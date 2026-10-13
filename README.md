@@ -10,6 +10,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
 - Identity and access review: [permissions, LDAP and portal examples](docs/PERMISSIONS.md).
+- Architecture review: [Go/Java comparison, modules, API and deployment proposal](docs/ARCHITECTURE.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -48,6 +49,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |
 | docs/PERMISSIONS.md | Draft groups, portal scope, field conflicts, identity lifecycle and acceptance scenarios |
+| docs/ARCHITECTURE.md | Proposed backend choice, module boundaries, API contract, deployment and measurement plan |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 
