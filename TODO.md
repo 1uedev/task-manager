@@ -100,15 +100,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #6](https://github.com/1uedev/task-manager/issues/6)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-helpdesk-01 · **Aktualisiert:** 2026-10-13
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261013-helpdesk-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** geplant: task/task-006-codex-helpdesk, separates Arbeitsverzeichnis.
+**Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003; Präzisierung des Abnahmevorschlags in REQ-TKT-005. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** task/task-006-codex-helpdesk; Helpdesk- und SLA-Entwurf vorhanden.
 
 **Umfang:** OPEN-008 und OPEN-009 bearbeiten. Nachrichtenwege, Postfächer, Kundenidentität und Servicekalender festlegen.
 
 **Abnahmekriterien:** Wochenenden, Feiertage, Zeitumstellung, Pausen, Wiedereröffnung und Prioritätswechsel sind anhand konkreter Zeitpunkte berechenbar. Doppelte Mails und Eskalationsversuche führen nicht zu unkontrollierten Doppelaktionen.
 
-**Nächster Schritt:** Nach Integration der Reservierung Nachrichtenwege, Portalzugang und berechenbare SLA-Beispiele ausarbeiten. Offene Produktregeln als Vorschläge kennzeichnen und neue ausdrückliche Nutzerentscheidungen nachführen. Koordination durch die fortsetzende Codex-Sitzung; keine Produktimplementierung.
+**Ergebnis:** [Helpdesk- und SLA-Entwurf](docs/HELPDESK_SLA.md) mit Mail-/Portalabläufen, Versandzuständen, Regel- und Kalenderzuordnung, 14 berechenbaren SLA-Fällen und zwölf weiteren Fachprüffällen. DEC-031 und DEC-032 dokumentieren Holgers Auswahl zur Prüfwarteschlange und Kundenpause. Anforderungen und Roadmap sind nachgeführt; andere Details bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. 17 Termin-/Offsetberechnungen mit separater Python-datetime/zoneinfo-Hilfsrechnung geprüft. Abgleich mit Rechte- und Fachmodellentwurf durchgeführt. Keine implementierte SLA-Engine, keine Mailintegration und keine Anwendungstests; kein unabhängiges Review.
+
+**Nächster Schritt:** Holger prüft Fristwerte, Antwortdefinition, Startmesspunkt, Wiedereröffnung und Prioritätswechsel aus OPEN-008 sowie Mailanbieter und Zugangsregeln aus OPEN-009. TASK-010 ergänzt Betriebs- und Aufbewahrungsgrenzen. Umsetzung bleibt gesondert zu beauftragen.
 
 ## TASK-007 Wiki Sprachen und Unternehmensauftritt spezifizieren
 

@@ -43,10 +43,14 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 | DEC-028 | Holger bestätigt am 13. Oktober 2026: Wenn anwendbare Gruppenrechte ein Feld freigeben und ausdrücklich verbieten, gewinnt das ausdrückliche Verbot. Dies klärt den Feldkonflikt in OPEN-005; eine allgemeine Verbotslogik für alle Aktionen ist damit nicht entschieden. | REQ-ACL-001, REQ-ACL-003 |
 | DEC-029 | Holger legt am 13. Oktober 2026 fest: 2FA folgt zeitnah nach Version 1, nicht in V1. Diese Konkretisierung ersetzt die offene Release-Zuordnung in DEC-008; Verfahren und Wiederherstellung bleiben offen. | REQ-AUTH-004 |
 | DEC-030 | Holger bestätigt am 13. Oktober 2026: Eine inhaltliche Änderung einer freigegebenen Anforderung erzeugt eine neue Revision zur erneuten Freigabe; die bisherige Freigabe bleibt historisch erhalten. Dadurch ist dieser Teil von OPEN-021 geklärt, ohne das spätere formale Änderungsmanagement vorwegzunehmen. | REQ-REQ-002, REQ-REQ-004 |
+| DEC-031 | Holger bestätigt am 13. Oktober 2026: E-Mails unbekannter Absender kommen in eine Prüfwarteschlange; Support prüft und ordnet den Kunden zu. Die Wahl klärt diesen Teil von OPEN-009 und gibt keine automatische Portalberechtigung. | REQ-HD-001, REQ-HD-002, REQ-PORTAL-003 |
+| DEC-032 | Holger bestätigt am 13. Oktober 2026: Während auf den Kunden gewartet wird, pausiert die Lösungsfrist; eine noch offene Erstreaktionsfrist läuft während der Geschäftszeiten weiter. Dies klärt die Kundenpause in OPEN-008; konkrete Budgets und übrige Berechnungsregeln bleiben offen. | REQ-HD-003, REQ-HD-004 |
 
 DEC-027 bis DEC-029 beruhen auf Holgers ausdrücklicher Auswahl der zuvor offenen Produktvarianten. Sie schaffen eine eindeutige Basis für Portalfilter, Feldkonflikte und Release-Planung. REQUIREMENTS.md und ROADMAP.md sind entsprechend nachgeführt; der [Rechteentwurf](docs/PERMISSIONS.md) konkretisiert sie mit weiterhin prüfpflichtigen Umsetzungsvorschlägen.
 
 DEC-030 ergänzt diese Entscheidungen nach Holgers ausdrücklicher Auswahl zur Behandlung geänderter Anforderungen. Die Regel hält die Freigabe an den tatsächlich geprüften Inhalt gebunden. REQUIREMENTS.md und ROADMAP.md sind angepasst; Beispiele und weitere Vorschläge stehen im [Fachmodellentwurf](docs/DOMAIN_MODEL.md).
+
+DEC-031 und DEC-032 beruhen ebenfalls auf Holgers ausdrücklicher Auswahl am 13. Oktober. Sie verhindern eine ungeprüfte automatische Kundenzuordnung und unterscheiden Kundenwartezeit von noch ausstehender Erstreaktion. Der [Helpdesk- und SLA-Entwurf](docs/HELPDESK_SLA.md) beschreibt die Folgen und trennt bestätigte Regeln von weiteren Vorschlägen.
 
 ## Offene Entscheidungen
 
@@ -102,15 +106,15 @@ Der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) beschreibt zwei unterschiedliche P
 
 ### OPEN-008 SLA Berechnungsregeln
 
-**Status:** offen · **Fällig:** vor Helpdesk-Datenmodell · **Bezug:** REQ-HD-003, REQ-HD-004, REQ-HD-005
+**Status:** teilweise entschieden · **Fällig:** vor Helpdesk-Datenmodell · **Bezug:** REQ-HD-003, REQ-HD-004, REQ-HD-005
 
-Benötigt werden konkrete Beispiele für erste Antwort und Lösung, Servicekalender, Feiertage, Zeitzonen, Pausen, Wiedereröffnung, Prioritätsänderung und Eskalationsstufen. Zu entscheiden ist, ob Regeln nach Kunde, Projekt, Vertrag oder Tickettyp zugeordnet werden. Fristverhalten muss vor Implementierung anhand von Beispielen berechenbar sein.
+DEC-032 legt die Kundenpause fest: Lösungsfrist pausiert, offene Erstreaktionsfrist läuft im Geschäftszeitkalender weiter. Der [SLA-Entwurf](docs/HELPDESK_SLA.md) enthält 14 berechenbare Fälle einschließlich Wochenenden, Kalendertagen ohne Betrieb, Zeitumstellung, Pausen, Wiedereröffnung und Prioritätswechsel. Zu entscheiden bleiben Budgets, verlässlicher Startmesspunkt, qualifizierte Antwort, Regelzuordnung und Eskalationsstufen. Die übrigen Fristregeln sind Vorschläge, keine bereits abgenommenen Vertragsbedingungen.
 
 ### OPEN-009 Postfächer und Portalzugang
 
-**Status:** offen · **Fällig:** vor Helpdesk- und Portalimplementierung · **Bezug:** REQ-HD-001, REQ-HD-002, REQ-PORTAL-001, REQ-PORTAL-003
+**Status:** teilweise entschieden · **Fällig:** vor Helpdesk- und Portalimplementierung · **Bezug:** REQ-HD-001, REQ-HD-002, REQ-PORTAL-001, REQ-PORTAL-003
 
-Zu entscheiden sind Anzahl und Zuordnung der Postfächer, Umgang mit unbekannten Absendern, Einladungen, Selbstregistrierung, öffentliche Anfragen, CC-Empfänger, Weiterleitungen und Anhänge. IMAP/SMTP sind bestätigt; die erlaubten Authentifizierungsverfahren des vorgesehenen Mailanbieters müssen praktisch geprüft werden.
+DEC-031 legt die Prüfwarteschlange mit Kundenzuordnung durch Support für unbekannte Absender fest. Der [Helpdesk-Entwurf](docs/HELPDESK_SLA.md) beschreibt Mail- und Portalabläufe, Wiederholungen und unklare SMTP-Annahme. Die vorgeschlagene Abnahme von REQ-TKT-005 wird entsprechend auf interne Versandaufträge und kontrollierte Behandlung unklarer Zustellung präzisiert; eine uneingeschränkte einmalige externe Zustellung wird nicht zugesagt. Offen bleiben Anzahl und Zuordnung der Postfächer, Mailanbieter, Authentifizierungs- und Vertrauensprüfung, Einladungen, Selbstregistrierung, anonyme Webanfragen, CC-Empfänger, Weiterleitungen und Anhänge. IMAP/SMTP bleiben bestätigt; die erlaubten Anmeldeverfahren des vorgesehenen Anbieters müssen praktisch geprüft werden.
 
 ### OPEN-010 Varianten der Git Dienste
 
