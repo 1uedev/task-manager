@@ -38,6 +38,7 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 | ID | Entscheidung | Bezug |
 |---|---|---|
 | DEC-025 | Der Auftraggeber hat https://github.com/1uedev/task-manager angelegt und die Einrichtung als gemeinsame Arbeitsumgebung beauftragt. Repository-Regeln, Aufgaben, Vorlagen und Strukturprüfungen dürfen eingerichtet werden. DEC-024 wird um diese Infrastrukturarbeit erweitert; eine Implementierung des Produkts ist weiterhin nicht freigegeben. | REQ-DEV-001, REQ-DEV-002, REQ-DEV-003 |
+| DEC-026 | Am 13. Oktober 2026 hat der Auftraggeber die öffentliche Veröffentlichung der vorbereiteten Anforderungen, Roadmap, Entscheidungen, Aufgabenlisten und KI-Arbeitsregeln im öffentlichen Repository 1uedev/task-manager ausdrücklich bestätigt. | REQ-DEV-001, REQ-DEV-002 |
 
 ## Offene Entscheidungen
 
