@@ -58,7 +58,7 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #4](https://github.com/1uedev/task-manager/issues/4)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-rights-fallback-01 · **Aktualisiert:** 2026-10-13
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261013-rights-fallback-01 · **Aktualisiert:** 2026-10-13
 
 **Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-004-claude-rights, separates Arbeitsverzeichnis; koordinierte Übergabe an Codex am 2026-10-13.
 
@@ -68,7 +68,11 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Übergabe:** Die reservierte Claude-Sitzung konnte wegen eines ungültigen OAuth-Zugangs keinen Entwurf erzeugen. Die koordinierende Sitzung weist die Entwurfserstellung ausdrücklich Codex zu. Kein Claude-Review wird behauptet; ein späterer Einsatz erfordert erneute Anmeldung.
 
-**Nächster Schritt:** Nach Integration dieser Übergabe den Rechteentwurf mit den neuen Nutzerentscheidungen erstellen: Organisationssicht im Portal, Vorrang ausdrücklicher Feldverbote, 2FA zeitnah nach V1. Diese Festlegungen anschließend in REQUIREMENTS.md und DECISIONS.md konsistent nachführen.
+**Ergebnis:** [Rechteentwurf](docs/PERMISSIONS.md) mit Gruppenmatrix, Auswertungsregeln, Datenwegen, LDAP-Lebenszyklus und 16 fachlichen Prüfszenarien. Holgers drei Entscheidungen sind als DEC-027 bis DEC-029 in Anforderungen, Entscheidungen und Roadmap übernommen. Die weiteren Umsetzungsvorschläge bleiben offen.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Dokumente auf Widersprüche zur Organisationssicht, Feldverbotsregel und 2FA-Einordnung geprüft. Keine Produkt- oder Sicherheitstests ausgeführt, da keine Anwendung implementiert ist. Keine unabhängige Prüfung und kein Claude-Review.
+
+**Nächster Schritt:** Holger prüft Matrix und Szenarien. Allgemeine Aktionsrechte, delegierte Administration, LDAP-Lebenszyklus und das spätere 2FA-Verfahren bleiben unter OPEN-004 bis OPEN-006 offen. Technischen Reviewer unter OPEN-017 bestimmen; Umsetzung benötigt weiterhin gesonderten Auftrag.
 
 ## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
 

@@ -25,14 +25,14 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Projekte und Tickets | Konfigurierbare Projekte, Tickettypen, Workflows, Felder, Formulare und Automationen | Rechte, API und Fachmodell |
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |
 | Helpdesk | IMAP/SMTP, SLA-Fristen, Geschäftszeiten und Eskalationen | Tickets, Hintergrundjobs und konkrete SLA-Regeln |
-| Kundenportal | Berechtigte externe Teilnahme und Bearbeitung freigegebener Anfragen | Identität, Rechte und Helpdesk |
+| Kundenportal | Berechtigte externe Teilnahme; standardmäßig Anfragen der eigenen Kundenorganisation in freigegebenen Projekten | Identität, Rechte und Helpdesk; DEC-027 |
 | Wiki | Moderne Textbearbeitung, Historie und Konfliktschutz, optionale Sprachfassungen | Rechte, Dateispeicher und Editorentscheidung |
 | Anforderungen | Kriterien, einfache Freigabe, Historie und Verknüpfungen | Tickets, Wiki und Git |
 | Git | GitHub und GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung und Sichtbarkeitsregeln |
 | Sprachen und Marke | Deutsch und Englisch, zusätzliche Sprachen vorbereiten, Logo und Farben | UI, Portal, Anmeldung und Vorlagen |
 | API | Dokumentierte Kernabläufe von Anfang an | Gemeinsame Fachlogik und Rechte |
 
-**Noch für V1 zu entscheiden:** konkreter KI-Lieferumfang, 2FA-Termin und alle in REQUIREMENTS.md als V markierten Ergänzungen. Diese Einordnung darf die bestätigten KI-Anbieter und die zeitnahe 2FA-Anforderung nicht aus der Planung entfernen.
+**Noch für V1 zu entscheiden:** konkreter KI-Lieferumfang und alle in REQUIREMENTS.md als V markierten Ergänzungen. Die bestätigten KI-Anbieter bleiben in der Planung. 2FA folgt gemäß DEC-029 zeitnah nach V1; V1 bereitet die spätere Ergänzung in der Anmeldearchitektur vor. Für Feldrechte gilt bereits der bestätigte Vorrang ausdrücklicher Verbote aus DEC-028.
 
 **Vorgeschlagene Auslieferungsbedingungen:** fachlich geprüfte Kernabläufe, nachgewiesene Rechteisolation, reproduzierbare Installation, Update und Wiederherstellung sowie definierte und gemessene Leistungsziele. Die genaue Freigaberegel wird unter OPEN-017 beschlossen.
 
@@ -41,7 +41,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Thema | Status | Ergebnis und Abnahmebeispiel |
 |---|---|---|
 | Migration aus Bestandssystemen | Bedarf bestätigt, Quellsysteme und Umfang offen | Ein ausgewählter Import wird im Probelauf geprüft; übertragene, ausgelassene und fehlerhafte Inhalte sind nachvollziehbar. REQ-MIG-001, REQ-MIG-002 |
-| Zwei-Faktor-Authentifizierung | Bedarf bestätigt, falls nicht bereits in V1 | Geschützte Anmeldung mit dokumentiertem Wiederherstellungsverfahren und LDAP-Zusammenspiel. REQ-AUTH-004 |
+| Zwei-Faktor-Authentifizierung | Zeitnah nach V1 bestätigt, konkretes Datum und Verfahren offen; DEC-029 | Geschützte Anmeldung mit dokumentiertem Wiederherstellungsverfahren und LDAP-Zusammenspiel. REQ-AUTH-004 |
 | Weitere KI-Anwendungsfälle | Bedarf zur Bewertung bestätigt, Reihenfolge offen | Jeder ausgelieferte Anwendungsfall besitzt passende Skills, Rechteprüfung und Bestätigung; keine automatische Freigabe durch die Roadmap. REQ-AI-001 bis REQ-AI-009 |
 
 Diese Reihenfolge ist vorläufig. Ein Importumfang mit komplexer Rechte- und Historienübernahme benötigt eine eigene Aufwandsbewertung.

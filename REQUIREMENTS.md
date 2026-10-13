@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.1 · Stand 12. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.2 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern.
 
@@ -78,15 +78,15 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-ACL-002 Externe Teilnehmer
 
-**B · V1.** Externe Nutzer erhalten nur die ausdrücklich zugewiesenen Projekt- und Funktionsrechte.
+**B · V1.** Externe Nutzer erhalten nur die ausdrücklich zugewiesenen Projekt- und Funktionsrechte. Standardmäßig sehen sie alle Anfragen ihrer Kundenorganisation innerhalb der ihnen freigegebenen Projekte. Administratoren können zusätzliche Rechte gezielt vergeben (DEC-027).
 
-**Abnahme:** Eigene Anfragen, Anfragen einer Kundenorganisation und projektweit sichtbare Vorgänge sind unterscheidbare Freigaben. Welche davon V1 anbietet und welcher Standard gilt, wird vor Umsetzung entschieden. Negative Zugriffstests decken fremde Ticketnummern und direkte Dateilinks ab.
+**Abnahme:** Zwei externe Nutzer derselben Kundenorganisation sehen gegenseitig deren Anfragen im gemeinsam freigegebenen Projekt. Anfragen anderer Kundenorganisationen und nicht zugewiesener Projekte bleiben ohne zusätzliche Freigabe unsichtbar. Die Organisationssicht erweitert keine Rechte auf interne Kommentare, Felder oder Anhänge. Welche zusätzlichen Sichtbereiche V1 anbietet, bleibt offen. Negative Zugriffstests decken fremde Ticketnummern und direkte Dateilinks ab.
 
 ### REQ-ACL-003 Feldberechtigungen
 
-**B · V1.** Einzelne Felder lassen sich für bestimmte Gruppen verbergen. Sichtbarkeit und Änderbarkeit werden getrennt behandelt.
+**B · V1.** Einzelne Felder lassen sich für bestimmte Gruppen verbergen. Sichtbarkeit und Änderbarkeit werden getrennt behandelt. Wenn anwendbare Gruppenrechte ein Feld freigeben und ausdrücklich verbieten, hat das ausdrückliche Verbot Vorrang (DEC-028).
 
-**Abnahme:** Ein verborgenes Feld wird weder als Wert noch indirekt über Suche, Filter, API, Historie, Export, Benachrichtigung oder KI-Ausgabe offengelegt. Pflichtfeldregeln dürfen Nutzer nicht zum Ausfüllen eines für sie unzugänglichen Felds zwingen; das Konfliktverhalten ist festgelegt.
+**Abnahme:** Ein verbotenes Feld wird auch bei einer Freigabe durch eine andere anwendbare Gruppe nicht offengelegt. Lesen und Schreiben werden getrennt geprüft. Ein verborgenes Feld wird weder als Wert noch indirekt über Suche, Filter, API, Historie, Export, Benachrichtigung oder KI-Ausgabe offengelegt. Pflichtfeldregeln dürfen Nutzer nicht zum Ausfüllen eines für sie unzugänglichen Felds zwingen; das Konfliktverhalten ist festgelegt.
 
 ### REQ-ACL-004 Einheitliche Durchsetzung
 
@@ -122,9 +122,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-AUTH-004 Zweiter Faktor
 
-**B · Früh, Zuordnung zu V1 offen.** Zwei-Faktor-Authentifizierung soll sehr zeitnah verfügbar sein.
+**B · Früh danach.** Zwei-Faktor-Authentifizierung folgt zeitnah nach Version 1 und gehört nicht zum ersten verkaufbaren Release (DEC-029). Die Anmeldearchitektur berücksichtigt die spätere Ergänzung.
 
-**Abnahme:** Verfahren, Wiederherstellung, mögliche Erzwingung und Zusammenspiel mit LDAP sind entschieden. Für die Umsetzung sind Verlust des zweiten Faktors und Administratorkonten als Abnahmefälle vorgesehen. Empfehlung: spätestens vor regulärem Kundeneinsatz; diese Terminempfehlung ist noch nicht bestätigt.
+**Abnahme:** Vor dem 2FA-Release sind Verfahren, Wiederherstellung, mögliche Erzwingung und Zusammenspiel mit LDAP entschieden. Verlust des zweiten Faktors und Administratorkonten sind als Abnahmefälle vorgesehen. V1 wird nicht als bereits mit 2FA ausgestattet beschrieben; ein konkretes Datum für das zeitnahe Folgerelease ist noch offen.
 
 ## Tickets und Zusammenarbeit
 
