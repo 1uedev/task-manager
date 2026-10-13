@@ -82,15 +82,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #5](https://github.com/1uedev/task-manager/issues/5)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-domain-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-ORG-003, REQ-TKT-001 bis REQ-TKT-005, REQ-TIME-001, REQ-TIME-002, REQ-REQ-001 bis REQ-REQ-003. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-ORG-003, REQ-TKT-001 bis REQ-TKT-005, REQ-TIME-001, REQ-TIME-002, REQ-REQ-001 bis REQ-REQ-003. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** geplant: task/task-005-codex-domain, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-007 und OPEN-021 bearbeiten. Standardfelder, Beziehungen, Status, Regeln, Zeitkorrekturen und Anforderungsfreigaben beschreiben.
 
 **Abnahmekriterien:** Änderungen bestehender Projektregeln sind durchgespielt. Verborgene Pflichtfelder, Archivierung und Änderungen nach Freigabe haben eindeutige Regeln. API und Oberfläche verwenden dieselbe Fachlogik.
 
-**Nächster Schritt:** Zwei exemplarische Projekte mit unterschiedlichen Workflows modellieren.
+**Nächster Schritt:** Nach Integration der Reservierung zwei exemplarische Projekte, Feldregeln, Zeitkorrekturen und Anforderungsrevisionen als prüfbaren Entwurf erstellen. Fortsetzung der Planung durch die koordinierende Codex-Sitzung auf Holgers Auftrag; keine Produktimplementierung.
 
 ## TASK-006 Helpdesk Portal und SLA Regeln ausarbeiten
 
