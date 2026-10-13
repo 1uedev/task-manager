@@ -1,6 +1,6 @@
 # Entscheidungen und offene Fragen
 
-Stand 13. Oktober 2026 · Erste Erfassung und Erweiterung um die GitHub-Arbeitsumgebung
+Stand 13. Oktober 2026 · GitHub-Arbeitsumgebung und bestätigte Rechteentscheidungen
 
 Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfragen. Sie ergänzt die zentrale Spezifikation in [REQUIREMENTS.md](REQUIREMENTS.md). Die ursprünglichen Einzeltermine früherer Gesprächsentscheidungen werden nicht nachträglich erfunden; der genannte Stand ist das Erfassungsdatum. Umsetzung und fachliche Abnahme sind daraus nicht abzuleiten.
 
@@ -15,7 +15,7 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 | DEC-005 | Internetzugang darf Voraussetzung sein; konkrete Zwecke und Ausfallregeln bleiben offen | REQ-OPS-003 |
 | DEC-006 | Eine Installation pro Unternehmen, spätere Mandantenfähigkeit architektonisch vorbereiten | REQ-ORG-001, REQ-ORG-002 |
 | DEC-007 | Kundenadministratoren verwalten Gruppen, Rechte und projektspezifische Konfiguration; einzelne Felder sind ausblendbar | REQ-ORG-003, REQ-ACL-001, REQ-ACL-003 |
-| DEC-008 | Interne Anmeldung und LDAP in V1, spätere Anmeldeverfahren erweiterbar; 2FA sehr zeitnah, konkreter Release offen | REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-004 |
+| DEC-008 | Interne Anmeldung und LDAP in V1, spätere Anmeldeverfahren erweiterbar; ursprünglich 2FA sehr zeitnah mit offenem Release. Die Release-Einordnung wurde am 13. Oktober 2026 durch DEC-029 konkretisiert. | REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-004 |
 | DEC-009 | PostgreSQL ist gesetzt; MariaDB, SQL Server und Oracle nur architektonisch vorbereiten | REQ-DATA-001, REQ-DATA-002 |
 | DEC-010 | React vorgesehen; Backend Go oder Java noch nicht entschieden | REQ-ARCH-001 |
 | DEC-011 | Deutsch und Englisch von Anfang an, weitere Sprachen einfach ergänzbar; Wiki-Sprachfassungen freiwillig | REQ-I18N-001, REQ-I18N-002, REQ-DOC-003 |
@@ -39,6 +39,11 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 |---|---|---|
 | DEC-025 | Der Auftraggeber hat https://github.com/1uedev/task-manager angelegt und die Einrichtung als gemeinsame Arbeitsumgebung beauftragt. Repository-Regeln, Aufgaben, Vorlagen und Strukturprüfungen dürfen eingerichtet werden. DEC-024 wird um diese Infrastrukturarbeit erweitert; eine Implementierung des Produkts ist weiterhin nicht freigegeben. | REQ-DEV-001, REQ-DEV-002, REQ-DEV-003 |
 | DEC-026 | Am 13. Oktober 2026 hat der Auftraggeber die öffentliche Veröffentlichung der vorbereiteten Anforderungen, Roadmap, Entscheidungen, Aufgabenlisten und KI-Arbeitsregeln im öffentlichen Repository 1uedev/task-manager ausdrücklich bestätigt. | REQ-DEV-001, REQ-DEV-002 |
+| DEC-027 | Holger legt am 13. Oktober 2026 die Standardsicht externer Portalnutzer auf alle Anfragen ihrer Kundenorganisation fest. Die bestehenden Projekt- und Funktionsrechte bleiben Voraussetzung; zusätzliche Rechte können Administratoren gezielt vergeben. Damit ist die bisher offene Standardsicht in OPEN-005 geklärt. | REQ-ACL-002, REQ-PORTAL-001 |
+| DEC-028 | Holger bestätigt am 13. Oktober 2026: Wenn anwendbare Gruppenrechte ein Feld freigeben und ausdrücklich verbieten, gewinnt das ausdrückliche Verbot. Dies klärt den Feldkonflikt in OPEN-005; eine allgemeine Verbotslogik für alle Aktionen ist damit nicht entschieden. | REQ-ACL-001, REQ-ACL-003 |
+| DEC-029 | Holger legt am 13. Oktober 2026 fest: 2FA folgt zeitnah nach Version 1, nicht in V1. Diese Konkretisierung ersetzt die offene Release-Zuordnung in DEC-008; Verfahren und Wiederherstellung bleiben offen. | REQ-AUTH-004 |
+
+Die drei Ergänzungen beruhen auf Holgers ausdrücklicher Auswahl der zuvor offenen Produktvarianten. Sie schaffen eine eindeutige Basis für Portalfilter, Feldkonflikte und Release-Planung. REQUIREMENTS.md und ROADMAP.md sind entsprechend nachgeführt; der [Rechteentwurf](docs/PERMISSIONS.md) konkretisiert sie mit weiterhin prüfpflichtigen Umsetzungsvorschlägen.
 
 ## Offene Entscheidungen
 
@@ -64,15 +69,15 @@ Welche Anwendungsfälle werden bereits in V1 ausgeliefert, und wann stehen alle 
 
 ### OPEN-004 Zwei Faktor Authentifizierung
 
-**Status:** offen · **Fällig:** vor verbindlicher V1-Planung · **Bezug:** REQ-AUTH-004
+**Status:** teilweise entschieden · **Fällig:** Architektur vor Implementierung, Detailverfahren vor 2FA-Release · **Bezug:** REQ-AUTH-004
 
-Zu entscheiden sind Liefertermin, Verfahren, verpflichtende Nutzergruppen und Wiederherstellung. Empfehlung: vor regulärem Kundeneinsatz, besonders für administrative Konten. Die bisherige Nutzerzusage lautet sehr zeitnah, nicht ausdrücklich V1.
+DEC-029 legt die Auslieferung zeitnah nach V1 fest. Offen bleiben konkreter Termin, Verfahren, verpflichtende Nutzergruppen, Wiederherstellung und LDAP-Zusammenspiel. Die V1-Architektur bereitet die Ergänzung vor; die frühere Empfehlung eines Termins vor regulärem Kundeneinsatz wird nicht als Anforderung weitergeführt.
 
 ### OPEN-005 Zusammenspiel der Berechtigungen
 
-**Status:** offen · **Fällig:** vor Datenmodell und Rechteimplementierung · **Bezug:** REQ-ACL-001 bis REQ-ACL-005
+**Status:** teilweise entschieden · **Fällig:** vor Datenmodell und Rechteimplementierung · **Bezug:** REQ-ACL-001 bis REQ-ACL-005
 
-Wie wirken mehrere Gruppen zusammen, und gibt es ausdrückliche Verbote? Welche Administrationsrechte sind global oder projektbezogen? Sehen externe Nutzer nur eigene, organisationsbezogene oder projektweit freigegebene Tickets? Wie werden verborgene Pflichtfelder und organisationsübergreifende Kontakte behandelt? Ausgangspunkt für die Spezifikation ist fehlender Zugriff ohne erteilte Berechtigung.
+DEC-027 bestätigt die Organisationssicht innerhalb freigegebener Projekte; DEC-028 bestätigt den Vorrang ausdrücklicher Feldverbote. Offen bleiben das Zusammenspiel allgemeiner Aktionsrechte, globale und delegierte Administrationsrechte, zusätzliche externe Sichtbereiche, verborgene Pflichtfelder und organisationsübergreifende Kontakte. Der [Rechteentwurf](docs/PERMISSIONS.md) enthält eine Beispielmatrix und positive sowie negative Prüffälle. Er ist noch nicht fachlich abgenommen.
 
 ### OPEN-006 Konten und LDAP Lebenszyklus
 
