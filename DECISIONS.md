@@ -42,8 +42,11 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 | DEC-027 | Holger legt am 13. Oktober 2026 die Standardsicht externer Portalnutzer auf alle Anfragen ihrer Kundenorganisation fest. Die bestehenden Projekt- und Funktionsrechte bleiben Voraussetzung; zusätzliche Rechte können Administratoren gezielt vergeben. Damit ist die bisher offene Standardsicht in OPEN-005 geklärt. | REQ-ACL-002, REQ-PORTAL-001 |
 | DEC-028 | Holger bestätigt am 13. Oktober 2026: Wenn anwendbare Gruppenrechte ein Feld freigeben und ausdrücklich verbieten, gewinnt das ausdrückliche Verbot. Dies klärt den Feldkonflikt in OPEN-005; eine allgemeine Verbotslogik für alle Aktionen ist damit nicht entschieden. | REQ-ACL-001, REQ-ACL-003 |
 | DEC-029 | Holger legt am 13. Oktober 2026 fest: 2FA folgt zeitnah nach Version 1, nicht in V1. Diese Konkretisierung ersetzt die offene Release-Zuordnung in DEC-008; Verfahren und Wiederherstellung bleiben offen. | REQ-AUTH-004 |
+| DEC-030 | Holger bestätigt am 13. Oktober 2026: Eine inhaltliche Änderung einer freigegebenen Anforderung erzeugt eine neue Revision zur erneuten Freigabe; die bisherige Freigabe bleibt historisch erhalten. Dadurch ist dieser Teil von OPEN-021 geklärt, ohne das spätere formale Änderungsmanagement vorwegzunehmen. | REQ-REQ-002, REQ-REQ-004 |
 
-Die drei Ergänzungen beruhen auf Holgers ausdrücklicher Auswahl der zuvor offenen Produktvarianten. Sie schaffen eine eindeutige Basis für Portalfilter, Feldkonflikte und Release-Planung. REQUIREMENTS.md und ROADMAP.md sind entsprechend nachgeführt; der [Rechteentwurf](docs/PERMISSIONS.md) konkretisiert sie mit weiterhin prüfpflichtigen Umsetzungsvorschlägen.
+DEC-027 bis DEC-029 beruhen auf Holgers ausdrücklicher Auswahl der zuvor offenen Produktvarianten. Sie schaffen eine eindeutige Basis für Portalfilter, Feldkonflikte und Release-Planung. REQUIREMENTS.md und ROADMAP.md sind entsprechend nachgeführt; der [Rechteentwurf](docs/PERMISSIONS.md) konkretisiert sie mit weiterhin prüfpflichtigen Umsetzungsvorschlägen.
+
+DEC-030 ergänzt diese Entscheidungen nach Holgers ausdrücklicher Auswahl zur Behandlung geänderter Anforderungen. Die Regel hält die Freigabe an den tatsächlich geprüften Inhalt gebunden. REQUIREMENTS.md und ROADMAP.md sind angepasst; Beispiele und weitere Vorschläge stehen im [Fachmodellentwurf](docs/DOMAIN_MODEL.md).
 
 ## Offene Entscheidungen
 
@@ -94,6 +97,8 @@ Zu klären sind lokale Einladungen, Kontowiederherstellung, Kontoanlage aus LDAP
 **Status:** offen · **Fällig:** vor Workflow- und Feldmodell · **Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001
 
 Zu definieren sind Feldtypen, Validierungen, Formularregeln, Übergänge, Projektvorlagen, erlaubte Automationen und der Umgang mit vorhandenen Daten nach Regeländerungen. Vorschlag: fachlich begrenzte Regeln mit dokumentierten Aktionen; beliebiger Kundencode ist kein bestätigter Bedarf.
+
+Der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) beschreibt zwei unterschiedliche Projektabläufe, Feld- und Übergangsregeln, versionierte Konfigurationsänderungen, Archivierung und begrenzte Automationen. Diese Detailregeln sind zur Prüfung gestellt und noch nicht als Gesamtpaket bestätigt.
 
 ### OPEN-008 SLA Berechnungsregeln
 
@@ -177,9 +182,9 @@ Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Suppor
 
 ### OPEN-021 Detailumfang der Fachmodule und späteren Funktionen
 
-**Status:** offen · **Fällig:** V1-Details vor deren Umsetzung; vollständiges Funktionsinventar vor Implementierungsstart · **Bezug:** REQ-PROD-003, REQ-TIME-001 bis REQ-TIME-003, REQ-REQ-001 bis REQ-REQ-004, REQ-EXT-001
+**Status:** teilweise entschieden · **Fällig:** V1-Details vor deren Umsetzung; vollständiges Funktionsinventar vor Implementierungsstart · **Bezug:** REQ-PROD-003, REQ-TIME-001 bis REQ-TIME-003, REQ-REQ-001 bis REQ-REQ-004, REQ-EXT-001
 
-Zu konkretisieren sind Standardfelder, Ticketbeziehungen, Zeitkorrekturen, Exportumfang und Verhalten nach Änderung einer freigegebenen Anforderung. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows.
+DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows.
 
 ## Entscheidungsverfahren
 
