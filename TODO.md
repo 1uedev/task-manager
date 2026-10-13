@@ -58,15 +58,17 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #4](https://github.com/1uedev/task-manager/issues/4)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261013-rights-01 · **Aktualisiert:** 2026-10-13
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-rights-fallback-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplant: task/task-004-claude-rights, separates Arbeitsverzeichnis.
+**Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-004-claude-rights, separates Arbeitsverzeichnis; koordinierte Übergabe an Codex am 2026-10-13.
 
 **Umfang:** OPEN-004, OPEN-005 und OPEN-006 beantworten. Rechtekonflikte, externe Sicht, Feldrechte, LDAP-Lebenszyklus und 2FA-Termin festlegen.
 
 **Abnahmekriterien:** Eine Rechte-Matrix und positive sowie negative Beispiele decken API, Suche, Exporte, E-Mail, Dateien und KI ab. Authentifizierung und fachliche Berechtigung bleiben getrennt. Fachliche Entscheidungen sind von technischen Vorschlägen unterscheidbar.
 
-**Nächster Schritt:** Nach Integration der Reservierung erstellt Claude Code einen lesenden Konzeptentwurf; die koordinierende Codex-Sitzung prüft und integriert ihn. Gruppen, Feldrechte, Kundenportal, LDAP und 2FA werden mit positiven und negativen Beispielen beschrieben. Offene Nutzerentscheidungen bleiben gekennzeichnet.
+**Übergabe:** Die reservierte Claude-Sitzung konnte wegen eines ungültigen OAuth-Zugangs keinen Entwurf erzeugen. Die koordinierende Sitzung weist die Entwurfserstellung ausdrücklich Codex zu. Kein Claude-Review wird behauptet; ein späterer Einsatz erfordert erneute Anmeldung.
+
+**Nächster Schritt:** Nach Integration dieser Übergabe den Rechteentwurf mit den neuen Nutzerentscheidungen erstellen: Organisationssicht im Portal, Vorrang ausdrücklicher Feldverbote, 2FA zeitnah nach V1. Diese Festlegungen anschließend in REQUIREMENTS.md und DECISIONS.md konsistent nachführen.
 
 ## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
 
