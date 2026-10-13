@@ -1,0 +1,34 @@
+name: Task proposal
+description: Propose a task for the central TODO ledger.
+title: "Task proposal: "
+labels: ["type:planning"]
+body:
+  - type: markdown
+    attributes:
+      value: "TODO.md on main is authoritative. This issue is a proposal, not a reservation or approval. Do not include secrets or customer data."
+  - type: input
+    id: requirements
+    attributes:
+      label: Related requirement IDs
+      description: Reference existing REQ-IDs or explain why a new requirement is needed.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and result
+      description: Describe a bounded outcome and what is outside scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and open questions
+    validations:
+      required: true

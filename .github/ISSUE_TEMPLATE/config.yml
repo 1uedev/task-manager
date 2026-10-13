@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Central task ledger
+    url: https://github.com/1uedev/task-manager/blob/main/TODO.md
+    about: Check existing tasks and current ownership before proposing work.
