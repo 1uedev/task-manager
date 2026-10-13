@@ -86,6 +86,8 @@ Wiederholte interne Verarbeitung darf keine doppelten Fachwirkungen erzeugen. Be
 
 SMTP kann nach einem Verbindungsabbruch einen unklaren Versandstatus hinterlassen; das Risiko doppelter Nachrichten durch Zeitüberschreitungen beschreibt [RFC 5321, Abschnitt 6.1](https://datatracker.ietf.org/doc/html/rfc5321#section-6.1). Dieser Zustand wird im Vorschlag gesondert angezeigt und nicht blind beliebig oft wiederholt. Die Forderung aus REQ-TKT-005 nach Vermeidung doppelter Benachrichtigungen muss in TASK-006 zwischen interner Auftragsduplizierung und tatsächlicher externer Zustellung präzisiert werden; dieser Entwurf verspricht keine garantierte Exactly-once-Zustellung.
 
+Nachtrag vom 13. Oktober 2026: Die Präzisierung liegt nun im [Helpdesk- und SLA-Entwurf](HELPDESK_SLA.md) und im aktualisierten Abnahmevorschlag zu REQ-TKT-005 vor. Die fachliche Gesamtprüfung bleibt offen.
+
 SLA-Fristen werden deterministisch aus versionierten Regeln und Servicekalendern berechnet. Jobs erhalten Unternehmenskontext, begrenzte Dienstrechte und eine überprüfbare Zeitquelle. Sommerzeit, Pausen, Wiedereröffnung und Prioritätswechsel benötigen vor Umsetzung Beispiele aus OPEN-008. KI entscheidet keine verbindlichen Fristen.
 
 ## Docker, Dateien und Betrieb

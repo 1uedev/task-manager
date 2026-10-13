@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.3 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.4 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern.
 
@@ -156,7 +156,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **V · V1.** Fachlich relevante Änderungen werden historisiert. Benachrichtigungen richten sich nach Empfängerrechten und konfigurierten Ereignissen.
 
-**Abnahme:** Die Historie zeigt Urheber und Zeitpunkt. Benachrichtigungen werden nicht mehrfach durch denselben internen Wiederholungsversuch versandt. Gleichzeitige Änderungen werden erkannt; stille Datenverluste sind ausgeschlossen.
+**Abnahme:** Die Historie zeigt Urheber und Zeitpunkt. Wiederholte interne Verarbeitung erzeugt keinen zweiten Versandauftrag für dieselbe Benachrichtigung. Ein unklarer SMTP-Annahmestatus wird ausdrücklich erfasst und kontrolliert geklärt; eine generell garantierte einmalige externe Zustellung wird nicht vorausgesetzt. Gleichzeitige Änderungen werden erkannt; stille Datenverluste sind ausgeschlossen.
 
 ## Zeiterfassung
 
@@ -184,19 +184,21 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **B · V1.** Der Helpdesk empfängt E-Mails über IMAP und versendet sie über SMTP. Eine spezielle Microsoft-365-Anbindung ist für V1 nicht erforderlich.
 
-**Abnahme:** Ein konfiguriertes Postfach erzeugt nachvollziehbar ein Ticket; berechtigte Antworten werden über SMTP versandt. Zugangsdaten bleiben geschützt. Verbindungsfehler und ausstehende Sendungen sind für zuständige Personen erkennbar.
+**Abnahme:** Ein konfiguriertes Postfach erzeugt bei zulässiger Kundenzuordnung nachvollziehbar ein Ticket; unbekannte Absender gelangen gemäß DEC-031 zunächst in die Prüfwarteschlange. Berechtigte Antworten werden über SMTP versandt. Zugangsdaten bleiben geschützt. Verbindungsfehler und ausstehende Sendungen sind für zuständige Personen erkennbar.
 
 ### REQ-HD-002 Zuordnung und Wiederholungen
 
 **V · V1.** Antworten werden bestehenden Konversationen zugeordnet. Mehrfach zugestellte Nachrichten, automatische Antworten und Wiederholungen bei Fehlern werden kontrolliert behandelt.
 
-**Abnahme:** Die erneute Verarbeitung derselben Nachricht erzeugt kein zweites Ticket. Eine Absenderadresse allein gewährt keinen Zugriff auf ein beliebiges Ticket. Regeln für Weiterleitungen, unbekannte Absender, Anhänge und Mail-Schleifen sind spezifiziert.
+**Bestätigte Teilvorgabe (DEC-031):** Nachrichten unbekannter Absender kommen in eine Prüfwarteschlange; Support prüft und ordnet den Kunden zu. Daraus entsteht kein automatischer Portalzugang. Die übrigen Detailregeln dieser Anforderung bleiben Vorschläge.
+
+**Abnahme:** Die erneute Verarbeitung derselben Nachricht erzeugt kein zweites Ticket. Eine Absenderadresse allein gewährt keinen Zugriff auf ein beliebiges Ticket. Unbekannte Absender werden nicht automatisch Kunden zugeordnet; Support kann einen zurückgehaltenen Eingang nachvollziehbar bearbeiten. Regeln für Weiterleitungen, Anhänge und Mail-Schleifen sind spezifiziert.
 
 ### REQ-HD-003 SLA Fristen
 
-**B · V1.** Der Helpdesk unterstützt SLA-Fristen.
+**B · V1.** Der Helpdesk unterstützt SLA-Fristen. Während auf eine Antwort des Kunden gewartet wird, pausiert die Lösungsfrist; eine noch offene Erstreaktionsfrist läuft während der Geschäftszeiten weiter (DEC-032).
 
-**Abnahme:** Administratoren können die vereinbarten Fristtypen und Zuordnungsregeln einstellen. Vorschlag für den Mindestumfang: erste Antwort und Lösung. Start, Stopp, Pausen, Wiedereröffnung und Wechsel der Priorität sind vor Umsetzung fachlich definiert und anhand von Beispielen berechenbar.
+**Abnahme:** Administratoren können die vereinbarten Fristtypen und Zuordnungsregeln einstellen. Für erste Antwort und Lösung sind Start, Stopp, Wiedereröffnung und Prioritätswechsel vor Umsetzung definiert. Eine Kundenpause hält nur die Lösungsuhr an; sie setzt kein verbrauchtes Budget zurück. Konkrete Fristwerte und die übrigen Berechnungsregeln bleiben bis zur fachlichen Entscheidung Vorschläge und werden anhand von Beispielen geprüft.
 
 ### REQ-HD-004 Geschäftszeiten
 
@@ -228,7 +230,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **V · V1.** Einladung, Kontowiederherstellung und Verwaltung externer Teilnehmer werden ausdrücklich spezifiziert.
 
-**Abnahme:** Eine Einladung legt die zulässige Zugehörigkeit fest und läuft kontrolliert ab. Selbstregistrierung, anonyme Anfragen und Zuordnung unbekannter E-Mail-Absender bleiben bis zur Entscheidung deaktivierte oder nicht zugesagte Varianten.
+**Abnahme:** Eine Einladung legt die zulässige Zugehörigkeit fest und läuft kontrolliert ab. Selbstregistrierung und anonyme Webanfragen bleiben bis zur Entscheidung deaktivierte oder nicht zugesagte Varianten. Für unbekannte E-Mail-Absender gilt die bestätigte Prüfwarteschlange aus DEC-031; die Zuordnung erzeugt keine automatische Einladung oder Portalberechtigung.
 
 ## Dokumentation und Wiki
 
