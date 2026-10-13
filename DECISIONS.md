@@ -55,11 +55,15 @@ Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezi
 
 Zu entscheiden sind Go oder Java, Framework, Sprachversionen, Frontend mit oder ohne TypeScript sowie Build- und Testkonventionen. Bisheriger Vorschlag: Java mit Spring Boot und React mit TypeScript. Die Begründung muss Domänenkomplexität, Betrieb, verfügbare Kenntnisse, Prüfbarkeit und laufende Kosten gegeneinander abwägen. Eine vermeintliche KI-Präferenz genügt nicht.
 
+Der [Architekturentwurf vom 13. Oktober 2026](docs/ARCHITECTURE.md) liefert den Go/Java-Vergleich mit Primärquellen und empfiehlt Java/Spring Boot sowie React/TypeScript. Die Auswahl ist weiterhin offen; es wurden keine Laufzeitmessungen oder Implementierungen vorgenommen.
+
 ### OPEN-002 Modulstruktur und spätere Mandanten
 
 **Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-ORG-002, REQ-ARCH-002
 
 Zu entscheiden sind fachliche Modulgrenzen, Hintergrundverarbeitung und Vorbereitung der Unternehmensgrenzen. Ausgangsvorschlag ist ein modularer Monolith. Die konkrete spätere Isolation über eigene Datenbanken, Schemas oder gemeinsam genutzte Tabellen bleibt offen. Für V1 soll daraus kein unnötiger Mehrmandantenbetrieb entstehen.
+
+Der [Architekturentwurf](docs/ARCHITECTURE.md) beschreibt Datenhoheit je Modul, gerichtete Abhängigkeiten, einen serverseitigen Unternehmenskontext sowie Datenbankadapter. PostgreSQL bleibt allein unterstützt; weitere Datenbanken und mehrere Mandanten werden nicht implementiert.
 
 ### OPEN-003 Erster KI Lieferumfang
 
@@ -126,6 +130,8 @@ Benötigt werden Zielplattformen und CPU-Architekturen, Container-Betriebsumgebu
 **Status:** offen · **Fällig:** vor erster Fachimplementierung · **Bezug:** REQ-API-001, REQ-API-002
 
 Zu bestimmen sind API-Stil, Dokumentationsformat, Versionierung, Authentifizierung, Fehlerformat, Seitennavigation, Wiederholbarkeit von Schreibaufrufen und spätere Ereignisschnittstellen. API- und UI-Rechte müssen auf denselben fachlichen Regeln beruhen.
+
+Der [API-Grundvertrag im Architekturentwurf](docs/ARCHITECTURE.md) schlägt HTTP/JSON, OpenAPI, versionierte Ressourcen, Konflikterkennung, eingeschränkte API-Zugänge und wiederholbare Schreiboperationen vor. Tokenform, Laufzeiten, Wiederholungsfenster und Übergangsfristen sind noch festzulegen.
 
 ### OPEN-014 Messbare Leistungsziele
 
