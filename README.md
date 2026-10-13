@@ -49,6 +49,6 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 
-The main branch is intended for changes through pull requests with successful, current CI. [Workflow documentation](docs/AI_WORKFLOW.md) explains the review boundary when tools share the owner's account. Product acceptance remains with Holger (@1uedev).
+The main branch requires pull requests with successful, current CI. Force pushes and branch deletion are disabled, including for administrators. [Workflow documentation](docs/AI_WORKFLOW.md) explains the review boundary when tools share the owner's account. Product acceptance remains with Holger (@1uedev).
 
 No project license or commercial model has been selected. That decision remains in DECISIONS.md. This public repository must contain only material intended for public access.

@@ -1,12 +1,12 @@
 # Zentrale abgeschlossene Aufgaben
 
-Stand 12. Oktober 2026
+Stand 13. Oktober 2026
 
 Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und gemäß ihren Kriterien geprüfter Aufgaben. Der Status offener Arbeit steht in [TODO.md](TODO.md). Fachliche Abnahme ist von technischer Eigenprüfung zu unterscheiden.
 
 ## Bisheriger Stand
 
-Es liegen noch keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. Die Produktimplementierung hat nicht begonnen.
+Es liegen noch keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Die Produktimplementierung hat nicht begonnen.
 
 ## Angaben für spätere Einträge
 
