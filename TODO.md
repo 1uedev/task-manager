@@ -96,15 +96,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #6](https://github.com/1uedev/task-manager/issues/6)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-helpdesk-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** geplant: task/task-006-codex-helpdesk, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-008 und OPEN-009 bearbeiten. Nachrichtenwege, Postfächer, Kundenidentität und Servicekalender festlegen.
 
 **Abnahmekriterien:** Wochenenden, Feiertage, Zeitumstellung, Pausen, Wiedereröffnung und Prioritätswechsel sind anhand konkreter Zeitpunkte berechenbar. Doppelte Mails und Eskalationsversuche führen nicht zu unkontrollierten Doppelaktionen.
 
-**Nächster Schritt:** Fachliche SLA-Beispiele vorschlagen und gezielt fehlende Regeln klären.
+**Nächster Schritt:** Nach Integration der Reservierung Nachrichtenwege, Portalzugang und berechenbare SLA-Beispiele ausarbeiten. Offene Produktregeln als Vorschläge kennzeichnen und neue ausdrückliche Nutzerentscheidungen nachführen. Koordination durch die fortsetzende Codex-Sitzung; keine Produktimplementierung.
 
 ## TASK-007 Wiki Sprachen und Unternehmensauftritt spezifizieren
 
