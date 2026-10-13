@@ -10,6 +10,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-001 Erste zentrale Spezifikation erstellen und prüfen
 
+**GitHub:** [Issue #1](https://github.com/1uedev/task-manager/issues/1)
+
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** Codex-Hauptsitzung-2026-10-12 · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-PROD-003, REQ-DEV-001, REQ-DEV-002, REQ-DEV-004. **Abhängigkeiten:** keine. **Arbeitsstand:** Dokumentfassung im Repository; ursprüngliche Erstellung am 2026-10-12.
@@ -26,6 +28,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-002 Umfang und spätere Funktionen vervollständigen
 
+**GitHub:** [Issue #2](https://github.com/1uedev/task-manager/issues/2)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** noch nicht begonnen.
@@ -37,6 +41,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 **Nächster Schritt:** Vorhandene Vergleichsanalyse bei Bedarf gezielt heranziehen und eine prüfbare Lückenliste erstellen.
 
 ## TASK-003 Architekturentscheidungen vorbereiten
+
+**GitHub:** [Issue #3](https://github.com/1uedev/task-manager/issues/3)
 
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
@@ -50,6 +56,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-004 Identität und Berechtigungen spezifizieren
 
+**GitHub:** [Issue #4](https://github.com/1uedev/task-manager/issues/4)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** noch nicht begonnen.
@@ -61,6 +69,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 **Nächster Schritt:** Konkrete Beispielrollen und Mehrfachgruppen-Fälle formulieren.
 
 ## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
+
+**GitHub:** [Issue #5](https://github.com/1uedev/task-manager/issues/5)
 
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
@@ -74,6 +84,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-006 Helpdesk Portal und SLA Regeln ausarbeiten
 
+**GitHub:** [Issue #6](https://github.com/1uedev/task-manager/issues/6)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** noch nicht begonnen.
@@ -85,6 +97,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 **Nächster Schritt:** Fachliche SLA-Beispiele vorschlagen und gezielt fehlende Regeln klären.
 
 ## TASK-007 Wiki Sprachen und Unternehmensauftritt spezifizieren
+
+**GitHub:** [Issue #7](https://github.com/1uedev/task-manager/issues/7)
 
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
@@ -98,6 +112,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-008 KI Umfang und Freigabeablauf festlegen
 
+**GitHub:** [Issue #8](https://github.com/1uedev/task-manager/issues/8)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** noch nicht begonnen.
@@ -109,6 +125,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 **Nächster Schritt:** Vier priorisierbare Anwendungsfälle mit Ein- und Ausgaben sowie Prüffällen formulieren.
 
 ## TASK-009 Git und spätere Migration eingrenzen
+
+**GitHub:** [Issue #9](https://github.com/1uedev/task-manager/issues/9)
 
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
@@ -122,6 +140,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-010 Betrieb Sicherheit und Leistung planen
 
+**GitHub:** [Issue #10](https://github.com/1uedev/task-manager/issues/10)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** noch nicht begonnen.
@@ -133,6 +153,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 **Nächster Schritt:** Betriebs- und Lastprofil mit klar markierten Annahmen entwerfen.
 
 ## TASK-011 Gemeinsamen Entwicklungs und Review Ablauf beschließen
+
+**GitHub:** [Issue #11](https://github.com/1uedev/task-manager/issues/11)
 
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
@@ -146,6 +168,8 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-012 Planungsstand zur Architekturfreigabe zusammenführen
 
+**GitHub:** [Issue #12](https://github.com/1uedev/task-manager/issues/12)
+
 **Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
 
 **Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** noch nicht begonnen.
@@ -158,15 +182,21 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 ## TASK-013 GitHub Arbeitsumgebung einrichten
 
-**Status:** IN ARBEIT · **Verantwortlich:** Codex-Hauptsitzung-2026-10-13 · **Aktualisiert:** 2026-10-13
+**GitHub:** [Issue #13](https://github.com/1uedev/task-manager/issues/13)
 
-**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene Spezifikation und DEC-025. **Arbeitsstand:** initialer Aufbau von main, danach Änderungen per Pull Request.
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** Codex-Hauptsitzung-2026-10-13 · **Aktualisiert:** 2026-10-13
+
+**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene Spezifikation und DEC-025. **Arbeitsstand:** Bootstrap-Commit 9b791e0 auf main; Verknüpfungen und Nachweise im Branch setup/task-013-task-links.
 
 **Umfang:** Das vom Auftraggeber angelegte Repository mit den zentralen Dokumenten, gemeinsamen KI-Regeln, Aufgaben-Issues, PR-Vorlage, Strukturprüfung und Schutz des Integrationsbranches einrichten. Die aktuelle Beauftragung umfasst die technische Einrichtung; die fachliche Abnahme der Produktspezifikation bleibt offen.
 
 **Abnahmekriterien:** Dokumente sind auf GitHub erreichbar. Jede bestehende Aufgabe besitzt einen verknüpften Issue-Einstieg. Die lokale Strukturprüfung und GitHub CI laufen erfolgreich. main verlangt Pull Requests und den aktuellen erfolgreichen Prüfstatus; gewaltsames Überschreiben und Löschen sind gesperrt. Eine neue KI-Sitzung findet Start-, Reservierungs- und Übergabeanleitung. Einschränkungen der Review-Regeln sind dokumentiert.
 
-**Nächster Schritt:** Lokale Prüfungen, Veröffentlichung, GitHub-Konfiguration und Remote-Verifikation durchführen. Keine automatische Freigabe von Produktanforderungen oder Aktivierung kostenpflichtiger KI-Dienste.
+**Ergebnis:** Dokumente, gemeinsame Regeln, Vorlagen und Prüfskripte sind veröffentlicht. Alle 13 Aufgaben haben Issues. main verlangt Pull Requests, einen aktuellen erfolgreichen repository-checks-Lauf von GitHub Actions und aufgelöste Review-Gespräche; Force-Push und Löschen sind auch für Administratoren gesperrt.
+
+**Prüfungen:** Lokale Strukturprüfung und elf Regressionstests bestanden. [Erster GitHub-CI-Lauf](https://github.com/1uedev/task-manager/actions/runs/38366179158) erfolgreich. Repository-Einstellungen und Branchschutz über die GitHub-API zurückgelesen. Kein unabhängiges Review und keine fachliche Produktfreigabe behauptet.
+
+**Nächster Schritt:** Ergebnis-PR mit diesen Verknüpfungen prüfen und integrieren. Holger kann die Arbeitsweise anschließend fachlich bestätigen; bis dahin bleibt die Aufgabe zur Prüfung eingetragen. Die Produktimplementierung wurde nicht gestartet und kein kostenpflichtiger KI-Dienst aktiviert.
 
 ## Neue Aufgaben und Übergaben
 
