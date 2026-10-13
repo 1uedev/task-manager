@@ -44,15 +44,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #3](https://github.com/1uedev/task-manager/issues/3)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261013-architecture-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002, REQ-API-001. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004 und TASK-005. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002, REQ-API-001. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004 und TASK-005. **Arbeitsstand:** geplant: task/task-003-codex-architecture, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-001, OPEN-002 und OPEN-013 bearbeiten. Go und Java bewerten, Modulgrenzen, Unternehmenskontext und API-Grundvertrag entwerfen.
 
 **Abnahmekriterien:** Ein begründeter Entscheidungsvorschlag benennt Betrieb, Prüfbarkeit, Aufwand und Grenzen. PostgreSQL bleibt alleiniger V1-Datenbankumfang. Kein Technologie-Prototyp oder Anwendungscode ohne zusätzliche Beauftragung.
 
-**Nächster Schritt:** Fachmodule und kritische Abhängigkeiten aus der Spezifikation ableiten.
+**Nächster Schritt:** Nach Integration dieser Reservierung einen Architekturentwurf mit Quellen, Go/Java-Vergleich, Modulgrenzen und API-Vertrag erstellen. Koordination dieser beauftragten Runde: Codex-Hauptsitzung nach Holgers Fortsetzungsauftrag. Keine Produktimplementierung.
 
 ## TASK-004 Identität und Berechtigungen spezifizieren
 
