@@ -27,7 +27,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Helpdesk | IMAP/SMTP, SLA-Fristen, Geschäftszeiten und Eskalationen | Tickets, Hintergrundjobs und konkrete SLA-Regeln |
 | Kundenportal | Berechtigte externe Teilnahme; standardmäßig Anfragen der eigenen Kundenorganisation in freigegebenen Projekten | Identität, Rechte und Helpdesk; DEC-027 |
 | Wiki | Moderne Textbearbeitung, Historie und Konfliktschutz, optionale Sprachfassungen | Rechte, Dateispeicher und Editorentscheidung |
-| Anforderungen | Kriterien, einfache Freigabe, Historie und Verknüpfungen | Tickets, Wiki und Git |
+| Anforderungen | Kriterien, einfache Freigabe, Historie und Verknüpfungen; inhaltliche Änderungen freigegebener Anforderungen erhalten eine neue Revision zur erneuten Freigabe | Tickets, Wiki und Git; DEC-030 |
 | Git | GitHub und GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung und Sichtbarkeitsregeln |
 | Sprachen und Marke | Deutsch und Englisch, zusätzliche Sprachen vorbereiten, Logo und Farben | UI, Portal, Anmeldung und Vorlagen |
 | API | Dokumentierte Kernabläufe von Anfang an | Gemeinsame Fachlogik und Rechte |

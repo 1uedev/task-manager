@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.2 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.3 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern.
 
@@ -266,9 +266,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-REQ-002 Einfacher Freigabestatus und Historie
 
-**B · V1.** Anforderungen besitzen einen einfachen Freigabestatus und eine nachvollziehbare Änderungshistorie.
+**B · V1.** Anforderungen besitzen einen einfachen Freigabestatus und eine nachvollziehbare Änderungshistorie. Wird eine freigegebene Anforderung inhaltlich geändert, entsteht eine neue Revision zur erneuten Freigabe. Die bisherige Freigabe bleibt historisch erhalten (DEC-030).
 
-**Abnahme:** Berechtigte Personen können eine Anforderung freigeben. Sichtbar bleiben freigebende Person, Zeitpunkt und die freigegebene Fassung. Das Verhalten nach einer inhaltlichen Änderung wird vor Umsetzung entschieden; vorgeschlagen ist eine erneute Prüfung statt einer stillschweigend weitergeltenden Freigabe.
+**Abnahme:** Berechtigte Personen können eine Anforderung freigeben. Sichtbar bleiben freigebende Person, Zeitpunkt und die freigegebene Fassung. Neue Abnahmekriterien erzeugen eine ungeprüfte Revision; die vorherige Freigabe wird weder überschrieben noch auf den neuen Inhalt übertragen. Welche rein organisatorischen Änderungen keine neue Fachrevision benötigen, wird vor Umsetzung festgelegt.
 
 ### REQ-REQ-003 Nachvollziehbare Umsetzung
 
