@@ -58,15 +58,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #4](https://github.com/1uedev/task-manager/issues/4)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261013-rights-01 · **Aktualisiert:** 2026-10-13
 
-**Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplant: task/task-004-claude-rights, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-004, OPEN-005 und OPEN-006 beantworten. Rechtekonflikte, externe Sicht, Feldrechte, LDAP-Lebenszyklus und 2FA-Termin festlegen.
 
 **Abnahmekriterien:** Eine Rechte-Matrix und positive sowie negative Beispiele decken API, Suche, Exporte, E-Mail, Dateien und KI ab. Authentifizierung und fachliche Berechtigung bleiben getrennt. Fachliche Entscheidungen sind von technischen Vorschlägen unterscheidbar.
 
-**Nächster Schritt:** Konkrete Beispielrollen und Mehrfachgruppen-Fälle formulieren.
+**Nächster Schritt:** Nach Integration der Reservierung erstellt Claude Code einen lesenden Konzeptentwurf; die koordinierende Codex-Sitzung prüft und integriert ihn. Gruppen, Feldrechte, Kundenportal, LDAP und 2FA werden mit positiven und negativen Beispielen beschrieben. Offene Nutzerentscheidungen bleiben gekennzeichnet.
 
 ## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
 
