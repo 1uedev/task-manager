@@ -154,15 +154,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #9](https://github.com/1uedev/task-manager/issues/9)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-git-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-GIT-001 bis REQ-GIT-003, REQ-MIG-001, REQ-MIG-002, REQ-API-002. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-GIT-001 bis REQ-GIT-003, REQ-MIG-001, REQ-MIG-002, REQ-API-002. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplant: task/task-009-codex-git, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-010 und den Migrationsteil von OPEN-016 bearbeiten. Git-Varianten und Objektarten wählen, Importquellen priorisieren.
 
 **Abnahmekriterien:** Zuordnung und Anzeige sind klar von späteren Git-Schreibaktionen getrennt. Quellenzugriff, Metadatenrechte und Aktualisierung sind definiert. Die erste Version verspricht keinen Import; die anschließende Migration besitzt einen begrenzten, überprüfbaren Umfang.
 
-**Nächster Schritt:** Gewünschte Git-Betriebsvarianten und erste Importquelle ermitteln.
+**Nächster Schritt:** Nach Integration der Reservierung Git-Zuordnung, Rechte und Aktualisierung sowie einen begrenzten ersten Migrationsumfang spezifizieren. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag; keine Produktimplementierung.
 
 ## TASK-010 Betrieb Sicherheit und Leistung planen
 
