@@ -14,6 +14,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Domain review: [project workflows, fields, time corrections and requirement revisions](docs/DOMAIN_MODEL.md).
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
+- Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -24,7 +25,7 @@ TODO.md on main is the single source for task ownership and state. Issues provid
 
 Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. React is planned; backend language remains open. German and English, customer branding, LDAP, group and field permissions and an API are included in the specification.
 
-Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. The first AI delivery scope is still open.
+Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
 
 Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous active users. There is no fixed RAM cap. The 1-TB SSD planning budget requires a defined attachment and retention profile. No performance measurements or finished application are claimed.
 
@@ -56,6 +57,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/DOMAIN_MODEL.md | Proposed project workflows, configuration lifecycle, time records and requirement revisions |
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
+| docs/AI_USE_CASES.md | Four confirmed internal V1 use cases and proposed skills, provider, data, confirmation and operating contracts |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 

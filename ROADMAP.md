@@ -31,8 +31,9 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Git | GitHub und GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung und Sichtbarkeitsregeln |
 | Sprachen und Marke | Deutsch und Englisch, zusätzliche Sprachen vorbereiten, Logo und Farben | UI, Portal, Anmeldung und Vorlagen |
 | API | Dokumentierte Kernabläufe von Anfang an | Gemeinsame Fachlogik und Rechte |
+| KI | Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung für interne berechtigte Benutzer; Skills und Modellzuordnung durch Administratoren | Kontextrechte, Bestätigung und mindestens eine qualifizierte Anbieteranbindung; DEC-034, DEC-035 |
 
-**Noch für V1 zu entscheiden:** konkreter KI-Lieferumfang und alle in REQUIREMENTS.md als V markierten Ergänzungen. Die bestätigten KI-Anbieter bleiben in der Planung. 2FA folgt gemäß DEC-029 zeitnah nach V1; V1 bereitet die spätere Ergänzung in der Anmeldearchitektur vor. Für Feldrechte gilt bereits der bestätigte Vorrang ausdrücklicher Verbote aus DEC-028.
+**Noch für V1 zu entscheiden:** Lieferreihenfolge der drei KI-Anbieter, Datenfreigaben und Betriebsgrenzen sowie alle in REQUIREMENTS.md als V markierten Ergänzungen. Die vier KI-Anwendungsfälle und der interne Nutzerkreis sind durch DEC-034 und DEC-035 bestätigt; die gleichzeitige Lieferung aller drei Anbieter ist noch offen. 2FA folgt gemäß DEC-029 zeitnah nach V1; V1 bereitet die spätere Ergänzung in der Anmeldearchitektur vor. Für Feldrechte gilt bereits der bestätigte Vorrang ausdrücklicher Verbote aus DEC-028.
 
 **Vorgeschlagene Auslieferungsbedingungen:** fachlich geprüfte Kernabläufe, nachgewiesene Rechteisolation, reproduzierbare Installation, Update und Wiederherstellung sowie definierte und gemessene Leistungsziele. Die genaue Freigaberegel wird unter OPEN-017 beschlossen.
 
@@ -52,6 +53,7 @@ Diese Reihenfolge ist vorläufig. Ein Importumfang mit komplexer Rechte- und His
 |---|---|---|
 | Mehrmandantenfähigkeit | Mehrere Unternehmen innerhalb eines Betriebsmodells | Unternehmensgrenzen müssen auch in Suche, Dateien, Jobs und KI nachgewiesen werden; eine getrennte Nutzersicht allein genügt nicht. REQ-ORG-002 |
 | Weitere Anmeldeanbieter | Kundenanforderungen an Anmeldung ergänzen | Anbieterwahl offen; ein neues Verfahren nutzt dieselbe interne Identität und Rechtebasis. REQ-AUTH-003 |
+| KI für externe Portalnutzer | Direkte KI-Unterstützung für berechtigte Kunden nach V1 | Eigene Daten- und Empfängergrenzen, Missbrauchs-/Kostenkontrolle und Abnahme; DEC-035, REQ-AI-001, REQ-AI-005 |
 | Weitere Git-Funktionen | Über Anzeige und Zuordnung hinausgehen | Einzelaktionen offen; eine später erlaubte Schreibaktion besitzt eigene Rechte und gegebenenfalls KI-Bestätigung. REQ-GIT-003 |
 | Vorlagenbasierte PDF-Ausgabe | Gebrandete Dokumente erzeugen | Ein freigegebener Dokumenttyp lässt sich in der gewünschten Sprache mit geprüftem Layout erzeugen. REQ-BRAND-002 |
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |

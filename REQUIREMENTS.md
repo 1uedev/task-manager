@@ -1,8 +1,8 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.5 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.6 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
-Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern.
+Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
 Fachliche Abnahme: Holger Gerlach. Entwicklung später überwiegend durch Codex und Claude Code. Seit dem 13. Oktober 2026 sind zusätzlich die Einrichtung des GitHub-Repositories und der gemeinsamen KI-Arbeitsumgebung beauftragt. Die Produktimplementierung ist weiterhin nicht beauftragt.
 
@@ -26,7 +26,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-PROD-002 Vollständiger Arbeitsablauf in Version 1
 
-**B · V1.** Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungsmanagement und Git-Verknüpfung sind gemeinsam Bestandteil der ersten verkaufbaren Version.
+**B · V1.** Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungsmanagement und Git-Verknüpfung sind gemeinsam Bestandteil der ersten verkaufbaren Version. Hinzu kommen die vier internen KI-Anwendungsfälle aus REQ-AI-001 (DEC-034, DEC-035).
 
 **Abnahme:** Eine Supportanfrage lässt sich erfassen, bearbeiten, mit Zeitbuchungen und Wissen verbinden und dem berechtigten Kunden anzeigen. Eine Anforderung lässt sich mit Umsetzungstickets und Git-Einträgen verknüpfen. Der Ablauf ist mit dokumentierten Beispieldaten fachlich prüfbar.
 
@@ -346,19 +346,19 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-AI-001 Nutzen pro Anwendungsfall planen
 
-**B · Planung.** Für jeden fachlichen Anwendungsfall wird eine sinnvolle KI-Unterstützung bewertet. Eine Bewertung darf ergeben, dass deterministische Software oder manuelle Bearbeitung geeigneter ist.
+**B · Planung und V1.** Für jeden fachlichen Anwendungsfall wird eine sinnvolle KI-Unterstützung bewertet. Eine Bewertung darf ergeben, dass deterministische Software oder manuelle Bearbeitung geeigneter ist. Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung gehören zu V1 (DEC-034). In V1 dürfen nur berechtigte interne Benutzer KI nutzen; die Nutzung durch externe Kunden im Portal folgt später (DEC-035).
 
-**Abnahme:** Ein KI-Verzeichnis beschreibt Zweck, Eingaben, Datenumfang, Rechte, Ausgabe, Bestätigung und Qualitätsprüfung. Es umfasst mindestens die unten aufgeführten Anwendungsfälle. Die konkrete Lieferreihenfolge ist separat zu entscheiden.
+**Abnahme:** Ein KI-Verzeichnis beschreibt Zweck, Eingaben, Datenumfang, Rechte, Ausgabe, Bestätigung und Qualitätsprüfung. Die vier bestätigten V1-Funktionen sind für berechtigte interne Benutzer prüfbar; externe Portalnutzer können sie auch über die API nicht ausführen. Weitere Bereiche werden bewertet, aber nicht allein dadurch zur Lieferzusage. Der [KI-Entwurf](docs/AI_USE_CASES.md) enthält konkrete Abläufe und Prüffälle; die Lieferreihenfolge der Anbieter bleibt offen.
 
 ### REQ-AI-002 Vom Administrator gepflegte Skills
 
-**B · Liefertermin offen.** Administratoren hinterlegen Markdown-Anweisungen je Thema oder Anwendungsfall.
+**B · V1.** Administratoren hinterlegen Markdown-Anweisungen je Thema oder Anwendungsfall. Die vier V1-Funktionen verwenden diese administrierbaren Skills; normale Benutzer erhalten dadurch kein Verwaltungsrecht.
 
 **Abnahme:** Ein Administrator kann einen Skill erstellen, bearbeiten und einem Anwendungsfall zuordnen. Ein Skill enthält Textanweisungen; daraus entsteht keine Berechtigung, beliebigen serverseitigen Code auszuführen. Fachliche Rechte bleiben unverändert.
 
 ### REQ-AI-003 Anbieter und Modelle konfigurieren
 
-**B · Liefertermin offen, Architektur von Anfang an.** Die Anbindung unterstützt OpenAI, Anthropic beziehungsweise Claude und Ollama. Nur Administratoren verwalten Anbieter, Endpunkte, Zugangsdaten, Modelle und ihre Zuordnung.
+**B · V1-Konfiguration; Lieferreihenfolge der drei Anbieter offen.** Die Anbindung sieht OpenAI, Anthropic beziehungsweise Claude und Ollama vor. Nur Administratoren verwalten Anbieter, Endpunkte, Zugangsdaten, Modelle und ihre Zuordnung. Für die vier bestätigten V1-Funktionen ist mindestens eine geeignete freigegebene Anbindung erforderlich; welche der drei Anbieter bereits in V1 ausgeliefert werden, bleibt unter OPEN-003 zu entscheiden.
 
 **Abnahme:** Die Architektur enthält eine gemeinsame Anbindung mit expliziten Fähigkeiten pro Anbieter und Modell. Nutzer starten einen fachlichen Anwendungsfall ohne Modellwahl. Ein nicht geeigneter Modelltyp führt zu einer verständlichen Meldung statt zu einer unkontrollierten Ausführung. Keine konkrete Modellversion ist festgeschrieben.
 
@@ -400,7 +400,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### Geplante KI Anwendungsfälle
 
-Die folgende Tabelle ist ein Vorschlag zur fachlichen Ausgestaltung von REQ-AI-001. Sie ist keine bereits freigegebene Lieferliste für V1.
+Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung für interne berechtigte Benutzer. Die folgende Tabelle erweitert die Nutzenbewertung aus REQ-AI-001; zusätzliche Tätigkeiten darin sind Vorschläge mit offener Lieferreihenfolge. Der [KI-Entwurf](docs/AI_USE_CASES.md) grenzt die vier Fälle und spätere Kandidaten ab.
 
 | Anwendungsfall | Sinnvolle Unterstützung | Bestätigung und fachliche Grenze |
 |---|---|---|
@@ -606,10 +606,10 @@ Diese Szenarien verbinden mehrere Anforderungen. Sie sind Entwürfe für die sp�
 | ACC-007 | Deutscher und englischer Nutzer arbeiten mit demselben Datenbestand im konfigurierten Unternehmensauftritt | REQ-I18N-001, REQ-I18N-002, REQ-I18N-003, REQ-BRAND-001 |
 | ACC-008 | Installation wird aktualisiert und aus einer Sicherung einschließlich Dateien wiederhergestellt | REQ-OPS-001, REQ-OPS-004, REQ-OPS-005, REQ-DATA-003 |
 | ACC-009 | Referenzlast wird mit dokumentierter Hardware und vorab festgelegten Leistungszielen geprüft | REQ-PROD-004, REQ-PERF-001, REQ-PERF-002, REQ-PERF-003 |
-| ACC-010 | Sobald KI ausgeliefert wird: Antwortvorschlag bleibt bis zur Freigabe unverändert, prüft Rechte erneut und versendet nichts automatisch | REQ-AI-003, REQ-AI-004, REQ-AI-005, REQ-AI-006 |
+| ACC-010 | Interner Benutzer nutzt die vier V1-KI-Funktionen; Änderungen und Versand benötigen Bestätigung und erneute Rechteprüfung; externer KI-Zugriff wird verweigert | REQ-AI-001, REQ-AI-003, REQ-AI-004, REQ-AI-005, REQ-AI-006 |
 
 ## Offene Punkte und nächster Prüfstand
 
-Die maßgeblichen offenen Fragen stehen in DECISIONS.md unter OPEN-001 bis OPEN-021. Vorrang haben Backend und Modulstruktur, Berechtigungsmodell, SLA-Regeln, KI-Lieferumfang sowie Betriebs- und Leistungsziele. Bereits bestätigte Vorgaben werden dabei nicht erneut zur Disposition gestellt.
+Die maßgeblichen offenen Fragen stehen in DECISIONS.md unter OPEN-001 bis OPEN-021. Vorrang haben Backend und Modulstruktur, Berechtigungsmodell, SLA-Regeln, KI-Anbieterreihenfolge und Datenfreigaben sowie Betriebs- und Leistungsziele. Bereits bestätigte Vorgaben werden dabei nicht erneut zur Disposition gestellt.
 
 Die erste fachliche Prüfung soll insbesondere die als V gekennzeichneten Ergänzungen und die vorgeschlagenen Abnahmekriterien beurteilen. Bis dahin bleiben diese Teile Entwürfe. Eine Freigabe dieser Spezifikation ist keine automatische Freigabe zur Programmierung.

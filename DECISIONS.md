@@ -57,8 +57,12 @@ DEC-031 und DEC-032 beruhen ebenfalls auf Holgers ausdrücklicher Auswahl am 13.
 | ID | Entscheidung | Bezug |
 |---|---|---|
 | DEC-033 | Holger bestätigt am 15. Oktober 2026: Wiki-Änderungen werden zunächst als Entwurf gespeichert und erst anschließend ausdrücklich veröffentlicht. Speicherung allein verändert die Leserfassung nicht. Dies klärt den Veröffentlichungsablauf in OPEN-011. | REQ-DOC-001, REQ-DOC-002, REQ-DOC-003 |
+| DEC-034 | Holger legt am 15. Oktober 2026 Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung als KI-Lieferumfang der ersten verkaufbaren Version fest. Die vier Fälle verwenden die bereits bestätigten administrierbaren Skills und Modellzuordnungen. Weitere KI-Funktionen und die Lieferreihenfolge der drei Anbieter bleiben offen. | REQ-PROD-002, REQ-AI-001, REQ-AI-002, REQ-AI-003 |
+| DEC-035 | Holger legt am 15. Oktober 2026 fest: In V1 dürfen nur interne berechtigte Benutzer die KI-Funktionen nutzen. Die direkte Nutzung durch externe Kunden im Portal folgt später. Von internem Support ausdrücklich bestätigte Kundenantworten bleiben möglich. | REQ-AI-001, REQ-AI-004, REQ-ACL-002 |
 
 DEC-033 trennt redaktionelle Arbeit von der sichtbaren Leserfassung. Der [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) beschreibt Revisionen, optionale Übersetzungen, Konflikte und Vorlagen. Die weiteren Detailvorschläge sind dadurch nicht pauschal freigegeben.
+
+DEC-034 und DEC-035 klären den ersten fachlichen KI-Umfang und dessen Nutzerkreis. Der [KI-Entwurf](docs/AI_USE_CASES.md) beschreibt die vier Abläufe sowie weiterhin vorgeschlagene Datenwege, Bestätigung, Skills und Betriebsgrenzen. Anforderungen und Roadmap sind nachgeführt.
 
 ## Offene Entscheidungen
 
@@ -82,9 +86,9 @@ Der [Architekturentwurf](docs/ARCHITECTURE.md) beschreibt Datenhoheit je Modul, 
 
 ### OPEN-003 Erster KI Lieferumfang
 
-**Status:** offen · **Fällig:** vor verbindlicher V1-Planung · **Bezug:** REQ-AI-001 bis REQ-AI-009
+**Status:** teilweise entschieden · **Fällig:** Anbieterreihenfolge vor verbindlicher V1-Planung · **Bezug:** REQ-AI-001 bis REQ-AI-009
 
-Welche Anwendungsfälle werden bereits in V1 ausgeliefert, und wann stehen alle drei bestätigten Anbieter zur Verfügung? Vorschlag zur Priorisierung: Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung. Die Verfügbarkeit für externe Portalnutzer und die Möglichkeit automatischer Vorschlagsgenerierung sind gesondert zu entscheiden. Automatische Änderungen bleiben ausgeschlossen.
+DEC-034 bestätigt Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung für V1. DEC-035 begrenzt V1 auf interne berechtigte Benutzer; direkte Portalnutzung folgt später. Offen bleiben die Lieferreihenfolge von OpenAI, Anthropic/Claude und Ollama sowie mögliche spätere automatische Vorschlagsgenerierung. Der [KI-Entwurf](docs/AI_USE_CASES.md) empfiehlt zunächst ausdrückliche Benutzerstarts und beschreibt die vier Abläufe. Mindestens eine geeignete Anbindung muss die V1-Funktionen tragen; eine gleichzeitige Auslieferung aller drei Anbieter ist noch nicht beschlossen. Automatische Änderungen bleiben ausgeschlossen.
 
 ### OPEN-004 Zwei Faktor Authentifizierung
 
@@ -184,7 +188,7 @@ Repository: 1uedev/task-manager. Integrationsbranch: main. Der technische Einric
 
 **Status:** offen · **Fällig:** vor erster KI-Auslieferung · **Bezug:** REQ-AI-003, REQ-AI-005, REQ-AI-007, REQ-AI-008
 
-Zu entscheiden sind erlaubte Datenklassen pro Anbieter, Herkunft der API-Zugangsdaten, Kostenträger, Nutzungsgrenzen, Zeitlimits, Inhaltsprotokollierung, Löschung und zulässige Ersatzmodelle. Eine gemeinsame Provider-Schnittstelle macht Modelle nicht automatisch austauschbar.
+Zu entscheiden sind erlaubte Datenklassen pro Anbieter, Herkunft der API-Zugangsdaten, Kostenträger, Nutzungsgrenzen, Zeitlimits, Inhaltsprotokollierung, Löschung und zulässige Ersatzmodelle. Eine gemeinsame Provider-Schnittstelle macht Modelle nicht automatisch austauschbar. Der [KI-Entwurf](docs/AI_USE_CASES.md) liefert Vorschläge für Kontextbegrenzung, versionierte Skills, Bestätigung, Budgetreservierung und Ausfallverhalten. Zahlenwerte, Datenklassen und Aufbewahrung sind noch nicht fachlich freigegeben.
 
 ### OPEN-020 Produkt und kommerzieller Rahmen
 

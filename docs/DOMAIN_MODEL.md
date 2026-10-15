@@ -1,6 +1,6 @@
 # Fachmodell und Projektkonfiguration
 
-Stand 13. Oktober 2026 · TASK-005 · Entwurf zur Prüfung durch Holger
+Stand 15. Oktober 2026 · TASK-005 · Entwurf zur Prüfung durch Holger
 
 Dieses Dokument konkretisiert REQ-ORG-003, REQ-TKT-001 bis REQ-TKT-005, REQ-TIME-001, REQ-TIME-002 und REQ-REQ-001 bis REQ-REQ-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Es beschreibt fachliches Verhalten, kein Datenbankschema und keinen Anwendungscode. Die [Architektur](ARCHITECTURE.md) und das [Rechtekonzept](PERMISSIONS.md) bleiben Entwürfe.
 
@@ -130,7 +130,7 @@ Als inhaltlich gelten im Vorschlag Titel, Beschreibung, Abnahmekriterien, Priori
 | Anforderungen | Widersprüche und fehlende Kriterien finden, Unterschiede zwischen Revisionen erklären | Keine fachliche Freigabe durch KI; geänderte Inhalte folgen DEC-030. |
 | Beziehungen | Mögliche Duplikate und passende Dokumentation vorschlagen | Nur sichtbare Inhalte; Verknüpfen benötigt Bestätigung und normale Fachrechte. |
 
-Diese Bewertung ergänzt REQ-AI-001; sie entscheidet weder den ersten KI-Lieferumfang noch die Modellwahl aus TASK-008.
+Diese Bewertung ergänzt REQ-AI-001. DEC-034 bestätigt inzwischen vier V1-Anwendungsfälle; der [KI-Entwurf](AI_USE_CASES.md) grenzt sie ab. Weitere hier genannte KI-Tätigkeiten und die Anbieterreihenfolge sind damit nicht automatisch freigegeben.
 
 ## Fachliche Prüffälle
 
