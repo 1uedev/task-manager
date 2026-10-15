@@ -168,15 +168,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #10](https://github.com/1uedev/task-manager/issues/10)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-ops-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** geplant: task/task-010-codex-ops, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-012, OPEN-014 und Aufbewahrung aus OPEN-016 bearbeiten. Docker-Betrieb, Persistenz, Internetbedarf, Sicherung, Updates, Risiken und Lastprofil beschreiben.
 
 **Abnahmekriterien:** Ressourcenannahmen sind nachvollziehbar, ohne feste RAM-Grenze. Die SSD-Planung berücksichtigt Anhänge. Wiederanlauf, zulässiger Datenverlust und Leistungsziele sind vor Tests festgelegt. Vorschläge werden nicht als gemessene Systemanforderungen ausgegeben.
 
-**Nächster Schritt:** Betriebs- und Lastprofil mit klar markierten Annahmen entwerfen.
+**Nächster Schritt:** Nach Integration der Reservierung Docker-Betrieb, Sicherung, Wiederanlauf, Updates, Datenaufbewahrung und Lastprofil mit nachvollziehbaren Annahmen ausarbeiten. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag; keine Produktimplementierung.
 
 ## TASK-011 Gemeinsamen Entwicklungs und Review Ablauf beschließen
 
