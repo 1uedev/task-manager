@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.4 · Stand 13. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.5 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern.
 
@@ -242,9 +242,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-DOC-002 Versionen und Bearbeitungskonflikte
 
-**B · V1.** Gleichzeitige gemeinsame Echtzeitbearbeitung ist nicht erforderlich. Änderungen müssen nachvollziehbar bleiben und dürfen sich nicht unbemerkt überschreiben.
+**B · V1.** Gleichzeitige gemeinsame Echtzeitbearbeitung ist nicht erforderlich. Änderungen müssen nachvollziehbar bleiben und dürfen sich nicht unbemerkt überschreiben. Wiki-Änderungen werden als Entwurf gespeichert und anschließend ausdrücklich veröffentlicht (DEC-033).
 
-**Abnahme:** Ein Nutzer erkennt einen Konflikt mit einer neueren gespeicherten Fassung und kann seine Arbeit erhalten. Ob Bearbeitungssperren, Versionsprüfung oder eine Kombination verwendet wird, bleibt eine Architekturentscheidung.
+**Abnahme:** Ein Nutzer erkennt einen Konflikt mit einer neueren gespeicherten Fassung und kann seine Arbeit erhalten. Ein neuer Entwurf verändert die für Leser veröffentlichte Fassung nicht. Nur eine berechtigte ausdrückliche Veröffentlichung macht ihn im vorgesehenen Leserkreis zugänglich. Ob Bearbeitungssperren, Versionsprüfung oder eine Kombination verwendet wird, bleibt eine Architekturentscheidung. Beispiele stehen im [Wiki-Entwurf](docs/WIKI_I18N_BRANDING.md).
 
 ### REQ-DOC-003 Optionale Sprachfassungen
 
@@ -601,7 +601,7 @@ Diese Szenarien verbinden mehrere Anforderungen. Sie sind Entwürfe für die sp�
 | ACC-002 | E-Mail erzeugt genau einen Vorgang, Geschäftszeiten bestimmen die Frist und eine Eskalation erreicht die festgelegten Empfänger | REQ-HD-001, REQ-HD-002, REQ-HD-003, REQ-HD-004, REQ-HD-005 |
 | ACC-003 | Kunde sieht und beantwortet freigegebene Anfragen; interne Notizen und geschützte Felder bleiben unzugänglich | REQ-PORTAL-001, REQ-TKT-003, REQ-ACL-003, REQ-ACL-004 |
 | ACC-004 | Bearbeiter bucht und korrigiert Zeit; die berechtigte Auswertung stimmt mit den Einzelbuchungen überein | REQ-TIME-001, REQ-TIME-002 |
-| ACC-005 | Wiki-Seite wird zuerst nur deutsch angelegt, später übersetzt; veraltete Bearbeitung überschreibt keine neuere Fassung | REQ-DOC-001, REQ-DOC-002, REQ-DOC-003 |
+| ACC-005 | Wiki-Seite wird zuerst nur deutsch als Entwurf angelegt, ausdrücklich veröffentlicht und später übersetzt; veraltete Bearbeitung überschreibt keine neuere Fassung | REQ-DOC-001, REQ-DOC-002, REQ-DOC-003 |
 | ACC-006 | Anforderung erhält Kriterien und Freigabe, wird mit Ticket und GitHub- beziehungsweise GitLab-Objekt verknüpft | REQ-REQ-001, REQ-REQ-002, REQ-REQ-003, REQ-GIT-001 |
 | ACC-007 | Deutscher und englischer Nutzer arbeiten mit demselben Datenbestand im konfigurierten Unternehmensauftritt | REQ-I18N-001, REQ-I18N-002, REQ-I18N-003, REQ-BRAND-001 |
 | ACC-008 | Installation wird aktualisiert und aus einer Sicherung einschließlich Dateien wiederhergestellt | REQ-OPS-001, REQ-OPS-004, REQ-OPS-005, REQ-DATA-003 |
