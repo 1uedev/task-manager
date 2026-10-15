@@ -118,15 +118,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #7](https://github.com/1uedev/task-manager/issues/7)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-wiki-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplant: task/task-007-codex-wiki, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-011 und OPEN-015 bearbeiten. Editor, Dokumentformat, Sprachfassungen, Konfliktbehandlung und Vorlagen entwerfen.
 
 **Abnahmekriterien:** Einsprachige Seiten sind ohne Übersetzungszwang nutzbar. Wiederholte Bearbeitung erhält Inhalte. Sprache, Zeitzone und Formatierung sind abgegrenzt. Anwendung, Portal, Anmeldung und E-Mail sind beim Branding berücksichtigt.
 
-**Nächster Schritt:** Repräsentative Wiki-Seite und E-Mail-Vorlage als fachliche Beispiele beschreiben.
+**Nächster Schritt:** Nach Integration dieser Reservierung Wiki-Inhalt, Veröffentlichung, Sprachfassungen, Konflikte und Branding mit fachlichen Beispielen spezifizieren. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag. Keine Produktimplementierung.
 
 ## TASK-008 KI Umfang und Freigabeablauf festlegen
 
