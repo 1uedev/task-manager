@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.6 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.7 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -288,9 +288,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-GIT-001 GitHub und GitLab
 
-**B · V1.** GitHub und GitLab werden für Zuordnung und Anzeige unterstützt.
+**B · V1.** GitHub.com, GitLab.com und selbst betriebenes GitLab werden für Zuordnung und Anzeige unterstützt. GitHub Enterprise Server folgt später (DEC-036).
 
-**Abnahme:** Berechtigte Nutzer können die vereinbarten Git-Objekte mit Tickets und Anforderungen verknüpfen und deren Informationen anzeigen. Vorschlag: Repository, Commit und Pull beziehungsweise Merge Request. Unterstützung kundeneigener GitLab- oder GitHub-Server bleibt gesondert zu entscheiden.
+**Abnahme:** Berechtigte Nutzer können die vereinbarten Git-Objekte mit Tickets und Anforderungen verknüpfen und deren Informationen anzeigen. Vorschlag: Repository, Commit und Pull beziehungsweise Merge Request. Unterstützte Versionen des selbst betriebenen GitLab und konkrete Authentifizierungswege werden vor Umsetzung festgelegt. Der [Git-Entwurf](docs/GIT_MIGRATION.md) beschreibt Zuordnung, Quellrechte und Aktualisierung als prüfpflichtige Vorschläge.
 
 ### REQ-GIT-002 Anzeige ohne Schreibaktionen
 
@@ -543,9 +543,9 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-MIG-001 Migration zeitnah nach Version 1
 
-**B · Früh danach.** Datenmigration aus bestehenden Lösungen ist nicht Teil der ersten verkaufbaren Version, soll aber zeitnah folgen.
+**B · Früh danach.** Datenmigration aus bestehenden Lösungen ist nicht Teil der ersten verkaufbaren Version, soll aber zeitnah folgen. Redmine ist die erste Importquelle; Easy Redmine/Easy8 und Jira werden anschließend geprüft (DEC-037).
 
-**Abnahme:** Vor Umsetzung sind Quellsystem, Version, Priorität und zu übernehmende Datenarten entschieden. Redmine, Easy8 beziehungsweise Easy Redmine und Jira sind zu prüfende Kandidaten, keine bereits bestätigte Importgarantie.
+**Abnahme:** Vor Umsetzung sind Redmine-Version, zu übernehmende Datenarten und Rechteabbildung entschieden. Ein Probelauf weist Datenmengen, Zeitbuchungen, Dateien, Sichtbarkeit und bekannte Lücken aus. Die Reihenfolge bestätigt weder vollständige Übernahme beliebiger Redmine-Plugins noch bereits einen Import aus Easy Redmine/Easy8 oder Jira. Der [Migrationsentwurf](docs/GIT_MIGRATION.md) grenzt den vorgeschlagenen ersten Umfang ab.
 
 ### REQ-MIG-002 Migration vorbereiten
 
