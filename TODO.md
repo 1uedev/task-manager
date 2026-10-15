@@ -172,15 +172,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #10](https://github.com/1uedev/task-manager/issues/10)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-ops-01 · **Aktualisiert:** 2026-10-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261015-ops-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** geplant: task/task-010-codex-ops, separates Arbeitsverzeichnis.
+**Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** task/task-010-codex-ops, separates Arbeitsverzeichnis; Betriebs- und Lastentwurf vorhanden.
 
 **Umfang:** OPEN-012, OPEN-014 und Aufbewahrung aus OPEN-016 bearbeiten. Docker-Betrieb, Persistenz, Internetbedarf, Sicherung, Updates, Risiken und Lastprofil beschreiben.
 
 **Abnahmekriterien:** Ressourcenannahmen sind nachvollziehbar, ohne feste RAM-Grenze. Die SSD-Planung berücksichtigt Anhänge. Wiederanlauf, zulässiger Datenverlust und Leistungsziele sind vor Tests festgelegt. Vorschläge werden nicht als gemessene Systemanforderungen ausgegeben.
 
-**Nächster Schritt:** Nach Integration der Reservierung Docker-Betrieb, Sicherung, Wiederanlauf, Updates, Datenaufbewahrung und Lastprofil mit nachvollziehbaren Annahmen ausarbeiten. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag; keine Produktimplementierung.
+**Ergebnis:** [Betriebsentwurf](docs/OPERATIONS.md) mit Docker-Referenzinstallation, Persistenz, Netzwegen, gemeinsamen Sicherungspunkten, Wiederanlauf, Updates, Aufbewahrung, Fünfjahres-Speicherrechnung, Lastprofil und 16 vorgeschlagenen Prüffällen. DEC-038 dokumentiert Holgers RPO-/RTO-Ziele; Anforderungen und Roadmap sind nachgeführt. Hardware, Leistungswerte und Detailverfahren bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Speicher-, Durchsatz- und Lastrechnungen separat mit Python geprüft; Docker-/PostgreSQL-Grundlagen anhand offizieller Dokumentation geprüft. Abgleich mit Mailversand, Wiki, Git, KI und Rechteentzug durchgeführt. Keine Containerinstallation, Sicherung, Wiederherstellung, Last- oder Sicherheitstests an einer Anwendung; kein unabhängiges technisches Review.
+
+**Nächster Schritt:** Holger prüft Referenzplattform, Servicezeit, Betreiberpflichten, Datenmengen und vorgeschlagene Fristen. OPEN-012, OPEN-014 und OPEN-016 bleiben für diese Details offen. OPEN-017 klärt den technischen Reviewer; TASK-012 führt spätere Freigaben zusammen. Umsetzung bleibt gesondert zu beauftragen.
 
 ## TASK-011 Gemeinsamen Entwicklungs und Review Ablauf beschließen
 

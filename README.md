@@ -16,6 +16,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
 - Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
 - Git and migration review: [provider variants, source permissions and staged Redmine import](docs/GIT_MIGRATION.md).
+- Operations review: [Docker, recovery targets, storage calculation and proposed load tests](docs/OPERATIONS.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -28,7 +29,7 @@ Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer 
 
 Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
 
-Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous active users. There is no fixed RAM cap. The 1-TB SSD planning budget requires a defined attachment and retention profile. No performance measurements or finished application are claimed.
+Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous active users. There is no fixed RAM cap. The 1-TB SSD planning budget requires a defined attachment and retention profile. The recovery planning targets are at most one hour of data loss and four hours to restore operation after complete server failure. No performance or recovery measurements or finished application are claimed.
 
 ## Local setup
 
@@ -60,6 +61,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
 | docs/AI_USE_CASES.md | Four confirmed internal V1 use cases and proposed skills, provider, data, confirmation and operating contracts |
 | docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority; proposed read access, import mapping and cutover |
+| docs/OPERATIONS.md | Confirmed recovery targets and proposed deployment, backup, retention, resource and performance profiles |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 

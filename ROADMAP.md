@@ -20,7 +20,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 
 | Bereich | Bestätigter Umfang | Wichtige Abhängigkeiten |
 |---|---|---|
-| Installation und Daten | Docker, PostgreSQL, einzelne Unternehmensinstallation, spätere Erweiterbarkeit | Betriebs- und Datenkonzept |
+| Installation und Daten | Docker, PostgreSQL, einzelne Unternehmensinstallation, spätere Erweiterbarkeit; Wiederherstellungsziel höchstens 1 Stunde Datenverlust und 4 Stunden Wiederanlauf | Betriebs-/Datenkonzept und praktischer Wiederherstellungsnachweis; DEC-038 |
 | Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder | Identitätsmodell und Konfliktregeln |
 | Projekte und Tickets | Konfigurierbare Projekte, Tickettypen, Workflows, Felder, Formulare und Automationen | Rechte, API und Fachmodell |
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |
@@ -34,6 +34,8 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | KI | Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung für interne berechtigte Benutzer; Skills und Modellzuordnung durch Administratoren | Kontextrechte, Bestätigung und mindestens eine qualifizierte Anbieteranbindung; DEC-034, DEC-035 |
 
 **Noch für V1 zu entscheiden:** Lieferreihenfolge der drei KI-Anbieter, Datenfreigaben und Betriebsgrenzen sowie alle in REQUIREMENTS.md als V markierten Ergänzungen. Die vier KI-Anwendungsfälle und der interne Nutzerkreis sind durch DEC-034 und DEC-035 bestätigt; die gleichzeitige Lieferung aller drei Anbieter ist noch offen. 2FA folgt gemäß DEC-029 zeitnah nach V1; V1 bereitet die spätere Ergänzung in der Anmeldearchitektur vor. Für Feldrechte gilt bereits der bestätigte Vorrang ausdrücklicher Verbote aus DEC-028.
+
+**Wiederherstellung:** DEC-038 legt Planungsziele fest, keine gemessene Verfügbarkeit. Sicherungsziel, Ersatzkapazität und erreichbares Betriebspersonal müssen zum zugesagten Servicezeitraum passen.
 
 **Vorgeschlagene Auslieferungsbedingungen:** fachlich geprüfte Kernabläufe, nachgewiesene Rechteisolation, reproduzierbare Installation, Update und Wiederherstellung sowie definierte und gemessene Leistungsziele. Die genaue Freigaberegel wird unter OPEN-017 beschlossen.
 

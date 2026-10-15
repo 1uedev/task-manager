@@ -61,12 +61,15 @@ DEC-031 und DEC-032 beruhen ebenfalls auf Holgers ausdrücklicher Auswahl am 13.
 | DEC-035 | Holger legt am 15. Oktober 2026 fest: In V1 dürfen nur interne berechtigte Benutzer die KI-Funktionen nutzen. Die direkte Nutzung durch externe Kunden im Portal folgt später. Von internem Support ausdrücklich bestätigte Kundenantworten bleiben möglich. | REQ-AI-001, REQ-AI-004, REQ-ACL-002 |
 | DEC-036 | Holger bestätigt am 15. Oktober 2026 für V1 GitHub.com, GitLab.com und selbst betriebenes GitLab. GitHub Enterprise Server wird später ergänzt. Objektumfang, Authentifizierung und unterstützte Quellversionen bleiben gesondert zu bestimmen. | REQ-GIT-001, REQ-GIT-002, REQ-GIT-003 |
 | DEC-037 | Holger wählt am 15. Oktober 2026 Redmine als erste Datenimportquelle zeitnah nach V1. Easy Redmine/Easy8 und Jira werden anschließend geprüft. Diese Priorisierung ist keine Zusage vollständiger Übernahme beliebiger Versionen, Plugins oder Historien. | REQ-MIG-001, REQ-MIG-002 |
+| DEC-038 | Holger wählt am 15. Oktober 2026 für die Planung bei vollständigem Serverausfall höchstens eine Stunde Datenverlust (RPO) und vier Stunden bis zum Wiederbetrieb (RTO). Die Ziele sind vor Kundenzusage mit vollständigem Daten-/Dateibestand nachzuweisen; sie sind keine bereits erreichten Messwerte oder zugesagte Bereitschaftsleistung. | REQ-OPS-004, REQ-PERF-002, REQ-PERF-003 |
 
 DEC-033 trennt redaktionelle Arbeit von der sichtbaren Leserfassung. Der [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) beschreibt Revisionen, optionale Übersetzungen, Konflikte und Vorlagen. Die weiteren Detailvorschläge sind dadurch nicht pauschal freigegeben.
 
 DEC-034 und DEC-035 klären den ersten fachlichen KI-Umfang und dessen Nutzerkreis. Der [KI-Entwurf](docs/AI_USE_CASES.md) beschreibt die vier Abläufe sowie weiterhin vorgeschlagene Datenwege, Bestätigung, Skills und Betriebsgrenzen. Anforderungen und Roadmap sind nachgeführt.
 
 DEC-036 und DEC-037 konkretisieren Betriebsvarianten der Git-Anbindung und die erste spätere Importquelle. Der [Git- und Migrationsentwurf](docs/GIT_MIGRATION.md) beschreibt weiterhin vorgeschlagene Berechtigungen, Datenumfang, Probelauf und Umschaltung.
+
+DEC-038 konkretisiert das Sicherungsziel. Der [Betriebsentwurf](docs/OPERATIONS.md) liefert Verfahren, Voraussetzungen, Ressourcenrechnung und Messfälle als Vorschläge. Servicezeit, Betreiberpflichten und technische Umsetzung bleiben zu entscheiden.
 
 ## Offene Entscheidungen
 
@@ -146,9 +149,9 @@ DEC-033 legt Entwurf und ausdrückliche Veröffentlichung fest. Der [Wiki-Entwur
 
 ### OPEN-012 Betriebsmodell und Verfügbarkeit
 
-**Status:** offen · **Fällig:** vor Installationsarchitektur · **Bezug:** REQ-OPS-001 bis REQ-OPS-006
+**Status:** teilweise entschieden · **Fällig:** vor Installationsarchitektur · **Bezug:** REQ-OPS-001 bis REQ-OPS-006
 
-Benötigt werden Zielplattformen und CPU-Architekturen, Container-Betriebsumgebung, TLS-Zuständigkeit, Proxy und Internetziele, Updateverfahren, Wartungsfenster, Fernzugriffsweg, Sicherungsziel, tolerierter Datenverlust und Wiederanlaufzeit. Ein Internetbedarf begründet keine unbestimmte Pflicht zur Datenübermittlung oder Telemetrie.
+DEC-038 legt für die Planung höchstens eine Stunde Datenverlust und vier Stunden bis zum Wiederbetrieb nach vollständigem Serverausfall fest. Der [Betriebsentwurf](docs/OPERATIONS.md) beschreibt eine Referenzinstallation, gemeinsame Sicherungspunkte und kontrollierte Wiederaufnahme. Offen bleiben Plattform-/Versionsmatrix, TLS, Proxy und Internetziele, Offline-Verhalten, Sicherungswerkzeug/-ziel, Servicezeit, Ersatzkapazität, Zuständigkeiten, Update- und Fernwartungsverfahren. Ein Internetbedarf begründet keine unbestimmte Pflicht zur Datenübermittlung oder Telemetrie. Die Wiederherstellungsziele sind noch nicht praktisch nachgewiesen.
 
 ### OPEN-013 API Vertrag
 
@@ -162,7 +165,7 @@ Der [API-Grundvertrag im Architekturentwurf](docs/ARCHITECTURE.md) schlägt HTTP
 
 **Status:** offen · **Fällig:** vor Architekturfreigabe und Lasttestplanung · **Bezug:** REQ-PROD-004, REQ-PERF-001 bis REQ-PERF-004
 
-Zu entscheiden sind Zielzeiten und Referenzhardware, akzeptable Verzögerungen für Mail- und SLA-Verarbeitung sowie Daten- und Anhangsprofil. Für einen Vergleich mit Redmine oder Easy8 sind konkrete Version, Konfiguration und Testdaten nötig. Keine RAM-Obergrenze bedeutet nicht, dass Ressourcenverbrauch unbewertet bleibt.
+Zu entscheiden sind Zielzeiten und Referenzhardware, akzeptable Verzögerungen für Mail- und SLA-Verarbeitung sowie Daten- und Anhangsprofil. Für einen Vergleich mit Redmine oder Easy8 sind konkrete Version, Konfiguration und Testdaten nötig. Keine RAM-Obergrenze bedeutet nicht, dass Ressourcenverbrauch unbewertet bleibt. Der [Betriebsentwurf](docs/OPERATIONS.md) schlägt 4 vCPU/16 GB als Messreferenz, ein Fünfjahresprofil, p95-Ziele und Störungstests vor. Nur die RPO-/RTO-Ziele aus DEC-038 sind bestätigt; übrige Werte bleiben Vorschläge.
 
 ### OPEN-015 Sprachen Vorlagen und Bedienung
 
@@ -174,7 +177,7 @@ Zu bestimmen sind Standardsprache, Rückfallregeln, Übersetzungsprozess für Ku
 
 **Status:** teilweise entschieden · **Fällig:** Aufbewahrung vor Betriebskonzept; Importumfang vor Migrationsrelease · **Bezug:** REQ-DATA-004, REQ-MIG-001, REQ-MIG-002
 
-DEC-037 priorisiert Redmine als erste Quelle nach V1; Easy Redmine/Easy8 und Jira werden anschließend geprüft. Der [Migrationsentwurf](docs/GIT_MIGRATION.md) liefert Datenarten, Probelauf, Rechteabbildung und Ergebnisabgleich als Vorschlag. Offen bleiben Quellversionen, endgültiger Datenumfang, Lösch- und Aufbewahrungsregeln. Vollständige Historie, Plugin-Inhalte und Rechteabbildung sind keine ungeprüfte Importzusage.
+DEC-037 priorisiert Redmine als erste Quelle nach V1; Easy Redmine/Easy8 und Jira werden anschließend geprüft. Der [Migrationsentwurf](docs/GIT_MIGRATION.md) liefert Datenarten, Probelauf, Rechteabbildung und Ergebnisabgleich als Vorschlag. Offen bleiben Quellversionen, endgültiger Datenumfang, Lösch- und Aufbewahrungsregeln. Vollständige Historie, Plugin-Inhalte und Rechteabbildung sind keine ungeprüfte Importzusage. Der [Betriebsentwurf](docs/OPERATIONS.md) ergänzt vorgeschlagene Fristen, Löschwege und den Umgang mit historischen Sicherungen; keine dieser Fristen gilt bereits als beschlossen.
 
 ### OPEN-017 Technisches Review und Freigaben
 
