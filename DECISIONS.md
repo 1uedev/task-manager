@@ -59,10 +59,14 @@ DEC-031 und DEC-032 beruhen ebenfalls auf Holgers ausdrücklicher Auswahl am 13.
 | DEC-033 | Holger bestätigt am 15. Oktober 2026: Wiki-Änderungen werden zunächst als Entwurf gespeichert und erst anschließend ausdrücklich veröffentlicht. Speicherung allein verändert die Leserfassung nicht. Dies klärt den Veröffentlichungsablauf in OPEN-011. | REQ-DOC-001, REQ-DOC-002, REQ-DOC-003 |
 | DEC-034 | Holger legt am 15. Oktober 2026 Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung als KI-Lieferumfang der ersten verkaufbaren Version fest. Die vier Fälle verwenden die bereits bestätigten administrierbaren Skills und Modellzuordnungen. Weitere KI-Funktionen und die Lieferreihenfolge der drei Anbieter bleiben offen. | REQ-PROD-002, REQ-AI-001, REQ-AI-002, REQ-AI-003 |
 | DEC-035 | Holger legt am 15. Oktober 2026 fest: In V1 dürfen nur interne berechtigte Benutzer die KI-Funktionen nutzen. Die direkte Nutzung durch externe Kunden im Portal folgt später. Von internem Support ausdrücklich bestätigte Kundenantworten bleiben möglich. | REQ-AI-001, REQ-AI-004, REQ-ACL-002 |
+| DEC-036 | Holger bestätigt am 15. Oktober 2026 für V1 GitHub.com, GitLab.com und selbst betriebenes GitLab. GitHub Enterprise Server wird später ergänzt. Objektumfang, Authentifizierung und unterstützte Quellversionen bleiben gesondert zu bestimmen. | REQ-GIT-001, REQ-GIT-002, REQ-GIT-003 |
+| DEC-037 | Holger wählt am 15. Oktober 2026 Redmine als erste Datenimportquelle zeitnah nach V1. Easy Redmine/Easy8 und Jira werden anschließend geprüft. Diese Priorisierung ist keine Zusage vollständiger Übernahme beliebiger Versionen, Plugins oder Historien. | REQ-MIG-001, REQ-MIG-002 |
 
 DEC-033 trennt redaktionelle Arbeit von der sichtbaren Leserfassung. Der [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) beschreibt Revisionen, optionale Übersetzungen, Konflikte und Vorlagen. Die weiteren Detailvorschläge sind dadurch nicht pauschal freigegeben.
 
 DEC-034 und DEC-035 klären den ersten fachlichen KI-Umfang und dessen Nutzerkreis. Der [KI-Entwurf](docs/AI_USE_CASES.md) beschreibt die vier Abläufe sowie weiterhin vorgeschlagene Datenwege, Bestätigung, Skills und Betriebsgrenzen. Anforderungen und Roadmap sind nachgeführt.
+
+DEC-036 und DEC-037 konkretisieren Betriebsvarianten der Git-Anbindung und die erste spätere Importquelle. Der [Git- und Migrationsentwurf](docs/GIT_MIGRATION.md) beschreibt weiterhin vorgeschlagene Berechtigungen, Datenumfang, Probelauf und Umschaltung.
 
 ## Offene Entscheidungen
 
@@ -130,9 +134,9 @@ DEC-031 legt die Prüfwarteschlange mit Kundenzuordnung durch Support für unbek
 
 ### OPEN-010 Varianten der Git Dienste
 
-**Status:** offen · **Fällig:** vor Git-Integration · **Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003
+**Status:** teilweise entschieden · **Fällig:** vor Git-Integration · **Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003
 
-GitHub und GitLab sind bestätigt. Offen sind SaaS beziehungsweise selbst betriebene Varianten, Authentifizierungsweg, unterstützte Objektarten, automatische Zuordnung, Aktualisierung und Sichtbarkeit importierter Metadaten. Es werden keine Git-Schreibfunktionen für V1 vorausgesetzt.
+DEC-036 bestätigt GitHub.com, GitLab.com und selbst betriebenes GitLab für V1 sowie GitHub Enterprise Server für später. Offen sind Authentifizierungsweg, unterstützte Versionen und Objektarten, automatische Zuordnung, Aktualisierung und Sichtbarkeit importierter Metadaten. Der [Git-Entwurf](docs/GIT_MIGRATION.md) enthält lesende Benutzeranbindung, drei Objektarten und aktuelle Quellprüfung als Vorschläge. Es werden keine Git-Schreibfunktionen für V1 vorausgesetzt.
 
 ### OPEN-011 Wiki Dateien und Suche
 
@@ -168,9 +172,9 @@ Zu bestimmen sind Standardsprache, Rückfallregeln, Übersetzungsprozess für Ku
 
 ### OPEN-016 Datenaufbewahrung und Migration
 
-**Status:** offen · **Fällig:** Aufbewahrung vor Betriebskonzept; Importumfang vor Migrationsrelease · **Bezug:** REQ-DATA-004, REQ-MIG-001, REQ-MIG-002
+**Status:** teilweise entschieden · **Fällig:** Aufbewahrung vor Betriebskonzept; Importumfang vor Migrationsrelease · **Bezug:** REQ-DATA-004, REQ-MIG-001, REQ-MIG-002
 
-Zu bestimmen sind Lösch- und Aufbewahrungsregeln sowie Reihenfolge, Versionen und Datenarten der Importquellen. Redmine, Easy8 beziehungsweise Easy Redmine und Jira müssen je Quelle bewertet werden. Vollständige Historie, Rechteabbildung und Anhänge sind keine ungeprüfte Importzusage.
+DEC-037 priorisiert Redmine als erste Quelle nach V1; Easy Redmine/Easy8 und Jira werden anschließend geprüft. Der [Migrationsentwurf](docs/GIT_MIGRATION.md) liefert Datenarten, Probelauf, Rechteabbildung und Ergebnisabgleich als Vorschlag. Offen bleiben Quellversionen, endgültiger Datenumfang, Lösch- und Aufbewahrungsregeln. Vollständige Historie, Plugin-Inhalte und Rechteabbildung sind keine ungeprüfte Importzusage.
 
 ### OPEN-017 Technisches Review und Freigaben
 

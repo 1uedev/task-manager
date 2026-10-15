@@ -28,7 +28,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Kundenportal | Berechtigte externe Teilnahme; standardmäßig Anfragen der eigenen Kundenorganisation in freigegebenen Projekten | Identität, Rechte und Helpdesk; DEC-027 |
 | Wiki | Moderne Textbearbeitung, Entwurf mit ausdrücklicher Veröffentlichung, Historie und Konfliktschutz, optionale Sprachfassungen | Rechte, Dateispeicher und Editorentscheidung; DEC-033 |
 | Anforderungen | Kriterien, einfache Freigabe, Historie und Verknüpfungen; inhaltliche Änderungen freigegebener Anforderungen erhalten eine neue Revision zur erneuten Freigabe | Tickets, Wiki und Git; DEC-030 |
-| Git | GitHub und GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung und Sichtbarkeitsregeln |
+| Git | GitHub.com, GitLab.com und selbst betriebenes GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung, Quellversionen und Sichtbarkeitsregeln; DEC-036 |
 | Sprachen und Marke | Deutsch und Englisch, zusätzliche Sprachen vorbereiten, Logo und Farben | UI, Portal, Anmeldung und Vorlagen |
 | API | Dokumentierte Kernabläufe von Anfang an | Gemeinsame Fachlogik und Rechte |
 | KI | Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung für interne berechtigte Benutzer; Skills und Modellzuordnung durch Administratoren | Kontextrechte, Bestätigung und mindestens eine qualifizierte Anbieteranbindung; DEC-034, DEC-035 |
@@ -41,11 +41,11 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 
 | Thema | Status | Ergebnis und Abnahmebeispiel |
 |---|---|---|
-| Migration aus Bestandssystemen | Bedarf bestätigt, Quellsysteme und Umfang offen | Ein ausgewählter Import wird im Probelauf geprüft; übertragene, ausgelassene und fehlerhafte Inhalte sind nachvollziehbar. REQ-MIG-001, REQ-MIG-002 |
+| Migration aus Bestandssystemen | Zuerst Redmine bestätigt; Version und Detailumfang offen; DEC-037 | Ein ausgewählter Import wird im Probelauf geprüft; übertragene, ausgelassene und fehlerhafte Inhalte sind nachvollziehbar. REQ-MIG-001, REQ-MIG-002 |
 | Zwei-Faktor-Authentifizierung | Zeitnah nach V1 bestätigt, konkretes Datum und Verfahren offen; DEC-029 | Geschützte Anmeldung mit dokumentiertem Wiederherstellungsverfahren und LDAP-Zusammenspiel. REQ-AUTH-004 |
 | Weitere KI-Anwendungsfälle | Bedarf zur Bewertung bestätigt, Reihenfolge offen | Jeder ausgelieferte Anwendungsfall besitzt passende Skills, Rechteprüfung und Bestätigung; keine automatische Freigabe durch die Roadmap. REQ-AI-001 bis REQ-AI-009 |
 
-Diese Reihenfolge ist vorläufig. Ein Importumfang mit komplexer Rechte- und Historienübernahme benötigt eine eigene Aufwandsbewertung.
+Redmine als erste Importquelle ist bestätigt; Easy Redmine/Easy8 und Jira werden anschließend geprüft. Die Reihenfolge gegenüber anderen Erweiterungen ist vorläufig. Ein Importumfang mit komplexer Rechte- und Historienübernahme benötigt eine eigene Aufwandsbewertung.
 
 ## Bestätigte spätere Entwicklungsrichtungen
 
@@ -54,6 +54,7 @@ Diese Reihenfolge ist vorläufig. Ein Importumfang mit komplexer Rechte- und His
 | Mehrmandantenfähigkeit | Mehrere Unternehmen innerhalb eines Betriebsmodells | Unternehmensgrenzen müssen auch in Suche, Dateien, Jobs und KI nachgewiesen werden; eine getrennte Nutzersicht allein genügt nicht. REQ-ORG-002 |
 | Weitere Anmeldeanbieter | Kundenanforderungen an Anmeldung ergänzen | Anbieterwahl offen; ein neues Verfahren nutzt dieselbe interne Identität und Rechtebasis. REQ-AUTH-003 |
 | KI für externe Portalnutzer | Direkte KI-Unterstützung für berechtigte Kunden nach V1 | Eigene Daten- und Empfängergrenzen, Missbrauchs-/Kostenkontrolle und Abnahme; DEC-035, REQ-AI-001, REQ-AI-005 |
+| GitHub Enterprise Server | Selbst betriebenes GitHub ergänzen | Eigene Versions-, Netzwerk- und Rechteprüfung; DEC-036, REQ-GIT-001 |
 | Weitere Git-Funktionen | Über Anzeige und Zuordnung hinausgehen | Einzelaktionen offen; eine später erlaubte Schreibaktion besitzt eigene Rechte und gegebenenfalls KI-Bestätigung. REQ-GIT-003 |
 | Vorlagenbasierte PDF-Ausgabe | Gebrandete Dokumente erzeugen | Ein freigegebener Dokumenttyp lässt sich in der gewünschten Sprache mit geprüftem Layout erzeugen. REQ-BRAND-002 |
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |

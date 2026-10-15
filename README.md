@@ -15,6 +15,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
 - Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
+- Git and migration review: [provider variants, source permissions and staged Redmine import](docs/GIT_MIGRATION.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -58,6 +59,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
 | docs/AI_USE_CASES.md | Four confirmed internal V1 use cases and proposed skills, provider, data, confirmation and operating contracts |
+| docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority; proposed read access, import mapping and cutover |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 
