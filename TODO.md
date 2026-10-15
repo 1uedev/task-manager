@@ -132,15 +132,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #8](https://github.com/1uedev/task-manager/issues/8)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-ai-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** geplant: task/task-008-codex-ai, separates Arbeitsverzeichnis.
 
 **Umfang:** OPEN-003 und OPEN-019 entscheiden. Skills, Provider-Konfiguration, erste Anwendungsfälle und Datenwege konkretisieren.
 
 **Abnahmekriterien:** Alle Fachbereiche besitzen eine Nutzenbewertung. Nur Administratoren konfigurieren Modelle und Skills. Jeder ändernde Anwendungsfall besitzt eine sichtbare Bestätigung, Konfliktbehandlung und erneute Rechteprüfung. Lokaler Betrieb wechselt nicht still in die Cloud.
 
-**Nächster Schritt:** Vier priorisierbare Anwendungsfälle mit Ein- und Ausgaben sowie Prüffällen formulieren.
+**Nächster Schritt:** Nach Integration dieser Reservierung die vier bestätigten V1-Anwendungsfälle mit Ein- und Ausgaben, Datenwegen, Bestätigung und Prüffällen spezifizieren. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag. Keine Produktimplementierung.
 
 ## TASK-009 Git und spätere Migration eingrenzen
 
