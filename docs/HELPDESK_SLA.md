@@ -1,6 +1,6 @@
 # Helpdesk, Kundenportal und Servicefristen
 
-Stand 13. Oktober 2026 · TASK-006 · Fachlicher Entwurf, keine implementierte Funktion
+Stand 15. Oktober 2026 · TASK-006 · Fachlicher Entwurf, keine implementierte Funktion
 
 Dieses Dokument konkretisiert REQ-HD-001 bis REQ-HD-005 und REQ-PORTAL-001 bis REQ-PORTAL-003 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Es ergänzt den [Fachmodellentwurf](DOMAIN_MODEL.md), die [Berechtigungen](PERMISSIONS.md) und die [Architektur](ARCHITECTURE.md). Die Beispieldaten sind synthetisch.
 
@@ -143,7 +143,7 @@ Diese Fälle sind spezifiziert, nicht als Anwendungstests ausgeführt.
 
 ## KI-Nutzen und verbleibende Entscheidungen
 
-KI kann Eingänge zusammenfassen, Zuordnung vorschlagen, Antwortentwürfe erstellen, Übergaben aufbereiten und Fristverläufe in Alltagssprache erklären. Sie entscheidet weder Kundenzugehörigkeit noch Fristberechnung oder Versandfreigabe. Vorschläge aus der Prüfwarteschlange verwenden nur für diesen Zweck freigegebene Daten; cloudseitige Verarbeitung wird nicht vorausgesetzt. Automatische Vorschlagserstellung und Nutzung durch externe Portalnutzer bleiben unter TASK-008 offen.
+KI kann Eingänge zusammenfassen, Zuordnung vorschlagen, Antwortentwürfe erstellen, Übergaben aufbereiten und Fristverläufe in Alltagssprache erklären. Sie entscheidet weder Kundenzugehörigkeit noch Fristberechnung oder Versandfreigabe. Vorschläge aus der Prüfwarteschlange verwenden nur für diesen Zweck freigegebene Daten; cloudseitige Verarbeitung wird nicht vorausgesetzt. DEC-034 bestätigt Zusammenfassung und Antwortentwurf für V1; DEC-035 verschiebt die direkte KI-Nutzung durch externe Portalnutzer auf später. Automatische Vorschlagserstellung und zusätzliche Anwendungsfälle bleiben offen. Der [KI-Entwurf](AI_USE_CASES.md) grenzt den bestätigten Umfang und vorgeschlagene Datenwege ab.
 
 OPEN-008 ist durch die Kundenpause teilweise geklärt; konkretes Budget, Startmesspunkt, Antwortdefinition, Zuordnung, Wiedereröffnung, Prioritätswechsel und Eskalationswerte müssen noch bestätigt werden. OPEN-009 ist beim unbekannten Absender geklärt; Mailanbieter, Authentifizierung, Vertrauensprüfung, Anzahl der Postfächer, Einladung und Grenzen für Anhänge bleiben offen. TASK-010 ergänzt Betriebsüberwachung, Zeitquellen, tolerierte Jobverzögerung und Aufbewahrung.
 

@@ -136,15 +136,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #8](https://github.com/1uedev/task-manager/issues/8)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-ai-01 · **Aktualisiert:** 2026-10-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261015-ai-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** geplant: task/task-008-codex-ai, separates Arbeitsverzeichnis.
+**Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004; bestätigte V1-Ergänzung in REQ-PROD-002. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** task/task-008-codex-ai, separates Arbeitsverzeichnis; KI-Anwendungsfallentwurf vorhanden.
 
 **Umfang:** OPEN-003 und OPEN-019 entscheiden. Skills, Provider-Konfiguration, erste Anwendungsfälle und Datenwege konkretisieren.
 
 **Abnahmekriterien:** Alle Fachbereiche besitzen eine Nutzenbewertung. Nur Administratoren konfigurieren Modelle und Skills. Jeder ändernde Anwendungsfall besitzt eine sichtbare Bestätigung, Konfliktbehandlung und erneute Rechteprüfung. Lokaler Betrieb wechselt nicht still in die Cloud.
 
-**Nächster Schritt:** Nach Integration dieser Reservierung die vier bestätigten V1-Anwendungsfälle mit Ein- und Ausgaben, Datenwegen, Bestätigung und Prüffällen spezifizieren. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag. Keine Produktimplementierung.
+**Ergebnis:** [KI-Anwendungsfallentwurf](docs/AI_USE_CASES.md) mit vier bestätigten V1-Funktionen für interne berechtigte Benutzer (DEC-034, DEC-035), Kontext- und Empfängergrenzen, versionierten Markdown-Skills, Providervertrag, Bestätigung, Kosten-/Ausfallvorschlägen und 16 fachlichen Prüffällen. Weitere Fachbereiche erhalten eine Nutzenbewertung. Anforderungen und Roadmap sind nachgeführt.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Datenwege, Bestätigung, Anforderungsrevision, Wiki-Veröffentlichung und SMTP-Grenzen mit den bestehenden Entwürfen abgeglichen. Keine Modellaufrufe, Integrationstests, Qualitätsmessungen oder Produktimplementierung; kein unabhängiges technisches Review.
+
+**Nächster Schritt:** Holger prüft die Detailvorschläge. OPEN-003 entscheidet die Anbieterreihenfolge, OPEN-019 Datenfreigaben, Kostenträger und Limits; TASK-010 ergänzt Betriebs- und Löschgrenzen. Externe KI-Nutzung bleibt nach V1. Technische Umsetzung benötigt weiterhin einen gesonderten Auftrag.
 
 ## TASK-009 Git und spätere Migration eingrenzen
 

@@ -1,6 +1,6 @@
 # Vorschlag für die Systemarchitektur
 
-Stand 13. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
+Stand 15. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
 
 Die Empfehlung lautet: Java mit Spring Boot als modularer Monolith, React mit TypeScript, PostgreSQL und ein versioniertes Anwendungsimage für Docker. Das ist ein Vorschlag zu OPEN-001 und OPEN-002. Bestätigt sind Docker, PostgreSQL, React und eine eigenständige Codebasis; die Backend-Sprache ist noch offen. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
 
@@ -122,7 +122,7 @@ Logo und Farben werden über definierte Designvariablen angewendet; Anwendung, P
 
 KI-Anbieter werden über einen Vertrag für Fähigkeiten, Modellzuordnung, Aufruf und Ergebnis angebunden. OpenAI, Anthropic/Claude und Ollama sind die bestätigten Anbieter; ihre konkreten Lieferzeitpunkte stehen noch unter OPEN-003. Nur Administratoren konfigurieren Endpunkte, Modelle und Markdown-Skills. Ein Modellzugang ist keine Fachberechtigung.
 
-Der Ablauf lautet: berechtigten Kontext zusammenstellen, Skill-Version auswählen, Vorschlag erzeugen, Quellen und Änderungen anzeigen, ausdrückliche Bestätigung einholen, Rechte und Objektversion erneut prüfen, normale Fachaktion ausführen. Provider-Ausgaben werden strukturell validiert. Eingelesene Dokumente sind Daten, keine Freigabe zur Ausführung. Aus einem lokalen Modellfehler entsteht kein stiller Cloud-Fallback. Kosten-, Laufzeit- und Datenklassenregeln werden vor dem ersten KI-Release in TASK-008 festgelegt.
+Der Ablauf lautet: berechtigten Kontext zusammenstellen, Skill-Version auswählen, Vorschlag erzeugen, Quellen und Änderungen anzeigen, ausdrückliche Bestätigung einholen, Rechte und Objektversion erneut prüfen, normale Fachaktion ausführen. Provider-Ausgaben werden strukturell validiert. Eingelesene Dokumente sind Daten, keine Freigabe zur Ausführung. Aus einem lokalen Modellfehler entsteht kein stiller Cloud-Fallback. Der [KI-Entwurf aus TASK-008](AI_USE_CASES.md) konkretisiert diese Verträge. Kosten-, Laufzeit- und Datenklassenregeln müssen vor der ersten KI-Auslieferung bestätigt werden; vier V1-Anwendungsfälle und der interne Nutzerkreis sind durch DEC-034 und DEC-035 entschieden.
 
 ## Messplan und Entscheidungspunkte
 
@@ -138,7 +138,7 @@ Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustr
 | OPEN-005, OPEN-006 | Rechteentwurf prüfen; Datenmodell und Sitzungs-/LDAP-Verhalten verbindlich machen |
 | OPEN-013 | API-Regeln einschließlich Token, Wiederholungsfenster und Versionsübergängen abstimmen |
 | TASK-005, TASK-006 | Zwei Projektabläufe, Feldmodell und berechenbare SLA-Beispiele spezifizieren |
-| TASK-002, TASK-008 | Vollständiges Funktionsinventar und ersten KI-Lieferumfang priorisieren |
+| TASK-002, TASK-008 | Funktionsinventar vervollständigen; vier interne KI-Fälle sind für V1 bestätigt, Anbieterreihenfolge und Betriebsgrenzen noch offen |
 | TASK-010, OPEN-014 | Betriebsannahmen, Referenzdaten und Leistungsziele festlegen |
 | OPEN-017 | Technischen Review für Anmeldung, Rechte, Migration und Wiederherstellung organisieren |
 
