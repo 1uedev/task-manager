@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.7 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.8 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -467,7 +467,7 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 **V · V1.** Für Fachinhalte, personenbezogene Daten, Protokolle, E-Mails, KI-Inhalte und Sicherungen werden nachvollziehbare Aufbewahrungs- und Löschregeln festgelegt.
 
-**Abnahme:** Archivieren, Löschen und Wiederherstellen haben unterscheidbare Wirkungen. Referenzen, Suchdaten und Sprachfassungen werden konsistent behandelt. Es werden keine gesetzlichen Aufbewahrungsfristen ohne fachliche beziehungsweise rechtliche Klärung erfunden.
+**Abnahme:** Archivieren, Löschen und Wiederherstellen haben unterscheidbare Wirkungen. Referenzen, Suchdaten und Sprachfassungen werden konsistent behandelt. Es werden keine gesetzlichen Aufbewahrungsfristen ohne fachliche beziehungsweise rechtliche Klärung erfunden. Die Werte im [Betriebsentwurf](docs/OPERATIONS.md) sind ausdrücklich offene Diskussionsvorschläge und aktivieren keine automatische Löschung.
 
 ## Auslieferung und Betrieb
 
@@ -491,9 +491,9 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-OPS-004 Sicherung und Wiederherstellung
 
-**V · V1.** Ein dokumentiertes Verfahren sichert Datenbank, Dateien, relevante Konfiguration und notwendiges Schlüsselmaterial konsistent.
+**B · V1-Planungsziele; Verfahren vorgeschlagen.** Bei vollständigem Serverausfall gelten höchstens eine Stunde Datenverlust und höchstens vier Stunden bis zum Wiederbetrieb als Planungsziele (DEC-038). Vorgeschlagen wird ein dokumentiertes Verfahren, das Datenbank, Dateien, relevante Konfiguration und notwendiges Schlüsselmaterial konsistent sichert.
 
-**Abnahme:** Eine Wiederherstellung in einer frischen Umgebung wird mit Beispieldaten praktisch geprüft. Verantwortliche, Sicherungsziel, zulässiger Datenverlust und Wiederanlaufzeit sind festgelegt. Ein separates Sicherungsziel wird empfohlen; es ist kein Teil des vorläufigen 1-TB-Live-Speicherbudgets.
+**Abnahme:** Eine Wiederherstellung in einer frischen Umgebung weist die Ziele unter dokumentiertem Datenvolumen nach: Der jüngste konsistente Stand liegt höchstens 60 Minuten vor dem Ausfall, der geprüfte Wiederbetrieb wird innerhalb von 240 Minuten erreicht. Messbeginn, Servicezeit, Verantwortliche und Sicherungsziel werden vorab festgelegt. Der [Betriebsentwurf](docs/OPERATIONS.md) schlägt dafür einen Gesamtprozess einschließlich Dateien, Schlüsseln und kontrollierter Worker-Freigabe vor. Ein separates Sicherungsziel gehört nicht zum vorläufigen 1-TB-Live-Speicherbudget; die Ziele sind noch nicht praktisch nachgewiesen.
 
 ### REQ-OPS-005 Updates und Schemaänderungen
 
@@ -525,13 +525,13 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 **B · Planung.** Es besteht keine feste RAM-Obergrenze. Bis zu 1 TB SSD bleibt der bisherige Planungsrahmen für Live-Daten; die Machbarkeit hängt insbesondere von Anhängen und Aufbewahrung ab.
 
-**Abnahme:** Die Dimensionierung nennt CPU, RAM, SSD und nötige Speicherleistung mit Annahmen und Messwerten. Docker hebt die Ressourcenanforderungen des Hosts nicht auf. Das Budget wird nicht als garantierte unbegrenzte Aufnahmekapazität dargestellt.
+**Abnahme:** Die Dimensionierung nennt CPU, RAM, SSD und nötige Speicherleistung mit Annahmen und Messwerten. Docker hebt die Ressourcenanforderungen des Hosts nicht auf. Das Budget wird nicht als garantierte unbegrenzte Aufnahmekapazität dargestellt. Der [Betriebsentwurf](docs/OPERATIONS.md) enthält eine nachvollziehbare Fünfjahresrechnung samt Gegenbeispiel mit größeren Anhängen.
 
 ### REQ-PERF-003 Messbare Antwortzeiten
 
 **V · V1.** Leistungsziele werden für zentrale Abläufe und Hintergrundverarbeitung getrennt festgelegt.
 
-**Abnahme:** Für Listen, Suche, Öffnen und Speichern sowie Mail- und SLA-Verarbeitung sind Zielwerte einschließlich Perzentil, Last, Datenumfang und Hardware dokumentiert. Externe Modellantworten werden getrennt gemessen. Werte sind aktuell offen und werden nicht nachträglich passend zu Messergebnissen gewählt.
+**Abnahme:** Für Listen, Suche, Öffnen und Speichern sowie Mail- und SLA-Verarbeitung sind Zielwerte einschließlich Perzentil, Last, Datenumfang und Hardware dokumentiert. Externe Modellantworten werden getrennt gemessen. Der [Betriebsentwurf](docs/OPERATIONS.md) enthält vorläufige Zielwerte und ein Referenzprofil zur Entscheidung; sie sind noch nicht bestätigt oder gemessen und werden nicht nachträglich passend zu Messergebnissen gewählt.
 
 ### REQ-PERF-004 Getrennte KI Dimensionierung
 

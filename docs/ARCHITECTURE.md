@@ -104,11 +104,11 @@ flowchart LR
     A --> L[Konfigurierter LDAP-Dienst]
 ```
 
-Ein versioniertes Anwendungsimage kann im Vorschlag als Webprozess oder Worker starten. PostgreSQL läuft als eigener Dienst. Für kleine Installationen können diese Dienste auf demselben Host betrieben werden. Die konkrete Compose-Datei, unterstützte CPU-Architektur, TLS-Zuständigkeit und Ressourcenlimits werden in TASK-010 festgelegt; hier wird nichts installiert.
+Ein versioniertes Anwendungsimage kann im Vorschlag als Webprozess oder Worker starten. PostgreSQL läuft als eigener Dienst. Für kleine Installationen können diese Dienste auf demselben Host betrieben werden. Der [Betriebsentwurf aus TASK-010](OPERATIONS.md) konkretisiert Plattform, TLS, Ressourcen und Persistenz als Vorschläge. Eine ausführbare Compose-Datei und Installation folgen erst nach Implementierungsfreigabe.
 
 Dateien liegen auf einem persistenten Volume außerhalb des Containerlebenszyklus. Ein Storage-Port lässt später Objektspeicher zu. Metadaten, Inhalt, Uploadabschluss und Aufräumen verwaister Dateien benötigen ein beschriebenes Konsistenzverfahren. Dateien werden über eine berechtigte Anwendungsschnittstelle ausgeliefert. Uploadgrenzen, Prüfung schädlicher Inhalte und Umgang mit Rich Text sind vor Auswahl der Bibliotheken festzulegen.
 
-Sicherungen umfassen Datenbank, Dateien, Konfiguration und erforderliches Schlüsselmaterial in einem konsistent wiederherstellbaren Stand. Wiederherstellung wird später in einer frischen Umgebung geprüft. Ein älteres Docker-Image allein macht eine Schemaänderung nicht rückgängig. Updates brauchen Migrationsreihenfolge, Sperre konkurrierender Migrationen, Sicherung, Wartungsfenster und einen getesteten Wiederherstellungsweg.
+Sicherungen umfassen Datenbank, Dateien, Konfiguration und erforderliches Schlüsselmaterial in einem konsistent wiederherstellbaren Stand. Wiederherstellung wird später in einer frischen Umgebung geprüft. DEC-038 bestätigt als Planungsziel höchstens eine Stunde Datenverlust und vier Stunden Wiederanlauf bei vollständigem Serverausfall; der [Betriebsentwurf](OPERATIONS.md) beschreibt den noch praktisch zu prüfenden Gesamtprozess. Ein älteres Docker-Image allein macht eine Schemaänderung nicht rückgängig. Updates brauchen Migrationsreihenfolge, Sperre konkurrierender Migrationen, Sicherung, Wartungsfenster und einen getesteten Wiederherstellungsweg.
 
 Internetbedarf wird je Zweck dokumentiert. Er legitimiert weder unerklärte Telemetrie noch den Versand von Kundendaten. Vorgeschlagen wird, Kernarbeit bei externen Ausfällen weiter zu ermöglichen, während Mail, Git oder KI einen sichtbaren Rückstand melden; das verbindliche Verhalten bleibt unter OPEN-012 zu entscheiden. LDAP und Ollama dürfen gezielt interne Ziele verwenden. Zielprüfung, TLS, Proxy und Umgang mit Weiterleitungen müssen diese freigegebenen internen Dienste berücksichtigen.
 
@@ -128,7 +128,7 @@ Der Ablauf lautet: berechtigten Kontext zusammenstellen, Skill-Version auswähle
 
 Als erster Referenzrechner wird **4 vCPU, 16 GB RAM und SSD** vorgeschlagen, ausschließlich als Ausgangspunkt späterer Messungen, ohne Betriebszusage und ohne neue RAM-Obergrenze. Lokale Modellhardware kommt gesondert hinzu. Das Profil umfasst 15 aktive Nutzer, 500–1.500 neue Tickets pro Monat und im Langzeittest 90.000 Tickets mit definierten Historien, Anhängen und Feldrechten.
 
-Vorgeschlagene Messziele zur Diskussion: p95 höchstens 500 ms für Ticketlisten und Detail-API, höchstens 1 s für Suche und Speichern, jeweils unter diesem Lastprofil ohne externe Providerlaufzeit. Zusätzlich sind Ende-zu-Ende-Bedienzeit, Fehlerrate, Mailrückstand und SLA-Verzögerung zu messen. Kein Ziel ist bisher bestätigt oder erreicht. Der Vergleich mit Redmine/Easy8 benötigt gleichwertige Daten, Funktionen, Hardware und bekannte Versionen.
+Vorgeschlagene Messziele zur Diskussion: p95 höchstens 500 ms für Ticketlisten und Detail-API, höchstens 1 s für Suche und Speichern, jeweils unter diesem Lastprofil ohne externe Providerlaufzeit. Zusätzlich sind Ende-zu-Ende-Bedienzeit, Fehlerrate, Mailrückstand und SLA-Verzögerung zu messen. Diese Antwortzeitziele sind bisher weder bestätigt noch erreicht; die inzwischen bestätigten Wiederherstellungsziele aus DEC-038 werden separat betrachtet. Der Vergleich mit Redmine/Easy8 benötigt gleichwertige Daten, Funktionen, Hardware und bekannte Versionen.
 
 Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustratives Profil mit 90.000 Tickets, zwei Dateien je Ticket und je 5 MB ergibt bereits rund 900 GB Dateiinhalte, ohne Datenbank, Revisionen, Suchindex oder Reserve. Deshalb sind Größenlimits, Aufbewahrung und reales Kundenprofil Voraussetzung einer Dimensionierung. Sicherungen benötigen ein separates Budget.
 
@@ -139,7 +139,7 @@ Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustr
 | OPEN-013 | API-Regeln einschließlich Token, Wiederholungsfenster und Versionsübergängen abstimmen |
 | TASK-005, TASK-006 | Zwei Projektabläufe, Feldmodell und berechenbare SLA-Beispiele spezifizieren |
 | TASK-002, TASK-008 | Funktionsinventar vervollständigen; vier interne KI-Fälle sind für V1 bestätigt, Anbieterreihenfolge und Betriebsgrenzen noch offen |
-| TASK-010, OPEN-014 | Betriebsannahmen, Referenzdaten und Leistungsziele festlegen |
+| TASK-010, OPEN-014 | Vorliegenden Betriebsentwurf, Referenzdaten und vorgeschlagene Leistungsziele prüfen; RPO/RTO aus DEC-038 praktisch nachweisen |
 | OPEN-017 | Technischen Review für Anmeldung, Rechte, Migration und Wiederherstellung organisieren |
 
 Das Ergebnis ist bereit zur Prüfung. Eine Annahme der Architektur ersetzt weder die noch offenen Detailentscheidungen noch einen gesonderten Implementierungsauftrag. Technische Quellen wurden am 13. Oktober 2026 gelesen; es wurden keine Last-, Integrations- oder Produktsicherheitstests ausgeführt.
