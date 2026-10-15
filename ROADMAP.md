@@ -1,6 +1,6 @@
 # Roadmap für das Projektmanagementprodukt
 
-Stand 13. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
+Stand 15. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
 
 Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). Sie unterscheidet den bestätigten V1-Umfang von Vorschlägen und späteren Funktionen. Die nötige Entwicklungskapazität, das Budget und ein Pilottermin sind noch offen. Die vollständige Funktionsinventur ist vor Implementierungsstart fertigzustellen; diese erste Roadmap ersetzt sie nicht.
 
@@ -26,7 +26,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |
 | Helpdesk | IMAP/SMTP, Prüfwarteschlange für unbekannte Absender, SLA-Fristen, Geschäftszeiten und Eskalationen; Kundenpause hält die Lösungsfrist an, offene Erstreaktion läuft weiter | Tickets, Hintergrundjobs und konkrete SLA-Regeln; DEC-031, DEC-032 |
 | Kundenportal | Berechtigte externe Teilnahme; standardmäßig Anfragen der eigenen Kundenorganisation in freigegebenen Projekten | Identität, Rechte und Helpdesk; DEC-027 |
-| Wiki | Moderne Textbearbeitung, Historie und Konfliktschutz, optionale Sprachfassungen | Rechte, Dateispeicher und Editorentscheidung |
+| Wiki | Moderne Textbearbeitung, Entwurf mit ausdrücklicher Veröffentlichung, Historie und Konfliktschutz, optionale Sprachfassungen | Rechte, Dateispeicher und Editorentscheidung; DEC-033 |
 | Anforderungen | Kriterien, einfache Freigabe, Historie und Verknüpfungen; inhaltliche Änderungen freigegebener Anforderungen erhalten eine neue Revision zur erneuten Freigabe | Tickets, Wiki und Git; DEC-030 |
 | Git | GitHub und GitLab für Zuordnung und Anzeige | Sichere Anbieteranbindung und Sichtbarkeitsregeln |
 | Sprachen und Marke | Deutsch und Englisch, zusätzliche Sprachen vorbereiten, Logo und Farben | UI, Portal, Anmeldung und Vorlagen |

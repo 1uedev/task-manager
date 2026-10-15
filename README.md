@@ -13,6 +13,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Architecture review: [Go/Java comparison, modules, API and deployment proposal](docs/ARCHITECTURE.md).
 - Domain review: [project workflows, fields, time corrections and requirement revisions](docs/DOMAIN_MODEL.md).
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
+- Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -54,6 +55,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/ARCHITECTURE.md | Proposed backend choice, module boundaries, API contract, deployment and measurement plan |
 | docs/DOMAIN_MODEL.md | Proposed project workflows, configuration lifecycle, time records and requirement revisions |
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
+| docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 

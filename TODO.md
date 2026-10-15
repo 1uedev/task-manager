@@ -1,6 +1,6 @@
 # Zentrale offene Aufgaben
 
-Stand 13. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
+Stand 15. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
@@ -118,15 +118,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #7](https://github.com/1uedev/task-manager/issues/7)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261015-wiki-01 · **Aktualisiert:** 2026-10-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261015-wiki-01 · **Aktualisiert:** 2026-10-15
 
-**Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplant: task/task-007-codex-wiki, separates Arbeitsverzeichnis.
+**Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-007-codex-wiki, separates Arbeitsverzeichnis; Wiki-, Sprach- und Brandingentwurf vorhanden.
 
 **Umfang:** OPEN-011 und OPEN-015 bearbeiten. Editor, Dokumentformat, Sprachfassungen, Konfliktbehandlung und Vorlagen entwerfen.
 
 **Abnahmekriterien:** Einsprachige Seiten sind ohne Übersetzungszwang nutzbar. Wiederholte Bearbeitung erhält Inhalte. Sprache, Zeitzone und Formatierung sind abgegrenzt. Anwendung, Portal, Anmeldung und E-Mail sind beim Branding berücksichtigt.
 
-**Nächster Schritt:** Nach Integration dieser Reservierung Wiki-Inhalt, Veröffentlichung, Sprachfassungen, Konflikte und Branding mit fachlichen Beispielen spezifizieren. Die fortsetzende Codex-Sitzung koordiniert diese Planungsrunde auf Holgers Auftrag. Keine Produktimplementierung.
+**Ergebnis:** [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) mit bestätigter Entwurfs-/Veröffentlichungstrennung (DEC-033), Sprachfassungen, Konfliktablauf, zwei Editor-Kandidaten, synthetischer Beispielseite, DE/EN-Mailvorlage und 16 fachlichen Prüffällen. Anforderungen, Roadmap und offene Entscheidungen sind nachgeführt. Die weiteren Detailregeln bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Veröffentlichung, Rechte, Sprachrückfall und Vorlagen mit den bestehenden Entwürfen abgeglichen; Editor-Grundlagen anhand zweier Primärquellen geprüft. Keine Editorimplementierung, Browser-, Mailclient- oder Anwendungstests und kein unabhängiges Review.
+
+**Nächster Schritt:** Holger prüft Beispiele und Detailvorschläge aus OPEN-011 und OPEN-015. Editor und Formate bleiben offen; TASK-010 konkretisiert Speicher- und Sicherungsgrenzen. Umsetzung bleibt gesondert zu beauftragen.
 
 ## TASK-008 KI Umfang und Freigabeablauf festlegen
 

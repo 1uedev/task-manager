@@ -1,6 +1,6 @@
 # Entscheidungen und offene Fragen
 
-Stand 13. Oktober 2026 · GitHub-Arbeitsumgebung und bestätigte Rechteentscheidungen
+Stand 15. Oktober 2026 · Bestätigte Produktentscheidungen und offene Detailplanung
 
 Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfragen. Sie ergänzt die zentrale Spezifikation in [REQUIREMENTS.md](REQUIREMENTS.md). Die ursprünglichen Einzeltermine früherer Gesprächsentscheidungen werden nicht nachträglich erfunden; der genannte Stand ist das Erfassungsdatum. Umsetzung und fachliche Abnahme sind daraus nicht abzuleiten.
 
@@ -51,6 +51,14 @@ DEC-027 bis DEC-029 beruhen auf Holgers ausdrücklicher Auswahl der zuvor offene
 DEC-030 ergänzt diese Entscheidungen nach Holgers ausdrücklicher Auswahl zur Behandlung geänderter Anforderungen. Die Regel hält die Freigabe an den tatsächlich geprüften Inhalt gebunden. REQUIREMENTS.md und ROADMAP.md sind angepasst; Beispiele und weitere Vorschläge stehen im [Fachmodellentwurf](docs/DOMAIN_MODEL.md).
 
 DEC-031 und DEC-032 beruhen ebenfalls auf Holgers ausdrücklicher Auswahl am 13. Oktober. Sie verhindern eine ungeprüfte automatische Kundenzuordnung und unterscheiden Kundenwartezeit von noch ausstehender Erstreaktion. Der [Helpdesk- und SLA-Entwurf](docs/HELPDESK_SLA.md) beschreibt die Folgen und trennt bestätigte Regeln von weiteren Vorschlägen.
+
+## Ergänzung vom 15. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-033 | Holger bestätigt am 15. Oktober 2026: Wiki-Änderungen werden zunächst als Entwurf gespeichert und erst anschließend ausdrücklich veröffentlicht. Speicherung allein verändert die Leserfassung nicht. Dies klärt den Veröffentlichungsablauf in OPEN-011. | REQ-DOC-001, REQ-DOC-002, REQ-DOC-003 |
+
+DEC-033 trennt redaktionelle Arbeit von der sichtbaren Leserfassung. Der [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) beschreibt Revisionen, optionale Übersetzungen, Konflikte und Vorlagen. Die weiteren Detailvorschläge sind dadurch nicht pauschal freigegeben.
 
 ## Offene Entscheidungen
 
@@ -124,9 +132,9 @@ GitHub und GitLab sind bestätigt. Offen sind SaaS beziehungsweise selbst betrie
 
 ### OPEN-011 Wiki Dateien und Suche
 
-**Status:** offen · **Fällig:** vor Speicher- und Editorwahl · **Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-DATA-003, REQ-TKT-004
+**Status:** teilweise entschieden · **Fällig:** vor Speicher- und Editorwahl · **Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-DATA-003, REQ-TKT-004
 
-Zu entscheiden sind Editorumfang, gespeichertes Dokumentformat, Import/Export, Konfliktverfahren, Dateispeicher, Versionsumfang und Suchstrategie. Anhänge benötigen ein reales Größenprofil, damit die 1-TB-Planung bewertet werden kann. Eine zusätzliche Suchdatenbank wird nicht automatisch vorausgesetzt.
+DEC-033 legt Entwurf und ausdrückliche Veröffentlichung fest. Der [Wiki-Entwurf](docs/WIKI_I18N_BRANDING.md) liefert konkrete Abläufe und Prüffälle für Sprachfassungen und Konflikte. Weiter zu entscheiden sind Editorumfang, gespeichertes Dokumentformat, Import/Export, Konfliktverfahren, Dateispeicher, Versionsumfang und Suchstrategie. Anhänge benötigen ein reales Größenprofil, damit die 1-TB-Planung bewertet werden kann. Eine zusätzliche Suchdatenbank wird nicht automatisch vorausgesetzt.
 
 ### OPEN-012 Betriebsmodell und Verfügbarkeit
 
@@ -152,7 +160,7 @@ Zu entscheiden sind Zielzeiten und Referenzhardware, akzeptable Verzögerungen f
 
 **Status:** offen · **Fällig:** vor UI- und Vorlagensystem · **Bezug:** REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001
 
-Zu bestimmen sind Standardsprache, Rückfallregeln, Übersetzungsprozess für Kundenkonfiguration, Zeitzonenverhalten, Vorlagenbearbeitung, erlaubte Designanpassungen, Browser und mobile Mindestansichten. Ein verbindliches Barrierefreiheitsziel bleibt zu entscheiden.
+Zu bestimmen sind Standardsprache, Rückfallregeln, Übersetzungsprozess für Kundenkonfiguration, Zeitzonenverhalten, Vorlagenbearbeitung, erlaubte Designanpassungen, Browser und mobile Mindestansichten. Ein verbindliches Barrierefreiheitsziel bleibt zu entscheiden. Der [Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) enthält Rückfallregeln, getrennte Formateinstellungen, Vorlagen und synthetische Beispiele zur Prüfung.
 
 ### OPEN-016 Datenaufbewahrung und Migration
 
