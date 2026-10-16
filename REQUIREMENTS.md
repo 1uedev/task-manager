@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.8 · Stand 15. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.9 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -34,7 +34,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **B · Planung.** Vor der Implementierung wird ein abgestimmtes Funktionsinventar mit einer Roadmap erstellt. Spätere Module erhalten mindestens Zweck, Abgrenzung, Abhängigkeiten und ein Abnahmebeispiel; technische Detailplanung erfolgt rechtzeitig vor ihrer Umsetzung.
 
-**Abnahme:** Jeder inventarisierte Funktionsbereich hat eine Release-Zuordnung oder einen ausdrücklich offenen Status. Die erste Roadmap ist bis zur Prüfung des vollständigen Inventars vorläufig.
+**Abnahme:** Jeder inventarisierte Funktionsbereich hat eine Release-Zuordnung oder einen ausdrücklich offenen Status. Das [Funktionsinventar](docs/FUNCTION_INVENTORY.md) liegt mit Priorisierungsvorschlag vor; die Roadmap bleibt bis zur fachlichen Prüfung vorläufig.
 
 ### REQ-PROD-004 Moderne und messbar bessere Nutzung
 

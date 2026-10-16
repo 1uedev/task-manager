@@ -8,6 +8,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 ## Start here
 
+- Scope review: [function inventory, V1 additions and later modules](docs/FUNCTION_INVENTORY.md).
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
 - Identity and access review: [permissions, LDAP and portal examples](docs/PERMISSIONS.md).
 - Architecture review: [Go/Java comparison, modules, API and deployment proposal](docs/ARCHITECTURE.md).
@@ -61,6 +62,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
 | docs/AI_USE_CASES.md | Four confirmed internal V1 use cases and proposed skills, provider, data, confirmation and operating contracts |
 | docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority; proposed read access, import mapping and cutover |
+| docs/FUNCTION_INVENTORY.md | Core scope, proposed V1 priorities, later modules and AI use assessment |
 | docs/OPERATIONS.md | Confirmed recovery targets and proposed deployment, backup, retention, resource and performance profiles |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |

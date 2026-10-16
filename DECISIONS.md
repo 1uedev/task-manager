@@ -1,6 +1,6 @@
 # Entscheidungen und offene Fragen
 
-Stand 15. Oktober 2026 · Bestätigte Produktentscheidungen und offene Detailplanung
+Stand 16. Oktober 2026 · Bestätigte Produktentscheidungen und offene Detailplanung
 
 Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfragen. Sie ergänzt die zentrale Spezifikation in [REQUIREMENTS.md](REQUIREMENTS.md). Die ursprünglichen Einzeltermine früherer Gesprächsentscheidungen werden nicht nachträglich erfunden; der genannte Stand ist das Erfassungsdatum. Umsetzung und fachliche Abnahme sind daraus nicht abzuleiten.
 
@@ -201,13 +201,13 @@ Zu entscheiden sind erlaubte Datenklassen pro Anbieter, Herkunft der API-Zugangs
 
 **Status:** offen · **Fällig:** vor verbindlichem Produktplan · **Bezug:** REQ-PROD-001, REQ-PROD-002, REQ-OPS-003
 
-Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Supportumfang sind offen. Diese Angaben verhindern den ersten Anforderungskatalog nicht. Sie sind für eine belastbare Release- und Wirtschaftlichkeitsplanung erforderlich. Eine günstigere Alternative ist ein Ziel, kein bereits kalkulierter Preisvorteil.
+Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Supportumfang sind offen. Diese Angaben verhindern den ersten Anforderungskatalog nicht. Sie sind für eine belastbare Release- und Wirtschaftlichkeitsplanung erforderlich. Eine günstigere Alternative ist ein Ziel, kein bereits kalkulierter Preisvorteil. Das [Funktionsinventar](docs/FUNCTION_INVENTORY.md) benennt die wesentlichen Kostentreiber; es enthält keine neue Preis- oder Terminzusage.
 
 ### OPEN-021 Detailumfang der Fachmodule und späteren Funktionen
 
 **Status:** teilweise entschieden · **Fällig:** V1-Details vor deren Umsetzung; vollständiges Funktionsinventar vor Implementierungsstart · **Bezug:** REQ-PROD-003, REQ-TIME-001 bis REQ-TIME-003, REQ-REQ-001 bis REQ-REQ-004, REQ-EXT-001
 
-DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows.
+DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 16. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. Die Prioritäten sind nicht bestätigt.
 
 ## Entscheidungsverfahren
 
