@@ -212,15 +212,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #12](https://github.com/1uedev/task-manager/issues/12)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-readiness-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** geplanter Branch task/task-012-codex-readiness; separates Arbeitsverzeichnis nach integrierter Reservierung.
 
 **Umfang:** Entscheidungen, Anforderungskatalog, Abnahmeszenarien und Roadmap konsistent zusammenführen.
 
 **Abnahmekriterien:** Kritische Architekturfragen sind entschieden. Restfragen haben Zuständigkeit und Fälligkeit. Der fachlich freigegebene Umfang ist sichtbar; keine Implementierung wird automatisch ausgelöst.
 
-**Nächster Schritt:** Nach den vorausgehenden Aufgaben verbleibende Entscheidungs- und Freigabepunkte bündeln.
+**Nächster Schritt:** Koordinierende Sitzung integriert die freie Reservierung. Danach Entscheidungsvorlage mit Zuständigkeiten, Fälligkeiten und Freigabegrenzen erstellen; offene Architekturentscheidungen nicht als getroffen darstellen.
 
 ## TASK-013 GitHub Arbeitsumgebung einrichten
 
