@@ -64,7 +64,9 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Nachtrag aus TASK-015 am 2026-10-16:** DEC-039 bestätigt Java mit Spring Boot; Versionen, TypeScript und Modulstruktur bleiben offen. DEC-040 legt zunächst gegenseitige KI-Reviews fest; zusätzliche menschliche Prüfung bleibt offen.
 
-**Nächster Schritt:** Holger bewertet restliche Werkzeugdetails unter OPEN-001, Modulstruktur unter OPEN-002 und API-Grundvertrag unter OPEN-013. Fachentwürfe und Funktionsinventar liegen vor. Gegenseitige KI-Prüfung mit konkreter Zuordnung unter OPEN-017 organisieren. Produktimplementierung bleibt gesondert zu beauftragen.
+**Nachtrag aus TASK-017 am 2026-10-16:** DEC-042 bis DEC-044 bestätigen React/TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. Die frühere offene Grundauswahl ist damit entschieden; konkrete Modul- und API-Verträge bleiben prüfpflichtig.
+
+**Nächster Schritt:** Holger prüft verbleibende Werkzeugdetails unter OPEN-001, konkrete Modulverträge unter OPEN-002 und API-Details unter OPEN-013. Der Vertragsentwurf aus TASK-016 ist separat KI-geprüft; weitere Zuordnung unter OPEN-017 organisieren. Produktimplementierung bleibt gesondert zu beauftragen.
 
 ## TASK-004 Identität und Berechtigungen spezifizieren
 
@@ -234,7 +236,9 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Nachtrag aus TASK-015 am 2026-10-16:** Die drei Antworten sind in der Entscheidungsvorlage und den Fachentwürfen nachgeführt. Weitere Architekturentscheidungen und die fachliche Gesamtabnahme stehen weiterhin aus.
 
-**Nächster Schritt:** Backend, anfänglicher Review-Weg und nächste Fachpriorität sind durch DEC-039 bis DEC-041 festgelegt. Als Nächstes TypeScript, Modulstruktur, API sowie die fälligen Rechte-/Betriebs-/KI-Details paketweise prüfen. Erst nach den erforderlichen Entscheidungen einen gesonderten Implementierungsauftrag abgrenzen.
+**Nachtrag aus TASK-017 am 2026-10-16:** DEC-042 bis DEC-044 bestätigen die weitere Grundauswahl. REQ-ARCH-002 wechselt von V zu B; der aktuelle Katalog enthält dadurch 56 B- und 30 V-Anforderungen. Die oben dokumentierte frühere Eigenprüfung mit 31 V bleibt als historischer Prüfstand erhalten.
+
+**Nächster Schritt:** Grundrichtung nach DEC-039 bis DEC-044 ist dokumentiert. Verbleibende technische Verträge, Versionen sowie fällige Rechte-/Betriebs-/KI-Details paketweise prüfen. Erst nach den erforderlichen Entscheidungen einen gesonderten Implementierungsauftrag abgrenzen.
 
 ## TASK-013 GitHub Arbeitsumgebung einrichten
 
@@ -292,7 +296,9 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Entscheidungseinträge, Anforderungs-/Fragenverweise und verbliebene Formulierungen zur Backendwahl, menschlichen Prüfung und Roadmap-Priorität auf Widersprüche geprüft. Keine zusätzliche KI-Gegenprüfung oder menschliche technische Prüfung als erfolgt behauptet; reine Dokumentnachführung, keine Anwendungstests.
 
-**Nächster Schritt:** Holger prüft die korrekte Übernahme; weitere Architekturentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 sowie Detailverfahren unter OPEN-017/OPEN-018 vorbereiten. Separate Implementierungsfreigabe bleibt erforderlich.
+**Nachtrag aus TASK-017 am 2026-10-16:** Die damals noch offene Auswahl von TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI ist inzwischen durch DEC-042 bis DEC-044 bestätigt. Die früheren Aussagen oben beschreiben den Stand bei Bearbeitung von TASK-015.
+
+**Nächster Schritt:** Holger prüft die korrekte Übernahme; restliche technische Detailverträge unter OPEN-001, OPEN-002 und OPEN-013 sowie Detailverfahren unter OPEN-017/OPEN-018 prüfen. Separate Implementierungsfreigabe bleibt erforderlich.
 
 ## TASK-016 Frontend-, Modul- und API-Verträge konkretisieren
 
@@ -310,7 +316,9 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Technische Primärquellen zu TypeScript, Spring Modulith, OpenAPI und HTTP geprüft. Die 16 Produktfälle sind erst beschrieben, nicht ausgeführt. Holgers fachliche Abnahme bleibt ausstehend.
 
-**Nächster Schritt:** Holger entscheidet über TypeScript, modularen Monolithen und HTTP/JSON/OpenAPI unter OPEN-001, OPEN-002 und OPEN-013. Detailverträge einschließlich Authentifizierung, Versionen, Wiederholungsfenster und Listengrenzen anschließend gezielt prüfen. Eine gesonderte Implementierungsfreigabe bleibt erforderlich.
+**Nachtrag aus TASK-017 am 2026-10-16:** Holger hat die drei zuvor vorgelegten Grundentscheidungen bestätigt (DEC-042 bis DEC-044). Der Ergebnis- und Reviewbericht oben bleibt als historischer Stand erhalten. Detailregeln und die 16 Prüffälle sind damit nicht pauschal abgenommen.
+
+**Nächster Schritt:** Verbleibende Detailverträge unter OPEN-001, OPEN-002 und OPEN-013 einschließlich Authentifizierung, Versionen, Wiederholungsfenster und Listengrenzen gezielt prüfen. Eine gesonderte Implementierungsfreigabe bleibt erforderlich.
 
 ## TASK-017 Bestätigte Frontend-, Modul- und API-Auswahl eintragen
 

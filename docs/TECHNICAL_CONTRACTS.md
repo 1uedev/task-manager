@@ -2,17 +2,17 @@
 
 Stand 16. Oktober 2026 · TASK-016 · Ergänzung zu TASK-003, zur Prüfung
 
-Dieser Entwurf konkretisiert [ARCHITECTURE.md](ARCHITECTURE.md) für REQ-ARCH-001, REQ-ARCH-002, REQ-API-001 und REQ-API-002. Er soll verhindern, dass verschiedene KI-Sitzungen unterschiedliche Daten-, Rechte- oder Fehlerverträge implementieren. Java/Spring Boot, React, PostgreSQL und Docker sind bestätigt. **Alle neu beschriebenen technischen Ausgestaltungen sind Vorschläge.** Es wurden keine Anwendung, Bibliothekskonfiguration, OpenAPI-Datei oder Container erstellt.
+Dieser Entwurf konkretisiert [ARCHITECTURE.md](ARCHITECTURE.md) für REQ-ARCH-001, REQ-ARCH-002, REQ-API-001 und REQ-API-002. Er soll verhindern, dass verschiedene KI-Sitzungen unterschiedliche Daten-, Rechte- oder Fehlerverträge implementieren. Java/Spring Boot, React, PostgreSQL und Docker sind bestätigt. DEC-042 bis DEC-044 bestätigen zusätzlich TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. **Die darüber hinaus beschriebenen technischen Ausgestaltungen bleiben Vorschläge.** Es wurden keine Anwendung, Bibliothekskonfiguration, OpenAPI-Datei oder Container erstellt.
 
-## Drei Grundentscheidungen
+## Drei bestätigte Grundentscheidungen
 
-| Auswahl unter den offenen Fragen | Empfehlung und Nutzen | Aufwand und Grenze |
+| Bestätigte Auswahl | Nutzen und vorgeschlagene Ausgestaltung | Aufwand und Grenze |
 |---|---|---|
-| OPEN-001: React mit TypeScript | TypeScript mit strenger Typprüfung; fehlende oder falsch verwendete API-Felder werden früh sichtbar | Typen müssen gepflegt werden. Sie ersetzen keine Laufzeitvalidierung oder Rechteprüfung. JavaScript bleibt technisch möglich, verlangt aber mehr Disziplin bei denselben Datenverträgen. |
-| OPEN-002: modularer Monolith | Eine gemeinsam ausgelieferte Anwendung mit getrennten Fachmodulen; Webprozess und Worker können dasselbe Image verwenden | Modulgrenzen müssen geprüft werden. Mehrere Prozesse desselben Produkts sind möglich; unabhängige Microservices mit verteilten Transaktionen werden für V1 nicht empfohlen. |
-| OPEN-013: HTTP/JSON im REST-Stil mit OpenAPI | Ein beschriebener Vertrag für Oberfläche und Integrationen, einschließlich fachlicher Aktionen | OpenAPI dokumentiert Formen und Operationen; Fachregeln und Zugriffsrechte brauchen eigene Prüfungen. Eine zweite GraphQL- oder öffentliche RPC-Schnittstelle würde zusätzliche Verträge erzeugen und wird zunächst nicht empfohlen. |
+| DEC-042, Teil von OPEN-001: React mit TypeScript | Strenge Typprüfung als Detailvorschlag; fehlende oder falsch verwendete API-Felder werden früh sichtbar | Typen müssen gepflegt werden. Sie ersetzen keine Laufzeitvalidierung oder Rechteprüfung. Compileroptionen, Generator und Versionen bleiben offen. |
+| DEC-043, Teil von OPEN-002: modularer Monolith | Eine gemeinsam ausgelieferte Anwendung mit getrennten Fachmodulen; Webprozess und Worker können dasselbe Image verwenden | Konkrete Grenzen und Transaktionsverträge müssen geprüft werden. Mehrere Prozesse desselben Produkts sind möglich; die genaue Prozessaufteilung und Auftragstechnik bleiben offen. |
+| DEC-044, Teil von OPEN-013: HTTP/JSON im REST-Stil mit OpenAPI | Ein beschriebener Vertrag für Oberfläche und Integrationen, einschließlich fachlicher Aktionen | OpenAPI dokumentiert Formen und Operationen; Fachregeln und Zugriffsrechte brauchen eigene Prüfungen. Eine zweite GraphQL- oder öffentliche RPC-Schnittstelle würde zusätzliche Verträge erzeugen und wird zunächst nicht empfohlen. |
 
-Die drei Grundentscheidungen sind Holger vorgelegt. Ihre Bestätigung würde weder alle folgenden Detailregeln noch konkrete Werkzeugversionen oder den Beginn der Implementierung einschließen. Der modulare Monolith ist eine Empfehlung für den bekannten Funktionsumfang und Betrieb, keine Behauptung über gemessene Leistung.
+Holger hat die drei Grundentscheidungen am 16. Oktober 2026 ausdrücklich bestätigt. Diese Auswahl schließt weder alle folgenden Detailregeln noch konkrete Werkzeugversionen oder den Beginn der Implementierung ein. Die Architekturwahl beruht auf dem bekannten Funktionsumfang und Betrieb, nicht auf einer bereits gemessenen Leistungsüberlegenheit.
 
 ## Frontend und Datenvertrag
 
@@ -157,6 +157,6 @@ Die folgenden Fälle sind **beschriebene Abnahmevorschläge, keine ausgeführten
 
 ## Verbleibende Entscheidungen und Nachweise
 
-Die drei Grundentscheidungen stehen unter OPEN-001, OPEN-002 und OPEN-013 aus. Danach sind die Details dieses Entwurfs als Paket zu prüfen, insbesondere Sitzungs-/Tokenverfahren mit OPEN-006, 24-Stunden-Wiederholungsfenster, Listengrenzen, konkrete Modul- und Transaktionsverträge sowie Kompatibilitätsregeln. Die Vorbereitung weiterer Datenbanken oder Mandanten führt hier zu keiner zusätzlichen Implementierung.
+Die drei Grundentscheidungen sind durch DEC-042 bis DEC-044 getroffen. OPEN-001, OPEN-002 und OPEN-013 bleiben für die Details teilweise offen. Als Nächstes sind die Details dieses Entwurfs als Paket zu prüfen, insbesondere Sitzungs-/Tokenverfahren mit OPEN-006, 24-Stunden-Wiederholungsfenster, Listengrenzen, konkrete Modul- und Transaktionsverträge sowie Kompatibilitätsregeln. Die Vorbereitung weiterer Datenbanken oder Mandanten führt hier zu keiner zusätzlichen Implementierung.
 
 Quellen zu TypeScript, Spring Modulith, OpenAPI und HTTP wurden am 16. Oktober 2026 gelesen. Sie belegen die beschriebenen Werkzeug-/Protokolleigenschaften, nicht die Sicherheit oder Leistungsfähigkeit des geplanten Produkts. Der tatsächliche Prüfstand dieses Dokuments und die Übergabe stehen bei TASK-016 in TODO.md. Fachliche Abnahme und ein gesonderter Implementierungsauftrag bleiben ausstehend.

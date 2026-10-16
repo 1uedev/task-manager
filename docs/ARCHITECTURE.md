@@ -2,11 +2,11 @@
 
 Stand 16. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
 
-Holger hat Java mit Spring Boot als Backend bestätigt (DEC-039). Docker, PostgreSQL, React und eine eigenständige Codebasis sind ebenfalls gesetzt. Modularer Monolith, React mit TypeScript, konkrete Versionen und die übrigen Architekturdetails bleiben Vorschläge zu OPEN-001 und OPEN-002. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
+Holger hat Java mit Spring Boot als Backend bestätigt (DEC-039). Docker, PostgreSQL und eine eigenständige Codebasis sind ebenfalls gesetzt. DEC-042 bis DEC-044 bestätigen zusätzlich React mit TypeScript, einen modularen Monolithen sowie HTTP/JSON im REST-Stil mit OpenAPI. Konkrete Versionen, Modulverträge und API-Detailregeln bleiben unter OPEN-001, OPEN-002 und OPEN-013 offen. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
 
-Grundlage sind REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002 und REQ-API-001 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Der Entwurf berücksichtigt außerdem den bestätigten Funktionsumfang und DEC-027 bis DEC-029 zur Organisationssicht, Feldverbotsregel und späteren 2FA-Erweiterung. Der [Rechteentwurf](PERMISSIONS.md) beschreibt die gemeinsame Zugriffsschnittstelle und fachliche Prüfszenarien. Abgesehen von der bestätigten Backendwahl nach DEC-039 bleiben die nachfolgenden technischen Details prüfpflichtige Vorschläge.
+Grundlage sind REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002 und REQ-API-001 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Der Entwurf berücksichtigt außerdem den bestätigten Funktionsumfang und DEC-027 bis DEC-029 zur Organisationssicht, Feldverbotsregel und späteren 2FA-Erweiterung. Der [Rechteentwurf](PERMISSIONS.md) beschreibt die gemeinsame Zugriffsschnittstelle und fachliche Prüfszenarien. Über die bestätigten Grundentscheidungen hinaus bleiben die nachfolgenden technischen Ausgestaltungen prüfpflichtige Vorschläge.
 
-Die [Konkretisierung aus TASK-016](TECHNICAL_CONTRACTS.md) ergänzt diesen Entwurf um TypeScript-Datenverträge, Modulabhängigkeiten, Transaktionsgrenzen, konkrete API-Abläufe und 16 vorgeschlagene Prüffälle. Insbesondere trennt sie HTTP-Vorbedingungen an einer Ressource von fachlichen Versionsprüfungen bei Aktionsaufrufen. Die drei Grundentscheidungen zu TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI bleiben bis zu Holgers ausdrücklicher Auswahl offen.
+Die [Konkretisierung aus TASK-016](TECHNICAL_CONTRACTS.md) ergänzt diesen Entwurf um TypeScript-Datenverträge, Modulabhängigkeiten, Transaktionsgrenzen, konkrete API-Abläufe und 16 vorgeschlagene Prüffälle. Insbesondere trennt sie HTTP-Vorbedingungen an einer Ressource von fachlichen Versionsprüfungen bei Aktionsaufrufen. Holgers Auswahl bestätigt die drei Grundentscheidungen nach DEC-042 bis DEC-044, nicht sämtliche Vertragsdetails oder Prüfszenarien.
 
 ## Begründung der bestätigten Backendwahl
 
@@ -65,7 +65,7 @@ Projektkonfigurationen erhalten stabile Feldkennungen, Typen, Validierungen und 
 
 ## API-Grundvertrag als Vorschlag
 
-Empfohlen wird eine HTTP/JSON-API unter `/api/v1`, beschrieben durch [OpenAPI](https://spec.openapis.org/oas/latest.html). Oberfläche und Integrationen verwenden dieselben fachlichen Operationen. Ein internes Datenbankfeld wird nicht allein dadurch öffentlich, dass es im Modell existiert. Folgende Regeln konkretisieren OPEN-013:
+HTTP/JSON im REST-Stil mit [OpenAPI](https://spec.openapis.org/oas/latest.html) ist durch DEC-044 bestätigt. Vorgeschlagen wird der Einstieg unter `/api/v1`; Pfade und weitere Regeln sind noch zu prüfen. Oberfläche und Integrationen verwenden dieselben fachlichen Operationen. Ein internes Datenbankfeld wird nicht allein dadurch öffentlich, dass es im Modell existiert. Folgende Vorschläge konkretisieren OPEN-013:
 
 | Thema | Vorgeschlagener Vertrag |
 |---|---|
@@ -116,7 +116,7 @@ Internetbedarf wird je Zweck dokumentiert. Er legitimiert weder unerklärte Tele
 
 ## Frontend, Wiki, Markenauftritt und KI
 
-React mit TypeScript wird für überprüfbare API-Typen und gemeinsame UI-Bausteine empfohlen. Übersetzungsschlüssel, Fachkennungen und angezeigte Texte bleiben getrennt. Deutsch und Englisch sind gleichwertige Prüffälle; zusätzliche Sprachen verwenden denselben Katalog. Datum, Zeitzone und Zahlenformat werden nicht aus der Sprache allein abgeleitet.
+React mit TypeScript ist durch DEC-042 bestätigt. Die vorgeschlagenen Datenverträge und gemeinsamen UI-Bausteine konkretisieren diese Wahl. Übersetzungsschlüssel, Fachkennungen und angezeigte Texte bleiben getrennt. Deutsch und Englisch sind gleichwertige Prüffälle; zusätzliche Sprachen verwenden denselben Katalog. Datum, Zeitzone und Zahlenformat werden nicht aus der Sprache allein abgeleitet.
 
 Der Wiki-Inhalt erhält ein versioniertes, dokumentiertes Format mit erlaubten Elementen, Referenzen und Bildern. Die konkrete Rich-Text-Bibliothek ist noch offen. Ein Wechsel der Editorbibliothek darf keine unlesbaren Bestandsdaten erzeugen. Sprachfassungen sind optional, teilen eine fachliche Dokumentkennung und haben getrennte Revisionen. Ein fehlender übersetzter Inhalt wird mit sichtbarer Ursprungssprache angezeigt, nicht automatisch als bestätigte Übersetzung ausgegeben.
 
@@ -136,7 +136,7 @@ Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustr
 
 | Entscheidung / Arbeit | Nächster prüfbarer Schritt |
 |---|---|
-| OPEN-001, OPEN-002 | Java/Spring Boot ist bestätigt; Versionen, React/TypeScript und modularen Monolithen entscheiden |
+| OPEN-001, OPEN-002 | Java/Spring Boot, React/TypeScript und modularer Monolith sind bestätigt; Versionen, konkrete Modulverträge und Hintergrundverarbeitung entscheiden |
 | OPEN-005, OPEN-006 | Rechteentwurf prüfen; Datenmodell und Sitzungs-/LDAP-Verhalten verbindlich machen |
 | OPEN-013 | API-Regeln einschließlich Token, Wiederholungsfenster und Versionsübergängen abstimmen |
 | TASK-005, TASK-006 | Zwei Projektabläufe, Feldmodell und berechenbare SLA-Beispiele spezifizieren |

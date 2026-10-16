@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.10 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.11 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -421,7 +421,7 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-API-001 API von Anfang an
 
-**B · V1.** Eine dokumentierte API gehört von Beginn an zum Produkt.
+**B · V1.** Eine dokumentierte API gehört von Beginn an zum Produkt. HTTP/JSON im REST-Stil mit OpenAPI-Beschreibung ist als Richtung bestätigt (DEC-044).
 
 **Abnahme:** Die vereinbarten fachlichen Kernabläufe sind über die API ausführbar und unterliegen denselben Rechten und Regeln wie die Oberfläche. Versionierung, Authentifizierung, Seitennavigation, Fehlerformat und Kompatibilitätsregeln sind vor Implementierung festgelegt.
 
@@ -433,13 +433,13 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-ARCH-001 Frontend und Backend
 
-**B · Planung.** React ist als Frontend vorgesehen. Das Backend wird mit Java und Spring Boot entwickelt (DEC-039).
+**B · Planung.** Das Frontend verwendet React mit TypeScript (DEC-042). Das Backend wird mit Java und Spring Boot entwickelt (DEC-039).
 
-**Abnahme:** Java/Spring Boot ist als begründete Backend-Entscheidung dokumentiert. Vor Implementierung werden unterstützte Versionen und Build-/Testkonventionen festgelegt. TypeScript und ein modularer Monolith bleiben Vorschläge; DEC-039 bestätigt keine weitere Technologie oder Implementierungsfreigabe.
+**Abnahme:** Java/Spring Boot und React/TypeScript sind als begründete Grundentscheidungen dokumentiert. Vor Implementierung werden unterstützte Versionen und Build-/Testkonventionen festgelegt. Compileroptionen, Generatoren und Bibliotheken bleiben Vorschläge; die Sprachauswahl ist keine Implementierungsfreigabe. Die bestätigte Architekturform steht in REQ-ARCH-002.
 
 ### REQ-ARCH-002 Prüffähige Modulgrenzen
 
-**V · V1 Architektur.** Fachbereiche besitzen klare Zuständigkeiten und möglichst wenige Abhängigkeiten. Ein modularer Monolith wird als Ausgangspunkt geprüft.
+**B · V1 Architektur.** Das Produkt wird als modularer Monolith mit klar getrennten Fachmodulen aufgebaut (DEC-043). Konkrete Modulverträge und die Ausgestaltung der Abhängigkeiten bleiben zu prüfen.
 
 **Abnahme:** Das Architekturkonzept zeigt Datenverantwortung, öffentliche Modulschnittstellen und erlaubte Abhängigkeiten. Es begründet zusätzliche Betriebsdienste. Die Wahl mehrerer KI-Entwickler begründet für sich keine Microservice-Architektur.
 
