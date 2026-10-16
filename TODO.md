@@ -267,3 +267,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 **Nachtrag am 2026-10-16:** Fix über PR #39 integriert; Reservierung PR #37 auf aktuellen main aktualisiert, alle elf Tests und GitHub-Pflichtprüfung erfolgreich, anschließend regulär integriert. Keine Schutzregel umgangen.
 
 **Nächster Schritt:** Technisches Ergebnis und Prüfnachweise durch Holger prüfen lassen; bis zur Abnahme bleibt die Aufgabe hier nachvollziehbar. Keine Produktimplementierung.
+
+## TASK-015 Bestätigte Backend-, Review- und Prioritätsentscheidungen eintragen
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-decisions-01 · **Aktualisiert:** 2026-10-16
+
+**Bezug:** REQ-ARCH-001, REQ-DEV-004, REQ-DEV-005, REQ-PROD-003, REQ-EXT-001. **Abhängigkeiten:** TASK-002, TASK-003, TASK-011, TASK-012 als Entwürfe und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-015-codex-decisions; separates Arbeitsverzeichnis nach integrierter Reservierung.
+
+**Umfang:** Drei bestätigte Auswahlentscheidungen mit neuen DEC-IDs festhalten und betroffene Anforderungen, Architektur, Review-Regeln, Roadmap und KI-Einstiegsdateien konsistent nachführen. Keine weiteren Detailvorschläge als bestätigt behandeln.
+
+**Abnahmekriterien:** Java/Spring Boot ist als Backend gesetzt; zunächst gegenseitige KI-Reviews bei weiterhin offener menschlicher Prüfung; Kanban, Gantt und einfache Dashboards nach den frühen Ergänzungen 2FA/Redmine-Import priorisiert. Versionen, TypeScript, Modulstruktur und weitere Details bleiben offen. Keine Programmierung oder Gesamtfreigabe abgeleitet.
+
+**Nächster Schritt:** Koordinierende Sitzung integriert die geprüfte freie Reservierung. Danach die drei Antworten in den öffentlichen Planungsstand übernehmen und Widersprüche prüfen.
