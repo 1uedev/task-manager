@@ -14,6 +14,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
 - Identity and access review: [permissions, LDAP and portal examples](docs/PERMISSIONS.md).
 - Architecture review: [confirmed Java/Spring Boot choice, comparison, modules and API proposal](docs/ARCHITECTURE.md).
+- Next technical choices: [TypeScript, module contracts and concrete API scenarios](docs/TECHNICAL_CONTRACTS.md).
 - Domain review: [project workflows, fields, time corrections and requirement revisions](docs/DOMAIN_MODEL.md).
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
@@ -64,6 +65,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |
 | docs/PERMISSIONS.md | Draft groups, portal scope, field conflicts, identity lifecycle and acceptance scenarios |
 | docs/ARCHITECTURE.md | Confirmed backend choice; proposed module boundaries, API contract, deployment and measurements |
+| docs/TECHNICAL_CONTRACTS.md | Proposed frontend and module contracts, HTTP examples, conflict handling and 16 future acceptance scenarios |
 | docs/DOMAIN_MODEL.md | Proposed project workflows, configuration lifecycle, time records and requirement revisions |
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |

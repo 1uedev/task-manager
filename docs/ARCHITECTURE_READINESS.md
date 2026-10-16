@@ -16,6 +16,8 @@ Holger hat am 16. Oktober 2026 drei Entscheidungen getroffen:
 
 Als Nächstes sind TypeScript, Modulstruktur und API-Grundvertrag sowie die fälligen Rechte-/Datenregeln, das Betriebsprofil und die KI-Anbieter zu prüfen. Die drei Entscheidungen geben weder sämtliche Detailentwürfe noch eine Produktimplementierung frei.
 
+Für die erste dieser Gruppen liegt mit TASK-016 jetzt ein [konkreter Vertragsentwurf](TECHNICAL_CONTRACTS.md) vor: drei Grundentscheidungen, Datenhoheit und Transaktionen, API-Beispiele und 16 spätere Prüffälle. Der zugehörige tatsächliche Gegenprüfungsstand wird zentral in TASK-016 dokumentiert. Die Auswahl zu TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI ist noch ausstehend; vorgeschlagene Laufzeiten, Grenzen und Authentifizierungsdetails bleiben separat prüfpflichtig.
+
 ## Bestätigter Umfang, der erhalten bleibt
 
 | Gebiet | Bereits bestätigte Richtung | Noch zu prüfende Ausgestaltung |

@@ -6,6 +6,8 @@ Holger hat Java mit Spring Boot als Backend bestätigt (DEC-039). Docker, Postgr
 
 Grundlage sind REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002 und REQ-API-001 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Der Entwurf berücksichtigt außerdem den bestätigten Funktionsumfang und DEC-027 bis DEC-029 zur Organisationssicht, Feldverbotsregel und späteren 2FA-Erweiterung. Der [Rechteentwurf](PERMISSIONS.md) beschreibt die gemeinsame Zugriffsschnittstelle und fachliche Prüfszenarien. Abgesehen von der bestätigten Backendwahl nach DEC-039 bleiben die nachfolgenden technischen Details prüfpflichtige Vorschläge.
 
+Die [Konkretisierung aus TASK-016](TECHNICAL_CONTRACTS.md) ergänzt diesen Entwurf um TypeScript-Datenverträge, Modulabhängigkeiten, Transaktionsgrenzen, konkrete API-Abläufe und 16 vorgeschlagene Prüffälle. Insbesondere trennt sie HTTP-Vorbedingungen an einer Ressource von fachlichen Versionsprüfungen bei Aktionsaufrufen. Die drei Grundentscheidungen zu TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI bleiben bis zu Holgers ausdrücklicher Auswahl offen.
+
 ## Begründung der bestätigten Backendwahl
 
 Beide Sprachen können dieses Produkt tragen. Für die erwarteten 15 gleichzeitig aktiven Nutzer ist die Sprache allein kein belastbarer Leistungsnachweis. Datenmodell, Abfragen, Rechteprüfung und Hintergrundarbeit müssen gemessen werden. „Von KI leichter zu schreiben“ ist kein ausreichendes Auswahlkriterium.
