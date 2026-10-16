@@ -322,12 +322,18 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-017 Bestätigte Frontend-, Modul- und API-Auswahl eintragen
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-architecture-decisions-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-architecture-decisions-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-012, TASK-016 und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-017-codex-architecture-decisions; eigenes Arbeitsverzeichnis nach Reservierung.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-012, TASK-016 und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** task/task-017-codex-architecture-decisions; Entscheidungen im eigenen Arbeitsverzeichnis nachgeführt.
 
 **Umfang:** TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI als bestätigte Grundentscheidungen erfassen; Anforderungen, Entwürfe, offene Fragen und KI-Einstiegsregeln konsistent nachführen.
 
 **Abnahmekriterien:** Drei neue DEC-IDs erfassen ausschließlich die ausgewählten Grundentscheidungen. Sprach-/Werkzeugversionen, konkrete Modul-/Transaktionsverträge, Authentifizierung, Laufzeiten und weitere Detailregeln bleiben offen. Keine Gesamtfreigabe, Anwendung oder Implementierungsbeauftragung ableiten. Historische Prüfstände erhalten.
 
-**Nächster Schritt:** Reservierung integrieren, Entscheidungen im separaten Worktree eintragen und auf widersprüchliche beziehungsweise zu weit gehende Bestätigungen prüfen.
+**Ergebnis:** DEC-042 bis DEC-044 bestätigen React/TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. Anforderungen sind auf Version 0.11 angehoben; REQ-ARCH-002 ist im Kern B. Offene Fragen, technische Entwürfe, Funktionsinventar, Roadmap, KI-Einstieg und frühere Übergaben sind nachgeführt. Details bleiben Vorschläge; keine Produktimplementierung oder Gesamtfreigabe abgeleitet.
+
+**KI-Gegenprüfung am 2026-10-16:** Eine getrennte Codex-Sitzung architecture_decisions_review prüfte alle zehn geänderten Dokumente in 119d20622483b534f1d9a2a9dead5ab122814a08 gegenüber 3e42d6d2c81254271620b2baaeea562d512cafc7 auf korrekte Übernahme, Überbestätigung und Widersprüche. Keine konkreten Befunde; offene Details und historische Nachträge waren konsistent. Dieser nachträgliche Prüfbericht ist Eigenprotokoll der koordinierenden Sitzung und nicht Teil des genannten Review-Commits. Kein Claude-Review, Produkt- oder Sicherheitsnachweis behauptet.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: alle 86 REQ-IDs erhalten, nur REQ-ARCH-002 wechselt V zu B; 56 B und 30 V. Alle früheren DEC-Einträge unverändert, genau DEC-042 bis DEC-044 ergänzt; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungstests.
+
+**Nächster Schritt:** Holger prüft die korrekte Übernahme. Danach verbleibende technische Detailverträge und Werkzeugversionen sowie die fälligen Rechte-/Betriebs-/KI-Fragen konkret entscheiden. Zusätzliche fachliche Abnahmen und ein gesonderter Implementierungsauftrag bleiben erforderlich.
