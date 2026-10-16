@@ -30,15 +30,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #2](https://github.com/1uedev/task-manager/issues/2)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-inventory-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** geplanter Branch task/task-002-codex-inventory; separates Arbeitsverzeichnis nach integrierter Reservierung.
 
 **Umfang:** V1-Vorschläge priorisieren, vollständiges Funktionsinventar der angestrebten Vergleichbarkeit erstellen und spätere Module abgrenzen. OPEN-020 und OPEN-021 einbeziehen.
 
 **Abnahmekriterien:** Jeder Bereich hat Zweck, Mindestumfang, Abhängigkeit, Release-Status und Abnahmebeispiel. Bestätigte V1-Funktionen werden nicht ohne Entscheidung verschoben. Termine und Preise werden ohne Budget- und Kapazitätsbasis nicht zugesagt.
 
-**Nächster Schritt:** Vorhandene Vergleichsanalyse bei Bedarf gezielt heranziehen und eine prüfbare Lückenliste erstellen.
+**Nächster Schritt:** Koordinierende Codex-Sitzung prüft die freie Aufgabe und integriert diese Reservierung. Danach Funktionsinventar, V1-Ergänzungen und spätere Ausbaustufen als Vorschlag ausarbeiten; fachliche Priorisierung durch Holger bleibt offen.
 
 ## TASK-003 Architekturentscheidungen vorbereiten
 
