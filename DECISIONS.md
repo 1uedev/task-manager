@@ -95,6 +95,8 @@ DEC-039 bestätigt Java mit Spring Boot. Offen bleiben Sprach- und Framework-Ver
 
 Der [Architekturentwurf](docs/ARCHITECTURE.md) erhält den ursprünglichen Go/Java-Vergleich als Entscheidungsbegründung und weist die bestätigte Auswahl separat aus. Es wurden keine Laufzeitmessungen oder Implementierungen vorgenommen.
 
+TASK-016 legt [TypeScript und den gemeinsamen Datenvertrag](docs/TECHNICAL_CONTRACTS.md) als konkrete Ergänzung vor. Strenge Typprüfung und aus OpenAPI abgeleitete Transporttypen sind Empfehlungen; Werkzeuge und Versionen sind nicht vorweggenommen.
+
 ### OPEN-002 Modulstruktur und spätere Mandanten
 
 **Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-ORG-002, REQ-ARCH-002
@@ -102,6 +104,8 @@ Der [Architekturentwurf](docs/ARCHITECTURE.md) erhält den ursprünglichen Go/Ja
 Zu entscheiden sind fachliche Modulgrenzen, Hintergrundverarbeitung und Vorbereitung der Unternehmensgrenzen. Ausgangsvorschlag ist ein modularer Monolith. Die konkrete spätere Isolation über eigene Datenbanken, Schemas oder gemeinsam genutzte Tabellen bleibt offen. Für V1 soll daraus kein unnötiger Mehrmandantenbetrieb entstehen.
 
 Der [Architekturentwurf](docs/ARCHITECTURE.md) beschreibt Datenhoheit je Modul, gerichtete Abhängigkeiten, einen serverseitigen Unternehmenskontext sowie Datenbankadapter. PostgreSQL bleibt allein unterstützt; weitere Datenbanken und mehrere Mandanten werden nicht implementiert.
+
+Die [Modulverträge aus TASK-016](docs/TECHNICAL_CONTRACTS.md) konkretisieren Abhängigkeitsordnung, zusammengesetzte Ansichten, Dateizugriff und gemeinsame Transaktionsgrenzen einschließlich konkurrierendem Rechteentzug. Grundwahl und Detailregeln bleiben Vorschläge.
 
 ### OPEN-003 Erster KI Lieferumfang
 
@@ -172,6 +176,8 @@ DEC-038 legt für die Planung höchstens eine Stunde Datenverlust und vier Stund
 Zu bestimmen sind API-Stil, Dokumentationsformat, Versionierung, Authentifizierung, Fehlerformat, Seitennavigation, Wiederholbarkeit von Schreibaufrufen und spätere Ereignisschnittstellen. API- und UI-Rechte müssen auf denselben fachlichen Regeln beruhen.
 
 Der [API-Grundvertrag im Architekturentwurf](docs/ARCHITECTURE.md) schlägt HTTP/JSON, OpenAPI, versionierte Ressourcen, Konflikterkennung, eingeschränkte API-Zugänge und wiederholbare Schreiboperationen vor. Tokenform, Laufzeiten, Wiederholungsfenster und Übergangsfristen sind noch festzulegen.
+
+Der [API-Entwurf aus TASK-016](docs/TECHNICAL_CONTRACTS.md) liefert konkrete Operationen, Fehlerfälle und Wiederholungsregeln. Opake API-Zugänge, 24 Stunden für abgeschlossene Wiederholungsnachweise und Listenseiten mit 50/maximal 100 Einträgen sind prüfpflichtige Vorschläge. Die Auswahl HTTP/JSON/OpenAPI allein würde diese Details nicht bestätigen. Anmeldung, Aufbewahrung und Transaktionsverfahren sind mit OPEN-006 und OPEN-014 abzustimmen.
 
 ### OPEN-014 Messbare Leistungsziele
 
