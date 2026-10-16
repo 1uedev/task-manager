@@ -1,6 +1,6 @@
 # Zentrale offene Aufgaben
 
-Stand 15. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
+Stand 16. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
@@ -30,15 +30,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #2](https://github.com/1uedev/task-manager/issues/2)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-inventory-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-inventory-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** geplanter Branch task/task-002-codex-inventory; separates Arbeitsverzeichnis nach integrierter Reservierung.
+**Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** task/task-002-codex-inventory; Funktionsinventar und priorisierte Roadmap als Entwurf vorhanden.
 
 **Umfang:** V1-Vorschläge priorisieren, vollständiges Funktionsinventar der angestrebten Vergleichbarkeit erstellen und spätere Module abgrenzen. OPEN-020 und OPEN-021 einbeziehen.
 
 **Abnahmekriterien:** Jeder Bereich hat Zweck, Mindestumfang, Abhängigkeit, Release-Status und Abnahmebeispiel. Bestätigte V1-Funktionen werden nicht ohne Entscheidung verschoben. Termine und Preise werden ohne Budget- und Kapazitätsbasis nicht zugesagt.
 
-**Nächster Schritt:** Koordinierende Codex-Sitzung prüft die freie Aufgabe und integriert diese Reservierung. Danach Funktionsinventar, V1-Ergänzungen und spätere Ausbaustufen als Vorschlag ausarbeiten; fachliche Priorisierung durch Holger bleibt offen.
+**Ergebnis:** [Funktionsinventar](docs/FUNCTION_INVENTORY.md) mit V1-Kern, Priorisierung aller V-Ergänzungen, späteren Funktionsbereichen, Mindestumfang, Abhängigkeiten, Abnahmebeispielen und KI-Nutzenbewertung. Roadmap verknüpft und konsolidiert. Bestätigte V1-Funktionen und frühe Ergänzungen bleiben erhalten; keine Preis-, Termin- oder Gleichheitszusage.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 86 REQ-IDs sind über Inventar und Bereichsverweise zugeordnet; V-Anforderungen auf Priorisierung geprüft. Herstellerseiten zur Bereichsabdeckung gelesen; eigene Mindestumfänge von Herstellerangaben getrennt. Keine Anwendungstests und keine unabhängige fachliche oder technische Abnahme.
+
+**Nächster Schritt:** Holger prüft V1-Ergänzungen und Reihenfolge der Ausbaubereiche unter OPEN-021. OPEN-020 benötigt Pilot, Budget, Lizenz- und Supportmodell. TASK-012 führt Entscheidungen zur Architekturfreigabe zusammen; Programmierung bleibt gesondert zu beauftragen.
 
 ## TASK-003 Architekturentscheidungen vorbereiten
 

@@ -1,0 +1,119 @@
+# Funktionsinventar und vorgeschlagene Prioritäten
+
+Stand 16. Oktober 2026 · TASK-002 · Entwurf zur fachlichen Prüfung
+
+Das Inventar ordnet den bestätigten Kern, die ergänzenden V1-Vorschläge und die späteren Ausbaubereiche. Es konkretisiert das eigenständige Produkt aus REQ-PROD-001 und den vollständigen V1-Arbeitsablauf aus REQ-PROD-002. Es vervollständigt die Planung auf Ebene der Funktionsbereiche; eine vollständige Gleichheit mit jedem Easy8-Modul, Plugin oder Tarif wird nicht zugesagt. Die verbindlichen Anforderungen bleiben in [REQUIREMENTS.md](../REQUIREMENTS.md), die Reihenfolge in [ROADMAP.md](../ROADMAP.md). Inventarzeilen sind keine zweite Aufgabenliste.
+
+**B** bedeutet bestätigter Kern. **V** bedeutet offener Vorschlag, auch wenn er für einen verlässlichen Betrieb dringend empfohlen wird. Alle hier formulierten Mindestumfänge, Prioritäten und Abnahmebeispiele sind bis zur ausdrücklichen Prüfung Detailvorschläge. Die vier bestätigten KI-Funktionen gehören zu V1; weitere KI-Ideen in diesem Dokument sind Bewertungen, keine zusätzlichen Lieferzusagen.
+
+## Referenz und Grenzen des Vergleichs
+
+Die am 16. Oktober 2026 gelesenen Herstellerseiten dienen als Kontrolle, ob ganze Funktionsbereiche fehlen. Die [Easy8-Produktübersicht](https://www.easy8.com/product) nennt unter anderem agile und klassische Planung, Ressourcen, Finanzen und WBS. Der [Funktionskatalog](https://www.easy8.com/product/features) ergänzt Dashboards, Assets, Vorlagen, Dokumentverwaltung und mobile Nutzung. Die [Erweiterungsübersicht](https://www.easy8.com/product/add-ons) beschreibt unter anderem Helpdesk, Wissensbasis und Git-Integration. Daraus folgt keine Aussage über einen bestimmten Kaufumfang oder die Qualität der Ausführung. Eigene Mindestumfänge und Releasevorschläge unten sind Produktentwürfe, keine Wiedergabe der Easy8-Spezifikation.
+
+Jira und MeisterTask bleiben Vergleichsprodukte für spätere Bedienversuche und Wirtschaftlichkeitsrechnung. Diese Funktionsinventur aktualisiert weder deren Preise noch den vollständigen Wettbewerbsvergleich. Aussagen wie „schneller“, „leichter“ und „günstiger“ benötigen weiterhin gemessene Abläufe beziehungsweise eine belastbare Gesamtkostenrechnung.
+
+## Kern der ersten verkaufbaren Version
+
+Abhängigkeiten nennen Voraussetzungen für eine Funktion, keine bereits erteilte Architekturfreigabe. Die Fachdetails stehen in den verlinkten Entwürfen.
+
+| Bereich / Anforderungen | Zweck und Mindestumfang zur Prüfung | Status / Release | Abhängigkeit | Abnahmebeispiel |
+|---|---|---|---|---|
+| Unternehmen und Projekte; REQ-ORG-001, REQ-ORG-003, REQ-ORG-004 | Projekte mit eigenen Typen, Feldern, Status, Formularen und begrenzten Automationen; Vorlage und Archivierung ergänzen | B Kern, V Vorlagen/Lebenszyklus; V1 | Identität, Rechte, versionierte Konfiguration | Zwei Projekte erlauben unterschiedliche Übergänge; eine Änderung alter Regeln beschädigt keine bestehenden Tickets |
+| Benutzer und Anmeldung; REQ-AUTH-001 bis REQ-AUTH-004 | Lokale und LDAP-Anmeldung, deaktivierbare Identitäten, spätere Anbieter und 2FA vorbereiten | B; Anmeldung V1, 2FA früh danach | Identitäts- und Sitzungsregeln | Deaktivierter Benutzer kann nicht über eine alte Sitzung weiterarbeiten; 2FA wird in V1 noch nicht als vorhanden angezeigt |
+| Rechte und Administration; REQ-ACL-001 bis REQ-ACL-005 | Kundengruppen, Projektzuweisungen, getrennte Feldsicht/-änderung, Feldverbot gewinnt; einheitliche Durchsetzung und Verwaltungsprotokoll ergänzen | B Kern, V Durchsetzung/Audit; V1 | Gemeinsame fachliche Zugriffsprüfung | Verbotenes Feld fehlt auch in API und Export, selbst wenn eine zweite Gruppe es freigibt |
+| Tickets und Beziehungen; REQ-TKT-001, REQ-TKT-002 | Bearbeiten nach Projektregeln; typisierte Verknüpfungen und Unteraufgaben ergänzen | B Ticketkern, V Beziehungen; V1 | Projekte, Rechte, Fachreferenzen | Erlaubter Übergang speichert; unzulässiger Übergang bleibt auch über API gesperrt |
+| Kommunikation und Anhänge; REQ-TKT-003, REQ-TKT-005 | Interne Notiz von Kundenantwort unterscheiden; Dateien, Historie und empfängerabhängige Benachrichtigung | V; für V1 empfohlen | Dateispeicher, Empfängerrechte, Versandaufträge | Portalnutzer bekommt die Kundenantwort und keinen Text der internen Notiz |
+| Finden und tägliche Arbeit; REQ-TKT-004 | Listen, Suche, Filter, Sortierung und gespeicherte Ansichten | V; V1 empfohlen | Sichtbarkeitsfilter, Pagination, Indizes | Filter „meine offenen Tickets“ bleibt nach erneutem Anmelden verfügbar |
+| Zeiten; REQ-TIME-001, REQ-TIME-002 | Zeiten zu Projekt/Ticket erfassen; nachvollziehbar korrigieren, summieren und exportieren | B Erfassung, V Auswertung/Export; V1 | Identität, Rechte, exakte Zeitrechnung | Korrektur und Einzeldaten erklären die Summe; fremde geschützte Buchungen bleiben unsichtbar |
+| E-Mail-Helpdesk; REQ-HD-001, REQ-HD-002 | IMAP/SMTP, Antworten zuordnen, unbekannte Absender prüfen, Wiederholungen behandeln | B Mail und Prüfwarteschlange, V Detailregeln; V1 | Tickets, Postfächer, Jobs, Kundenzuordnung | Zweiter Abruf legt kein zweites Ticket an; unbekannter Absender erhält keinen automatischen Portalzugang |
+| Servicefristen; REQ-HD-003 bis REQ-HD-005 | Erstreaktion/Lösung, Geschäftskalender und Eskalation; Kundenpause nur für Lösung | B; V1 | Versionierte Kalender, Zeitquelle, Jobs | Offene Erstreaktion läuft während Kundenpause im Geschäftskalender weiter |
+| Kundenportal; REQ-PORTAL-001 bis REQ-PORTAL-003, REQ-ACL-002 | Eigene Organisationsanfragen in freigegebenen Projekten, Antworten; Einladung und freigegebenes Wissen ergänzen | B Anfragekern, V Zugang/Wissen; V1 | Identität, Rechte, Helpdesk, veröffentlichtes Wiki | Zwei Kontakte derselben Organisation sehen freigegebene Anfragen; fremde Organisation und nicht zugewiesenes Projekt bleiben ausgeschlossen |
+| Wiki; REQ-DOC-001 bis REQ-DOC-004 | Visuelle Texte, Entwurf und ausdrückliche Veröffentlichung, Revisionen, Konfliktschutz, optionale Übersetzungen; Struktur/Suche ergänzen | B Kern, V Auffindbarkeit; V1 | Editorformat, Dateien, Rechte | Deutsch wird veröffentlicht, englischer Entwurf bleibt intern; veraltetes Speichern überschreibt nichts |
+| Anforderungen; REQ-REQ-001 bis REQ-REQ-003 | Beschreibung, Kriterien, Verantwortliche, Priorität, Status und einfache Freigabe; Links zu Umsetzung/Wissen/Git | B; V1 | Revisionen, Rechte, Verknüpfungen | Inhaltliche Änderung erzeugt neue Freigaberunde; bisherige Freigabe bleibt historisch |
+| Git; REQ-GIT-001 bis REQ-GIT-003 | GitHub.com, GitLab.com und selbst betriebenes GitLab; Zuordnung und Anzeige, keine V1-Schreibaktionen | B; V1 | Anbieteradapter und aktuelle Quellenrechte | Benutzer verliert Quellzugriff und sieht anschließend keine geschützten Git-Metadaten |
+| Sprache und Marke; REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002 | DE/EN, regionale Formate, zusätzliche Sprachpakete vorbereiten; Logo/Farben und E-Mail-Vorlagen | B; V1, PDF später | UI, Portal, Anmeldung, Übersetzung und Vorlagen | Englischer Empfänger erhält verständliche, gebrandete E-Mail; optionale Wiki-Sprache ist keine Veröffentlichungspflicht |
+| KI-Unterstützung; REQ-AI-001 bis REQ-AI-009 | Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung, Wiki-Überarbeitung; Admin-Skills/-Modelle; Bestätigung für Änderungen/Versand | B vier Fälle und Steuerung, V Schutzdetails; V1 | Interne Berechtigung, Anbieterfreigabe, aktuelle Quellen, Kostenregeln | Geänderte Empfänger oder Quellen machen einen alten Versandvorschlag erneut prüfpflichtig |
+| Bedienung; REQ-PROD-004, REQ-UX-001 | Verständliche Navigation, Tastaturzugang, gute Fehlerrückmeldung, klare Speicher-/Versandzustände; mobile Mindestansichten festlegen | B Verbesserungsziel, V Detailziele; V1 | UI-Konzept, Nutzeraufgaben, Messung | Nutzer erstellt und beantwortet ein Ticket ohne Hilfe; Fehlversand ist nicht als Erfolg dargestellt |
+| API und Module; REQ-API-001, REQ-API-002, REQ-ARCH-001, REQ-ARCH-002 | Dokumentierte Kernabläufe; React, Backendentscheidung offen; abgegrenzte Fachmodule und Adapter vorgeschlagen | B API/React, V Details; V1 | Backend, Zugriffs-/Fehler-/Versionsvertrag | UI und API lehnen dieselbe unerlaubte Änderung ab |
+| Daten und Erweiterbarkeit; REQ-DATA-001 bis REQ-DATA-004, REQ-ORG-002, REQ-MIG-002 | PostgreSQL, dauerhafte Dateien; weitere DBs, Unternehmenskontext und spätere Importgrenze vorbereiten; Löschwege definieren | B PostgreSQL/Vorbereitung, V Datei-/Lebenszyklusdetails; V1 | Speicher-, Schlüssel- und Migrationskonzept | Containerwechsel erhält Anhänge; V1 behauptet keine Unterstützung von Oracle oder mehreren Mandanten |
+| Betrieb und Schutz; REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001 | Docker, Wartung durch Anbieter/Kunden, definierter Internetbedarf, Wiederherstellung; Updates, Diagnose und Schutzprüfungen ergänzen | B Betriebsrichtung/RPO/RTO, V Verfahren; V1 | Betreiber, Sicherungsziel, Ersatzkapazität | Frische Umgebung wird mit Dateien/Schlüsseln innerhalb der vorab definierten Messbedingungen wiederhergestellt |
+| Leistungsnachweis; REQ-PERF-001 bis REQ-PERF-004 | 500–1.500 Tickets monatlich, 15 aktive Nutzer; Speicherprofil und vorab definierte Antwortzeiten messen; lokale KI separat dimensionieren | B Last/Budget, V Messwerte; V1 | Referenzdaten, Hardware, Messverfahren | p95-Auswertung enthält Last, Datenmenge und Ressourcen statt nur einer schnellen Einzelanfrage |
+| Entwicklungsnachweise; REQ-DEV-001 bis REQ-DEV-005 | Gemeinsame Regeln, zentrale TODO/DONE, getrennte Arbeiten und nachvollziehbare fachliche/technische Prüfung | B gemeinsame Arbeit/Abnahme, V Detailverfahren; Planung und Entwicklung | Koordination und Reviewer | Fremder Aufgabenbesitzer bleibt bei Integration erhalten; Eigenprüfung wird nicht als Holgers Abnahme eingetragen |
+
+Detailentwürfe: [Rechte](PERMISSIONS.md), [Fachmodell](DOMAIN_MODEL.md), [Helpdesk](HELPDESK_SLA.md), [Wiki und Marke](WIKI_I18N_BRANDING.md), [KI](AI_USE_CASES.md), [Git und Migration](GIT_MIGRATION.md), [Architektur](ARCHITECTURE.md), [Betrieb](OPERATIONS.md).
+
+## Priorisierung der offenen Ergänzungen
+
+Diese Reihenfolge priorisiert V-Anforderungen; sie ändert weder deren Status noch bestätigte B-Anforderungen. „V1 empfohlen“ ist noch keine Freigabe.
+
+| Priorität | Offene Anforderungen | Begründung / empfohlene Grenze |
+|---|---|---|
+| Zuerst entscheiden: Daten- und Rechteintegrität | REQ-ACL-004, REQ-ACL-005, REQ-DATA-003, REQ-DATA-004, REQ-SEC-001, REQ-OPS-005, REQ-OPS-006 | Für V1 empfohlen: einheitliche Rechte, Protokollierung, dauerhafte Dateien, kontrolliertes Löschen/Update und sichtbare Fehler tragen den bestätigten Kern |
+| Zuerst entscheiden: verlässliche KI | REQ-AI-005 bis REQ-AI-009, REQ-PERF-004 | Mit erster jeweiliger KI-Anbindung: Rechte, kontrollierte Anwendung, Datenwege, Skill-Versionen, Qualitätstests; lokale Modellressourcen zusätzlich |
+| Zuerst entscheiden: Entwicklungsgrundlage | REQ-ARCH-002, REQ-API-002, REQ-MIG-002, REQ-DEV-003, REQ-DEV-005, REQ-PERF-003 | Vor entsprechender Umsetzung: Modul-/Adapterverträge, Importvorbereitung, Review und messbare Ziele; keine weiteren Datenbankadapter vorziehen |
+| Danach entscheiden: vollständiger Alltagsablauf | REQ-TKT-002 bis REQ-TKT-005, REQ-HD-002, REQ-PORTAL-003, REQ-UX-001 | V1 empfohlen: Beziehungen, interne/öffentliche Kommunikation, Suche, Historie, Mailzuordnung, Einladung und zugängliche Bedienung |
+| Danach entscheiden: V1-Komfort mit enger Grenze | REQ-ORG-004, REQ-TIME-002, REQ-PORTAL-002, REQ-DOC-004 | V1 empfohlen: Projektkonfiguration als Vorlage, Archivierung, einfache Zeitsumme/Export, veröffentlichte Wissensseiten und Suche; kein Vorlagenmarktplatz, BI-System oder Office-Editor |
+| Separater Ausbau | REQ-TIME-003 | Timer, Freigaben und Abrechnung einzeln entscheiden; keine verdeckte Voraussetzung für die bestätigte manuelle Zeiterfassung |
+
+## Spätere Ausbaubereiche
+
+**B früh**: bereits zeitnah nach V1 zugesagt. **B später**: Entwicklungsrichtung bestätigt, Termin offen. **V A/B/C**: eigene vorgeschlagene Reihenfolge nach dem frühen Ausbau; A vor B vor C. Alle V-Kandidaten benötigen noch Bedarf und Freigabe. Die Tabellen spezifizieren den Mindestumfang auf Planungsebene gemäß REQ-PROD-003 und REQ-EXT-001; neue detaillierte REQ-IDs folgen erst bei Aufnahme eines Moduls.
+
+| Bereich | Zweck und vorgeschlagener erster Umfang | Status | Abhängigkeit | Abnahmebeispiel |
+|---|---|---|---|---|
+| 2FA | Zusätzlicher Anmeldefaktor mit Wiederherstellung und LDAP-Regeln | B früh; REQ-AUTH-004 | Identität, Recovery, Supportverfahren | Verlorener Faktor lässt sich kontrolliert ersetzen; Umgehung über anderen Loginweg scheitert |
+| Redmine-Import | Geprüfter Probelauf für ausgewählte Projekte, Tickets, Zeiten, Wiki und Dateien; Lückenbericht | B früh; REQ-MIG-001, REQ-MIG-002; Datenumfang V | Stabile IDs, Rechteabbildung, Quellversion | Wiederholter Probelauf erzeugt keine Dubletten; Mengen und Dateiprüfsummen sind abgeglichen |
+| Kanban und Sprintarbeit | Bestehende Tickets als Board, danach Backlog/Sprints und klar definierte Fortschrittswerte | V A | Workflows, Teams, Filter, Historie | Verschieben respektiert erlaubte Übergänge; Sprintbericht benennt Änderungen am Umfang |
+| Terminplanung / Gantt | Meilensteine, Abhängigkeiten und Terminansicht; automatische Verschiebung zunächst nur nach Vorschau | V A | Ticketbeziehungen, Projektkalender | Verschiebung zeigt betroffene Nachfolger; widersprüchliche Abhängigkeiten werden erklärt |
+| Berichte / Dashboards | Zunächst feste Kennzahlen für offene Arbeit, SLA und Zeiten mit sichtbarer Berechnungsgrundlage | V A | Historie, Rechte, abgestimmte Kennzahlen | Kennzahl führt zu den zugrunde liegenden berechtigten Datensätzen |
+| Ressourcen / Kapazitäten | Verfügbarkeit und geplante Aufwände gegenüberstellen; Team- und Personensicht trennen | V B | Kalender, Aufwand, Abwesenheiten, Rechte | 30 Stunden Kapazität und 40 geplante Stunden zeigen zehn Stunden Überplanung |
+| Budgets / Kosten | Projektbudget, gültige Kostensätze und Plan/Ist; zunächst eine definierte Währung | V B | Zeitkorrekturen, sensible Feldrechte, Rundung | Satzänderung verändert keine abgeschlossene historische Berechnung unbemerkt |
+| Erweiterte Zeiten | Timer zuerst separat, dann Freigabeperioden und abrechenbare Anteile; Rechnungen separat entscheiden | V B; REQ-TIME-003 | Zeitmodell, Kalender, Verantwortliche | Gesperrte Periode nimmt eine nachträgliche Buchung nur als dokumentierte Korrektur an |
+| Testmanagement | Testfälle, Versionen, Ausführungen und Ergebnisse zu Anforderungen und Fehlern | V B | Anforderungsrevisionen, Tickets, Dateien | Prüfung bleibt der tatsächlich geprüften Revision zugeordnet, auch wenn die Anforderung weiterentwickelt wird |
+| Formale Anforderungsstände | Unveränderlicher Satz freigegebener Revisionen, Vergleich und kontrollierter Änderungsantrag | B später; REQ-REQ-004; Reihenfolge V B | Revisionsmodell, Freigaberechte | Alter Stand bleibt reproduzierbar; genehmigter Änderungsantrag erzeugt einen neuen Stand |
+| Vorlagenbasierte PDF-Ausgabe | Zuerst ein Dokumenttyp mit Marke, Sprache, Seitenumbrüchen und erlaubten Feldern | B später; REQ-BRAND-002; Reihenfolge V B | Vorlagen, Schriftarten, Exportrechte | Mehrseitige Ausgabe bleibt lesbar; versteckte Felder fehlen auch im PDF |
+| Weitere Anmeldung | Priorisierten Anbieter über gemeinsame Identität ergänzen; OIDC/SAML zunächst bewerten | B Richtung; REQ-AUTH-003; Reihenfolge offen | Kontoverknüpfung, Sitzungen, 2FA-Regeln | Anbieterwechsel erzeugt weder doppeltes Konto noch zusätzliche Rechte |
+| Git-Ausbau | GitHub Enterprise Server, anschließend einzeln freigegebene Automationen, Builds oder Schreibaktionen | B Richtung; REQ-GIT-001, REQ-GIT-003; Reihenfolge offen | Versionsmatrix, Quellenrechte, Bestätigung | Neues Git-System erfüllt dieselben Negativfälle; Schreibrecht wird ausdrücklich separat vergeben |
+| Zusätzliche KI-Fälle | Kontextsuche, Übersetzung und Planungsvorschläge erst nach Nutzen-/Datenprüfung; Portal-KI gesondert | B Bewertung und späteres Portal; REQ-AI-001; einzelne Fälle V | Eigene Skills, Rechte, Qualitäts-/Kostenprüfung | Quellenentzug verhindert eine neue Antwort aus inzwischen gesperrtem Wissen |
+| Weitere Migrationen | Easy Redmine/Easy8 und Jira nach Redmine prüfen; Plugin-Daten und Historien als eigene Pakete | B Prüfung; REQ-MIG-001; Lieferung offen | Quelldaten, Lizenzen, Mapping, Probelauf | Nicht übertragene Daten erscheinen im Ergebnisbericht statt still zu verschwinden |
+| Mehrmandantenbetrieb | Mehrere getrennte Unternehmen in einer Betriebsumgebung; Modell vor Ausbau entscheiden | B später; REQ-ORG-002 | Suche, Jobs, Dateien, Schlüssel, Limits | Fremder Mandant kann auch über erratene IDs, Exporte oder Hintergrundjobs nicht gelesen werden |
+| Andere Datenbanken | MariaDB, SQL Server oder Oracle nur nach konkretem Kundenbedarf qualifizieren | B nur Architekturvorbereitung; REQ-DATA-002; Lieferung offen | Dialekt, Migrationen, Such-/Jobstrategie, Prüfmatrix | Gesamte fachliche Prüfsuite und Update/Restore laufen auf der zusätzlichen DB |
+| Portfolio / Programm | Mehrere Projekte, Ziele und Meilensteine zusammen betrachten; später Planstände und Prognosen | V B | Projekte, Gantt, Kennzahlen, Rechte | Portfolio summiert nur erlaubte Projekte und erläutert fehlende Daten |
+| WBS / Ideenstruktur | Hierarchische Arbeitszerlegung; freie Ideenknoten erst bei ausdrücklicher Übernahme als Tickets | V C | Ticketbaum, Reihenfolge, Vorlagen | Umstrukturierung erhält Ticketkennungen und verhindert Zyklen |
+| Risiken / Probleme / Entscheidungen | Projektrisiken mit Bewertung, Gegenmaßnahmen und Verantwortlichen; kein bloßes Textfeld | V B | Projektobjekte, Rechte, Verlauf | Geänderte Risikobewertung ist begründet und historisch sichtbar |
+| Assets / Konfiguration | Geräte oder Dienste mit Eigentümer, Zustand und Beziehungen zu Supportfällen | V B | Kundenorganisationen, Ticketlinks, Lebenszyklus | Servicefall zeigt nur freigegebene Assetinformationen der passenden Organisation |
+| Kundenverwaltung / CRM | Servicekontakte und Vereinbarungen erweitern; Verkaufschancen getrennt vom Portalzugriff | V C | Organisationen, Kontaktrechte, Datenpflege | Vertriebszuordnung gibt einem Kontakt keine zusätzlichen Ticketrechte |
+| Serviceverträge / Kontingente | Vereinbarte Supportzeiten und Verbrauch nachvollziehen; Übertragungsregeln ausdrücklich festlegen | V B | Zeiterfassung, SLA, Korrekturen | Korrigierte Buchung berichtigt den Verbrauch ohne Verlust der ursprünglichen Abrechnungsspur |
+| Dokumentverwaltung | Dateiversionen, Kategorien, kontrollierte Freigabe; Office-Bearbeitung als separate Integration | V C | Dateispeicher, Rechte, Versionen, Suche | Neue Dateiversion ersetzt keinen historischen Anhang; sensible Version bleibt gesperrt |
+| Kalender / Abwesenheit | Projekttermine und verfügbare Kapazität abbilden; keine Lohnabrechnung | V B | Zeitzonen, Personenrechte, Ressourcen | Abwesenheit reduziert Kapazität, ohne vertraulichen Abwesenheitsgrund offenzulegen |
+| Alltagswerkzeuge | Ticketvorlagen, Checklisten, kontrollierte Sammelaktionen und wiederkehrende Aufgaben | V A | Projektregeln, Historie, Jobs | Sammeländerung meldet nicht zulässige Vorgänge einzeln und ändert sie nicht |
+| Externe Ereignisse / Automationen | Versionierte Webhooks und priorisierte Nachbarsysteme; Skript-/Pluginplattform gesondert bewerten | V B | API, Ereignisvertrag, Authentifizierung, Wiederholungen | Doppelte Ereigniszustellung erzeugt keine doppelte Buchung |
+| Mobile Nutzung / Offline | Zunächst responsive Kernabläufe; native App, Push und Offline-Synchronisation separat bewerten | V C; mobile V1-Mindestansichten unter OPEN-015 | UI, API, lokale Datenrechte, Konflikte | Rechteentzug und gleichzeitige Änderungen werden vor Wiedereinspielen lokaler Daten berücksichtigt |
+
+Der Bedarf an diesen Bereichen wird mit Pilotanwendern geprüft. Vorlagen, globale Ansichten und Berichte werden funktional gebündelt statt jede Herstelleransicht als eigenes Modul zu kopieren. Ein integrierter Git-Server, ein Office-Paket, Buchhaltung, Lohnabrechnung und eine universelle Plugin-Laufzeit sind derzeit keine Lieferzusagen.
+
+## KI-Nutzen je Bereich
+
+Für jeden neuen konkreten Anwendungsfall ist vor Entwicklung ein eigenes Blatt nach [AI_USE_CASES.md](AI_USE_CASES.md) auszuarbeiten: Nutzer, Nutzen, erlaubte Quellen, Admin-Skill, Anbieter, Vorschau/Bestätigung, Kosten und positive/negative Prüffälle. Diese Übersicht begrenzt und begründet die Ideen bereits auf Bereichsebene.
+
+| Bereich | Mögliche Hilfe / Release | Verbindliche Grenze |
+|---|---|---|
+| Tickets, Mail, Wiki, Anforderungen | Vier beschlossene V1-Fälle; spätere Suche/Übersetzung gesondert | Nur interne berechtigte Nutzer in V1; speichern, veröffentlichen und versenden sind getrennte Aktionen |
+| Projektkonfiguration und Alltagswerkzeuge | Später Regeln, Vorlagen und Checklisten vorschlagen | Admin prüft Auswirkungen; keine ungeprüften Rechte- oder Workflowänderungen |
+| Kanban, Gantt, WBS, Portfolio | Später Arbeitspakete und Planalternativen vorschlagen | Termine, Abhängigkeiten und Kapazität deterministisch validieren |
+| Ressourcen, Zeiten, Kosten, Kontingente | Später Abweichungen erläutern und mögliche Fehlbuchungen markieren | KI berechnet keine verbindlichen Summen, Löhne oder Leistungsbewertungen |
+| Berichte und Risiken | Später belegten Statusbericht oder mögliche Projektrisiken formulieren | Quellen, Zeitraum und Unsicherheit sichtbar; keine erfundenen Kennzahlen |
+| Tests und formale Anforderungsstände | Später Prüffälle und Auswirkungen einer Änderung vorschlagen | Testausführung, Genehmigung und historische Stände bleiben überprüfbare Fachaktionen |
+| Assets, CRM, Serviceverträge | Später vorhandene Fallhistorie zusammenfassen | Organisationsgrenzen und sensible Vertragsfelder erhalten eigene Kontextprüfung |
+| Dokumente, Sprache, PDF, mobile Nutzung | Später Text-/Übersetzungshilfe, mobiler Aufruf bestehender Fälle | Ausgabe/Formatierung deterministisch; keine automatische Veröffentlichung |
+| Git und Integrationen | Später Beschreibung verknüpfter Änderungen nach eigener Datenfreigabe | In V1 keine Git-Metadaten im KI-Kontext gemäß Git-Entwurf; Schreibaktionen separat freigeben |
+| Identität, Rechte, Migration, Datenbanken, Betrieb | Zunächst deterministische Werkzeuge; später eventuell Diagnoseerklärung aus freigegebenen Daten | Keine KI entscheidet Zugriff, Übernahme, Löschung oder Wiederherstellung; keine Secrets in Modellkontext |
+| Entwicklung und Abnahme | KI erstellt Entwürfe und unterstützt Review gemäß eigenem Entwicklungsablauf | Produkt-KI und Entwicklungswerkzeuge sind getrennt; menschliche Abnahme wird nicht durch Modellzustimmung ersetzt |
+
+## Aufwand und nächster Entscheidungsbedarf
+
+Der bestätigte V1-Kern ist bereits ein umfangreiches Produkt. Budget und Termin lassen sich erst nach freigegebenen Detailgrenzen, verfügbarem technischem Review und einem erprobten Entwicklungsdurchlauf verlässlich planen. Stunden- oder Eurozahlen ohne diese Basis werden hier nicht zugesagt.
+
+Kostentreiber sind insbesondere konfigurierbare Rechte/Felder, sichere Mailzuordnung, SLA-Kalender, Update/Restore, Anbieterqualifizierung und später zusätzliche Datenbanken. Ein kleiner Lizenzpreis allein begründet noch keinen wirtschaftlichen Vorteil. OPEN-020 benötigt Pilotkunde, Budget, Wartungs-/Supportmodell und Lizenzentscheidung; OPEN-021 die fachliche Priorisierung dieser Inventur. Günstigere Betriebshardware gleicht ungeplanten Support nicht automatisch aus.
+
+Zur Entscheidung vorgeschlagen: die V1-Ergänzungen in der oben genannten Reihenfolge prüfen; 2FA und Redmine-Import früh halten; anschließend Kanban, Gantt und einfache Dashboards priorisieren. Dieser Vorschlag wird nach Holgers Rückmeldung angepasst. Kein Kandidat wird durch diese Datei zum bestätigten Releaseumfang.

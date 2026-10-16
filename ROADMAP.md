@@ -1,8 +1,8 @@
 # Roadmap für das Projektmanagementprodukt
 
-Stand 15. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
+Stand 16. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
 
-Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). Sie unterscheidet den bestätigten V1-Umfang von Vorschlägen und späteren Funktionen. Die nötige Entwicklungskapazität, das Budget und ein Pilottermin sind noch offen. Die vollständige Funktionsinventur ist vor Implementierungsstart fertigzustellen; diese erste Roadmap ersetzt sie nicht.
+Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). Sie unterscheidet den bestätigten V1-Umfang von Vorschlägen und späteren Funktionen. Die nötige Entwicklungskapazität, das Budget und ein Pilottermin sind noch offen. Das [Funktionsinventar](docs/FUNCTION_INVENTORY.md) enthält den Kern, priorisierte V1-Ergänzungen und spätere Bereiche mit Grenzen und Abnahmebeispielen. Seine fachliche Prüfung ist vor Implementierungsstart erforderlich.
 
 ## Phase 0 Anforderungen und Architektur
 
@@ -62,23 +62,19 @@ Redmine als erste Importquelle ist bestätigt; Easy Redmine/Easy8 und Jira werde
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |
 | Weitere Datenbanken | Option für MariaDB, SQL Server oder Oracle | Bisher nur Vorbereitung beauftragt; jede tatsächliche Unterstützung braucht gesonderte Entscheidung, Migration und Prüfnachweise. REQ-DATA-002 |
 
-## Kandidaten für das vollständige Funktionsinventar
+## Vorgeschlagene Reihenfolge weiterer Module
 
-Die folgenden Bereiche sind zu prüfen, aber noch keine bestätigten Lieferzusagen. Ihre Beschreibung erfüllt die erste Einordnung; die vollständige Spezifikation bleibt eine offene Planungsaufgabe.
+Die Bereiche und Mindestumfänge stehen im [Funktionsinventar](docs/FUNCTION_INVENTORY.md). Alle folgenden Prioritäten sind Vorschläge unter OPEN-021, ohne Kalenderzusage und zusätzlich zu den bestätigten frühen Erweiterungen 2FA und Redmine-Import.
 
-| Kandidat | Zweck und Abgrenzung | Abhängigkeiten | Beispiel für spätere fachliche Abnahme |
-|---|---|---|---|
-| Projektplanung und Gantt | Termine, Meilensteine und Abhängigkeiten planen | Ticketbeziehungen, Kalender und Rechte | Eine Terminänderung macht ihre Auswirkungen sichtbar; Folgetermine werden nach definierten Regeln behandelt |
-| Agile Ansichten | Kanban beziehungsweise Sprintplanung für vorhandene Arbeit | Statusmodell, Filter und Teams | Ein Vorgang wechselt im Board nur entlang erlaubter Übergänge |
-| Ressourcen und Kapazitäten | Auslastung und Verfügbarkeit planen | Benutzer, Kalender, Projekte und Zeitdaten | Eine Überplanung ist mit nachvollziehbaren Eingabedaten erkennbar |
-| Budgets und Kosten | Plan und Ist wirtschaftlich vergleichen | Zeiten, Berechtigungen und Preisregeln | Ein Bericht lässt sich auf Buchungen und festgelegte Sätze zurückführen |
-| Berichte und Dashboards | Projekt- und Servicezustand beurteilen | Rechte, Kennzahlendefinitionen und Historie | Zwei Ansichten desselben Zeitraums verwenden dieselbe Kennzahlendefinition |
-| Testmanagement | Prüffälle, Ausführungen und Ergebnisse mit Anforderungen verbinden | Anforderungen, Tickets und Versionen | Eine nicht bestandene Prüfung verweist auf Anforderung und Fehlerbehebung |
-| Erweiterte Zeitwirtschaft | Timer, Freigaben und Abrechnung | Basis-Zeiterfassung und Kalender | Eine freigegebene Abrechnungsperiode behandelt spätere Korrekturen nachvollziehbar |
-| Erweiterte Kundenverwaltung | Organisationen, Kontakte und Servicevereinbarungen verwalten | Portal, Rechte und Helpdesk | Ein Kontakt erhält nur die für seine Kundenorganisation freigegebenen Vorgänge |
-| Weitere Integrationen und Ereignisse | Nachbarsysteme zuverlässig anbinden | API, Identität und Hintergrundverarbeitung | Ein wiederholt zugestelltes Ereignis erzeugt keine doppelte Fachaktion |
+| Reihenfolge | Schwerpunkt | Voraussetzung |
+|---|---|---|
+| A | Kanban/Sprints, Gantt, einfache Dashboards sowie Ticketvorlagen/Checklisten | Stabile Tickets, Rechte, Kalender und definierte Kennzahlen |
+| B | Ressourcen, Kosten, Zeitfreigaben, Tests, Portfolios, Risiken, Assets, Servicekontingente und externe Ereignisse | Bedarf aus Pilotbetrieb, Datenverträge und eigene Abnahme je Modul |
+| C | Freie Ideenstruktur, erweitertes CRM, Dokumentverwaltung und native/offline mobile Nutzung | Nachgewiesener Nutzen gegenüber zusätzlichen Integrationen und Wartung |
 
-**KI-Bewertung:** Für jeden freigegebenen Kandidaten wird REQ-AI-001 konkretisiert. KI kann Vorschläge und Erklärungen unterstützen; verbindliche Berechnungen, Rechte und Freigaben bleiben explizite Fachlogik.
+Formale Anforderungsstände und PDF-Ausgabe sind bereits als spätere Richtungen bestätigt; ihre Einordnung zusammen mit B bleibt vorgeschlagen. Weitere Anmeldeanbieter, Git-Ausbau, Portal-KI und Mehrmandantenbetrieb erhalten ihre Reihenfolge nach konkretem Bedarf. Weitere Datenbanken sind nur architektonisch vorbereitet; eine tatsächliche Unterstützung bleibt gesondert zu beauftragen.
+
+Die als V gekennzeichneten V1-Ergänzungen werden im Inventar zuerst nach Daten-/Rechteintegrität, verlässlicher KI und Entwicklungsgrundlage, danach nach Alltagsabläufen und eng begrenztem Komfort priorisiert. Es wird keine bestätigte V1-Funktion verschoben.
 
 ## Roadmap Änderungen
 
