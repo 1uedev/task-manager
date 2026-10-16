@@ -245,3 +245,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 ## Neue Aufgaben und Übergaben
 
 Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, verantwortliche Sitzung oder unbesetzt, Aktualisierungsdatum, REQ-Bezug, Abhängigkeiten, Arbeitsstand oder Branch, Umfang, Abnahmekriterien und nächster Schritt. Bei Blockaden Ursache und benötigte Entscheidung ergänzen. Statusänderungen dürfen keine ausgeführten Prüfungen oder Freigaben erfinden.
+
+## TASK-014 Regressionstest von freien Aufgaben entkoppeln
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-contract-fix-01 · **Aktualisiert:** 2026-10-16
+
+**Bezug:** REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** TASK-013; Fehler durch Reservierung von TASK-012 sichtbar. **Arbeitsstand:** task/task-014-codex-contract-fix; korrigierter Regressionstest vorhanden.
+
+**Umfang:** Vorhandenen Test test_active_task_requires_owner unabhängig vom aktuellen Aufgabenbestand machen. Produktcode und Validatorregeln bleiben außerhalb des Umfangs.
+
+**Abnahmekriterien:** Test prüft eine aktive Aufgabe ohne Besitzer auch dann, wenn keine freie Aufgabe mehr existiert. Alle vorhandenen Tests bestehen; der negative Nachweis bleibt wirksam. Keine Pflichtprüfung wird deaktiviert.
+
+**Ergebnis:** Der Test verwendet eine eigene synthetische Aufgabe und prüft sowohl IN ARBEIT als auch BEREIT ZUR PRÜFUNG auf fehlenden Besitzer. Ein gültiger Besitzer beseitigt den Fehler. Der produktive Validator und seine Regeln bleiben unverändert.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Zusätzlich eine temporäre Repository-Kopie ohne irgendeine OFFEN-Aufgabe validiert und alle elf Tests dort erfolgreich ausgeführt. Der vorherige Fehlschlag der TASK-012-Reservierung ist damit lokal reproduzierbar behoben; deren GitHub-Prüfung muss nach Integration erneut laufen.
+
+**Nächster Schritt:** Fix integrieren, offene Reservierung aus PR #37 auf aktuellen main bringen und Pflichtprüfungen erneut ausführen. Technisches Ergebnis bleibt bis zur Abnahme hier nachvollziehbar; keine Produktimplementierung.
