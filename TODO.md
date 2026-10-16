@@ -194,15 +194,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #11](https://github.com/1uedev/task-manager/issues/11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-review-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-review-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplanter Branch task/task-011-codex-review; separates Arbeitsverzeichnis nach integrierter Reservierung.
+**Bezug:** REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-011-codex-review; Entwicklungs- und Review-Vorschlag vorhanden.
 
 **Umfang:** OPEN-017 und OPEN-018 entscheiden. Koordination, getrennte Arbeitsstände, Aufgabenreservierung, PRs, technisches Review und fachliche Abnahme definieren.
 
 **Abnahmekriterien:** Zwei gedachte gleichzeitige KI-Sitzungen können Aufgaben eindeutig übernehmen und übergeben. Eine veraltete TODO-Kopie überschreibt keinen aktuellen Stand. Fachliche Freigabe und technische Prüfung haben benannte Verantwortlichkeiten. Die technische GitHub-Einrichtung erfolgt separat in TASK-013. Weitergehende Review-Regeln werden hier geprüft.
 
-**Nächster Schritt:** Koordinierende Sitzung integriert die geprüfte freie Reservierung. Danach risikogerechte Review-Regeln und Parallel-/Abbruchszenarien ausarbeiten; benannter technischer Reviewer und Freigabe durch Holger bleiben offen.
+**Ergebnis:** [Entwicklungs- und Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) mit Rollen, risikogerechten Nachweisen, Commitbezug, acht Koordinations-/Unterbrechungsszenarien und klarer Trennung von Integration, technischer Prüfung und Fachabnahme. Bestehende AGENTS-Regeln bleiben gültig; zusätzliche Freigabeschwellen sind vorgeschlagen, technischer Reviewer noch nicht benannt.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Acht Ablaufszenarien gedanklich geprüft. Zwei Fälle zusätzlich in isolierten temporären Git-Repositories ausgeführt: konkurrierende Eigentümer derselben Aufgabe erzeugten einen Textkonflikt; unabhängige Aufgaben ließen sich unter Erhalt beider Eigentümer zusammenführen. Das beweist keine atomare Sperre, verhindert kein bewusstes Zurückkopieren veralteter Inhalte und ersetzt weder reale parallele KI-Tests noch unabhängiges technisches Review.
+
+**Nächster Schritt:** Holger entscheidet Review-Verantwortung und vorgeschlagene Schwellen unter OPEN-017 sowie den erweiterten Ablauf unter OPEN-018. TASK-012 bündelt die Freigabepunkte. Keine Produktimplementierung und keine Abnahme im Namen Holgers.
 
 ## TASK-012 Planungsstand zur Architekturfreigabe zusammenführen
 

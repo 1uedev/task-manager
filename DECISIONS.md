@@ -183,13 +183,13 @@ DEC-037 priorisiert Redmine als erste Quelle nach V1; Easy Redmine/Easy8 und Jir
 
 **Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-SEC-001, REQ-DEV-004, REQ-DEV-005
 
-Holger übernimmt die fachliche Abnahme. Offen ist, wer sicherheitskritische Architektur, Rechte, Anmeldung, Datenmigration und Wiederherstellung technisch prüft und welche Nachweise dafür nötig sind. Fachliche Abnahme und technischer Review sollen sich ergänzen.
+Holger übernimmt die fachliche Abnahme. Offen ist, wer sicherheitskritische Architektur, Rechte, Anmeldung, Datenmigration und Wiederherstellung technisch prüft und welche Nachweise dafür nötig sind. Fachliche Abnahme und technischer Review sollen sich ergänzen. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) empfiehlt risikogerechte Nachweise und eine erfahrene menschliche Prüfung kritischer Bereiche. Person und Freigabeschwellen sind weiterhin offen.
 
 ### OPEN-018 Koordination der KI Arbeit
 
 **Status:** offen · **Fällig:** vor paralleler Entwicklung · **Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003
 
-Repository: 1uedev/task-manager. Integrationsbranch: main. Der technische Einrichtungsauftrag ist DEC-025. Das in docs/AI_WORKFLOW.md beschriebene Verfahren verwendet reservierende Pull Requests, bevor eine KI eine Aufgabe bearbeitet, sowie getrennte Arbeitsstände. TODO.md auf main bleibt maßgeblich. Das Verfahren ist organisatorisch; eine atomare Task-Sperre und die Identifikation einzelner KI-Sitzungen über GitHub-Benutzerkonten werden nicht behauptet. Koordination: Holger beziehungsweise eine von ihm ausdrücklich benannte Sitzung. Die weitergehenden fachlichen und technischen Freigaberegeln bleiben unter OPEN-017 zu entscheiden.
+Repository: 1uedev/task-manager. Integrationsbranch: main. Der technische Einrichtungsauftrag ist DEC-025. Das in docs/AI_WORKFLOW.md beschriebene Verfahren verwendet reservierende Pull Requests, bevor eine KI eine Aufgabe bearbeitet, sowie getrennte Arbeitsstände. TODO.md auf main bleibt maßgeblich. Das Verfahren ist organisatorisch; eine atomare Task-Sperre und die Identifikation einzelner KI-Sitzungen über GitHub-Benutzerkonten werden nicht behauptet. Koordination: Holger beziehungsweise eine von ihm ausdrücklich benannte Sitzung. Die weitergehenden fachlichen und technischen Freigaberegeln bleiben unter OPEN-017 zu entscheiden. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) ergänzt Parallel-, Konflikt- und Abbruchszenarien; seine erweiterten Regeln sind noch nicht beschlossen.
 
 ### OPEN-019 KI Betrieb und Nutzungsgrenzen
 
