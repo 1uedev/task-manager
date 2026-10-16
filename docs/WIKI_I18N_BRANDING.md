@@ -1,6 +1,6 @@
 # Wiki, Sprachen und Unternehmensauftritt
 
-Stand 15. Oktober 2026 · Planungsentwurf für TASK-007
+Stand 16. Oktober 2026 · Planungsentwurf für TASK-007
 
 Dieses Dokument konkretisiert REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002 und REQ-UX-001. Maßgeblich bleiben die [zentralen Anforderungen](../REQUIREMENTS.md) und das [Rechtekonzept](PERMISSIONS.md).
 
@@ -47,7 +47,7 @@ Beim Einfügen aus Zwischenablage oder importiertem Inhalt werden erlaubte Eleme
 | Tiptap | Kann HTML oder JSON ausgeben; die Dokumentation empfiehlt JSON für den gespeicherten Editorzustand. [Persistenz-Dokumentation](https://tiptap.dev/docs/editor/core-concepts/persistence) | Aufwand für eigene Oberfläche, zulässige Erweiterungen, React-Einbindung und vollständige Lizenz-/Kostenprüfung des gewählten Paketsatzes. |
 | Lexical | Bietet React-Anbindung, einen eigenen Dokumentzustand und JSON-Speicherung. Layout, Werkzeugleisten und Speicherung gehören zur Anwendung. [Offizielle Einführung](https://lexical.dev/docs/intro) | Aufwand für vollständige Bedienung, Tabellen, Bilder, Zwischenablage, Migration und Lizenzprüfung der konkreten Abhängigkeiten. |
 
-Die Primärquellen wurden am 15. Oktober 2026 gelesen. Empfehlung: beide Kandidaten nach späterer Implementierungsfreigabe mit derselben Beispielsammlung vergleichen. Kein Editor ist ausgewählt, kein Prototyp erstellt. Für Go oder Java bleibt die fachliche Speicherung hinter einer eigenen Schnittstelle; eine eventuell nötige zusätzliche Render-Laufzeit muss vor Auswahl berücksichtigt werden. Editorinterne Undo-Historie ersetzt keine serverseitigen Revisionen.
+Die Primärquellen wurden am 15. Oktober 2026 gelesen. Empfehlung: beide Kandidaten nach späterer Implementierungsfreigabe mit derselben Beispielsammlung vergleichen. Kein Editor ist ausgewählt, kein Prototyp erstellt. Für das inzwischen bestätigte Java/Spring-Boot-Backend (DEC-039) bleibt die fachliche Speicherung hinter einer eigenen Schnittstelle; eine eventuell nötige zusätzliche Render-Laufzeit muss vor Auswahl berücksichtigt werden. Editorinterne Undo-Historie ersetzt keine serverseitigen Revisionen.
 
 Ein verlustfreier Wechsel über Markdown oder HTML wird nicht zugesagt. Import-/Exportformate, Grenzen für Dokumentgröße und Bilder sowie die Suchstrategie bleiben unter OPEN-011 offen. Sicherungen müssen Originaldokumente, Schema-Versionen und referenzierte Dateien gemeinsam erfassen.
 

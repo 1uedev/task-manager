@@ -42,7 +42,9 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 86 REQ-IDs sind über Inventar und Bereichsverweise zugeordnet; V-Anforderungen auf Priorisierung geprüft. Herstellerseiten zur Bereichsabdeckung gelesen; eigene Mindestumfänge von Herstellerangaben getrennt. Keine Anwendungstests und keine unabhängige fachliche oder technische Abnahme.
 
-**Nächster Schritt:** Holger prüft V1-Ergänzungen und Reihenfolge der Ausbaubereiche unter OPEN-021. OPEN-020 benötigt Pilot, Budget, Lizenz- und Supportmodell. TASK-012 führt Entscheidungen zur Architekturfreigabe zusammen; Programmierung bleibt gesondert zu beauftragen.
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-041 bestätigt die Priorität von Kanban, Gantt und einfachen Dashboards; die frühen Ergänzungen 2FA und Redmine-Import bleiben eingeplant. Übrige Prioritäten und Mindestumfänge bleiben Vorschläge.
+
+**Nächster Schritt:** Holger prüft V1-Ergänzungen, Detailumfänge und verbleibende Reihenfolge unter OPEN-021. OPEN-020 benötigt Pilot, Budget, Lizenz- und Supportmodell. TASK-012 führt Entscheidungen zur Architekturfreigabe zusammen; Programmierung bleibt gesondert zu beauftragen.
 
 ## TASK-003 Architekturentscheidungen vorbereiten
 
@@ -56,11 +58,13 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Abnahmekriterien:** Ein begründeter Entscheidungsvorschlag benennt Betrieb, Prüfbarkeit, Aufwand und Grenzen. PostgreSQL bleibt alleiniger V1-Datenbankumfang. Kein Technologie-Prototyp oder Anwendungscode ohne zusätzliche Beauftragung.
 
-**Ergebnis:** [Architekturentwurf](docs/ARCHITECTURE.md) mit Go/Java-Vergleich, begründeter Empfehlung, Modul- und Datenhoheit, späteren Unternehmensgrenzen, API-Grundvertrag, Hintergrundaufträgen und Docker-Betriebsbild. PostgreSQL bleibt die einzige unterstützte Datenbank. Vorschläge für Leistung und Hardware sind keine Messergebnisse. Backend und Detailverträge sind noch nicht freigegeben.
+**Ergebnis:** [Architekturentwurf](docs/ARCHITECTURE.md) mit Go/Java-Vergleich, begründeter Empfehlung, Modul- und Datenhoheit, späteren Unternehmensgrenzen, API-Grundvertrag, Hintergrundaufträgen und Docker-Betriebsbild. PostgreSQL bleibt die einzige unterstützte Datenbank. Vorschläge für Leistung und Hardware sind keine Messergebnisse. Die Backendwahl war im ursprünglichen Entwurf offen; der nachstehende Nachtrag dokumentiert die bestätigte Auswahl. Detailverträge bleiben offen.
 
 **Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Rechte- und Architekturentwurf auf konsistente Organisationsgrenzen, Feldrechte, Zugriffskontext und spätere 2FA geprüft. Quellen, Aufgabenverweise und Trennung von Vorschlag und Entscheidung geprüft. Keine Produkt-, Last- oder Integrationstests; keine unabhängige technische Prüfung.
 
-**Nächster Schritt:** Holger bewertet OPEN-001, OPEN-002 und den vorgeschlagenen API-Grundvertrag unter OPEN-013. TASK-005, TASK-006 und TASK-010 konkretisieren Fachmodell, SLA und Betrieb; TASK-002 vervollständigt das Funktionsinventar. Technisches Review unter OPEN-017 organisieren. Produktimplementierung bleibt gesondert zu beauftragen.
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-039 bestätigt Java mit Spring Boot; Versionen, TypeScript und Modulstruktur bleiben offen. DEC-040 legt zunächst gegenseitige KI-Reviews fest; zusätzliche menschliche Prüfung bleibt offen.
+
+**Nächster Schritt:** Holger bewertet restliche Werkzeugdetails unter OPEN-001, Modulstruktur unter OPEN-002 und API-Grundvertrag unter OPEN-013. Fachentwürfe und Funktionsinventar liegen vor. Gegenseitige KI-Prüfung mit konkreter Zuordnung unter OPEN-017 organisieren. Produktimplementierung bleibt gesondert zu beauftragen.
 
 ## TASK-004 Identität und Berechtigungen spezifizieren
 
@@ -80,7 +84,9 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Dokumente auf Widersprüche zur Organisationssicht, Feldverbotsregel und 2FA-Einordnung geprüft. Keine Produkt- oder Sicherheitstests ausgeführt, da keine Anwendung implementiert ist. Keine unabhängige Prüfung und kein Claude-Review.
 
-**Nächster Schritt:** Holger prüft Matrix und Szenarien. Allgemeine Aktionsrechte, delegierte Administration, LDAP-Lebenszyklus und das spätere 2FA-Verfahren bleiben unter OPEN-004 bis OPEN-006 offen. Technischen Reviewer unter OPEN-017 bestimmen; Umsetzung benötigt weiterhin gesonderten Auftrag.
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-040 bestätigt gegenseitige KI-Reviews auch für Rechte und Anmeldung. Zusätzliche menschliche Prüfung bleibt offen; die fachliche Gesamtprüfung ist damit nicht erfolgt.
+
+**Nächster Schritt:** Holger prüft Matrix und Szenarien. Allgemeine Aktionsrechte, delegierte Administration, LDAP-Lebenszyklus und das spätere 2FA-Verfahren bleiben unter OPEN-004 bis OPEN-006 offen. Konkrete KI-Review-Zuordnung unter OPEN-017 bestimmen; Umsetzung benötigt weiterhin gesonderten Auftrag.
 
 ## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
 
@@ -188,7 +194,7 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Speicher-, Durchsatz- und Lastrechnungen separat mit Python geprüft; Docker-/PostgreSQL-Grundlagen anhand offizieller Dokumentation geprüft. Abgleich mit Mailversand, Wiki, Git, KI und Rechteentzug durchgeführt. Keine Containerinstallation, Sicherung, Wiederherstellung, Last- oder Sicherheitstests an einer Anwendung; kein unabhängiges technisches Review.
 
-**Nächster Schritt:** Holger prüft Referenzplattform, Servicezeit, Betreiberpflichten, Datenmengen und vorgeschlagene Fristen. OPEN-012, OPEN-014 und OPEN-016 bleiben für diese Details offen. OPEN-017 klärt den technischen Reviewer; TASK-012 führt spätere Freigaben zusammen. Umsetzung bleibt gesondert zu beauftragen.
+**Nächster Schritt:** Holger prüft Referenzplattform, Servicezeit, Betreiberpflichten, Datenmengen und vorgeschlagene Fristen. OPEN-012, OPEN-014 und OPEN-016 bleiben für diese Details offen. OPEN-017 klärt konkrete KI-Review-Zuordnung und Nachweise gemäß DEC-040; TASK-012 führt spätere Freigaben zusammen. Umsetzung bleibt gesondert zu beauftragen.
 
 ## TASK-011 Gemeinsamen Entwicklungs und Review Ablauf beschließen
 
@@ -202,11 +208,13 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Abnahmekriterien:** Zwei gedachte gleichzeitige KI-Sitzungen können Aufgaben eindeutig übernehmen und übergeben. Eine veraltete TODO-Kopie überschreibt keinen aktuellen Stand. Fachliche Freigabe und technische Prüfung haben benannte Verantwortlichkeiten. Die technische GitHub-Einrichtung erfolgt separat in TASK-013. Weitergehende Review-Regeln werden hier geprüft.
 
-**Ergebnis:** [Entwicklungs- und Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) mit Rollen, risikogerechten Nachweisen, Commitbezug, acht Koordinations-/Unterbrechungsszenarien und klarer Trennung von Integration, technischer Prüfung und Fachabnahme. Bestehende AGENTS-Regeln bleiben gültig; zusätzliche Freigabeschwellen sind vorgeschlagen, technischer Reviewer noch nicht benannt.
+**Ergebnis:** [Entwicklungs- und Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) mit Rollen, risikogerechten Nachweisen, Commitbezug, acht Koordinations-/Unterbrechungsszenarien und klarer Trennung von Integration, technischer Prüfung und Fachabnahme. Bestehende AGENTS-Regeln bleiben gültig; zusätzliche Freigabeschwellen bleiben vorgeschlagen; den bestätigten anfänglichen Review-Weg ergänzt der nachstehende Nachtrag.
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Acht Ablaufszenarien gedanklich geprüft. Zwei Fälle zusätzlich in isolierten temporären Git-Repositories ausgeführt: konkurrierende Eigentümer derselben Aufgabe erzeugten einen Textkonflikt; unabhängige Aufgaben ließen sich unter Erhalt beider Eigentümer zusammenführen. Das beweist keine atomare Sperre, verhindert kein bewusstes Zurückkopieren veralteter Inhalte und ersetzt weder reale parallele KI-Tests noch unabhängiges technisches Review.
 
-**Nächster Schritt:** Holger entscheidet Review-Verantwortung und vorgeschlagene Schwellen unter OPEN-017 sowie den erweiterten Ablauf unter OPEN-018. TASK-012 bündelt die Freigabepunkte. Keine Produktimplementierung und keine Abnahme im Namen Holgers.
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-040 bestätigt zunächst gegenseitige KI-Reviews; menschliche technische Prüfung bleibt ausdrücklich offen. Die Antwort nimmt weder alle Review-Details noch den Gesamtentwurf ab.
+
+**Nächster Schritt:** Holger prüft die vorgeschlagenen Nachweise und Schwellen unter OPEN-017 sowie übrige Ablaufdetails unter OPEN-018; konkrete prüfende KI-Sitzungen sind zuzuordnen. TASK-012 bündelt die Freigabepunkte. Keine Produktimplementierung und keine Abnahme im Namen Holgers.
 
 ## TASK-012 Planungsstand zur Architekturfreigabe zusammenführen
 
@@ -224,7 +232,9 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Alle 21 OPEN-IDs in der Entscheidungstabelle erfasst; 86 Anforderungen im Inventar zugeordnet, 31 V-Anforderungen dort priorisiert. Bestätigte DEC-001 bis DEC-038 bleiben unverändert. Nur vorhandene Dokument-, Rechen- und Git-Beispielnachweise angeführt; keine Produktmessung oder unabhängige Abnahme behauptet.
 
-**Nächster Schritt:** Holger entscheidet zunächst Backend, technische Review-Verantwortung und spätere Prioritäten. Danach fällige Rechte-/API-/Betriebs-/KI-Details paketweise prüfen und jede ausdrückliche Entscheidung mit eigener DEC-ID integrieren. Erst nach den erforderlichen Entscheidungen einen gesonderten Implementierungsauftrag abgrenzen.
+**Nachtrag aus TASK-015 am 2026-10-16:** Die drei Antworten sind in der Entscheidungsvorlage und den Fachentwürfen nachgeführt. Weitere Architekturentscheidungen und die fachliche Gesamtabnahme stehen weiterhin aus.
+
+**Nächster Schritt:** Backend, anfänglicher Review-Weg und nächste Fachpriorität sind durch DEC-039 bis DEC-041 festgelegt. Als Nächstes TypeScript, Modulstruktur, API sowie die fälligen Rechte-/Betriebs-/KI-Details paketweise prüfen. Erst nach den erforderlichen Entscheidungen einen gesonderten Implementierungsauftrag abgrenzen.
 
 ## TASK-013 GitHub Arbeitsumgebung einrichten
 
@@ -270,12 +280,16 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-015 Bestätigte Backend-, Review- und Prioritätsentscheidungen eintragen
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-decisions-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-decisions-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-ARCH-001, REQ-DEV-004, REQ-DEV-005, REQ-PROD-003, REQ-EXT-001. **Abhängigkeiten:** TASK-002, TASK-003, TASK-011, TASK-012 als Entwürfe und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-015-codex-decisions; separates Arbeitsverzeichnis nach integrierter Reservierung.
+**Bezug:** REQ-ARCH-001, REQ-DEV-004, REQ-DEV-005, REQ-PROD-003, REQ-EXT-001. **Abhängigkeiten:** TASK-002, TASK-003, TASK-011, TASK-012 als Entwürfe und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** task/task-015-codex-decisions; bestätigte Auswahl und betroffene Planungsdokumente nachgeführt.
 
 **Umfang:** Drei bestätigte Auswahlentscheidungen mit neuen DEC-IDs festhalten und betroffene Anforderungen, Architektur, Review-Regeln, Roadmap und KI-Einstiegsdateien konsistent nachführen. Keine weiteren Detailvorschläge als bestätigt behandeln.
 
 **Abnahmekriterien:** Java/Spring Boot ist als Backend gesetzt; zunächst gegenseitige KI-Reviews bei weiterhin offener menschlicher Prüfung; Kanban, Gantt und einfache Dashboards nach den frühen Ergänzungen 2FA/Redmine-Import priorisiert. Versionen, TypeScript, Modulstruktur und weitere Details bleiben offen. Keine Programmierung oder Gesamtfreigabe abgeleitet.
 
-**Nächster Schritt:** Koordinierende Sitzung integriert die geprüfte freie Reservierung. Danach die drei Antworten in den öffentlichen Planungsstand übernehmen und Widersprüche prüfen.
+**Ergebnis:** DEC-039 bis DEC-041 halten die ausdrücklichen Antworten fest. Zentrale Spezifikation, offene Entscheidungen, Architektur, Review-Dokumente, Funktionsinventar, Roadmap, Einstiegsregeln und betroffene Übergaben sind konsistent nachgeführt. TypeScript, Versionen, Modulstruktur, zusätzliche Sprintfunktionen und übrige Detailvorschläge bleiben offen. Keine Anwendung implementiert.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Entscheidungseinträge, Anforderungs-/Fragenverweise und verbliebene Formulierungen zur Backendwahl, menschlichen Prüfung und Roadmap-Priorität auf Widersprüche geprüft. Keine zusätzliche KI-Gegenprüfung oder menschliche technische Prüfung als erfolgt behauptet; reine Dokumentnachführung, keine Anwendungstests.
+
+**Nächster Schritt:** Holger prüft die korrekte Übernahme; weitere Architekturentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 sowie Detailverfahren unter OPEN-017/OPEN-018 vorbereiten. Separate Implementierungsfreigabe bleibt erforderlich.

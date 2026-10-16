@@ -63,6 +63,6 @@ Choose a specific TASK-ID when using this prompt. TASK-003 concerns backend and 
 
 Verified during setup on 13 October 2026: [Codex AGENTS.md instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [Claude shared project instructions](https://code.claude.com/docs/en/memory#share-one-file-with-other-coding-tools), and [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches). These references describe tool behavior; the coordination and acceptance policy above is specific to this project.
 
-## Proposed extension for development review
+## Development review: confirmed approach and proposed details
 
-[DEVELOPMENT_REVIEW.md](DEVELOPMENT_REVIEW.md) describes proposed review responsibilities, risk-based evidence and interruption scenarios for TASK-011. These additions require Holger’s decision under OPEN-017 and OPEN-018; they do not override AGENTS.md or authorize application implementation.
+DEC-040 confirms reciprocal AI reviews as the initial technical review approach, including critical changes. Additional human technical review remains open; Holger retains functional acceptance. [DEVELOPMENT_REVIEW.md](DEVELOPMENT_REVIEW.md) separates this decision from proposed risk-based evidence, review thresholds and interruption details under OPEN-017 and OPEN-018. An author’s self-check is not a reciprocal review. No application implementation is authorized by this decision.

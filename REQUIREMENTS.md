@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.9 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.10 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -433,9 +433,9 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-ARCH-001 Frontend und Backend
 
-**B · Planung.** React ist als Frontend vorgesehen. Die Entscheidung zwischen Go und Java als Backend ist offen.
+**B · Planung.** React ist als Frontend vorgesehen. Das Backend wird mit Java und Spring Boot entwickelt (DEC-039).
 
-**Abnahme:** Vor Implementierung ist eine begründete Backend-Entscheidung festgehalten. TypeScript, Java mit Spring Boot und ein modularer Monolith sind derzeit Vorschläge, keine bestätigten Festlegungen.
+**Abnahme:** Java/Spring Boot ist als begründete Backend-Entscheidung dokumentiert. Vor Implementierung werden unterstützte Versionen und Build-/Testkonventionen festgelegt. TypeScript und ein modularer Monolith bleiben Vorschläge; DEC-039 bestätigt keine weitere Technologie oder Implementierungsfreigabe.
 
 ### REQ-ARCH-002 Prüffähige Modulgrenzen
 
@@ -555,9 +555,9 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 ### REQ-EXT-001 Weitere Fachmodule bewerten
 
-**B · Planung für die Roadmap.** Weitere Funktionen eines vergleichbaren Produkts werden vorab bewertet und eingeordnet.
+**B · Planung für die Roadmap.** Weitere Funktionen eines vergleichbaren Produkts werden vorab bewertet und eingeordnet. Kanban, Gantt und einfache Dashboards sind als erste weitere Fachpriorität nach V1 bestätigt; die frühen Ergänzungen 2FA und Redmine-Import bleiben eingeplant (DEC-041).
 
-**Abnahme:** Das Inventar prüft mindestens die Kandidaten Projektplanung und Gantt, agile Ansichten, Ressourcen und Kapazitäten, Budgets und Kosten, Berichte und Dashboards, Testmanagement, Vorlagen und PDF-Ausgabe, zusätzliche Integrationen sowie weitergehende Kundenverwaltung. Die Aufzählung ist ein Vorschlag für die Prüfung und noch keine Lieferzusage für jeden Kandidaten.
+**Abnahme:** Das Inventar prüft mindestens die Kandidaten Projektplanung und Gantt, agile Ansichten, Ressourcen und Kapazitäten, Budgets und Kosten, Berichte und Dashboards, Testmanagement, Vorlagen und PDF-Ausgabe, zusätzliche Integrationen sowie weitergehende Kundenverwaltung. Für Kanban, Gantt und einfache Dashboards ist die Priorität durch DEC-041 bestätigt, ihre Detailumfänge und Termine bleiben offen. Die übrige Aufzählung ist ein Vorschlag für die Prüfung und keine Lieferzusage für jeden Kandidaten.
 
 ## Zusammenarbeit mehrerer KI Entwickler
 
@@ -583,13 +583,13 @@ Bestätigt für V1 sind Ticketzusammenfassung, Antwortentwurf, Anforderungsprüf
 
 **B · Alle Lieferstände.** Holger Gerlach übernimmt die fachliche Abnahme. Der Reviewer verfügt über grundsätzliches Coding-Verständnis; Ergebnisse müssen deshalb fachlich nachvollziehbar demonstrierbar sein.
 
-**Abnahme:** Jede relevante Lieferung benennt geändertes Verhalten, Prüfszenarien, Ergebnisse und verbleibende Einschränkungen. Technische Prüfung und fachliche Freigabe werden getrennt festgehalten. KI-Übereinstimmung allein wird nicht als Qualitätsnachweis gewertet.
+**Abnahme:** Jede relevante Lieferung benennt geändertes Verhalten, Prüfszenarien, Ergebnisse und verbleibende Einschränkungen. Technische Prüfung und fachliche Freigabe werden getrennt festgehalten. Zunächst erfolgen gegenseitige KI-Reviews; eine zusätzliche menschliche technische Prüfung bleibt offen (DEC-040). KI-Übereinstimmung allein wird nicht als Qualitätsnachweis gewertet.
 
 ### REQ-DEV-005 Nachvollziehbare Änderungen
 
-**V · Entwicklung.** Änderungen werden klein genug gehalten, um sie anhand der Anforderungen prüfen zu können. Besonders kritische Bereiche erhalten gezielte technische Prüfung.
+**V · Entwicklungsdetails; Review-Weg durch DEC-040 bestätigt.** Änderungen werden klein genug gehalten, um sie anhand der Anforderungen prüfen zu können. Besonders kritische Bereiche erhalten gezielte technische Prüfung.
 
-**Abnahme:** Eine Änderung nennt betroffene REQ-IDs und sinnvolle Prüfungen. Rechte, Anmeldung, SLA-Berechnung, Datenmigration und Wiederherstellung erhalten Risiko und Verhalten entsprechende Tests. Die Wahl des technischen Reviewers und der Freigabeschwellen bleibt offen.
+**Abnahme:** Eine Änderung nennt betroffene REQ-IDs und sinnvolle Prüfungen. Rechte, Anmeldung, SLA-Berechnung, Datenmigration und Wiederherstellung erhalten Risiko und Verhalten entsprechende Tests. Der anfängliche Review-Weg über gegenseitige KI-Reviews ist bestätigt (DEC-040); konkrete Sitzungszuordnung, Freigabeschwellen und weitere Detailregeln bleiben offen. Zusätzliche menschliche Prüfung ist noch nicht festgelegt.
 
 ## Fachliche Abnahmeszenarien für Version 1
 
@@ -610,6 +610,6 @@ Diese Szenarien verbinden mehrere Anforderungen. Sie sind Entwürfe für die sp�
 
 ## Offene Punkte und nächster Prüfstand
 
-Die maßgeblichen offenen Fragen stehen in DECISIONS.md unter OPEN-001 bis OPEN-021. Vorrang haben Backend und Modulstruktur, Berechtigungsmodell, SLA-Regeln, KI-Anbieterreihenfolge und Datenfreigaben sowie Betriebs- und Leistungsziele. Bereits bestätigte Vorgaben werden dabei nicht erneut zur Disposition gestellt.
+Die maßgeblichen offenen Fragen stehen in DECISIONS.md unter OPEN-001 bis OPEN-021. Vorrang haben die verbleibenden Werkzeugentscheidungen und Modulstruktur, Berechtigungsmodell, SLA-Regeln, KI-Anbieterreihenfolge und Datenfreigaben sowie Betriebs- und Leistungsziele. Bereits bestätigte Vorgaben werden dabei nicht erneut zur Disposition gestellt.
 
 Die [Entscheidungsübersicht](docs/ARCHITECTURE_READINESS.md) bündelt den aktuellen Prüfstand mit Zuständigkeiten und Fälligkeiten. Die fachliche Prüfung soll insbesondere die als V gekennzeichneten Ergänzungen und die vorgeschlagenen Abnahmekriterien beurteilen. Bis dahin bleiben diese Teile Entwürfe. Eine Freigabe dieser Spezifikation ist keine automatische Freigabe zur Programmierung.

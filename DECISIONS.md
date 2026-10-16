@@ -17,7 +17,7 @@ Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfrage
 | DEC-007 | Kundenadministratoren verwalten Gruppen, Rechte und projektspezifische Konfiguration; einzelne Felder sind ausblendbar | REQ-ORG-003, REQ-ACL-001, REQ-ACL-003 |
 | DEC-008 | Interne Anmeldung und LDAP in V1, spätere Anmeldeverfahren erweiterbar; ursprünglich 2FA sehr zeitnah mit offenem Release. Die Release-Einordnung wurde am 13. Oktober 2026 durch DEC-029 konkretisiert. | REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-004 |
 | DEC-009 | PostgreSQL ist gesetzt; MariaDB, SQL Server und Oracle nur architektonisch vorbereiten | REQ-DATA-001, REQ-DATA-002 |
-| DEC-010 | React vorgesehen; Backend Go oder Java noch nicht entschieden | REQ-ARCH-001 |
+| DEC-010 | React vorgesehen; Backend ursprünglich Go oder Java offen. Am 16. Oktober 2026 durch DEC-039 auf Java mit Spring Boot konkretisiert. | REQ-ARCH-001 |
 | DEC-011 | Deutsch und Englisch von Anfang an, weitere Sprachen einfach ergänzbar; Wiki-Sprachfassungen freiwillig | REQ-I18N-001, REQ-I18N-002, REQ-DOC-003 |
 | DEC-012 | Logo und Farben für Anwendung, Portal, Anmeldung und E-Mails; später PDFs auf Vorlagenbasis | REQ-BRAND-001, REQ-BRAND-002 |
 | DEC-013 | IMAP/SMTP reichen für V1; SLA-Fristen, Geschäftszeiten und Eskalationen sind wichtig und Teil von V1 | REQ-HD-001, REQ-HD-003, REQ-HD-004, REQ-HD-005 |
@@ -71,6 +71,16 @@ DEC-036 und DEC-037 konkretisieren Betriebsvarianten der Git-Anbindung und die e
 
 DEC-038 konkretisiert das Sicherungsziel. Der [Betriebsentwurf](docs/OPERATIONS.md) liefert Verfahren, Voraussetzungen, Ressourcenrechnung und Messfälle als Vorschläge. Servicezeit, Betreiberpflichten und technische Umsetzung bleiben zu entscheiden.
 
+## Ergänzung vom 16. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-039 | Holger bestätigt am 16. Oktober 2026 Java mit Spring Boot als Backend auf Basis der vorgelegten Auswahl. Dies konkretisiert DEC-010 und den Backend-/Frameworkteil von OPEN-001. React bleibt gesetzt; TypeScript, Sprach-/Framework-Versionen, Build-Konventionen und Modulstruktur sind damit nicht bestätigt. | REQ-ARCH-001 |
+| DEC-040 | Holger legt am 16. Oktober 2026 zunächst gegenseitige KI-Reviews für technische Änderungen fest, auch für kritische Bereiche wie Anmeldung, Berechtigungen, Datenmigration und Wiederherstellung. Eine zusätzliche menschliche technische Prüfung bleibt ausdrücklich offen. Holger übernimmt weiterhin die fachliche Abnahme. Die Auswahl bestätigt den anfänglichen Review-Weg, nicht sämtliche vorgeschlagenen Freigabeschwellen und keine bereits erfolgte Prüfung. | REQ-DEV-004, REQ-DEV-005 |
+| DEC-041 | Holger priorisiert am 16. Oktober 2026 Kanban, Gantt und einfache Dashboards als erste weitere Fachfunktionen nach V1. Die bereits vorgesehenen frühen Ergänzungen 2FA und Redmine-Import bleiben eingeplant. Diese Auswahl klärt die Richtung unter OPEN-021, bestätigt aber keine Termine, zusätzlichen Sprintfunktionen, umfassenden Berichtswerkzeuge oder alle vorgeschlagenen Mindestumfänge. | REQ-PROD-003, REQ-EXT-001 |
+
+Die drei ausdrücklichen Antworten konkretisieren die Planung, ohne eine Gesamtfreigabe der Architektur oder einen Implementierungsauftrag zu erteilen. Die bisher offene Technologieauswahl wird nachvollziehbar abgeschlossen; der anfängliche Review-Weg und die nächste fachliche Priorität sind festgelegt. Weitere Details bleiben als Vorschläge gekennzeichnet.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
@@ -79,11 +89,11 @@ Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezi
 
 ### OPEN-001 Backend und Entwicklungswerkzeuge
 
-**Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-ARCH-001, REQ-DEV-005
+**Status:** teilweise entschieden · **Fällig:** Restdetails vor Implementierung · **Bezug:** REQ-ARCH-001, REQ-DEV-005
 
-Zu entscheiden sind Go oder Java, Framework, Sprachversionen, Frontend mit oder ohne TypeScript sowie Build- und Testkonventionen. Bisheriger Vorschlag: Java mit Spring Boot und React mit TypeScript. Die Begründung muss Domänenkomplexität, Betrieb, verfügbare Kenntnisse, Prüfbarkeit und laufende Kosten gegeneinander abwägen. Eine vermeintliche KI-Präferenz genügt nicht.
+DEC-039 bestätigt Java mit Spring Boot. Offen bleiben Sprach- und Framework-Versionen, Frontend mit oder ohne TypeScript sowie Build- und Testkonventionen. React mit TypeScript bleibt vorgeschlagen. Die Backendentscheidung beruht auf dem vorgelegten Go/Java-Vergleich; eine vermeintliche KI-Präferenz wird nicht als Begründung verwendet.
 
-Der [Architekturentwurf vom 13. Oktober 2026](docs/ARCHITECTURE.md) liefert den Go/Java-Vergleich mit Primärquellen und empfiehlt Java/Spring Boot sowie React/TypeScript. Die Auswahl ist weiterhin offen; es wurden keine Laufzeitmessungen oder Implementierungen vorgenommen.
+Der [Architekturentwurf](docs/ARCHITECTURE.md) erhält den ursprünglichen Go/Java-Vergleich als Entscheidungsbegründung und weist die bestätigte Auswahl separat aus. Es wurden keine Laufzeitmessungen oder Implementierungen vorgenommen.
 
 ### OPEN-002 Modulstruktur und spätere Mandanten
 
@@ -183,15 +193,15 @@ DEC-037 priorisiert Redmine als erste Quelle nach V1; Easy Redmine/Easy8 und Jir
 
 ### OPEN-017 Technisches Review und Freigaben
 
-**Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-SEC-001, REQ-DEV-004, REQ-DEV-005
+**Status:** teilweise entschieden · **Fällig:** Detailverfahren vor Implementierung; menschliche Prüfung ausdrücklich offen · **Bezug:** REQ-SEC-001, REQ-DEV-004, REQ-DEV-005
 
-Holger übernimmt die fachliche Abnahme. Offen ist, wer sicherheitskritische Architektur, Rechte, Anmeldung, Datenmigration und Wiederherstellung technisch prüft und welche Nachweise dafür nötig sind. Fachliche Abnahme und technischer Review sollen sich ergänzen. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) empfiehlt risikogerechte Nachweise und eine erfahrene menschliche Prüfung kritischer Bereiche. Person und Freigabeschwellen sind weiterhin offen.
+DEC-040 bestätigt zunächst gegenseitige KI-Reviews, auch für kritische Änderungen. Holger übernimmt weiterhin die fachliche Abnahme. Eine zusätzliche menschliche technische Prüfung bleibt ausdrücklich offen und ist durch diese Auswahl keine vorausgesetzte Freigabestufe. Zu klären bleiben konkrete Zuordnung der prüfenden Sitzungen, Nachweise, Freigabeschwellen und Behandlung offener Befunde. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) trennt den bestätigten Review-Weg von diesen Detailvorschlägen.
 
 ### OPEN-018 Koordination der KI Arbeit
 
 **Status:** offen · **Fällig:** vor paralleler Entwicklung · **Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003
 
-Repository: 1uedev/task-manager. Integrationsbranch: main. Der technische Einrichtungsauftrag ist DEC-025. Das in docs/AI_WORKFLOW.md beschriebene Verfahren verwendet reservierende Pull Requests, bevor eine KI eine Aufgabe bearbeitet, sowie getrennte Arbeitsstände. TODO.md auf main bleibt maßgeblich. Das Verfahren ist organisatorisch; eine atomare Task-Sperre und die Identifikation einzelner KI-Sitzungen über GitHub-Benutzerkonten werden nicht behauptet. Koordination: Holger beziehungsweise eine von ihm ausdrücklich benannte Sitzung. Die weitergehenden fachlichen und technischen Freigaberegeln bleiben unter OPEN-017 zu entscheiden. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) ergänzt Parallel-, Konflikt- und Abbruchszenarien; seine erweiterten Regeln sind noch nicht beschlossen.
+Repository: 1uedev/task-manager. Integrationsbranch: main. Der technische Einrichtungsauftrag ist DEC-025. Das in docs/AI_WORKFLOW.md beschriebene Verfahren verwendet reservierende Pull Requests, bevor eine KI eine Aufgabe bearbeitet, sowie getrennte Arbeitsstände. TODO.md auf main bleibt maßgeblich. Das Verfahren ist organisatorisch; eine atomare Task-Sperre und die Identifikation einzelner KI-Sitzungen über GitHub-Benutzerkonten werden nicht behauptet. Koordination: Holger beziehungsweise eine von ihm ausdrücklich benannte Sitzung. Die weitergehenden fachlichen und technischen Freigaberegeln bleiben unter OPEN-017 zu entscheiden. Der [Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) ergänzt Parallel-, Konflikt- und Abbruchszenarien; gegenseitige KI-Reviews sind durch DEC-040 bestätigt, seine übrigen erweiterten Regeln sind noch nicht beschlossen.
 
 ### OPEN-019 KI Betrieb und Nutzungsgrenzen
 
@@ -209,7 +219,7 @@ Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Suppor
 
 **Status:** teilweise entschieden · **Fällig:** V1-Details vor deren Umsetzung; vollständiges Funktionsinventar vor Implementierungsstart · **Bezug:** REQ-PROD-003, REQ-TIME-001 bis REQ-TIME-003, REQ-REQ-001 bis REQ-REQ-004, REQ-EXT-001
 
-DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 16. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. Die Prioritäten sind nicht bestätigt.
+DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 16. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. DEC-041 bestätigt Kanban, Gantt und einfache Dashboards als erste weitere Fachpriorität nach V1; 2FA und Redmine-Import bleiben früh eingeplant. Die übrigen Prioritäten und Detailumfänge sind nicht bestätigt.
 
 ## Entscheidungsverfahren
 
