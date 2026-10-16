@@ -194,15 +194,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #11](https://github.com/1uedev/task-manager/issues/11)
 
-**Status:** OFFEN · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-12
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-review-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** noch nicht begonnen.
+**Bezug:** REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** geplanter Branch task/task-011-codex-review; separates Arbeitsverzeichnis nach integrierter Reservierung.
 
 **Umfang:** OPEN-017 und OPEN-018 entscheiden. Koordination, getrennte Arbeitsstände, Aufgabenreservierung, PRs, technisches Review und fachliche Abnahme definieren.
 
 **Abnahmekriterien:** Zwei gedachte gleichzeitige KI-Sitzungen können Aufgaben eindeutig übernehmen und übergeben. Eine veraltete TODO-Kopie überschreibt keinen aktuellen Stand. Fachliche Freigabe und technische Prüfung haben benannte Verantwortlichkeiten. Die technische GitHub-Einrichtung erfolgt separat in TASK-013. Weitergehende Review-Regeln werden hier geprüft.
 
-**Nächster Schritt:** Den organisatorischen Vorschlag aus AGENTS.md mit einem Parallel- und Abbruchszenario prüfen.
+**Nächster Schritt:** Koordinierende Sitzung integriert die geprüfte freie Reservierung. Danach risikogerechte Review-Regeln und Parallel-/Abbruchszenarien ausarbeiten; benannter technischer Reviewer und Freigabe durch Holger bleiben offen.
 
 ## TASK-012 Planungsstand zur Architekturfreigabe zusammenführen
 
