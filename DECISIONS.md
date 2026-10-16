@@ -81,6 +81,16 @@ DEC-038 konkretisiert das Sicherungsziel. Der [Betriebsentwurf](docs/OPERATIONS.
 
 Die drei ausdrücklichen Antworten konkretisieren die Planung, ohne eine Gesamtfreigabe der Architektur oder einen Implementierungsauftrag zu erteilen. Die bisher offene Technologieauswahl wird nachvollziehbar abgeschlossen; der anfängliche Review-Weg und die nächste fachliche Priorität sind festgelegt. Weitere Details bleiben als Vorschläge gekennzeichnet.
 
+## Weitere Architekturauswahl vom 16. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-042 | Holger bestätigt TypeScript für das React-Frontend. Damit ist die Sprachauswahl unter OPEN-001 konkretisiert. Strenge Compileroptionen, Generator, Komponentenbibliotheken, Versionen sowie Build-/Testkonventionen bleiben gesonderte Detailvorschläge. | REQ-ARCH-001 |
+| DEC-043 | Holger bestätigt einen modularen Monolithen: eine gemeinsame Anwendung mit klar getrennten Fachmodulen. Webserver und Hintergrundverarbeitung können aus demselben Docker-Image laufen. Konkrete Modulverträge, Transaktions-/Auftragstechnik, zusätzliche Dienste und spätere Mandantenisolation bleiben unter OPEN-002 zu prüfen. Die Auswahl verpflichtet nicht auf eine bestimmte Prozessaufteilung. | REQ-ARCH-002, REQ-ORG-002 |
+| DEC-044 | Holger bestätigt eine HTTP/JSON-Schnittstelle im REST-Stil mit OpenAPI-Beschreibung für Oberfläche und Integrationen. Damit sind API-Stil und Beschreibungsformat unter OPEN-013 entschieden. OpenAPI-Version, Generator, Ressourcenpfade, Authentifizierung, Fehler-/Versionsregeln, Seitengrößen und Wiederholungsfristen sind dadurch nicht pauschal angenommen. | REQ-API-001 |
+
+Diese drei Antworten bestätigen die in TASK-016 vorgelegten Grundentscheidungen. Die vorherigen Entscheidungseinträge bleiben als historische Belege erhalten; die aktuelle Einordnung richtet sich zusätzlich nach DEC-042 bis DEC-044. Die Detailentwürfe und deren Abnahmeszenarien bleiben prüfpflichtig. Eine Gesamtfreigabe der Spezifikation oder ein Auftrag zur Produktimplementierung ist damit nicht verbunden.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
@@ -91,21 +101,21 @@ Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezi
 
 **Status:** teilweise entschieden · **Fällig:** Restdetails vor Implementierung · **Bezug:** REQ-ARCH-001, REQ-DEV-005
 
-DEC-039 bestätigt Java mit Spring Boot. Offen bleiben Sprach- und Framework-Versionen, Frontend mit oder ohne TypeScript sowie Build- und Testkonventionen. React mit TypeScript bleibt vorgeschlagen. Die Backendentscheidung beruht auf dem vorgelegten Go/Java-Vergleich; eine vermeintliche KI-Präferenz wird nicht als Begründung verwendet.
+DEC-039 bestätigt Java mit Spring Boot, DEC-042 TypeScript für React. Offen bleiben Sprach- und Framework-Versionen sowie Build- und Testkonventionen. Die Backendentscheidung beruht auf dem vorgelegten Go/Java-Vergleich; eine vermeintliche KI-Präferenz wird nicht als Begründung verwendet.
 
 Der [Architekturentwurf](docs/ARCHITECTURE.md) erhält den ursprünglichen Go/Java-Vergleich als Entscheidungsbegründung und weist die bestätigte Auswahl separat aus. Es wurden keine Laufzeitmessungen oder Implementierungen vorgenommen.
 
-TASK-016 legt [TypeScript und den gemeinsamen Datenvertrag](docs/TECHNICAL_CONTRACTS.md) als konkrete Ergänzung vor. Strenge Typprüfung und aus OpenAPI abgeleitete Transporttypen sind Empfehlungen; Werkzeuge und Versionen sind nicht vorweggenommen.
+TASK-016 beschreibt [TypeScript und den gemeinsamen Datenvertrag](docs/TECHNICAL_CONTRACTS.md). Die TypeScript-Auswahl ist bestätigt; strenge Typprüfung und aus OpenAPI abgeleitete Transporttypen bleiben Empfehlungen. Werkzeuge und Versionen sind nicht vorweggenommen.
 
 ### OPEN-002 Modulstruktur und spätere Mandanten
 
-**Status:** offen · **Fällig:** vor Implementierung · **Bezug:** REQ-ORG-002, REQ-ARCH-002
+**Status:** teilweise entschieden · **Fällig:** Restdetails vor Implementierung · **Bezug:** REQ-ORG-002, REQ-ARCH-002
 
-Zu entscheiden sind fachliche Modulgrenzen, Hintergrundverarbeitung und Vorbereitung der Unternehmensgrenzen. Ausgangsvorschlag ist ein modularer Monolith. Die konkrete spätere Isolation über eigene Datenbanken, Schemas oder gemeinsam genutzte Tabellen bleibt offen. Für V1 soll daraus kein unnötiger Mehrmandantenbetrieb entstehen.
+DEC-043 bestätigt den modularen Monolithen mit klar getrennten Fachmodulen. Offen bleiben konkrete Modulverträge, Hintergrundverarbeitung und Ausgestaltung der Unternehmensgrenzen. Die konkrete spätere Isolation über eigene Datenbanken, Schemas oder gemeinsam genutzte Tabellen bleibt offen. Für V1 soll daraus kein unnötiger Mehrmandantenbetrieb entstehen.
 
 Der [Architekturentwurf](docs/ARCHITECTURE.md) beschreibt Datenhoheit je Modul, gerichtete Abhängigkeiten, einen serverseitigen Unternehmenskontext sowie Datenbankadapter. PostgreSQL bleibt allein unterstützt; weitere Datenbanken und mehrere Mandanten werden nicht implementiert.
 
-Die [Modulverträge aus TASK-016](docs/TECHNICAL_CONTRACTS.md) konkretisieren Abhängigkeitsordnung, zusammengesetzte Ansichten, Dateizugriff und gemeinsame Transaktionsgrenzen einschließlich konkurrierendem Rechteentzug. Grundwahl und Detailregeln bleiben Vorschläge.
+Die [Modulverträge aus TASK-016](docs/TECHNICAL_CONTRACTS.md) konkretisieren Abhängigkeitsordnung, zusammengesetzte Ansichten, Dateizugriff und gemeinsame Transaktionsgrenzen einschließlich konkurrierendem Rechteentzug. Diese Detailregeln bleiben Vorschläge innerhalb der bestätigten Architekturform.
 
 ### OPEN-003 Erster KI Lieferumfang
 
@@ -171,13 +181,13 @@ DEC-038 legt für die Planung höchstens eine Stunde Datenverlust und vier Stund
 
 ### OPEN-013 API Vertrag
 
-**Status:** offen · **Fällig:** vor erster Fachimplementierung · **Bezug:** REQ-API-001, REQ-API-002
+**Status:** teilweise entschieden · **Fällig:** Restdetails vor erster Fachimplementierung · **Bezug:** REQ-API-001, REQ-API-002
 
-Zu bestimmen sind API-Stil, Dokumentationsformat, Versionierung, Authentifizierung, Fehlerformat, Seitennavigation, Wiederholbarkeit von Schreibaufrufen und spätere Ereignisschnittstellen. API- und UI-Rechte müssen auf denselben fachlichen Regeln beruhen.
+DEC-044 bestätigt HTTP/JSON im REST-Stil mit OpenAPI-Beschreibung. Zu bestimmen bleiben die konkrete Vertrags-/Werkzeugversion, Versionierung, Authentifizierung, Fehlerformat, Seitennavigation, Wiederholbarkeit von Schreibaufrufen und spätere Ereignisschnittstellen. API- und UI-Rechte müssen auf denselben fachlichen Regeln beruhen.
 
-Der [API-Grundvertrag im Architekturentwurf](docs/ARCHITECTURE.md) schlägt HTTP/JSON, OpenAPI, versionierte Ressourcen, Konflikterkennung, eingeschränkte API-Zugänge und wiederholbare Schreiboperationen vor. Tokenform, Laufzeiten, Wiederholungsfenster und Übergangsfristen sind noch festzulegen.
+Der [API-Grundvertrag im Architekturentwurf](docs/ARCHITECTURE.md) konkretisiert die bestätigte API-Richtung mit vorgeschlagenen versionierten Ressourcen, Konflikterkennung, eingeschränkten API-Zugängen und wiederholbaren Schreiboperationen. Tokenform, Laufzeiten, Wiederholungsfenster und Übergangsfristen sind noch festzulegen.
 
-Der [API-Entwurf aus TASK-016](docs/TECHNICAL_CONTRACTS.md) liefert konkrete Operationen, Fehlerfälle und Wiederholungsregeln. Opake API-Zugänge, 24 Stunden für abgeschlossene Wiederholungsnachweise und Listenseiten mit 50/maximal 100 Einträgen sind prüfpflichtige Vorschläge. Die Auswahl HTTP/JSON/OpenAPI allein würde diese Details nicht bestätigen. Anmeldung, Aufbewahrung und Transaktionsverfahren sind mit OPEN-006 und OPEN-014 abzustimmen.
+Der [API-Entwurf aus TASK-016](docs/TECHNICAL_CONTRACTS.md) liefert konkrete Operationen, Fehlerfälle und Wiederholungsregeln. Opake API-Zugänge, 24 Stunden für abgeschlossene Wiederholungsnachweise und Listenseiten mit 50/maximal 100 Einträgen sind prüfpflichtige Vorschläge. Die Auswahl nach DEC-044 bestätigt diese Details nicht. Anmeldung, Aufbewahrung und Transaktionsverfahren sind mit OPEN-006 und OPEN-014 abzustimmen.
 
 ### OPEN-014 Messbare Leistungsziele
 

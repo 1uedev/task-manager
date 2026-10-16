@@ -6,7 +6,7 @@ These instructions apply to this repository. Explicit current user instructions 
 
 The user has authorized requirements and architecture planning plus setup of this GitHub collaboration environment. Product implementation is not yet authorized. Repository automation, templates and checks are within scope; application scaffolding, deployment and database setup are not. Java with Spring Boot has been explicitly selected by the user (DEC-039); further unconfirmed technology choices remain proposals.
 
-The product requirements remain in German. Preserve their meaning, stable IDs and distinction between confirmed requirements and proposals. PostgreSQL, React, Docker distribution and Java with Spring Boot are agreed. Versions, TypeScript and a modular monolith remain open; do not turn them into confirmed choices. DEC-041 prioritizes Kanban, Gantt and simple dashboards after V1 while keeping early 2FA and Redmine import planned. It does not approve additional sprint features or detailed release scope.
+The product requirements remain in German. Preserve their meaning, stable IDs and distinction between confirmed requirements and proposals. PostgreSQL, Docker distribution and Java with Spring Boot are agreed. DEC-042 through DEC-044 additionally confirm React with TypeScript, a modular monolith, and an HTTP/JSON API in REST style described with OpenAPI. Versions, compiler options, generators, detailed module/transaction contracts and API policy values remain open; do not treat these choices as blanket approval of the technical proposals. DEC-041 prioritizes Kanban, Gantt and simple dashboards after V1 while keeping early 2FA and Redmine import planned. It does not approve additional sprint features or detailed release scope.
 
 ## Start every session
 

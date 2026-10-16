@@ -4,25 +4,28 @@ Stand 16. Oktober 2026 · TASK-012 · Vorlage zur Prüfung, Architektur noch nic
 
 Für die geplanten Fachbereiche liegen jetzt Entwürfe vor. Der nächste Schritt ist die gezielte Entscheidung über ihre offenen Grundlagen. Zusätzliche Dokumente allein lösen diese Entscheidungen nicht. Die Anwendung wurde nicht implementiert; dieses Paket beauftragt keine Programmierung.
 
-Die zentrale Spezifikation enthält 86 Anforderungen. **B** bestätigt deren Kern, nicht automatisch alle vorgeschlagenen Abnahmedetails. **V** bleibt ein Vorschlag. Die unter DEC-001 bis DEC-041 erfassten Vorgaben gelten weiterhin; die offene Auswahl unter OPEN-001 bis OPEN-021 wird durch diese Übersicht nicht geschlossen. Aufgaben und Abnahmen werden ausschließlich in [TODO.md](../TODO.md) und [DONE.md](../DONE.md) geführt.
+Die zentrale Spezifikation enthält 86 Anforderungen: 56 mit bestätigtem Kern und 30 Vorschläge. **B** bestätigt deren Kern, nicht automatisch alle vorgeschlagenen Abnahmedetails. **V** bleibt ein Vorschlag. Die unter DEC-001 bis DEC-044 erfassten Vorgaben gelten weiterhin; die verbleibenden Fragen unter OPEN-001 bis OPEN-021 werden durch diese Übersicht nicht geschlossen. Aufgaben und Abnahmen werden ausschließlich in [TODO.md](../TODO.md) und [DONE.md](../DONE.md) geführt.
 
 ## Bestätigte Auswahl und nächster Prüfbedarf
 
-Holger hat am 16. Oktober 2026 drei Entscheidungen getroffen:
+Holger hat am 16. Oktober 2026 in zwei Auswahlrunden sechs Entscheidungen getroffen:
 
-1. **Backend: Java mit Spring Boot (DEC-039).** React und PostgreSQL bleiben gesetzt. TypeScript, Versionen und die übrigen Architekturdetails sind nicht automatisch bestätigt.
+1. **Backend: Java mit Spring Boot (DEC-039).** PostgreSQL bleibt gesetzt. Versionen und die übrigen technischen Detailregeln sind nicht automatisch bestätigt.
 2. **Technische Prüfung: zunächst gegenseitige KI-Reviews (DEC-040).** Zusätzliche menschliche technische Prüfung bleibt ausdrücklich offen. Holger übernimmt weiterhin die fachliche Abnahme; konkrete Prüfbelege und Freigabeschwellen sind noch zu bestimmen.
 3. **Ausbau: Kanban, Gantt und einfache Dashboards (DEC-041).** Diese bilden die nächste Fachpriorität nach V1; die frühen Ergänzungen 2FA und Redmine-Import bleiben eingeplant. Detailumfänge, Termine und zusätzliche Sprintfunktionen sind nicht bestätigt.
+4. **Frontend: React mit TypeScript (DEC-042).** Compileroptionen, Generator und Bibliotheksversionen bleiben offen.
+5. **Architektur: modularer Monolith (DEC-043).** Eine gemeinsame Anwendung mit getrennten Fachmodulen ist gesetzt; genaue Modul-/Transaktionsverträge und Prozessaufteilung sind weiter zu prüfen.
+6. **API: HTTP/JSON im REST-Stil mit OpenAPI (DEC-044).** Konkrete Versionen, Authentifizierung, Fehler-/Versionsregeln, Seitengrößen und Wiederholungsfristen bleiben offen.
 
-Als Nächstes sind TypeScript, Modulstruktur und API-Grundvertrag sowie die fälligen Rechte-/Datenregeln, das Betriebsprofil und die KI-Anbieter zu prüfen. Die drei Entscheidungen geben weder sämtliche Detailentwürfe noch eine Produktimplementierung frei.
+Als Nächstes sind die technischen Detailverträge und Werkzeugversionen sowie die fälligen Rechte-/Datenregeln, das Betriebsprofil und die KI-Anbieter zu prüfen. Die bestätigte Grundrichtung gibt weder sämtliche Detailentwürfe noch eine Produktimplementierung frei.
 
-Für die erste dieser Gruppen liegt mit TASK-016 jetzt ein [konkreter Vertragsentwurf](TECHNICAL_CONTRACTS.md) vor: drei Grundentscheidungen, Datenhoheit und Transaktionen, API-Beispiele und 16 spätere Prüffälle. Der zugehörige tatsächliche Gegenprüfungsstand wird zentral in TASK-016 dokumentiert. Die Auswahl zu TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI ist noch ausstehend; vorgeschlagene Laufzeiten, Grenzen und Authentifizierungsdetails bleiben separat prüfpflichtig.
+Für die technischen Details liegt mit TASK-016 ein [konkreter Vertragsentwurf](TECHNICAL_CONTRACTS.md) vor: Datenhoheit und Transaktionen, API-Beispiele und 16 spätere Prüffälle. Der zugehörige tatsächliche Gegenprüfungsstand wird zentral in TASK-016 dokumentiert. Die dort vorgelegte Grundauswahl ist durch DEC-042 bis DEC-044 bestätigt; vorgeschlagene Laufzeiten, Grenzen und Authentifizierungsdetails bleiben separat prüfpflichtig.
 
 ## Bestätigter Umfang, der erhalten bleibt
 
 | Gebiet | Bereits bestätigte Richtung | Noch zu prüfende Ausgestaltung |
 |---|---|---|
-| Produkt und Betrieb | Eigenständige Codebasis; Docker beim Kunden, eine Unternehmensinstallation; React, PostgreSQL und Java/Spring Boot; Internetbedarf zulässig | Versionen, genaue Laufzeit-/Installationsplattform, Kosten, Wartung und Verhalten bei Netzstörungen |
+| Produkt und Betrieb | Eigenständige Codebasis; Docker beim Kunden, eine Unternehmensinstallation; React/TypeScript, PostgreSQL, Java/Spring Boot, modularer Monolith und HTTP/JSON im REST-Stil mit OpenAPI; Internetbedarf zulässig | Versionen, technische Detailverträge, genaue Laufzeit-/Installationsplattform, Kosten, Wartung und Verhalten bei Netzstörungen |
 | V1-Fachmodule | Tickets, Zeiten, IMAP/SMTP-Helpdesk mit SLA/Geschäftszeiten/Eskalation, Portal, Wiki, Anforderungen und Git-Verknüpfung | Felder, Übergänge, Mailzuordnung, berechnete Fristen und weitere V1-Vorschläge |
 | Identität und Rechte | Lokales Konto, LDAP, eigene Gruppen, Projekt- und Feldrechte; Feldverbot gewinnt; Portal zeigt eigene Organisationsanfragen innerhalb freigegebener Projekte | Allgemeine Aktionskonflikte, delegierte Administration, LDAP-Lebenszyklus und zusätzliche Sichtbereiche |
 | Wissen und Anforderungen | Wiki-Entwurf mit ausdrücklicher Veröffentlichung, optionale Sprachfassungen; neue Revision und erneute Freigabe nach inhaltlicher Änderung freigegebener Anforderungen | Editorformat, Such-/Dateiverfahren und genaue Änderungs-/Freigaberegeln |
@@ -43,8 +46,8 @@ Die Fälligkeiten entsprechen DECISIONS.md. Wo eine Frage sowohl Architektur als
 
 | Frage | Noch nötiges Ergebnis / Ausgangsvorschlag | Zuständigkeit neben Holger | Spätester Entscheidungszeitpunkt |
 |---|---|---|---|
-| OPEN-001 Backend und Werkzeuge | Java/Spring Boot bestätigt; TypeScript, unterstützte Versionen sowie Build-/Testkonventionen noch entscheiden | Technik offen | Vor Implementierung |
-| OPEN-002 Modulstruktur | Modularer Monolith, Datenhoheit, Unternehmenskontext und Jobs; spätere Mandantenisolation darf als ausdrücklich vertagte Variante dokumentiert bleiben | Technik offen | Vor Implementierung; Isolation vor Mehrmandantenausbau |
+| OPEN-001 Backend und Werkzeuge | Java/Spring Boot und React/TypeScript bestätigt; unterstützte Versionen, Compiler-/Generator- sowie Build-/Testkonventionen noch entscheiden | Technik offen | Vor Implementierung |
+| OPEN-002 Modulstruktur | Modularer Monolith bestätigt; konkrete Modulverträge, Datenhoheit, Unternehmenskontext und Jobs prüfen; spätere Mandantenisolation darf ausdrücklich vertagt bleiben | Technik offen | Vor Implementierung; Isolation vor Mehrmandantenausbau |
 | OPEN-003 KI-Anbieter | Lieferreihenfolge der drei Anbieter; mindestens eine geeignete qualifizierte Anbindung trägt alle vier V1-Fälle | Technik und Pilot offen | Vor verbindlicher V1-Planung |
 | OPEN-004 2FA | Erweiterungspunkt jetzt; Faktor, Pflichtgruppen, Recovery und LDAP-Zusammenspiel später | Technik offen | Architektur vor Implementierung; Verfahren vor 2FA-Release |
 | OPEN-005 Rechte | Aktionsrechte, Admin-Grenzen, verborgene Pflichtfelder und Sonderfälle der Organisationssicht; bestätigte Feldverbote erhalten | Technik offen | Vor Datenmodell und Rechteimplementierung |
@@ -55,7 +58,7 @@ Die Fälligkeiten entsprechen DECISIONS.md. Wo eine Frage sowohl Architektur als
 | OPEN-010 Git | Lesende Benutzeranbindung, zulässige Objekte, Versionsmatrix und aktuelle Quellenprüfung | Technik offen | Vor Git-Integration |
 | OPEN-011 Wiki, Dateien, Suche | Editor-/Dokumentformat, Versionsumfang, Konfliktverfahren, Dateispeicher und Suchstrategie | Technik offen | Vor Speicher- und Editorwahl |
 | OPEN-012 Betrieb | Referenzplattform, TLS/Proxy/Internetziele, Update, Sicherungsziel, Servicezeit, Ersatzkapazität und Zuständigkeiten | Betreiber und Technik offen | Vor Installationsarchitektur; praktische Nachweise vor entsprechender Auslieferung |
-| OPEN-013 API | HTTP/JSON und OpenAPI prüfen; Versionierung, Authentifizierung, Fehler, Pagination und Wiederholbarkeit konkret beschließen | Technik offen | Vor erster Fachimplementierung |
+| OPEN-013 API | HTTP/JSON im REST-Stil mit OpenAPI bestätigt; Versionierung, Authentifizierung, Fehler, Pagination und Wiederholbarkeit konkret beschließen | Technik offen | Vor erster Fachimplementierung |
 | OPEN-014 Leistung | Referenzhardware, Mengen, Anhangsprofil und p95-Ziele; Vergleichsprodukt/Version und Bedienaufgaben benennen | Technik und Pilot offen | Vor Architekturfreigabe und Lasttestplanung |
 | OPEN-015 Oberfläche und Sprache | Rückfall-/Formatregeln, Vorlagen und Brandinggrenzen, Browser/mobile Ansichten, Zugänglichkeitsziel | Holger; Technik für Umsetzbarkeit | Vor UI- und Vorlagensystem |
 | OPEN-016 Lebenszyklus und Import | Aufbewahrung/Löschen jetzt; Redmine-Version, Mapping und Detailumfang vor Import | Betreiber und Technik offen | Aufbewahrung vor Betriebskonzept; Importdetails vor Migrationsrelease |
@@ -67,7 +70,7 @@ Die Fälligkeiten entsprechen DECISIONS.md. Wo eine Frage sowohl Architektur als
 
 ## Empfohlene Entscheidungspakete
 
-**Grundlage:** OPEN-001, OPEN-002, OPEN-013, OPEN-017 und OPEN-018 zusammen prüfen. Java/Spring Boot ist bestätigt. React/TypeScript, modularer Monolith, PostgreSQL-Jobs und HTTP/JSON/OpenAPI bilden die noch vorgeschlagene Ergänzung. Die Zustimmung zur Sprache allein gibt weder alle Komponenten noch deren Versionen frei. Ergebnis ist eine nachvollziehbare Auswahl mit Review-Verantwortung und begrenztem erstem Entwicklungsauftrag.
+**Grundlage:** Restdetails unter OPEN-001, OPEN-002, OPEN-013, OPEN-017 und OPEN-018 zusammen prüfen. Java/Spring Boot, React/TypeScript, modularer Monolith und HTTP/JSON im REST-Stil mit OpenAPI sind bestätigt. Konkrete Modul-/Transaktionsverträge, PostgreSQL-Jobs, Compiler-/Generatorwahl, Versionen und API-Grenzen bleiben Vorschläge. Die Grundauswahl gibt diese Details nicht pauschal frei. Nach deren Entscheidung und fachlicher Prüfung kann ein begrenzter erster Entwicklungsauftrag gesondert erteilt werden.
 
 **Rechte und Fachmodell:** OPEN-005 bis OPEN-009 mit OPEN-011 und den relevanten Teilen von OPEN-021 prüfen. Entscheidend sind Organisations-/Projektgrenzen, Identität, Konfigurationsversionen, Nachrichtenempfänger, Kalender und Revisionen. Diese Verträge beeinflussen mehrere Module und dürfen nicht widersprüchlich von verschiedenen KIs implementiert werden. Eine Entscheidung nennt die konkret angenommenen beziehungsweise geänderten Beispiele.
 
