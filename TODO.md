@@ -293,3 +293,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Entscheidungseinträge, Anforderungs-/Fragenverweise und verbliebene Formulierungen zur Backendwahl, menschlichen Prüfung und Roadmap-Priorität auf Widersprüche geprüft. Keine zusätzliche KI-Gegenprüfung oder menschliche technische Prüfung als erfolgt behauptet; reine Dokumentnachführung, keine Anwendungstests.
 
 **Nächster Schritt:** Holger prüft die korrekte Übernahme; weitere Architekturentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 sowie Detailverfahren unter OPEN-017/OPEN-018 vorbereiten. Separate Implementierungsfreigabe bleibt erforderlich.
+
+## TASK-016 Frontend-, Modul- und API-Verträge konkretisieren
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-contracts-01 · **Aktualisiert:** 2026-10-16
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-API-002, REQ-DEV-004. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-008 und TASK-012 als Entwürfe; DEC-039 und DEC-040. **Arbeitsstand:** geplanter Branch task/task-016-codex-contracts; separates Arbeitsverzeichnis nach Reservierung.
+
+**Umfang:** Prüffähige Vorschläge zu TypeScript, Datenhoheit und Modulabhängigkeiten sowie API-Verträgen mit konkreten Abläufen und Fehlerfällen ausarbeiten. Offene Grundentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 gezielt vorlegen; nur ausdrückliche Antworten als bestätigt eintragen. Keine Produktimplementierung.
+
+**Abnahmekriterien:** Vorschläge enthalten Verantwortlichkeiten, Vertragsänderungen bei paralleler KI-Arbeit, Rechte- und Versionsprüfung, Wiederholbarkeit sowie prüfbare positive und negative Beispiele. Bestehende Fachentscheidungen bleiben erhalten. Ausgeführte Dokumentprüfungen und KI-Gegenprüfung werden von künftigen Anwendungstests getrennt. Offene Details und nicht bestätigte Entscheidungen bleiben sichtbar.
+
+**Nächster Schritt:** Reservierung integrieren; danach Vertragsentwurf im eigenen Worktree erstellen, Gegenprüfung und Repository-Prüfungen durchführen und Ergebnis zur fachlichen Prüfung übergeben.
