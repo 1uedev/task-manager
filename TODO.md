@@ -296,12 +296,18 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-016 Frontend-, Modul- und API-Verträge konkretisieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-contracts-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-contracts-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-API-002, REQ-DEV-004. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-008 und TASK-012 als Entwürfe; DEC-039 und DEC-040. **Arbeitsstand:** geplanter Branch task/task-016-codex-contracts; separates Arbeitsverzeichnis nach Reservierung.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-API-002, REQ-DEV-004. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-008 und TASK-012 als Entwürfe; DEC-039 und DEC-040. **Arbeitsstand:** task/task-016-codex-contracts; Vertragsentwurf im separaten Arbeitsverzeichnis erstellt.
 
 **Umfang:** Prüffähige Vorschläge zu TypeScript, Datenhoheit und Modulabhängigkeiten sowie API-Verträgen mit konkreten Abläufen und Fehlerfällen ausarbeiten. Offene Grundentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 gezielt vorlegen; nur ausdrückliche Antworten als bestätigt eintragen. Keine Produktimplementierung.
 
 **Abnahmekriterien:** Vorschläge enthalten Verantwortlichkeiten, Vertragsänderungen bei paralleler KI-Arbeit, Rechte- und Versionsprüfung, Wiederholbarkeit sowie prüfbare positive und negative Beispiele. Bestehende Fachentscheidungen bleiben erhalten. Ausgeführte Dokumentprüfungen und KI-Gegenprüfung werden von künftigen Anwendungstests getrennt. Offene Details und nicht bestätigte Entscheidungen bleiben sichtbar.
 
-**Nächster Schritt:** Reservierung integrieren; danach Vertragsentwurf im eigenen Worktree erstellen, Gegenprüfung und Repository-Prüfungen durchführen und Ergebnis zur fachlichen Prüfung übergeben.
+**Ergebnis:** [TECHNICAL_CONTRACTS.md](docs/TECHNICAL_CONTRACTS.md) konkretisiert TypeScript-Datenverträge, Modulordnung, Transaktionen, API-Abläufe, Feldrechte, Konflikte und Wiederholung mit 16 vorgeschlagenen Prüffällen. Entscheidungsübersicht, Architektur und Einstieg verweisen darauf. Die drei Grundentscheidungen wurden Holger vorgelegt; ohne Antwort bleiben sie offen. Keine neuen Entscheidungen, Anwendungsdateien oder zusätzlichen Pflichtdienste angelegt.
+
+**KI-Gegenprüfung am 2026-10-16:** Eine getrennte Codex-Prüfsitzung contracts_review las den Entwurf in Commit 5bba988c15a918363069fab309887c9d75f16c0d gegen die bestehenden Fachverträge. Zwei P2-Befunde: Freigabe benötigte zusätzlich die technische Inhaltsversion; fachliche Einmaligkeit einer KI-Aktionskennung musste vom HTTP-Wiederholungsfenster getrennt werden. Korrektur in 484d85e74cdc5044079c78000346bda10fc77556, einschließlich C14/C15. Dieselbe separate Prüfsitzung bestätigte in gezielter Nachprüfung beide dokumentarischen Korrekturen ohne weiteren konkreten Widerspruch. Kein Claude-Review, Anwendungstest oder Sicherheitsnachweis behauptet.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Technische Primärquellen zu TypeScript, Spring Modulith, OpenAPI und HTTP geprüft. Die 16 Produktfälle sind erst beschrieben, nicht ausgeführt. Holgers fachliche Abnahme bleibt ausstehend.
+
+**Nächster Schritt:** Holger entscheidet über TypeScript, modularen Monolithen und HTTP/JSON/OpenAPI unter OPEN-001, OPEN-002 und OPEN-013. Detailverträge einschließlich Authentifizierung, Versionen, Wiederholungsfenster und Listengrenzen anschließend gezielt prüfen. Eine gesonderte Implementierungsfreigabe bleibt erforderlich.
