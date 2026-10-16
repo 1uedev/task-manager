@@ -18,6 +18,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
 - Git and migration review: [provider variants, source permissions and staged Redmine import](docs/GIT_MIGRATION.md).
 - Operations review: [Docker, recovery targets, storage calculation and proposed load tests](docs/OPERATIONS.md).
+- Review policy proposal: [risk-based checks, responsibilities and coordination examples](docs/DEVELOPMENT_REVIEW.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
 - Contributions and checks: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -54,6 +55,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | ROADMAP.md | Initial release and later work |
 | TODO.md / DONE.md | Central task ledger and accepted history |
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
+| docs/DEVELOPMENT_REVIEW.md | Proposed technical review, acceptance boundaries and parallel-work scenarios |
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |
 | docs/PERMISSIONS.md | Draft groups, portal scope, field conflicts, identity lifecycle and acceptance scenarios |
 | docs/ARCHITECTURE.md | Proposed backend choice, module boundaries, API contract, deployment and measurement plan |
