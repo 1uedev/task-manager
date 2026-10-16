@@ -48,9 +48,28 @@ class RepositoryContractTests(unittest.TestCase):
 
     def test_active_task_requires_owner(self):
         path = self.root / "TODO.md"
-        text = path.read_text().replace("**Status:** OFFEN · **Verantwortlich:** unbesetzt", "**Status:** IN ARBEIT · **Verantwortlich:** unbesetzt", 1)
-        path.write_text(text)
-        self.assertTrue(any("needs a session owner" in e for e in validate(self.root)))
+        baseline = path.read_text()
+        # Do not depend on an unclaimed task remaining in the live ledger.
+        for status in ("IN ARBEIT", "BEREIT ZUR PRÜFUNG"):
+            with self.subTest(status=status):
+                fixture = f"""
+## TASK-999 Synthetic owner check
+**Status:** {status} · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-16
+**Bezug:** REQ-DEV-002. **Abhängigkeiten:** keine. **Arbeitsstand:** synthetic fixture.
+**Umfang:** Check task ownership.
+**Abnahmekriterien:** Active tasks require an owner.
+**Nächster Schritt:** Assign a session owner.
+"""
+                path.write_text(baseline + fixture)
+                self.assertEqual(
+                    validate(self.root),
+                    ["TASK-999: active/review task needs a session owner"],
+                )
+                path.write_text(baseline + fixture.replace(
+                    "**Verantwortlich:** unbesetzt",
+                    "**Verantwortlich:** synthetic-session",
+                ))
+                self.assertEqual(validate(self.root), [])
 
     def test_completion_requires_evidence_fields(self):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Ergebnis:** drafted\n")
