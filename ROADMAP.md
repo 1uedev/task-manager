@@ -62,15 +62,16 @@ Redmine als erste Importquelle ist bestätigt; Easy Redmine/Easy8 und Jira werde
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |
 | Weitere Datenbanken | Option für MariaDB, SQL Server oder Oracle | Bisher nur Vorbereitung beauftragt; jede tatsächliche Unterstützung braucht gesonderte Entscheidung, Migration und Prüfnachweise. REQ-DATA-002 |
 
-## Vorgeschlagene Reihenfolge weiterer Module
+## Prioritäten weiterer Module
 
-Die Bereiche und Mindestumfänge stehen im [Funktionsinventar](docs/FUNCTION_INVENTORY.md). Alle folgenden Prioritäten sind Vorschläge unter OPEN-021, ohne Kalenderzusage und zusätzlich zu den bestätigten frühen Erweiterungen 2FA und Redmine-Import.
+Die Bereiche und vorgeschlagenen Mindestumfänge stehen im [Funktionsinventar](docs/FUNCTION_INVENTORY.md). DEC-041 bestätigt Kanban, Gantt und einfache Dashboards als nächste Fachpriorität nach V1. Die frühen Erweiterungen 2FA und Redmine-Import bleiben eingeplant. Innerhalb dieser drei Fachbereiche sind Reihenfolge, Detailumfang und Termine noch nicht entschieden.
 
-| Reihenfolge | Schwerpunkt | Voraussetzung |
+| Reihenfolge / Status | Schwerpunkt | Voraussetzung |
 |---|---|---|
-| A | Kanban/Sprints, Gantt, einfache Dashboards sowie Ticketvorlagen/Checklisten | Stabile Tickets, Rechte, Kalender und definierte Kennzahlen |
-| B | Ressourcen, Kosten, Zeitfreigaben, Tests, Portfolios, Risiken, Assets, Servicekontingente und externe Ereignisse | Bedarf aus Pilotbetrieb, Datenverträge und eigene Abnahme je Modul |
-| C | Freie Ideenstruktur, erweitertes CRM, Dokumentverwaltung und native/offline mobile Nutzung | Nachgewiesener Nutzen gegenüber zusätzlichen Integrationen und Wartung |
+| A · Priorität bestätigt, Details offen | Kanban, Gantt und einfache Dashboards (DEC-041) | Stabile Tickets, Rechte, Kalender und definierte Kennzahlen |
+| A · zusätzlicher Vorschlag | Sprints sowie Ticketvorlagen/Checklisten | Bedarf und Umfang gesondert bestätigen |
+| B · Vorschlag | Ressourcen, Kosten, Zeitfreigaben, Tests, Portfolios, Risiken, Assets, Servicekontingente und externe Ereignisse | Bedarf aus Pilotbetrieb, Datenverträge und eigene Abnahme je Modul |
+| C · Vorschlag | Freie Ideenstruktur, erweitertes CRM, Dokumentverwaltung und native/offline mobile Nutzung | Nachgewiesener Nutzen gegenüber zusätzlichen Integrationen und Wartung |
 
 Formale Anforderungsstände und PDF-Ausgabe sind bereits als spätere Richtungen bestätigt; ihre Einordnung zusammen mit B bleibt vorgeschlagen. Weitere Anmeldeanbieter, Git-Ausbau, Portal-KI und Mehrmandantenbetrieb erhalten ihre Reihenfolge nach konkretem Bedarf. Weitere Datenbanken sind nur architektonisch vorbereitet; eine tatsächliche Unterstützung bleibt gesondert zu beauftragen.
 

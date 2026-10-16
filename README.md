@@ -4,7 +4,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 [![Repository checks](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml/badge.svg)](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml)
 
-**Current phase: requirements, architecture and collaboration setup. Application implementation has not started.** The repository setup does not choose between Go and Java or accept the product specification on the owner's behalf.
+**Current phase: requirements, architecture and collaboration setup. Application implementation has not started.** Java with Spring Boot is now confirmed (DEC-039); the remaining architecture details and product specification still need review.
 
 ## Start here
 
@@ -13,7 +13,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Scope review: [function inventory, V1 additions and later modules](docs/FUNCTION_INVENTORY.md).
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
 - Identity and access review: [permissions, LDAP and portal examples](docs/PERMISSIONS.md).
-- Architecture review: [Go/Java comparison, modules, API and deployment proposal](docs/ARCHITECTURE.md).
+- Architecture review: [confirmed Java/Spring Boot choice, comparison, modules and API proposal](docs/ARCHITECTURE.md).
 - Domain review: [project workflows, fields, time corrections and requirement revisions](docs/DOMAIN_MODEL.md).
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
@@ -29,9 +29,11 @@ TODO.md on main is the single source for task ownership and state. Issues provid
 
 ## Agreed product direction
 
-Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. React is planned; backend language remains open. German and English, customer branding, LDAP, group and field permissions and an API are included in the specification.
+Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. React is planned; Java with Spring Boot is confirmed for the backend. German and English, customer branding, LDAP, group and field permissions and an API are included in the specification.
 
 Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
+
+Initial technical reviews will be reciprocal AI reviews; additional human technical review remains open (DEC-040). Holger retains functional acceptance. Kanban, Gantt and simple dashboards are the next confirmed functional priority after V1, with early 2FA and Redmine import retained (DEC-041).
 
 Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous active users. There is no fixed RAM cap. The 1-TB SSD planning budget requires a defined attachment and retention profile. The recovery planning targets are at most one hour of data loss and four hours to restore operation after complete server failure. No performance or recovery measurements or finished application are claimed.
 
@@ -61,7 +63,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/DEVELOPMENT_REVIEW.md | Proposed technical review, acceptance boundaries and parallel-work scenarios |
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |
 | docs/PERMISSIONS.md | Draft groups, portal scope, field conflicts, identity lifecycle and acceptance scenarios |
-| docs/ARCHITECTURE.md | Proposed backend choice, module boundaries, API contract, deployment and measurement plan |
+| docs/ARCHITECTURE.md | Confirmed backend choice; proposed module boundaries, API contract, deployment and measurements |
 | docs/DOMAIN_MODEL.md | Proposed project workflows, configuration lifecycle, time records and requirement revisions |
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |

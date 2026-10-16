@@ -1,12 +1,12 @@
 # Vorschlag für die Systemarchitektur
 
-Stand 15. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
+Stand 16. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
 
-Die Empfehlung lautet: Java mit Spring Boot als modularer Monolith, React mit TypeScript, PostgreSQL und ein versioniertes Anwendungsimage für Docker. Das ist ein Vorschlag zu OPEN-001 und OPEN-002. Bestätigt sind Docker, PostgreSQL, React und eine eigenständige Codebasis; die Backend-Sprache ist noch offen. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
+Holger hat Java mit Spring Boot als Backend bestätigt (DEC-039). Docker, PostgreSQL, React und eine eigenständige Codebasis sind ebenfalls gesetzt. Modularer Monolith, React mit TypeScript, konkrete Versionen und die übrigen Architekturdetails bleiben Vorschläge zu OPEN-001 und OPEN-002. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
 
-Grundlage sind REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002 und REQ-API-001 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Der Entwurf berücksichtigt außerdem den bestätigten Funktionsumfang und DEC-027 bis DEC-029 zur Organisationssicht, Feldverbotsregel und späteren 2FA-Erweiterung. Der [Rechteentwurf](PERMISSIONS.md) beschreibt die gemeinsame Zugriffsschnittstelle und fachliche Prüfszenarien. Alle nachfolgenden technischen Details bleiben prüfpflichtige Vorschläge.
+Grundlage sind REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002 und REQ-API-001 aus [REQUIREMENTS.md](../REQUIREMENTS.md). Der Entwurf berücksichtigt außerdem den bestätigten Funktionsumfang und DEC-027 bis DEC-029 zur Organisationssicht, Feldverbotsregel und späteren 2FA-Erweiterung. Der [Rechteentwurf](PERMISSIONS.md) beschreibt die gemeinsame Zugriffsschnittstelle und fachliche Prüfszenarien. Abgesehen von der bestätigten Backendwahl nach DEC-039 bleiben die nachfolgenden technischen Details prüfpflichtige Vorschläge.
 
-## Go oder Java: Entscheidung nach Produktbedarf
+## Begründung der bestätigten Backendwahl
 
 Beide Sprachen können dieses Produkt tragen. Für die erwarteten 15 gleichzeitig aktiven Nutzer ist die Sprache allein kein belastbarer Leistungsnachweis. Datenmodell, Abfragen, Rechteprüfung und Hintergrundarbeit müssen gemessen werden. „Von KI leichter zu schreiben“ ist kein ausreichendes Auswahlkriterium.
 
@@ -20,7 +20,7 @@ Beide Sprachen können dieses Produkt tragen. Für die erwarteten 15 gleichzeiti
 | Datenbankwechsel | Treiber abstrahieren Verbindungszugriff, nicht sämtliche SQL-Unterschiede | Auch ein ORM macht SQL und Migrationen nicht automatisch portabel | Kein entscheidender Sprachvorteil; Adapter und spätere Tests sind nötig |
 | Kosten und Geschwindigkeit | Mögliche Einsparungen im Betrieb sind zu messen | Mögliche Einsparungen bei Integrationsarbeit sind zu validieren | Entwicklungs-, Review- und Supportaufwand wiegt zunächst schwerer als ein ungeprüfter RAM-Vorteil |
 
-**Empfehlung:** Java/Spring Boot, sofern eine technisch erfahrene Person die Sicherheits- und Architekturprüfung übernehmen kann. Go bleibt eine gute Alternative, wenn langfristig überwiegend Go-Kompetenz verfügbar ist oder eine verbindlich sehr kleine Laufzeitumgebung wichtiger wird. Keines der Kriterien rechtfertigt eine behauptete Überlegenheit ohne Erprobung. Holgers fachliche Abnahme ersetzt keinen technischen Review der KI-generierten Änderungen.
+**Entscheidung vom 16. Oktober 2026:** Java/Spring Boot ist gewählt (DEC-039); der Vergleich oben dokumentiert die Grundlage. Für die technische Prüfung sind zunächst gegenseitige KI-Reviews bestätigt, während zusätzliche menschliche Prüfung offenbleibt (DEC-040). Die frühere Empfehlung einer menschlichen Prüfung ist keine Voraussetzung dieser Backendentscheidung. Holgers fachliche Abnahme bleibt getrennt. Keines der Kriterien beweist eine Leistungsüberlegenheit ohne Erprobung.
 
 Die technischen Grundlagen sind dokumentiert in [Spring Security LDAP](https://docs.spring.io/spring-security/reference/servlet/authentication/passwords/ldap.html), [Spring Modulith Verification](https://docs.spring.io/spring-modulith/reference/verification.html), [Go database/sql](https://go.dev/doc/database/) und der [Go-LDAP-Bibliothek](https://github.com/go-ldap/ldap). Sprach-, Framework- und Bibliotheksversionen werden erst bei Freigabe anhand unterstützter Versionen und Lizenzen festgelegt. Hier wird keine aktuelle Versionskombination zugesagt.
 
@@ -43,7 +43,7 @@ Der modulare Monolith hält Installation, lokale Transaktionen und Fehlersuche �
 | KI-Unterstützung | Skill-Versionen, Modellzuordnungen, Vorschläge und Bestätigungsnachweise | Nutzt berechtigte Leseschnittstellen; führt bestätigte Aktionen über Fachmodule aus |
 | Technische Dienste | Dateispeicher, Aufträge, Outbox, Vorlagen, Audit und Diagnose | Definierte Ports; Infrastrukturadapter hängen von Fachverträgen ab |
 
-Das Portal und die interne Oberfläche sind zwei Ansichten derselben Fachlogik. Ein zweites Portal-Backend mit abweichender Rechteprüfung wird nicht empfohlen. Spätere Module wie Ressourcenplanung, Budgets oder Testmanagement erhalten eigene Grenzen; ihre konkreten Funktionen bleiben in TASK-002 zu inventarisieren.
+Das Portal und die interne Oberfläche sind zwei Ansichten derselben Fachlogik. Ein zweites Portal-Backend mit abweichender Rechteprüfung wird nicht empfohlen. Spätere Module wie Ressourcenplanung, Budgets oder Testmanagement erhalten eigene Grenzen; ihre vorgeschlagenen Funktionen stehen im [Funktionsinventar](FUNCTION_INVENTORY.md).
 
 Abhängigkeiten werden gerichtet und zyklenfrei geplant: Zeit kennt Tickets, Tickets kennen keine Zeitbuchungsimplementierung. Eine Ticketansicht mit Zeitsumme verwendet einen separaten Abfragedienst. Verknüpfungen rufen bereitgestellte Leseschnittstellen auf; sie umgehen keine Zugriffsprüfung. Die Zusammensetzung geschieht an einem klaren Anwendungseinstieg. Spring Modulith kann bei Java insbesondere Zyklen, unerlaubte interne Zugriffe und erlaubte Abhängigkeiten prüfen; es beweist weder korrekte Fachregeln noch sichere Rechte.
 
@@ -134,12 +134,12 @@ Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustr
 
 | Entscheidung / Arbeit | Nächster prüfbarer Schritt |
 |---|---|
-| OPEN-001, OPEN-002 | Holger bewertet Java/Spring Boot, React/TypeScript und modularen Monolithen; technische Review-Verantwortung klären |
+| OPEN-001, OPEN-002 | Java/Spring Boot ist bestätigt; Versionen, React/TypeScript und modularen Monolithen entscheiden |
 | OPEN-005, OPEN-006 | Rechteentwurf prüfen; Datenmodell und Sitzungs-/LDAP-Verhalten verbindlich machen |
 | OPEN-013 | API-Regeln einschließlich Token, Wiederholungsfenster und Versionsübergängen abstimmen |
 | TASK-005, TASK-006 | Zwei Projektabläufe, Feldmodell und berechenbare SLA-Beispiele spezifizieren |
 | TASK-002, TASK-008 | Funktionsinventar vervollständigen; vier interne KI-Fälle sind für V1 bestätigt, Anbieterreihenfolge und Betriebsgrenzen noch offen |
 | TASK-010, OPEN-014 | Vorliegenden Betriebsentwurf, Referenzdaten und vorgeschlagene Leistungsziele prüfen; RPO/RTO aus DEC-038 praktisch nachweisen |
-| OPEN-017 | Technischen Review für Anmeldung, Rechte, Migration und Wiederherstellung organisieren |
+| OPEN-017 | Gegenseitige KI-Reviews sind bestätigt; konkrete Sitzungen, Nachweise und Freigabeschwellen klären; menschliche Prüfung bleibt offen |
 
 Das Ergebnis ist bereit zur Prüfung. Eine Annahme der Architektur ersetzt weder die noch offenen Detailentscheidungen noch einen gesonderten Implementierungsauftrag. Technische Quellen wurden am 13. Oktober 2026 gelesen; es wurden keine Last-, Integrations- oder Produktsicherheitstests ausgeführt.

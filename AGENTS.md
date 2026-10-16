@@ -4,9 +4,9 @@ These instructions apply to this repository. Explicit current user instructions 
 
 ## Current scope
 
-The user has authorized requirements and architecture planning plus setup of this GitHub collaboration environment. Product implementation is not yet authorized. Repository automation, templates and checks are within scope; application scaffolding, framework selection, deployment and database setup are not.
+The user has authorized requirements and architecture planning plus setup of this GitHub collaboration environment. Product implementation is not yet authorized. Repository automation, templates and checks are within scope; application scaffolding, deployment and database setup are not. Java with Spring Boot has been explicitly selected by the user (DEC-039); further unconfirmed technology choices remain proposals.
 
-The product requirements remain in German. Preserve their meaning, stable IDs and distinction between confirmed requirements and proposals. PostgreSQL, React and Docker distribution are agreed. Go versus Java remains open. Do not silently turn Spring Boot, TypeScript or a modular monolith into a confirmed choice.
+The product requirements remain in German. Preserve their meaning, stable IDs and distinction between confirmed requirements and proposals. PostgreSQL, React, Docker distribution and Java with Spring Boot are agreed. Versions, TypeScript and a modular monolith remain open; do not turn them into confirmed choices. DEC-041 prioritizes Kanban, Gantt and simple dashboards after V1 while keeping early 2FA and Redmine import planned. It does not approve additional sprint features or detailed release scope.
 
 ## Start every session
 
@@ -38,7 +38,7 @@ Keep each change scoped to its task and REQ-IDs. Run python3 scripts/validate_re
 
 Use the pull request template. Include changed behavior, evidence and limitations. Set the task to BEREIT ZUR PRÜFUNG with a handoff. Do not use GitHub closing keywords before the task is actually accepted. A merged result PR does not automatically satisfy product acceptance.
 
-Holger performs functional acceptance. Do not approve requirements on his behalf. Until the review policy is expanded, tasks needing his acceptance stay in TODO.md. Technical setup results may be delivered and verified, but do not invent an independent review. Shared GitHub credentials cannot distinguish an AI from Holger; required CI is not proof of human approval.
+Holger performs functional acceptance. Do not approve requirements on his behalf. DEC-040 selects reciprocal AI reviews as the initial technical review approach, including critical changes; additional human technical review remains open. Author self-checks are not a reciprocal review. Detailed evidence and release thresholds in docs/DEVELOPMENT_REVIEW.md remain proposals unless explicitly confirmed. Tasks needing Holger's acceptance stay in TODO.md. Technical setup results may be delivered and verified, but do not invent an independent review. Shared GitHub credentials cannot distinguish an AI from Holger; required CI is not proof of human approval.
 
 On acceptance, preserve the task ID and move the result from TODO.md to DONE.md in the same PR. Include original criteria, result, actual checks, reviewer, acceptance evidence, date and commit/PR references. Keep history; corrections get linked follow-up tasks.
 

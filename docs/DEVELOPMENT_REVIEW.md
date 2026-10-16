@@ -1,10 +1,10 @@
 # Entwicklung und Prüfung mit mehreren KI-Sitzungen
 
-Stand 16. Oktober 2026 · TASK-011 · Vorschlag zu OPEN-017 und OPEN-018
+Stand 16. Oktober 2026 · TASK-011 / TASK-015 · Review-Weg bestätigt, Detailverfahren vorgeschlagen
 
 Codex und Claude Code sollen kleine, nachvollziehbare Arbeitsergebnisse liefern können. Entscheidend sind prüfbare Änderungen und klare Zuständigkeiten. Zwei zustimmende Modelle ersetzen keine Fachabnahme und beweisen keine technische Korrektheit.
 
-Das bestehende Reservierungsverfahren in [AGENTS.md](../AGENTS.md) und [AI_WORKFLOW.md](AI_WORKFLOW.md) gilt bereits für diese Planungsarbeit. Die zusätzlichen Rollen, Risikostufen und Freigabeschwellen unten sind **Vorschläge**. Sie werden erst nach Holgers Entscheidung verbindlich. Dieses Dokument erteilt weder einen Programmierauftrag noch neue Befugnisse zur Veröffentlichung, Beauftragung von Personen oder Nutzung kostenpflichtiger Dienste.
+Das bestehende Reservierungsverfahren in [AGENTS.md](../AGENTS.md) und [AI_WORKFLOW.md](AI_WORKFLOW.md) gilt bereits für diese Planungsarbeit. DEC-040 bestätigt zunächst gegenseitige KI-Reviews, auch für kritische Änderungen; zusätzliche menschliche technische Prüfung bleibt ausdrücklich offen. Die übrigen Rollen, Risikostufen und Freigabeschwellen unten sind **Vorschläge** und werden erst nach entsprechender Entscheidung verbindlich. Dieses Dokument erteilt weder einen Programmierauftrag noch neue Befugnisse zur Veröffentlichung, Beauftragung von Personen oder Nutzung kostenpflichtiger Dienste.
 
 Bezug: REQ-DEV-001 bis REQ-DEV-005, REQ-SEC-001. Aufgabenstatus bleibt ausschließlich in [TODO.md](../TODO.md), abgenommene Ergebnisse in [DONE.md](../DONE.md).
 
@@ -15,11 +15,11 @@ Bezug: REQ-DEV-001 bis REQ-DEV-005, REQ-SEC-001. Aufgabenstatus bleibt ausschlie
 | Produktverantwortlicher | Umfang, fachliche Beispiele, Prioritäten und Abnahme entscheiden | Holger Gerlach bestätigt; grundlegendes Coding-Verständnis ist keine behauptete Sicherheitsexpertise |
 | Koordination | Freie Aufgabe prüfen, Reservierung integrieren, Überschneidungen auflösen, Übergaben dokumentieren | Holger oder ausdrücklich benannte Sitzung gemäß bestehendem Ablauf; Berechtigung gilt für den beauftragten Umfang |
 | Autor | Anforderungen lesen, Änderung umsetzen, Eigenprüfungen und Einschränkungen liefern | Eindeutige KI-Sitzung oder Person pro Aufgabe; eigenes Arbeitsverzeichnis |
-| Prüfende KI | Konkreten Änderungsstand gegen Anforderungen und Fehlerfälle prüfen | Vorgeschlagen: andere Sitzung, möglichst anderes Werkzeug; nicht dieselbe Unterhaltung als „unabhängiges Review“ umbenennen |
-| Technischer Reviewer | Kritische Architektur und Code sowie deren Prüfnachweise fachkundig beurteilen | Vorgeschlagen: erfahrene menschliche Person; noch nicht benannt oder beauftragt; Entscheidung unter OPEN-017 |
+| Prüfende KI | Konkreten Änderungsstand gegen Anforderungen und Fehlerfälle prüfen | Gegenseitige KI-Reviews bestätigt (DEC-040); Autor und prüfende KI unterscheiden. Konkrete Sitzung durch Koordination zuordnen; Werkzeugkombination noch festzulegen |
+| Zusätzlicher menschlicher Reviewer | Bei späterer Entscheidung technische Beurteilung ergänzen | Ausdrücklich offen (DEC-040); keine verpflichtende menschliche Freigabestufe beschlossen und keine Person beauftragt |
 | Integration / Release | Prüfergebnisse zum richtigen Commit abgleichen, Integration beziehungsweise Auslieferung im genehmigten Umfang durchführen | Koordination; Integration ist keine fachliche Abnahme und keine automatische Releasefreigabe |
 
-Ein fehlender technischer Reviewer verhindert das Erstellen reviewbarer Planungsunterlagen nicht. Für Umsetzung und Kundenauslieferung muss Holger das Verfahren ausdrücklich festlegen. Die Empfehlung ist, kritische Architektur vor Umsetzung und kritische Änderungen vor Kundeneinsatz zusätzlich menschlich prüfen zu lassen. Bis zur Entscheidung wird keine solche Prüfung als erfolgt ausgewiesen.
+Der anfängliche technische Review-Weg ist entschieden: KI-Sitzungen prüfen gegenseitig ihre Änderungen, Holger nimmt fachlich ab. Menschliche technische Prüfung wird weder als bereits erfolgt noch als verpflichtende Voraussetzung behandelt. Offen bleiben konkrete Zuordnung, Prüfbelege und Freigabeschwellen. Ein KI-Review besteht aus nachvollziehbaren Befunden und überprüften Fehlerfällen; bloße Zustimmung eines Modells genügt nicht. Die Entscheidung ist kein Programmier- oder Auslieferungsauftrag.
 
 ## Eine Aufgabe muss konkret prüfbar sein
 
@@ -46,13 +46,13 @@ Fachliche Abnahme kann vor oder nach Integration erfolgen, muss aber den tatsäc
 | Änderung | Erforderliche Nachweise nach Freigabe dieses Vorschlags | Zusätzliche Prüfung |
 |---|---|---|
 | Planung, Übersetzung, statischer Text oder rein visuelle Korrektur | Dokument-/Linkprüfung beziehungsweise sichtbare Prüfung der betroffenen Oberfläche; keine Tests, die nur den geänderten Wortlaut wiederholen | Gezielte Gegenprüfung nach Bedarf; fachliche Entscheidung durch Holger bei Inhaltsänderung |
-| Normaler Fachablauf | Verhaltenstest für erlaubten/unerlaubten Fall, relevante Integration mit PostgreSQL, API-Konflikt-/Validierungsfall, UI-Demonstration bei UI-Änderung | Separate KI-Prüfung vorgeschlagen; technischer Mensch bei unklaren Befunden oder neuem Architekturvertrag |
-| Rechte, Anmeldung, Portalgrenzen, Rich Text, Uploads, externe Verbindungen oder KI-Daten/Bestätigung | Negative Zugriffstests über betroffene UI/API/Datei-/Such-/Export-/Jobwege, Missbrauchs-/Fehlerfälle, Geheimnis- und Datenflussprüfung | Erfahrene menschliche Prüfung empfohlen; Umfang vor Umsetzung festlegen |
-| SLA, Zeitkorrektur, Vertrags-/Kostensummen | Unabhängig nachvollziehbare Sollwerte, Grenzzeiten, Rundung, Sommerzeit, Wiederholung und Regelversionswechsel; keine Sollwerte nur aus derselben Implementierung ableiten | Fachliche Beispiele mit Holger; technisch erfahrene Prüfung der kritischen Berechnung |
-| Datenmigration, Schemaänderung, Update, Löschung oder Restore | Probe mit synthetischem repräsentativem Bestand, Konsistenz-/Mengenprüfung, Wiederholbarkeit, Abbruch und Wiederanlauf; gemessene Wiederherstellung bei betroffenem Verfahren | Technischer Mensch und zuständiger Betreiber vorgeschlagen; Backup-Erfolg allein genügt nicht |
+| Normaler Fachablauf | Verhaltenstest für erlaubten/unerlaubten Fall, relevante Integration mit PostgreSQL, API-Konflikt-/Validierungsfall, UI-Demonstration bei UI-Änderung | Gegenseitiges KI-Review; unklare Befunde bleiben zur Entscheidung offen, zusätzliche menschliche Prüfung nicht beschlossen |
+| Rechte, Anmeldung, Portalgrenzen, Rich Text, Uploads, externe Verbindungen oder KI-Daten/Bestätigung | Negative Zugriffstests über betroffene UI/API/Datei-/Such-/Export-/Jobwege, Missbrauchs-/Fehlerfälle, Geheimnis- und Datenflussprüfung | Gegenseitiges KI-Review mit gezielten Negativfällen; zusätzliche menschliche Prüfung bleibt offen |
+| SLA, Zeitkorrektur, Vertrags-/Kostensummen | Unabhängig nachvollziehbare Sollwerte, Grenzzeiten, Rundung, Sommerzeit, Wiederholung und Regelversionswechsel; keine Sollwerte nur aus derselben Implementierung ableiten | Fachliche Beispiele mit Holger; prüfende KI kontrolliert Sollwerte und Grenzfälle getrennt von der Implementierung |
+| Datenmigration, Schemaänderung, Update, Löschung oder Restore | Probe mit synthetischem repräsentativem Bestand, Konsistenz-/Mengenprüfung, Wiederholbarkeit, Abbruch und Wiederanlauf; gemessene Wiederherstellung bei betroffenem Verfahren | Gegenseitiges KI-Review bestätigt; Nachweise mit zuständigem Betreiber vorgeschlagen; zusätzliche menschliche Codeprüfung bleibt offen |
 | Laufzeit, Bibliothek, Build oder Auslieferungsartefakt | Gepinnte Versionen, Eignung/Lizenz prüfen, betroffene Regressionen und reproduzierbares Artefakt; Herkunft und Abhängigkeiten dokumentieren | Technische Prüfung entsprechend den betroffenen Sicherheits-/Betriebswegen |
 
-Bei mehreren Kategorien gilt die sachlich strengste betroffene Prüfung. Eine kleine Änderung an einer Rechtebedingung bleibt kritisch. Automatische Scanner sind Ergänzungen; ein leerer Scan ist keine fachliche Sicherheitsfreigabe. Die konkrete Werkzeugauswahl erfolgt nach Backendentscheidung; hier wird kein Dienst aktiviert.
+Bei mehreren Kategorien gilt die sachlich strengste betroffene Prüfung. Eine kleine Änderung an einer Rechtebedingung bleibt kritisch. Automatische Scanner sind Ergänzungen; ein leerer Scan ist keine fachliche Sicherheitsfreigabe. Die konkrete Werkzeugauswahl für Java/Spring Boot bleibt offen; hier wird kein Dienst aktiviert.
 
 Bestehende Pflichtprüfungen für das Repository bleiben: `python3 scripts/validate_repository.py`, `python3 -m unittest discover -s tests -v` und `git diff --check`. Sie prüfen Dokumentstruktur und Zusammenarbeit, nicht die künftige Anwendung. Ausführliche Last- und Wiederherstellungsmessungen sind nur bei entsprechender Änderung oder Releaseanforderung nötig; ein Textfehler löst keinen vollständigen Produkttest aus.
 
@@ -85,6 +85,6 @@ Reviewbefunde enthalten Ort, auslösenden Fall, beobachtete Folge und erforderli
 
 ## Ausstehende Entscheidungen und Prüfstand
 
-OPEN-017: menschlichen technischen Reviewer, Freigabeschwellen und Umgang mit offenen Befunden festlegen. OPEN-018: den erweiterten Ablauf für künftige parallele Entwicklung bestätigen. Holger entscheidet; die zu benennende technische Person bewertet die technische Eignung. Die bereits gültigen Regeln in AGENTS.md gelten bis dahin weiter.
+OPEN-017: Konkrete KI-Review-Zuordnung, Freigabeschwellen und Umgang mit offenen Befunden festlegen; zusätzliche menschliche Prüfung bleibt gemäß DEC-040 offen. OPEN-018: übrigen erweiterten Ablauf für künftige parallele Entwicklung bestätigen. Die Koordination weist prüfende Sitzungen zu; Holger entscheidet fachliche und organisatorische Fragen. Die bereits gültigen Regeln in AGENTS.md gelten weiter.
 
 Die Szenarien K1 bis K8 sind am 16. Oktober 2026 gedanklich gegen den bestehenden Ablauf geprüft. K1 und K2 wurden zusätzlich in lokalen synthetischen Git-Repositories nachvollzogen: gleiche Aufgabenzeile mit verschiedenen Eigentümern ergab einen Textkonflikt; getrennte Aufgaben ließen sich unter Erhalt beider Eigentümer zusammenführen. TASK-011 hält diesen Nachweis fest. Das ist kein Test gleichzeitig laufender KI-Dienste, keine unabhängige technische Prüfung und keine neue GitHub-Sperrfunktion.

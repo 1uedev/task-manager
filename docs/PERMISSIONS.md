@@ -1,6 +1,6 @@
 # Identität und Berechtigungen
 
-Stand 13. Oktober 2026 · TASK-004 · Entwurf zur fachlichen und technischen Prüfung
+Stand 16. Oktober 2026 · TASK-004 · Entwurf zur fachlichen und technischen Prüfung
 
 Dieser Entwurf konkretisiert REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004 und REQ-PORTAL-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Er wurde von Codex erstellt. Der vorgesehene Claude-Aufruf scheiterte an der Anmeldung und lieferte keinen Entwurf; eine unabhängige Prüfung hat nicht stattgefunden.
 
@@ -144,4 +144,4 @@ Diese Szenarien sind geplante Abnahmefälle, keine ausgeführten Softwaretests. 
 
 OPEN-005 ist durch die Organisationssicht und Feldkonfliktregel teilweise geklärt. Offen bleiben allgemeine Aktionsverbote, Delegation, zusätzliche externe Sichtbereiche und Mehrfachzugehörigkeit. OPEN-006 benötigt konkrete LDAP-Umgebung, Kontoanlage, Synchronisation, Sitzungsfristen und Wiederherstellung. Bei OPEN-004 ist der Release geklärt, nicht das Verfahren.
 
-TASK-005 konkretisiert Feld- und Workflowkonflikte; TASK-006 die Empfänger- und Portalregeln; TASK-008 KI-Sichtbarkeit und Datenwege; TASK-003 die technischen Modulverträge. Vor Implementierung ist ein technischer Reviewer unter OPEN-017 festzulegen. Die fachliche Prüfung dieses Entwurfs bleibt bei Holger. Primärquellen wurden am 13. Oktober 2026 gelesen; daraus wird keine Abnahme der vorgeschlagenen Produktregeln abgeleitet.
+TASK-005 konkretisiert Feld- und Workflowkonflikte; TASK-006 die Empfänger- und Portalregeln; TASK-008 KI-Sichtbarkeit und Datenwege; TASK-003 die technischen Modulverträge. DEC-040 bestätigt zunächst gegenseitige KI-Reviews; konkrete Prüfzuordnung und Nachweise werden unter OPEN-017 festgelegt. Zusätzliche menschliche Prüfung bleibt offen. Die fachliche Prüfung dieses Entwurfs bleibt bei Holger. Primärquellen wurden am 13. Oktober 2026 gelesen; daraus wird keine Abnahme der vorgeschlagenen Produktregeln abgeleitet.

@@ -1,6 +1,6 @@
 # Docker-Betrieb, Sicherung und Leistungsplanung
 
-Stand 15. Oktober 2026 · Planungsentwurf für TASK-010
+Stand 16. Oktober 2026 · Planungsentwurf für TASK-010
 
 Dieses Dokument konkretisiert REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004 sowie REQ-DATA-003 und REQ-DATA-004. Es ergänzt [Architektur](ARCHITECTURE.md), [Helpdesk](HELPDESK_SLA.md), [Git und Migration](GIT_MIGRATION.md) und [KI-Betriebsgrenzen](AI_USE_CASES.md).
 
@@ -172,7 +172,7 @@ Der Kunde beziehungsweise ausdrücklich beauftragte Betreiber verantwortet Host,
 
 Die Überwachung unterscheidet Web-Erreichbarkeit, Bereitschaft der Kernanwendung, Datenbank, Dateispeicher, Jobrückstand, Postfächer, Integrationen, Zertifikate und letzte vollständige Sicherung. Ein KI-Ausfall allein macht die Kernanwendung nicht unbereit. Ein externer Meldeweg ist nötig, damit eine Störung nicht nur über den ebenfalls ausgefallenen Produkt-Mailversand gemeldet werden soll. Konkrete Alarmkanäle und Reaktionszeiten bleiben offen.
 
-Vor Kundeneinsatz benötigt die technische Prüfung negative Rechte-/Anmeldetests, Sitzungs- und API-Schutz, Upload-/Rich-Text-Prüfung, Schutz vor unzulässigen ausgehenden Zugriffen, Geheimnisbehandlung und nachvollziehbare Build-Abhängigkeiten. Vorgeschlagen sind reproduzierbare Images, Komponentenverzeichnis, Prüfung bekannter Schwachstellen und verifizierbare Herkunft der Releases. Verbindliche Freigabeschwellen und der technische Reviewer werden unter OPEN-017 beschlossen. Fachliche Abnahme und ein erfolgreicher Repository-Check ersetzen diese Prüfung nicht.
+Vor Kundeneinsatz benötigt die technische Prüfung negative Rechte-/Anmeldetests, Sitzungs- und API-Schutz, Upload-/Rich-Text-Prüfung, Schutz vor unzulässigen ausgehenden Zugriffen, Geheimnisbehandlung und nachvollziehbare Build-Abhängigkeiten. Vorgeschlagen sind reproduzierbare Images, Komponentenverzeichnis, Prüfung bekannter Schwachstellen und verifizierbare Herkunft der Releases. DEC-040 bestätigt zunächst gegenseitige KI-Reviews; konkrete Zuordnung und verbindliche Freigabeschwellen bleiben unter OPEN-017 offen. Zusätzliche menschliche Prüfung ist noch nicht festgelegt. Fachliche Abnahme und ein erfolgreicher Repository-Check ersetzen diese Prüfung nicht.
 
 ## Fachliche und betriebliche Prüffälle
 
