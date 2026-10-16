@@ -245,3 +245,15 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 ## Neue Aufgaben und Übergaben
 
 Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, verantwortliche Sitzung oder unbesetzt, Aktualisierungsdatum, REQ-Bezug, Abhängigkeiten, Arbeitsstand oder Branch, Umfang, Abnahmekriterien und nächster Schritt. Bei Blockaden Ursache und benötigte Entscheidung ergänzen. Statusänderungen dürfen keine ausgeführten Prüfungen oder Freigaben erfinden.
+
+## TASK-014 Regressionstest von freien Aufgaben entkoppeln
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-contract-fix-01 · **Aktualisiert:** 2026-10-16
+
+**Bezug:** REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** TASK-013; Fehler durch Reservierung von TASK-012 sichtbar. **Arbeitsstand:** geplanter Branch task/task-014-codex-contract-fix; separates Arbeitsverzeichnis nach integrierter Reservierung.
+
+**Umfang:** Vorhandenen Test test_active_task_requires_owner unabhängig vom aktuellen Aufgabenbestand machen. Produktcode und Validatorregeln bleiben außerhalb des Umfangs.
+
+**Abnahmekriterien:** Test prüft eine aktive Aufgabe ohne Besitzer auch dann, wenn keine freie Aufgabe mehr existiert. Alle vorhandenen Tests bestehen; der negative Nachweis bleibt wirksam. Keine Pflichtprüfung wird deaktiviert.
+
+**Nächster Schritt:** Koordinierende Sitzung integriert diese getrennte Reservierung; danach synthetische Testfixture einsetzen und den bisher fehlschlagenden Reservierungsstand erneut prüfen. Fachliche Abnahme bleibt offen.
