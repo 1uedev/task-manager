@@ -311,3 +311,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Technische Primärquellen zu TypeScript, Spring Modulith, OpenAPI und HTTP geprüft. Die 16 Produktfälle sind erst beschrieben, nicht ausgeführt. Holgers fachliche Abnahme bleibt ausstehend.
 
 **Nächster Schritt:** Holger entscheidet über TypeScript, modularen Monolithen und HTTP/JSON/OpenAPI unter OPEN-001, OPEN-002 und OPEN-013. Detailverträge einschließlich Authentifizierung, Versionen, Wiederholungsfenster und Listengrenzen anschließend gezielt prüfen. Eine gesonderte Implementierungsfreigabe bleibt erforderlich.
+
+## TASK-017 Bestätigte Frontend-, Modul- und API-Auswahl eintragen
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-architecture-decisions-01 · **Aktualisiert:** 2026-10-16
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-012, TASK-016 und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-017-codex-architecture-decisions; eigenes Arbeitsverzeichnis nach Reservierung.
+
+**Umfang:** TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI als bestätigte Grundentscheidungen erfassen; Anforderungen, Entwürfe, offene Fragen und KI-Einstiegsregeln konsistent nachführen.
+
+**Abnahmekriterien:** Drei neue DEC-IDs erfassen ausschließlich die ausgewählten Grundentscheidungen. Sprach-/Werkzeugversionen, konkrete Modul-/Transaktionsverträge, Authentifizierung, Laufzeiten und weitere Detailregeln bleiben offen. Keine Gesamtfreigabe, Anwendung oder Implementierungsbeauftragung ableiten. Historische Prüfstände erhalten.
+
+**Nächster Schritt:** Reservierung integrieren, Entscheidungen im separaten Worktree eintragen und auf widersprüchliche beziehungsweise zu weit gehende Bestätigungen prüfen.
