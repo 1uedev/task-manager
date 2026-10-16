@@ -73,6 +73,8 @@ DEC-038 konkretisiert das Sicherungsziel. Der [Betriebsentwurf](docs/OPERATIONS.
 
 ## Offene Entscheidungen
 
+Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
+
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 
 ### OPEN-001 Backend und Entwicklungswerkzeuge

@@ -6,7 +6,7 @@ Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). S
 
 ## Phase 0 Anforderungen und Architektur
 
-**Aktueller Stand:** erste Dokumentfassung zur Prüfung vorhanden; GitHub-Arbeitsumgebung beauftragt, Produktimplementierung nicht autorisiert.
+**Aktueller Stand:** Fachentwürfe, vollständige Bereichsinventur und Review-Vorschlag liegen zur Prüfung vor; die [Entscheidungsübersicht](docs/ARCHITECTURE_READINESS.md) bündelt die Freigabepunkte. GitHub-Arbeitsumgebung ist eingerichtet. Architekturentscheidung, fachliche Gesamtabnahme und Produktimplementierung sind noch offen.
 
 **Ergebnis:** abgestimmte Anforderungen, fachliche Abnahmeszenarien, priorisiertes Funktionsinventar, Modul- und Datenkonzept, Rechtekonzept, Betriebsrahmen und Arbeitsverfahren für mehrere KIs.
 

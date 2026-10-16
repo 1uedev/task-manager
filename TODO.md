@@ -212,15 +212,19 @@ Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung 
 
 **GitHub:** [Issue #12](https://github.com/1uedev/task-manager/issues/12)
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261016-readiness-01 · **Aktualisiert:** 2026-10-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261016-readiness-01 · **Aktualisiert:** 2026-10-16
 
-**Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** geplanter Branch task/task-012-codex-readiness; separates Arbeitsverzeichnis nach integrierter Reservierung.
+**Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** task/task-012-codex-readiness; zentrale Entscheidungsvorlage vorhanden, Architekturfreigabe weiterhin offen.
 
 **Umfang:** Entscheidungen, Anforderungskatalog, Abnahmeszenarien und Roadmap konsistent zusammenführen.
 
 **Abnahmekriterien:** Kritische Architekturfragen sind entschieden. Restfragen haben Zuständigkeit und Fälligkeit. Der fachlich freigegebene Umfang ist sichtbar; keine Implementierung wird automatisch ausgelöst.
 
-**Nächster Schritt:** Koordinierende Sitzung integriert die freie Reservierung. Danach Entscheidungsvorlage mit Zuständigkeiten, Fälligkeiten und Freigabegrenzen erstellen; offene Architekturentscheidungen nicht als getroffen darstellen.
+**Ergebnis:** [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) mit bestätigtem Kern, allen 21 offenen Entscheidungsbereichen, Zuständigkeiten/Fälligkeiten, Prüfungspaketen und Nachweisübersicht. Sie verknüpft sämtliche Fachentwürfe. Kritische Entscheidungen und fachliche Abnahme stehen weiterhin aus; die Abnahmekriterien dieser Aufgabe sind daher noch nicht vollständig erfüllt. Keine Programmierung ausgelöst.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Alle 21 OPEN-IDs in der Entscheidungstabelle erfasst; 86 Anforderungen im Inventar zugeordnet, 31 V-Anforderungen dort priorisiert. Bestätigte DEC-001 bis DEC-038 bleiben unverändert. Nur vorhandene Dokument-, Rechen- und Git-Beispielnachweise angeführt; keine Produktmessung oder unabhängige Abnahme behauptet.
+
+**Nächster Schritt:** Holger entscheidet zunächst Backend, technische Review-Verantwortung und spätere Prioritäten. Danach fällige Rechte-/API-/Betriebs-/KI-Details paketweise prüfen und jede ausdrückliche Entscheidung mit eigener DEC-ID integrieren. Erst nach den erforderlichen Entscheidungen einen gesonderten Implementierungsauftrag abgrenzen.
 
 ## TASK-013 GitHub Arbeitsumgebung einrichten
 
@@ -260,4 +264,6 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Zusätzlich eine temporäre Repository-Kopie ohne irgendeine OFFEN-Aufgabe validiert und alle elf Tests dort erfolgreich ausgeführt. Der vorherige Fehlschlag der TASK-012-Reservierung ist damit lokal reproduzierbar behoben; deren GitHub-Prüfung muss nach Integration erneut laufen.
 
-**Nächster Schritt:** Fix integrieren, offene Reservierung aus PR #37 auf aktuellen main bringen und Pflichtprüfungen erneut ausführen. Technisches Ergebnis bleibt bis zur Abnahme hier nachvollziehbar; keine Produktimplementierung.
+**Nachtrag am 2026-10-16:** Fix über PR #39 integriert; Reservierung PR #37 auf aktuellen main aktualisiert, alle elf Tests und GitHub-Pflichtprüfung erfolgreich, anschließend regulär integriert. Keine Schutzregel umgangen.
+
+**Nächster Schritt:** Technisches Ergebnis und Prüfnachweise durch Holger prüfen lassen; bis zur Abnahme bleibt die Aufgabe hier nachvollziehbar. Keine Produktimplementierung.

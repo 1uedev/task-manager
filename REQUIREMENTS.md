@@ -612,4 +612,4 @@ Diese Szenarien verbinden mehrere Anforderungen. Sie sind Entwürfe für die sp�
 
 Die maßgeblichen offenen Fragen stehen in DECISIONS.md unter OPEN-001 bis OPEN-021. Vorrang haben Backend und Modulstruktur, Berechtigungsmodell, SLA-Regeln, KI-Anbieterreihenfolge und Datenfreigaben sowie Betriebs- und Leistungsziele. Bereits bestätigte Vorgaben werden dabei nicht erneut zur Disposition gestellt.
 
-Die erste fachliche Prüfung soll insbesondere die als V gekennzeichneten Ergänzungen und die vorgeschlagenen Abnahmekriterien beurteilen. Bis dahin bleiben diese Teile Entwürfe. Eine Freigabe dieser Spezifikation ist keine automatische Freigabe zur Programmierung.
+Die [Entscheidungsübersicht](docs/ARCHITECTURE_READINESS.md) bündelt den aktuellen Prüfstand mit Zuständigkeiten und Fälligkeiten. Die fachliche Prüfung soll insbesondere die als V gekennzeichneten Ergänzungen und die vorgeschlagenen Abnahmekriterien beurteilen. Bis dahin bleiben diese Teile Entwürfe. Eine Freigabe dieser Spezifikation ist keine automatische Freigabe zur Programmierung.
