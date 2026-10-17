@@ -340,7 +340,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-018 Sitzungsfristen, V1-Tags und Suche spezifizieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-tags-search-01 · **Aktualisiert:** 2026-10-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261017-tags-search-01 · **Aktualisiert:** 2026-10-17
 
 **Bezug:** REQ-AUTH-001, REQ-AUTH-005, REQ-ORG-003, REQ-TKT-004, REQ-TAG-001, REQ-SRCH-001, REQ-PERF-002, REQ-PERF-003, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-016 und Holgers Ergänzungen vom 17. Oktober 2026. **Arbeitsstand:** task/task-018-codex-tags-search; Entwurf im separaten Arbeitsverzeichnis nach Reservierung #47.
 
@@ -348,4 +348,10 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Abnahmekriterien:** Bestätigte Kernvorgaben erhalten stabile REQ-/DEC-IDs; Detailvorschläge und offene Antworten bleiben getrennt. Tags, Suche und Sitzungsablauf berücksichtigen API, Portal, Rechte, Konflikte und messbare spätere Prüffälle. Keine unbelegte Leistungszusage oder Jira-Funktionsgleichheit. Der interne Kommunikationsvorschlag widerspricht nicht DEC-043/DEC-044.
 
-**Nächster Schritt:** Reservierung integrieren; danach Fach- und Architekturentwürfe im eigenen Worktree ergänzen, getrennte KI-Gegenprüfung und Repository-Prüfungen durchführen.
+**Ergebnis:** REQ-AUTH-005, REQ-TAG-001 und REQ-SRCH-001 sowie DEC-045 bis DEC-047 erfassen die neuen V1-Kernvorgaben. Anforderungen Version 0.12, Roadmap, Funktionsinventar, Architektur-/Betriebsentwurf und KI-Einstieg sind nachgeführt. PERMISSIONS.md beschreibt konfigurierbare Sitzungsfristen mit acht späteren Prüffällen; TAGS_SEARCH.md beschreibt Katalogpflege, Massenaktionen, Sichtgrenzen, PostgreSQL-Suchvorschlag, Lastprofil und 17 spätere Prüffälle. Direkte Java-Modulaufrufe im selben Prozess sind empfohlen, REST bleibt an Frontend-/Integrationsgrenzen bestätigt; gRPC ist keine neue Pflicht. Detailwerte und zusätzliche Suchbereiche bleiben Vorschläge.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 14 geänderten Dateien in c556ee17db8d5d55fb4080ac428ae108ad427f29 gegenüber c8b7d188562cddab0f202a603f2677d2004cd19a. Zwei Befunde: Namenskonflikte könnten verborgene Tags verraten; der ältere Rechtealgorithmus verlangte auch für angenommene Hintergrundaufträge eine aktive Browsersitzung. Korrektur 422025389caaa5183f1757277325a3ce49534998 bindet Namenseindeutigkeit an die Entdeckungsgrenze und trennt interaktive, Integrations- und Auftragskontexte. Die gezielte Nachprüfung beider Korrekturen fand keine weiteren konkreten Widersprüche. Dieser nachträgliche Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review oder vollständiger Produkt-/Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: 89 Anforderungen, davon 59 B und 30 V; alle früheren 86 REQ-IDs und deren Status erhalten. Genau drei neue DEC-IDs, alle 44 früheren DEC-Zeilen unverändert; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungs-, Last- oder Sicherheitstests; die 25 beschriebenen neuen Prüffälle sind nicht ausgeführt.
+
+**Nächster Schritt:** Holger entscheidet Fristart (seit Anmeldung/Inaktivität/beide), Tag-Erstellrechte und weitere gemeinsame Suchbereiche. Standard-/Grenzwerte, Katalogdetails und Messziele danach konkret abnehmen. Die Kernvorgaben sind aufgenommen; diese Übergabe nimmt weder sämtliche Detailvorschläge noch die Architektur insgesamt ab. Produktimplementierung bleibt gesondert zu beauftragen.
