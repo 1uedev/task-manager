@@ -375,3 +375,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 **Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs samt Status erhalten (59 B/30 V), genau drei DEC-IDs ergänzt; alle 47 vorherigen DEC-Zeilen unverändert. 21 OPEN-IDs und DONE.md unverändert. Acht Sitzungs- und 20 Tag-/Suchfälle sind beschrieben, nicht als Anwendungstests ausgeführt; keine Leistungs- oder Sicherheitsmessungen.
 
 **Nächster Schritt:** Holger prüft die korrekte Übernahme. Danach verbleibende Fristwerte/Änderungsregeln, konkrete Katalog-/Vergaberegeln, Suchfelder/-filter, Dateinamen/Metadaten und Messziele entscheiden. Die drei beantworteten Auswahlfragen werden nicht erneut geöffnet; weitere Abnahmen und ein gesonderter Implementierungsauftrag bleiben ausstehend.
+
+## TASK-020 Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-start-plan-01 · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-PROD-002, REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-AUTH-001, REQ-AUTH-005, REQ-ACL-001, REQ-ACL-003, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-012, TASK-016, TASK-018 und TASK-019. **Arbeitsstand:** geplanter Branch task/task-020-codex-start-plan; eigenes Arbeitsverzeichnis nach Reservierung.
+
+**Umfang:** Bestehende Entwürfe zu einer kompakten Entscheidungsvorlage mit technischen Empfehlungen, offenen Fachfragen, erstem durchgängigen Entwicklungsablauf und kleinen KI-Arbeitspaketen mit Schnittstellen, Abhängigkeiten und Prüfungen zusammenführen. Werkzeugempfehlungen aus Primärquellen prüfen. Künftige Aufgaben ausschließlich zentral in TODO.md vormerken.
+
+**Abnahmekriterien:** Erster Abschnitt ist vom vollständigen V1-Umfang getrennt; keine bestätigte V1-Funktion wird gestrichen. Bestätigte Vorgaben, Empfehlungen und unbeantwortete Fragen sind unterscheidbar. Künftige Aufgaben sind bis zum gesonderten Implementierungsauftrag gesperrt, ohne vorgetäuschte Besitzer oder fertiggestellte Funktionen. Kritische Übergaben und Review-Nachweise sind benannt. Kein Anwendungscode, Gerüst, Datenbank oder Container wird erstellt.
+
+**Nächster Schritt:** Reservierung integrieren; dann vorhandene Verträge bündeln, Fachantworten berücksichtigen, Arbeitspakete planen und unabhängig gegenprüfen.
