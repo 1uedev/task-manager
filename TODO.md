@@ -337,3 +337,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 **Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: alle 86 REQ-IDs erhalten, nur REQ-ARCH-002 wechselt V zu B; 56 B und 30 V. Alle früheren DEC-Einträge unverändert, genau DEC-042 bis DEC-044 ergänzt; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungstests.
 
 **Nächster Schritt:** Holger prüft die korrekte Übernahme. Danach verbleibende technische Detailverträge und Werkzeugversionen sowie die fälligen Rechte-/Betriebs-/KI-Fragen konkret entscheiden. Zusätzliche fachliche Abnahmen und ein gesonderter Implementierungsauftrag bleiben erforderlich.
+
+## TASK-018 Sitzungsfristen, V1-Tags und Suche spezifizieren
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-tags-search-01 · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-AUTH-001, REQ-ORG-003, REQ-TKT-004, REQ-PERF-002, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-016 und Holgers Ergänzungen vom 17. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-018-codex-tags-search; eigenes Arbeitsverzeichnis nach Reservierung.
+
+**Umfang:** Konfigurierbare automatische Abmeldung und umfangreiches Tag-System für Tickets/Tasks und Projekte sowie performante Suche für V1 in die Anforderungen aufnehmen. Sitzungssemantik, Tag-Verwaltung und Suchumfang gezielt klären. Direkte Modulaufrufe, REST und gRPC für den bestätigten modularen Monolithen einordnen. Keine Produktimplementierung.
+
+**Abnahmekriterien:** Bestätigte Kernvorgaben erhalten stabile REQ-/DEC-IDs; Detailvorschläge und offene Antworten bleiben getrennt. Tags, Suche und Sitzungsablauf berücksichtigen API, Portal, Rechte, Konflikte und messbare spätere Prüffälle. Keine unbelegte Leistungszusage oder Jira-Funktionsgleichheit. Der interne Kommunikationsvorschlag widerspricht nicht DEC-043/DEC-044.
+
+**Nächster Schritt:** Reservierung integrieren; danach Fach- und Architekturentwürfe im eigenen Worktree ergänzen, getrennte KI-Gegenprüfung und Repository-Prüfungen durchführen.
