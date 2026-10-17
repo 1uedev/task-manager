@@ -89,7 +89,7 @@ components:
       properties:
         id: {type: string, format: uuid}
         label: {type: string}
-        version: {type: string, description: Opaque business version, not an ETag}
+        version: {type: string, description: "Opaque business version, not an ETag"}
         note: {type: [string, 'null']}
     Problem:
       type: object

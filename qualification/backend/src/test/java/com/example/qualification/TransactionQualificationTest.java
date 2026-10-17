@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Testcontainers(disabledWithoutDocker = false)
 @SpringBootTest(classes = ProbeApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class TransactionQualificationTest {
-    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18.6");
+    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336");
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);

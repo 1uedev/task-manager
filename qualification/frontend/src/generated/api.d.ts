@@ -46,7 +46,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             label: string;
-            /** @description Opaque business version */
+            /** @description Opaque business version, not an ETag */
             version: string;
             note?: string | null;
         };
