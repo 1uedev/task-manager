@@ -360,7 +360,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-019 Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-v1-decisions-01 · **Aktualisiert:** 2026-10-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261017-v1-decisions-01 · **Aktualisiert:** 2026-10-17
 
 **Bezug:** REQ-AUTH-005, REQ-TAG-001, REQ-SRCH-001, REQ-DOC-004, REQ-PERF-003. **Abhängigkeiten:** TASK-004, TASK-007, TASK-010, TASK-012, TASK-018 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** task/task-019-codex-v1-decisions; Übernahme im separaten Arbeitsverzeichnis nach Reservierung #49.
 
@@ -368,4 +368,10 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Abnahmekriterien:** Genau diese Auswahl als drei neue Entscheidungen erfassen; frühere Entscheidungen und Prüfberichte erhalten. Keine Inaktivitätsfrist in den V1-Vertrag übernehmen. Externe Tag-Erstellung erweitert nicht automatisch Katalogverwaltung, Fachrechte oder Sichtbarkeit. Dateiinhalte bleiben außerhalb V1; Dateinamen-/Metadatenumfang und übrige Detailvorschläge sind nicht pauschal freigegeben. Keine Umsetzung oder fachliche Gesamtabnahme ableiten.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Auswahl im eigenen Arbeitsverzeichnis übernehmen, gegenseitiges KI-Review und Repository-Prüfungen durchführen.
+**Ergebnis:** DEC-048 bis DEC-050 erfassen ausschließlich die drei bestätigten Antworten. REQUIREMENTS.md steht auf Version 0.13. PERMISSIONS.md verwendet feste Dauer seit Anmeldung ohne Inaktivitätsfrist; TAGS_SEARCH.md berücksichtigt berechtigte externe Ersteller und gemeinsame Suche einschließlich Wiki/Anforderungen bei späteren Dateiinhalten. Sitzungsfälle angepasst, drei weitere Tag-/Suchfälle beschrieben. Inventar, Roadmap, Messprofil, Wiki-Vertrag, offene Fragen und KI-Einstieg sind konsistent nachgeführt; übrige Detailvorschläge bleiben offen.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 13 geänderten Planungsdateien in 6d27a003774a93fadc7a48af52b31e132b0ff1ff gegenüber 1d3f7722d19a7c4dce44e04b915284083a5cf574, einschließlich umgebender Sitzungs-, Katalog-, Rechte- und Suchregeln. Keine konkreten Befunde: Auswahl korrekt übertragen, keine weitere Inaktivitätsfrist, keine automatische Rechteausweitung durch externe Tag-Erstellung, Wiki/Anforderungen in Suchumfang und Messprofil enthalten. Dieser anschließend ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review oder Produktnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs samt Status erhalten (59 B/30 V), genau drei DEC-IDs ergänzt; alle 47 vorherigen DEC-Zeilen unverändert. 21 OPEN-IDs und DONE.md unverändert. Acht Sitzungs- und 20 Tag-/Suchfälle sind beschrieben, nicht als Anwendungstests ausgeführt; keine Leistungs- oder Sicherheitsmessungen.
+
+**Nächster Schritt:** Holger prüft die korrekte Übernahme. Danach verbleibende Fristwerte/Änderungsregeln, konkrete Katalog-/Vergaberegeln, Suchfelder/-filter, Dateinamen/Metadaten und Messziele entscheiden. Die drei beantworteten Auswahlfragen werden nicht erneut geöffnet; weitere Abnahmen und ein gesonderter Implementierungsauftrag bleiben ausstehend.
