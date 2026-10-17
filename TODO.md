@@ -378,7 +378,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## TASK-020 Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-start-plan-01 · **Aktualisiert:** 2026-10-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261017-start-plan-01 · **Aktualisiert:** 2026-10-17
 
 **Bezug:** REQ-PROD-002, REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-AUTH-001, REQ-AUTH-005, REQ-ACL-001, REQ-ACL-003, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-012, TASK-016, TASK-018 und TASK-019. **Arbeitsstand:** task/task-020-codex-start-plan; eigenes Arbeitsverzeichnis nach integrierter Reservierung #51.
 
@@ -386,7 +386,13 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Abnahmekriterien:** Erster Abschnitt ist vom vollständigen V1-Umfang getrennt; keine bestätigte V1-Funktion wird gestrichen. Bestätigte Vorgaben, Empfehlungen und unbeantwortete Fragen sind unterscheidbar. Künftige Aufgaben sind bis zum gesonderten Implementierungsauftrag gesperrt, ohne vorgetäuschte Besitzer oder fertiggestellte Funktionen. Kritische Übergaben und Review-Nachweise sind benannt. Kein Anwendungscode, Gerüst, Datenbank oder Container wird erstellt.
 
-**Nächster Schritt:** Entscheidungsvorlage und gesperrte Folgeaufgaben prüfen; unabhängige KI-Gegenprüfung durchführen. Offene Auswahlfragen bleiben ohne Antwort Vorschläge.
+**Ergebnis:** [DEVELOPMENT_START.md](docs/DEVELOPMENT_START.md) bündelt einen ersten internen Ablauf, technische Werkzeug-/Vertragsempfehlungen, drei offene Fachfragen, Abhängigkeiten und zehn geplante Nachweise. TASK-021 bis TASK-031 sind zentral als BLOCKIERT und unbesetzt vorgemerkt, mit Arbeitsgrenzen, Übergaben und Review-Kriterien. Einstieg, offene Entscheidungen, Roadmap und KI-Regeln verweisen darauf. Keine bestätigte V1-Funktion verschoben, keine neue Entscheidung vorweggenommen, keine Anwendung erstellt.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle acht geänderten Planungsdateien in 9cf25809fee3869c7f4a7c605ce8834b86d117d5 gegenüber 40e3d8f1eddce9ccf1b94a3bcee36098074daa82 einschließlich Folgeaufgaben und umgebender Fachverträge. Keine konkreten Befunde: V1-Umfang erhalten, Aufgabenabhängigkeiten zyklenfrei, Konten-/SMTP-/Bootstrap-Fragen sowie feste Frist, Rechte, Transaktionen und Suchgeheimhaltung konsistent. Dieser anschließend ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review, Anwendungstest oder Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 Anforderungen samt Status unverändert (59 B/30 V), alle 50 bisherigen DEC-Zeilen unverändert; 21 OPEN-IDs erhalten. TASK-001 bis TASK-019 und DONE.md unverändert; elf Folgeaufgaben blockiert/unbesetzt, ausschließlich acht Markdown-Dateien geändert. Werkzeugempfehlungen anhand offizieller Primärquellen eingeordnet, nicht praktisch qualifiziert. Die zehn Start-Szenarien sind nur geplant.
+
+**Nächster Schritt:** Holger prüft Vorlage und offenen Fragen. Ein nächster begrenzter Implementierungsauftrag könnte ausdrücklich TASK-021 zur Werkzeug-/Vertragsqualifikation beauftragen; weitere Aufgaben benötigen ihren freigegebenen Umfang und akzeptierte Voraussetzungen. Antworten werden gesondert als Entscheidungen eingetragen. Fachliche Abnahme dieses Plans bleibt ausstehend.
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
