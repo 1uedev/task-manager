@@ -14,6 +14,12 @@ Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). S
 
 **Bezug:** REQ-PROD-003, REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DEV-001 bis REQ-DEV-005.
 
+## Vorgeschlagener erster Entwicklungsabschnitt
+
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) empfiehlt nach gesonderter Beauftragung zunächst einen internen Ablauf: lokale Anmeldung, Projekte, Tickets, Tags und Suche. TASK-021 bis TASK-031 sind im zentralen TODO ausschließlich gesperrt vorgemerkt. Werkzeugqualifikation und gemeinsame Verträge gehen paralleler Backend-/Frontendarbeit voraus. Der Abschnitt benötigt noch Entscheidungen und ist keine verkaufbare V1.
+
+LDAP, Kundenportal einschließlich externer Tag-Erstellung, Wiki/Anforderungen einschließlich gemeinsamer Suche und sämtliche weiteren unten bestätigten Bereiche bleiben innerhalb V1. Der vorgeschlagene Start verschiebt keine bestätigte Funktion nach V1. Die drei dazu vorgelegten Auswahlfragen und die technischen Empfehlungen sind noch nicht entschieden.
+
 ## Version 1 Erste verkaufbare Version
 
 Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wird nach der Architekturentscheidung festgelegt.

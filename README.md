@@ -8,7 +8,8 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 ## Start here
 
-- Start the next decision round: [architecture readiness, open choices and review evidence](docs/ARCHITECTURE_READINESS.md).
+- Prepare a bounded first development order: [recommendations, open questions and planned AI tasks](docs/DEVELOPMENT_START.md). Application implementation still needs an explicit order.
+- Review the broader decision round: [architecture readiness, open choices and review evidence](docs/ARCHITECTURE_READINESS.md).
 
 - Scope review: [function inventory, V1 additions and later modules](docs/FUNCTION_INVENTORY.md).
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
@@ -63,6 +64,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | ROADMAP.md | Initial release and later work |
 | TODO.md / DONE.md | Central task ledger and accepted history |
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
+| docs/DEVELOPMENT_START.md | Proposed first development slice, version candidates and blocked task dependencies |
 | docs/ARCHITECTURE_READINESS.md | Consolidated decision package and evidence; architecture is not yet approved |
 | docs/DEVELOPMENT_REVIEW.md | Proposed technical review, acceptance boundaries and parallel-work scenarios |
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |

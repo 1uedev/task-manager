@@ -380,10 +380,168 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-start-plan-01 · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-PROD-002, REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-AUTH-001, REQ-AUTH-005, REQ-ACL-001, REQ-ACL-003, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-012, TASK-016, TASK-018 und TASK-019. **Arbeitsstand:** geplanter Branch task/task-020-codex-start-plan; eigenes Arbeitsverzeichnis nach Reservierung.
+**Bezug:** REQ-PROD-002, REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-AUTH-001, REQ-AUTH-005, REQ-ACL-001, REQ-ACL-003, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-012, TASK-016, TASK-018 und TASK-019. **Arbeitsstand:** task/task-020-codex-start-plan; eigenes Arbeitsverzeichnis nach integrierter Reservierung #51.
 
 **Umfang:** Bestehende Entwürfe zu einer kompakten Entscheidungsvorlage mit technischen Empfehlungen, offenen Fachfragen, erstem durchgängigen Entwicklungsablauf und kleinen KI-Arbeitspaketen mit Schnittstellen, Abhängigkeiten und Prüfungen zusammenführen. Werkzeugempfehlungen aus Primärquellen prüfen. Künftige Aufgaben ausschließlich zentral in TODO.md vormerken.
 
 **Abnahmekriterien:** Erster Abschnitt ist vom vollständigen V1-Umfang getrennt; keine bestätigte V1-Funktion wird gestrichen. Bestätigte Vorgaben, Empfehlungen und unbeantwortete Fragen sind unterscheidbar. Künftige Aufgaben sind bis zum gesonderten Implementierungsauftrag gesperrt, ohne vorgetäuschte Besitzer oder fertiggestellte Funktionen. Kritische Übergaben und Review-Nachweise sind benannt. Kein Anwendungscode, Gerüst, Datenbank oder Container wird erstellt.
 
-**Nächster Schritt:** Reservierung integrieren; dann vorhandene Verträge bündeln, Fachantworten berücksichtigen, Arbeitspakete planen und unabhängig gegenprüfen.
+**Nächster Schritt:** Entscheidungsvorlage und gesperrte Folgeaufgaben prüfen; unabhängige KI-Gegenprüfung durchführen. Offene Auswahlfragen bleiben ohne Antwort Vorschläge.
+
+## Vorgemerkte Entwicklung nach gesonderter Beauftragung
+
+Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Kein Besitzer oder Arbeitsbranch ist reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+
+## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-020 sowie ausdrücklich beauftragter Umfang und ausgewählte Kandidaten P1 bis P4. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Exakte Werkzeug-/Bibliotheksversionen, Komponentenlizenzen, Modulordnung, Datenhoheit, Identitäts-/Rechtekontext und API-/Fehler-/Versionsvertrag für den ersten Abschnitt festlegen. Nach gesonderter Beauftragung einen begrenzten Build-/Generator-/Transaktionsnachweis erstellen; keine Fachmodule vorwegnehmen.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: gemeinsame Versionsunterlage, OpenAPI-Vertrag und Konventionen für `backend/`, `frontend/` und Migrationen. Diese Anwendungspfade existieren noch nicht. Übergabe liefert verwendbare Vertragsfassungen für TASK-022 und TASK-023; spätere Änderungen koordiniert.
+
+**Abnahmekriterien:** Java/Boot/PostgreSQL und React/TypeScript/Buildwerkzeuge gemeinsam qualifiziert; Generator verarbeitet Erfolgs-, Fehler- und Konfliktantworten. Modulprüfung, JPA-/JDBC-Transaktion und Rückabwicklung nachgewiesen. Lizenz-/Wartungsinformationen und verbleibende Lücken dokumentiert; keine ungeprüfte Alternativdatenbankzusage. Getrennte KI prüft Verträge und Nachweise.
+
+**Nächster Schritt:** Holger entscheidet Kandidaten und einen begrenzten Auftrag. Danach BLOCKIERT ausdrücklich aufheben und regulär reservieren.
+
+## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Abhängigkeiten:** TASK-021; Ergebnisse für diesen Folgeschritt angenommen und Implementierungsauftrag erteilt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Spring-Boot-Build, leere Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung und erste kontrollierte Migrationen aufbauen. Noch keine Fachfunktion als fertig melden.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: `backend/`-Grundstruktur, zentrale Migrationskonvention und Backend-CI. Gemeinsame Root-Dateien und API-Vertrag nur koordiniert ändern; kein Frontend. Liefert Transaktions-/Repository- und Testbasis an TASK-024/TASK-025.
+
+**Abnahmekriterien:** Sauberer Build, Start/Stopp, leere Datenbankmigration und Wiederanlauf reproduzierbar; fehlende notwendige Konfiguration scheitert nachvollziehbar. Echtes PostgreSQL in Integrationstests, keine Produktions-Schemaautomatik. Getrennte KI prüft insbesondere Migrations- und Modulgrenzen.
+
+**Nächster Schritt:** Vertrags-/Werkzeugergebnis akzeptieren; beauftragten Umfang und Dateiverantwortung vor Reservierung festhalten.
+
+## TASK-023 React-Grundfläche mit Sprachen und API-Anbindung aufbauen
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001. **Abhängigkeiten:** TASK-021; Frontend-/Browservertrag angenommen und Implementierungsauftrag erteilt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** React/TypeScript-Oberfläche, Navigation, DE/EN-Sprachpakete, Farb-/Logo-Grundstruktur und generierten API-Client aufbauen. Zustände für Laden, leere Daten, Fehler, fehlende Rechte und Konflikte vorsehen.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: `frontend/` mit eigener Lockdatei und Frontend-Prüfungen. API-Vertrag wird übernommen, Änderungen werden zu TASK-021 beziehungsweise der Koordination zurückgegeben. Kann nach dessen Annahme parallel zu TASK-022 arbeiten.
+
+**Abnahmekriterien:** Reproduzierbarer Build mit strenger Typprüfung, Sprachumschaltung und Tastaturbedienung geprüft; keine hart verdrahteten Fachtexte oder Sitzungstokens im Lokalspeicher. Testantworten ausdrücklich synthetisch, keine behauptete Backendfunktion. Getrennte KI prüft Client-/Fehlervertrag und UI-Zustände.
+
+**Nächster Schritt:** Sprach-/Browserdetails für den ersten Abschnitt bestätigen; nach Autorisierung reservieren.
+
+## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; Kontolebenszyklus, Fristwerte/-änderungen und beauftragter Umfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Lokale Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer ab erfolgreicher Anmeldung umsetzen. Anmeldeanbieter kapseln. Vor Beginn entscheiden, ob echte Einladungen einschließlich SMTP, Einmaltoken und Rücksetzung bereits dazugehören; andernfalls ausschließlich dokumentierte synthetische Entwicklungskonten für die interne Vorführung.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Identitätsmodul und dessen Migrationen; öffentlicher Identitäts-/Sitzungskontext aus TASK-021. Keine Rechteberechnung im Identitätsadapter. LDAP bleibt V1-Folgearbeit, 2FA spätere Erweiterung. Erstadministrator-/Wiederherstellungsweg vor produktiver Kontoanlage festlegen.
+
+**Abnahmekriterien:** Kein zusätzliches Inaktivitätslimit, keine Fristverlängerung durch Aktivität, Rotation oder Neustart; Ablauf und Deaktivierung serverseitig wirksam. Cookie-/CSRF- und negative Anmeldefälle geprüft. Keine produktiven Standardpasswörter. Getrennte KI prüft Sicherheitsgrenzen; Umfang des Kontenwegs bleibt in Ergebnis und Vorführung sichtbar.
+
+**Nächster Schritt:** Offene Konten-/Fristdetails und ausdrücklich erlaubten Entwicklungsumfang entscheiden; danach reservieren.
+
+## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021, TASK-022; Rechtealgorithmus und Administrationsgrenzen entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Gruppen, Aktions-/Projekt-/Feldregeln, aktuelle Autorisierung und protokollierbare Verwaltungsoperationen implementieren. Bestätigter Vorrang ausdrücklicher Feldverbote; weitere Konfliktregeln nur nach Auswahl.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Berechtigungsmodul und eigene Migrationen. Nutzt vereinbarten Identitätskontext; TASK-024 kann parallel arbeiten. Objekt-/Projektinformationen kommen über Fachverträge, keine fremden Tabellenzugriffe oder Identitätskopien. Administrations-UI folgt TASK-030.
+
+**Abnahmekriterien:** Positive, negative und Mehrgruppenfälle einschließlich Feldverbot, Rechteentzug und konkurrierender Änderung geprüft. Fehlender Kontext verweigert Zugriff; Testdoubles werden im integrierten Betrieb ersetzt. Getrennte KI prüft Rechtealgorithmus, Auditgrenzen und konkurrierenden Entzug.
+
+**Nächster Schritt:** Rechtematrix und gemeinsame Schnittstellen annehmen; Umfang freigeben und anschließend reservieren.
+
+## TASK-026 Projekte und minimale Konfiguration implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025; deren für Projekte benötigte Ergebnisse angenommen, Projektkonfiguration entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Projekte, Mitgliedschaften sowie minimale pro Projekt gepflegte Typ-/Status-/Feldkonfiguration mit Verwaltungs-API umsetzen. Zwei unterschiedliche synthetische Projekte vorbereiten. Keine globale unveränderliche Workflow-Schablone.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Projektmodul und dessen Migrationen. Mitgliedschaft und Regeln werden über vereinbarte Rechteverträge verbunden; keine zweite Benutzerverwaltung. Liefert Projekt-/Konfigurationsversion und Objektkontext an Tickets.
+
+**Abnahmekriterien:** Berechtigter Zugriff und Administration funktionieren; fremde Projekte bleiben über Listen und IDs geschützt. Konfigurationsversionen und ungültige Änderungen werden nach Fachvertrag behandelt. Getrennte KI prüft Datenhoheit, Projektgrenzen und administrativen Rechteentzug.
+
+**Nächster Schritt:** Anmeldung/Rechte und notwendige Projektregeln akzeptieren; ausdrücklich autorisierten Auftrag reservieren.
+
+## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-TKT-001, REQ-TKT-005, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-026 sowie angenommener Ticket-/Konfigurationsvertrag. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Tickets mit Titel, Beschreibung, Typ, Status und Zuständigkeit erstellen, lesen und ändern. Projektkonfiguration, Feldrechte, Änderungshistorie und Versionskonflikte durchsetzen. Tags und Suche folgen über vereinbarte Verträge.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Ticketmodul, API-Operationen und eigene Migrationen. Öffentliche Kontext-/Änderungs- und Projektionsverträge für TASK-028/TASK-029; keine direkten Abfragen anderer Modultabellen.
+
+**Abnahmekriterien:** Erfolgs- und Negativfälle, Feldfilterung, verbotene Übergänge, veraltete Versionen und vollständige Rückabwicklung geprüft. Aktuelle Rechte gelten auch bei konkurrierendem Entzug bis zur Schreibgrenze. Getrennte KI prüft Transaktion, Historie und API-Konfliktantworten.
+
+**Nächster Schritt:** Benötigte Projektergebnisse fachlich/technisch annehmen; nach Beauftragung reservieren.
+
+## TASK-028 Tag-Kern für Tickets und Projekte implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-TKT-004. **Abhängigkeiten:** TASK-027 und TASK-025; konkrete Katalog-, Sichtbarkeits- und Vergaberegeln entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Katalog, Erstell-/Zuordnungsrechte, Tag-Erstellung und Zuordnung zu Tickets sowie Projekten für den internen Ablauf umsetzen. Vertrag für weitere V1-Verwaltungsfunktionen und berechtigte externe Ersteller erhalten.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Tag-Modul, Tag-Zuordnungen und eigene Migrationen. Objektkontext kommt über öffentliche Projekt-/Ticketverträge. Katalog-/Objektsicht und Eindeutigkeit folgen TAGS_SEARCH.md nach Auswahl; keine Rechteausweitung durch Tag-Erstellung.
+
+**Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
+
+**Nächster Schritt:** Katalogregeln und benötigte Ticket-/Rechteergebnisse annehmen; ausdrücklich autorisierten Auftrag reservieren.
+
+## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Abhängigkeiten:** TASK-028; Projektions-/Sichtbarkeitsvertrag und Messziele für den Abschnitt entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Text-/Projekt-/Status-/Tag-Suche für Tickets und Projekte, PostgreSQL-Indizes, Rechtefilterung und konsistente Aktualisierung implementieren. Erweiterungsverträge für Wiki und Anforderungen erhalten; diese bleiben notwendige V1-Folgearbeit.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Suchmodul mit eigenen Projektionstabellen und Indizes. Quellen liefern berechtigungstrennbare Segmente über Verträge; Such-SQL liest keine fremden internen Tabellen. Rechteprüfung vor Ranking, Zählung und Seitenauswahl.
+
+**Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
+
+**Nächster Schritt:** Suchfelder/-filter und messbaren Abschnittsumfang annehmen; nach Beauftragung reservieren.
+
+## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Anmeldung, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Frontend-Fachansichten und Browserprüfungen. Backendänderungsbedarf als koordinierte Vertragskorrektur übergeben; keine unabhängigen API-Sonderwege. Keine echten Kundendaten in Beispielen.
+
+**Abnahmekriterien:** Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
+
+**Nächster Schritt:** Passende Backend-/UI-Ergebnisse und Demoablauf annehmen; nach Beauftragung reservieren.
+
+## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
+
+**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+
+**Umfang:** Reproduzierbares Anwendungsimage mit Oberfläche, PostgreSQL-Anbindung, Startanleitung und synthetischen Demodaten liefern. Durchgängige Funktions-/Rechte-/Konfliktnachweise und begrenzte Suchmessung des tatsächlich vorhandenen Umfangs durchführen.
+
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Container-/Buildintegration, Beispielkonfiguration ohne Geheimnisse, Demonstrations- und Messprotokoll. Runtime-/Secrets-/TLS-/Persistenzgrenzen aus Betriebsvertrag übernehmen. Gemeinsame CI-Änderungen koordiniert integrieren.
+
+**Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
+
+**Nächster Schritt:** Betriebs-/Messprofil und Vorführung freigeben; nach Beauftragung reservieren. Spätere V1-Aufgaben erst anschließend mit unverändertem bestätigtem Umfang konkretisieren.
