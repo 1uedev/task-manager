@@ -551,3 +551,15 @@ Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. 
 **Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
 
 **Nächster Schritt:** Betriebs-/Messprofil und Vorführung freigeben; nach Beauftragung reservieren. Spätere V1-Aufgaben erst anschließend mit unverändertem bestätigtem Umfang konkretisieren.
+
+## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-start-decisions-01 · **Aktualisiert:** 2026-10-17
+
+**Bezug:** REQ-PROD-001, REQ-PROD-002, REQ-AUTH-001, REQ-AUTH-005, REQ-PORTAL-003, REQ-DEV-004. **Abhängigkeiten:** TASK-004, TASK-006, TASK-012, TASK-020 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-032-codex-start-decisions; separates Arbeitsverzeichnis, Sacharbeit erst nach integrierter Reservierung.
+
+**Umfang:** Ersten internen Ablauf mit Anmeldung, Projekten, Tickets, Tags und Suche bei LDAP/Portal anschließend innerhalb V1, 24 Stunden feste Standardsitzungsdauer und administrative Kontoanlage mit Einmalpasswort und Pflichtwechsel bei erster Anmeldung als bestätigte Auswahl erfassen. Betroffene Anforderungen, Entwürfe, offene Fragen und gesperrte Folgeaufgaben konsistent nachführen.
+
+**Abnahmekriterien:** Genau die drei Antworten als neue Entscheidungen aufnehmen; keine technische Umsetzung, Gesamtfreigabe oder weitere Detailentscheidung ableiten. Einmalpasswort und erzwungener Wechsel gelten auch für lokale Portalzugänge; sichere Ausgestaltung und Wiederherstellung bleiben ausdrücklich zur Konkretisierung. Frühere Entscheidungseinträge und Prüfberichte erhalten. TASK-021 bis TASK-031 bleiben blockiert/unbesetzt. Keine Anwendung erstellen.
+
+**Nächster Schritt:** Reservierung integrieren; danach bestätigte Auswahl nachführen und unabhängig gegenprüfen.
