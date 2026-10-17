@@ -10,6 +10,8 @@ The product requirements remain in German. Preserve their meaning, stable IDs an
 
 DEC-045 through DEC-047 add configurable automatic logout, an extensive tag system for tickets/tasks and projects, and performant search to V1. DEC-048 confirms only a fixed duration since login, without an inactivity timeout. DEC-049 allows tag creation by authorized external portal users as well as authorized internal users; this does not grant general catalog or object rights. DEC-050 includes tickets/tasks, projects, wiki and requirements in unified V1 search, with file-content search later. Defaults, precise tag governance, file-name/metadata scope and latency targets remain proposals. Internal direct Java calls are the architecture recommendation for same-process modules; DEC-044 does not require REST between every module, and gRPC is not selected.
 
+TASK-020 proposes a bounded first development slice in docs/DEVELOPMENT_START.md. TASK-021 through TASK-031 are BLOCKIERT and unassigned in TODO.md: future work, not implementation permission. Do not claim or start them until the applicable user order and prerequisite decisions are recorded. A limited internal demo does not remove LDAP, portal, wiki/requirements search or any other confirmed V1 scope.
+
 ## Start every session
 
 1. Read README.md, TODO.md, DONE.md and docs/AI_WORKFLOW.md.

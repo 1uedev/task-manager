@@ -115,6 +115,8 @@ Die drei Antworten konkretisieren den Entwurf aus TASK-018. Frühere Entscheidun
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
 
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre Werkzeugkandidaten, drei Fachfragen und TASK-021 bis TASK-031 schließen keine OPEN-Frage und erzeugen ohne ausdrückliche Antwort keine neue DEC-Entscheidung.
+
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 
 ### OPEN-001 Backend und Entwicklungswerkzeuge

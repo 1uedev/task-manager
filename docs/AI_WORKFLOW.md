@@ -19,6 +19,10 @@ Holger coordinates work unless he explicitly designates a coordinating session. 
 
 A competing claim must not overwrite an owner. If another claim wins, abandon or revise your reservation. A CI pass is not a grant of ownership. Claims are serialized through the coordinator; Markdown and GitHub issue comments are not atomic locks.
 
+## Planned development tasks
+
+[DEVELOPMENT_START.md](DEVELOPMENT_START.md) describes the proposed first slice; TODO.md alone records TASK-021 through TASK-031 and their state. They are blocked, unassigned and not implementation orders. After explicit authorization and acceptance of the required choices/results, the coordinator records which blocker is resolved and which tasks may become available. Only then use the ordinary claim procedure. The planned parallel pairs share versioned contracts; serialize changes to shared API files, root build files and migration identifiers. A merged dependency does not by itself mean its contracts or functional behavior were accepted.
+
 ## Separate worktrees
 
 One checkout must not be edited by two active agents. From an existing clone, a new planning worktree can be created after the claim is merged:
