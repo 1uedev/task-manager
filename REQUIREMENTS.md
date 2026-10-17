@@ -4,7 +4,7 @@ Version 0.14 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
-Fachliche Abnahme: Holger Gerlach. Entwicklung später überwiegend durch Codex und Claude Code. Seit dem 13. Oktober 2026 sind zusätzlich die Einrichtung des GitHub-Repositories und der gemeinsamen KI-Arbeitsumgebung beauftragt. Die Produktimplementierung ist weiterhin nicht beauftragt.
+Fachliche Abnahme: Holger Gerlach. Entwicklung später überwiegend durch Codex und Claude Code. Seit dem 13. Oktober 2026 sind zusätzlich die Einrichtung des GitHub-Repositories und der gemeinsamen KI-Arbeitsumgebung beauftragt. Die Produktimplementierung ist weiterhin nicht beauftragt. DEC-054 erlaubt inzwischen den begrenzten synthetischen Werkzeug-/Vertragsnachweis in TASK-021; daraus folgt keine Freigabe der Fachimplementierung.
 
 ## Verbindlichkeit und Leseschlüssel
 

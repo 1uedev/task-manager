@@ -1,0 +1,63 @@
+name: Technical qualification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.0'
+      - name: Record tool versions
+        run: |
+          java -version
+          node --version
+          npm --version
+          test "$(node --version)" = "v24.22.0"
+          test "$(npm --version)" = "11.19.1"
+          docker version
+      - name: Real PostgreSQL transactions, module checks and Java wire fixtures
+        working-directory: qualification/backend
+        run: |
+          ./mvnw --batch-mode --no-transfer-progress verify
+          ./mvnw --batch-mode --no-transfer-progress dependency:tree -DoutputFile=target/dependency-tree.txt
+      - name: Locked frontend dependencies
+        working-directory: qualification/frontend
+        run: npm ci --ignore-scripts
+      - name: Generate types, check errors, test Java fixtures and build React
+        working-directory: qualification/frontend
+        run: |
+          npm run verify
+          git diff --exit-code -- src/generated/api.d.ts
+      - name: Preserve synthetic qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualification-evidence
+          retention-days: 7
+          path: |
+            qualification/backend/target/surefire-reports/
+            qualification/backend/target/contract-fixtures/
+            qualification/backend/target/dependency-tree.txt
+            qualification/frontend/dist/

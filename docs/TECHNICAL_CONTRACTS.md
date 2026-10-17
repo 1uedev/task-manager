@@ -2,7 +2,7 @@
 
 Stand 17. Oktober 2026 · TASK-016 · Ergänzung zu TASK-003, zur Prüfung
 
-Dieser Entwurf konkretisiert [ARCHITECTURE.md](ARCHITECTURE.md) für REQ-ARCH-001, REQ-ARCH-002, REQ-API-001 und REQ-API-002. Er soll verhindern, dass verschiedene KI-Sitzungen unterschiedliche Daten-, Rechte- oder Fehlerverträge implementieren. Java/Spring Boot, React, PostgreSQL und Docker sind bestätigt. DEC-042 bis DEC-044 bestätigen zusätzlich TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. **Die darüber hinaus beschriebenen technischen Ausgestaltungen bleiben Vorschläge.** Es wurden keine Anwendung, Bibliothekskonfiguration, OpenAPI-Datei oder Container erstellt.
+Dieser Entwurf konkretisiert [ARCHITECTURE.md](ARCHITECTURE.md) für REQ-ARCH-001, REQ-ARCH-002, REQ-API-001 und REQ-API-002. Er soll verhindern, dass verschiedene KI-Sitzungen unterschiedliche Daten-, Rechte- oder Fehlerverträge implementieren. Java/Spring Boot, React, PostgreSQL und Docker sind bestätigt. DEC-042 bis DEC-044 bestätigen zusätzlich TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. **Die darüber hinaus beschriebenen technischen Ausgestaltungen bleiben Vorschläge.** Eine Produktanwendung und produktive API wurden nicht erstellt. DEC-054 beauftragt inzwischen einen [isolierten technischen Versuch](TECHNICAL_BASELINE.md) mit synthetischem OpenAPI-Vertrag und Testdatenbank; seine Ergebnisse nehmen die folgenden Fachverträge nicht pauschal ab.
 
 ## Drei bestätigte Grundentscheidungen
 

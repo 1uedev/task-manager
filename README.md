@@ -4,11 +4,12 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 [![Repository checks](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml/badge.svg)](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml)
 
-**Current phase: requirements, architecture and collaboration setup. Application implementation has not started.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
+**Current phase: architecture and isolated technical qualification (TASK-021). Product application implementation has not started.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
 
 ## Start here
 
-- Prepare a bounded first development order: [recommendations, open questions and planned AI tasks](docs/DEVELOPMENT_START.md). Application implementation still needs an explicit order.
+- Technical qualification: [pinned candidates, common contracts and evidence](docs/TECHNICAL_BASELINE.md), [reproducible commands](qualification/README.md). DEC-054 authorizes this isolated proof only.
+- Prepare a bounded first product development order: [recommendations, open questions and planned AI tasks](docs/DEVELOPMENT_START.md). Application implementation still needs an explicit order.
 - Review the broader decision round: [architecture readiness, open choices and review evidence](docs/ARCHITECTURE_READINESS.md).
 
 - Scope review: [function inventory, V1 additions and later modules](docs/FUNCTION_INVENTORY.md).
@@ -46,7 +47,7 @@ Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous ac
 
 ## Local setup
 
-Only Git and Python 3.10 or later are needed for the repository checks. GitHub CLI is optional for creating issues and pull requests. No application dependencies, model keys or database are required.
+Only Git and Python 3.10 or later are needed for the documentation/repository checks below. The separate technical qualification additionally needs the versions and Docker runtime described in qualification/README.md; CI runs it on an ephemeral runner. GitHub CLI is optional for creating issues and pull requests. No model keys or existing database are required.
 
 ```sh
 git clone https://github.com/1uedev/task-manager.git
@@ -66,6 +67,8 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | ROADMAP.md | Initial release and later work |
 | TODO.md / DONE.md | Central task ledger and accepted history |
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
+| docs/TECHNICAL_BASELINE.md | Isolated qualification, exact version candidates, contracts and measured evidence |
+| qualification/ / contracts/ | Synthetic test sources and OpenAPI specimen; not product modules |
 | docs/DEVELOPMENT_START.md | Confirmed first slice and account/session choices, proposed tools and blocked task dependencies |
 | docs/ARCHITECTURE_READINESS.md | Consolidated decision package and evidence; architecture is not yet approved |
 | docs/DEVELOPMENT_REVIEW.md | Proposed technical review, acceptance boundaries and parallel-work scenarios |
