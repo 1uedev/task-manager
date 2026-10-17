@@ -392,7 +392,9 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 Anforderungen samt Status unverändert (59 B/30 V), alle 50 bisherigen DEC-Zeilen unverändert; 21 OPEN-IDs erhalten. TASK-001 bis TASK-019 und DONE.md unverändert; elf Folgeaufgaben blockiert/unbesetzt, ausschließlich acht Markdown-Dateien geändert. Werkzeugempfehlungen anhand offizieller Primärquellen eingeordnet, nicht praktisch qualifiziert. Die zehn Start-Szenarien sind nur geplant.
 
-**Nächster Schritt:** Holger prüft Vorlage und offenen Fragen. Ein nächster begrenzter Implementierungsauftrag könnte ausdrücklich TASK-021 zur Werkzeug-/Vertragsqualifikation beauftragen; weitere Aufgaben benötigen ihren freigegebenen Umfang und akzeptierte Voraussetzungen. Antworten werden gesondert als Entscheidungen eingetragen. Fachliche Abnahme dieses Plans bleibt ausstehend.
+**Nachtrag aus TASK-032 am 2026-10-17:** Die drei damaligen Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet: erster interner Ablauf, LDAP/Portal anschließend innerhalb V1; 24 Stunden als Standard neuer Installationen; administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel. Die oben berichteten Ergebnisse/Prüfungen bleiben historisch erhalten. Technische Detailfreigaben und Implementierungsauftrag sind weiterhin offen.
+
+**Nächster Schritt:** Holger prüft verbleibende technische Empfehlungen und Details. Ein nächster begrenzter Implementierungsauftrag könnte ausdrücklich TASK-021 zur Werkzeug-/Vertragsqualifikation beauftragen; weitere Aufgaben benötigen ihren freigegebenen Umfang und akzeptierte Voraussetzungen. Fachliche Abnahme des Gesamtplans bleibt ausstehend.
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
@@ -444,15 +446,15 @@ Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. 
 
 **Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; Kontolebenszyklus, Fristwerte/-änderungen und beauftragter Umfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
 
-**Umfang:** Lokale Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer ab erfolgreicher Anmeldung umsetzen. Anmeldeanbieter kapseln. Vor Beginn entscheiden, ob echte Einladungen einschließlich SMTP, Einmaltoken und Rücksetzung bereits dazugehören; andernfalls ausschließlich dokumentierte synthetische Entwicklungskonten für die interne Vorführung.
+**Umfang:** Administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel, Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer mit 24 Stunden als Standard neuer Installationen umsetzen. Anmeldeanbieter kapseln. Vor Beginn Gültigkeit, sichere Übergabe, Erstadministrator, Wiederherstellung und initialen Sitzungsübergang konkretisieren. Synthetische Entwicklungskonten ersetzen den gewählten Kontoanlageweg nicht; SMTP ist nicht als Kennwort-Übergabekanal beschlossen.
 
 **Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Identitätsmodul und dessen Migrationen; öffentlicher Identitäts-/Sitzungskontext aus TASK-021. Keine Rechteberechnung im Identitätsadapter. LDAP bleibt V1-Folgearbeit, 2FA spätere Erweiterung. Erstadministrator-/Wiederherstellungsweg vor produktiver Kontoanlage festlegen.
 
-**Abnahmekriterien:** Kein zusätzliches Inaktivitätslimit, keine Fristverlängerung durch Aktivität, Rotation oder Neustart; Ablauf und Deaktivierung serverseitig wirksam. Cookie-/CSRF- und negative Anmeldefälle geprüft. Keine produktiven Standardpasswörter. Getrennte KI prüft Sicherheitsgrenzen; Umfang des Kontenwegs bleibt in Ergebnis und Vorführung sichtbar.
+**Abnahmekriterien:** Neue Installation mit 24 Stunden voreingestellt, andere gültige Stundenwerte administrativ änderbar. Vor Pflichtwechsel kein regulärer Fachzugriff über UI/API oder Ausgabe von Integrationszugängen; verbrauchtes Einmalpasswort nicht wiederverwendbar. Kein zusätzliches Inaktivitätslimit, keine Fristverlängerung durch Aktivität, Rotation oder Neustart; Ablauf und Deaktivierung serverseitig wirksam. Cookie-/CSRF- und negative Anmeldefälle geprüft. Keine produktiven Standardpasswörter. Getrennte KI prüft Sicherheitsgrenzen; Umfang des Kontenwegs bleibt in Ergebnis und Vorführung sichtbar.
 
-**Nächster Schritt:** Offene Konten-/Fristdetails und ausdrücklich erlaubten Entwicklungsumfang entscheiden; danach reservieren.
+**Nächster Schritt:** Verbleibende Kennwort-/Konten-/Fristdetails und ausdrücklichen Implementierungsauftrag entscheiden; Kontoanlageweg, Standardwert und internen Abschnitt nicht erneut zur Auswahl stellen. Danach reservieren.
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
@@ -530,11 +532,11 @@ Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. 
 
 **Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
 
-**Umfang:** Anmeldung, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
+**Umfang:** Administrative lokale Kontoanlage, Anmeldung mit Pflichtwechsel, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
 
 **Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Frontend-Fachansichten und Browserprüfungen. Backendänderungsbedarf als koordinierte Vertragskorrektur übergeben; keine unabhängigen API-Sonderwege. Keine echten Kundendaten in Beispielen.
 
-**Abnahmekriterien:** Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
+**Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
 
 **Nächster Schritt:** Passende Backend-/UI-Ergebnisse und Demoablauf annehmen; nach Beauftragung reservieren.
 
@@ -554,12 +556,18 @@ Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. 
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-start-decisions-01 · **Aktualisiert:** 2026-10-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261017-start-decisions-01 · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-PROD-001, REQ-PROD-002, REQ-AUTH-001, REQ-AUTH-005, REQ-PORTAL-003, REQ-DEV-004. **Abhängigkeiten:** TASK-004, TASK-006, TASK-012, TASK-020 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-032-codex-start-decisions; separates Arbeitsverzeichnis, Sacharbeit erst nach integrierter Reservierung.
+**Bezug:** REQ-PROD-001, REQ-PROD-002, REQ-AUTH-001, REQ-AUTH-005, REQ-PORTAL-003, REQ-DEV-004. **Abhängigkeiten:** TASK-004, TASK-006, TASK-012, TASK-020 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** task/task-032-codex-start-decisions; separates Arbeitsverzeichnis nach integrierter Reservierung #53.
 
 **Umfang:** Ersten internen Ablauf mit Anmeldung, Projekten, Tickets, Tags und Suche bei LDAP/Portal anschließend innerhalb V1, 24 Stunden feste Standardsitzungsdauer und administrative Kontoanlage mit Einmalpasswort und Pflichtwechsel bei erster Anmeldung als bestätigte Auswahl erfassen. Betroffene Anforderungen, Entwürfe, offene Fragen und gesperrte Folgeaufgaben konsistent nachführen.
 
 **Abnahmekriterien:** Genau die drei Antworten als neue Entscheidungen aufnehmen; keine technische Umsetzung, Gesamtfreigabe oder weitere Detailentscheidung ableiten. Einmalpasswort und erzwungener Wechsel gelten auch für lokale Portalzugänge; sichere Ausgestaltung und Wiederherstellung bleiben ausdrücklich zur Konkretisierung. Frühere Entscheidungseinträge und Prüfberichte erhalten. TASK-021 bis TASK-031 bleiben blockiert/unbesetzt. Keine Anwendung erstellen.
 
-**Nächster Schritt:** Reservierung integrieren; danach bestätigte Auswahl nachführen und unabhängig gegenprüfen.
+**Ergebnis:** DEC-051 bis DEC-053 erfassen den ersten internen Abschnitt, 24 Stunden als Standardsitzungsdauer neuer Installationen und administrative lokale Kontoanlage mit Einmalpasswort/Pflichtwechsel. Anforderungen Version 0.14, Startvorlage, Rechte-/Portal-/API-Entwurf, Roadmap, Inventar und Einstieg sind konsistent nachgeführt. REQ-PORTAL-003 besitzt nun bestätigten Zugangskern; technische Detailverfahren bleiben offen. TASK-024/TASK-030 sind angepasst, alle elf Implementierungsaufgaben weiterhin BLOCKIERT/unbesetzt. Neun Sitzungs- und vier Kontoanlagefälle sind im Rechteentwurf beschrieben, nicht ausgeführt.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 13 geänderten Dokumentdateien in 5245104b5fd519220ce96907d4d56b28f7c1b540 gegenüber 6a9c6fd12091ffbcb48326c09a990aae87d182c9. Keine konkreten Befunde: Auswahl korrekt, Sitzungsstandard von Einmalpasswortgültigkeit und API-Wiederholungsfenster getrennt, Pflichtwechsel für UI/API einschließlich lokaler Portalzugänge berücksichtigt. LDAP, Rechte und 2FA unverändert; sichere Detailverfahren offen. Historische Berichte erhalten. Dieser nachträglich ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review, Anwendungstest oder Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs erhalten, nur REQ-PORTAL-003 wechselt V zu B (60 B/29 V). Genau drei DEC-IDs ergänzt; alle 50 früheren DEC-Zeilen unverändert. 21 OPEN-IDs, TASK-001 bis TASK-019 und DONE.md unverändert; TASK-020 hat einen datierten Nachtrag, TASK-024/TASK-030 die nötige Folgeplanung. Keine Anwendung, Last- oder Sicherheitstests erstellt oder ausgeführt.
+
+**Nächster Schritt:** Holger prüft die korrekte Übernahme. Der nächste begrenzte Entwicklungsauftrag kann TASK-021 zur Werkzeug-/Vertragsqualifikation betreffen; technische Kandidaten, verbliebene Details und der Implementierungsauftrag bleiben gesondert zu entscheiden. Die drei beantworteten Auswahlfragen werden nicht erneut geöffnet.

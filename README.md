@@ -34,7 +34,9 @@ TODO.md on main is the single source for task ownership and state. Issues provid
 
 Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. The confirmed direction is React with TypeScript, Java with Spring Boot, a modular monolith and an HTTP/JSON API in REST style described with OpenAPI. German and English, customer branding, LDAP and group and field permissions are included in the specification.
 
-V1 also includes configurable expiry after a fixed duration since login, without an inactivity timeout; an extensive tag system with creation rights available to authorized external portal users; and unified search across tickets/tasks, projects, wiki and requirements (DEC-045 through DEC-050). File-content search comes later. Exact duration values, tag governance, file-name/metadata scope and numeric performance targets remain open.
+V1 also includes configurable expiry after a fixed duration since login, without an inactivity timeout; an extensive tag system with creation rights available to authorized external portal users; and unified search across tickets/tasks, projects, wiki and requirements (DEC-045 through DEC-050). File-content search comes later. The default for new installations is 24 hours (DEC-052); duration limits and rule-change behavior, tag governance, file-name/metadata scope and numeric performance targets remain open.
+
+DEC-051 confirms the first internal demonstration slice: login, projects, tickets, tags and search; LDAP and the portal follow within V1. DEC-053 confirms administrator-created local accounts, including portal accounts, with an initial one-time password and mandatory change at first login. Expiry, secure delivery, recovery and bootstrap details remain open. These choices do not authorize application implementation.
 
 Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
 
@@ -64,7 +66,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | ROADMAP.md | Initial release and later work |
 | TODO.md / DONE.md | Central task ledger and accepted history |
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
-| docs/DEVELOPMENT_START.md | Proposed first development slice, version candidates and blocked task dependencies |
+| docs/DEVELOPMENT_START.md | Confirmed first slice and account/session choices, proposed tools and blocked task dependencies |
 | docs/ARCHITECTURE_READINESS.md | Consolidated decision package and evidence; architecture is not yet approved |
 | docs/DEVELOPMENT_REVIEW.md | Proposed technical review, acceptance boundaries and parallel-work scenarios |
 | docs/AI_WORKFLOW.md | Reservation, separate worktrees, review and starter prompts |

@@ -14,11 +14,11 @@ Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). S
 
 **Bezug:** REQ-PROD-003, REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DEV-001 bis REQ-DEV-005.
 
-## Vorgeschlagener erster Entwicklungsabschnitt
+## Bestätigter erster Entwicklungsabschnitt
 
-Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) empfiehlt nach gesonderter Beauftragung zunächst einen internen Ablauf: lokale Anmeldung, Projekte, Tickets, Tags und Suche. TASK-021 bis TASK-031 sind im zentralen TODO ausschließlich gesperrt vorgemerkt. Werkzeugqualifikation und gemeinsame Verträge gehen paralleler Backend-/Frontendarbeit voraus. Der Abschnitt benötigt noch Entscheidungen und ist keine verkaufbare V1.
+DEC-051 bestätigt den ersten vorführbaren internen Ablauf: lokale Anmeldung, Projekte, Tickets, Tags und Suche. Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) konkretisiert ihn nach Übernahme der Antworten aus TASK-032. TASK-021 bis TASK-031 sind im zentralen TODO ausschließlich gesperrt vorgemerkt. Werkzeugqualifikation und gemeinsame Verträge gehen paralleler Backend-/Frontendarbeit voraus. Die technischen Details und der gesonderte Implementierungsauftrag bleiben offen; der Abschnitt ist keine verkaufbare V1.
 
-LDAP, Kundenportal einschließlich externer Tag-Erstellung, Wiki/Anforderungen einschließlich gemeinsamer Suche und sämtliche weiteren unten bestätigten Bereiche bleiben innerhalb V1. Der vorgeschlagene Start verschiebt keine bestätigte Funktion nach V1. Die drei dazu vorgelegten Auswahlfragen und die technischen Empfehlungen sind noch nicht entschieden.
+LDAP, Kundenportal einschließlich externer Tag-Erstellung, Wiki/Anforderungen einschließlich gemeinsamer Suche und sämtliche weiteren unten bestätigten Bereiche bleiben innerhalb V1. Der bestätigte Start verschiebt keine zugesagte Funktion nach V1. DEC-052 legt 24 Stunden als Standard neuer Installationen fest; DEC-053 bestätigt administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel. Die technischen Empfehlungen sind damit nicht pauschal entschieden.
 
 ## Version 1 Erste verkaufbare Version
 
@@ -27,7 +27,7 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Bereich | Bestätigter Umfang | Wichtige Abhängigkeiten |
 |---|---|---|
 | Installation und Daten | Docker, PostgreSQL, einzelne Unternehmensinstallation, spätere Erweiterbarkeit; Wiederherstellungsziel höchstens 1 Stunde Datenverlust und 4 Stunden Wiederanlauf | Betriebs-/Datenkonzept und praktischer Wiederherstellungsnachweis; DEC-038 |
-| Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder und konfigurierbare automatische Abmeldung ausschließlich nach fester Zeit seit Anmeldung | Identitätsmodell, Konfliktregeln und konkrete Fristwerte; DEC-045, DEC-048 |
+| Identität und Rechte | Lokale administrative Kontoanlage mit Einmalpasswort/Pflichtwechsel, LDAP, Gruppen, Projekt-/Feldrechte und feste Sitzungsdauer mit 24 Stunden als Standard neuer Installationen | Identitätsmodell, Konfliktregeln, Kennwort-/Wiederherstellungsdetails und verbleibende Fristregeln; DEC-045, DEC-048, DEC-052, DEC-053 |
 | Tags und Suche | Umfangreiche Tags für Tickets/Tasks und Projekte; Erstellung auch durch berechtigte Portalbenutzer; gemeinsame performante Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen | Katalog-/Vergaberegeln, Suchdetails und messbare Zielwerte; DEC-046, DEC-047, DEC-049, DEC-050 |
 | Projekte und Tickets | Konfigurierbare Projekte, Tickettypen, Workflows, Felder, Formulare und Automationen | Rechte, API und Fachmodell |
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |

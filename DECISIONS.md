@@ -111,11 +111,21 @@ Die Frage nach REST oder gRPC wird im [Architekturentwurf](docs/ARCHITECTURE.md)
 
 Die drei Antworten konkretisieren den Entwurf aus TASK-018. Frühere Entscheidungseinträge bleiben historisch erhalten; die aktuelle Einordnung berücksichtigt DEC-048 bis DEC-050. Weitere Details, die Gesamtarchitektur und eine Produktimplementierung werden dadurch nicht freigegeben.
 
+## Bestätigter Einstieg und lokale Kontoanlage vom 17. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-051 | Holger wählt als ersten vorführbaren Entwicklungsabschnitt den internen Ablauf mit Anmeldung, Projekten, Tickets, Tags und Suche. LDAP und Kundenportal folgen anschließend innerhalb V1. Alle übrigen bestätigten V1-Funktionen bleiben erhalten. Die Auswahl bestätigt den Abschnittsumfang, nicht sämtliche technischen Vorschläge, Detailabnahmen oder einen Implementierungsauftrag. | REQ-PROD-001, REQ-PROD-002 |
+| DEC-052 | Bei einer neuen Installation beträgt die feste Sitzungsdauer standardmäßig 24 Stunden seit erfolgreicher Anmeldung. Administratoren können den Stundenwert ändern. Die ausschließlich feste Frist ohne Inaktivitätsabmeldung aus DEC-048 bleibt bestehen. Grenzen, Deaktivierbarkeit und Wirkung von Regeländerungen auf laufende Sitzungen bleiben offen; bestehende Kundenkonfigurationen werden durch diese Standardwahl nicht pauschal überschrieben. | REQ-AUTH-005 |
+| DEC-053 | Lokale Benutzerkonten und lokale Portalzugänge werden in V1 durch Administratoren mit Einmalpasswort angelegt. Bei erster Anmeldung muss der Benutzer sein Passwort ändern. Dies ersetzt den vorgeschlagenen Einladungslink als gewählten Kontoanlageweg; es ist keine zusätzliche 2FA-Anforderung und legt keine LDAP-Passwortverwaltung fest. Gültigkeit, Übergabe, Wiederherstellung und technischer Zustandsübergang bleiben auszugestalten; Kontoanlage ersetzt keine Gruppen-/Projektfreigabe. | REQ-AUTH-001, REQ-PORTAL-003 |
+
+Die Antworten konkretisieren TASK-020. Werkzeugversionen, weitere Detailverträge, fachliche Gesamtabnahme und gesonderter Entwicklungsauftrag bleiben offen. TASK-021 bis TASK-031 bleiben blockiert und unbesetzt.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
 
-Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre Werkzeugkandidaten, drei Fachfragen und TASK-021 bis TASK-031 schließen keine OPEN-Frage und erzeugen ohne ausdrückliche Antwort keine neue DEC-Entscheidung.
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. Werkzeugkandidaten und übrige Detailfragen bleiben offen; TASK-021 bis TASK-031 sind weiterhin nur vorgemerkt. Die Teilantworten schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
 
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 
@@ -163,9 +173,9 @@ DEC-049 bestätigt Tag-Erstellung auch durch berechtigte externe Portalbenutzer.
 
 **Status:** teilweise entschieden · **Fällig:** Restdetails vor Anmeldung und Benutzerverwaltung · **Bezug:** REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005
 
-Zu klären sind lokale Einladungen, Kontowiederherstellung, Kontoanlage aus LDAP, stabile Identitätszuordnung, gegebenenfalls LDAP-Gruppenzuordnung, Deaktivierung und Ausfallverhalten. Ein geschützter lokaler Wiederherstellungsweg für Administratoren ist zu bewerten. Eine konkrete LDAP-Servervariante ist noch nicht benannt.
+DEC-053 bestätigt administrative Anlage lokaler Konten und Portalzugänge mit Einmalpasswort und erzwungenem Passwortwechsel bei erster Anmeldung. Zu klären sind dessen Gültigkeit, sichere Übergabe und Zustandswechsel, Kontowiederherstellung, Kontoanlage aus LDAP, stabile Identitätszuordnung, gegebenenfalls LDAP-Gruppenzuordnung, Deaktivierung und Ausfallverhalten. Ein geschützter lokaler Wiederherstellungsweg für Administratoren ist zu bewerten. Eine konkrete LDAP-Servervariante ist noch nicht benannt.
 
-DEC-045 bestätigt die Einstellbarkeit; DEC-048 legt ausschließlich feste Laufzeit seit Anmeldung fest. Die [Sitzungsregeln](docs/PERMISSIONS.md) sind darauf angepasst und enthalten keine zusätzliche Inaktivitätsfrist für V1. Standard-/Grenzwerte, Wirkung von Regeländerungen und UX-Details bleiben Vorschläge. Die Auswahl der Fristart ist nicht erneut offen.
+DEC-045 bestätigt die Einstellbarkeit; DEC-048 legt ausschließlich feste Laufzeit seit Anmeldung fest. Die [Sitzungsregeln](docs/PERMISSIONS.md) sind darauf angepasst und enthalten keine zusätzliche Inaktivitätsfrist für V1. DEC-052 bestätigt 24 Stunden als Voreinstellung neuer Installationen. Grenzwerte, Deaktivierbarkeit, Wirkung von Regeländerungen und UX-Details bleiben Vorschläge. Fristart und Standardwert sind nicht erneut offen.
 
 ### OPEN-007 Projektkonfiguration und Automationen
 
@@ -185,7 +195,7 @@ DEC-032 legt die Kundenpause fest: Lösungsfrist pausiert, offene Erstreaktionsf
 
 **Status:** teilweise entschieden · **Fällig:** vor Helpdesk- und Portalimplementierung · **Bezug:** REQ-HD-001, REQ-HD-002, REQ-PORTAL-001, REQ-PORTAL-003
 
-DEC-031 legt die Prüfwarteschlange mit Kundenzuordnung durch Support für unbekannte Absender fest. Der [Helpdesk-Entwurf](docs/HELPDESK_SLA.md) beschreibt Mail- und Portalabläufe, Wiederholungen und unklare SMTP-Annahme. Die vorgeschlagene Abnahme von REQ-TKT-005 wird entsprechend auf interne Versandaufträge und kontrollierte Behandlung unklarer Zustellung präzisiert; eine uneingeschränkte einmalige externe Zustellung wird nicht zugesagt. Offen bleiben Anzahl und Zuordnung der Postfächer, Mailanbieter, Authentifizierungs- und Vertrauensprüfung, Einladungen, Selbstregistrierung, anonyme Webanfragen, CC-Empfänger, Weiterleitungen und Anhänge. IMAP/SMTP bleiben bestätigt; die erlaubten Anmeldeverfahren des vorgesehenen Anbieters müssen praktisch geprüft werden.
+DEC-031 legt die Prüfwarteschlange mit Kundenzuordnung durch Support für unbekannte Absender fest. Der [Helpdesk-Entwurf](docs/HELPDESK_SLA.md) beschreibt Mail- und Portalabläufe, Wiederholungen und unklare SMTP-Annahme. Die vorgeschlagene Abnahme von REQ-TKT-005 wird entsprechend auf interne Versandaufträge und kontrollierte Behandlung unklarer Zustellung präzisiert; eine uneingeschränkte einmalige externe Zustellung wird nicht zugesagt. Offen bleiben Anzahl und Zuordnung der Postfächer, Mailanbieter, Authentifizierungs- und Vertrauensprüfung, sichere Übergabe/Verfall von Einmalpasswörtern und Wiederherstellung, anonyme Webanfragen, CC-Empfänger, Weiterleitungen und Anhänge. Der lokale Portalzugang wird nach DEC-053 administrativ mit Einmalpasswort angelegt; offene Selbstregistrierung gehört nicht zum ausgewählten Kontoanlageweg. IMAP/SMTP bleiben bestätigt; die erlaubten Anmeldeverfahren des vorgesehenen Anbieters müssen praktisch geprüft werden.
 
 ### OPEN-010 Varianten der Git Dienste
 
