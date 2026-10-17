@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.12 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.13 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -128,9 +128,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-AUTH-005 Konfigurierbare automatische Abmeldung
 
-**B · V1.** Der Kunde kann einstellen, nach wie vielen Stunden Benutzer automatisch abgemeldet werden (DEC-045).
+**B · V1.** Der Kunde kann einstellen, nach wie vielen Stunden seit erfolgreicher Anmeldung Benutzer automatisch abgemeldet werden. Es gilt ausschließlich eine feste Sitzungsdauer, keine zusätzliche Inaktivitätsfrist (DEC-045, DEC-048).
 
-**Abnahme:** Berechtigte Administration kann eine gültige Dauer konfigurieren. Der Server verweigert mit abgelaufener Sitzung weitere geschützte Aufrufe, auch bei direkter API-Nutzung mit dem Sitzungscookie. Lokale und LDAP-Anmeldung sowie internes Frontend und Kundenportal werden berücksichtigt. Absolute Laufzeit seit Anmeldung, Inaktivitätsfrist oder beide Grenzen, Standardwerte und Wirkung einer Regeländerung sind noch zu entscheiden. Der [Sitzungsentwurf](docs/PERMISSIONS.md) trennt diese Vorschläge von der bestätigten Einstellbarkeit; Integrations-API-Zugänge besitzen getrennte Laufzeiten.
+**Abnahme:** Berechtigte Administration kann eine gültige Dauer konfigurieren. Benutzeraktivität, Polling und technische Erneuerungen verschieben den Beginn nicht; bloße Inaktivität beendet die Sitzung nicht vor der festen Grenze. Der Server verweigert mit abgelaufener Sitzung weitere geschützte Aufrufe, auch bei direkter API-Nutzung mit dem Sitzungscookie. Lokale und LDAP-Anmeldung sowie internes Frontend und Kundenportal werden berücksichtigt. Manuelle Abmeldung, Kontosperre und expliziter Sitzungswiderruf bleiben unabhängige Beendigungsgründe. Standard-/Grenzwerte und Wirkung einer Regeländerung sind noch zu entscheiden. Der [Sitzungsentwurf](docs/PERMISSIONS.md) trennt diese Detailvorschläge von der bestätigten Fristart; Integrations-API-Zugänge besitzen getrennte Laufzeiten.
 
 ## Tickets und Zusammenarbeit
 
@@ -170,15 +170,15 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-TAG-001 Umfangreiches Tag-System ab V1
 
-**B · V1.** Tickets beziehungsweise Tasks und Projekte erhalten ein umfangreiches Tag-System; Jira dient als funktionale Orientierung (DEC-046). Ein Task ist dabei ein Arbeitstyp des Ticketmodells, kein zweites paralleles Aufgabenmodell.
+**B · V1.** Tickets beziehungsweise Tasks und Projekte erhalten ein umfangreiches Tag-System; Jira dient als funktionale Orientierung (DEC-046). Neue Tags dürfen auch berechtigte externe Portalbenutzer anlegen (DEC-049). Das erteilt nicht automatisch Katalogverwaltungs-, Projekt- oder Objektänderungsrechte. Ein Task ist dabei ein Arbeitstyp des Ticketmodells, kein zweites paralleles Aufgabenmodell.
 
-**Abnahme:** Vorgeschlagene Ausgestaltung: Mehrere Tags je Objekt, Wiederverwendung und Autovervollständigung, kombinierte Filter, Massen-Zuordnung/-Entfernung, verständliche Darstellung und zentrale Pflege durch Umbenennen, Zusammenführen und Archivieren. Tag-Erstellung, Katalogbereiche, Sichtbarkeit, administrative Zuständigkeit und Grenzen sind im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) zur Prüfung beschrieben. Verborgene Tags bleiben auch in Vorschlägen und Zählern verborgen. Projekt-Tags werden nicht ungeprüft zu Ticketrechten oder vererbten Ticket-Tags. Hierarchien, automatische Vererbung und vollständige Jira-Kompatibilität sind nicht zugesagt.
+**Abnahme:** Vorgeschlagene Ausgestaltung: Mehrere Tags je Objekt, Wiederverwendung und Autovervollständigung, kombinierte Filter, Massen-Zuordnung/-Entfernung, verständliche Darstellung und zentrale Pflege durch Umbenennen, Zusammenführen und Archivieren. Die genaue Rechtevergabe für Tag-Erstellung, Katalogbereiche, Sichtbarkeit, administrative Zuständigkeit und Grenzen sind im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) zur Prüfung beschrieben. Verborgene Tags bleiben auch in Vorschlägen und Zählern verborgen. Projekt-Tags werden nicht ungeprüft zu Ticketrechten oder vererbten Ticket-Tags. Hierarchien, automatische Vererbung und vollständige Jira-Kompatibilität sind nicht zugesagt.
 
 ### REQ-SRCH-001 Performante Suche ab V1
 
-**B · V1.** Tickets/Tasks und Projekte müssen sehr performant auffindbar sein; Tags sind in die Suche einzubeziehen (DEC-047). Die gemeinsame Suche weiterer Bereiche wird gesondert konkretisiert.
+**B · V1.** Die gemeinsame performante Suche umfasst Tickets/Tasks, Projekte, Wiki und Anforderungen; Tags an Tickets/Tasks und Projekten sind einzubeziehen (DEC-047, DEC-050). Suche in Dateiinhalten folgt später und gehört nicht zu V1. Dateinamen und Metadaten sind davon getrennt zu konkretisieren.
 
-**Abnahme:** Vorgeschlagene Ausgestaltung: Volltext, direkte Kennungssuche und kombinierbare Tag-/Fachfilter berücksichtigen aktuelle Projekt-, Organisations-, Feld- und Beitragsrechte bereits bei Trefferbildung, Rangfolge, Zählung und Vorschau. Suchumfang für Wiki/Anforderungen und Dateiinhalte, Filterdetails und konkrete Messgrenzen sind noch offen. Der [Suchentwurf](docs/TAGS_SEARCH.md) beschreibt einen PostgreSQL-Ausgangspunkt und messbare Ziele unter Referenzlast; diese Werte sind weder bestätigt noch erreicht. „Sehr performant“ wird nicht allein aus der Wahl von REST, gRPC oder einer Suchbibliothek abgeleitet.
+**Abnahme:** Vorgeschlagene Ausgestaltung: Volltext, direkte Kennungssuche und kombinierbare Tag-/Fachfilter berücksichtigen aktuelle Projekt-, Organisations-, Feld- und Beitragsrechte bereits bei Trefferbildung, Rangfolge, Zählung und Vorschau. Die Auswahl der vier Suchbereiche ist bestätigt; durchsuchbare Felder, Revisions-/Sprachfilter, Dateinamen/Metadaten und konkrete Messgrenzen bleiben im Detail offen. Der [Suchentwurf](docs/TAGS_SEARCH.md) beschreibt einen PostgreSQL-Ausgangspunkt und messbare Ziele unter Referenzlast; diese Werte sind weder bestätigt noch erreicht. „Sehr performant“ wird nicht allein aus der Wahl von REST, gRPC oder einer Suchbibliothek abgeleitet.
 
 ## Zeiterfassung
 
@@ -277,6 +277,8 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 ### REQ-DOC-004 Wissensstruktur und Auffindbarkeit
 
 **V · V1.** Seiten werden geordnet, gesucht und mit anderen Arbeitsgegenständen verknüpft. Historie und Sprachfassungen bleiben auffindbar.
+
+**Bestätigter Teil:** Wiki gehört zur gemeinsamen V1-Suche (DEC-050, REQ-SRCH-001). Diese Auswahl bestätigt nicht pauschal die übrigen Struktur-, Verknüpfungs- und Wiederherstellungsdetails dieser Anforderung.
 
 **Abnahme:** Ein Nutzer kann eine Seite ihrem Projekt oder Wissensbereich zuordnen und berechtigte Inhalte über die Suche erreichen. Verschieben, Umbenennen und Wiederherstellen erhalten gültige Verknüpfungen nach dokumentierten Regeln.
 

@@ -33,7 +33,7 @@ TODO.md on main is the single source for task ownership and state. Issues provid
 
 Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. The confirmed direction is React with TypeScript, Java with Spring Boot, a modular monolith and an HTTP/JSON API in REST style described with OpenAPI. German and English, customer branding, LDAP and group and field permissions are included in the specification.
 
-V1 also includes configurable automatic session expiry, an extensive tag system for tickets/tasks and projects, and performant search (DEC-045 through DEC-047). Timeout semantics, tag governance, further search scope and numeric performance targets remain open.
+V1 also includes configurable expiry after a fixed duration since login, without an inactivity timeout; an extensive tag system with creation rights available to authorized external portal users; and unified search across tickets/tasks, projects, wiki and requirements (DEC-045 through DEC-050). File-content search comes later. Exact duration values, tag governance, file-name/metadata scope and numeric performance targets remain open.
 
 Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
 

@@ -21,8 +21,8 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Bereich | Bestätigter Umfang | Wichtige Abhängigkeiten |
 |---|---|---|
 | Installation und Daten | Docker, PostgreSQL, einzelne Unternehmensinstallation, spätere Erweiterbarkeit; Wiederherstellungsziel höchstens 1 Stunde Datenverlust und 4 Stunden Wiederanlauf | Betriebs-/Datenkonzept und praktischer Wiederherstellungsnachweis; DEC-038 |
-| Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder und konfigurierbare automatische Abmeldung | Identitätsmodell, Konfliktregeln und Sitzungsfristen; DEC-045 |
-| Tags und Suche | Umfangreiches Tag-System für Tickets/Tasks und Projekte; sehr performante Suche | Katalog-/Erstellrechte, gemeinsame Suchbereiche und messbare Zielwerte; DEC-046, DEC-047 |
+| Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder und konfigurierbare automatische Abmeldung ausschließlich nach fester Zeit seit Anmeldung | Identitätsmodell, Konfliktregeln und konkrete Fristwerte; DEC-045, DEC-048 |
+| Tags und Suche | Umfangreiche Tags für Tickets/Tasks und Projekte; Erstellung auch durch berechtigte Portalbenutzer; gemeinsame performante Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen | Katalog-/Vergaberegeln, Suchdetails und messbare Zielwerte; DEC-046, DEC-047, DEC-049, DEC-050 |
 | Projekte und Tickets | Konfigurierbare Projekte, Tickettypen, Workflows, Felder, Formulare und Automationen | Rechte, API und Fachmodell |
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |
 | Helpdesk | IMAP/SMTP, Prüfwarteschlange für unbekannte Absender, SLA-Fristen, Geschäftszeiten und Eskalationen; Kundenpause hält die Lösungsfrist an, offene Erstreaktion läuft weiter | Tickets, Hintergrundjobs und konkrete SLA-Regeln; DEC-031, DEC-032 |
@@ -61,6 +61,7 @@ Redmine als erste Importquelle ist bestätigt; Easy Redmine/Easy8 und Jira werde
 | Weitere Git-Funktionen | Über Anzeige und Zuordnung hinausgehen | Einzelaktionen offen; eine später erlaubte Schreibaktion besitzt eigene Rechte und gegebenenfalls KI-Bestätigung. REQ-GIT-003 |
 | Vorlagenbasierte PDF-Ausgabe | Gebrandete Dokumente erzeugen | Ein freigegebener Dokumenttyp lässt sich in der gewünschten Sprache mit geprüftem Layout erzeugen. REQ-BRAND-002 |
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |
+| Suche in Dateiinhalten | Inhalte von Anhängen und Dokumentdateien erst nach V1 durchsuchbar machen; Zeitpunkt und Formatumfang offen | Eigene Rechte-, Extraktions-, Ressourcen- und Aktualisierungsprüfung; DEC-050, REQ-SRCH-001 |
 | Weitere Datenbanken | Option für MariaDB, SQL Server oder Oracle | Bisher nur Vorbereitung beauftragt; jede tatsächliche Unterstützung braucht gesonderte Entscheidung, Migration und Prüfnachweise. REQ-DATA-002 |
 
 ## Prioritäten weiterer Module

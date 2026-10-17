@@ -354,13 +354,15 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: 89 Anforderungen, davon 59 B und 30 V; alle früheren 86 REQ-IDs und deren Status erhalten. Genau drei neue DEC-IDs, alle 44 früheren DEC-Zeilen unverändert; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungs-, Last- oder Sicherheitstests; die 25 beschriebenen neuen Prüffälle sind nicht ausgeführt.
 
-**Nächster Schritt:** Holger entscheidet Fristart (seit Anmeldung/Inaktivität/beide), Tag-Erstellrechte und weitere gemeinsame Suchbereiche. Standard-/Grenzwerte, Katalogdetails und Messziele danach konkret abnehmen. Die Kernvorgaben sind aufgenommen; diese Übergabe nimmt weder sämtliche Detailvorschläge noch die Architektur insgesamt ab. Produktimplementierung bleibt gesondert zu beauftragen.
+**Nachtrag aus TASK-019 am 2026-10-17:** Die drei Antworten sind durch DEC-048 bis DEC-050 erfasst: ausschließlich feste Dauer seit Anmeldung, Tag-Erstellung auch durch berechtigte Portalbenutzer und gemeinsame Suche einschließlich Wiki/Anforderungen; Dateiinhalte später. Die oben dokumentierten Prüfstände bleiben historisch erhalten; der frühere Zwei-Fristen-Vorschlag ist ersetzt.
+
+**Nächster Schritt:** Standard-/Grenzwerte, konkrete Katalog-/Vergaberegeln, Suchdetails und Messziele prüfen. Diese Teilentscheidungen nehmen weder sämtliche Detailvorschläge noch die Architektur insgesamt ab. Produktimplementierung bleibt gesondert zu beauftragen.
 
 ## TASK-019 Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen
 
 **Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-v1-decisions-01 · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-AUTH-005, REQ-TAG-001, REQ-SRCH-001, REQ-DOC-004, REQ-PERF-003. **Abhängigkeiten:** TASK-004, TASK-007, TASK-010, TASK-012, TASK-018 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-019-codex-v1-decisions; eigenes Arbeitsverzeichnis nach Reservierung.
+**Bezug:** REQ-AUTH-005, REQ-TAG-001, REQ-SRCH-001, REQ-DOC-004, REQ-PERF-003. **Abhängigkeiten:** TASK-004, TASK-007, TASK-010, TASK-012, TASK-018 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** task/task-019-codex-v1-decisions; Übernahme im separaten Arbeitsverzeichnis nach Reservierung #49.
 
 **Umfang:** Ausschließlich feste Sitzungsdauer seit Anmeldung, Tag-Erstellung auch durch berechtigte externe Portalbenutzer und gemeinsame V1-Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen bestätigen; Dateiinhalte später. Anforderungen, Entwürfe, Roadmap und offene Fragen konsistent nachführen.
 
