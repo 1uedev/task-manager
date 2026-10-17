@@ -57,6 +57,35 @@ Das PostgreSQL-Image ist zusätzlich an den öffentlich abgerufenen Manifest-Dig
 
 Die lokale Umgebung wurde nicht global umgestellt. Der lokale Frontendnachweis verwendet einen temporären Node-24-Download, geprüft gegen die offiziellen SHA-256-Angaben. Java-/PostgreSQL-Nachweise erfolgen im flüchtigen GitHub-Runner; ein lokaler fehlender Docker-Daemon wird nicht als erfolgreicher Datenbanktest ausgegeben. Der Workflow hat nur lesende Repository-Rechte und verwendet keine Produktgeheimnisse.
 
+## Wartung und verbleibende Freigaben
+
+Die festgeschriebenen Versionen sichern diesen Versuch, nicht die gesamte künftige Produktlaufzeit. Vor der Produktfreigabe müssen Supportzeiträume, verfügbare Sicherheitskorrekturen und die vollständige Komponentenliste erneut geprüft werden. Ein kostenpflichtiger Hersteller-Support oder ein Wartungs-SLA ist nicht ausgewählt. Empfohlen ist, spätere Versionsänderungen als eigenen PR mit denselben Modul-, Transaktions-, Generator- und Clientprüfungen vorzulegen; ein erfolgreicher Build allein ersetzt die betroffenen Produktprüfungen nicht. Die alternative Datenbankunterstützung bleibt architektonisch vorzubereiten und ist hier nicht nachgewiesen.
+
 ## Tatsächlicher Prüfstand
 
-Der erste npm-Versuch mit TypeScript 6.0.3 ist wie oben beschrieben fehlgeschlagen. Die kompatible Variante und der gesamte Java-/PostgreSQL-/Frontend-Lauf werden derzeit geprüft. Ein erfolgreicher Gesamtnachweis wird erst mit konkretem Commit und CI-Lauf eingetragen. Keine Produktanmeldung, Fachrechte, Last- oder Restore-Erfüllung wird aus diesem Versuch abgeleitet.
+Der vollständige technische Lauf auf Commit `79ad5fe18dfbbffeabbd46cd4643cf9bf01459c1` ist erfolgreich: [Qualifikation 39063473112](https://github.com/1uedev/task-manager/actions/runs/39063473112), [Repository-Prüfung 39063473068](https://github.com/1uedev/task-manager/actions/runs/39063473068). Die Testberichte wurden heruntergeladen und gegen das CI-Protokoll geprüft. Der Versuch lief auf Ubuntu 24.04 x64 mit den oben genannten Versionen.
+
+| Tatsächlich ausgeführter Nachweis | Ergebnis | Aussagegrenze |
+|---|---|---|
+| Repository-Validator und Regressionstests | Validator erfolgreich; 12 Tests bestanden | Metadaten, Links und Aufgabenführung; keine Produktabnahme |
+| Spring-Modulprüfung | 3 Tests bestanden, 0 übersprungen | Zwei Module erkannt; erlaubte Struktur akzeptiert, verbotener interner Zugriff und Zyklus abgewiesen |
+| PostgreSQL / Flyway / JPA / JDBC | 4 Tests bestanden, 0 übersprungen | Echte Datenbank 18.6, Migration, gemeinsamer Commit und zwei Rückabwicklungsfälle; keine Rechte- oder Parallelitätsprüfung |
+| Java-Transportfixture | 1 Test bestanden, 0 übersprungen | Synthetische JSON-Antworten aus Jackson; kein laufender HTTP-Server |
+| TypeScript-Client | 6 Tests bestanden, 0 übersprungen | Java-Fixtures über simulierten HTTP-Transport; Erfolg, Fehler, Konflikt, Header, Netzfehler und begrenzte Laufzeitprüfung |
+| OpenAPI und Oberfläche | Generierung ohne Git-Abweichung, strenge Typprüfung inklusive Negativbeispielen, React-Build erfolgreich | Keine Browser-/Bedienbarkeitsprüfung oder vollständige Laufzeit-Schemavalidierung |
+| Aufgelöste Abhängigkeiten | Maven-Abhängigkeitsbaum und npm-Lockdatei vorhanden | Kein vollständiges Produkt-SBOM und keine allgemeine Sicherheitsfreigabe |
+
+Java ergibt zusammen **8/8**, Node **6/6**, Repository **12/12** erfolgreiche Tests. Zusätzlich liefen der Repository-Validator und `git diff --check` lokal erfolgreich; Typgenerierung, Typprüfung und React-Build wurden auch mit dem temporären lokalen Node ausgeführt. Java-/Datenbanktests liefen ausschließlich im CI-Runner. Das CI-Artefakt `qualification-evidence` enthält Surefire-Berichte, synthetische JSON-Fixtures, Abhängigkeitsbaum und Buildausgabe mit sieben Tagen Aufbewahrung. Danach bleiben Quellstand, dieser Ergebnisbericht und die CI-Links zur Reproduktion; die Verfügbarkeit der GitHub-Protokolle folgt deren Aufbewahrungseinstellung.
+
+### Gefundene Fehler und Korrekturen
+
+- Der erste npm-Versuch mit TypeScript 6.0.3 scheiterte am beschriebenen Peer-Konflikt. Die erfolgreiche Variante verwendet 5.9.3 ohne erzwungene Auflösung.
+- Ein bestehendes Repository-Testfixture kopierte nur Markdown-Dateien und verlor dadurch neue gültige Links auf YAML-/Lizenz-/Workflow-Dateien. Es kopiert jetzt auch diese Quellen, schließt generierte/private Laufzeitverzeichnisse aus und hat einen zusätzlichen Link-Regressionstest.
+- [Erster CI-Lauf 39063143728](https://github.com/1uedev/task-manager/actions/runs/39063143728): Modulith schloss die Klassen unter `src/test` standardmäßig aus. Die [öffentliche ImportOption-Überladung](https://github.com/spring-projects/spring-modulith/blob/2.1.1/spring-modulith-core/src/main/java/org/springframework/modulith/core/ApplicationModules.java) nimmt nun die synthetischen Fixtures auf; alle Fälle prüfen zusätzlich die tatsächliche Modulzahl. Die Regeln wurden nicht abgeschaltet.
+- [Zweiter CI-Lauf 39063368895](https://github.com/1uedev/task-manager/actions/runs/39063368895): Testcontainers akzeptierte die kombinierte Tag-/Digest-Angabe nicht als PostgreSQL-Familie. Die Referenz verwendet jetzt den unveränderten offiziellen Digest ohne Tag und erklärt dessen PostgreSQL-Kompatibilität explizit. Die Prüfung der tatsächlichen Serverversion bleibt erhalten.
+- Das getrennte KI-Review fand eine unquotierte Beschreibung mit Komma in einer YAML-Flow-Map. Sie ist quotiert und die Typdatei neu generiert; die vollständige Abgrenzung von Fachversion und ETag bleibt erhalten.
+
+Keine Produktanmeldung, Fachrechte, Suchleistung oder Restore-Erfüllung wird aus diesem Versuch abgeleitet. TASK-021 ist ein technisches Ergebnis zur Prüfung; Annahme der gemeinsamen Vertragsgrundlage und Auftrag für die nächsten Produktschritte bleiben getrennt.
+
+
+Die getrennte Codex-Sitzung `sessions_tags_search_review` prüfte Quellen und Verträge sowie die beiden Korrekturstufen bis `79ad5fe`; zuletzt las sie auch die heruntergeladenen Testberichte und das CI-Protokoll. Nach Behebung des YAML-Befunds blieben keine offenen Befunde. Sie führte selbst keine Java-/Docker-Tests aus. Dieser abschließend ergänzte Ergebnisbericht stammt von der koordinierenden Sitzung; die fachliche Abnahme durch Holger bleibt offen.
