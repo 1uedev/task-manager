@@ -1,10 +1,10 @@
 # Entscheidungsübersicht für die Architekturfreigabe
 
-Stand 16. Oktober 2026 · TASK-012 · Vorlage zur Prüfung, Architektur noch nicht freigegeben
+Stand 17. Oktober 2026 · TASK-012 · Vorlage zur Prüfung, Architektur noch nicht freigegeben
 
 Für die geplanten Fachbereiche liegen jetzt Entwürfe vor. Der nächste Schritt ist die gezielte Entscheidung über ihre offenen Grundlagen. Zusätzliche Dokumente allein lösen diese Entscheidungen nicht. Die Anwendung wurde nicht implementiert; dieses Paket beauftragt keine Programmierung.
 
-Die zentrale Spezifikation enthält 86 Anforderungen: 56 mit bestätigtem Kern und 30 Vorschläge. **B** bestätigt deren Kern, nicht automatisch alle vorgeschlagenen Abnahmedetails. **V** bleibt ein Vorschlag. Die unter DEC-001 bis DEC-044 erfassten Vorgaben gelten weiterhin; die verbleibenden Fragen unter OPEN-001 bis OPEN-021 werden durch diese Übersicht nicht geschlossen. Aufgaben und Abnahmen werden ausschließlich in [TODO.md](../TODO.md) und [DONE.md](../DONE.md) geführt.
+Die zentrale Spezifikation enthält 89 Anforderungen: 59 mit bestätigtem Kern und 30 Vorschläge. **B** bestätigt deren Kern, nicht automatisch alle vorgeschlagenen Abnahmedetails. **V** bleibt ein Vorschlag. Die unter DEC-001 bis DEC-047 erfassten Vorgaben gelten weiterhin; die verbleibenden Fragen unter OPEN-001 bis OPEN-021 werden durch diese Übersicht nicht geschlossen. Aufgaben und Abnahmen werden ausschließlich in [TODO.md](../TODO.md) und [DONE.md](../DONE.md) geführt.
 
 ## Bestätigte Auswahl und nächster Prüfbedarf
 
@@ -21,13 +21,16 @@ Als Nächstes sind die technischen Detailverträge und Werkzeugversionen sowie d
 
 Für die technischen Details liegt mit TASK-016 ein [konkreter Vertragsentwurf](TECHNICAL_CONTRACTS.md) vor: Datenhoheit und Transaktionen, API-Beispiele und 16 spätere Prüffälle. Der zugehörige tatsächliche Gegenprüfungsstand wird zentral in TASK-016 dokumentiert. Die dort vorgelegte Grundauswahl ist durch DEC-042 bis DEC-044 bestätigt; vorgeschlagene Laufzeiten, Grenzen und Authentifizierungsdetails bleiben separat prüfpflichtig.
 
+Am 17. Oktober ergänzt: konfigurierbare automatische Abmeldung (DEC-045), umfangreiche V1-Tags für Tickets/Tasks und Projekte (DEC-046) und sehr performante Suche (DEC-047). Der [Tag- und Suchentwurf](TAGS_SEARCH.md) und die [Sitzungsregeln](PERMISSIONS.md) konkretisieren diese Kerne. Fristart, Tag-Erstellrechte und zusätzliche Suchbereiche sind als Fragen vorgelegt; konkrete Werte und übrige Details bleiben Vorschläge. Der [interne Kommunikationsvorschlag](ARCHITECTURE.md) empfiehlt direkte Java-Aufrufe innerhalb eines Prozesses und erhält REST an der Frontend-/Integrationsgrenze.
+
 ## Bestätigter Umfang, der erhalten bleibt
 
 | Gebiet | Bereits bestätigte Richtung | Noch zu prüfende Ausgestaltung |
 |---|---|---|
 | Produkt und Betrieb | Eigenständige Codebasis; Docker beim Kunden, eine Unternehmensinstallation; React/TypeScript, PostgreSQL, Java/Spring Boot, modularer Monolith und HTTP/JSON im REST-Stil mit OpenAPI; Internetbedarf zulässig | Versionen, technische Detailverträge, genaue Laufzeit-/Installationsplattform, Kosten, Wartung und Verhalten bei Netzstörungen |
 | V1-Fachmodule | Tickets, Zeiten, IMAP/SMTP-Helpdesk mit SLA/Geschäftszeiten/Eskalation, Portal, Wiki, Anforderungen und Git-Verknüpfung | Felder, Übergänge, Mailzuordnung, berechnete Fristen und weitere V1-Vorschläge |
-| Identität und Rechte | Lokales Konto, LDAP, eigene Gruppen, Projekt- und Feldrechte; Feldverbot gewinnt; Portal zeigt eigene Organisationsanfragen innerhalb freigegebener Projekte | Allgemeine Aktionskonflikte, delegierte Administration, LDAP-Lebenszyklus und zusätzliche Sichtbereiche |
+| Identität und Rechte | Lokales Konto, LDAP, konfigurierbare automatische Abmeldung, eigene Gruppen, Projekt- und Feldrechte; Feldverbot gewinnt; Portal zeigt eigene Organisationsanfragen innerhalb freigegebener Projekte | Allgemeine Aktionskonflikte, delegierte Administration, LDAP-Lebenszyklus, konkrete Sitzungsfristen und zusätzliche Sichtbereiche |
+| Tags und Suche | Umfangreiches Tag-System für Tickets/Tasks und Projekte und sehr performante Suche ab V1 | Katalog-/Erstellrechte, Massenänderungsregeln, weitere Suchbereiche, Indexierung und konkrete Antwortzeiten |
 | Wissen und Anforderungen | Wiki-Entwurf mit ausdrücklicher Veröffentlichung, optionale Sprachfassungen; neue Revision und erneute Freigabe nach inhaltlicher Änderung freigegebener Anforderungen | Editorformat, Such-/Dateiverfahren und genaue Änderungs-/Freigaberegeln |
 | Sprache und Marke | DE/EN für Anwendung, Portal, Anmeldung und E-Mail; weitere Sprachen vorbereiten; Logo, Farben und Vorlagen | Rückfallsprachen, Übersetzungsprozess, Browser-/Mobilprofil und erlaubte Designanpassung |
 | KI | Vier interne V1-Fälle; Admin-Markdown-Skills und Admin-Modellzuordnung; Änderungen/Versand nur nach Bestätigung; OpenAI, Claude und Ollama vorgesehen | Anbieterreihenfolge, Datenklassen, Kostenlimits und technische Bestätigungs-/Fehlerregeln |
@@ -51,15 +54,15 @@ Die Fälligkeiten entsprechen DECISIONS.md. Wo eine Frage sowohl Architektur als
 | OPEN-003 KI-Anbieter | Lieferreihenfolge der drei Anbieter; mindestens eine geeignete qualifizierte Anbindung trägt alle vier V1-Fälle | Technik und Pilot offen | Vor verbindlicher V1-Planung |
 | OPEN-004 2FA | Erweiterungspunkt jetzt; Faktor, Pflichtgruppen, Recovery und LDAP-Zusammenspiel später | Technik offen | Architektur vor Implementierung; Verfahren vor 2FA-Release |
 | OPEN-005 Rechte | Aktionsrechte, Admin-Grenzen, verborgene Pflichtfelder und Sonderfälle der Organisationssicht; bestätigte Feldverbote erhalten | Technik offen | Vor Datenmodell und Rechteimplementierung |
-| OPEN-006 Identitäten | Konto-/LDAP-Zuordnung, Deaktivierung, Einladungen, Recovery und Ausfallfall | Technik, LDAP-Betreiber offen | Vor Anmeldung und Benutzerverwaltung |
+| OPEN-006 Identitäten | Konto-/LDAP-Zuordnung, Deaktivierung, Einladungen, Recovery, Ausfallfall und Fristart/-werte der bestätigten automatischen Abmeldung | Technik, LDAP-Betreiber offen | Vor Anmeldung und Benutzerverwaltung |
 | OPEN-007 Projektregeln | Feldtypen, Versionierung, sichere Änderungen vorhandener Konfiguration und erlaubte Automationen | Fachentscheidung Holger, Technik offen | Vor Workflow- und Feldmodell |
 | OPEN-008 SLA | Start, Antwortdefinition, Budgets, Kalender, Wiedereröffnung und Eskalationen anhand berechneter Fälle bestätigen | Holger, später Serviceverantwortlicher offen | Vor Helpdesk-Datenmodell |
 | OPEN-009 Mail und Portal | Postfach-/Projektzuordnung, Mailanbieter, sichere Absender-/Threadbehandlung, CC, Einladungen und Anhangsgrenzen | Technik und Mailbetreiber offen | Vor Helpdesk- und Portalimplementierung |
 | OPEN-010 Git | Lesende Benutzeranbindung, zulässige Objekte, Versionsmatrix und aktuelle Quellenprüfung | Technik offen | Vor Git-Integration |
-| OPEN-011 Wiki, Dateien, Suche | Editor-/Dokumentformat, Versionsumfang, Konfliktverfahren, Dateispeicher und Suchstrategie | Technik offen | Vor Speicher- und Editorwahl |
+| OPEN-011 Wiki, Dateien, Suche | Editor-/Dokumentformat, Versionsumfang, Konfliktverfahren, Dateispeicher, gemeinsamer Suchumfang und Suchstrategie | Technik offen | Vor Speicher- und Editorwahl |
 | OPEN-012 Betrieb | Referenzplattform, TLS/Proxy/Internetziele, Update, Sicherungsziel, Servicezeit, Ersatzkapazität und Zuständigkeiten | Betreiber und Technik offen | Vor Installationsarchitektur; praktische Nachweise vor entsprechender Auslieferung |
 | OPEN-013 API | HTTP/JSON im REST-Stil mit OpenAPI bestätigt; Versionierung, Authentifizierung, Fehler, Pagination und Wiederholbarkeit konkret beschließen | Technik offen | Vor erster Fachimplementierung |
-| OPEN-014 Leistung | Referenzhardware, Mengen, Anhangsprofil und p95-Ziele; Vergleichsprodukt/Version und Bedienaufgaben benennen | Technik und Pilot offen | Vor Architekturfreigabe und Lasttestplanung |
+| OPEN-014 Leistung | Referenzhardware, Mengen, Anhangs-/Tagprofil und konkretisierte Such-p95-Ziele; Vergleichsprodukt/Version und Bedienaufgaben benennen | Technik und Pilot offen | Vor Architekturfreigabe und Lasttestplanung |
 | OPEN-015 Oberfläche und Sprache | Rückfall-/Formatregeln, Vorlagen und Brandinggrenzen, Browser/mobile Ansichten, Zugänglichkeitsziel | Holger; Technik für Umsetzbarkeit | Vor UI- und Vorlagensystem |
 | OPEN-016 Lebenszyklus und Import | Aufbewahrung/Löschen jetzt; Redmine-Version, Mapping und Detailumfang vor Import | Betreiber und Technik offen | Aufbewahrung vor Betriebskonzept; Importdetails vor Migrationsrelease |
 | OPEN-017 Technische Prüfung | Gegenseitige KI-Reviews bestätigt; konkrete Zuordnung, Nachweise und Schwellen offen; zusätzliche menschliche Prüfung offen | Koordination ordnet KI-Reviews zu, Holger entscheidet Detailverfahren | Detailverfahren vor Implementierung; menschliche Prüfung ausdrücklich offen |

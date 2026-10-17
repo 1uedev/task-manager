@@ -1,6 +1,6 @@
 # Zentrale offene Aufgaben
 
-Stand 16. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
+Stand 17. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
@@ -342,7 +342,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 **Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-tags-search-01 · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-AUTH-001, REQ-ORG-003, REQ-TKT-004, REQ-PERF-002, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-016 und Holgers Ergänzungen vom 17. Oktober 2026. **Arbeitsstand:** geplanter Branch task/task-018-codex-tags-search; eigenes Arbeitsverzeichnis nach Reservierung.
+**Bezug:** REQ-AUTH-001, REQ-AUTH-005, REQ-ORG-003, REQ-TKT-004, REQ-TAG-001, REQ-SRCH-001, REQ-PERF-002, REQ-PERF-003, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-016 und Holgers Ergänzungen vom 17. Oktober 2026. **Arbeitsstand:** task/task-018-codex-tags-search; Entwurf im separaten Arbeitsverzeichnis nach Reservierung #47.
 
 **Umfang:** Konfigurierbare automatische Abmeldung und umfangreiches Tag-System für Tickets/Tasks und Projekte sowie performante Suche für V1 in die Anforderungen aufnehmen. Sitzungssemantik, Tag-Verwaltung und Suchumfang gezielt klären. Direkte Modulaufrufe, REST und gRPC für den bestätigten modularen Monolithen einordnen. Keine Produktimplementierung.
 

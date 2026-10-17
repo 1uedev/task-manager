@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.11 · Stand 16. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.12 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -106,7 +106,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **B · V1.** Anmeldung mit internem Benutzernamen und Passwort wird unterstützt.
 
-**Abnahme:** Anmeldung, Abmeldung, Deaktivierung und Passwortwiederherstellung sind spezifiziert und prüfbar. Nach Deaktivierung bleiben keine unzulässigen aktiven Sitzungen bestehen. Details zu Sitzungsdauer und Passwortrichtlinien sind offen.
+**Abnahme:** Anmeldung, Abmeldung, Deaktivierung und Passwortwiederherstellung sind spezifiziert und prüfbar. Nach Deaktivierung bleiben keine unzulässigen aktiven Sitzungen bestehen. Konfigurierbare automatische Abmeldung ist durch REQ-AUTH-005 bestätigt; genaue Fristregeln und Passwortrichtlinien bleiben offen.
 
 ### REQ-AUTH-002 LDAP
 
@@ -125,6 +125,12 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 **B · Früh danach.** Zwei-Faktor-Authentifizierung folgt zeitnah nach Version 1 und gehört nicht zum ersten verkaufbaren Release (DEC-029). Die Anmeldearchitektur berücksichtigt die spätere Ergänzung.
 
 **Abnahme:** Vor dem 2FA-Release sind Verfahren, Wiederherstellung, mögliche Erzwingung und Zusammenspiel mit LDAP entschieden. Verlust des zweiten Faktors und Administratorkonten sind als Abnahmefälle vorgesehen. V1 wird nicht als bereits mit 2FA ausgestattet beschrieben; ein konkretes Datum für das zeitnahe Folgerelease ist noch offen.
+
+### REQ-AUTH-005 Konfigurierbare automatische Abmeldung
+
+**B · V1.** Der Kunde kann einstellen, nach wie vielen Stunden Benutzer automatisch abgemeldet werden (DEC-045).
+
+**Abnahme:** Berechtigte Administration kann eine gültige Dauer konfigurieren. Der Server verweigert mit abgelaufener Sitzung weitere geschützte Aufrufe, auch bei direkter API-Nutzung mit dem Sitzungscookie. Lokale und LDAP-Anmeldung sowie internes Frontend und Kundenportal werden berücksichtigt. Absolute Laufzeit seit Anmeldung, Inaktivitätsfrist oder beide Grenzen, Standardwerte und Wirkung einer Regeländerung sind noch zu entscheiden. Der [Sitzungsentwurf](docs/PERMISSIONS.md) trennt diese Vorschläge von der bestätigten Einstellbarkeit; Integrations-API-Zugänge besitzen getrennte Laufzeiten.
 
 ## Tickets und Zusammenarbeit
 
@@ -150,6 +156,8 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **V · V1.** Tickets bieten Suche, Filter, Sortierung, gespeicherte Ansichten und eine verständliche Listenansicht. Weitere Ansichten werden separat priorisiert.
 
+**Bestätigter Teil:** Die performante V1-Suche ist mit REQ-SRCH-001 ausdrücklich bestätigt. Die übrigen Vorschläge dieser Anforderung, insbesondere gespeicherte Ansichten, sind damit nicht pauschal angenommen.
+
 **Abnahme:** Nutzer finden eigene offene Vorgänge und überfällige Vorgänge eines berechtigten Projekts. Zähler, Vorschautexte und Suchvorschläge berücksichtigen dieselben Rechte wie die Treffer.
 
 ### REQ-TKT-005 Änderungen und Benachrichtigungen
@@ -157,6 +165,20 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 **V · V1.** Fachlich relevante Änderungen werden historisiert. Benachrichtigungen richten sich nach Empfängerrechten und konfigurierten Ereignissen.
 
 **Abnahme:** Die Historie zeigt Urheber und Zeitpunkt. Wiederholte interne Verarbeitung erzeugt keinen zweiten Versandauftrag für dieselbe Benachrichtigung. Ein unklarer SMTP-Annahmestatus wird ausdrücklich erfasst und kontrolliert geklärt; eine generell garantierte einmalige externe Zustellung wird nicht vorausgesetzt. Gleichzeitige Änderungen werden erkannt; stille Datenverluste sind ausgeschlossen.
+
+## Tags und Suche
+
+### REQ-TAG-001 Umfangreiches Tag-System ab V1
+
+**B · V1.** Tickets beziehungsweise Tasks und Projekte erhalten ein umfangreiches Tag-System; Jira dient als funktionale Orientierung (DEC-046). Ein Task ist dabei ein Arbeitstyp des Ticketmodells, kein zweites paralleles Aufgabenmodell.
+
+**Abnahme:** Vorgeschlagene Ausgestaltung: Mehrere Tags je Objekt, Wiederverwendung und Autovervollständigung, kombinierte Filter, Massen-Zuordnung/-Entfernung, verständliche Darstellung und zentrale Pflege durch Umbenennen, Zusammenführen und Archivieren. Tag-Erstellung, Katalogbereiche, Sichtbarkeit, administrative Zuständigkeit und Grenzen sind im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) zur Prüfung beschrieben. Verborgene Tags bleiben auch in Vorschlägen und Zählern verborgen. Projekt-Tags werden nicht ungeprüft zu Ticketrechten oder vererbten Ticket-Tags. Hierarchien, automatische Vererbung und vollständige Jira-Kompatibilität sind nicht zugesagt.
+
+### REQ-SRCH-001 Performante Suche ab V1
+
+**B · V1.** Tickets/Tasks und Projekte müssen sehr performant auffindbar sein; Tags sind in die Suche einzubeziehen (DEC-047). Die gemeinsame Suche weiterer Bereiche wird gesondert konkretisiert.
+
+**Abnahme:** Vorgeschlagene Ausgestaltung: Volltext, direkte Kennungssuche und kombinierbare Tag-/Fachfilter berücksichtigen aktuelle Projekt-, Organisations-, Feld- und Beitragsrechte bereits bei Trefferbildung, Rangfolge, Zählung und Vorschau. Suchumfang für Wiki/Anforderungen und Dateiinhalte, Filterdetails und konkrete Messgrenzen sind noch offen. Der [Suchentwurf](docs/TAGS_SEARCH.md) beschreibt einen PostgreSQL-Ausgangspunkt und messbare Ziele unter Referenzlast; diese Werte sind weder bestätigt noch erreicht. „Sehr performant“ wird nicht allein aus der Wahl von REST, gRPC oder einer Suchbibliothek abgeleitet.
 
 ## Zeiterfassung
 
