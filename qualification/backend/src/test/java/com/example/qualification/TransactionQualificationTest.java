@@ -14,12 +14,16 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers(disabledWithoutDocker = false)
 @SpringBootTest(classes = ProbeApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class TransactionQualificationTest {
-    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336");
+    // Official postgres:18.6 manifest. Digest references need an explicit image-family declaration.
+    @Container static final PostgreSQLContainer postgres = new PostgreSQLContainer(
+        DockerImageName.parse("postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336")
+            .asCompatibleSubstituteFor("postgres"));
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);

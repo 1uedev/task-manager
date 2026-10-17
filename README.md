@@ -47,7 +47,7 @@ Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous ac
 
 ## Local setup
 
-Only Git and Python 3.10 or later are needed for the documentation/repository checks. The separate technical qualification additionally needs the versions and Docker runtime described in qualification/README.md; CI runs it on an ephemeral runner. GitHub CLI is optional for creating issues and pull requests. No application dependencies, model keys or database are required.
+Only Git and Python 3.10 or later are needed for the documentation/repository checks below. The separate technical qualification additionally needs the versions and Docker runtime described in qualification/README.md; CI runs it on an ephemeral runner. GitHub CLI is optional for creating issues and pull requests. No model keys or existing database are required.
 
 ```sh
 git clone https://github.com/1uedev/task-manager.git
