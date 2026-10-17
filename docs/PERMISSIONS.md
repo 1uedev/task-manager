@@ -92,9 +92,9 @@ Bei kopierten Inhalten hilft die ursprüngliche Feldmaske allein nicht: Eine Zus
 
 Anmeldeanbieter liefern einen überprüften Identitätsnachweis. Erst die Anwendung ordnet diesen einer internen Identität zu und wertet Gruppen und Projekte aus. Der vorgeschlagene Schlüssel einer externen Identität besteht aus Anbieterkennung und unveränderlicher Verzeichniskennung. Anzeigename und E-Mail dürfen sich ändern. Gleichnamige lokale und LDAP-Konten werden nie automatisch zusammengeführt.
 
-| Vorgang | Vorgeschlagenes Verhalten; Details unter OPEN-006 |
+| Vorgang | Bestätigter Kern und vorgeschlagene Details unter OPEN-006 |
 |---|---|
-| Lokales Konto | Einladung durch berechtigte Verwaltung, Passwort als zeitgemäß geschützter Hash, begrenzte Anmeldeversuche, allgemeine Fehlermeldung ohne Kontenauskunft. Passwortpolitik und Verfahren vor Umsetzung festlegen. |
+| Lokales Konto | Bestätigt: administrative Anlage mit Einmalpasswort und Pflichtwechsel bei erster Anmeldung, auch für lokale Portalzugänge (DEC-053). Vorschlag: geschützte Passwort-Hashes, begrenzte Anmeldeversuche und allgemeine Fehler ohne Kontenauskunft. Gültigkeit, Übergabe, Passwortpolitik und Wiederherstellung vor Umsetzung festlegen. |
 | Wiederherstellung | Zeitlich begrenzter, einmaliger Nachweis; erfolgreiche Änderung widerruft betroffene Sitzungen. Keine Klartextpasswörter per E-Mail. |
 | LDAP-Anmeldung | Verifiziertes TLS, Verzeichnisprüfung und Zuordnung zur stabilen internen Identität. Erfolgreiche Anmeldung allein erzeugt keine Projekt- oder Administratorrechte. |
 | LDAP-Gruppen | Nur ausdrücklich konfigurierte Zuordnungen; Namensgleichheit mit lokalen Gruppen genügt nicht. Synchronisation und zulässige Rechte müssen überprüfbar sein. |
@@ -104,15 +104,24 @@ Anmeldeanbieter liefern einen überprüften Identitätsnachweis. Erst die Anwend
 
 Bei Java unterstützt Spring Security LDAP-Bind, bei dem das Verzeichnis das Passwort prüft; ein Abruf des Passwort-Hashes ist dafür nicht notwendig. Diese technische Möglichkeit entscheidet weder die Benutzeranlage noch die Fachrechte. Siehe [Spring Security LDAP](https://docs.spring.io/spring-security/reference/servlet/authentication/passwords/ldap.html).
 
-Vorgeschlagene Anmeldezustände sind „nicht angemeldet“, „erster Faktor bestätigt“, „vollständig angemeldet“ und „gesperrt“. In V1 genügt das konfigurierte Erstverfahren. Der Vertrag lässt später eine zusätzliche Prüfung zu, ohne Fachmodule auf den jeweiligen Anbieter festzulegen.
+Vorgeschlagene Anmeldezustände sind „nicht angemeldet“, „erster Faktor bestätigt“, „Passwortwechsel erforderlich“, „vollständig angemeldet“ und „gesperrt“. In V1 genügt das konfigurierte Erstverfahren nach Erfüllung eines gegebenenfalls erforderlichen Pflichtwechsels. Der Vertrag lässt später einen zusätzlichen Faktor zu, ohne Fachmodule auf den jeweiligen Anbieter festzulegen. Das Einmalpasswort aus DEC-053 ist ein initiales Kennwort, kein zweiter Faktor.
+
+**Ausgestaltung des bestätigten Pflichtwechsels – Entwurf:** Ein Ersteinrichtungskontext erlaubt nur die erforderlichen Passwortwechsel-/Abmeldeoperationen, keinen regulären Fachzugriff oder das Erzeugen von Integrationszugängen. UI und API müssen dieselbe Sperre durchsetzen. Verbrauch und Passwortänderung erfolgen atomar; das initiale Kennwort ist danach unbrauchbar. Vorschlag für noch festzulegende Verfahren: zufällige Einmalpasswörter je Konto, begrenzte Gültigkeit und Versuche, serverseitig nur geschützte Prüfreferenzen, keine Kennwörter in Logs oder Images; erneute Ausgabe entwertet den vorherigen Nachweis. Der sichere Übergabekanal, Kennwortregeln und der erste Administrator bleiben offen. Die 24-Stunden-Sitzungsvoreinstellung ist keine Einmalpasswortfrist. Der initiale Anmelde-/Sitzungsübergang ist vor Umsetzung festzulegen; ein Pflichtwechsel oder eine technische Sitzungsrotation darf eine bereits begonnene feste Frist nicht still verlängern. Kontowiederherstellung ist nicht durch die Kontoanlageentscheidung vollständig festgelegt.
+
+| Fall | Später nachzuweisen; Detailausgestaltung ist Vorschlag |
+|---|---|
+| K01 | Einmalpasswort akzeptiert, Pflichtwechsel ausstehend: kein regulärer Fachzugriff über UI oder API, keine Ausgabe eines Integrationszugangs. |
+| K02 | Passwort erfolgreich geändert: neues Passwort funktioniert, verbrauchtes Einmalpasswort nicht; aktuelle Gruppen-/Projekt-/Feldrechte bleiben maßgeblich. |
+| K03 | Gleichzeitige Verwendung beziehungsweise erneute administrative Ausgabe: nur ein gültiger Verbrauch, keine zweite erfolgreiche Wiederverwendung; Fehler hinterlassen keinen teilweise freigegebenen Zustand. |
+| K04 | Lokaler Portalzugang durch Administration angelegt: Pflichtwechsel gilt ebenfalls; danach nur die freigegebene Kundenorganisation und Projekte, unbekannte Mailabsender erhalten kein Konto automatisch. |
 
 **2FA folgt zeitnah nach V1.** Verfahren, Erzwingung für ausgewählte Gruppen, Wiederherstellung und Zusammenspiel mit LDAP bleiben offen. TOTP und Wiederherstellungscodes sind ein möglicher Ausgangspunkt, keine Festlegung. Faktorwechsel und Wiederherstellung brauchen eigene Prüfungen; siehe [OWASP Multifactor Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html). V1 darf nicht als bereits mit 2FA ausgestattet beschrieben werden.
 
 ## Konfigurierbare automatische Abmeldung
 
-**Bestätigt:** Der Kunde stellt eine feste Sitzungsdauer in Stunden seit erfolgreicher Anmeldung ein (REQ-AUTH-005, DEC-045, DEC-048). V1 enthält keine zusätzliche Inaktivitätsfrist. Der frühere Zwei-Fristen-Vorschlag aus TASK-018 ist durch diese Auswahl ersetzt. Die nachfolgenden Einstell-, Regeländerungs- und UX-Details bleiben Vorschläge.
+**Bestätigt:** Der Kunde stellt eine feste Sitzungsdauer in Stunden seit erfolgreicher Anmeldung ein (REQ-AUTH-005, DEC-045, DEC-048); bei einer neuen Installation sind 24 Stunden voreingestellt (DEC-052). V1 enthält keine zusätzliche Inaktivitätsfrist. Der frühere Zwei-Fristen-Vorschlag aus TASK-018 ist durch diese Auswahl ersetzt. Die nachfolgenden Einstell-, Regeländerungs- und UX-Details bleiben Vorschläge.
 
-V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes Administrationsrecht. Die Oberfläche erlaubt Stundenwerte mit klarer Einheit, auch für kürzere Bruchteile einer Stunde; validierte positive Werte und dokumentierte Grenzen ersetzen eine mehrdeutige Null. Standardwert, Minimal-/Maximalwert und eine mögliche vollständige Deaktivierung des Zeitablaufs bleiben ausdrücklich zu entscheiden. Gruppenspezifische Ausnahmen werden nicht still in V1 eingeführt.
+V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes Administrationsrecht. Die Oberfläche erlaubt Stundenwerte mit klarer Einheit, auch für kürzere Bruchteile einer Stunde; validierte positive Werte und dokumentierte Grenzen ersetzen eine mehrdeutige Null. Der Standardwert für neue Installationen ist mit 24 Stunden bestätigt. Minimal-/Maximalwert und eine mögliche vollständige Deaktivierung des Zeitablaufs bleiben ausdrücklich zu entscheiden. Gruppenspezifische Ausnahmen werden nicht still in V1 eingeführt.
 
 | Aspekt | Festgelegter Kern / vorgeschlagene Erläuterung |
 |---|---|
@@ -120,7 +129,7 @@ V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes
 | Zeitablauf | Ausschließlich die konfigurierte Dauer seit Anmeldung. Beispiel: Anmeldung 08:00, Dauer 8 Stunden → Ablauf um 16:00, unabhängig davon, ob seit 10:00 keine Aktivität stattfand oder um 15:59 noch geschrieben wird. |
 | Unabhängige Beendigung | Manuelle Abmeldung, Kontosperre oder expliziter Sitzungswiderruf können früher wirken; sie sind keine Inaktivitätsfrist. |
 
-Acht Stunden sind ein Rechenbeispiel, kein gewählter Standardwert. Laufzeiten sind tatsächliche Zeitdauern, keine Geschäftszeiten und kein sprachabhängiges Kalenderdatum.
+Acht Stunden sind ein Beispiel einer administrativ geänderten Dauer; der gewählte Standardwert neuer Installationen beträgt 24 Stunden. Laufzeiten sind tatsächliche Zeitdauern, keine Geschäftszeiten und kein sprachabhängiges Kalenderdatum.
 
 Das Backend erzwingt Fristen auf Basis seiner Zeitquelle; ein Browser-Timer ist nur eine Bedienhilfe. Bei abgelaufener Sitzung erfolgt vor geschütztem Lesen/Schreiben eine allgemeine 401-Antwort mit geeignetem Produktcode. Längere schreibende Vorgänge prüfen den noch gültigen Ausführungskontext erneut am verbindlichen Autorisierungsschritt vor der Fachänderung. Bereits zuvor dauerhaft angenommene Hintergrundaufträge werden durch einen Browser-Timeout nicht automatisch widerrufen: Sie benötigen einen gesonderten begrenzten Auftragskontext und aktuelle Konto-/Objektrechte gemäß TECHNICAL_CONTRACTS.md. Eine noch unbestätigte KI-Änderung wird niemals nach Ablauf automatisch übernommen. Kontosperre oder Rechteentzug bleiben vom bloßen Sitzungsablauf getrennt und verhindern unzulässige Ausführung.
 
@@ -144,6 +153,7 @@ Die bereits in TASK-018 herangezogene [OWASP Session Management Cheat Sheet](htt
 | S06 | Lokale und LDAP-Sitzung folgen derselben Regel; Zeitzonen-/Sommerzeitwechsel verändert keine tatsächliche Dauer. |
 | S07 | Ablauf während Wiki-/Ticketbearbeitung verdeckt Inhalte; Wiederanmeldung als anderer Nutzer zeigt keinen alten Puffer. |
 | S08 | Nach Ablauf keine neue KI-Bestätigung; schon verbindlich angenommener Auftrag läuft nur mit seinem eigenen zulässigen Kontext und aktuellen Rechten. |
+| S09 | Neue Installation verwendet 24 Stunden; nach 24 tatsächlich verstrichenen Stunden läuft die Sitzung auch bei Aktivität ab. Administrativ gewählte andere gültige Stundenwerte bleiben möglich; bestehende Kundenwerte werden nicht allein durch die Standardfestlegung ersetzt. |
 
 ## Schnittstellen zum Architekturentwurf
 

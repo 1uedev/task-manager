@@ -1,6 +1,6 @@
 # Zentrale Anforderungen an das Projektmanagementprodukt
 
-Version 0.13 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
+Version 0.14 · Stand 17. Oktober 2026 · Entwurf zur fachlichen Prüfung
 
 Das Produkt unterstützt DACH-Unternehmen mit 10 bis 100 Nutzern bei technischen Projekten, Softwareentwicklung und Kundenservice. Es wird als eigenständiges Produkt entwickelt, mit Easy8 beziehungsweise Easy Redmine als funktionalem Vergleich. Die erste verkaufbare Version verbindet Tickets, Zeiterfassung, E-Mail-Helpdesk, Kundenportal, Dokumentation, Anforderungen und Git-Verknüpfung. Moderne Bedienung, nachvollziehbare Berechtigungen und eine erweiterbare API gehören zum Kern. V1 enthält außerdem Ticketzusammenfassung, Antwortentwurf, Anforderungsprüfung und Wiki-Überarbeitung durch KI für berechtigte interne Benutzer.
 
@@ -20,7 +20,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-PROD-001 Eigenständiges Produkt
 
-**B · V1.** Das Produkt erhält eine eigene Codebasis und orientiert sich funktional an Easy8 beziehungsweise Easy Redmine. Die Umsetzung beginnt mit einem klar begrenzten Kern und wird schrittweise erweitert.
+**B · V1.** Das Produkt erhält eine eigene Codebasis und orientiert sich funktional an Easy8 beziehungsweise Easy Redmine. Der erste vorführbare Abschnitt umfasst den internen Ablauf mit Anmeldung, Projekten, Tickets, Tags und Suche; LDAP und Kundenportal folgen anschließend innerhalb V1 (DEC-051). Die Umsetzung wird schrittweise erweitert und bleibt separat zu beauftragen.
 
 **Abnahme:** Die Funktionsübersicht unterscheidet V1, spätere Erweiterungen und offene Wünsche. Sie behauptet keine vollständige Funktionsgleichheit. Eine Nutzung vorhandener Bibliotheken wird separat hinsichtlich Eignung und Lizenz geprüft.
 
@@ -104,9 +104,9 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 ### REQ-AUTH-001 Interne Konten
 
-**B · V1.** Anmeldung mit internem Benutzernamen und Passwort wird unterstützt.
+**B · V1.** Anmeldung mit internem Benutzernamen und Passwort wird unterstützt. Administratoren legen lokale Konten mit Einmalpasswort an; bei erster Anmeldung ist ein Passwortwechsel verpflichtend (DEC-053).
 
-**Abnahme:** Anmeldung, Abmeldung, Deaktivierung und Passwortwiederherstellung sind spezifiziert und prüfbar. Nach Deaktivierung bleiben keine unzulässigen aktiven Sitzungen bestehen. Konfigurierbare automatische Abmeldung ist durch REQ-AUTH-005 bestätigt; genaue Fristregeln und Passwortrichtlinien bleiben offen.
+**Abnahme:** Administrative Kontoanlage, Anmeldung mit Pflichtwechsel, Abmeldung, Deaktivierung und Passwortwiederherstellung sind spezifiziert und prüfbar. Vor erfolgreichem Pflichtwechsel ist über Oberfläche und API kein regulärer Fachzugriff möglich; das verbrauchte Einmalpasswort kann danach nicht erneut verwendet werden. Gültigkeit, Übergabe und Wiederherstellung werden separat konkretisiert; die 24-Stunden-Sitzungsvoreinstellung ist keine gewählte Einmalpasswortfrist. Nach Deaktivierung bleiben keine unzulässigen aktiven Sitzungen bestehen. Konfigurierbare automatische Abmeldung ist durch REQ-AUTH-005 bestätigt; genaue Fristregeln und Passwortrichtlinien bleiben offen.
 
 ### REQ-AUTH-002 LDAP
 
@@ -130,7 +130,7 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **B · V1.** Der Kunde kann einstellen, nach wie vielen Stunden seit erfolgreicher Anmeldung Benutzer automatisch abgemeldet werden. Es gilt ausschließlich eine feste Sitzungsdauer, keine zusätzliche Inaktivitätsfrist (DEC-045, DEC-048).
 
-**Abnahme:** Berechtigte Administration kann eine gültige Dauer konfigurieren. Benutzeraktivität, Polling und technische Erneuerungen verschieben den Beginn nicht; bloße Inaktivität beendet die Sitzung nicht vor der festen Grenze. Der Server verweigert mit abgelaufener Sitzung weitere geschützte Aufrufe, auch bei direkter API-Nutzung mit dem Sitzungscookie. Lokale und LDAP-Anmeldung sowie internes Frontend und Kundenportal werden berücksichtigt. Manuelle Abmeldung, Kontosperre und expliziter Sitzungswiderruf bleiben unabhängige Beendigungsgründe. Standard-/Grenzwerte und Wirkung einer Regeländerung sind noch zu entscheiden. Der [Sitzungsentwurf](docs/PERMISSIONS.md) trennt diese Detailvorschläge von der bestätigten Fristart; Integrations-API-Zugänge besitzen getrennte Laufzeiten.
+**Abnahme:** Berechtigte Administration kann eine gültige Dauer konfigurieren. Benutzeraktivität, Polling und technische Erneuerungen verschieben den Beginn nicht; bloße Inaktivität beendet die Sitzung nicht vor der festen Grenze. Der Server verweigert mit abgelaufener Sitzung weitere geschützte Aufrufe, auch bei direkter API-Nutzung mit dem Sitzungscookie. Lokale und LDAP-Anmeldung sowie internes Frontend und Kundenportal werden berücksichtigt. Manuelle Abmeldung, Kontosperre und expliziter Sitzungswiderruf bleiben unabhängige Beendigungsgründe. Bei einer neuen Installation sind 24 Stunden voreingestellt (DEC-052); der Stundenwert bleibt administrativ änderbar. Grenzwerte, Deaktivierbarkeit und Wirkung einer Regeländerung sind noch zu entscheiden. Der [Sitzungsentwurf](docs/PERMISSIONS.md) trennt diese Detailvorschläge von der bestätigten Fristart; Integrations-API-Zugänge besitzen getrennte Laufzeiten.
 
 ## Tickets und Zusammenarbeit
 
@@ -248,11 +248,11 @@ Die fachlichen Anforderungen stehen ausschließlich hier. [DECISIONS.md](DECISIO
 
 **Abnahme:** Eine für interne Nutzer sichtbare Seite wird nicht allein durch ihre Verknüpfung mit einem Kundenticket öffentlich. Suchergebnisse, Anhänge und Übersetzungen folgen der Freigabe der jeweiligen Inhalte.
 
-### REQ-PORTAL-003 Zugang und Einladung
+### REQ-PORTAL-003 Zugang und Kontoanlage
 
-**V · V1.** Einladung, Kontowiederherstellung und Verwaltung externer Teilnehmer werden ausdrücklich spezifiziert.
+**B · V1.** Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung muss das Passwort geändert werden (DEC-053). Zugehörigkeit, Berechtigungen und Kontowiederherstellung werden ausdrücklich spezifiziert; deren Detailverfahren bleiben zur Prüfung.
 
-**Abnahme:** Eine Einladung legt die zulässige Zugehörigkeit fest und läuft kontrolliert ab. Selbstregistrierung und anonyme Webanfragen bleiben bis zur Entscheidung deaktivierte oder nicht zugesagte Varianten. Für unbekannte E-Mail-Absender gilt die bestätigte Prüfwarteschlange aus DEC-031; die Zuordnung erzeugt keine automatische Einladung oder Portalberechtigung.
+**Abnahme:** Die administrative Anlage legt die zulässige Kundenorganisation und Projektfreigaben fest. Vor dem Pflichtwechsel bleibt regulärer Fachzugriff gesperrt; danach gelten weiterhin nur die aktuellen Rechte. Gültigkeit, sichere Übergabe und Erneuerung des Einmalpassworts sowie Wiederherstellung sind Detailentwürfe. Selbstregistrierung ist nicht der gewählte V1-Kontoanlageweg; anonyme Webanfragen bleiben unbestätigt. Für unbekannte E-Mail-Absender gilt die Prüfwarteschlange aus DEC-031; die Zuordnung erzeugt kein automatisches Konto oder Portalrecht.
 
 ## Dokumentation und Wiki
 
