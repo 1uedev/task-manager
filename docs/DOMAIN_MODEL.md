@@ -1,6 +1,6 @@
 # Fachmodell und Projektkonfiguration
 
-Stand 15. Oktober 2026 · TASK-005 · Entwurf zur Prüfung durch Holger
+Stand 17. Oktober 2026 · TASK-005 · Entwurf zur Prüfung durch Holger
 
 Dieses Dokument konkretisiert REQ-ORG-003, REQ-TKT-001 bis REQ-TKT-005, REQ-TIME-001, REQ-TIME-002 und REQ-REQ-001 bis REQ-REQ-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Es beschreibt fachliches Verhalten, kein Datenbankschema und keinen Anwendungscode. Die [Architektur](ARCHITECTURE.md) und das [Rechtekonzept](PERMISSIONS.md) bleiben Entwürfe.
 
@@ -33,7 +33,8 @@ Kennungen bleiben bei Umbenennung erhalten. Zeitpunkte werden eindeutig gespeich
 | Priorität | Administrierbare Liste mit stabilen Kennungen und Standardwert | Kein fest verdrahteter Zusammenhang zwischen Anzeigename und SLA. |
 | Verantwortlicher | Optional bei Anlage; für ausgewählte Übergänge erforderlich | Nur geeignete aktive Projektmitglieder auswählbar. |
 | Kundenorganisation / Kontakt | Für Kundenanfragen erforderlich, für interne Aufgaben optional | Externe können nicht durch Eingabe einer Kennung zu einem anderen Kunden wechseln. |
-| Termine, Tags, Version/Meilenstein | Kandidaten zur Priorisierung unter OPEN-021 | Kein automatischer V1-Lieferumfang durch diese Tabelle. |
+| Tags | Umfangreiches Tag-System für Tickets/Tasks und Projekte ab V1 bestätigt (DEC-046, REQ-TAG-001) | Konkrete Katalog-, Änderungs- und Sichtregeln im [Tag- und Suchentwurf](TAGS_SEARCH.md); keine automatische Vererbung von Projekt-Tags. |
+| Termine, Version/Meilenstein | Kandidaten zur Priorisierung unter OPEN-021 | Kein automatischer V1-Lieferumfang durch diese Tabelle. |
 | Eigene Felder | Vorschlag: Kurztext, Langtext, Ganzzahl, Dezimalzahl, Datum, Wahr/Falsch, Ein-/Mehrfachauswahl, Benutzerreferenz | Datentyp, zulässige Werte, Längen und Pflichtbedingungen je Projekt festlegen. |
 
 Freie Berechnungsformeln, kundeneigener Servercode und beliebige verschachtelte Datentypen werden durch die konfigurierbaren Felder nicht vorausgesetzt. Ein Zahlenfeld kann im Beispiel die geschätzte Restdauer enthalten; daraus entsteht keine bestätigte Ressourcenplanung.

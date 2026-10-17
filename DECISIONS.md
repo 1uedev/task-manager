@@ -1,6 +1,6 @@
 # Entscheidungen und offene Fragen
 
-Stand 16. Oktober 2026 · Bestätigte Produktentscheidungen und offene Detailplanung
+Stand 17. Oktober 2026 · Bestätigte Produktentscheidungen und offene Detailplanung
 
 Diese Datei dokumentiert bestätigte Entscheidungen und noch offene Auswahlfragen. Sie ergänzt die zentrale Spezifikation in [REQUIREMENTS.md](REQUIREMENTS.md). Die ursprünglichen Einzeltermine früherer Gesprächsentscheidungen werden nicht nachträglich erfunden; der genannte Stand ist das Erfassungsdatum. Umsetzung und fachliche Abnahme sind daraus nicht abzuleiten.
 
@@ -91,6 +91,16 @@ Die drei ausdrücklichen Antworten konkretisieren die Planung, ohne eine Gesamtf
 
 Diese drei Antworten bestätigen die in TASK-016 vorgelegten Grundentscheidungen. Die vorherigen Entscheidungseinträge bleiben als historische Belege erhalten; die aktuelle Einordnung richtet sich zusätzlich nach DEC-042 bis DEC-044. Die Detailentwürfe und deren Abnahmeszenarien bleiben prüfpflichtig. Eine Gesamtfreigabe der Spezifikation oder ein Auftrag zur Produktimplementierung ist damit nicht verbunden.
 
+## Ergänzungen vom 17. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-045 | Holger fordert eine durch den Kunden einstellbare automatische Benutzerabmeldung nach einer konfigurierten Stundenzahl. Diese Anforderung wird in V1 aufgenommen. Ob seit Anmeldung, seit letzter Aktivität oder nach beiden Grenzen gemessen wird sowie Fristwerte und Regeländerungen bleiben zur Klärung offen. | REQ-AUTH-005 |
+| DEC-046 | Holger bestätigt ein umfangreiches Tag-System für Tickets/Tasks und Projekte bereits ab V1, mit Jira als funktionaler Orientierung. Konkrete Verwaltungs-/Rechteregeln und Einzelmerkmale werden als prüfbarer Entwurf spezifiziert; daraus folgt keine vollständige Jira-Funktionsgleichheit. | REQ-TAG-001 |
+| DEC-047 | Holger verlangt eine sehr performante Suche als V1-Kern, im Zusammenhang mit Tickets/Tasks, Projekten und Tags. Zusätzliche durchsuchbare Bereiche und verbindliche Antwortzeiten unter definierter Last sind noch festzulegen. Ein Suchdienst, ein Protokollwechsel oder bereits erreichte Messwerte sind damit nicht beschlossen. | REQ-SRCH-001, REQ-PERF-003 |
+
+Die Frage nach REST oder gRPC wird im [Architekturentwurf](docs/ARCHITECTURE.md) beantwortet: direkte Java-Modulschnittstellen innerhalb eines Prozesses sind die Empfehlung, REST bleibt gemäß DEC-044 für Frontend und Integrationen gesetzt. gRPC wird für einen späteren konkreten Dienstbedarf bewertet. Diese Empfehlung ist keine zusätzliche bestätigte Technologieentscheidung und löst keine Implementierung aus.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
@@ -137,9 +147,11 @@ DEC-027 bestätigt die Organisationssicht innerhalb freigegebener Projekte; DEC-
 
 ### OPEN-006 Konten und LDAP Lebenszyklus
 
-**Status:** offen · **Fällig:** vor Anmeldung und Benutzerverwaltung · **Bezug:** REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003
+**Status:** teilweise entschieden · **Fällig:** Restdetails vor Anmeldung und Benutzerverwaltung · **Bezug:** REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005
 
 Zu klären sind lokale Einladungen, Kontowiederherstellung, Kontoanlage aus LDAP, stabile Identitätszuordnung, gegebenenfalls LDAP-Gruppenzuordnung, Deaktivierung und Ausfallverhalten. Ein geschützter lokaler Wiederherstellungsweg für Administratoren ist zu bewerten. Eine konkrete LDAP-Servervariante ist noch nicht benannt.
+
+DEC-045 bestätigt die einstellbare automatische Abmeldung. Die [Sitzungsregeln](docs/PERMISSIONS.md) schlagen getrennte absolute und Inaktivitätsfristen, serverseitige Durchsetzung, Umgang mit offenen Formularen und bestehende Sitzungen bei Regeländerung vor. Holger wurde die Auswahl der Fristart vorgelegt; ohne Antwort bleiben beide Grenzen eine Empfehlung. Konkrete Werte sind nicht beschlossen.
 
 ### OPEN-007 Projektkonfiguration und Automationen
 
@@ -173,6 +185,8 @@ DEC-036 bestätigt GitHub.com, GitLab.com und selbst betriebenes GitLab für V1 
 
 DEC-033 legt Entwurf und ausdrückliche Veröffentlichung fest. Der [Wiki-Entwurf](docs/WIKI_I18N_BRANDING.md) liefert konkrete Abläufe und Prüffälle für Sprachfassungen und Konflikte. Weiter zu entscheiden sind Editorumfang, gespeichertes Dokumentformat, Import/Export, Konfliktverfahren, Dateispeicher, Versionsumfang und Suchstrategie. Anhänge benötigen ein reales Größenprofil, damit die 1-TB-Planung bewertet werden kann. Eine zusätzliche Suchdatenbank wird nicht automatisch vorausgesetzt.
 
+Der [Tag- und Suchentwurf aus TASK-018](docs/TAGS_SEARCH.md) konkretisiert die nun bestätigte performante Suche. Vorgeschlagen sind PostgreSQL-Volltextindizes und getrennte sichtbare Textsegmente. Gemeinsame Wiki-/Anforderungssuche und Dateiinhalte sind zur Auswahl vorgelegt, noch nicht bestätigt. Ein zusätzlicher Suchdienst wird erst bei nachgewiesenem Bedarf bewertet.
+
 ### OPEN-012 Betriebsmodell und Verfügbarkeit
 
 **Status:** teilweise entschieden · **Fällig:** vor Installationsarchitektur · **Bezug:** REQ-OPS-001 bis REQ-OPS-006
@@ -194,6 +208,8 @@ Der [API-Entwurf aus TASK-016](docs/TECHNICAL_CONTRACTS.md) liefert konkrete Ope
 **Status:** offen · **Fällig:** vor Architekturfreigabe und Lasttestplanung · **Bezug:** REQ-PROD-004, REQ-PERF-001 bis REQ-PERF-004
 
 Zu entscheiden sind Zielzeiten und Referenzhardware, akzeptable Verzögerungen für Mail- und SLA-Verarbeitung sowie Daten- und Anhangsprofil. Für einen Vergleich mit Redmine oder Easy8 sind konkrete Version, Konfiguration und Testdaten nötig. Keine RAM-Obergrenze bedeutet nicht, dass Ressourcenverbrauch unbewertet bleibt. Der [Betriebsentwurf](docs/OPERATIONS.md) schlägt 4 vCPU/16 GB als Messreferenz, ein Fünfjahresprofil, p95-Ziele und Störungstests vor. Nur die RPO-/RTO-Ziele aus DEC-038 sind bestätigt; übrige Werte bleiben Vorschläge.
+
+DEC-047 bestätigt die sehr performante Suche als Produktziel. Der [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) konkretisiert Suchfälle, Tag-Mengen, Berechtigungsfilter und vorgeschlagene p95-Ziele. Diese verschärfen die Ausgangsplanung für einfache Suche, ersetzen aber keine gemessene Qualifikation oder Freigabe der Zahlenwerte.
 
 ### OPEN-015 Sprachen Vorlagen und Bedienung
 
@@ -235,7 +251,9 @@ Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Suppor
 
 **Status:** teilweise entschieden · **Fällig:** V1-Details vor deren Umsetzung; vollständiges Funktionsinventar vor Implementierungsstart · **Bezug:** REQ-PROD-003, REQ-TIME-001 bis REQ-TIME-003, REQ-REQ-001 bis REQ-REQ-004, REQ-EXT-001
 
-DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 16. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. DEC-041 bestätigt Kanban, Gantt und einfache Dashboards als erste weitere Fachpriorität nach V1; 2FA und Redmine-Import bleiben früh eingeplant. Die übrigen Prioritäten und Detailumfänge sind nicht bestätigt.
+DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 17. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. DEC-041 bestätigt Kanban, Gantt und einfache Dashboards als erste weitere Fachpriorität nach V1; 2FA und Redmine-Import bleiben früh eingeplant. Die übrigen Prioritäten und Detailumfänge sind nicht bestätigt.
+
+DEC-046 bestätigt umfangreiche Tags für Tickets/Tasks und Projekte bereits ab V1. Die frühere Einordnung von Tags als bloßem Standardfeld-Kandidaten ist damit überholt. Katalogbereiche, Tag-Erstellrechte, Massenänderungen, Pflege und Grenzen bleiben im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) Vorschläge; mit OPEN-005 und OPEN-014 abstimmen.
 
 ## Entscheidungsverfahren
 

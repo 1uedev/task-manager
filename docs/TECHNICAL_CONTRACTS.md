@@ -1,6 +1,6 @@
 # Vorschlag für Frontend-, Modul- und API-Verträge
 
-Stand 16. Oktober 2026 · TASK-016 · Ergänzung zu TASK-003, zur Prüfung
+Stand 17. Oktober 2026 · TASK-016 · Ergänzung zu TASK-003, zur Prüfung
 
 Dieser Entwurf konkretisiert [ARCHITECTURE.md](ARCHITECTURE.md) für REQ-ARCH-001, REQ-ARCH-002, REQ-API-001 und REQ-API-002. Er soll verhindern, dass verschiedene KI-Sitzungen unterschiedliche Daten-, Rechte- oder Fehlerverträge implementieren. Java/Spring Boot, React, PostgreSQL und Docker sind bestätigt. DEC-042 bis DEC-044 bestätigen zusätzlich TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. **Die darüber hinaus beschriebenen technischen Ausgestaltungen bleiben Vorschläge.** Es wurden keine Anwendung, Bibliothekskonfiguration, OpenAPI-Datei oder Container erstellt.
 
@@ -62,6 +62,12 @@ Fachänderung, relevante Historie, Wiederholungsnachweis und ausgehender Auftrag
 Eine bloße Rechteprüfung einige Millisekunden vor dem Speichern reicht nicht aus. Vorgeschlagen wird ein gemeinsames Serialisierungsverfahren für Fachschreiben und Änderungen relevanter Rechte-/Mitgliedschaftsversionen: Sperren beziehungsweise bedingte Versionsprüfung müssen bis zum Commit wirken; Rechteänderungen nehmen am selben Verfahren teil. Eine feste Reihenfolge verhindert wechselseitiges Warten. Detailtechnik und Lastwirkung sind vor Implementierung dieses Vertrags nachzuweisen. Verbindlicher Prüffall im Vorschlag: **Ist der Rechteentzug zuerst verbindlich gespeichert, darf der konkurrierende Schreibvorgang nicht mehr mit alten Rechten erfolgreich sein.** Ein zuvor abgeschlossenes, damals berechtigtes Schreiben wird dadurch nicht rückwirkend unzulässig.
 
 Ereignisse enthalten Unternehmenskennung, Ereignis-ID, Art, Schemaversion, Zeitpunkt und erforderliche Ressourcenreferenzen. Vertrauliche Volltexte werden nicht vorsorglich an alle Verbraucher verteilt. Worker laden nur den zulässigen aktuellen Kontext; historische Fachereignisse bleiben versioniert. Benutzeraufträge und explizite Systemaufgaben wie SLA-Verarbeitung besitzen unterschiedliche, begrenzte Ausführungskontexte. Ein Dienstkonto ist kein allgemeiner Rechteumgehungsweg.
+
+## Ergänzungen aus TASK-018
+
+Der [Kommunikationsvorschlag](ARCHITECTURE.md) trennt direkte Java-Aufrufe zwischen Modulen im selben Prozess von REST für Frontend/Integrationen und einer dauerhaften Auftragsübergabe an Worker. gRPC bleibt eine später zu begründende Dienstoption, keine V1-Pflicht.
+
+REQ-AUTH-005 bestätigt die konfigurierbare automatische Abmeldung; konkrete Ablauf-, Aktivitäts- und Regeländerungsverfahren stehen als Vorschläge in [PERMISSIONS.md](PERMISSIONS.md). Eine Browser-Sitzung und ein Integrations-API-Zugang behalten unterschiedliche Lebenszyklen. Der [Tag- und Suchentwurf](TAGS_SEARCH.md) ergänzt Katalog-/Zuordnungsaktionen, Suchprojektionen und aktuelle Rechte vor Trefferbildung. Die allgemeinen HTTP-Konflikt-, Wiederholungs- und Fehlerregeln unten gelten auch dort; eine Tag-Massenänderung erhält einen begrenzten Auftrag mit ausdrücklich ausgewiesenen Einzelresultaten.
 
 ## HTTP-Vertrag mit konkreten Abläufen
 

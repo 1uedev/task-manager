@@ -1,6 +1,6 @@
 # Roadmap für das Projektmanagementprodukt
 
-Stand 16. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
+Stand 17. Oktober 2026 · Vorläufige Reihenfolge ohne Kalenderzusage
 
 Diese Roadmap ordnet die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md). Sie unterscheidet den bestätigten V1-Umfang von Vorschlägen und späteren Funktionen. Die nötige Entwicklungskapazität, das Budget und ein Pilottermin sind noch offen. Das [Funktionsinventar](docs/FUNCTION_INVENTORY.md) enthält den Kern, priorisierte V1-Ergänzungen und spätere Bereiche mit Grenzen und Abnahmebeispielen. Seine fachliche Prüfung ist vor Implementierungsstart erforderlich.
 
@@ -21,7 +21,8 @@ Der folgende Umfang ist bestätigt. Die Reihenfolge innerhalb der Entwicklung wi
 | Bereich | Bestätigter Umfang | Wichtige Abhängigkeiten |
 |---|---|---|
 | Installation und Daten | Docker, PostgreSQL, einzelne Unternehmensinstallation, spätere Erweiterbarkeit; Wiederherstellungsziel höchstens 1 Stunde Datenverlust und 4 Stunden Wiederanlauf | Betriebs-/Datenkonzept und praktischer Wiederherstellungsnachweis; DEC-038 |
-| Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder | Identitätsmodell und Konfliktregeln |
+| Identität und Rechte | Internes Konto, LDAP, Gruppen, Projektberechtigungen, verborgene Felder und konfigurierbare automatische Abmeldung | Identitätsmodell, Konfliktregeln und Sitzungsfristen; DEC-045 |
+| Tags und Suche | Umfangreiches Tag-System für Tickets/Tasks und Projekte; sehr performante Suche | Katalog-/Erstellrechte, gemeinsame Suchbereiche und messbare Zielwerte; DEC-046, DEC-047 |
 | Projekte und Tickets | Konfigurierbare Projekte, Tickettypen, Workflows, Felder, Formulare und Automationen | Rechte, API und Fachmodell |
 | Zeiterfassung | Erfassung im Projekt- und Ticketzusammenhang | Benutzer, Tickets und Zeitregeln |
 | Helpdesk | IMAP/SMTP, Prüfwarteschlange für unbekannte Absender, SLA-Fristen, Geschäftszeiten und Eskalationen; Kundenpause hält die Lösungsfrist an, offene Erstreaktion läuft weiter | Tickets, Hintergrundjobs und konkrete SLA-Regeln; DEC-031, DEC-032 |

@@ -8,6 +8,8 @@ The user has authorized requirements and architecture planning plus setup of thi
 
 The product requirements remain in German. Preserve their meaning, stable IDs and distinction between confirmed requirements and proposals. PostgreSQL, Docker distribution and Java with Spring Boot are agreed. DEC-042 through DEC-044 additionally confirm React with TypeScript, a modular monolith, and an HTTP/JSON API in REST style described with OpenAPI. Versions, compiler options, generators, detailed module/transaction contracts and API policy values remain open; do not treat these choices as blanket approval of the technical proposals. DEC-041 prioritizes Kanban, Gantt and simple dashboards after V1 while keeping early 2FA and Redmine import planned. It does not approve additional sprint features or detailed release scope.
 
+DEC-045 through DEC-047 add configurable automatic logout, an extensive tag system for tickets/tasks and projects, and performant search to V1. Timeout semantics, tag creation/governance, extended search scope and exact latency targets remain proposals pending explicit choices. Internal direct Java calls are the architecture recommendation for same-process modules; DEC-044 does not require REST between every module, and gRPC is not selected.
+
 ## Start every session
 
 1. Read README.md, TODO.md, DONE.md and docs/AI_WORKFLOW.md.

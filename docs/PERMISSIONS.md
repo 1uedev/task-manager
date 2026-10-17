@@ -1,14 +1,16 @@
 # Identität und Berechtigungen
 
-Stand 16. Oktober 2026 · TASK-004 · Entwurf zur fachlichen und technischen Prüfung
+Stand 17. Oktober 2026 · TASK-004, ergänzt durch TASK-018 · Entwurf zur fachlichen und technischen Prüfung
 
-Dieser Entwurf konkretisiert REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004 und REQ-PORTAL-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Er wurde von Codex erstellt. Der vorgesehene Claude-Aufruf scheiterte an der Anmeldung und lieferte keinen Entwurf; eine unabhängige Prüfung hat nicht stattgefunden.
+Dieser Entwurf konkretisiert REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-005 und REQ-PORTAL-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Der ursprüngliche Entwurf wurde von Codex erstellt; der damalige Claude-Aufruf scheiterte an der Anmeldung und lieferte keinen Entwurf. Für die Ergänzungen vom 17. Oktober wird der tatsächliche Prüfstand separat bei TASK-018 in TODO.md geführt; daraus folgt keine nachträgliche Gesamtprüfung der ursprünglichen Fassung.
 
 ## Bestätigte Vorgaben und offene Ausgestaltung
 
 Holger hat am 13. Oktober 2026 drei Entscheidungen getroffen: Externe sehen standardmäßig die Anfragen ihrer Kundenorganisation, innerhalb ihrer freigegebenen Projekte; ein ausdrückliches Feldverbot gewinnt gegenüber einer Freigabe durch eine andere Gruppe; Zwei-Faktor-Authentifizierung folgt zeitnah nach V1. Diese Vorgaben stehen unter DEC-027 bis DEC-029 in [DECISIONS.md](../DECISIONS.md).
 
 Ebenfalls bestätigt sind frei anlegbare Gruppen, projektspezifische Rechte, getrennte Feldsichtbarkeit und Änderbarkeit, lokale Anmeldung und LDAP. Alle nachfolgenden Algorithmen, Rollenbeispiele, technischen Schnittstellen und Abnahmefälle sind Vorschläge zur Umsetzung dieser Vorgaben. Insbesondere ist ein allgemeiner Vorrang von Verboten für sämtliche Aktionen damit noch nicht beschlossen.
+
+Seit dem 17. Oktober ist zusätzlich eine konfigurierbare automatische Abmeldung nach Stunden bestätigt (DEC-045). Tag-Sichtbarkeit, Tag-Verwaltung und Suchrechte werden im [V1-Tag- und Suchentwurf](TAGS_SEARCH.md) konkretisiert. Neue Detailregeln bleiben dort wie hier Vorschläge.
 
 ## Begriffe und Grenzen
 
@@ -50,7 +52,7 @@ Eine reine Systemverwaltungsgruppe erhält im Vorschlag keinen automatischen Les
 
 Jede Auswertung erhält die interne Benutzerkennung, den serverseitig ermittelten Unternehmenskontext, Projekt, Ressource und angefragte Aktion. Eine vom Browser übermittelte Unternehmens- oder Kundenkennung gilt nur als Eingabe, niemals als Berechtigungsnachweis.
 
-1. Konto und Sitzung müssen aktiv sein. Unternehmenskontext und Ressource müssen zusammenpassen.
+1. Identität und der zum Zugangsweg gehörende Ausführungskontext müssen gültig sein. Interaktive UI-/Cookie-API-Aufrufe benötigen ein aktives Konto und eine aktive Anwendungssitzung; Integrationen ein aktives Konto beziehungsweise eine aktive Dienstidentität und ihren gesondert gültigen API-Zugang. Bereits verbindlich angenommene Benutzeraufträge verwenden ihren begrenzten, nicht widerrufenen Auftragskontext und ein weiterhin aktives Konto, ohne eine noch laufende Browsersitzung zu verlangen. Explizite Systemaufgaben besitzen einen eigens autorisierten Dienstkontext. Keiner dieser Wege ersetzt die folgenden aktuellen Rechteprüfungen. Unternehmenskontext und Ressource müssen zusammenpassen.
 2. Projektmitgliedschaft und weitere Objektgrenzen werden geprüft. Für Externe ist der Standard die eigene Kundenorganisation innerhalb freigegebener Projekte.
 3. Für die Aktion muss mindestens eine passende Gruppenfreigabe bestehen. Ohne Freigabe wird abgewiesen. Mehrere passende Aktionsfreigaben werden im vorgeschlagenen V1-Modell zusammengeführt; außerhalb von Feldern wird zunächst kein zusätzliches Verbotssystem eingeführt. Diese Vereinfachung bedarf noch der Zustimmung.
 4. Fachregeln gelten zusätzlich: erlaubter Statusübergang, Archivierung, Freigabezustand und Bearbeitungskonflikt. Ein Leserecht erlaubt keinen Schreibvorgang.
@@ -105,6 +107,41 @@ Bei Java unterstützt Spring Security LDAP-Bind, bei dem das Verzeichnis das Pas
 Vorgeschlagene Anmeldezustände sind „nicht angemeldet“, „erster Faktor bestätigt“, „vollständig angemeldet“ und „gesperrt“. In V1 genügt das konfigurierte Erstverfahren. Der Vertrag lässt später eine zusätzliche Prüfung zu, ohne Fachmodule auf den jeweiligen Anbieter festzulegen.
 
 **2FA folgt zeitnah nach V1.** Verfahren, Erzwingung für ausgewählte Gruppen, Wiederherstellung und Zusammenspiel mit LDAP bleiben offen. TOTP und Wiederherstellungscodes sind ein möglicher Ausgangspunkt, keine Festlegung. Faktorwechsel und Wiederherstellung brauchen eigene Prüfungen; siehe [OWASP Multifactor Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html). V1 darf nicht als bereits mit 2FA ausgestattet beschrieben werden.
+
+## Konfigurierbare automatische Abmeldung
+
+**Bestätigter Kern:** Der Kunde kann die automatische Abmeldung nach einer Stundenzahl einstellen (REQ-AUTH-005, DEC-045). **Noch offen:** Laufzeit seit Anmeldung, Inaktivitätsfrist oder beide Grenzen. Holger wurde die Wahl vorgelegt. Die nachstehenden Regeln beschreiben den empfohlenen Fall mit zwei getrennten Grenzen und sind bis zu einer Entscheidung Vorschläge. Sie werden nicht allein durch das Wort „automatisch“ zu bestätigten Detailvorgaben.
+
+V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes Administrationsrecht. Die Oberfläche erlaubt Stundenwerte mit klarer Einheit, auch für kürzere Bruchteile einer Stunde; validierte positive Werte und dokumentierte Grenzen ersetzen eine mehrdeutige Null. Standardwerte, Minimal-/Maximalwerte und eine mögliche Deaktivierung einzelner Grenzen müssen ausdrücklich festgelegt werden. Gruppenspezifische Ausnahmen werden nicht still in V1 eingeführt.
+
+| Frist | Vorgeschlagene Bedeutung |
+|---|---|
+| Maximale Sitzungsdauer | Zeit seit erfolgreicher interaktiver Anmeldung; Aktivität oder Erneuern der Sitzungskennung setzt den Beginn nicht zurück. Beispiel zur Erklärung: Anmeldung 08:00, Grenze 8 Stunden → spätestens 16:00 erneute Anmeldung erforderlich. |
+| Inaktivitätsdauer | Zeit seit zuletzt serverseitig verbuchter zulässiger Benutzeraktivität. Beispiel: letzte Aktivität 10:15, Grenze 1 Stunde → 11:15 Ablauf, sofern zuvor keine qualifizierende Aktivität erfolgt. |
+| Zusammenspiel | Die zuerst erreichte Grenze beendet die Sitzung. Die genannten 8/1 Stunden sind Rechenbeispiele, keine gewählten Standardwerte. Laufzeiten sind tatsächliche Zeitdauern, keine Geschäftszeiten und kein sprachabhängiges Kalenderdatum. |
+
+Das Backend erzwingt Fristen auf Basis seiner Zeitquelle; ein Browser-Timer ist nur eine Bedienhilfe. Bei abgelaufener Sitzung erfolgt vor geschütztem Lesen/Schreiben eine allgemeine 401-Antwort mit geeignetem Produktcode. Längere schreibende Vorgänge prüfen den noch gültigen Ausführungskontext erneut am verbindlichen Autorisierungsschritt vor der Fachänderung. Bereits zuvor dauerhaft angenommene Hintergrundaufträge werden durch einen Browser-Timeout nicht automatisch widerrufen: Sie benötigen einen gesonderten begrenzten Auftragskontext und aktuelle Konto-/Objektrechte gemäß TECHNICAL_CONTRACTS.md. Eine noch unbestätigte KI-Änderung wird niemals nach Ablauf automatisch übernommen. Kontosperre oder Rechteentzug bleiben vom bloßen Sitzungsablauf getrennt und verhindern unzulässige Ausführung.
+
+Als Benutzeraktivität zählen ausdrücklich benutzerinitiierte Navigation, Such-/Bearbeitungsaktionen und begrenzte Aktivitätssignale beim aktiven Schreiben. Automatisches Polling, offene Tabs, automatische Aktualisierung und technische Token-Erneuerung zählen nicht. Der Server bestimmt die Zeit, akzeptiert keine beliebigen Zeitstempel vom Client und begrenzt Aktivitätssignale. Ein solches Signal beweist keine physische Anwesenheit und kann die absolute Grenze nicht verlängern. Eine offene Wiki-Eingabe soll vor Ablauf eine sichtbare Warnung erhalten; nach absolutem Ablauf ist auch bei aktivem Schreiben eine neue Anmeldung erforderlich.
+
+Alle Tabs derselben Sitzung und deren Cookie-API-Aufrufe folgen derselben Frist; andere separat angemeldete Geräte behalten ihre eigenen Sitzungen. Lokale Anmeldung und LDAP benutzen dieselbe Anwendungsrichtlinie. Ein weiterhin gültiger LDAP-Nachweis verlängert die abgelaufene Anwendungssitzung nicht still. Integrations-API-Schlüssel haben eigene Laufzeiten und sind kein „angemeldet bleiben“-Ersatz für die Weboberfläche. Dauerhafte Browser-Anmeldung oder spätere SSO-Verfahren dürfen die festgelegte Maximaldauer nicht unbemerkt umgehen.
+
+**Regeländerungen im Vorschlag:** Eine Verkürzung wirkt auf bestehende Sitzungen spätestens bei der nächsten geschützten Anfrage; bereits überschrittene Grenzen führen zur Abmeldung. Eine Verlängerung gilt erst nach neuer Anmeldung, damit laufende Sitzungen nicht heimlich erweitert werden. Die Verwaltung sieht vor Bestätigung die Auswirkung und das Risiko der eigenen Abmeldung. Richtlinie und Sitzungsversion werden konsistent ausgewertet; Werte werden nicht pro Tab zwischengespeichert und ungeprüft weiterverwendet.
+
+Warnung und Wiedereinstieg müssen verständlich sein. Nach Ablauf werden Fachinhalte verdeckt; neue Abfragen enden. Ein bereits manuell gespeicherter Entwurf bleibt gespeichert. Ein noch nicht gespeicherter Formularpuffer kann im selben Tab vorübergehend im Arbeitsspeicher zurückgehalten werden, ohne ihn auf dem Sperrbildschirm anzuzeigen oder in ungeschütztem Local Storage abzulegen. Er darf nur nach Anmeldung derselben Identität und erneuter Rechte-/Versionsprüfung wieder angeboten werden; andernfalls wird er verworfen. Ein Neuladen oder Schließen kann ungesicherte Eingaben verlieren, worauf die Warnung hinweist. Fremde Konten erhalten keine alten Formulardaten, und Wiederanmeldung löst keine automatische Speicherung oder Sendung aus.
+
+Die Unterscheidung von Inaktivitäts- und absoluter Frist sowie deren serverseitige Durchsetzung ist in der [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration) beschrieben, gelesen am 17. Oktober 2026. Unsere konkreten Einstell-, Aktivitäts- und UX-Regeln oben bleiben projektbezogene Vorschläge.
+
+| Fall | Später nachzuweisen, kein bereits ausgeführter Test |
+|---|---|
+| S01 | Beispiel 08:00 + 8 Stunden läuft um 16:00 ab, auch bei Aktivität um 15:59. |
+| S02 | Beispiel 10:15 + 1 Stunde läuft um 11:15 ab; bloßes Polling um 11:10 verlängert nicht. |
+| S03 | Berechtigte Aktivität vor Inaktivitätsende verschiebt nur die Inaktivitätsgrenze, nicht das absolute Ende. |
+| S04 | Offener zweiter Tab und direkter Cookie-API-Aufruf scheitern nach Ablauf; erneute Anmeldung setzt einen neuen Sitzungsbeginn. |
+| S05 | Verkürzung meldet bereits überfällige Sitzungen bei nächstem Zugriff ab; Verlängerung belebt keine abgelaufene Sitzung wieder. |
+| S06 | Lokale und LDAP-Sitzung folgen derselben Regel; Zeitzonen-/Sommerzeitwechsel verändert keine tatsächliche Dauer. |
+| S07 | Ablauf während Wiki-/Ticketbearbeitung verdeckt Inhalte; Wiederanmeldung als anderer Nutzer zeigt keinen alten Puffer. |
+| S08 | Nach Ablauf keine neue KI-Bestätigung; schon verbindlich angenommener Auftrag läuft nur mit seinem eigenen zulässigen Kontext und aktuellen Rechten. |
 
 ## Schnittstellen zum Architekturentwurf
 

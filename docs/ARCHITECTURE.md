@@ -1,6 +1,6 @@
 # Vorschlag für die Systemarchitektur
 
-Stand 16. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
+Stand 17. Oktober 2026 · TASK-003 · Entscheidungsgrundlage, keine freigegebene Umsetzung
 
 Holger hat Java mit Spring Boot als Backend bestätigt (DEC-039). Docker, PostgreSQL und eine eigenständige Codebasis sind ebenfalls gesetzt. DEC-042 bis DEC-044 bestätigen zusätzlich React mit TypeScript, einen modularen Monolithen sowie HTTP/JSON im REST-Stil mit OpenAPI. Konkrete Versionen, Modulverträge und API-Detailregeln bleiben unter OPEN-001, OPEN-002 und OPEN-013 offen. Es wurden weder Gerüstcode noch Datenbank, Container oder Technologietests erstellt.
 
@@ -50,6 +50,22 @@ Das Portal und die interne Oberfläche sind zwei Ansichten derselben Fachlogik. 
 Abhängigkeiten werden gerichtet und zyklenfrei geplant: Zeit kennt Tickets, Tickets kennen keine Zeitbuchungsimplementierung. Eine Ticketansicht mit Zeitsumme verwendet einen separaten Abfragedienst. Verknüpfungen rufen bereitgestellte Leseschnittstellen auf; sie umgehen keine Zugriffsprüfung. Die Zusammensetzung geschieht an einem klaren Anwendungseinstieg. Spring Modulith kann bei Java insbesondere Zyklen, unerlaubte interne Zugriffe und erlaubte Abhängigkeiten prüfen; es beweist weder korrekte Fachregeln noch sichere Rechte.
 
 Für parallele KI-Arbeit werden später kleine Aufgaben je Modul und Vertrag vergeben. Änderungen an gemeinsamem Zugriffskontext, API oder Ereignissen werden vor abhängigen Aufgaben koordiniert. Versionsverwaltung, Claim-PRs und getrennte Worktrees bleiben gemäß [AI_WORKFLOW.md](AI_WORKFLOW.md) verbindlich. Eine KI darf kein neues Framework oder eine konkurrierende Aufgabenliste nebenbei einführen.
+
+## Interne Kommunikation: lokale Aufrufe, REST oder gRPC?
+
+**Empfehlung für den bestätigten modularen Monolithen:** Fachmodule im selben Java-Prozess rufen ihre veröffentlichten Java-Schnittstellen direkt auf. Sie bauen keinen HTTP- oder gRPC-Client für den Aufruf eines benachbarten Moduls ein. Das wahrt Modulverträge und lokale Transaktionen, ohne für jeden Fachschritt Serialisierung, Netzwerkfehler und zusätzliche Dienstverwaltung einzuführen. Eine Java-Modulschnittstelle ist dabei nicht automatisch ein öffentlich erreichbarer Netzwerkendpunkt.
+
+| Verbindung | Empfehlung / bestätigte Richtung | Grund und Grenze |
+|---|---|---|
+| React/Portal → Backend; externe Integrationen → Produkt | HTTP/JSON im REST-Stil mit OpenAPI, bestätigt durch DEC-044 | Einheitlicher veröffentlichter Fachvertrag; API- und Objektberechtigungen bleiben erforderlich. |
+| Fachmodul → anderes Modul im selben Prozess | Direkter Java-Aufruf über geprüften Modulvertrag; Empfehlung unter OPEN-002 | Gemeinsame Transaktionsgrenzen und geringe zusätzliche Betriebs-/Aufrufkomplexität; keine Behauptung gemessener Produktleistung. |
+| Webprozess → dauerhafte Hintergrundarbeit | Auftrag/Outbox; Vorschlag PostgreSQL mit gesondertem Worker | Worker kann aus demselben Image starten, läuft aber in einem eigenen Prozess. Lokale Methodenaufrufe ersetzen die dauerhafte Übergabe zwischen diesen Prozessen nicht. |
+| Später tatsächlich getrennte eigene Dienste | REST oder gRPC anhand des konkreten Vertrags entscheiden | gRPC ist ein Kandidat für typisierte entfernte Aufrufe oder Streaming. Deadlines, Wiederholbarkeit, Authentifizierung, Kompatibilität und Betrieb sind zusätzlich zu lösen. |
+| Produkt → Mail, LDAP, Git, KI | Vorgegebene Anbieterprotokolle über Adapter | Keine erzwungene Übersetzung aller Integrationen in gRPC. |
+
+[Spring Modulith](https://docs.spring.io/spring-modulith/reference/fundamentals.html) beschreibt Module mit bereitgestellten Schnittstellen und internen Implementierungen. Die [gRPC-Grundlagen](https://grpc.io/docs/what-is-grpc/core-concepts/) beschreiben entfernte Dienstaufrufe und Streaming-Varianten. Daraus folgt für dieses Projekt die Empfehlung oben; eine feste Aussage „gRPC ist schneller“ wäre ohne konkreten Vergleich nicht belastbar. Die Quellen wurden am 17. Oktober 2026 gelesen. Der interne Aufrufvorschlag ist noch keine weitere DEC-Entscheidung.
+
+Direkte Aufrufe behalten denselben vertrauenswürdigen serverseitigen Zugriffskontext und dieselben Fachrechte. Methoden dürfen keinen ungeschützten internen Schreibweg anbieten, der sich allein auf den HTTP-Controller verlässt. Ein späterer Dienstzuschnitt rechtfertigt heute weder Microservices noch eine doppelte REST-/gRPC-API. Für die geforderte Suchleistung sind Datenmodell, Indizes, erlaubte Filter und Abfragepläne zunächst die zu prüfenden Faktoren; der [Tag- und Suchentwurf](TAGS_SEARCH.md) beschreibt den Messansatz.
 
 ## Daten und Vorbereitung späterer Mandanten
 
@@ -128,9 +144,9 @@ Der Ablauf lautet: berechtigten Kontext zusammenstellen, Skill-Version auswähle
 
 ## Messplan und Entscheidungspunkte
 
-Als erster Referenzrechner wird **4 vCPU, 16 GB RAM und SSD** vorgeschlagen, ausschließlich als Ausgangspunkt späterer Messungen, ohne Betriebszusage und ohne neue RAM-Obergrenze. Lokale Modellhardware kommt gesondert hinzu. Das Profil umfasst 15 aktive Nutzer, 500–1.500 neue Tickets pro Monat und im Langzeittest 90.000 Tickets mit definierten Historien, Anhängen und Feldrechten.
+Als erster Referenzrechner wird **4 vCPU, 16 GB RAM und SSD** vorgeschlagen, ausschließlich als Ausgangspunkt späterer Messungen, ohne Betriebszusage und ohne neue RAM-Obergrenze. Lokale Modellhardware kommt gesondert hinzu. Das Profil umfasst 15 aktive Nutzer, 500–1.500 neue Tickets pro Monat und im Langzeittest 90.000 Tickets mit definierten Historien, Anhängen und Feldrechten. TASK-018 ergänzt ein vorgeschlagenes Tag-/Suchprofil einschließlich unterschiedlich sichtbarer Inhalte.
 
-Vorgeschlagene Messziele zur Diskussion: p95 höchstens 500 ms für Ticketlisten und Detail-API, höchstens 1 s für Suche und Speichern, jeweils unter diesem Lastprofil ohne externe Providerlaufzeit. Zusätzlich sind Ende-zu-Ende-Bedienzeit, Fehlerrate, Mailrückstand und SLA-Verzögerung zu messen. Diese Antwortzeitziele sind bisher weder bestätigt noch erreicht; die inzwischen bestätigten Wiederherstellungsziele aus DEC-038 werden separat betrachtet. Der Vergleich mit Redmine/Easy8 benötigt gleichwertige Daten, Funktionen, Hardware und bekannte Versionen.
+Vorgeschlagene Messziele zur Diskussion: p95 höchstens 500 ms für Ticketlisten und Detail-API; TASK-018 konkretisiert reguläre Suche auf ebenfalls 500 ms und Tag-/Kennungsvorschläge auf 200 ms. Komplexe freigegebene Suche und Speichern bleiben bei höchstens 1 s, jeweils unter Referenzlast ohne externe Providerlaufzeit. Der [Tag- und Suchentwurf](TAGS_SEARCH.md) grenzt Messklassen und sichtbare Bedienzeit ab. Zusätzlich sind Fehlerrate, Mailrückstand und SLA-Verzögerung zu messen. Diese Antwortzeitziele sind bisher weder bestätigt noch erreicht; die bestätigten Wiederherstellungsziele aus DEC-038 werden separat betrachtet. Der Vergleich mit Redmine/Easy8 benötigt gleichwertige Daten, Funktionen, Hardware und bekannte Versionen.
 
 Das 1-TB-Live-Budget wird vor allem durch Anhänge beeinflusst: Ein rein illustratives Profil mit 90.000 Tickets, zwei Dateien je Ticket und je 5 MB ergibt bereits rund 900 GB Dateiinhalte, ohne Datenbank, Revisionen, Suchindex oder Reserve. Deshalb sind Größenlimits, Aufbewahrung und reales Kundenprofil Voraussetzung einer Dimensionierung. Sicherungen benötigen ein separates Budget.
 

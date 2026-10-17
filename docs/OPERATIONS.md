@@ -1,6 +1,6 @@
 # Docker-Betrieb, Sicherung und Leistungsplanung
 
-Stand 16. Oktober 2026 · Planungsentwurf für TASK-010
+Stand 17. Oktober 2026 · Planungsentwurf für TASK-010
 
 Dieses Dokument konkretisiert REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004 sowie REQ-DATA-003 und REQ-DATA-004. Es ergänzt [Architektur](ARCHITECTURE.md), [Helpdesk](HELPDESK_SLA.md), [Git und Migration](GIT_MIGRATION.md) und [KI-Betriebsgrenzen](AI_USE_CASES.md).
 
@@ -150,6 +150,8 @@ Vorgeschlagene Warnstufen: 70 Prozent belegter Nutzkapazität und absehbare Ersc
 
 Der Referenzbestand enthält 100 Konten, 20 Projekte mit unterschiedlichen Gruppen-/Feldrechten, 90.000 Tickets, durchschnittlich zehn Historieneinträge und fünf Zeitbuchungen je Ticket, 2.000 Wiki-Seiten mit mehreren Revisionen sowie das oben beschriebene Dateiprofil. Eigene Felder, interne und externe Sichten, DE/EN und lange Ticketverläufe werden einbezogen. Unberechtigte oder leere Datenbestände dürfen keine günstigeren Scheinmessungen liefern.
 
+Das [Tag-/Suchprofil aus TASK-018](TAGS_SEARCH.md) ergänzt 5.000 Tags, 450.200 Zuordnungen, 180.000 durchsuchbare Kommentare und bei erweitertem Suchumfang 10.000 Anforderungen. Indexgröße und Speicherbudget sind anhand dieses Gesamtprofils zu messen; die vorstehende Dimensionierung ist weiterhin keine Zusage.
+
 Vorgeschlagen sind 15 aktive Sitzungen mit im Mittel einer Fachaktion alle fünf Sekunden. Aktionen verteilen sich auf Lesen/Listen (45 Prozent), Suche/Filter (25 Prozent), Ticketänderung/Antwort (15 Prozent), Zeitbuchung (10 Prozent) und Wiki-Bearbeitung (5 Prozent). Ein 30-Minuten-Messlauf nach zehn Minuten Aufwärmzeit sowie ein zweistündiger Dauerlauf prüfen Normalbetrieb. Eine zusätzliche Laststufe mit 30 Sitzungen zeigt die Überlastreaktion; die Normalziele sind dafür nicht automatisch zugesagt.
 
 Parallel laufen reale Hintergrundmuster: Mailabruf, SLA-Fälligkeiten und Sicherung. Ein separater Spitzenfall mit 30 eingehenden Mails je Minute über fünf Minuten ergibt 150 Eingänge. KI-Last wird zusätzlich mit höchstens zwei parallelen Generierungen aus dem KI-Entwurf geprüft; Modellserver beziehungsweise Providerlaufzeit wird getrennt ausgewiesen.
@@ -157,7 +159,10 @@ Parallel laufen reale Hintergrundmuster: Mailabruf, SLA-Fälligkeiten und Sicher
 | Messgröße | Vorgeschlagener Zielwert unter Referenzlast |
 |---|---|
 | Ticketliste / Detail-API | p95 höchstens 500 ms innerhalb des Anwendungsservers, ohne externe Integration. |
-| Suche / reguläre Speicherung | p95 höchstens 1 Sekunde; komplexe erlaubte Rechtefilter enthalten. |
+| Tag-/Kennungsvorschläge | p95 höchstens 200 ms serverseitig, einschließlich Rechteprüfung; konkretisiert durch TASK-018. |
+| Reguläre Suche | p95 höchstens 500 ms serverseitig bis zur ersten Seite; Messklassen und Datenprofil in [TAGS_SEARCH.md](TAGS_SEARCH.md). |
+| Komplexe freigegebene Suche / reguläre Speicherung | p95 höchstens 1 Sekunde; komplexe erlaubte Rechtefilter enthalten. |
+| Sichtbare reguläre Suche | p95 höchstens 1 Sekunde einschließlich Debounce, Netz und Darstellung unter dokumentiertem Referenzprofil; TASK-018. |
 | Sichtbare Kernbedienung | p95 höchstens 2 Sekunden vom Auslösen bis zum verwendbaren Ergebnis im Referenzbrowser und festgehaltenen Netzprofil. |
 | Mailverarbeitung | p95 höchstens 60 Sekunden vom Abrufbereitstehen im Testpostfach bis zum verarbeiteten Eingang, einschließlich Polling. Prüfwarteschlangen bleiben sichtbar. |
 | SLA-Eskalationsauftrag | p95 höchstens 60 Sekunden nach Fälligkeit dauerhaft angelegt; Zustellung und SMTP-Annahme separat messen. |

@@ -14,6 +14,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Human review: [requirements](REQUIREMENTS.md), [decisions and open questions](DECISIONS.md), [roadmap](ROADMAP.md).
 - Identity and access review: [permissions, LDAP and portal examples](docs/PERMISSIONS.md).
 - Architecture review: [confirmed technology choices, rationale and proposed details](docs/ARCHITECTURE.md).
+- Tags and search review: [V1 catalog, rights, search scope and performance proposals](docs/TAGS_SEARCH.md).
 - Technical contract review: [confirmed TypeScript, module and API direction with proposed details](docs/TECHNICAL_CONTRACTS.md).
 - Domain review: [project workflows, fields, time corrections and requirement revisions](docs/DOMAIN_MODEL.md).
 - Service review: [mail handling, customer portal and calculated SLA examples](docs/HELPDESK_SLA.md).
@@ -31,6 +32,8 @@ TODO.md on main is the single source for task ownership and state. Issues provid
 ## Agreed product direction
 
 Version 1 combines tickets, time tracking, email helpdesk with SLAs, a customer portal, a modern wiki, requirements management and GitHub/GitLab links. Deployment starts with Docker and PostgreSQL, one installation per company. The confirmed direction is React with TypeScript, Java with Spring Boot, a modular monolith and an HTTP/JSON API in REST style described with OpenAPI. German and English, customer branding, LDAP and group and field permissions are included in the specification.
+
+V1 also includes configurable automatic session expiry, an extensive tag system for tickets/tasks and projects, and performant search (DEC-045 through DEC-047). Timeout semantics, tag governance, further search scope and numeric performance targets remain open.
 
 Administrators will configure Markdown instructions and models from OpenAI, Anthropic/Claude or Ollama. AI proposes; authorized users confirm changes and outgoing messages. V1 includes ticket summaries, reply drafts, requirements checks and wiki revision assistance for authorized internal users. Direct AI access for external portal users comes later. Delivery order for the three providers remains open.
 
@@ -55,7 +58,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 
 | Path | Purpose |
 |---|---|
-| REQUIREMENTS.md | 86 initial requirements, stable IDs and draft acceptance criteria |
+| REQUIREMENTS.md | 89 requirements, stable IDs and draft acceptance criteria |
 | DECISIONS.md | Confirmed choices, authorized scope and open decisions |
 | ROADMAP.md | Initial release and later work |
 | TODO.md / DONE.md | Central task ledger and accepted history |
@@ -66,6 +69,7 @@ Use a separate clone or worktree for each concurrent AI. Task reservation and ha
 | docs/PERMISSIONS.md | Draft groups, portal scope, field conflicts, identity lifecycle and acceptance scenarios |
 | docs/ARCHITECTURE.md | Confirmed architecture choices; proposed detailed contracts, deployment and measurements |
 | docs/TECHNICAL_CONTRACTS.md | Confirmed frontend/module/API direction; proposed contracts and 16 future acceptance scenarios |
+| docs/TAGS_SEARCH.md | Confirmed V1 tags and performant search; proposed behavior, rights and measurements |
 | docs/DOMAIN_MODEL.md | Proposed project workflows, configuration lifecycle, time records and requirement revisions |
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
