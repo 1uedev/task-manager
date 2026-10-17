@@ -15,14 +15,17 @@ class RepositoryContractTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        # Include all tracked documentation so valid local links remain valid.
-        for source in ROOT.rglob("*.md"):
-            relative = source.relative_to(ROOT)
-            if any(part in {".git", ".venv", "node_modules", "__pycache__"} for part in relative.parts):
-                continue
-            target = self.root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
+        # Copy source fixtures, including non-Markdown link targets. Generated
+        # dependencies and local/private runtime state are not test inputs.
+        shutil.copytree(
+            ROOT, self.root, dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(
+                ".git", ".venv", "venv", "node_modules", "__pycache__",
+                ".worktrees", "target", "dist", "build", "coverage",
+                ".codex", ".aws", ".env", ".env.*", "secrets",
+                "customer-data", "backups", "*.log",
+            ),
+        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -82,6 +85,14 @@ class RepositoryContractTests(unittest.TestCase):
     def test_broken_local_link_is_rejected(self):
         self.append("README.md", "\n[Missing](docs/missing.md)\n")
         self.assertTrue(any("broken local link" in e for e in validate(self.root)))
+
+    def test_local_non_markdown_artifact_link_is_checked(self):
+        artifact = self.root / "synthetic-contract.yaml"
+        artifact.write_text("openapi: 3.1.1\n")
+        self.append("README.md", "\n[Contract](synthetic-contract.yaml)\n")
+        self.assertEqual(validate(self.root), [])
+        artifact.unlink()
+        self.assertTrue(any("broken local link synthetic-contract.yaml" in e for e in validate(self.root)))
 
     def test_claude_import_is_required(self):
         (self.root / "CLAUDE.md").write_text("Read the rules, but no explicit import.\n")
