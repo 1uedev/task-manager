@@ -1,6 +1,6 @@
 # Wiki, Sprachen und Unternehmensauftritt
 
-Stand 16. Oktober 2026 · Planungsentwurf für TASK-007
+Stand 17. Oktober 2026 · Planungsentwurf für TASK-007
 
 Dieses Dokument konkretisiert REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002 und REQ-UX-001. Maßgeblich bleiben die [zentralen Anforderungen](../REQUIREMENTS.md) und das [Rechtekonzept](PERMISSIONS.md).
 
@@ -39,6 +39,8 @@ Vorschlag V1: ausdrücklich serverseitig speichern, sichtbarer Speicherzustand u
 Der vorgeschlagene Mindestumfang umfasst Absätze, Überschriften, Fett/Kursiv, geordnete und ungeordnete Listen, Tabellen mit Kopfzeile, Links, Bilder mit Alternativtext, Zitate und Codeblöcke. Tastaturbedienung, erkennbare Fokusposition und verständliche Werkzeugnamen gehören zur Prüfung. Beliebiges HTML, eingebettete Skripte und interaktive Fremdinhalte sind kein Bedarf für diesen Kern.
 
 Beim Einfügen aus Zwischenablage oder importiertem Inhalt werden erlaubte Elemente übernommen. Entfernte Formatierungen werden erkennbar, statt unbemerkt Text zu verlieren. Links verwenden zugelassene Protokolle; Codeblöcke sind Text, keine Ausführung. Bilder werden über den vorgesehenen Dateidienst verwaltet. Externe Bilder werden nicht ungefragt vom Leserbrowser oder Server nachgeladen.
+
+**Nachtrag TASK-019:** Wiki ist durch DEC-050 in die gemeinsame V1-Suche aufgenommen. Die bestätigte Trennung von Entwurf und Veröffentlichung gilt auch dort. Konkrete Sprach-/Revisionsfilter stehen als Vorschläge in [TAGS_SEARCH.md](TAGS_SEARCH.md); Dateiinhalte kommen erst später.
 
 **Speichervorschlag:** Ein versioniertes strukturiertes Dokument mit ausdrücklich erlaubten Elementen ist die bearbeitbare Quelle. Gerendertes HTML und Suchtext werden daraus abgeleitet. Der Server prüft Schema, Größen und Referenzen unabhängig vom Editor. Ein späterer Formatwechsel benötigt eine dokumentierte Migration, Sicherung und Prüfung der Bestandsseiten. JSON allein garantiert keine Austauschbarkeit zwischen Editoren.
 

@@ -101,6 +101,16 @@ Diese drei Antworten bestätigen die in TASK-016 vorgelegten Grundentscheidungen
 
 Die Frage nach REST oder gRPC wird im [Architekturentwurf](docs/ARCHITECTURE.md) beantwortet: direkte Java-Modulschnittstellen innerhalb eines Prozesses sind die Empfehlung, REST bleibt gemäß DEC-044 für Frontend und Integrationen gesetzt. gRPC wird für einen späteren konkreten Dienstbedarf bewertet. Diese Empfehlung ist keine zusätzliche bestätigte Technologieentscheidung und löst keine Implementierung aus.
 
+## Bestätigte Auswahl zu Sitzungen, Tags und Suche vom 17. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-048 | Holger wählt für die konfigurierbare automatische Abmeldung ausschließlich eine feste Zeit seit Anmeldung. Damit ist die Fristart aus DEC-045 entschieden; der vorherige Vorschlag mit zusätzlicher Inaktivitätsfrist entfällt für V1. Aktivität verlängert die feste Frist nicht. Konkrete Dauer, Grenzen und Umgang mit Regeländerungen bleiben offen; Kontosperre, Widerruf und manuelle Abmeldung sind unabhängige Vorgänge. | REQ-AUTH-005 |
+| DEC-049 | Auch berechtigte externe Portalbenutzer dürfen in V1 neue Tags anlegen. Die Auswahl erweitert den Nutzerkreis aus DEC-046; sie erteilt weder allen Portalbenutzern automatisch das Recht noch Katalogverwaltung oder Zugriff auf fremde Projekte/Kunden. Konkrete Katalog-, Sicht- und Vergaberegeln bleiben prüfpflichtig. | REQ-TAG-001, REQ-ACL-001, REQ-ACL-002 |
+| DEC-050 | Die gemeinsame V1-Suche umfasst Tickets/Tasks, Projekte, Wiki und Anforderungen. Suche in Dateiinhalten folgt später. Dies konkretisiert den Bereich aus DEC-047; Dateinamen-/Metadatensuche, konkrete Felder, Filter, Suchtechnik und Antwortzeitwerte sind nicht pauschal bestätigt. | REQ-SRCH-001, REQ-DOC-004, REQ-PERF-003 |
+
+Die drei Antworten konkretisieren den Entwurf aus TASK-018. Frühere Entscheidungseinträge bleiben historisch erhalten; die aktuelle Einordnung berücksichtigt DEC-048 bis DEC-050. Weitere Details, die Gesamtarchitektur und eine Produktimplementierung werden dadurch nicht freigegeben.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
@@ -145,13 +155,15 @@ DEC-029 legt die Auslieferung zeitnah nach V1 fest. Offen bleiben konkreter Term
 
 DEC-027 bestätigt die Organisationssicht innerhalb freigegebener Projekte; DEC-028 bestätigt den Vorrang ausdrücklicher Feldverbote. Offen bleiben das Zusammenspiel allgemeiner Aktionsrechte, globale und delegierte Administrationsrechte, zusätzliche externe Sichtbereiche, verborgene Pflichtfelder und organisationsübergreifende Kontakte. Der [Rechteentwurf](docs/PERMISSIONS.md) enthält eine Beispielmatrix und positive sowie negative Prüffälle. Er ist noch nicht fachlich abgenommen.
 
+DEC-049 bestätigt Tag-Erstellung auch durch berechtigte externe Portalbenutzer. Gesonderte Erstell-, Zuordnungs- und Verwaltungsrechte sowie Sichtbarkeitsgrenzen werden im [Tag-Entwurf](docs/TAGS_SEARCH.md) vorgeschlagen; die konkrete Rechtevergabe ist damit nicht pauschal beschlossen.
+
 ### OPEN-006 Konten und LDAP Lebenszyklus
 
 **Status:** teilweise entschieden · **Fällig:** Restdetails vor Anmeldung und Benutzerverwaltung · **Bezug:** REQ-AUTH-001, REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005
 
 Zu klären sind lokale Einladungen, Kontowiederherstellung, Kontoanlage aus LDAP, stabile Identitätszuordnung, gegebenenfalls LDAP-Gruppenzuordnung, Deaktivierung und Ausfallverhalten. Ein geschützter lokaler Wiederherstellungsweg für Administratoren ist zu bewerten. Eine konkrete LDAP-Servervariante ist noch nicht benannt.
 
-DEC-045 bestätigt die einstellbare automatische Abmeldung. Die [Sitzungsregeln](docs/PERMISSIONS.md) schlagen getrennte absolute und Inaktivitätsfristen, serverseitige Durchsetzung, Umgang mit offenen Formularen und bestehende Sitzungen bei Regeländerung vor. Holger wurde die Auswahl der Fristart vorgelegt; ohne Antwort bleiben beide Grenzen eine Empfehlung. Konkrete Werte sind nicht beschlossen.
+DEC-045 bestätigt die Einstellbarkeit; DEC-048 legt ausschließlich feste Laufzeit seit Anmeldung fest. Die [Sitzungsregeln](docs/PERMISSIONS.md) sind darauf angepasst und enthalten keine zusätzliche Inaktivitätsfrist für V1. Standard-/Grenzwerte, Wirkung von Regeländerungen und UX-Details bleiben Vorschläge. Die Auswahl der Fristart ist nicht erneut offen.
 
 ### OPEN-007 Projektkonfiguration und Automationen
 
@@ -185,7 +197,7 @@ DEC-036 bestätigt GitHub.com, GitLab.com und selbst betriebenes GitLab für V1 
 
 DEC-033 legt Entwurf und ausdrückliche Veröffentlichung fest. Der [Wiki-Entwurf](docs/WIKI_I18N_BRANDING.md) liefert konkrete Abläufe und Prüffälle für Sprachfassungen und Konflikte. Weiter zu entscheiden sind Editorumfang, gespeichertes Dokumentformat, Import/Export, Konfliktverfahren, Dateispeicher, Versionsumfang und Suchstrategie. Anhänge benötigen ein reales Größenprofil, damit die 1-TB-Planung bewertet werden kann. Eine zusätzliche Suchdatenbank wird nicht automatisch vorausgesetzt.
 
-Der [Tag- und Suchentwurf aus TASK-018](docs/TAGS_SEARCH.md) konkretisiert die nun bestätigte performante Suche. Vorgeschlagen sind PostgreSQL-Volltextindizes und getrennte sichtbare Textsegmente. Gemeinsame Wiki-/Anforderungssuche und Dateiinhalte sind zur Auswahl vorgelegt, noch nicht bestätigt. Ein zusätzlicher Suchdienst wird erst bei nachgewiesenem Bedarf bewertet.
+Der [Tag- und Suchentwurf aus TASK-018, konkretisiert durch TASK-019](docs/TAGS_SEARCH.md) beschreibt die bestätigte gemeinsame Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen (DEC-050). Dateiinhalte sind für später eingeordnet. Dateinamen/Metadaten, genaue Felder, Revisions-/Sprachfilter und Suchstrategie bleiben offen. PostgreSQL-Volltextindizes und getrennte sichtbare Textsegmente sind Vorschläge; ein zusätzlicher Suchdienst wird erst bei nachgewiesenem Bedarf bewertet.
 
 ### OPEN-012 Betriebsmodell und Verfügbarkeit
 
@@ -253,7 +265,7 @@ Produktname, Lizenzmodell, Preislogik, Pilotkunde, Budget, Zeitrahmen und Suppor
 
 DEC-030 bestätigt neue Revision und erneute Freigabe nach inhaltlicher Änderung einer freigegebenen Anforderung. Offen bleiben die genaue Abgrenzung inhaltlicher Änderungen, Standardfelder, Ticketbeziehungen, Zeitkorrekturen und Exportumfang; der [Fachmodellentwurf](docs/DOMAIN_MODEL.md) liefert prüfbare Vorschläge. Alle als Vorschlag bezeichneten V1-Ergänzungen und Kandidaten späterer Module müssen priorisiert werden. Die Freigabe des einfachen Anforderungsmoduls bedeutet keine Freigabe eines beliebig komplexen Genehmigungsworkflows. Das [Funktionsinventar vom 17. Oktober 2026](docs/FUNCTION_INVENTORY.md) liegt mit Kernumfang, priorisierten V1-Vorschlägen und späteren Modulen vor. DEC-041 bestätigt Kanban, Gantt und einfache Dashboards als erste weitere Fachpriorität nach V1; 2FA und Redmine-Import bleiben früh eingeplant. Die übrigen Prioritäten und Detailumfänge sind nicht bestätigt.
 
-DEC-046 bestätigt umfangreiche Tags für Tickets/Tasks und Projekte bereits ab V1. Die frühere Einordnung von Tags als bloßem Standardfeld-Kandidaten ist damit überholt. Katalogbereiche, Tag-Erstellrechte, Massenänderungen, Pflege und Grenzen bleiben im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) Vorschläge; mit OPEN-005 und OPEN-014 abstimmen.
+DEC-046 bestätigt umfangreiche Tags für Tickets/Tasks und Projekte bereits ab V1, DEC-049 die Erstellung auch durch berechtigte externe Portalbenutzer. Die frühere Einordnung von Tags als bloßem Standardfeld-Kandidaten ist damit überholt. Katalogbereiche, konkrete Vergabe der Erstellrechte, Massenänderungen, Pflege und Grenzen bleiben im [Tag- und Suchentwurf](docs/TAGS_SEARCH.md) Vorschläge; mit OPEN-005 und OPEN-014 abstimmen.
 
 ## Entscheidungsverfahren
 

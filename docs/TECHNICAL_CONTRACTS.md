@@ -63,11 +63,11 @@ Eine bloße Rechteprüfung einige Millisekunden vor dem Speichern reicht nicht a
 
 Ereignisse enthalten Unternehmenskennung, Ereignis-ID, Art, Schemaversion, Zeitpunkt und erforderliche Ressourcenreferenzen. Vertrauliche Volltexte werden nicht vorsorglich an alle Verbraucher verteilt. Worker laden nur den zulässigen aktuellen Kontext; historische Fachereignisse bleiben versioniert. Benutzeraufträge und explizite Systemaufgaben wie SLA-Verarbeitung besitzen unterschiedliche, begrenzte Ausführungskontexte. Ein Dienstkonto ist kein allgemeiner Rechteumgehungsweg.
 
-## Ergänzungen aus TASK-018
+## Ergänzungen aus TASK-018 und TASK-019
 
 Der [Kommunikationsvorschlag](ARCHITECTURE.md) trennt direkte Java-Aufrufe zwischen Modulen im selben Prozess von REST für Frontend/Integrationen und einer dauerhaften Auftragsübergabe an Worker. gRPC bleibt eine später zu begründende Dienstoption, keine V1-Pflicht.
 
-REQ-AUTH-005 bestätigt die konfigurierbare automatische Abmeldung; konkrete Ablauf-, Aktivitäts- und Regeländerungsverfahren stehen als Vorschläge in [PERMISSIONS.md](PERMISSIONS.md). Eine Browser-Sitzung und ein Integrations-API-Zugang behalten unterschiedliche Lebenszyklen. Der [Tag- und Suchentwurf](TAGS_SEARCH.md) ergänzt Katalog-/Zuordnungsaktionen, Suchprojektionen und aktuelle Rechte vor Trefferbildung. Die allgemeinen HTTP-Konflikt-, Wiederholungs- und Fehlerregeln unten gelten auch dort; eine Tag-Massenänderung erhält einen begrenzten Auftrag mit ausdrücklich ausgewiesenen Einzelresultaten.
+REQ-AUTH-005 bestätigt die konfigurierbare automatische Abmeldung ausschließlich nach fester Dauer seit Anmeldung (DEC-048); konkrete Werte, UX- und Regeländerungsverfahren stehen als Vorschläge in [PERMISSIONS.md](PERMISSIONS.md). Eine Browser-Sitzung und ein Integrations-API-Zugang behalten unterschiedliche Lebenszyklen. Der [Tag- und Suchentwurf](TAGS_SEARCH.md) berücksichtigt die bestätigte Tag-Erstellung auch durch berechtigte Portalbenutzer und die gemeinsame Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen; Dateiinhalte folgen später (DEC-049, DEC-050). Katalog-/Zuordnungsaktionen, Suchprojektionen und aktuelle Rechte vor Trefferbildung bleiben im Detail prüfpflichtig. Die allgemeinen HTTP-Konflikt-, Wiederholungs- und Fehlerregeln unten gelten auch dort; eine Tag-Massenänderung erhält einen begrenzten Auftrag mit ausdrücklich ausgewiesenen Einzelresultaten.
 
 ## HTTP-Vertrag mit konkreten Abläufen
 

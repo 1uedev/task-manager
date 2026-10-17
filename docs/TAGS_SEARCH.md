@@ -1,8 +1,8 @@
 # V1-Tags und performante Suche
 
-Stand 17. Oktober 2026 · TASK-018 · Fachlicher und technischer Entwurf zur Prüfung
+Stand 17. Oktober 2026 · TASK-018, konkretisiert durch TASK-019 · Fachlicher und technischer Entwurf zur Prüfung
 
-**Bestätigt:** Umfangreiches Tag-System für Tickets/Tasks und Projekte sowie sehr performante Suche gehören zu V1 (DEC-046, DEC-047; REQ-TAG-001, REQ-SRCH-001). Tasks sind Arbeitstypen im bestehenden Ticketmodell. **Alle folgenden Einzelmerkmale, Grenzen und Messwerte sind Vorschläge**, soweit keine weitere Entscheidung ausdrücklich genannt ist. Es wurde keine Suchfunktion implementiert oder gemessen.
+**Bestätigt:** Umfangreiches Tag-System für Tickets/Tasks und Projekte sowie sehr performante Suche gehören zu V1 (DEC-046, DEC-047; REQ-TAG-001, REQ-SRCH-001). DEC-049 schließt berechtigte externe Portalbenutzer in die Tag-Erstellung ein; DEC-050 bestätigt die gemeinsame Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen, Dateiinhalte erst später. Tasks sind Arbeitstypen im bestehenden Ticketmodell. **Alle übrigen Einzelmerkmale, Grenzen und Messwerte sind Vorschläge**, soweit keine weitere Entscheidung ausdrücklich genannt ist. Es wurde keine Suchfunktion implementiert oder gemessen.
 
 ## Jira als Orientierung, eigener klarer Umfang
 
@@ -21,7 +21,7 @@ Atlassian beschreibt für Jira Cloud mehrere Labels pro Vorgang, Vorschläge vor
 | Gespeicherte Abfragen | Vorschlag für private und ausdrücklich geteilte Filter; ein geteilter Filter speichert Kriterien, keine Freigabe seiner Treffer. Dieser Komfortteil von REQ-TKT-004 bleibt offen. |
 | API | Dieselben Zuordnungs-/Verwaltungsaktionen und Prüfungen wie in der Oberfläche; Konfliktschutz und Wiederholbarkeit gemäß TECHNICAL_CONTRACTS.md. |
 
-Holger wurde gefragt, wer neue Tags anlegen darf. **Ausgangsvorschlag:** berechtigte interne Nutzer erstellen Tags, eine ausdrücklich berechtigte Verwaltung pflegt den Katalog; externe Benutzer verwenden nur gezielt freigegebene Tags. Ohne Antwort ist dies keine bestätigte Rollenregel.
+**Bestätigter Nutzerkreis (DEC-049):** Berechtigte interne Benutzer und auch berechtigte externe Portalbenutzer dürfen neue Tags anlegen. Ein Portalzugang allein erteilt kein Erstellrecht. **Weiterhin Vorschlag:** Erstellen, Zuordnen und Katalogverwaltung besitzen getrennte Rechte; eine ausdrücklich berechtigte Verwaltung pflegt den Katalog. Die Auswahl bestätigt keinen allgemeinen Anspruch externer Nutzer auf Umbenennen, Zusammenführen, Archivieren oder Freigeben fremder Tags.
 
 ### Katalog, Identität und Änderungen
 
@@ -41,19 +41,21 @@ Tag-Sichtbarkeit und Objekt-Sichtbarkeit sind getrennt. Das Lesen eines Tags ert
 
 Die Vorschlagsliste zeigt nur Katalogeinträge, für die ein ausdrückliches Entdeckungs-/Verwendungsrecht besteht. Bei einem gemeinsam freigegebenen Unternehmenskatalog sind dessen Namen bewusst im freigegebenen Kreis sichtbar, unabhängig von einzelnen Zuordnungen. Vertrauliche Projekte verwenden keine allgemein sichtbaren Tag-Namen. Nutzungszahlen werden zusätzlich nach den zugänglichen Objekten berechnet oder weggelassen. Ein allgemeiner Systemadministrator erhält dadurch weiterhin nicht automatisch sämtliche Fachinhalte.
 
-Im Portal gilt als konservativer Vorschlag: nur ausdrücklich kundenlesbare Tags innerhalb erlaubter Projekte und Organisationsanfragen; keine internen Tags. Die Freigabe eines Tag-Namens legt die zugehörigen fremden Kundenanfragen nicht offen. Auftrag, Filter, Suche, E-Mail-Vorlage und KI-Kontext nutzen dieselben Sichtregeln. KI darf Tags vorschlagen; Anlegen, Zuordnen oder Zusammenführen verlangt die normale Berechtigung und ausdrückliche Bestätigung und ist kein zusätzlicher zugesagter V1-KI-Anwendungsfall.
+Für die bestätigte externe Tag-Erstellung wird folgende Grenze vorgeschlagen: Das gesonderte Erstellrecht gilt nur für einen freigegebenen Projekt-/Katalogbereich und eine zulässige kundensichtbare Zielgruppe. Als Ausgangspunkt sind neue Portal-Tags an die eigene Kundenorganisation innerhalb eines freigegebenen Projekts gebunden. Der Server prüft Bereich, Zielgruppe und vollständiges Entdeckungsrecht gemäß obiger Dublettenregel; freie Zielgruppen- oder Unternehmenskennungen aus dem Browser erteilen keine Rechte. Das Anlegen eines Tags weist ihn noch keinem Ticket oder Projekt zu. Eine Zuordnung erfordert zusätzlich die jeweiligen aktuellen Objekt- und Feldänderungsrechte; bei einer kombinierten Anlage-/Zuordnungsaktion werden beide Schritte als gemeinsamer Auftrag atomar geprüft. Änderungen an Kundenorganisation, Projektmitgliedschaft oder Erstellrecht wirken auch für diesen Auftrag. Konkrete Katalogaufteilung und Standardrechte bleiben unter OPEN-005/OPEN-021 offen.
 
-## Vorgeschlagener Suchumfang
+Im Portal sind im Vorschlag nur ausdrücklich kundenlesbare Tags innerhalb erlaubter Projekte und Organisationsanfragen sichtbar; keine internen Tags. Ein selbst erstellter Tag verschafft keine zusätzlichen Fach- oder Verwaltungsrechte und darf nicht fremde Kundenzuordnungen aufdecken. Die Freigabe eines Tag-Namens legt die zugehörigen fremden Kundenanfragen nicht offen. Auftrag, Filter, Suche, E-Mail-Vorlage und KI-Kontext nutzen dieselben Sichtregeln. KI darf Tags vorschlagen; Anlegen, Zuordnen oder Zusammenführen verlangt die normale Berechtigung und ausdrückliche Bestätigung und ist kein zusätzlicher zugesagter V1-KI-Anwendungsfall. Die bestätigte externe Tag-Erstellung erweitert nicht den internen V1-KI-Nutzerkreis.
 
-Bestätigt ist die performante Suche im Zusammenhang mit Tickets/Tasks, Projekten und Tags. Die Frage nach den weiteren Bereichen wurde Holger vorgelegt. **Empfehlung für die gemeinsame Suche:** zusätzlich Wiki und Anforderungen; Dateiinhalte erst später. Bis zur Antwort bleiben diese Erweiterungen Vorschläge.
+## Bestätigter Suchumfang und vorgeschlagene Details
+
+**Bestätigt durch DEC-050:** Die gemeinsame V1-Suche umfasst Tickets/Tasks, Projekte, Wiki und Anforderungen. Dateiinhalte folgen später. Die folgende Tabelle konkretisiert Felder, Revisionen und Rechte als Vorschläge; Dateinamen-/Metadatensuche ist separat weiter zu entscheiden. Die Suche in einem Bereich erteilt keine Leserechte an dessen Inhalten.
 
 | Bereich | Vorgeschlagene V1-Inhalte und Grenzen |
 |---|---|
 | Tickets/Tasks | Kennung, Titel, Beschreibung, berechtigte Kommentare und ausgewählte durchsuchbare eigene Felder; interne Beiträge nur mit ihrem eigenen Leserecht. |
 | Projekte | Kennung, Name, Beschreibung und sichtbare Tags. Die Projektansicht darf keine nicht freigegebenen Projektinformationen an Portalnutzer ausgeben. |
-| Wiki, falls aufgenommen | Berechtigte Sprachfassungen; öffentliche Leser finden nur veröffentlichte Stände. Entwurfssuche ist eine getrennte, ausdrücklich berechtigte Ansicht, nicht die Standardkundensuche. |
-| Anforderungen, falls aufgenommen | Aktuelle berechtigte Inhalte einschließlich Kriterien; freigegebene historische Revisionen über einen gesonderten Filter. Keine Vermischung von alter Freigabe und neuem Entwurf. |
-| Dateien | Vorschlag: berechtigte Dateinamen und Metadaten, keine PDF-/Office-Inhaltsextraktion, OCR oder Archivdatei-Inhalte in V1. Umfang bleibt von der offenen Antwort abhängig. |
+| Wiki | Berechtigte Sprachfassungen; öffentliche Leser finden nur veröffentlichte Stände. Entwurfssuche ist eine getrennte, ausdrücklich berechtigte Ansicht, nicht die Standardkundensuche. |
+| Anforderungen | Aktuelle berechtigte Inhalte einschließlich Kriterien; freigegebene historische Revisionen über einen gesonderten Filter. Keine Vermischung von alter Freigabe und neuem Entwurf. |
+| Dateien | Dateiinhalte sind für V1 ausdrücklich ausgeschlossen (DEC-050): keine PDF-/Office-Inhaltsextraktion, OCR oder Archivdatei-Inhalte. Berechtigte Dateinamen und Metadaten sind ein separater, noch offener Vorschlag; die vier bestätigten Suchbereiche allein bestätigen diesen Zusatz nicht. |
 | Git und KI | Geschützte Git-Providerinhalte bleiben gemäß GIT_MIGRATION.md aus dem globalen Index ausgeschlossen. Private KI-Vorschläge und Rohprompts werden nicht global durchsuchbar. |
 
 Direkte Kennungssuche wird von Volltext und Tag-Auswahl getrennt. Exakte Tag-IDs sind Filter; Tippfehlertoleranz dient nur als sichtbar gemachter Vorschlag, nicht als stiller Wechsel des gewählten Tags. Vorgeschlagen werden Wortsuche und Phrasen, DE/EN-Verarbeitung sowie eine verständliche Filteroberfläche. Beliebige reguläre Ausdrücke, ausführbarer Abfragetext, vollständiges JQL und semantische Vektorsuche sind durch den V1-Kern nicht zugesagt. Anfrageumfang, zulässige Felder, Timeout und Fehlermeldungen sind Teil des API-Vertrags.
@@ -78,7 +80,7 @@ Ein zusätzlicher Suchdienst wird erst bei nachgewiesenem Bedarf vorgeschlagen: 
 
 ## Messbare Zielvorschläge
 
-Die Messung baut auf [OPERATIONS.md](OPERATIONS.md) auf: 4 vCPU/16 GB als unverbindliche Referenz, SSD, 100 Konten, 15 gleichzeitig aktive Benutzer, 20 Projekte und 90.000 Tickets. Ergänzendes synthetisches Tag-Profil: 5.000 Katalogeinträge, durchschnittlich fünf Tags je Ticket und zehn je Projekt, entsprechend 450.200 Zuordnungen. Zusätzlich 180.000 durchsuchbare Kommentare unterschiedlicher Zielgruppen, vorhandene eigene Felder und bei erweitertem Suchumfang 2.000 Wiki-Seiten sowie 10.000 Anforderungen. Realistische Textlängen und Sprachmischung werden im späteren Messdatensatz festgehalten.
+Die Messung baut auf [OPERATIONS.md](OPERATIONS.md) auf: 4 vCPU/16 GB als unverbindliche Referenz, SSD, 100 Konten, 15 gleichzeitig aktive Benutzer, 20 Projekte und 90.000 Tickets. Ergänzendes synthetisches Tag-Profil: 5.000 Katalogeinträge, durchschnittlich fünf Tags je Ticket und zehn je Projekt, entsprechend 450.200 Zuordnungen. Zusätzlich 180.000 durchsuchbare Kommentare unterschiedlicher Zielgruppen, vorhandene eigene Felder sowie 2.000 Wiki-Seiten und 10.000 Anforderungen für den bestätigten gemeinsamen Suchumfang. Alle genannten Mengen bleiben vorgeschlagene Messdaten. Realistische Textlängen und Sprachmischung werden im späteren Messdatensatz festgehalten.
 
 | Messfall | Vorgeschlagenes Ziel, kein gemessener Wert |
 |---|---|
@@ -113,5 +115,8 @@ Diese Ziele konkretisieren „sehr performant“ zur Entscheidung. Sie ändern k
 | T15 | Referenzlast mit häufigen Begriffen, zehn Tags, Portalrechten und Hintergrundjobs | Messklassen getrennt gegen vorgeschlagene Ziele auswerten; Zielverfehlung sichtbar, keine Aussage allein aus Mittelwerten. |
 | T16 | Suchprojektionsfehler oder Wiederherstellung | Kein stiller Zugriff über alte Inhalte; kontrollierter Wiederaufbau und sichtbarer Betriebszustand. |
 | T17 | Anlage oder Umbenennung auf einen Namen, der nur in einer verborgenen anderen Sichtbarkeitsgruppe existiert | Eigener zulässiger Eintrag möglich, kein fremder Konflikt oder Wiederverwendungshinweis; bei fehlendem Entdeckungsrecht für den Zielkreis allgemeine Ablehnung vor Namensprüfung. |
+| T18 | Berechtigter Nordwerk-Portalnutzer legt einen Tag im erlaubten Katalog-/Zielgruppenkreis an und ordnet ihn einer bearbeitbaren eigenen Anfrage zu | Anlage und erlaubte Zuordnung gelingen; kein zusätzlicher Zugriff auf Südtechnik oder interne Tags. |
+| T19 | Portalnutzer ohne Erstellrecht, mit entzogener Mitgliedschaft oder mit manipulierter fremder Zielgruppe versucht eine Anlage | Server weist auch direkte API-Aufrufe ab; kombinierte Anlage/Zuordnung hinterlässt kein unzulässiges Teilergebnis. |
+| T20 | Vier synthetische Suchbegriffe stehen jeweils in einem berechtigten Ticket, Projekt, veröffentlichten Wiki und einer aktuellen Anforderung; ein fünfter ausschließlich im Inhalt einer Datei | Die vier Fachbereiche sind über die gemeinsame Suche auffindbar; der ausschließlich im Dateiinhalt vorhandene Begriff erzeugt in V1 keinen Inhaltstreffer. |
 
-T11 gilt nur, wenn Wiki in die gemeinsame Suche aufgenommen wird. Alle Fälle sind Planung, keine ausgeführten Produktprüfungen. Quellen wurden am 17. Oktober 2026 gelesen. Offene Katalog-/Erstellrechte, Suchbereiche, Grenzen und Leistungsziele werden unter OPEN-005, OPEN-011, OPEN-014 und OPEN-021 weitergeführt; Prüfnachweise zu diesem Dokument stehen zentral bei TASK-018.
+Wiki und Anforderungen sind gemäß DEC-050 in die V1-Prüfung einzubeziehen; T11 ist nicht mehr bedingt. Alle Fälle sind Planung, keine ausgeführten Produktprüfungen. Quellen wurden am 17. Oktober 2026 gelesen. Konkrete Katalog-/Rechtevergabe, Felder/Filter, Dateinamen-/Metadatenumfang, Grenzen und Leistungsziele bleiben unter OPEN-005, OPEN-011, OPEN-014 und OPEN-021 offen. Die Fristart und die ausgewählten Nutzer-/Suchbereiche werden nicht erneut zur Wahl gestellt; Prüfnachweise stehen zentral bei TASK-018 und TASK-019.

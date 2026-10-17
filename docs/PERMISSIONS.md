@@ -1,8 +1,8 @@
 # Identität und Berechtigungen
 
-Stand 17. Oktober 2026 · TASK-004, ergänzt durch TASK-018 · Entwurf zur fachlichen und technischen Prüfung
+Stand 17. Oktober 2026 · TASK-004, ergänzt durch TASK-018 und TASK-019 · Entwurf zur fachlichen und technischen Prüfung
 
-Dieser Entwurf konkretisiert REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-005 und REQ-PORTAL-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Der ursprüngliche Entwurf wurde von Codex erstellt; der damalige Claude-Aufruf scheiterte an der Anmeldung und lieferte keinen Entwurf. Für die Ergänzungen vom 17. Oktober wird der tatsächliche Prüfstand separat bei TASK-018 in TODO.md geführt; daraus folgt keine nachträgliche Gesamtprüfung der ursprünglichen Fassung.
+Dieser Entwurf konkretisiert REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-005 und REQ-PORTAL-003 aus den [zentralen Anforderungen](../REQUIREMENTS.md). Der ursprüngliche Entwurf wurde von Codex erstellt; der damalige Claude-Aufruf scheiterte an der Anmeldung und lieferte keinen Entwurf. Für die Ergänzungen vom 17. Oktober wird der tatsächliche Prüfstand separat bei TASK-018 und TASK-019 in TODO.md geführt; daraus folgt keine nachträgliche Gesamtprüfung der ursprünglichen Fassung.
 
 ## Bestätigte Vorgaben und offene Ausgestaltung
 
@@ -10,7 +10,7 @@ Holger hat am 13. Oktober 2026 drei Entscheidungen getroffen: Externe sehen stan
 
 Ebenfalls bestätigt sind frei anlegbare Gruppen, projektspezifische Rechte, getrennte Feldsichtbarkeit und Änderbarkeit, lokale Anmeldung und LDAP. Alle nachfolgenden Algorithmen, Rollenbeispiele, technischen Schnittstellen und Abnahmefälle sind Vorschläge zur Umsetzung dieser Vorgaben. Insbesondere ist ein allgemeiner Vorrang von Verboten für sämtliche Aktionen damit noch nicht beschlossen.
 
-Seit dem 17. Oktober ist zusätzlich eine konfigurierbare automatische Abmeldung nach Stunden bestätigt (DEC-045). Tag-Sichtbarkeit, Tag-Verwaltung und Suchrechte werden im [V1-Tag- und Suchentwurf](TAGS_SEARCH.md) konkretisiert. Neue Detailregeln bleiben dort wie hier Vorschläge.
+Seit dem 17. Oktober ist zusätzlich eine konfigurierbare automatische Abmeldung nach Stunden bestätigt (DEC-045); DEC-048 legt ausschließlich feste Laufzeit seit Anmeldung fest. DEC-049 erlaubt Tag-Erstellung auch berechtigten externen Portalbenutzern. Tag-Sichtbarkeit, Verwaltungs- und Suchrechte werden im [V1-Tag- und Suchentwurf](TAGS_SEARCH.md) konkretisiert. Nicht ausdrücklich bestätigte Detailregeln bleiben Vorschläge.
 
 ## Begriffe und Grenzen
 
@@ -110,19 +110,21 @@ Vorgeschlagene Anmeldezustände sind „nicht angemeldet“, „erster Faktor be
 
 ## Konfigurierbare automatische Abmeldung
 
-**Bestätigter Kern:** Der Kunde kann die automatische Abmeldung nach einer Stundenzahl einstellen (REQ-AUTH-005, DEC-045). **Noch offen:** Laufzeit seit Anmeldung, Inaktivitätsfrist oder beide Grenzen. Holger wurde die Wahl vorgelegt. Die nachstehenden Regeln beschreiben den empfohlenen Fall mit zwei getrennten Grenzen und sind bis zu einer Entscheidung Vorschläge. Sie werden nicht allein durch das Wort „automatisch“ zu bestätigten Detailvorgaben.
+**Bestätigt:** Der Kunde stellt eine feste Sitzungsdauer in Stunden seit erfolgreicher Anmeldung ein (REQ-AUTH-005, DEC-045, DEC-048). V1 enthält keine zusätzliche Inaktivitätsfrist. Der frühere Zwei-Fristen-Vorschlag aus TASK-018 ist durch diese Auswahl ersetzt. Die nachfolgenden Einstell-, Regeländerungs- und UX-Details bleiben Vorschläge.
 
-V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes Administrationsrecht. Die Oberfläche erlaubt Stundenwerte mit klarer Einheit, auch für kürzere Bruchteile einer Stunde; validierte positive Werte und dokumentierte Grenzen ersetzen eine mehrdeutige Null. Standardwerte, Minimal-/Maximalwerte und eine mögliche Deaktivierung einzelner Grenzen müssen ausdrücklich festgelegt werden. Gruppenspezifische Ausnahmen werden nicht still in V1 eingeführt.
+V1 erhält im Vorschlag eine Unternehmensrichtlinie, verwaltet über ein eigenes Administrationsrecht. Die Oberfläche erlaubt Stundenwerte mit klarer Einheit, auch für kürzere Bruchteile einer Stunde; validierte positive Werte und dokumentierte Grenzen ersetzen eine mehrdeutige Null. Standardwert, Minimal-/Maximalwert und eine mögliche vollständige Deaktivierung des Zeitablaufs bleiben ausdrücklich zu entscheiden. Gruppenspezifische Ausnahmen werden nicht still in V1 eingeführt.
 
-| Frist | Vorgeschlagene Bedeutung |
+| Aspekt | Festgelegter Kern / vorgeschlagene Erläuterung |
 |---|---|
-| Maximale Sitzungsdauer | Zeit seit erfolgreicher interaktiver Anmeldung; Aktivität oder Erneuern der Sitzungskennung setzt den Beginn nicht zurück. Beispiel zur Erklärung: Anmeldung 08:00, Grenze 8 Stunden → spätestens 16:00 erneute Anmeldung erforderlich. |
-| Inaktivitätsdauer | Zeit seit zuletzt serverseitig verbuchter zulässiger Benutzeraktivität. Beispiel: letzte Aktivität 10:15, Grenze 1 Stunde → 11:15 Ablauf, sofern zuvor keine qualifizierende Aktivität erfolgt. |
-| Zusammenspiel | Die zuerst erreichte Grenze beendet die Sitzung. Die genannten 8/1 Stunden sind Rechenbeispiele, keine gewählten Standardwerte. Laufzeiten sind tatsächliche Zeitdauern, keine Geschäftszeiten und kein sprachabhängiges Kalenderdatum. |
+| Fester Beginn | Erfolgreiche interaktive Anmeldung; Aktivität, Polling oder Erneuern der Sitzungskennung setzt den Beginn nicht zurück. |
+| Zeitablauf | Ausschließlich die konfigurierte Dauer seit Anmeldung. Beispiel: Anmeldung 08:00, Dauer 8 Stunden → Ablauf um 16:00, unabhängig davon, ob seit 10:00 keine Aktivität stattfand oder um 15:59 noch geschrieben wird. |
+| Unabhängige Beendigung | Manuelle Abmeldung, Kontosperre oder expliziter Sitzungswiderruf können früher wirken; sie sind keine Inaktivitätsfrist. |
+
+Acht Stunden sind ein Rechenbeispiel, kein gewählter Standardwert. Laufzeiten sind tatsächliche Zeitdauern, keine Geschäftszeiten und kein sprachabhängiges Kalenderdatum.
 
 Das Backend erzwingt Fristen auf Basis seiner Zeitquelle; ein Browser-Timer ist nur eine Bedienhilfe. Bei abgelaufener Sitzung erfolgt vor geschütztem Lesen/Schreiben eine allgemeine 401-Antwort mit geeignetem Produktcode. Längere schreibende Vorgänge prüfen den noch gültigen Ausführungskontext erneut am verbindlichen Autorisierungsschritt vor der Fachänderung. Bereits zuvor dauerhaft angenommene Hintergrundaufträge werden durch einen Browser-Timeout nicht automatisch widerrufen: Sie benötigen einen gesonderten begrenzten Auftragskontext und aktuelle Konto-/Objektrechte gemäß TECHNICAL_CONTRACTS.md. Eine noch unbestätigte KI-Änderung wird niemals nach Ablauf automatisch übernommen. Kontosperre oder Rechteentzug bleiben vom bloßen Sitzungsablauf getrennt und verhindern unzulässige Ausführung.
 
-Als Benutzeraktivität zählen ausdrücklich benutzerinitiierte Navigation, Such-/Bearbeitungsaktionen und begrenzte Aktivitätssignale beim aktiven Schreiben. Automatisches Polling, offene Tabs, automatische Aktualisierung und technische Token-Erneuerung zählen nicht. Der Server bestimmt die Zeit, akzeptiert keine beliebigen Zeitstempel vom Client und begrenzt Aktivitätssignale. Ein solches Signal beweist keine physische Anwesenheit und kann die absolute Grenze nicht verlängern. Eine offene Wiki-Eingabe soll vor Ablauf eine sichtbare Warnung erhalten; nach absolutem Ablauf ist auch bei aktivem Schreiben eine neue Anmeldung erforderlich.
+Navigation, Such-/Bearbeitungsaktionen, aktives Schreiben, Polling und technische Token-Erneuerung verändern den festen Sitzungsbeginn nicht. Ein Aktivitätssignal oder Inaktivitätszähler ist für diesen V1-Ablauf nicht erforderlich. Der Server bestimmt Beginn und Ende, nicht ein frei übergebener Client-Zeitstempel. Eine offene Wiki-Eingabe soll vor Ablauf eine sichtbare Warnung erhalten; nach Ablauf ist auch bei aktivem Schreiben eine neue Anmeldung erforderlich.
 
 Alle Tabs derselben Sitzung und deren Cookie-API-Aufrufe folgen derselben Frist; andere separat angemeldete Geräte behalten ihre eigenen Sitzungen. Lokale Anmeldung und LDAP benutzen dieselbe Anwendungsrichtlinie. Ein weiterhin gültiger LDAP-Nachweis verlängert die abgelaufene Anwendungssitzung nicht still. Integrations-API-Schlüssel haben eigene Laufzeiten und sind kein „angemeldet bleiben“-Ersatz für die Weboberfläche. Dauerhafte Browser-Anmeldung oder spätere SSO-Verfahren dürfen die festgelegte Maximaldauer nicht unbemerkt umgehen.
 
@@ -130,13 +132,13 @@ Alle Tabs derselben Sitzung und deren Cookie-API-Aufrufe folgen derselben Frist;
 
 Warnung und Wiedereinstieg müssen verständlich sein. Nach Ablauf werden Fachinhalte verdeckt; neue Abfragen enden. Ein bereits manuell gespeicherter Entwurf bleibt gespeichert. Ein noch nicht gespeicherter Formularpuffer kann im selben Tab vorübergehend im Arbeitsspeicher zurückgehalten werden, ohne ihn auf dem Sperrbildschirm anzuzeigen oder in ungeschütztem Local Storage abzulegen. Er darf nur nach Anmeldung derselben Identität und erneuter Rechte-/Versionsprüfung wieder angeboten werden; andernfalls wird er verworfen. Ein Neuladen oder Schließen kann ungesicherte Eingaben verlieren, worauf die Warnung hinweist. Fremde Konten erhalten keine alten Formulardaten, und Wiederanmeldung löst keine automatische Speicherung oder Sendung aus.
 
-Die Unterscheidung von Inaktivitäts- und absoluter Frist sowie deren serverseitige Durchsetzung ist in der [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration) beschrieben, gelesen am 17. Oktober 2026. Unsere konkreten Einstell-, Aktivitäts- und UX-Regeln oben bleiben projektbezogene Vorschläge.
+Die bereits in TASK-018 herangezogene [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration), gelesen am 17. Oktober 2026, unterscheidet Inaktivitäts- und absolute Frist. Für dieses Produkt hat Holger ausschließlich die absolute Frist gewählt (DEC-048); daraus folgt keine pauschale Übernahme aller Empfehlungen der Quelle. Konkrete Einstell- und UX-Details bleiben projektbezogene Vorschläge.
 
 | Fall | Später nachzuweisen, kein bereits ausgeführter Test |
 |---|---|
 | S01 | Beispiel 08:00 + 8 Stunden läuft um 16:00 ab, auch bei Aktivität um 15:59. |
-| S02 | Beispiel 10:15 + 1 Stunde läuft um 11:15 ab; bloßes Polling um 11:10 verlängert nicht. |
-| S03 | Berechtigte Aktivität vor Inaktivitätsende verschiebt nur die Inaktivitätsgrenze, nicht das absolute Ende. |
+| S02 | Anmeldung 08:00 mit beispielhaft 8 Stunden: Inaktivität seit 10:00 führt um 11:15 zu keiner zeitbedingten Abmeldung; Sitzung läuft bis 16:00, sofern kein unabhängiger Beendigungsgrund eintritt. |
+| S03 | Navigation, Schreiben, Polling und technische Erneuerung verschieben das Beispielende 16:00 nicht; manueller Widerruf oder Kontosperre wirken weiterhin früher. |
 | S04 | Offener zweiter Tab und direkter Cookie-API-Aufruf scheitern nach Ablauf; erneute Anmeldung setzt einen neuen Sitzungsbeginn. |
 | S05 | Verkürzung meldet bereits überfällige Sitzungen bei nächstem Zugriff ab; Verlängerung belebt keine abgelaufene Sitzung wieder. |
 | S06 | Lokale und LDAP-Sitzung folgen derselben Regel; Zeitzonen-/Sommerzeitwechsel verändert keine tatsächliche Dauer. |
