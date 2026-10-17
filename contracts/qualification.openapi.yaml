@@ -1,0 +1,108 @@
+openapi: 3.1.1
+info:
+  title: Synthetic transport qualification — not the product API
+  version: 0.1.0
+  description: Test-only shape for generation, error and version headers; no implemented HTTP endpoint or authentication.
+servers:
+  - url: https://qualification.invalid
+security: []
+paths:
+  /_qualification/probes:
+    post:
+      operationId: createProbe
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [label]
+              properties:
+                label: {type: string, minLength: 1, maxLength: 255}
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Probe'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /_qualification/probes/{probeId}:
+    parameters:
+      - in: path
+        name: probeId
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: readProbe
+      responses:
+        '200':
+          description: Representation
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Probe'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateProbe
+      parameters:
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [label]
+              properties:
+                label: {type: string, minLength: 1, maxLength: 255}
+      responses:
+        '200':
+          description: Updated
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Probe'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+components:
+  schemas:
+    Probe:
+      type: object
+      additionalProperties: false
+      required: [id, label, version]
+      properties:
+        id: {type: string, format: uuid}
+        label: {type: string}
+        version: {type: string, description: Opaque business version, not an ETag}
+        note: {type: [string, 'null']}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        code: {type: string}
+  responses:
+    Problem:
+      description: Problem Details
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}

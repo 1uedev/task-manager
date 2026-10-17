@@ -398,13 +398,13 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
-Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Kein Besitzer oder Arbeitsbranch ist reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwischen ausschließlich TASK-021 als isolierten Nachweis; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Kein Besitzer oder Arbeitsbranch ist reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
 
 ## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
 
 **Status:** IN ARBEIT · **Verantwortlich:** codex-20261017-qualification-01 · **Aktualisiert:** 2026-10-17
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-020 sowie ausdrücklich beauftragter Umfang und ausgewählte Kandidaten P1 bis P4. **Arbeitsstand:** geplanter Branch task/task-021-codex-qualification, separates Arbeitsverzeichnis nach Reservierung. Holgers Fortsetzungsauftrag vom 17. Oktober 2026 beauftragt den angekündigten begrenzten Werkzeug-/Vertragsnachweis. P1 bis P4 werden dafür als zu prüfende Kandidaten verwendet, nicht als pauschal abgenommene Produktarchitektur; keine Fachimplementierung aus TASK-022 bis TASK-031.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-020 sowie ausdrücklich beauftragter Umfang und ausgewählte Kandidaten P1 bis P4. **Arbeitsstand:** task/task-021-codex-qualification, separates Arbeitsverzeichnis nach Reservierung #55. Holgers Fortsetzungsauftrag vom 17. Oktober 2026 beauftragt den angekündigten begrenzten Werkzeug-/Vertragsnachweis. P1 bis P4 werden dafür als zu prüfende Kandidaten verwendet, nicht als pauschal abgenommene Produktarchitektur; keine Fachimplementierung aus TASK-022 bis TASK-031.
 
 **Umfang:** Exakte Werkzeug-/Bibliotheksversionen, Komponentenlizenzen, Modulordnung, Datenhoheit, Identitäts-/Rechtekontext und API-/Fehler-/Versionsvertrag für den ersten Abschnitt festlegen. Nach gesonderter Beauftragung einen begrenzten Build-/Generator-/Transaktionsnachweis erstellen; keine Fachmodule vorwegnehmen.
 
@@ -412,7 +412,7 @@ Die folgenden Aufgaben sind ein Vorschlag aus TASK-020, kein laufender Auftrag. 
 
 **Abnahmekriterien:** Java/Boot/PostgreSQL und React/TypeScript/Buildwerkzeuge gemeinsam qualifiziert; Generator verarbeitet Erfolgs-, Fehler- und Konfliktantworten. Modulprüfung, JPA-/JDBC-Transaktion und Rückabwicklung nachgewiesen. Lizenz-/Wartungsinformationen und verbleibende Lücken dokumentiert; keine ungeprüfte Alternativdatenbankzusage. Getrennte KI prüft Verträge und Nachweise.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Versionen anhand verfügbarer Artefakte prüfen, isolierte Qualifikation und Vertragsentwurf erstellen und unabhängig prüfen. Abweichungen offen ausweisen; keine produktiven Konten, Kundendaten oder Fachmodule.
+**Nächster Schritt:** Isolierte Qualifikation auf GitHub ausführen, Nachweise und gegebenenfalls Fehlerkorrekturen dokumentieren, unabhängige KI-Prüfung abschließen. TypeScript-6-/Generator-Konflikt bereits gefunden; kompatible 5.9.3-Variante besteht lokal Typgenerierung, Typprüfung und React-Build. Java-/PostgreSQL-/Client-Gesamtnachweis noch offen.
 
 ## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
 
