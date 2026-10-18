@@ -9,12 +9,11 @@ from html import escape
 from pathlib import Path
 import re
 
-from validate_repository import STATUSES, UNASSIGNED, field
+from validate_repository import STATUSES, TASK_HEADINGS, UNASSIGNED, field, task_heading_errors
 
 
 START = "<!-- TASK-BOARD:START -->"
 END = "<!-- TASK-BOARD:END -->"
-HEADINGS = re.compile(r"^## (TASK-\d{3}) ([^\n]+)\n", re.M)
 GROUPS = (
     ("OFFEN", "Frei und bearbeitbar", "Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen."),
     ("IN ARBEIT", "Durch eine KI reserviert", "Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe."),
@@ -38,9 +37,10 @@ class Task:
 
 
 def parse_tasks(text):
-    matches = list(HEADINGS.finditer(text))
-    if not matches:
-        raise ValueError("TODO.md enthält keine Aufgabenüberschriften.")
+    errors = task_heading_errors(text)
+    if errors:
+        raise ValueError("; ".join(errors))
+    matches = list(TASK_HEADINGS.finditer(text))
     tasks = []
     for i, match in enumerate(matches):
         body = text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)]
@@ -102,9 +102,12 @@ def updated_text(text):
     tasks = parse_tasks(text)
     board = START + "\n" + render(tasks) + END
     starts, ends = text.count(START), text.count(END)
-    first_task = HEADINGS.search(text).start()
+    first_heading = TASK_HEADINGS.search(text)
+    first_task = first_heading.start() if first_heading else len(text)
     if starts == ends == 0:
-        return text[:first_task] + board + "\n\n" + text[first_task:]
+        prefix = text[:first_task]
+        separator = "" if not prefix or prefix.endswith("\n\n") else "\n" if prefix.endswith("\n") else "\n\n"
+        return prefix + separator + board + "\n\n" + text[first_task:]
     if starts != 1 or ends != 1:
         raise ValueError("Übersicht benötigt genau ein START-/END-Markerpaar.")
     start, end = text.index(START), text.index(END) + len(END)

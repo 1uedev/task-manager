@@ -657,4 +657,4 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Abnahmekriterien:** Jede offene Aufgabe erscheint genau in der passenden Statusgruppe. Reservierte Aufgaben nennen die zuständige Sitzung. Freie und blockierte Arbeit ist eindeutig getrennt; offene Aufgaben mit zugeordnetem Besitzer werden nicht als frei angeboten. Die Übersicht ist eine abgeleitete Ansicht derselben TODO-Datei, keine zweite Statusquelle. Veraltete Übersichten werden von CI erkannt. Bestehende Aufgaben, Entscheidungen und Abnahmen bleiben erhalten. Getrennte KI prüft Verfahren und Nachweise.
 
-**Nächster Schritt:** Getrennte KI-Gegenprüfung und GitHub-Prüfungen abschließen; anschließend Ergebnis und Übergabe dokumentieren. Übersicht, Generator und 21 lokale Regressionstests sind erstellt und bestehen.
+**Nächster Schritt:** Getrennte KI-Gegenprüfung und GitHub-Prüfungen abschließen; anschließend Ergebnis und Übergabe dokumentieren. Übersicht, Generator und 25 lokale Regressionstests sind erstellt und bestehen. Beide Befunde der ersten Gegenprüfung sind korrigiert und durch zusätzliche Tests abgedeckt.

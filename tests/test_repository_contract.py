@@ -89,6 +89,12 @@ class RepositoryContractTests(unittest.TestCase):
 """)
         self.assertEqual(validate(self.root), ["TASK-999: open task must be unassigned"])
 
+    def test_task_heading_without_title_is_rejected_in_both_ledgers(self):
+        for name in ("TODO.md", "DONE.md"):
+            with self.subTest(name=name):
+                self.append(name, "\n## TASK-999\n")
+                self.assertTrue(any(f"{name}: invalid task heading" in error for error in validate(self.root)))
+
     def test_pending_acceptance_must_stay_in_todo(self):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Abnahme:** offen\n")
         self.assertTrue(any("pending acceptance belongs in TODO" in e for e in validate(self.root)))
