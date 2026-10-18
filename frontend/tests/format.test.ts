@@ -32,3 +32,30 @@ test('ambiguous or malformed input is rejected instead of guessed', () => {
   assert.equal(parseDecimal('', 'en'), null);
   assert.equal(parseDecimal('12,', 'de'), null);
 });
+
+test('spaces never join digits that are not a complete group', () => {
+  for (const language of ['de', 'en', 'fr']) {
+    assert.equal(parseDecimal('1 5', language), null, `${language} space`);
+    assert.equal(parseDecimal('1\u00a05', language), null, `${language} no-break space`);
+    assert.equal(parseDecimal('1\u202f5', language), null, `${language} narrow no-break space`);
+    assert.equal(parseDecimal('1 23', language), null, `${language} incomplete group`);
+  }
+  assert.equal(parseDecimal('1 234,5', 'de'), null);
+  assert.equal(parseDecimal('1 234.5', 'en'), null);
+  assert.equal(parseDecimal('1.2.3', 'de'), null);
+  assert.equal(parseDecimal('12.34', 'de'), null);
+});
+
+test('languages that group with spaces accept complete groups only', () => {
+  assert.equal(parseDecimal('1\u202f234,5', 'fr'), 1234.5);
+  assert.equal(parseDecimal('1\u00a0234,5', 'fr'), 1234.5);
+  assert.equal(parseDecimal('1 234,5', 'fr'), 1234.5);
+  assert.equal(parseDecimal('1 234 567', 'fr'), 1234567);
+  assert.equal(parseDecimal('1.5', 'fr'), null);
+});
+
+test('only outer whitespace is ignored', () => {
+  assert.equal(parseDecimal(' \t1,5\n', 'de'), 1.5);
+  assert.equal(parseDecimal('- 1,5', 'de'), null);
+  assert.equal(parseDecimal('-1,5', 'de'), -1.5);
+});

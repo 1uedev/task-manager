@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../src/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../src/', import.meta.url));
 
 function sources(directory: string): string[] {
   return readdirSync(directory).flatMap((name) => {
@@ -19,7 +20,7 @@ test('source files were found', () => assert.ok(files.length > 10));
 
 test('browser storage is used for the language choice only', () => {
   const users = files.filter((file) => /localStorage|sessionStorage|indexedDB|document\.cookie/.test(readFileSync(file, 'utf8')));
-  assert.deepEqual(users.map((file) => relative(root, file)), ['i18n/storage.ts']);
+  assert.deepEqual(users.map((file) => relative(root, file).split('\\').join('/')), ['i18n/storage.ts']);
   assert.match(readFileSync(join(root, 'i18n/storage.ts'), 'utf8'), /'taskmanager\.language'/);
 });
 
@@ -44,7 +45,8 @@ test('no hard wired user facing text in components', () => {
 test('the only network access goes through the generated client', () => {
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
-    if (relative(root, file) === 'api/client.ts') continue;
-    assert.ok(!/\bfetch\(|XMLHttpRequest|axios/.test(text) || relative(root, file) === 'api/synthetic.ts', relative(root, file));
+    const name = relative(root, file).split('\\').join('/');
+    if (name === 'api/client.ts') continue;
+    assert.ok(!/\bfetch\(|XMLHttpRequest|axios/.test(text) || name === 'api/synthetic.ts', name);
   }
 });

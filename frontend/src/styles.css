@@ -4,14 +4,18 @@
   --brand-background: #ffffff;
   --brand-text: #1b1b1b;
   --error: #8f1d1d;
-  --muted: #4a4a4a;
-  --border: #6b6b6b;
+  --error-strong: #8f1d1d;
+  --link: #1f4e79;
+  --muted: #545454;
+  --border: #828282;
   --focus: #b35c00;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+
+a { color: var(--link); }
 
 body {
   margin: 0;
@@ -48,6 +52,7 @@ h1:focus-visible, .error-summary:focus-visible, .success:focus-visible { outline
   color: var(--brand-on-primary);
 }
 .app-header a, .app-header label { color: var(--brand-on-primary); }
+.app-header :focus-visible, .skip-link:focus-visible { outline-color: var(--brand-on-primary); }
 .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.15rem; }
 .app-header nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; margin: 0; padding: 0; }
 .app-header nav a { display: inline-block; padding: 0.35rem 0.25rem; text-underline-offset: 4px; }
@@ -91,19 +96,20 @@ button:disabled { background: #e3e3e3; color: #4a4a4a; border-color: #6b6b6b; cu
 .field-error { margin: 0.25rem 0; color: var(--error); }
 
 .error-summary, .state-problem {
-  border: 3px solid var(--error);
+  border: 3px solid var(--error-strong);
   border-left-width: 10px;
   padding: 0.75rem 1rem;
   margin: 1rem 0;
   background: #fff6f6;
   color: #3a1010;
 }
-.error-summary h2 { margin: 0 0 0.5rem; font-size: 1.1rem; color: var(--error); }
-.error-summary a { color: var(--error); }
+.error-summary h2 { margin: 0 0 0.5rem; font-size: 1.1rem; color: var(--error-strong); }
+.error-summary a { color: var(--error-strong); }
 .success, .state-success { border: 3px solid #1d5c2e; border-left-width: 10px; padding: 0.75rem 1rem; margin: 1rem 0; background: #f4fbf6; color: #10281a; }
 .state-empty { border: 2px dashed var(--border); padding: 0.75rem 1rem; }
 .state-title { font-weight: 700; margin-top: 0; }
 .reference { color: var(--muted); font-size: 0.9rem; }
+.state-problem .reference { color: #5a2a2a; }
 .state h3 { margin-top: 0; }
 .state-loading { display: flex; align-items: center; gap: 0.75rem; }
 .spinner {

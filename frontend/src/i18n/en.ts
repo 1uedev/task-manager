@@ -26,6 +26,7 @@ export const en: Record<MessageKey, Message> = {
   'start.brand.title': 'Company branding',
   'start.brand.intro': 'Logo and colors come from a setting and can be reset. A synthetic branding is applied here.',
   'start.brand.apply': 'Apply example branding',
+  'start.brand.applyDark': 'Apply dark example branding',
   'start.brand.reset': 'Reset branding',
   'start.brand.current': 'Current branding: {name}',
 
