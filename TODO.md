@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 9 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,13 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-022](#task-022-backend-und-postgresql-grundlage-aufbauen) | Backend und PostgreSQL-Grundlage aufbauen | claude-20261018-backend-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-022](#task-022-backend-und-postgresql-grundlage-aufbauen) | Backend und PostgreSQL-Grundlage aufbauen | — | 2026-10-17 |
 | [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | — | 2026-10-17 |
 | [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | — | 2026-10-17 |
@@ -492,17 +493,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 ## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-backend-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Abhängigkeiten:** TASK-021; Ergebnisse für diesen Folgeschritt angenommen und Implementierungsauftrag erteilt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Abhängigkeiten:** TASK-021; Ergebnisse für diesen Folgeschritt angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte TASK-022 gewählt, mit der Folge „TASK-021 gilt als angenommen, das Backend mit PostgreSQL startet, zuerst per Claim PR“. Das ist der Implementierungsauftrag für diesen Umfang, keine Freigabe von TASK-023 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
 
 **Umfang:** Spring-Boot-Build, leere Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung und erste kontrollierte Migrationen aufbauen. Noch keine Fachfunktion als fertig melden.
 
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: `backend/`-Grundstruktur, zentrale Migrationskonvention und Backend-CI. Gemeinsame Root-Dateien und API-Vertrag nur koordiniert ändern; kein Frontend. Liefert Transaktions-/Repository- und Testbasis an TASK-024/TASK-025.
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: `backend/`-Grundstruktur, zentrale Migrationskonvention und Backend-CI. Gemeinsame Root-Dateien und API-Vertrag nur koordiniert ändern; kein Frontend. Liefert Transaktions-/Repository- und Testbasis an TASK-024/TASK-025. Versionen und Vertragsregeln aus [TECHNICAL_BASELINE.md](docs/TECHNICAL_BASELINE.md) werden übernommen, Abweichungen begründet. Voraussichtlich koordiniert zu ändernde zentrale Dateien: DECISIONS.md (Eintrag des Implementierungsauftrags), AGENTS.md und README.md (Umfangsbeschreibung), ein neuer Workflow unter `.github/workflows/`. Kein Docker-Image und keine Auslieferung (TASK-031).
 
 **Abnahmekriterien:** Sauberer Build, Start/Stopp, leere Datenbankmigration und Wiederanlauf reproduzierbar; fehlende notwendige Konfiguration scheitert nachvollziehbar. Echtes PostgreSQL in Integrationstests, keine Produktions-Schemaautomatik. Getrennte KI prüft insbesondere Migrations- und Modulgrenzen.
 
-**Nächster Schritt:** Vertrags-/Werkzeugergebnis akzeptieren; beauftragten Umfang und Dateiverantwortung vor Reservierung festhalten.
+**Nächster Schritt:** Reservierung integrieren; anschließend Backendgrundlage aufbauen, im CI mit PostgreSQL nachweisen und als Ergebnis-PR übergeben.
 
 ## TASK-023 React-Grundfläche mit Sprachen und API-Anbindung aufbauen
 
