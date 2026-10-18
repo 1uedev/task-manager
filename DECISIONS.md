@@ -143,11 +143,17 @@ Modulordnung, Migrationskonvention und erste Fehlercodes in [backend/README.md](
 
 Sprachpaketformat, Rückfallregel, Fehlerabbildung und Brandingprüfung in [frontend/README.md](frontend/README.md) sind technische Umsetzungsvorschläge dieses Auftrags und werden mit dessen Ergebnis geprüft.
 
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-057 | Holger bestätigt am 18. Oktober 2026 TASK-025 als nächsten Implementierungsauftrag für Codex und die im Claim-PR #69 festgehaltenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; ausdrückliche Feldverbote gewinnen und Schreiben verlangt zusätzlich Lesen. Systemadministratoren erhalten keinen automatischen Fachzugriff, delegierte Administration bleibt begrenzt. Auftrag sind Gruppen, Projekt-/Aktions-/Feldregeln, aktuelle Autorisierung und protokollierbare Verwaltungsoperationen im Berechtigungsmodul mit eigener Migration. Die Reservierung für codex-20261018-permissions-01 wurde mit PR #69 auf main übernommen. TASK-024 und TASK-026 bis TASK-031 werden dadurch nicht beauftragt. | REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005 |
+
+Die konkreten Ports, Sperren, Delegations- und Auditgrenzen in [backend/PERMISSIONS.md](backend/PERMISSIONS.md) sind technische Ausgestaltung des TASK-025-Ergebnis-PRs zur Prüfung. Sie nehmen die echte Identitäts-/Projektintegration oder deren Abnahme nicht vorweg.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
 
-Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragte TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; TASK-024 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragte TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; DEC-057 beauftragt zusätzlich TASK-025; TASK-024 ist separat durch Claim-PR #73 beauftragt und für Claude reserviert, mit Beschlüssen im TODO-Eintrag; TASK-026 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
 
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 
