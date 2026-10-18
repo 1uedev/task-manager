@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -72,8 +72,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
-| [TASK-034](#task-034-claude-gegenprüfung-von-task-021-und-task-033-durchführen) | Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen | claude-20261018-review-01 | 2026-10-18 |
-| [TASK-035](#task-035-befunde-q1-bis-q4-der-claude-gegenprüfung-im-qualifikationsversuch-beheben) | Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben | claude-20261018-qualfix-01 | 2026-10-18 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -669,37 +667,3 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
-
-## TASK-034 Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-review-01 · **Aktualisiert:** 2026-10-18
-
-**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-DATA-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** Ergebnisse TASK-021 und TASK-033 auf main; DEC-040 (gegenseitige KI-Reviews); ausdrücklicher Auftrag vom 18. Oktober 2026 zu einer Claude-Gegenprüfung. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach integrierter Reservierung #59.
-
-**Umfang:** Unabhängige technische Gegenprüfung der gelieferten Ergebnisse von TASK-021 (Werkzeugbasis, Verträge, Qualifikationsquellen und CI-Nachweise) und TASK-033 (erzeugte Aufgabenübersicht, Generator und Prüfungen) durch eine Claude-Sitzung. Befunde mit Belegen und Schweregrad in einem Prüfbericht festhalten. Keine Produktimplementierung, keine Änderung der geprüften Ergebnisse ohne gesonderte Abstimmung, keine fachliche Abnahme.
-
-**Abnahmekriterien:** Prüfbericht nennt geprüfte Commits, ausgeführte und nicht ausgeführte Prüfungen, Befunde mit Datei- und Zeilenbezug sowie verbleibende Grenzen. Bestätigte Entscheidungen, Vorschläge und geprüfte Ergebnisse bleiben getrennt. TASK-021 und TASK-033 behalten Status und Zuständigkeit; Übergaben werden nur als Verweis auf den Bericht ergänzt. Holger entscheidet über Annahme der Befunde.
-
-**Ergebnis:** Der [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md) nennt die geprüften Commits, die tatsächlich ausgeführten und die nicht ausgeführten Prüfungen sowie die Befunde mit Datei- und Zeilenbezug. TASK-033: keine blockierenden Befunde, ein niedriger Befund (T1) und ein Hinweis (T2). TASK-021: keine blockierenden Befunde, ein mittlerer Befund (Q1, fehlender Negativtest für die Transaktionspflicht), drei niedrige Befunde (Q2 bis Q4) und drei Hinweise für TASK-022/TASK-023 (Q5 bis Q7). Versionen, Prüfsummen und Testzahlen aus TASK-021 wurden unabhängig bestätigt. Die geprüften Ergebnisse wurden nicht verändert; TASK-021 und TASK-033 erhalten nur einen Verweis auf den Bericht.
-
-**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Die einzelnen Java-, Node- und CI-Nachweise und ihre Abweichungen von der Zielumgebung (Java 21 statt 25, Node 22 statt 24, kein lokales PostgreSQL) stehen im Bericht. Der Bericht ist selbst eine KI-Prüfung; eine weitere Gegenprüfung des Berichts und die fachliche Abnahme stehen aus.
-
-**Nächster Schritt:** Holger entscheidet über die Annahme der Befunde und darüber, ob Q1 bis Q4 als Korrektur zu TASK-021 oder beim Übertrag in TASK-022 behoben werden. TASK-022 bis TASK-031 bleiben BLOCKIERT.
-
-## TASK-035 Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-qualfix-01 · **Aktualisiert:** 2026-10-18
-
-**Bezug:** REQ-ARCH-002, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-021 (Qualifikationsversuch) und TASK-034 (Prüfbericht); DEC-054 für den begrenzten Arbeitsbereich unter `qualification/`; ausdrücklicher Auftrag vom 18. Oktober 2026, Q1 bis Q4 jetzt zu beheben. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach integrierter Reservierung #61.
-
-**Umfang:** Die Befunde Q1 bis Q4 aus [REVIEW_TASK-021_TASK-033.md](docs/REVIEW_TASK-021_TASK-033.md) beheben: Negativtest für die Transaktionspflicht der Moduloperationen (Q1), konkrete Verstoßarten in den Modulith-Negativtests (Q2), CRLF-Zeilenenden für Windows-Batchdateien über `.gitattributes` (Q3), Ersatz des veralteten `asText()` (Q4). Keine Produktimplementierung, keine Versionsänderung, keine Änderung an Q5 bis Q7 oder an TASK-022 bis TASK-031.
-
-**Schnittstellen und Arbeitsbereich:** Tests unter `qualification/backend/src/test`, `qualification/backend/mvnw.cmd` (nur Zeilenenden) und eine Zeile in der zentralen `.gitattributes`. Der Qualifikationsbericht in TECHNICAL_BASELINE.md erhält nur angepasste Testzahlen und einen kurzen Korrekturvermerk.
-
-**Abnahmekriterien:** Der neue Negativtest schlägt nachweislich fehl, wenn die Transaktionspflicht entfernt wird, und besteht mit ihr. Die Modulith-Negativtests prüfen die erwartete Verstoßart. `mvnw.cmd` wird mit CRLF ausgecheckt und ist inhaltlich gleich mit dem Wrapper-Archiv 3.3.4. Keine Deprecation-Warnung mehr aus TransportFixtureTest. Der vollständige Qualifikationslauf mit PostgreSQL ist grün. Getrennte KI prüft die Änderung.
-
-**Ergebnis:** Q1 bis Q4 sind behoben, Details im [Nachtrag des Qualifikationsberichts](docs/TECHNICAL_BASELINE.md). Neuer Negativtest für die Transaktionspflicht (Q1), Verstoßarten in den Modulith-Negativtests (Q2), `*.cmd text eol=crlf` in `.gitattributes` (Q3), `asString()` statt `asText()` (Q4). Java hat jetzt 9 statt 8 Tests. Keine Versions-, Vertrags- oder Produktänderung; T1, T2 und Q5 bis Q7 bleiben offen.
-
-**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Lokal mit Java 21 statt 25: Modul- und Fixturetests 4/4, Testkompilierung ohne Deprecation-Meldung; PostgreSQL-Tests lokal nicht ausführbar (kein Docker). `mvnw.cmd` nach frischem Auschecken mit CRLF und bytegleich mit dem Wrapper-Archiv. Gegenprobe im CI: Ohne Transaktionspflicht scheitert genau der neue Test ([Lauf 39116009163](https://github.com/1uedev/task-manager/actions/runs/39116009163)). Der vollständige Lauf mit Transaktionspflicht erfolgt in den Prüfungen des Ergebnis-PR. Eine getrennte KI-Prüfung dieser Änderung steht aus.
-
-**Nächster Schritt:** Getrennte KI prüft die Korrekturen; Holger nimmt TASK-035 an oder benennt Änderungen.
