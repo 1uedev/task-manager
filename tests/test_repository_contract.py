@@ -91,9 +91,13 @@ class RepositoryContractTests(unittest.TestCase):
 
     def test_task_heading_without_title_is_rejected_in_both_ledgers(self):
         for name in ("TODO.md", "DONE.md"):
-            with self.subTest(name=name):
-                self.append(name, "\n## TASK-999\n")
-                self.assertTrue(any(f"{name}: invalid task heading" in error for error in validate(self.root)))
+            path = self.root / name
+            baseline = path.read_text()
+            for heading in ("## TASK-999", " ## TASK-999 Reserved", "  ## TASK-999 Reserved", "   ## TASK-999 Reserved"):
+                with self.subTest(name=name, heading=heading):
+                    path.write_text(baseline + "\n" + heading + "\n")
+                    self.assertTrue(any(f"{name}: invalid task heading" in error for error in validate(self.root)))
+            path.write_text(baseline)
 
     def test_pending_acceptance_must_stay_in_todo(self):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Abnahme:** offen\n")

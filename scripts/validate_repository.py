@@ -45,7 +45,7 @@ def sections(text, prefix, level):
 
 def task_heading_errors(text):
     errors = []
-    for candidate in re.finditer(r"^#{1,6}[ \t]+TASK-[^\n]*(?:\n|$)", text, re.M):
+    for candidate in re.finditer(r"^[ \t]*#{1,6}[ \t]+TASK-[^\n]*(?:\n|$)", text, re.M | re.I):
         match = TASK_HEADINGS.fullmatch(candidate.group())
         if not match or not match[2].startswith(" ") or not match[2].strip():
             errors.append("invalid task heading (expected ## TASK-NNN Title): " + candidate.group().strip())

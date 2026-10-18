@@ -69,7 +69,9 @@ class TaskBoardTests(unittest.TestCase):
         self.assertNotIn("[TASK-001]", cleared)
 
     def test_malformed_headings_are_rejected_even_inside_generated_markers(self):
-        for heading in ("## TASK-034", "## TASK-34 Titel", "### TASK-034 Titel", "## TASK-034OhneTrennung"):
+        for heading in ("## TASK-034", "## TASK-34 Titel", "### TASK-034 Titel", "## TASK-034OhneTrennung",
+                        " ## TASK-034 Titel", "  ## TASK-034 Titel", "   ## TASK-034 Titel", "\t## TASK-034 Titel",
+                        "## task-034 Titel"):
             malformed = task(34, "IN ARBEIT", "worker").replace("## TASK-034 Beispiel", heading)
             for text in (malformed + task(1), START + "\n" + malformed + END + "\n" + task(1)):
                 with self.subTest(heading=heading, text=text), self.assertRaisesRegex(ValueError, "invalid task heading"):
@@ -78,13 +80,15 @@ class TaskBoardTests(unittest.TestCase):
     def test_cli_refuses_to_overwrite_task_hidden_inside_markers(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "TODO.md"
-            original = START + "\n" + task(34).replace("## TASK-034 Beispiel", "## TASK-034") + END + "\n" + task(1)
-            path.write_text(original, encoding="utf-8")
             command = [sys.executable, str(ROOT / "scripts/task_board.py"), "--root", directory, "--write"]
-            result = subprocess.run(command, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("invalid task heading", result.stdout)
-            self.assertEqual(path.read_text(), original)
+            for heading in ("## TASK-034", " ## TASK-034 Reserved", "  ## TASK-034 Reserved", "   ## TASK-034 Reserved"):
+                with self.subTest(heading=heading):
+                    original = START + "\n" + task(34).replace("## TASK-034 Beispiel", heading) + END + "\n" + task(1)
+                    path.write_text(original, encoding="utf-8")
+                    result = subprocess.run(command, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("invalid task heading", result.stdout)
+                    self.assertEqual(path.read_text(), original)
 
     def test_status_change_moves_task_without_rewriting_other_details(self):
         text = updated_text(task(1))
