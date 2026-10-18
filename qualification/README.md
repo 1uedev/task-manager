@@ -20,6 +20,7 @@ Geprüft werden:
 
 - Erlaubte Modulverträge sowie absichtlich unerlaubter interner Zugriff und ein Abhängigkeitszyklus.
 - Flyway-Migration gegen echtes PostgreSQL, JPA und JDBC in derselben Transaktion, erfolgreicher Commit sowie Rückabwicklung bei Java- und Datenbankfehlern.
+- Moduloperationen schreiben nur innerhalb einer bestehenden Transaktion; ein Aufruf ohne Transaktion wird abgewiesen.
 - Java-JSON → OpenAPI-Typen → TypeScript-Client: Erfolg, 201/Location, Konflikt/If-Match, Fehler, Unicode, Nullwerte und Netzfehler.
 - Statische Negativbeispiele: unzulässige Versionsdatentypen, fehlendes Pflichtfeld und fehlende Versionsbedingung müssen Compilerfehler bleiben.
 - React-Build und eine ausdrücklich begrenzte Laufzeitprüfung eines synthetischen Antwortobjekts.

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-035](#task-035-befunde-q1-bis-q4-der-claude-gegenprüfung-im-qualifikationsversuch-beheben) | Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben | claude-20261018-qualfix-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -75,6 +73,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 | [TASK-034](#task-034-claude-gegenprüfung-von-task-021-und-task-033-durchführen) | Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen | claude-20261018-review-01 | 2026-10-18 |
+| [TASK-035](#task-035-befunde-q1-bis-q4-der-claude-gegenprüfung-im-qualifikationsversuch-beheben) | Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben | claude-20261018-qualfix-01 | 2026-10-18 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -689,9 +688,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 ## TASK-035 Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-qualfix-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-qualfix-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-002, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-021 (Qualifikationsversuch) und TASK-034 (Prüfbericht); DEC-054 für den begrenzten Arbeitsbereich unter `qualification/`; ausdrücklicher Auftrag vom 18. Oktober 2026, Q1 bis Q4 jetzt zu beheben. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+**Bezug:** REQ-ARCH-002, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-021 (Qualifikationsversuch) und TASK-034 (Prüfbericht); DEC-054 für den begrenzten Arbeitsbereich unter `qualification/`; ausdrücklicher Auftrag vom 18. Oktober 2026, Q1 bis Q4 jetzt zu beheben. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach integrierter Reservierung #61.
 
 **Umfang:** Die Befunde Q1 bis Q4 aus [REVIEW_TASK-021_TASK-033.md](docs/REVIEW_TASK-021_TASK-033.md) beheben: Negativtest für die Transaktionspflicht der Moduloperationen (Q1), konkrete Verstoßarten in den Modulith-Negativtests (Q2), CRLF-Zeilenenden für Windows-Batchdateien über `.gitattributes` (Q3), Ersatz des veralteten `asText()` (Q4). Keine Produktimplementierung, keine Versionsänderung, keine Änderung an Q5 bis Q7 oder an TASK-022 bis TASK-031.
 
@@ -699,4 +698,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Abnahmekriterien:** Der neue Negativtest schlägt nachweislich fehl, wenn die Transaktionspflicht entfernt wird, und besteht mit ihr. Die Modulith-Negativtests prüfen die erwartete Verstoßart. `mvnw.cmd` wird mit CRLF ausgecheckt und ist inhaltlich gleich mit dem Wrapper-Archiv 3.3.4. Keine Deprecation-Warnung mehr aus TransportFixtureTest. Der vollständige Qualifikationslauf mit PostgreSQL ist grün. Getrennte KI prüft die Änderung.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Korrekturen umsetzen, im CI nachweisen und als Ergebnis-PR übergeben.
+**Ergebnis:** Q1 bis Q4 sind behoben, Details im [Nachtrag des Qualifikationsberichts](docs/TECHNICAL_BASELINE.md). Neuer Negativtest für die Transaktionspflicht (Q1), Verstoßarten in den Modulith-Negativtests (Q2), `*.cmd text eol=crlf` in `.gitattributes` (Q3), `asString()` statt `asText()` (Q4). Java hat jetzt 9 statt 8 Tests. Keine Versions-, Vertrags- oder Produktänderung; T1, T2 und Q5 bis Q7 bleiben offen.
+
+**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Lokal mit Java 21 statt 25: Modul- und Fixturetests 4/4, Testkompilierung ohne Deprecation-Meldung; PostgreSQL-Tests lokal nicht ausführbar (kein Docker). `mvnw.cmd` nach frischem Auschecken mit CRLF und bytegleich mit dem Wrapper-Archiv. Gegenprobe im CI: Ohne Transaktionspflicht scheitert genau der neue Test ([Lauf 39116009163](https://github.com/1uedev/task-manager/actions/runs/39116009163)). Der vollständige Lauf mit Transaktionspflicht erfolgt in den Prüfungen des Ergebnis-PR. Eine getrennte KI-Prüfung dieser Änderung steht aus.
+
+**Nächster Schritt:** Getrennte KI prüft die Korrekturen; Holger nimmt TASK-035 an oder benennt Änderungen.
