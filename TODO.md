@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 8 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 7 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,14 +28,15 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
-| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | — | 2026-10-17 |
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
 | [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
@@ -465,7 +466,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
-Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-024 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-024 und TASK-026 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
 
 ## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
 
@@ -509,7 +510,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Offen und Übergabe:** (1) Das Schema `Problem` im synthetischen Vertrag kennt `correlationId` und `instance` nicht und ist geschlossen; der Produktvertrag muss beides aufnehmen und für Erweiterungsfelder öffnen (Q5). (2) Noch nicht festgelegt: verbindlicher Barrierefreiheitsstandard, unterstützte Browser außerhalb von Chromium, mobile Mindestansichten (REQ-UX-001). Es gab weder eine automatische Barrierefreiheitsprüfung noch eine Prüfung mit Screenreader. (3) Seitenwahl, Übersetzungs- und Komponentenbibliothek bleiben eine spätere Entscheidung. (4) Verwaltung des Unternehmensauftritts, Benutzereinstellung für Zeitzone, Anmeldung mit Cookie und CSRF sowie Übersetzung konfigurierbarer Feldbezeichnungen folgen mit den Fachaufgaben (TASK-024 und später).
 
-**Nächster Schritt:** Holger entscheidet, wer die Frontend-Grundfläche gegenprüft, und über die Annahme. TASK-023 bleibt bis dahin zur Prüfung in TODO.md. TASK-024 bis TASK-031 bleiben blockiert.
+**Nächster Schritt:** Holger entscheidet, wer die Frontend-Grundfläche gegenprüft, und über die Annahme. TASK-023 bleibt bis dahin zur Prüfung in TODO.md. TASK-024 und TASK-026 bis TASK-031 bleiben blockiert; TASK-025 liegt bei Codex.
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 
@@ -527,9 +528,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021, TASK-022; Rechtealgorithmus und Administrationsgrenzen entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021 als Werkzeug-/Vertragsbasis und die abgenommene Backendgrundlage TASK-022. Holger bestätigt am 18. Oktober 2026 im Projektgespräch TASK-025 als nächsten Implementierungsauftrag für Codex und die vorgeschlagenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; Feldverbote gewinnen, Schreiben verlangt zusätzlich Leserecht; Systemadministratoren erhalten keinen automatischen Zugriff auf Fachinhalte, delegierte Administration bleibt begrenzt. Weitere offene Detailregeln werden dadurch nicht pauschal angenommen. **Arbeitsstand:** Reservierung für codex-20261018-permissions-01; geplanter Arbeitsbranch task/task-025-codex-permissions-01, eigenes Arbeitsverzeichnis. Vorgesehene erste Migration: V0002__permissions_baseline.sql; weitere Nummern vor Verwendung koordinieren. Kein Produktcode vor Übernahme dieses Claim-PRs.
 
 **Umfang:** Gruppen, Aktions-/Projekt-/Feldregeln, aktuelle Autorisierung und protokollierbare Verwaltungsoperationen implementieren. Bestätigter Vorrang ausdrücklicher Feldverbote; weitere Konfliktregeln nur nach Auswahl.
 
@@ -537,7 +538,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Positive, negative und Mehrgruppenfälle einschließlich Feldverbot, Rechteentzug und konkurrierender Änderung geprüft. Fehlender Kontext verweigert Zugriff; Testdoubles werden im integrierten Betrieb ersetzt. Getrennte KI prüft Rechtealgorithmus, Auditgrenzen und konkurrierenden Entzug.
 
-**Nächster Schritt:** Rechtematrix und gemeinsame Schnittstellen annehmen; Umfang freigeben und anschließend reservieren.
+**Nächster Schritt:** Koordination prüft Auftrag, Zuständigkeit und Migrationsnummer und integriert die Reservierung. Anschließend vom aktualisierten main aus innerhalb des bestätigten Umfangs implementieren. Identitäts-/Objektverträge und Änderungen zentraler Dateien koordiniert abstimmen; TASK-023 bleibt bei Claude, TASK-024 und TASK-026 bis TASK-031 bleiben blockiert. Bestätigte Rechteregeln und Auftrag im Ergebnis nachvollziehbar in Entscheidungen und Umfangsbeschreibung nachführen; Ergebnis mit Prüfungen und getrennter KI-Prüfung übergeben. Keine fachliche Abnahme vorwegnehmen.
 
 ## TASK-026 Projekte und minimale Konfiguration implementieren
 
