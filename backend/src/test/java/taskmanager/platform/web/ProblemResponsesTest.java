@@ -53,7 +53,7 @@ class ProblemResponsesTest {
 
     @Test
     void unknownPathIsAProblemWithCodeAndCorrelationId() throws Exception {
-        HttpResponse<String> response = send("GET", "/api/v1/unknown/" + SECRET + "?filter=" + SECRET);
+        HttpResponse<String> response = send("GET", "/unknown/" + SECRET + "?filter=" + SECRET);
         JsonNode problem = assertProblem(response, 404, "resource.not_found");
         assertFalse(problem.has("detail"));
         assertFalse(response.body().contains(SECRET), response.body());

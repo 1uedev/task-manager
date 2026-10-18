@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import taskmanager.platform.ApiProblemException;
 
 /**
  * Common error handling: every error from a controller becomes {@code application/problem+json}
@@ -29,6 +31,16 @@ class ProblemResponses extends ResponseEntityExceptionHandler {
         log.error("Unexpected error", exception);
         ProblemDetail body = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
         return createResponseEntity(body, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, request);
+    }
+
+    @ExceptionHandler(ApiProblemException.class)
+    ResponseEntity<Object> deliberate(ApiProblemException exception, WebRequest request) {
+        ProblemDetail body = ProblemDetail.forStatus(exception.status());
+        Problems.normalize(body, request.getAttribute(CorrelationIdFilter.ATTRIBUTE, RequestAttributes.SCOPE_REQUEST),
+            exception.code(), exception.violations());
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.status()).contentType(MediaType.APPLICATION_PROBLEM_JSON);
+        ProblemHeaders.apply(exception, response::header);
+        return response.body(body);
     }
 
     @Override

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -30,7 +30,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | claude-20261018-identity-01 | 2026-10-18 |
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
@@ -69,6 +68,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | claude-20261018-identity-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -491,9 +491,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-identity-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-identity-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. Holger hat am 18. Oktober 2026 im Projektgespräch die zehn Details der [Entscheidungsvorlage](https://claude.ai/code/artifact/c3c32fc1-b94a-440e-8f63-935a4b546019) mit „alles so“ bestätigt und auf einer Entscheidungskarte „Soll ich TASK-024 jetzt als Implementierungsauftrag per Claim PR starten?“ die Option „Ja, starten“ gewählt. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031; mit dem Merge dieser Reservierung hebt die Koordination die Blockierung auf. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung dieses Claim PR.
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. Holger hat am 18. Oktober 2026 im Projektgespräch die zehn Details der [Entscheidungsvorlage](https://claude.ai/code/artifact/c3c32fc1-b94a-440e-8f63-935a4b546019) mit „alles so“ bestätigt und auf einer Entscheidungskarte „Soll ich TASK-024 jetzt als Implementierungsauftrag per Claim PR starten?“ die Option „Ja, starten“ gewählt. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031; mit dem Merge der Reservierung (Claim PR #73) hob die Koordination die Blockierung auf. **Arbeitsstand:** claude/project-thread-qfsobf nach Reservierung #73; die Beschlüsse sind als DEC-058 eingetragen.
 
 **Umfang:** Administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel, Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer mit 24 Stunden als Standard neuer Installationen umsetzen. Anmeldeanbieter kapseln. Vor Beginn Gültigkeit, sichere Übergabe, Erstadministrator, Wiederherstellung und initialen Sitzungsübergang konkretisieren. Synthetische Entwicklungskonten ersetzen den gewählten Kontoanlageweg nicht; SMTP ist nicht als Kennwort-Übergabekanal beschlossen.
 
@@ -503,7 +503,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Neue Installation mit 24 Stunden voreingestellt, andere gültige Stundenwerte administrativ änderbar. Vor Pflichtwechsel kein regulärer Fachzugriff über UI/API oder Ausgabe von Integrationszugängen; verbrauchtes Einmalpasswort nicht wiederverwendbar. Kein zusätzliches Inaktivitätslimit, keine Fristverlängerung durch Aktivität, Rotation oder Neustart; Ablauf und Deaktivierung serverseitig wirksam. Cookie-/CSRF- und negative Anmeldefälle geprüft. Keine produktiven Standardpasswörter. Getrennte KI prüft Sicherheitsgrenzen; Umfang des Kontenwegs bleibt in Ergebnis und Vorführung sichtbar.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend das Identitätsmodul im Backend aufbauen, im CI nachweisen und als Ergebnis-PR mit DEC-Eintrag übergeben. Die Schnittstelle des Zugriffskontexts mit Koordination und der Codex-Sitzung zu TASK-025 abstimmen. Kontoanlageweg, Standardwert und Beschlüsse nicht erneut zur Auswahl stellen.
+**Ergebnis:** Das Identitätsmodul im [Backend](backend/README.md#identität-task-024) setzt die zehn Beschlüsse um. Migration `V0003__identity_accounts.sql` (V0002 ist für TASK-025 reserviert) mit fünf eigenen Tabellen: Konten, Sitzungen, Einstellung, Fehlversuchzähler, Prüfprotokoll; kein Konto und kein Standardpasswort in der Migration. Containerbefehle `bootstrap-admin NAME` (nur ohne vorhandene Konten) und `reset-admin-password NAME` (Notweg, protokolliert). Lokale Konten mit Einmalpasswort (20 Zeichen, 72 Stunden, genau eine erfolgreiche Anmeldung, nur als Argon2id Hash gespeichert, einmalig in der Antwort), Anmeldung, Abmeldung, Deaktivierung und Reaktivierung (letzter aktiver Administrator geschützt), Zurücksetzen durch Administratoren. Eingeschränkte Sitzung bis zum Pflichtwechsel (nur Passwortwechsel und Abmeldung, höchstens 30 Minuten), danach neue Sitzungskennung mit unverändertem Ablauf; alle anderen Sitzungen des Kontos enden. Feste Sitzungsdauer, 24 Stunden voreingestellt, 1 bis 720 Stunden einstellbar, nicht abschaltbar, ohne Verlängerung durch Aktivität, Rotation oder Neustart; Verkürzung wirkt bei der nächsten Anfrage, Verlängerung nur auf neue Anmeldungen. Serverseitige Sitzungen mit Token Hash, Cookies `__Host-tm-session` (HttpOnly) und `__Host-tm-csrf` (Secure, SameSite=Lax), CSRF per Doppelcookie mit Sitzungsbindung und Herkunftsprüfung, Standardverweigerung für jeden Pfad unter `/api`, `Cache-Control: no-store`. Wartezeit nach fünf Fehlversuchen je Name und je Adresse ohne Kontosperre; gleiche Antwort für bekannte, unbekannte und deaktivierte Konten. Produkt API Vertrag [identity.openapi.yaml](contracts/identity.openapi.yaml) mit einem Test gegen Abweichungen von den Routen. Zugriffskontext für Fachmodule über `taskmanager.identity.AccessContexts`. Mit dem Ergebnis eingetragen: DEC-058.
+
+**Eigenprüfung am 2026-10-18:** Lokal mit OpenJDK 21 (nur Entwicklerhilfe, CI nutzt Temurin 25) gegen PostgreSQL 16: 59 Tests ohne Fehler und ohne übersprungene Tests, darunter 29 HTTP Integrationstests (Standardverweigerung, CSRF, Cookie Attribute, Pflichtwechsel, verbrauchtes und abgelaufenes Einmalpasswort, gleichzeitige Wechsel, feste Frist über 23 Stunden Aktivität und Ablauf, Verkürzung und Verlängerung, Deaktivierung, Zurücksetzen, Wartezeiten, Protokoll ohne Geheimnisse, Prüfprotokoll), 5 Tests der Containerbefehle gegen frische Datenbanken, Regel und Tokentests sowie die Vertragsprüfung. Das gepackte JAR bestand `lifecycle-check.sh` einschließlich `bootstrap-admin` und der Ablehnung eines zweiten Aufrufs. Vor dem Ergebnis gefundene und behobene Fehler: Zeitstempel wurden von PostgreSQL auf Mikrosekunden gerundet und konnten Wartezeiten um eine Sekunde verlängern (jetzt abgeschnitten), der Problemschreiber warf bei fehlendem `type` einen Nullzeiger. Repository Prüfungen (`validate_repository.py`, `task_board.py --check`, `unittest`, `git diff --check`) siehe PR. Nicht ausgeführt: Java 25, PostgreSQL 18.6 und Docker lokal; diese Nachweise liefert die CI des PR.
+
+**Offen und Übergabe:** (1) Eine getrennte KI Prüfung der Sicherheitsgrenzen nach DEC-040 und Holgers Abnahme stehen aus; der Umfang ist ausdrücklich nur Backend ohne Anmeldeseite (TASK-030), ohne LDAP, Portalkonten und zweiten Faktor. (2) Anbindung an TASK-025: Dessen Port `IdentityAccess` erwartet Mandant, Organisation, Rechteversion und einen Adapter außerhalb des Identitätsmoduls, das Identitätsmodul führt diese Daten noch nicht. Das Feld `administrator` ist nur eine vorläufige technische Kennzeichnung. Adapter und Datenmodell sind mit der Koordination und der Codex Sitzung abzustimmen und nicht Teil dieses Ergebnisses. (3) Migrationsnummer: V0003 wegen der Reservierung von V0002 für TASK-025; wer später in main übernommen wird, passt Foundation und Lebenszyklusprüfung an die Tabellenliste des anderen an. (4) Quelladresse hinter einem Proxy, kleine Passwortliste und Aufbewahrung des Prüfprotokolls (OPEN-014) sind in backend/README.md als Grenzen vermerkt.
+
+**Nächster Schritt:** Gegenseitige KI Prüfung der Sicherheitsgrenzen nach DEC-040 (Codex), danach Holgers Entscheidung über die Annahme. Bis dahin bleibt TASK-024 zur Prüfung in TODO.md; TASK-026 bis TASK-031 bleiben blockiert.
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 

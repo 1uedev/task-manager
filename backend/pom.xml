@@ -4,7 +4,7 @@
   <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>4.1.1</version><relativePath/></parent>
   <groupId>taskmanager</groupId><artifactId>task-manager-backend</artifactId><version>0.0.1-SNAPSHOT</version>
   <name>Task manager backend foundation</name>
-  <properties><java.version>25</java.version><spring-modulith.version>2.1.1</spring-modulith.version><project.build.outputTimestamp>2026-10-18T00:00:00Z</project.build.outputTimestamp></properties>
+  <properties><java.version>25</java.version><spring-modulith.version>2.1.1</spring-modulith.version><bouncycastle.version>1.86</bouncycastle.version><project.build.outputTimestamp>2026-10-18T00:00:00Z</project.build.outputTimestamp></properties>
   <dependencyManagement><dependencies><dependency><groupId>org.springframework.modulith</groupId><artifactId>spring-modulith-bom</artifactId><version>${spring-modulith.version}</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>
   <dependencies>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc</artifactId></dependency>
@@ -13,6 +13,9 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-flyway</artifactId></dependency>
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
     <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+    <!-- Argon2id password hashing only (TASK-024). No Spring Security filter chain: sessions, CSRF and the default-deny rule live in the identity module. -->
+    <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-crypto</artifactId></dependency>
+    <dependency><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk18on</artifactId><version>${bouncycastle.version}</version></dependency>
     <dependency><groupId>org.springframework.modulith</groupId><artifactId>spring-modulith-api</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.springframework.modulith</groupId><artifactId>spring-modulith-starter-test</artifactId><scope>test</scope></dependency>

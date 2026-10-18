@@ -2,6 +2,7 @@ package taskmanager.platform.web;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ProblemDetail;
 
@@ -16,12 +17,20 @@ final class Problems {
     }
 
     static ProblemDetail normalize(ProblemDetail problem, Object correlationAttribute) {
+        return normalize(problem, correlationAttribute, ProblemCode.forStatus(problem.getStatus()), List.of());
+    }
+
+    /** Variant for deliberate product errors: a module defined code and stable machine readable reasons. */
+    static ProblemDetail normalize(ProblemDetail problem, Object correlationAttribute, String code, List<String> violations) {
         String correlationId = correlationAttribute instanceof String id ? id : UUID.randomUUID().toString();
         problem.setDetail(null);
         problem.setProperties(null);
         problem.setInstance(URI.create("urn:uuid:" + correlationId));
-        problem.setProperty("code", ProblemCode.forStatus(problem.getStatus()));
+        problem.setProperty("code", code);
         problem.setProperty("correlationId", correlationId);
+        if (!violations.isEmpty()) {
+            problem.setProperty("violations", violations);
+        }
         return problem;
     }
 

@@ -30,19 +30,20 @@ class DatabaseFoundationTest {
     }
 
     @Test
-    void flywayAppliedTheBaselineAndNothingElse() {
+    void flywayAppliedExactlyTheKnownMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001"), versions);
+        assertEquals(List.of("0001", "0003"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
     @Test
-    void noSchemaObjectsBesideTheMigrationHistory() {
+    void onlyTheMigrationHistoryAndTheIdentityTablesExist() {
         List<String> tables = jdbc.queryForList(
             "select table_name from information_schema.tables where table_schema = current_schema() order by table_name",
             String.class);
-        assertEquals(List.of("flyway_schema_history"), tables);
+        assertEquals(List.of("flyway_schema_history", "identity_account", "identity_audit_event", "identity_login_throttle",
+            "identity_session", "identity_setting"), tables);
     }
 
     @Test
