@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 REQ_ID = r"REQ-[A-Z0-9]+-\d{3}"
 TASK_ID = r"TASK-\d{3}"
+TASK_HEADINGS = re.compile(rf"^## ({TASK_ID})\b([^\n]*)(?:\n|$)", re.M)
 OPEN_ID = r"OPEN-\d{3}"
 REQUIRED = (
     "README.md", "AGENTS.md", "CLAUDE.md", "REQUIREMENTS.md",
@@ -21,6 +22,7 @@ REQUIRED = (
 )
 SKIP = {".git", ".venv", "venv", "node_modules", ".worktrees", "__pycache__"}
 STATUSES = {"OFFEN", "IN ARBEIT", "BLOCKIERT", "BEREIT ZUR PRÜFUNG"}
+UNASSIGNED = {"unbesetzt", "offen"}
 TASK_FIELDS = (
     "Status", "Verantwortlich", "Aktualisiert", "Bezug", "Abhängigkeiten",
     "Arbeitsstand", "Umfang", "Abnahmekriterien", "Nächster Schritt",
@@ -33,11 +35,21 @@ DONE_FIELDS = (
 
 def sections(text, prefix, level):
     pattern = rf"^{re.escape('#' * level)} ({prefix})\b[^\n]*\n"
-    matches = list(re.finditer(pattern, text, re.M))
+    matches = list(TASK_HEADINGS.finditer(text) if prefix == TASK_ID and level == 2
+                   else re.finditer(pattern, text, re.M))
     return [
         (match.group(1), text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)])
         for i, match in enumerate(matches)
     ]
+
+
+def task_heading_errors(text):
+    errors = []
+    for candidate in re.finditer(r"^[ \t]*#{1,6}[ \t]+TASK-[^\n]*(?:\n|$)", text, re.M | re.I):
+        match = TASK_HEADINGS.fullmatch(candidate.group())
+        if not match or not match[2].startswith(" ") or not match[2].strip():
+            errors.append("invalid task heading (expected ## TASK-NNN Title): " + candidate.group().strip())
+    return errors
 
 
 def field(body, name):
@@ -68,6 +80,8 @@ def validate(root):
     requirements = sections(docs["REQUIREMENTS.md"], REQ_ID, 3)
     todo = sections(docs["TODO.md"], TASK_ID, 2)
     done = sections(docs["DONE.md"], TASK_ID, 2)
+    for name in ("TODO.md", "DONE.md"):
+        errors.extend(f"{name}: {error}" for error in task_heading_errors(docs[name]))
     questions = sections(docs["DECISIONS.md"], OPEN_ID, 3)
     req_ids = {key for key, _ in requirements}
     task_ids = {key for key, _ in todo + done}
@@ -94,8 +108,10 @@ def validate(root):
         if status not in STATUSES:
             errors.append(f"{key}: invalid status {status!r}")
         owner = field(body, "Verantwortlich")
-        if status in {"IN ARBEIT", "BEREIT ZUR PRÜFUNG"} and owner.lower() in {"", "unbesetzt", "offen"}:
+        if status in {"IN ARBEIT", "BEREIT ZUR PRÜFUNG"} and owner.casefold() in {""} | UNASSIGNED:
             errors.append(f"{key}: active/review task needs a session owner")
+        if status == "OFFEN" and owner.casefold() not in UNASSIGNED:
+            errors.append(f"{key}: open task must be unassigned")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", field(body, "Aktualisiert")):
             errors.append(f"{key}: update date must use YYYY-MM-DD")
         if not re.search(REQ_ID, field(body, "Bezug")):

@@ -78,6 +78,27 @@ class RepositoryContractTests(unittest.TestCase):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Ergebnis:** drafted\n")
         self.assertTrue(any("missing completion field Abnahme" in e for e in validate(self.root)))
 
+    def test_open_task_cannot_keep_a_reserved_owner(self):
+        self.append("TODO.md", """
+## TASK-999 Synthetic availability check
+**Status:** OFFEN · **Verantwortlich:** another-session · **Aktualisiert:** 2026-10-18
+**Bezug:** REQ-DEV-002. **Abhängigkeiten:** keine. **Arbeitsstand:** synthetic fixture.
+**Umfang:** Check task availability.
+**Abnahmekriterien:** An owned task must never be advertised as free.
+**Nächster Schritt:** Coordinate the handoff.
+""")
+        self.assertEqual(validate(self.root), ["TASK-999: open task must be unassigned"])
+
+    def test_task_heading_without_title_is_rejected_in_both_ledgers(self):
+        for name in ("TODO.md", "DONE.md"):
+            path = self.root / name
+            baseline = path.read_text()
+            for heading in ("## TASK-999", " ## TASK-999 Reserved", "  ## TASK-999 Reserved", "   ## TASK-999 Reserved"):
+                with self.subTest(name=name, heading=heading):
+                    path.write_text(baseline + "\n" + heading + "\n")
+                    self.assertTrue(any(f"{name}: invalid task heading" in error for error in validate(self.root)))
+            path.write_text(baseline)
+
     def test_pending_acceptance_must_stay_in_todo(self):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Abnahme:** offen\n")
         self.assertTrue(any("pending acceptance belongs in TODO" in e for e in validate(self.root)))

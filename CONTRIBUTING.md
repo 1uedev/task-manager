@@ -4,7 +4,7 @@ Read [AGENTS.md](AGENTS.md) and the [AI workflow](docs/AI_WORKFLOW.md) first. Re
 
 ## Changes
 
-1. Choose a task from TODO.md and reserve it through a claim-only PR.
+1. Choose an authorized, unassigned OFFEN task from the generated overview in TODO.md and reserve it through a claim-only PR. Check its detailed prerequisites first.
 2. After the coordinator merges the reservation, work on a separate task branch from current main.
 3. Keep the change limited to the task and its referenced requirements. Preserve IDs and existing history.
 4. Run the repository checks and any additional checks relevant to the change.
@@ -17,11 +17,14 @@ Use branch names such as claim/task-003-codex-01 and task/task-003-codex-archite
 
 ```sh
 python3 scripts/validate_repository.py
+python3 scripts/task_board.py --check
 python3 -m unittest discover -s tests -v
 git diff --check
 ```
 
-The validator checks requirement and task IDs, references, local document links, task metadata, duplicate ownership records across TODO/DONE and required completion evidence. Tests verify that representative invalid documents are rejected. These checks do not prove factual accuracy, authorization or application correctness.
+Run `python3 scripts/task_board.py --write` after task metadata changes, including reservations and accepted completion, and commit the generated block together with its task changes. The overview check is read-only; CI does not push automatic fixes or grant reservations.
+
+The validator checks requirement and task IDs, references, local document links, task metadata, duplicate ownership records across TODO/DONE and required completion evidence. OFFEN tasks must be unassigned. The overview check rejects stale or missing summaries; tests verify that reserved and blocked work cannot appear as available. These checks do not prove factual accuracy, authorization or application correctness.
 
 GitHub Actions runs with read-only contents permission, no product secrets and no AI provider calls. It runs on pull requests and pushes to main. Keep the job name repository-checks stable because branch protection refers to it. Changes to the validator, workflows and agent instructions deserve explicit review.
 

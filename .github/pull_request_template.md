@@ -13,6 +13,7 @@ Describe the concrete result and why it is needed. For a reservation, name the p
 ## Verification
 
 - [ ] python3 scripts/validate_repository.py
+- [ ] python3 scripts/task_board.py --check
 - [ ] python3 -m unittest discover -s tests -v
 - [ ] git diff --check
 

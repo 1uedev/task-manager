@@ -28,9 +28,13 @@ Every task has a stable TASK-ID, requirement references, status, session owner, 
 
 Allowed TODO statuses are OFFEN, IN ARBEIT, BLOCKIERT and BEREIT ZUR PRÜFUNG. Requirements marked B are confirmed in principle; their proposed detailed acceptance criteria are still subject to review. V marks a proposal.
 
+The generated overview at the top of TODO.md groups the same task entries; it is not a second ledger. OFFEN means unassigned and available for reservation within an authorized scope after its prerequisites are resolved. Only coordination records that transition. IN ARBEIT reserves the task for its named session; BLOCKIERT is not available, even when unassigned. A blocked task with an owner retains that owner until an explicit handoff. BEREIT ZUR PRÜFUNG is awaiting review/acceptance, not free work. No status proves that an agent is currently running.
+
+After changing any task title, status, owner, date or adding/removing a task, run `python3 scripts/task_board.py --write`. Never manually maintain the generated block. CI runs `python3 scripts/task_board.py --check` and rejects drift. Refresh main before selecting work; a local overview may be stale.
+
 ## Reserve before substantive work
 
-Create a small claim-only pull request from current main. Set the task to IN ARBEIT, record your session and planned branch, and change no other task. The coordinator, Holger or a session he designated, checks that the task is free and merges the reservation. Start substantive work only after that reservation is on main. Rejected or conflicting reservations do not authorize work.
+Create a small claim-only pull request from current main. Set the task to IN ARBEIT, record your session and planned branch, change no other task entry, and regenerate the derived overview. The coordinator, Holger or a session he designated, checks that the task is free and merges the reservation. Start substantive work only after that reservation is on main. Rejected or conflicting reservations do not authorize work.
 
 This is a coordination protocol, not an atomic locking service. Required up-to-date CI and ordinary Git conflict handling support the protocol; they do not establish human identity or prove authorization. Never overwrite another owner, auto-expire a reservation, or treat silence as approval. Record explicit handoffs.
 
@@ -38,7 +42,7 @@ The bootstrap of this repository is TASK-013 and may initialize the empty main b
 
 ## Deliver and review
 
-Keep each change scoped to its task and REQ-IDs. Run python3 scripts/validate_repository.py and python3 -m unittest discover -s tests -v, plus checks justified by the actual change. Use git diff --check. Report what ran and what did not.
+Keep each change scoped to its task and REQ-IDs. Run python3 scripts/validate_repository.py, python3 scripts/task_board.py --check and python3 -m unittest discover -s tests -v, plus checks justified by the actual change. Use git diff --check. Report what ran and what did not.
 
 Use the pull request template. Include changed behavior, evidence and limitations. Set the task to BEREIT ZUR PRÜFUNG with a handoff. Do not use GitHub closing keywords before the task is actually accepted. A merged result PR does not automatically satisfy product acceptance.
 
