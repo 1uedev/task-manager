@@ -1,0 +1,42 @@
+# Required settings have no defaults. The application refuses to start until they are provided.
+spring:
+  application:
+    name: task-manager
+  datasource:
+    url: ${TASK_MANAGER_DB_URL}
+    username: ${TASK_MANAGER_DB_USER}
+    password: ${TASK_MANAGER_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway is the only way the schema changes. Hibernate only checks mapped entities.
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+    clean-disabled: true
+    baseline-on-migrate: false
+    validate-migration-naming: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${TASK_MANAGER_HTTP_PORT:8080}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"
