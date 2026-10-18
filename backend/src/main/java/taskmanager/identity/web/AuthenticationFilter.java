@@ -10,6 +10,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.server.PathContainer;
+import org.springframework.web.util.ServletRequestPathUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import taskmanager.identity.AuthenticationLevel;
@@ -45,7 +47,7 @@ class AuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String path = request.getRequestURI();
+        String path = canonicalPath(request);
         if (!path.equals("/api") && !path.startsWith("/api/")) {
             chain.doFilter(request, response);
             return;
@@ -68,6 +70,22 @@ class AuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * The path the way Spring MVC matches it: the segments of the raw request path with path parameters
+     * ({@code /api;x/...}) removed and percent encoding decoded ({@code /%61pi/...}), empty segments dropped.
+     * The decision must not rest on the raw request URI, because the server routes every one of these spellings
+     * to the same handler. Spring's own parsing of the request path is used so that both always agree.
+     */
+    static String canonicalPath(HttpServletRequest request) {
+        StringBuilder path = new StringBuilder();
+        for (PathContainer.Element element : ServletRequestPathUtils.parseAndCache(request).pathWithinApplication().elements()) {
+            if (element instanceof PathContainer.PathSegment segment && !segment.valueToMatch().isEmpty()) {
+                path.append('/').append(segment.valueToMatch());
+            }
+        }
+        return path.length() == 0 ? "/" : path.toString();
     }
 
     private static ApiProblemException authorizationProblem(String method, String path, boolean hadToken, Optional<Resolved> resolved) {

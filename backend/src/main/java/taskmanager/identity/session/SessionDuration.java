@@ -11,8 +11,9 @@ import taskmanager.platform.ApiProblemException;
 
 /**
  * The administrator setting for the fixed session period in hours. A new installation starts with 24 hours
- * (migration). The value is always read from the database, never cached. A shortened value takes effect for
- * sessions that already exist at their next request, an extended value only for later logins.
+ * (migration). The value is always read from the database, never cached. A shortened value is written into
+ * the sessions that already exist when it is set and takes effect at their next request; it is never undone for
+ * them. An extended value only applies to later logins.
  */
 @Service
 public class SessionDuration {
@@ -34,6 +35,11 @@ public class SessionDuration {
         return Integer.parseInt(jdbc.sql("select value from identity_setting where name = ?").param(SETTING).query(String.class).single());
     }
 
+    /** Reads the setting with a shared row lock; use it in the transaction that inserts a session. */
+    public int hoursForShare() {
+        return Integer.parseInt(jdbc.sql("select value from identity_setting where name = ? for share").param(SETTING).query(String.class).single());
+    }
+
     @Transactional
     public void change(String actor, Integer hours) {
         if (hours == null) {
@@ -44,6 +50,11 @@ public class SessionDuration {
         }
         var now = clock.instant();
         jdbc.sql("update identity_setting set value = ?, updated_at = ? where name = ?").params(Integer.toString(hours), Db.ts(now), SETTING).update();
+        // A shortened period is final for the sessions that exist now: a later extension must not revive them.
+        jdbc.sql("""
+                update identity_session set expires_at = started_at + make_interval(hours => ?)
+                where revoked_at is null and expires_at > started_at + make_interval(hours => ?)
+                """).params(hours, hours).update();
         accounts.audit(actor, "settings.session_duration_changed", null, hours + "h", now);
     }
 }

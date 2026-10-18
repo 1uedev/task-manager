@@ -30,8 +30,10 @@ paths:
       summary: Anmelden
       description: |
         Mit dem Passwort beginnt die feste Sitzungsdauer. Mit einem Einmalpasswort entsteht eine eingeschränkte Sitzung
-        (`level` = `password_change_required`), die nur den Passwortwechsel und das Abmelden erlaubt. Fehlgeschlagene Versuche
-        führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
+        (`level` = `password_change_required`), die nur den Passwortwechsel und das Abmelden erlaubt. Das Einmalpasswort wird
+        mit dieser ersten erfolgreichen Anmeldung verbraucht; jede weitere Anmeldung damit, auch nach Ablauf der eingeschränkten
+        Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Administrator ein neues ausgibt. Fehlgeschlagene
+        Versuche führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
       security: []
       requestBody:
         required: true
@@ -212,7 +214,7 @@ components:
       description: |
         Fehler im Problemformat. Maßgeblich sind Status und `code`, nie der Text. Codes dieses Vertrags:
         request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
-        auth.one_time_password_expired, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
+        auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
         password.current_incorrect, password.policy_violation (mit violations), account.not_found,
         account.username_taken, account.last_administrator, account.not_administrator.
       headers:

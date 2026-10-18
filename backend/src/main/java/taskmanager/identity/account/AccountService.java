@@ -58,7 +58,7 @@ public class AccountService {
         Instant now = clock.instant();
         String oneTime = oneTimePasswords.next();
         Instant expires = now.plus(properties.oneTimePasswordValidity());
-        AccountRecord account = new AccountRecord(UUID.randomUUID(), username, name, hasher.hash(oneTime), true, expires,
+        AccountRecord account = new AccountRecord(UUID.randomUUID(), username, name, hasher.hash(oneTime), true, expires, null,
             true, administrator, now, now);
         if (accounts.findByUsername(username).isPresent()) {
             throw ApiProblemException.of(409, "account.username_taken");

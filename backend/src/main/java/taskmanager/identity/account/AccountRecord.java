@@ -10,6 +10,7 @@ public record AccountRecord(
         String passwordHash,
         boolean passwordChangeRequired,
         Instant oneTimeExpiresAt,
+        Instant oneTimeUsedAt,
         boolean active,
         boolean administrator,
         Instant createdAt,

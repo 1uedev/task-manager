@@ -27,8 +27,9 @@ import taskmanager.platform.ApiProblemException;
  * <p>The session period is fixed: it starts with the first successful login and its end is stored once.
  * Activity, polling, rotation of the session token and application restarts never move it. A password change
  * issues a new token but inherits the start and end of the period. A shortened administrator setting applies
- * to existing sessions at their next request (the effective end is the earlier of the stored end and start
- * plus the current duration); an extended setting only applies to later logins.
+ * to existing sessions at once: the change itself lowers the stored end of every open session to at most start
+ * plus the new duration, and the lowered end is never raised again. An extended setting only applies to later
+ * logins. The effective end is still the earlier of the stored end and start plus the current duration.
  */
 @Service
 public class SessionService {
@@ -86,17 +87,48 @@ public class SessionService {
             throttle.recordFailure(userSubject, sourceSubject, now);
             throw ApiProblemException.of(401, "auth.invalid_credentials");
         }
-        AccountRecord account = found.get();
-        if (account.passwordChangeRequired() && !now.isBefore(account.oneTimeExpiresAt())) {
+        AccountRecord verified = found.get();
+        if (verified.passwordChangeRequired() && !now.isBefore(verified.oneTimeExpiresAt())) {
             throw ApiProblemException.of(401, "auth.one_time_password_expired");
         }
+        Issued issued;
+        try {
+            issued = transaction.execute(status -> startSession(verified, now));
+        } catch (ApiProblemException refused) {
+            if ("auth.invalid_credentials".equals(refused.code())) {
+                // The password was correct when it was checked but is no longer the account's password.
+                throttle.recordFailure(userSubject, sourceSubject, now);
+            }
+            throw refused;
+        }
         throttle.recordSuccess(userSubject);
-        return transaction.execute(status -> startSession(account, now));
+        return issued;
     }
 
-    private Issued startSession(AccountRecord account, Instant now) {
+    /**
+     * Starts the session of a login whose password was verified outside this transaction. The account row is
+     * locked and read again first, because a reset, a password change or a deactivation may have been committed
+     * since the check. Only the credential that was verified may start a session, and a one time password is
+     * consumed here, in the same transaction that creates its restricted session.
+     */
+    private Issued startSession(AccountRecord verified, Instant now) {
+        // Setting row first, shared: a concurrent shortening of the period waits and then also shortens this session.
+        int hours = duration.hoursForShare();
+        AccountRecord account = accounts.findByIdForUpdate(verified.id()).orElse(null);
+        if (account == null || !account.active() || !account.passwordHash().equals(verified.passwordHash())) {
+            throw ApiProblemException.of(401, "auth.invalid_credentials");
+        }
+        if (account.passwordChangeRequired()) {
+            if (!now.isBefore(account.oneTimeExpiresAt())) {
+                throw ApiProblemException.of(401, "auth.one_time_password_expired");
+            }
+            if (account.oneTimeUsedAt() != null) {
+                throw ApiProblemException.of(401, "auth.one_time_password_used");
+            }
+            accounts.markOneTimeUsed(account.id(), now);
+        }
         purgeOld(now);
-        Instant expires = now.plus(Duration.ofHours(duration.hours()));
+        Instant expires = now.plus(Duration.ofHours(hours));
         Instant restrictedUntil = account.passwordChangeRequired() ? now.plus(properties.restrictedSessionValidity()) : null;
         return insertSession(account, now, expires, restrictedUntil, now);
     }
@@ -123,7 +155,7 @@ public class SessionService {
         Instant now = clock.instant();
         return jdbc.sql("""
                 select s.id, s.account_id, s.csrf_hash, s.started_at, s.expires_at, s.restricted, s.restricted_expires_at,
-                       a.username, a.display_name, a.administrator, a.active,
+                       a.username, a.display_name, a.administrator, a.active, a.password_change_required,
                        (select value from identity_setting where name = 'session_duration_hours') as duration_hours
                 from identity_session s join identity_account a on a.id = s.account_id
                 where s.token_hash = ? and s.revoked_at is null
@@ -136,7 +168,9 @@ public class SessionService {
                 Instant effective = stored.isBefore(current) ? stored : current;
                 Instant restrictedUntil = Db.instant(rs, "restricted_expires_at");
                 boolean restricted = rs.getBoolean("restricted");
-                boolean alive = rs.getBoolean("active") && now.isBefore(effective) && (!restricted || now.isBefore(restrictedUntil));
+                // A full session never belongs to an account that still has to change its password.
+                boolean alive = rs.getBoolean("active") && now.isBefore(effective) && (!restricted || now.isBefore(restrictedUntil))
+                    && (restricted || !rs.getBoolean("password_change_required"));
                 if (!alive) {
                     return null;
                 }
