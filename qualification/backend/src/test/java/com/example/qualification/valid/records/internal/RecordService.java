@@ -11,7 +11,7 @@ class RecordService implements Records {
     private final RecordRepository repository;
     RecordService(RecordRepository repository) { this.repository = repository; }
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional
     public void create(UUID id, String label) {
         // Flush makes the row visible to JDBC in the same transaction before its FK insert.
         repository.saveAndFlush(new StoredRecord(id, label));
