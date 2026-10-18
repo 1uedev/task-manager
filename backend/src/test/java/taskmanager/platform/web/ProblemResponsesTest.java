@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,6 +18,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.TestDatabase;
 import tools.jackson.databind.JsonNode;
@@ -32,6 +35,11 @@ class ProblemResponsesTest {
         String fail() {
             throw new IllegalStateException(SECRET);
         }
+
+        @GetMapping("/test-only/send-error/{marker}")
+        void sendError(@PathVariable String marker, HttpServletResponse response) throws IOException {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        }
     }
 
     @DynamicPropertySource
@@ -45,9 +53,10 @@ class ProblemResponsesTest {
 
     @Test
     void unknownPathIsAProblemWithCodeAndCorrelationId() throws Exception {
-        HttpResponse<String> response = send("GET", "/api/v1/unknown?filter=" + SECRET);
+        HttpResponse<String> response = send("GET", "/api/v1/unknown/" + SECRET + "?filter=" + SECRET);
         JsonNode problem = assertProblem(response, 404, "resource.not_found");
         assertFalse(problem.has("detail"));
+        assertFalse(response.body().contains(SECRET), response.body());
     }
 
     @Test
@@ -61,6 +70,13 @@ class ProblemResponsesTest {
         assertProblem(response, 500, "server.internal_error");
         assertFalse(response.body().contains(SECRET), response.body());
         assertFalse(response.body().contains("IllegalStateException"), response.body());
+    }
+
+    @Test
+    void errorsOutsideControllersUseTheSameProblemShape() throws Exception {
+        HttpResponse<String> response = send("GET", "/test-only/send-error/" + SECRET + "?q=" + SECRET);
+        assertProblem(response, 403, "request.rejected");
+        assertFalse(response.body().contains(SECRET), response.body());
     }
 
     @Test
@@ -82,6 +98,7 @@ class ProblemResponsesTest {
         assertTrue(problem.has("title"));
         String header = response.headers().firstValue(CorrelationIdFilter.HEADER).orElseThrow();
         assertEquals(header, problem.get("correlationId").asString());
+        assertEquals("urn:uuid:" + header, problem.get("instance").asString());
         UUID.fromString(header);
         return problem;
     }

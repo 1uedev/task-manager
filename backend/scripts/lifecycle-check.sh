@@ -12,13 +12,28 @@ export TASK_MANAGER_HTTP_PORT=$port
 logs=target/lifecycle
 mkdir -p "$logs"
 
-fail() { echo "FAILED: $*" >&2; exit 1; }
+pid=
+phase=setup
+fail() { echo "FAILED in phase '$phase': $*" >&2; exit 1; }
+# Never leave the application running when the check stops early. A forced kill here is cleanup
+# only; a successful stop is proven separately by the exit code and the graceful shutdown log.
+cleanup() {
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    echo "Cleanup: stopping leftover process $pid after phase '$phase'" >&2
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+# An exited child stays a zombie until it is reaped by wait, and kill -0 still succeeds for it.
+alive() { kill -0 "$pid" 2>/dev/null && ! ps -o stat= -p "$pid" | grep -q Z; }
+ready() { curl -fsS --connect-timeout 2 --max-time 5 "http://localhost:$port/actuator/health/readiness" 2>/dev/null | grep -q '"UP"'; }
 sql() { psql -X -A -t -q -v ON_ERROR_STOP=1 -c "$1"; }
 history() { sql "select version || ' ' || success || ' ' || installed_on from flyway_schema_history order by installed_rank"; }
 
 [ "$(sql "select count(*) from information_schema.tables where table_schema = 'public'")" = 0 ] \
   || fail "database is not empty before the first start"
 
+phase=missing-settings
 echo "== Refusal without database settings"
 set +e
 env -u TASK_MANAGER_DB_URL -u TASK_MANAGER_DB_USER -u TASK_MANAGER_DB_PASSWORD \
@@ -33,22 +48,29 @@ grep -q "required settings are missing: TASK_MANAGER_DB_PASSWORD (spring.datasou
   || fail "refused start changed the database"
 
 run() {
-  local name=$1 pid code
+  local name=$1 code deadline watchdog
+  phase="$name: start"
   java -jar "$jar" > "$logs/$name.log" 2>&1 &
   pid=$!
-  for _ in $(seq 120); do
-    if curl -fsS "http://localhost:$port/actuator/health/readiness" 2>/dev/null | grep -q '"UP"'; then
-      break
-    fi
-    kill -0 "$pid" 2>/dev/null || { cat "$logs/$name.log"; fail "$name: process ended before it was ready"; }
+  deadline=$((SECONDS + 120))
+  until ready; do
+    alive || { cat "$logs/$name.log"; fail "process ended before it was ready"; }
+    [ "$SECONDS" -lt "$deadline" ] || { cat "$logs/$name.log"; fail "not ready within 120 s"; }
     sleep 1
   done
-  curl -fsS "http://localhost:$port/actuator/health/readiness" | grep -q '"UP"' || fail "$name: not ready"
+  phase="$name: stop"
   kill -TERM "$pid"
+  # A stop that hangs is killed after 60 s; the resulting exit code 137 fails the check below.
+  ( sleep 60; kill -KILL "$pid" 2>/dev/null ) &
+  watchdog=$!
   set +e
   wait "$pid"
   code=$?
   set -e
+  kill "$watchdog" 2>/dev/null || true
+  wait "$watchdog" 2>/dev/null || true
+  pid=
+  [ "$code" -ne 137 ] || { cat "$logs/$name.log"; fail "no exit within 60 s after SIGTERM"; }
   # 143 = terminated by SIGTERM after the JVM shutdown hooks ran.
   [ "$code" -eq 143 ] || fail "$name: exit code $code after SIGTERM"
   grep -q "Graceful shutdown complete" "$logs/$name.log" || fail "$name: no graceful shutdown"
@@ -57,11 +79,13 @@ run() {
 
 echo "== First start on the empty database"
 run first-start
+phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
 [ "$(echo "$after_first" | wc -l)" -eq 1 ] && [[ "$after_first" == "0001 true "* ]] || fail "unexpected history after first start"
 grep -q 'Successfully applied 1 migration' "$logs/first-start.log" || fail "first start did not migrate"
 
+phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"

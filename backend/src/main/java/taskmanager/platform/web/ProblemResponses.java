@@ -16,8 +16,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * Common error handling: every error from a controller becomes {@code application/problem+json}
  * (RFC 9457) with a stable product {@code code} and the request's {@code correlationId}.
- * Framework texts in {@code detail} are removed because they can echo input values; Spring MVC sets
- * {@code instance} to the request path. Modules add their own codes later through a coordinated
+ * Framework texts in {@code detail} are removed and {@code instance} is replaced because both can
+ * echo input values (see {@link Problems}). Modules add their own codes later through a coordinated
  * contract change.
  */
 @RestControllerAdvice
@@ -35,13 +35,7 @@ class ProblemResponses extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> createResponseEntity(
             Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         if (body instanceof ProblemDetail problem) {
-            problem.setDetail(null);
-            problem.setProperties(null);
-            problem.setProperty("code", ProblemCode.forStatus(status.value()));
-            Object correlationId = request.getAttribute(CorrelationIdFilter.ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
-            if (correlationId != null) {
-                problem.setProperty("correlationId", correlationId);
-            }
+            Problems.normalize(problem, request.getAttribute(CorrelationIdFilter.ATTRIBUTE, RequestAttributes.SCOPE_REQUEST));
         }
         return super.createResponseEntity(body, headers, status, request);
     }
