@@ -2,6 +2,8 @@ package com.example.qualification;
 
 import com.example.qualification.valid.Composition;
 import com.example.qualification.valid.ProbeApplication;
+import com.example.qualification.valid.projection.Projection;
+import com.example.qualification.valid.records.Records;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -30,6 +33,8 @@ class TransactionQualificationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
     @Autowired Composition composition;
+    @Autowired Records records;
+    @Autowired Projection projection;
     @Autowired JdbcTemplate jdbc;
     @BeforeEach void clearFixtures() {
         jdbc.update("delete from probe_projection");
@@ -55,6 +60,11 @@ class TransactionQualificationTest {
     }
     @Test void jdbcConstraintFailureAlsoRollsBackFlushedJpaRow() {
         assertThrows(DataIntegrityViolationException.class, () -> composition.create(UUID.randomUUID(), "rollback", null, false));
+        assertCounts(0);
+    }
+    @Test void moduleWritesRequireAnExistingTransaction() {
+        assertThrows(IllegalTransactionStateException.class, () -> records.create(UUID.randomUUID(), "outside"));
+        assertThrows(IllegalTransactionStateException.class, () -> projection.index(UUID.randomUUID(), "outside"));
         assertCounts(0);
     }
 }
