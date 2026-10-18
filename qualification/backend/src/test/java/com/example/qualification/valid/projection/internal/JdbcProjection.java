@@ -12,7 +12,7 @@ class JdbcProjection implements Projection {
     private final JdbcTemplate jdbc;
     JdbcProjection(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void index(UUID id, String text) {
         jdbc.update("insert into probe_projection (record_id, body) values (?, ?)", id, text);
     }
