@@ -1,6 +1,6 @@
 # Zentrale offene Aufgaben
 
-Stand 18. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
+Stand 18. Oktober 2026 · Planung, Repository-Infrastruktur und Backendgrundlage (TASK-022)
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 9 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-022](#task-022-backend-und-postgresql-grundlage-aufbauen) | Backend und PostgreSQL-Grundlage aufbauen | claude-20261018-backend-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -71,6 +69,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-022](#task-022-backend-und-postgresql-grundlage-aufbauen) | Backend und PostgreSQL-Grundlage aufbauen | claude-20261018-backend-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -467,7 +466,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
-Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwischen ausschließlich TASK-021 als isolierten Nachweis; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-022 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-023 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
 
 ## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
 
@@ -493,9 +492,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 ## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-backend-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-backend-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Abhängigkeiten:** TASK-021; Ergebnisse für diesen Folgeschritt angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte TASK-022 gewählt, mit der Folge „TASK-021 gilt als angenommen, das Backend mit PostgreSQL startet, zuerst per Claim PR“. Das ist der Implementierungsauftrag für diesen Umfang, keine Freigabe von TASK-023 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Abhängigkeiten:** TASK-021; Ergebnisse für diesen Folgeschritt angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte TASK-022 gewählt, mit der Folge „TASK-021 gilt als angenommen, das Backend mit PostgreSQL startet, zuerst per Claim PR“. Das ist der Implementierungsauftrag für diesen Umfang, keine Freigabe von TASK-023 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung #64; Auftrag als DEC-055 eingetragen.
 
 **Umfang:** Spring-Boot-Build, leere Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung und erste kontrollierte Migrationen aufbauen. Noch keine Fachfunktion als fertig melden.
 
@@ -503,7 +502,15 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Abnahmekriterien:** Sauberer Build, Start/Stopp, leere Datenbankmigration und Wiederanlauf reproduzierbar; fehlende notwendige Konfiguration scheitert nachvollziehbar. Echtes PostgreSQL in Integrationstests, keine Produktions-Schemaautomatik. Getrennte KI prüft insbesondere Migrations- und Modulgrenzen.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Backendgrundlage aufbauen, im CI mit PostgreSQL nachweisen und als Ergebnis-PR übergeben.
+**Ergebnis:** Die [Backendgrundlage](backend/README.md) unter `backend/` verwendet die Versionen aus TASK-021 ohne Abweichung: Spring Boot 4.1.1, Spring Modulith 2.1.1, Flyway, PostgreSQL 18.6 mit festem Digest, Temurin 25.0.4.1+1 und Maven-Wrapper 3.3.4. Sieben leere Modulgrenzen (`platform`, `identity`, `permissions`, `projects`, `tickets`, `tags`, `search`) mit erlaubten Abhängigkeiten nach TECHNICAL_CONTRACTS.md. Pflichtkonfiguration über `TASK_MANAGER_DB_URL`, `TASK_MANAGER_DB_USER`, `TASK_MANAGER_DB_PASSWORD`; fehlt eine Angabe, bricht der Start vor Webserver und Datenbankverbindung ab und nennt alle fehlenden Variablen. Alle Fehler als Problem Details mit stabilem `code`, serverseitiger `correlationId` und `instance` als `urn:uuid:` dieser Kennung, ohne Anfragepfad, Query, `detail`, Stacktrace oder Ausnahmemeldung; das gilt auch für Fehler außerhalb der Controller. Flyway als einziger Schemaweg (`ddl-auto: validate`, `clean` abgeschaltet), Migrationskonvention `V<NNNN>__<modul>_<beschreibung>.sql` mit leerer Startmigration `V0001__platform_baseline.sql`. Nur `/actuator/health` mit Liveness/Readiness ohne Details. Neuer Workflow [backend.yml](.github/workflows/backend.yml). Keine Fachfunktion, keine Anmeldung, kein Frontend, kein Docker-Image.
+
+**Eigenprüfung am 2026-10-18:** [CI-Lauf 39118663035](https://github.com/1uedev/task-manager/actions/runs/39118663035) auf dem ersten Ergebnisstand: Temurin 25.0.4.1, 13/13 Tests ohne übersprungene Tests (Modulprüfung 2, Migrationskonvention 1, PostgreSQL-Grundlage 4, Start/Stopp/Neustart und fehlende Konfiguration 2, Problemantworten 4), Datenbank 18.6. Danach startete das gepackte JAR gegen eine leere PostgreSQL-18.6-Datenbank: Abweisung ohne Einstellungen ohne Datenbankänderung, erster Start mit genau einer Migration, Stopp per SIGTERM mit geordnetem Herunterfahren (Exitcode 143), Neustart mit „No migration necessary“ und unveränderter Historie. Lokal: dieselben 13 Tests gegen einen lokalen PostgreSQL-16-Server mit OpenJDK 21 (nur Entwicklerhilfe), Lebenszyklusskript lokal erfolgreich, Gegenprobe mit vorübergehend eingefügtem Zugriff `identity` → `tickets` von der Modulprüfung abgewiesen und wieder entfernt. Repository-Validator, Übersichtsprüfung, 25 Regressionstests und `git diff --check` erfolgreich. Kein lokaler Lauf mit Docker oder exakt Temurin 25.
+
+**KI-Gegenprüfung am 2026-10-18:** Die getrennte Codex-Sitzung codex-20261018-backend-review-01 prüfte `bc48d12` gegen `26ac52d`; siehe [Prüfbericht in PR #66](https://github.com/1uedev/task-manager/blob/d5e8f3dec4c334d38a379791324904069eb8ad88/docs/REVIEW_TASK-022_PR-65.md). Keine Befunde an Startmigration und Moduldeklarationen. R1 (mittel): `instance` spiegelte den Anfragepfad zurück. Behoben: `instance` ist jetzt die Korrelationskennung als URN; Fehler außerhalb der Controller verwenden dieselbe Form statt der Spring-Boot-Standardantwort mit Pfad. Neue Tests prüfen Marker in Pfad und Query auf beiden Wegen; eine Gegenprobe mit der alten Behandlung lässt vier der fünf Problemtests scheitern. R2 (niedrig): Lebenszyklusskript ohne Zeitlimits und Bereinigung. Behoben: HTTP-Proben mit Verbindungs- und Gesamtlimit, Start auf 120 s und Stopp auf 60 s begrenzt, Phasenangabe im Fehler, EXIT-Trap beendet einen zurückgebliebenen Prozess; ein erzwungenes Beenden zählt nie als erfolgreicher Stopp. Nachweis der Korrekturen: [CI-Lauf 39121322406](https://github.com/1uedev/task-manager/actions/runs/39121322406) auf `62a9d4c` mit 14/14 Tests (Problemantworten jetzt 5) und erfolgreichem Lebenszyklusskript ohne verwaiste Prozesse; ein Zwischenlauf hatte verwaiste Wartebefehle des Stopp-Wächters gezeigt, die der letzte Commit beseitigt. Lokal zusätzlich ein Fehlerpfad mit nicht erreichbarer Datenbank: Abbruch nach 8 s mit Phasenangabe. Der Fall eines hängenden Stopps wurde nicht simuliert. Die Korrekturen sind noch nicht erneut durch Codex geprüft.
+
+**Offen und Übergabe:** Aus der Claude-Gegenprüfung von TASK-021 bleiben Q5 (Problem-Schema im späteren Produktvertrag für Standard- und Erweiterungsfelder öffnen; die Antworten hier enthalten bereits `instance`) und Q6 (wer flusht) für TASK-023 beziehungsweise die ersten Fachmodule offen. Fachcodes, `type`-URIs, Absicherung der Endpunkte (TASK-024), Zusammensetzung von Tickets, Tags und Suche (TASK-027 bis TASK-029) sowie Image und Betrieb (TASK-031) sind nicht Teil dieses Ergebnisses.
+
+**Nächster Schritt:** Holger entscheidet über die Annahme, gegebenenfalls nach Nachprüfung von R1 und R2 durch Codex. TASK-022 bleibt bis dahin zur Prüfung in TODO.md. TASK-023 bis TASK-031 bleiben blockiert.
 
 ## TASK-023 React-Grundfläche mit Sprachen und API-Anbindung aufbauen
 

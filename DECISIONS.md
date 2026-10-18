@@ -129,11 +129,19 @@ Die Antworten konkretisieren TASK-020. Werkzeugversionen, weitere Detailverträg
 
 Der [Qualifikationsbericht](docs/TECHNICAL_BASELINE.md) trennt technische Versuchsauswahl und tatsächliche Nachweise von der ausstehenden Produktfreigabe. Frühere Entscheidungseinträge bleiben als damaliger Stand erhalten.
 
+## Implementierungsauftrag vom 18. Oktober 2026
+
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-055 | Holger wählt am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte TASK-022 als nächsten Schritt, mit der Folge „TASK-021 gilt als angenommen, das Backend mit PostgreSQL startet, zuerst per Claim PR“. Damit sind die Ergebnisse von TASK-021 für diesen Folgeschritt angenommen und die Backend- und PostgreSQL-Grundlage unter `backend/` beauftragt: Build, leere Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung, Migrationsweg und Backend-CI. Fachfunktionen, Frontend, Docker-Image, Auslieferung, produktive Konten sowie TASK-023 bis TASK-031 sind damit nicht beauftragt. Die förmliche Abnahme von TASK-021 und dessen Übernahme nach DONE.md bleiben gesondert. | REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005 |
+
+Modulordnung, Migrationskonvention und erste Fehlercodes in [backend/README.md](backend/README.md) sind technische Umsetzungsvorschläge dieses Auftrags und werden mit dessen Ergebnis geprüft.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
 
-Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragt inzwischen TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten; TASK-022 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragte TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten, DEC-055 die Backendgrundlage aus TASK-022; TASK-023 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
 
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 

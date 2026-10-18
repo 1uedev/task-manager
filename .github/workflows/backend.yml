@@ -1,0 +1,87 @@
+name: Backend
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      # Official postgres:18.6 manifest, same digest as the Testcontainers tests. Empty and
+      # discarded after the job; the password is a synthetic CI value, not a credential.
+      postgres:
+        image: postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: lifecycle
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: lifecycle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lifecycle -d lifecycle"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Record tool versions
+        run: |
+          java -version
+          docker version
+          psql --version
+      - name: Build, module checks and integration tests with real PostgreSQL
+        working-directory: backend
+        run: |
+          ./mvnw --batch-mode --no-transfer-progress verify
+          ./mvnw --batch-mode --no-transfer-progress dependency:tree -DoutputFile=target/dependency-tree.txt
+      - name: No skipped tests
+        working-directory: backend
+        run: |
+          if grep -l 'skipped="[1-9]' target/surefire-reports/TEST-*.xml; then
+            echo "Skipped tests are not allowed" >&2
+            exit 1
+          fi
+      - name: Start, stop and restart the packaged application
+        working-directory: backend
+        env:
+          TASK_MANAGER_DB_URL: jdbc:postgresql://localhost:5432/lifecycle
+          TASK_MANAGER_DB_USER: lifecycle
+          TASK_MANAGER_DB_PASSWORD: synthetic-ci-only
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: lifecycle
+          PGPASSWORD: synthetic-ci-only
+          PGDATABASE: lifecycle
+        run: |
+          version=$(psql -X -A -t -c 'show server_version')
+          echo "PostgreSQL $version"
+          [[ "$version" == "18.6" || "$version" == "18.6 "* ]]
+          scripts/lifecycle-check.sh
+      - name: Preserve backend evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-evidence
+          retention-days: 7
+          path: |
+            backend/target/surefire-reports/
+            backend/target/dependency-tree.txt
+            backend/target/lifecycle/

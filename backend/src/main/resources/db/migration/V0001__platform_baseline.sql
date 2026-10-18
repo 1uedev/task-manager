@@ -1,0 +1,3 @@
+-- Owner: platform (TASK-022).
+-- Starting point of the controlled schema history. Intentionally creates no objects:
+-- modules add their own tables in later migrations following backend/README.md.
