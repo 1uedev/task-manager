@@ -26,6 +26,7 @@ export const de = {
   'start.brand.title': 'Unternehmensauftritt',
   'start.brand.intro': 'Logo und Farben kommen aus einer Einstellung und lassen sich zurücksetzen. Hier wird ein synthetischer Auftritt angewendet.',
   'start.brand.apply': 'Beispielauftritt anwenden',
+  'start.brand.applyDark': 'Dunklen Beispielauftritt anwenden',
   'start.brand.reset': 'Auftritt zurücksetzen',
   'start.brand.current': 'Aktueller Auftritt: {name}',
 

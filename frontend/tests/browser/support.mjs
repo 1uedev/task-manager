@@ -1,18 +1,31 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
-const dist = new URL('../../dist/', import.meta.url).pathname;
+const dist = resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 // Serves the production build. Every unknown path answers with index.html like the later single page hosting.
 export async function startServer() {
   const server = createServer(async (request, response) => {
-    const path = normalize(new URL(request.url ?? '/', 'http://localhost').pathname).replace(/^(\.\.[/\\])+/, '');
-    const file = path === '/' || extname(path) === '' ? 'index.html' : path.slice(1);
+    let path;
     try {
-      const body = await readFile(join(dist, file));
+      path = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
+    } catch {
+      response.writeHead(400).end();
+      return;
+    }
+    const file = path === '/' || extname(path) === '' ? 'index.html' : path.slice(1);
+    // The resolved path must stay inside dist, whatever the request contains or the platform uses as separator.
+    const target = resolve(dist, file);
+    if (target !== dist && !target.startsWith(dist + sep)) {
+      response.writeHead(404).end();
+      return;
+    }
+    try {
+      const body = await readFile(target);
       response.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'application/octet-stream' });
       response.end(body);
     } catch {

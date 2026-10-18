@@ -271,6 +271,20 @@ describe('form', () => {
     });
   });
 
+  test('digits separated by a space are never read as one number', async () => {
+    await withPage({ locale: 'de-DE' }, async (page) => {
+      await page.goto(`${server.url}#/form`);
+      await page.waitForSelector('h1:has-text("Beispielformular")');
+      await page.getByLabel('Bezeichnung (Pflichtfeld)').fill('Bericht');
+      for (const input of ['1 5', '1\u00a05', '1\u202f5']) {
+        await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').fill(input);
+        await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').press('Enter');
+        await page.getByTestId('error-summary').waitFor();
+        assert.equal(await page.getByTestId('success').count(), 0, JSON.stringify(input));
+      }
+    });
+  });
+
   test('errors are translated when the language changes', async () => {
     await withPage({}, async (page) => {
       await page.goto(`${server.url}#/form`);
@@ -289,7 +303,7 @@ describe('branding', () => {
       const color = () => header.evaluate((element) => getComputedStyle(element).backgroundColor);
       const before = await color();
       assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
-      await page.getByRole('button', { name: 'Beispielauftritt anwenden' }).click();
+      await page.getByRole('button', { name: 'Beispielauftritt anwenden', exact: true }).click();
       assert.equal(await page.getByTestId('brand-name').innerText(), 'Beispiel GmbH');
       assert.notEqual(await color(), before);
       assert.equal(await color(), 'rgb(122, 46, 14)');
@@ -298,6 +312,53 @@ describe('branding', () => {
       await page.getByRole('button', { name: 'Auftritt zurücksetzen' }).click();
       assert.equal(await color(), before);
       assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
+    });
+  });
+
+  test('a dark branding keeps hints, errors, borders and focus readable', async () => {
+    await withPage({}, async (page) => {
+      await page.getByRole('button', { name: 'Dunklen Beispielauftritt anwenden' }).click();
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nacht AG');
+      await page.evaluate(() => { location.hash = '#/form'; });
+      await page.waitForSelector('h1:has-text("Beispielformular")');
+      await page.getByRole('button', { name: 'Prüfen und übernehmen' }).click();
+      await page.getByTestId('error-summary').waitFor();
+      await page.keyboard.press('Shift'); // keyboard modality, so that :focus-visible applies
+      await page.locator('input[name="label"]').focus();
+      const measured = await page.evaluate(() => {
+        const parse = (value) => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+        const light = (rgb) => {
+          const [r, g, b] = rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const ratio = (a, b) => { const x = light(parse(a)); const y = light(parse(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+        const page = getComputedStyle(document.body).backgroundColor;
+        const colorOf = (selector) => getComputedStyle(document.querySelector(selector)).color;
+        const input = document.querySelector('input[name="label"]');
+        const header = document.querySelector('header');
+        const language = document.querySelector('#language');
+        language.focus();
+        const headerFocus = { visible: language.matches(':focus-visible'), ratio: ratio(getComputedStyle(language).outlineColor, getComputedStyle(header).backgroundColor) };
+        input.focus();
+        return {
+          page,
+          hint: ratio(colorOf('.hint'), page),
+          required: ratio(colorOf('.required'), page),
+          footer: ratio(colorOf('footer'), page),
+          fieldError: ratio(colorOf('.field-error'), page),
+          border: ratio(getComputedStyle(input).borderTopColor, page),
+          focus: ratio(getComputedStyle(input).outlineColor, page),
+          focusVisible: input.matches(':focus-visible'),
+          summary: ratio(colorOf('.error-summary h2'), getComputedStyle(document.querySelector('.error-summary')).backgroundColor),
+          headerFocus,
+        };
+      });
+      assert.equal(measured.page, 'rgb(0, 0, 0)');
+      for (const name of ['hint', 'required', 'footer', 'fieldError', 'summary']) assert.ok(measured[name] >= 4.5, `${name} ${measured[name]}`);
+      for (const name of ['border', 'focus']) assert.ok(measured[name] >= 3, `${name} ${measured[name]}`);
+      assert.equal(measured.focusVisible, true, 'the focus ring was actually measured');
+      assert.equal(measured.headerFocus.visible, true);
+      assert.ok(measured.headerFocus.ratio >= 3, `header focus ${measured.headerFocus.ratio}`);
     });
   });
 });

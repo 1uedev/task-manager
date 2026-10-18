@@ -1,5 +1,5 @@
 import { useBrand } from '../brand/BrandProvider.tsx';
-import { syntheticBrand } from '../brand/brand.ts';
+import { darkSyntheticBrand, syntheticBrand } from '../brand/brand.ts';
 import { formatDateTime, formatNumber } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
@@ -44,6 +44,9 @@ export function StartPage() {
         <p className="actions">
           <button type="button" onClick={() => apply(syntheticBrand)} disabled={!isDefault}>
             {t('start.brand.apply')}
+          </button>
+          <button type="button" onClick={() => apply(darkSyntheticBrand)} disabled={!isDefault}>
+            {t('start.brand.applyDark')}
           </button>
           <button type="button" onClick={reset} disabled={isDefault}>
             {t('start.brand.reset')}
