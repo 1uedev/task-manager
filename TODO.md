@@ -577,3 +577,15 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 **Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs erhalten, nur REQ-PORTAL-003 wechselt V zu B (60 B/29 V). Genau drei DEC-IDs ergänzt; alle 50 früheren DEC-Zeilen unverändert. 21 OPEN-IDs, TASK-001 bis TASK-019 und DONE.md unverändert; TASK-020 hat einen datierten Nachtrag, TASK-024/TASK-030 die nötige Folgeplanung. Keine Anwendung, Last- oder Sicherheitstests erstellt oder ausgeführt.
 
 **Nächster Schritt:** Holger prüft die korrekte Übernahme. Der nächste begrenzte Entwicklungsauftrag kann TASK-021 zur Werkzeug-/Vertragsqualifikation betreffen; technische Kandidaten, verbliebene Details und der Implementierungsauftrag bleiben gesondert zu entscheiden. Die drei beantworteten Auswahlfragen werden nicht erneut geöffnet.
+
+## TASK-033 Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen
+
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261018-task-board-01 · **Aktualisiert:** 2026-10-18
+
+**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene zentrale Aufgabenverwaltung aus TASK-013; ausdrücklicher Auftrag vom 18. Oktober 2026 zur Übersicht bearbeitbarer und durch KI reservierter Aufgaben. **Arbeitsstand:** task/task-033-codex-board, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+
+**Umfang:** Kompakte, aus den Aufgabeneinträgen erzeugte Übersicht in TODO.md für bearbeitbare, reservierte, blockierte und zur Prüfung bereite Aufgaben. Zuständigkeit und letzter Aktualisierungsstand sichtbar machen, Aktualisierung und Konsistenzprüfung automatisieren und den Einstieg für neue KI-Sitzungen erklären. Bestehende Produktaufgaben nicht eigenmächtig freigeben.
+
+**Abnahmekriterien:** Jede offene Aufgabe erscheint genau in der passenden Statusgruppe. Reservierte Aufgaben nennen die zuständige Sitzung. Freie und blockierte Arbeit ist eindeutig getrennt; offene Aufgaben mit zugeordnetem Besitzer werden nicht als frei angeboten. Die Übersicht ist eine abgeleitete Ansicht derselben TODO-Datei, keine zweite Statusquelle. Veraltete Übersichten werden von CI erkannt. Bestehende Aufgaben, Entscheidungen und Abnahmen bleiben erhalten. Getrennte KI prüft Verfahren und Nachweise.
+
+**Nächster Schritt:** Reservierung integrieren; anschließend Übersicht, Generator, Konsistenzprüfungen und Einstiegshinweise erstellen und prüfen.
