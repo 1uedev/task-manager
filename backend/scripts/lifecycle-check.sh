@@ -61,12 +61,13 @@ run() {
   phase="$name: stop"
   kill -TERM "$pid"
   # A stop that hangs is killed after 60 s; the resulting exit code 137 fails the check below.
-  ( sleep 60; kill -KILL "$pid" 2>/dev/null ) &
+  ( sleep 60; kill -KILL "$pid" ) 2>/dev/null &
   watchdog=$!
   set +e
   wait "$pid"
   code=$?
   set -e
+  pkill -P "$watchdog" 2>/dev/null || true
   kill "$watchdog" 2>/dev/null || true
   wait "$watchdog" 2>/dev/null || true
   pid=
