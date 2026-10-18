@@ -4,12 +4,13 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 [![Repository checks](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml/badge.svg)](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml)
 
-**Current phase: architecture and isolated technical qualification (TASK-021). Product application implementation has not started.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
+**Current phase: backend foundation (TASK-022, DEC-055) after the isolated technical qualification (TASK-021). Business features have not started.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
 
 ## Start here
 
 - Find work: [available, reserved, blocked and review-ready tasks](TODO.md#aufgabenübersicht). The overview is generated from the task entries and checked by CI. Reservations become effective after their claim PR is merged.
 - Technical qualification: [pinned candidates, common contracts and evidence](docs/TECHNICAL_BASELINE.md), [reproducible commands](qualification/README.md). DEC-054 authorizes this isolated proof only.
+- Backend foundation: [commands, configuration, modules and migration convention](backend/README.md). DEC-055 authorizes this foundation only.
 - Prepare a bounded first product development order: [recommendations, open questions and planned AI tasks](docs/DEVELOPMENT_START.md). Application implementation still needs an explicit order.
 - Review the broader decision round: [architecture readiness, open choices and review evidence](docs/ARCHITECTURE_READINESS.md).
 
@@ -48,7 +49,7 @@ Target usage is 500–1,500 new tickets per month and roughly 15 simultaneous ac
 
 ## Local setup
 
-Only Git and Python 3.10 or later are needed for the documentation/repository checks below. The separate technical qualification additionally needs the versions and Docker runtime described in qualification/README.md; CI runs it on an ephemeral runner. GitHub CLI is optional for creating issues and pull requests. No model keys or existing database are required.
+Only Git and Python 3.10 or later are needed for the documentation/repository checks below. The separate technical qualification additionally needs the versions and Docker runtime described in qualification/README.md; CI runs it on an ephemeral runner. The backend under backend/ needs Temurin 25 and a Docker runtime for its PostgreSQL integration tests, see backend/README.md. GitHub CLI is optional for creating issues and pull requests. No model keys or existing database are required.
 
 ```sh
 git clone https://github.com/1uedev/task-manager.git
@@ -72,6 +73,7 @@ After changing task metadata, run `python3 scripts/task_board.py --write` to upd
 | TODO.md / DONE.md | Central task ledger and accepted history |
 | AGENTS.md / CLAUDE.md | Shared AI instructions and Claude import |
 | docs/TECHNICAL_BASELINE.md | Isolated qualification, exact version candidates, contracts and measured evidence |
+| backend/ | Backend and PostgreSQL foundation from TASK-022; empty module boundaries, no business features |
 | qualification/ / contracts/ | Synthetic test sources and OpenAPI specimen; not product modules |
 | docs/DEVELOPMENT_START.md | Confirmed first slice and account/session choices, proposed tools and blocked task dependencies |
 | docs/ARCHITECTURE_READINESS.md | Consolidated decision package and evidence; architecture is not yet approved |
