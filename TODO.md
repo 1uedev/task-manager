@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 22 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -73,6 +71,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
+| [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -649,7 +648,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 ## TASK-033 Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen
 
-**Status:** IN ARBEIT · **Verantwortlich:** codex-20261018-task-board-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261018-task-board-01 · **Aktualisiert:** 2026-10-18
 
 **Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene zentrale Aufgabenverwaltung aus TASK-013; ausdrücklicher Auftrag vom 18. Oktober 2026 zur Übersicht bearbeitbarer und durch KI reservierter Aufgaben. **Arbeitsstand:** task/task-033-codex-overview, separates Arbeitsverzeichnis nach integrierter Reservierung #57.
 
@@ -657,4 +656,10 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Abnahmekriterien:** Jede offene Aufgabe erscheint genau in der passenden Statusgruppe. Reservierte Aufgaben nennen die zuständige Sitzung. Freie und blockierte Arbeit ist eindeutig getrennt; offene Aufgaben mit zugeordnetem Besitzer werden nicht als frei angeboten. Die Übersicht ist eine abgeleitete Ansicht derselben TODO-Datei, keine zweite Statusquelle. Veraltete Übersichten werden von CI erkannt. Bestehende Aufgaben, Entscheidungen und Abnahmen bleiben erhalten. Getrennte KI prüft Verfahren und Nachweise.
 
-**Nächster Schritt:** Getrennte KI-Gegenprüfung und GitHub-Prüfungen abschließen; anschließend Ergebnis und Übergabe dokumentieren. Übersicht, Generator und 25 lokale Regressionstests sind erstellt und bestehen. Beide Befunde der ersten Gegenprüfung sind korrigiert und durch zusätzliche Tests abgedeckt.
+**Ergebnis:** Die Aufgabenübersicht oben in TODO.md zeigt alle Einträge nach Verfügbarkeit, Reservierung, Blockade und Prüfbereitschaft mit Aufgabenlink, zuständiger Sitzung und Aktualisierungsdatum. scripts/task_board.py erzeugt sie aus derselben Datei; der verpflichtende repository-checks-Job weist eine veraltete Ansicht zurück. Gemeinsame Arbeitsregeln und Einstieg für Codex/Claude erklären Aktualisierung und Reservierung. Keine automatische Vergabe, Freigabe oder zeitliche Aufhebung einer Reservierung.
+
+**KI-Gegenprüfung am 2026-10-18:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte zunächst 11fb6d57c295e045f0bb87d2979c2fb22f4bc1b1 gegenüber dem integrierten Claim #57. Die Befunde zu unvollständigen Aufgabenüberschriften und einer vollständig abgearbeiteten TODO-Liste wurden in 37556037ae57ec0539ce47342da26f9c6bf3f8ab korrigiert. Die anschließende Prüfung erkannte noch eingerückte Überschriften; cdbe689fcc3fa891bea9fa34be81e30968c1f101 behebt diesen Fall. Die erneute gezielte Prüfung bestätigte die Korrektur ohne weitere konkrete Befunde. Der Reviewer prüfte Fälle im Speicher sowie Validator, Übersichtsprüfung und Diff; die vollständige Testsuite wurde von der koordinierenden Sitzung ausgeführt. Dieser nachträglich ergänzte Bericht ist Eigenprotokoll, kein Claude-Review oder Nachweis einer fachlichen Abnahme.
+
+**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Tests prüfen unter anderem eindeutige Zuordnung, inkonsistente Besitzer, beschädigte Marker, leere Listen, Erhalt der Aufgaben und schreibfreie Zurückweisung fehlerhafter Überschriften. TASK-001 bis TASK-032 sowie Anforderungen, Entscheidungen, Roadmap und DONE.md bleiben unverändert. Für cdbe689 bestehen auch die GitHub-Läufe [Repository checks](https://github.com/1uedev/task-manager/actions/runs/39112206093) und [Technical qualification](https://github.com/1uedev/task-manager/actions/runs/39112206092); der Ergebnis-PR #58 prüft die abschließende Übergabefassung erneut.
+
+**Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
