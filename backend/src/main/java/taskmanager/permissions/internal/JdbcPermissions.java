@@ -167,9 +167,9 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
     }
 
     private IdentityAccess adapter() {
-        IdentityAccess selected = identity.getIfUnique();
-        if (selected == null) throw new PermissionDenied();
-        return selected;
+        var candidates = identity.stream().limit(2).toList();
+        if (candidates.size() != 1) throw new PermissionDenied();
+        return candidates.getFirst();
     }
 
     private static boolean isCompanyManager(AccessContext actor, Policy policy) {

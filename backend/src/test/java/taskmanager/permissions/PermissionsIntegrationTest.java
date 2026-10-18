@@ -108,6 +108,11 @@ class PermissionsIntegrationTest {
         beans.registerSingleton("one", (IdentityAccess) actor -> true);
         beans.registerSingleton("two", (IdentityAccess) actor -> true);
         assertFalse(inTransaction(() -> isolated.inspect(actor(USER), scope(), "ticket.read", Set.of())).allowed());
+        var primary = new org.springframework.beans.factory.support.RootBeanDefinition(IdentityAccess.class,
+            () -> (IdentityAccess) actor -> true);
+        primary.setPrimary(true);
+        beans.registerBeanDefinition("primary", primary);
+        assertFalse(inTransaction(() -> isolated.inspect(actor(USER), scope(), "ticket.read", Set.of())).allowed());
     }
 
     @Test
