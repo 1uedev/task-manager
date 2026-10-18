@@ -137,11 +137,17 @@ Der [Qualifikationsbericht](docs/TECHNICAL_BASELINE.md) trennt technische Versuc
 
 Modulordnung, Migrationskonvention und erste Fehlercodes in [backend/README.md](backend/README.md) sind technische Umsetzungsvorschläge dieses Auftrags und werden mit dessen Ergebnis geprüft.
 
+| ID | Entscheidung | Bezug |
+|---|---|---|
+| DEC-056 | Holger wählt am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte TASK-023 als nächste Aufgabe. Die Karte nannte als Grundlage Deutsch und Englisch sowie aktuelle Chromium-basierte Browser. Damit ist die React-Grundfläche unter `frontend/` beauftragt: Oberflächenrahmen mit Navigation, Sprachumschaltung Deutsch und Englisch, Unternehmensauftritt aus einer Einstellung, aus dem Vertrag erzeugter API Client, Zustände für Laden, leere Daten, Fehler, fehlende Rechte und Konflikte sowie Frontend-CI. Fachfunktionen, Anmeldung, Docker-Image, Auslieferung sowie TASK-024 bis TASK-031 sind damit nicht beauftragt. Der verbindliche Barrierefreiheitsstandard und die mobilen Mindestansichten (REQ-UX-001) bleiben offen. Die förmliche Abnahme von TASK-021 und dessen Übernahme nach DONE.md bleiben gesondert. | REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001 |
+
+Sprachpaketformat, Rückfallregel, Fehlerabbildung und Brandingprüfung in [frontend/README.md](frontend/README.md) sind technische Umsetzungsvorschläge dieses Auftrags und werden mit dessen Ergebnis geprüft.
+
 ## Offene Entscheidungen
 
 Die [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) bündelt diese 21 Fragen mit Zuständigkeiten, Fälligkeiten und vorgeschlagenen Prüfungspaketen. Sie ersetzt keine Entscheidung und gibt die Architektur noch nicht frei.
 
-Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragte TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten, DEC-055 die Backendgrundlage aus TASK-022; TASK-023 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
+Die [Startvorlage aus TASK-020](docs/DEVELOPMENT_START.md) bündelt konkrete Empfehlungen für einen begrenzten ersten Auftrag. Ihre drei Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet. DEC-054 beauftragte TASK-021 zur begrenzten technischen Qualifikation der Werkzeugkandidaten, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; TASK-024 bis TASK-031 bleiben gesperrt. Die Teilantworten und der technische Nachweis schließen die nachstehenden umfassenderen OPEN-Fragen nicht vollständig.
 
 Die nachstehenden Punkte müssen nicht alle beantwortet sein, um die erste Spezifikation zu prüfen. Jeder Punkt nennt, bis wann er für verlässliche Umsetzung oder Auslieferung geklärt sein muss. Vorschläge sind keine vorweggenommene Entscheidung.
 

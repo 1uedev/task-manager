@@ -1,0 +1,128 @@
+:root {
+  --brand-primary: #1f4e79;
+  --brand-on-primary: #ffffff;
+  --brand-background: #ffffff;
+  --brand-text: #1b1b1b;
+  --error: #8f1d1d;
+  --muted: #4a4a4a;
+  --border: #6b6b6b;
+  --focus: #b35c00;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--brand-background);
+  color: var(--brand-text);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+main:focus, h1:focus, .error-summary:focus, .success:focus { outline: none; }
+h1:focus-visible, .error-summary:focus-visible, .success:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -4rem;
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  padding: 0.5rem 0.75rem;
+  z-index: 10;
+}
+.skip-link:focus { top: 8px; }
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+.app-header a, .app-header label { color: var(--brand-on-primary); }
+.brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.15rem; }
+.app-header nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; margin: 0; padding: 0; }
+.app-header nav a { display: inline-block; padding: 0.35rem 0.25rem; text-underline-offset: 4px; }
+.app-header nav a[aria-current='page'] { font-weight: 700; text-decoration: underline; text-decoration-thickness: 3px; }
+.language { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+
+main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+h1 { font-size: 1.75rem; margin-top: 0; }
+h2 { font-size: 1.25rem; margin-top: 2rem; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+dt { font-weight: 600; }
+dd { margin: 0; overflow-wrap: anywhere; }
+
+button, select, input {
+  font: inherit;
+  min-height: 2.5rem;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  background: #ffffff;
+  color: #1b1b1b;
+}
+button {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  border-color: var(--brand-primary);
+  cursor: pointer;
+}
+button:disabled { background: #e3e3e3; color: #4a4a4a; border-color: #6b6b6b; cursor: not-allowed; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.result { margin-top: 1.25rem; min-height: 6rem; }
+
+.field { margin: 1.25rem 0; max-width: 28rem; }
+.field label { display: block; font-weight: 600; }
+.field input { width: 100%; margin-top: 0.25rem; }
+.field input[aria-invalid='true'] { border-color: var(--error); border-width: 3px; }
+.hint { margin: 0.1rem 0; color: var(--muted); font-size: 0.95rem; }
+.required { font-weight: 400; color: var(--muted); }
+.field-error { margin: 0.25rem 0; color: var(--error); }
+
+.error-summary, .state-problem {
+  border: 3px solid var(--error);
+  border-left-width: 10px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  background: #fff6f6;
+  color: #3a1010;
+}
+.error-summary h2 { margin: 0 0 0.5rem; font-size: 1.1rem; color: var(--error); }
+.error-summary a { color: var(--error); }
+.success, .state-success { border: 3px solid #1d5c2e; border-left-width: 10px; padding: 0.75rem 1rem; margin: 1rem 0; background: #f4fbf6; color: #10281a; }
+.state-empty { border: 2px dashed var(--border); padding: 0.75rem 1rem; }
+.state-title { font-weight: 700; margin-top: 0; }
+.reference { color: var(--muted); font-size: 0.9rem; }
+.state h3 { margin-top: 0; }
+.state-loading { display: flex; align-items: center; gap: 0.75rem; }
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+footer { max-width: 52rem; margin: 0 auto; padding: 1rem; color: var(--muted); border-top: 1px solid var(--border); }
+
+@media (forced-colors: active) {
+  button, .error-summary, .state-problem, .success { border: 2px solid ButtonText; }
+}
+@media (max-width: 40rem) {
+  .language { margin-left: 0; }
+  dl { grid-template-columns: 1fr; }
+}
