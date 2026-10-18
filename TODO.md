@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-034](#task-034-claude-gegenprüfung-von-task-021-und-task-033-durchführen) | Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen | claude-20261018-review-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -74,6 +72,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-034](#task-034-claude-gegenprüfung-von-task-021-und-task-033-durchführen) | Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen | claude-20261018-review-01 | 2026-10-18 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -488,6 +487,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Eigenprüfung am 2026-10-17:** Repository-Validator, zwölf Regressionstests und git diff --check erfolgreich. Lokale Typgenerierung, Typprüfung und React-Build erfolgreich; Java-/PostgreSQL-/Client-Gesamtlauf auf dem flüchtigen GitHub-Runner. Frühere fehlgeschlagene Versuche sind im Bericht verlinkt. Die 89 Anforderungen mit Status (60 B/29 V), 53 historischen DEC-Zeilen, TASK-022 bis TASK-031 und DONE.md bleiben unverändert. DEC-054 ergänzt ausschließlich den begrenzten Auftrag. Die technische Prüfung ist keine fachliche Abnahme.
 
+**Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein mittlerer Befund (fehlender Negativtest für die Transaktionspflicht) und mehrere niedrige Befunde und Hinweise zur Übergabe an TASK-022/TASK-023. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
+
 **Nächster Schritt:** Holger prüft die qualifizierte Werkzeugbasis und die gemeinsamen Vertragsregeln. Danach können TASK-022 (Backend-/PostgreSQL-Grundlage) und TASK-023 (React-Grundfläche) mit benannten Grenzen beauftragt werden; benötigte Browser-/Betriebsdetails sind vorher festzuhalten. Sie bleiben bis dahin BLOCKIERT und unbesetzt. TASK-021 bleibt zur Prüfung in TODO.md.
 
 ## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
@@ -664,16 +665,22 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Tests prüfen unter anderem eindeutige Zuordnung, inkonsistente Besitzer, beschädigte Marker, leere Listen, Erhalt der Aufgaben und schreibfreie Zurückweisung fehlerhafter Überschriften. TASK-001 bis TASK-032 sowie Anforderungen, Entscheidungen, Roadmap und DONE.md bleiben unverändert. Für cdbe689 bestehen auch die GitHub-Läufe [Repository checks](https://github.com/1uedev/task-manager/actions/runs/39112206093) und [Technical qualification](https://github.com/1uedev/task-manager/actions/runs/39112206092); der Ergebnis-PR #58 prüft die abschließende Übergabefassung erneut.
 
+**Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
+
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
 
 ## TASK-034 Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-review-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-review-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-DATA-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** Ergebnisse TASK-021 und TASK-033 auf main; DEC-040 (gegenseitige KI-Reviews); ausdrücklicher Auftrag vom 18. Oktober 2026 zu einer Claude-Gegenprüfung. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-DATA-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** Ergebnisse TASK-021 und TASK-033 auf main; DEC-040 (gegenseitige KI-Reviews); ausdrücklicher Auftrag vom 18. Oktober 2026 zu einer Claude-Gegenprüfung. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach integrierter Reservierung #59.
 
 **Umfang:** Unabhängige technische Gegenprüfung der gelieferten Ergebnisse von TASK-021 (Werkzeugbasis, Verträge, Qualifikationsquellen und CI-Nachweise) und TASK-033 (erzeugte Aufgabenübersicht, Generator und Prüfungen) durch eine Claude-Sitzung. Befunde mit Belegen und Schweregrad in einem Prüfbericht festhalten. Keine Produktimplementierung, keine Änderung der geprüften Ergebnisse ohne gesonderte Abstimmung, keine fachliche Abnahme.
 
 **Abnahmekriterien:** Prüfbericht nennt geprüfte Commits, ausgeführte und nicht ausgeführte Prüfungen, Befunde mit Datei- und Zeilenbezug sowie verbleibende Grenzen. Bestätigte Entscheidungen, Vorschläge und geprüfte Ergebnisse bleiben getrennt. TASK-021 und TASK-033 behalten Status und Zuständigkeit; Übergaben werden nur als Verweis auf den Bericht ergänzt. Holger entscheidet über Annahme der Befunde.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Prüfbericht erstellen und als Ergebnis-PR übergeben.
+**Ergebnis:** Der [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md) nennt die geprüften Commits, die tatsächlich ausgeführten und die nicht ausgeführten Prüfungen sowie die Befunde mit Datei- und Zeilenbezug. TASK-033: keine blockierenden Befunde, ein niedriger Befund (T1) und ein Hinweis (T2). TASK-021: keine blockierenden Befunde, ein mittlerer Befund (Q1, fehlender Negativtest für die Transaktionspflicht), drei niedrige Befunde (Q2 bis Q4) und drei Hinweise für TASK-022/TASK-023 (Q5 bis Q7). Versionen, Prüfsummen und Testzahlen aus TASK-021 wurden unabhängig bestätigt. Die geprüften Ergebnisse wurden nicht verändert; TASK-021 und TASK-033 erhalten nur einen Verweis auf den Bericht.
+
+**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Die einzelnen Java-, Node- und CI-Nachweise und ihre Abweichungen von der Zielumgebung (Java 21 statt 25, Node 22 statt 24, kein lokales PostgreSQL) stehen im Bericht. Der Bericht ist selbst eine KI-Prüfung; eine weitere Gegenprüfung des Berichts und die fachliche Abnahme stehen aus.
+
+**Nächster Schritt:** Holger entscheidet über die Annahme der Befunde und darüber, ob Q1 bis Q4 als Korrektur zu TASK-021 oder beim Übertrag in TASK-022 behoben werden. TASK-022 bis TASK-031 bleiben BLOCKIERT.
