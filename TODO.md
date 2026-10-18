@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | claude-20261018-permissions-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
@@ -66,7 +68,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -489,9 +490,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021 als Werkzeug-/Vertragsbasis und die abgenommene Backendgrundlage TASK-022. Holger bestätigt am 18. Oktober 2026 im Projektgespräch TASK-025 als nächsten Implementierungsauftrag für Codex und die vorgeschlagenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; Feldverbote gewinnen, Schreiben verlangt zusätzlich Leserecht; Systemadministratoren erhalten keinen automatischen Zugriff auf Fachinhalte, delegierte Administration bleibt begrenzt. Weitere offene Detailregeln werden dadurch nicht pauschal angenommen. **Arbeitsstand:** Claim-PR #69 auf main übernommen; Umsetzung durch codex-20261018-permissions-01 auf task/task-025-codex-permissions-01 in eigenem Arbeitsverzeichnis. Migration V0002__permissions_baseline.sql. Öffentliche Ports verbleiben im Berechtigungsmodul; keine Änderung fremder Modulverträge. Technische Ausgestaltung und Integrationspflichten in backend/PERMISSIONS.md; DEC-057 führt den bereits im Claim verzeichneten Auftrag nach.
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021 als Werkzeug-/Vertragsbasis und die abgenommene Backendgrundlage TASK-022. Holger bestätigt am 18. Oktober 2026 im Projektgespräch TASK-025 als nächsten Implementierungsauftrag für Codex und die vorgeschlagenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; Feldverbote gewinnen, Schreiben verlangt zusätzlich Leserecht; Systemadministratoren erhalten keinen automatischen Zugriff auf Fachinhalte, delegierte Administration bleibt begrenzt. Weitere offene Detailregeln werden dadurch nicht pauschal angenommen. **Arbeitsstand:** Claim-PR #69 auf main übernommen; Umsetzung durch codex-20261018-permissions-01 auf task/task-025-codex-permissions-01 in eigenem Arbeitsverzeichnis. Migration V0002__permissions_baseline.sql. Öffentliche Ports verbleiben im Berechtigungsmodul; keine Änderung fremder Modulverträge. Technische Ausgestaltung und Integrationspflichten in backend/PERMISSIONS.md; DEC-057 führt den bereits im Claim verzeichneten Auftrag nach. **Übergabe für die Nachbesserung P1 und P7:** Holger hat am 18. Oktober 2026 im Projektgespräch nach dem Gegenreview ([PR #76](https://github.com/1uedev/task-manager/pull/76), [Bericht](docs/REVIEW_TASK-025_PR-74.md)) mit „Beide wie vorgeschlagen umsetzen“ beauftragt, (P1) Änderungen zu verweigern, nach denen kein aktives Mitglied mehr `permissions.manage` auf Unternehmensebene hält, mit Konkurrenztest, und (P7) Projektverwaltern nur die Rücknahme eigener Setzungen zu erlauben statt der Verbote anderer Gruppen. Bisheriger Besitzer war codex-20261018-permissions-01; die Übergabe gilt nur für diese beiden Korrekturen im Berechtigungsmodul und erst nach dem Merge dieses Claim PRs. Branch claude/project-thread-qfsobf. Weitere Befunde (P2 bis P6) und die Abnahme bleiben unverändert.
 
 **Umfang:** Gruppen, Aktions-/Projekt-/Feldregeln, aktuelle Autorisierung und protokollierbare Verwaltungsoperationen implementieren. Bestätigter Vorrang ausdrücklicher Feldverbote; weitere Konfliktregeln nur nach Auswahl.
 
