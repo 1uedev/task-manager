@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 sind die ersten Einträge unten. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Die Produktimplementierung hat nicht begonnen.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 sind die ersten Einträge unten. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Fachfunktionen sind noch nicht implementiert.
 
 ## Angaben für spätere Einträge
 
@@ -58,3 +58,21 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Abnahme:** Holger, 2026-10-18, im Projektgespräch erklärte Annahme von TASK-035; bestätigt durch Merge dieses Abschluss-PR.
 
 **Referenz:** Reservierung #61 (05fc08a), Ergebnis #62 (03350ba).
+
+## TASK-022 Backend und PostgreSQL-Grundlage aufbauen
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-DATA-001, REQ-OPS-005, REQ-DEV-005. **Verantwortlich:** claude-20261018-backend-01. **Abgeschlossen:** 2026-10-18.
+
+**Abnahmekriterien:** Sauberer Build, Start/Stopp, leere Datenbankmigration und Wiederanlauf reproduzierbar; fehlende notwendige Konfiguration scheitert nachvollziehbar. Echtes PostgreSQL in Integrationstests, keine Produktions-Schemaautomatik. Getrennte KI prüft insbesondere Migrations- und Modulgrenzen.
+
+**Ergebnis:** [Backendgrundlage](backend/README.md) unter `backend/` mit den Versionen aus TASK-021 ohne Abweichung: Spring Boot 4.1.1, Spring Modulith 2.1.1, Flyway, PostgreSQL 18.6 mit festem Digest, Temurin 25.0.4.1+1, Maven-Wrapper 3.3.4. Sieben leere Modulgrenzen mit erlaubten Abhängigkeiten nach TECHNICAL_CONTRACTS.md. Pflichtkonfiguration `TASK_MANAGER_DB_URL`, `TASK_MANAGER_DB_USER`, `TASK_MANAGER_DB_PASSWORD`; fehlt eine Angabe, bricht der Start vor Webserver und Datenbankverbindung ab und nennt alle fehlenden Variablen. Alle Fehler als Problem Details mit stabilem `code`, serverseitiger `correlationId` und `instance` als `urn:uuid:`, ohne Anfragepfad, Query, `detail`, Stacktrace oder Ausnahmemeldung, auch außerhalb der Controller. Flyway als einziger Schemaweg (`ddl-auto: validate`, `clean` abgeschaltet), Migrationskonvention `V<NNNN>__<modul>_<beschreibung>.sql` mit leerer Startmigration. Nur `/actuator/health` mit Liveness/Readiness ohne Details. Workflow [backend.yml](.github/workflows/backend.yml). Auftrag als DEC-055 eingetragen. Keine Fachfunktion, keine Anmeldung, kein Frontend, kein Docker-Image. Betroffene Dateien: `backend/`, `.github/workflows/backend.yml`, DECISIONS.md, AGENTS.md, CLAUDE.md, README.md, docs/AI_WORKFLOW.md, TODO.md.
+
+**Prüfungen:** [CI-Lauf 39121322406](https://github.com/1uedev/task-manager/actions/runs/39121322406) auf `62a9d4c`: Temurin 25.0.4.1, 14/14 Tests ohne übersprungene Tests gegen PostgreSQL 18.6; danach gepacktes JAR gegen leere Datenbank: Abweisung ohne Einstellungen ohne Datenbankänderung, erster Start mit genau einer Migration, Stopp per SIGTERM mit geordnetem Herunterfahren (Exitcode 143), Neustart mit „No migration necessary“ und unveränderter Historie, ohne verwaiste Prozesse. Repository-, Qualifikations- und Backendläufe auf dem letzten Stand `8635a54` erfolgreich. Gegenproben: eingefügter Zugriff `identity` → `tickets` von der Modulprüfung abgewiesen; alte Fehlerbehandlung lässt vier der fünf Problemtests scheitern; nicht erreichbare Datenbank bricht das Lebenszyklusskript nach 8 s mit Phasenangabe ab. Repository-Validator, Übersichtsprüfung, 25 Regressionstests und `git diff --check` erfolgreich. Lokal nur OpenJDK 21 und PostgreSQL 16 ohne Docker (Entwicklerhilfe); ein hängender Stopp wurde nicht simuliert.
+
+**Review:** Getrennte KI-Gegenprüfung nach DEC-040 durch die Codex-Sitzung codex-20261018-backend-review-01 auf `bc48d12` ([Prüfbericht in PR #66](https://github.com/1uedev/task-manager/blob/d5e8f3dec4c334d38a379791324904069eb8ad88/docs/REVIEW_TASK-022_PR-65.md)): keine Befunde an Startmigration und Moduldeklarationen, R1 (mittel, `instance` spiegelte den Anfragepfad) und R2 (niedrig, Lebenszyklusskript ohne Zeitlimits und Bereinigung). Beide in PR #65 behoben. Die Korrekturen wurden nicht erneut durch Codex geprüft; ihre Nachweise oben sind Eigenprüfung der umsetzenden Sitzung.
+
+**Abnahme:** Holger, 2026-10-18, im Projektgespräch erklärte Annahme von TASK-022 („task22 passt“) nach Merge von PR #65; bestätigt durch Merge dieses Abschluss-PR.
+
+**Offen und Folgeaufgaben:** Q5 (Problem-Schema im Produktvertrag für Standard- und Erweiterungsfelder öffnen) und Q6 (wer flusht) aus der Gegenprüfung von TASK-021 bleiben für TASK-023 beziehungsweise die ersten Fachmodule offen. Fachcodes, `type`-URIs, Absicherung der Endpunkte (TASK-024), Zusammensetzung von Tickets, Tags und Suche (TASK-027 bis TASK-029) sowie Image und Betrieb (TASK-031) sind nicht Teil dieses Ergebnisses. TASK-023 bis TASK-031 bleiben blockiert.
+
+**Referenz:** Reservierung #64 (26ac52d), Ergebnis #65 (4be10f7).
