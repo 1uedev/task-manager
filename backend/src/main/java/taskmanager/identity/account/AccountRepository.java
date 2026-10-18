@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AccountRepository {
     private static final String COLUMNS =
-        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, active, administrator, created_at, updated_at";
+        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, administrator, created_at, updated_at";
 
     private final JdbcClient jdbc;
 
@@ -26,6 +26,7 @@ public class AccountRepository {
             rs.getString("password_hash"),
             rs.getBoolean("password_change_required"),
             Db.instant(rs, "one_time_expires_at"),
+            Db.instant(rs, "one_time_used_at"),
             rs.getBoolean("active"),
             rs.getBoolean("administrator"),
             Db.instant(rs, "created_at"),
@@ -33,9 +34,9 @@ public class AccountRepository {
     }
 
     public void insert(AccountRecord account) {
-        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(account.id(), account.username(), account.displayName(), account.passwordHash(),
-                account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), account.active(),
+                account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), Db.ts(account.oneTimeUsedAt()), account.active(),
                 account.administrator(), Db.ts(account.createdAt()), Db.ts(account.updatedAt()))
             .update();
     }
@@ -71,8 +72,13 @@ public class AccountRepository {
 
     /** Replaces the credential. A one time password is stored with its expiry; a chosen password without one. */
     public void updatePassword(UUID id, String passwordHash, Instant oneTimeExpiresAt, Instant now) {
-        jdbc.sql("update identity_account set password_hash = ?, password_change_required = ?, one_time_expires_at = ?, updated_at = ? where id = ?")
+        jdbc.sql("update identity_account set password_hash = ?, password_change_required = ?, one_time_expires_at = ?, one_time_used_at = null, updated_at = ? where id = ?")
             .params(passwordHash, oneTimeExpiresAt != null, Db.ts(oneTimeExpiresAt), Db.ts(now), id).update();
+    }
+
+    /** The first successful login with a one time password consumes it. The caller holds the row lock. */
+    public void markOneTimeUsed(UUID id, Instant now) {
+        jdbc.sql("update identity_account set one_time_used_at = ?, updated_at = ? where id = ?").params(Db.ts(now), Db.ts(now), id).update();
     }
 
     public void setActive(UUID id, boolean active, Instant now) {

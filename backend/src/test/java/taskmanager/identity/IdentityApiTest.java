@@ -253,13 +253,10 @@ class IdentityApiTest {
         String username = issued.account().username();
         ApiClient first = browser();
         assertEquals(200, login(first, username, issued.oneTimePassword()).status());
-        ApiClient secondBrowser = browser();
-        assertEquals(200, login(secondBrowser, username, issued.oneTimePassword()).status(), "valid until it is used");
+        // The first successful login consumed it (DEC-058), also while its restricted session is still open.
+        assertProblem(login(browser(), username, issued.oneTimePassword()), 401, "auth.one_time_password_used");
         assertEquals(200, first.post("/api/v1/session/password", Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG)).status());
 
-        // The other half finished session of the same account ended with the change.
-        assertProblem(secondBrowser.post("/api/v1/session/password", Map.of("currentPassword", issued.oneTimePassword(), "newPassword", "Another-Strong-Pass-7")),
-            401, "auth.session_expired");
         assertProblem(login(browser(), username, issued.oneTimePassword()), 401, "auth.invalid_credentials");
         assertEquals(200, login(browser(), username, STRONG).status());
     }
@@ -320,9 +317,8 @@ class IdentityApiTest {
         CLOCK.advance(Duration.ofMinutes(31));
         assertProblem(browser.post("/api/v1/session/password", Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG)),
             401, "auth.session_expired");
-        // The one time password is still valid, so a new login starts the change again.
-        ApiClient again = browser();
-        assertEquals(200, login(again, issued.account().username(), issued.oneTimePassword()).status());
+        // The one time password was consumed by the first login (DEC-058): the same password cannot start another session.
+        assertProblem(login(browser(), issued.account().username(), issued.oneTimePassword()), 401, "auth.one_time_password_used");
     }
 
     // ---------------------------------------------------------------- fixed session period

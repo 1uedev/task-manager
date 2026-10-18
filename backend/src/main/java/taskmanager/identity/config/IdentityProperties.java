@@ -20,7 +20,7 @@ public record IdentityProperties(
         @DefaultValue("72h") Duration oneTimePasswordValidity,
         @DefaultValue("30m") Duration restrictedSessionValidity,
         @DefaultValue("5") int userFailureThreshold,
-        @DefaultValue("20") int sourceFailureThreshold,
+        @DefaultValue("5") int sourceFailureThreshold,
         @DefaultValue("5s") Duration baseDelay,
         @DefaultValue("15m") Duration maxDelay) {
 }
