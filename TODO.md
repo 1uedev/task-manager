@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 7 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,13 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | claude-20261018-identity-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
 | [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
@@ -464,7 +465,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
-Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023 und DEC-057 das Berechtigungsmodul aus TASK-025; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-024 und TASK-026 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023 und DEC-057 das Berechtigungsmodul aus TASK-025; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. TASK-024 ist inzwischen durch Claim-PR #73 für claude-20261018-identity-01 reserviert; TASK-026 bis TASK-031 haben weiterhin keinen Besitzer oder Arbeitsbranch. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
 
 ## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
 
@@ -490,17 +491,19 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-identity-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. Holger hat am 18. Oktober 2026 im Projektgespräch die zehn Details der [Entscheidungsvorlage](https://claude.ai/code/artifact/c3c32fc1-b94a-440e-8f63-935a4b546019) mit „alles so“ bestätigt und auf einer Entscheidungskarte „Soll ich TASK-024 jetzt als Implementierungsauftrag per Claim PR starten?“ die Option „Ja, starten“ gewählt. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031; mit dem Merge dieser Reservierung hebt die Koordination die Blockierung auf. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung dieses Claim PR.
 
 **Umfang:** Administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel, Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer mit 24 Stunden als Standard neuer Installationen umsetzen. Anmeldeanbieter kapseln. Vor Beginn Gültigkeit, sichere Übergabe, Erstadministrator, Wiederherstellung und initialen Sitzungsübergang konkretisieren. Synthetische Entwicklungskonten ersetzen den gewählten Kontoanlageweg nicht; SMTP ist nicht als Kennwort-Übergabekanal beschlossen.
+
+**Beschlüsse vom 18. Oktober 2026:** (1) Ein Einmalpasswort gilt 72 Stunden ab Ausgabe und für genau eine erfolgreiche Anmeldung; eine neue Ausgabe entwertet das alte. (2) Übergabe: Die Oberfläche zeigt es dem Administrator einmal nach der Anlage, es ist nicht erneut abrufbar und steht in keinem Protokoll; kein Versand per Mail. (3) Erstadministrator: Ein Befehl im Container legt das Konto an, nur solange noch kein Konto existiert, und gibt ein Einmalpasswort einmal auf der Konsole aus. (4) Wiederherstellung: Der Administrator setzt zurück (neues Einmalpasswort, Pflichtwechsel, Widerruf aller Sitzungen des Kontos); keine Selbstbedienung per Mail in V1. (5) Notweg: Derselbe Containerbefehl darf auch bei vorhandenen Konten ein Administratorpasswort zurücksetzen, setzt Serverzugriff voraus und wird im Prüfprotokoll vermerkt. (6) Passwortregeln: 12 bis 128 Zeichen, keine Zeichenklassenpflicht, nicht gleich dem Benutzernamen, Abgleich mit einer kleinen Liste häufiger Passwörter, Speicherung als Argon2id Hash. (7) Fehlversuche: wachsende Wartezeit je Konto und Quelladresse nach fünf Fehlversuchen statt Sperre, Fehlermeldung ohne Auskunft über vorhandene Konten. (8) Sitzungsdauer einstellbar von 1 bis 720 Stunden, nicht abschaltbar; Verkürzung wirkt bei der nächsten Anfrage auf bestehende Sitzungen, Verlängerung nur für neue Anmeldungen. (9) Übergang: Die Anmeldung mit dem Einmalpasswort startet die feste Frist und erzeugt eine eingeschränkte Sitzung (nur Passwortwechsel und Abmeldung, höchstens 30 Minuten); nach dem Wechsel folgt eine neue Sitzungskennung mit demselben Ablaufzeitpunkt, ohne Verlängerung. (10) Umfang: Backend, Migrationen, API Vertrag und Tests für lokale Konten, Anmeldung, Abmeldung, Deaktivierung, Pflichtwechsel und Sitzungsfristen, kontoart neutral für Portalkonten vorbereitet; eine bedienbare Anmeldeseite folgt in TASK-030. Cookie mit `Secure`, `HttpOnly` und `SameSite=Lax` sowie CSRF Prüfung legt die umsetzende Sitzung fest und dokumentiert sie. Die Zahlenwerte stammen aus der Vorlage; die Beschlüsse werden im Ergebnis-PR als DEC-Eintrag in DECISIONS.md übernommen.
 
 **Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Identitätsmodul und dessen Migrationen; öffentlicher Identitäts-/Sitzungskontext aus TASK-021. Keine Rechteberechnung im Identitätsadapter. LDAP bleibt V1-Folgearbeit, 2FA spätere Erweiterung. Erstadministrator-/Wiederherstellungsweg vor produktiver Kontoanlage festlegen.
 
 **Abnahmekriterien:** Neue Installation mit 24 Stunden voreingestellt, andere gültige Stundenwerte administrativ änderbar. Vor Pflichtwechsel kein regulärer Fachzugriff über UI/API oder Ausgabe von Integrationszugängen; verbrauchtes Einmalpasswort nicht wiederverwendbar. Kein zusätzliches Inaktivitätslimit, keine Fristverlängerung durch Aktivität, Rotation oder Neustart; Ablauf und Deaktivierung serverseitig wirksam. Cookie-/CSRF- und negative Anmeldefälle geprüft. Keine produktiven Standardpasswörter. Getrennte KI prüft Sicherheitsgrenzen; Umfang des Kontenwegs bleibt in Ergebnis und Vorführung sichtbar.
 
-**Nächster Schritt:** Verbleibende Kennwort-/Konten-/Fristdetails und ausdrücklichen Implementierungsauftrag entscheiden; Kontoanlageweg, Standardwert und internen Abschnitt nicht erneut zur Auswahl stellen. Danach reservieren.
+**Nächster Schritt:** Reservierung integrieren; anschließend das Identitätsmodul im Backend aufbauen, im CI nachweisen und als Ergebnis-PR mit DEC-Eintrag übergeben. Die Schnittstelle des Zugriffskontexts mit Koordination und der Codex-Sitzung zu TASK-025 abstimmen. Kontoanlageweg, Standardwert und Beschlüsse nicht erneut zur Auswahl stellen.
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
@@ -522,7 +525,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Offen und Übergabe:** Echte Identitäts-/Sitzungs- und Projekt-/Objektadapter fehlen weiterhin (TASK-024/TASK-026). Ohne genau einen echten Identitätsadapter verweigert das Modul Zugriff; synthetische Adapter sind nur im Test registriert. Diese Folgeaufgaben müssen alle Konto-/Sitzungs-/Organisations-/Objektwechsel mit gemeinsamen Transaktionen, passenden Sperren und eigenen Konkurrenztests nachweisen. Bootstrap/Unternehmensinitialisierung, Dienst-/Worker-Kontexte, konkrete HTTP-Fachfehler und Auditaufbewahrung (OPEN-014) sind nicht vorweggenommen. Neue Ports gehören ausschließlich dem Berechtigungsmodul; vor Verbrauch durch Folgeaufgaben koordiniert integrieren. Die konservative Delegationsgrenze und technische Aktionsschlüssel werden mit diesem Ergebnis geprüft.
 
-**Nächster Schritt:** Gegenseitige technische Gegenprüfung gemäß DEC-040 am finalen PR-Stand koordinieren und Holgers Annahme abwarten. TASK-025 bleibt bis zur belegten Annahme in TODO.md. TASK-024 und TASK-026 bis TASK-031 bleiben blockiert. Kein Merge dieses PRs durch den Autor, keine fachliche Abnahme und keine Änderung von DONE.md.
+**Nächster Schritt:** Gegenseitige technische Gegenprüfung gemäß DEC-040 am finalen PR-Stand koordinieren und Holgers Annahme abwarten. TASK-025 bleibt bis zur belegten Annahme in TODO.md. TASK-024 liegt nach Claim-PR #73 bei claude-20261018-identity-01; TASK-026 bis TASK-031 bleiben blockiert. Kein Merge dieses PRs durch den Autor, keine fachliche Abnahme und keine Änderung von DONE.md.
 
 ## TASK-026 Projekte und minimale Konfiguration implementieren
 

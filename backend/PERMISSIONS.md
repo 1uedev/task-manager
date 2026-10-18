@@ -25,7 +25,7 @@ Objektversion prüft weiterhin das zuständige Fachmodul zusätzlich.
 Es gibt keine HTTP-Endpunkte, Rollen mit Sonderzugriff, Standardgruppen, Initialrechte,
 Benutzerkopien oder Bootstrapkonten. Ohne genau einen echten `IdentityAccess`-Adapter
 verweigert die Anwendung alle Auswertungen/Verwaltungsaufrufe. Tests verwenden ausschließlich
-synthetische Adapter unter `src/test`. TASK-024 ist weiterhin blockiert; Anmeldung,
+synthetische Adapter unter `src/test`. TASK-024 ist separat für Claude reserviert (Claim-PR #73); Anmeldung,
 Sitzungen, LDAP, API-/Job-/Dienstkontexte und produktiver Bootstrap sind nicht implementiert.
 TASK-026 muss die echten Projekt-/Objektadapter liefern. Deren integrierte Sicherheit ist
 durch die synthetischen Nachweise nicht belegt. Die Administrationsoberfläche folgt TASK-030.

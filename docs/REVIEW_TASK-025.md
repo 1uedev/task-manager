@@ -14,6 +14,8 @@ PermissionsIntegrationTest sowie AGENTS.md, TASK-025, DEC-028/DEC-040,
 PERMISSIONS.md und TECHNICAL_CONTRACTS.md. Schwerpunkt: Aktionsunion, Feldverbotsvorrang,
 Unternehmens-/Projekt-/Organisationsgrenzen, Delegationsgrenzen, Audit und konkurrierender
 Entzug. Nachprüfung der Korrektur am Stand von PR #74 (`19a6755`) und im lokalen Vertrag.
+Die Auswahl von genau einem Identitätsadapter einschließlich Gegenprobe mit `@Primary`
+wurde am Stand `3395672` zusätzlich gezielt gelesen; kein neuer Befund.
 
 Der getrennte Prüfer führte **keine Tests selbst aus**. Er las vorhandene lokale Surefire-
 Berichte (4 Policytests und 1 Konventionstest). Den laufenden PostgreSQL-CI wertete er nicht

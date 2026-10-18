@@ -4,7 +4,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 [![Repository checks](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml/badge.svg)](https://github.com/1uedev/task-manager/actions/workflows/repository-checks.yml)
 
-**Current phase: backend and frontend foundations (TASK-022, DEC-055; TASK-023, DEC-056) plus the separately authorized permissions module (TASK-025, DEC-057, claim PR #69), after the isolated technical qualification (TASK-021). Identity, projects and other business modules remain future work.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
+**Current phase: backend and frontend foundations (TASK-022, DEC-055; TASK-023, DEC-056) plus the separately authorized permissions module (TASK-025, DEC-057, claim PR #69), after the isolated technical qualification (TASK-021). Identity is separately reserved for Claude through TASK-024 (claim PR #73); projects and other business modules remain future work.** Java with Spring Boot, React with TypeScript, a modular monolith and HTTP/JSON in REST style with OpenAPI are confirmed (DEC-039, DEC-042 through DEC-044). Detailed contracts, versions and the product specification still need review.
 
 ## Start here
 
