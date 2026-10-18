@@ -83,18 +83,48 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 2 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 3 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'flyway_schema_history,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision' ] \
   || fail "unexpected schema objects"
 [ "$(sql "select (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
+[ "$(sql "select count(*) from identity_account")" = 0 ] || fail "a migration or start created an account"
+
+phase=bootstrap-admin
+echo "== Container command: first administrator"
+set +e
+java -jar "$jar" bootstrap-admin lifecycle-admin > "$logs/bootstrap.out" 2> "$logs/bootstrap.err"
+code=$?
+set -e
+[ "$code" -eq 0 ] || { cat "$logs/bootstrap.out" "$logs/bootstrap.err"; fail "bootstrap-admin exited with $code"; }
+grep -q '^Account: lifecycle-admin$' "$logs/bootstrap.out" || fail "bootstrap-admin did not name the account"
+secret=$(sed -n 's/^One time password (shown only now): //p' "$logs/bootstrap.out")
+[ "${#secret}" -eq 20 ] || fail "bootstrap-admin did not print a one time password"
+! grep -q "$secret" "$logs/bootstrap.err" || fail "one time password reached the error output"
+[ "$(sql "select count(*) from identity_account where administrator and password_change_required and password_hash like '\$argon2id\$%'")" = 1 ] \
+  || fail "administrator account is not stored as expected"
+[ "$(sql "select count(*) from identity_account where password_hash like '%$secret%'")" = 0 ] || fail "one time password stored in clear"
+
+phase=bootstrap-refused
+set +e
+java -jar "$jar" bootstrap-admin second-admin > "$logs/bootstrap-second.out" 2> "$logs/bootstrap-second.err"
+code=$?
+set -e
+[ "$code" -eq 2 ] || fail "second bootstrap-admin exited with $code instead of 2"
+grep -q 'bootstrap.accounts_exist' "$logs/bootstrap-second.err" || fail "second bootstrap-admin did not name the reason"
+! grep -q 'One time password' "$logs/bootstrap-second.out" || fail "second bootstrap-admin printed a password"
+[ "$(sql "select count(*) from identity_account")" = 1 ] || fail "second bootstrap-admin created an account"
+
+phase=started-with-admin
+echo "== Start with an existing account"
+run with-account
 
 echo "Lifecycle check passed"

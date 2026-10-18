@@ -1,0 +1,322 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Identität (TASK-024)
+  version: 0.1.0
+  description: |
+    Lokale Konten, Anmeldung, feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
+    weitere Fachbereiche erhalten eigene Verträge. Die Sitzung läuft über Cookies (`__Host-tm-session`, HttpOnly,
+    und `__Host-tm-csrf`, lesbar, beide Secure und SameSite=Lax). Jede Anfrage mit einer Methode außer GET, HEAD und OPTIONS
+    muss den Wert des CSRF Cookies im Header `X-CSRF-Token` senden; der Origin Header, falls vorhanden, muss zum Host passen.
+    Alle Pfade unter /api verlangen eine Sitzung, außer /api/v1/session. Antworten sind `Cache-Control: no-store`.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /session:
+    get:
+      operationId: getSession
+      summary: Zustand der eigenen Sitzung
+      description: Für Besucher ohne Sitzung wird beim ersten Aufruf ein CSRF Cookie gesetzt und das Token im Körper genannt.
+      security: []
+      responses:
+        '200':
+          description: Zustand, auch anonym
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+    post:
+      operationId: login
+      summary: Anmelden
+      description: |
+        Mit dem Passwort beginnt die feste Sitzungsdauer. Mit einem Einmalpasswort entsteht eine eingeschränkte Sitzung
+        (`level` = `password_change_required`), die nur den Passwortwechsel und das Abmelden erlaubt. Fehlgeschlagene Versuche
+        führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: Angemeldet. Setzt beide Cookies.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/TooManyAttempts'}
+    delete:
+      operationId: logout
+      summary: Abmelden
+      description: Beendet die Sitzung auf dem Server. Wiederholbar; ohne Sitzung ebenfalls 204.
+      security: []
+      responses:
+        '204':
+          description: Abgemeldet. Löscht beide Cookies.
+        '403': {$ref: '#/components/responses/Problem'}
+  /session/password:
+    post:
+      operationId: changeOwnPassword
+      summary: Eigenes Passwort ändern
+      description: |
+        Erlaubt auch in der eingeschränkten Sitzung. Danach endet jede andere Sitzung des Kontos; die aktuelle Sitzung erhält
+        eine neue Kennung, behält aber Beginn und Ablauf. Ein falsches aktuelles Passwort zählt für die Wartezeit mit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordChangeRequest'}
+      responses:
+        '200':
+          description: Geändert. Setzt beide Cookies neu.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/TooManyAttempts'}
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: Konten auflisten (Administrator)
+      responses:
+        '200':
+          description: Alle lokalen Konten
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Account'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createAccount
+      summary: Konto anlegen (Administrator)
+      description: Das Einmalpasswort steht nur in dieser Antwort und ist danach nicht mehr abrufbar. Es gilt 72 Stunden für genau eine erfolgreiche Anmeldung.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAccountRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedAccount'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/deactivate:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: deactivateAccount
+      summary: Konto deaktivieren (Administrator)
+      description: Beendet alle Sitzungen des Kontos sofort. Der letzte aktive Administrator kann nicht deaktiviert werden.
+      responses:
+        '200':
+          description: Deaktiviert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/reactivate:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: reactivateAccount
+      summary: Konto wieder aktivieren (Administrator)
+      responses:
+        '200':
+          description: Aktiviert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/password-reset:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: resetAccountPassword
+      summary: Passwort zurücksetzen (Administrator)
+      description: Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
+      responses:
+        '200':
+          description: Zurückgesetzt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedAccount'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /settings/session-duration:
+    get:
+      operationId: getSessionDuration
+      summary: Feste Sitzungsdauer lesen (Administrator)
+      responses:
+        '200':
+          description: Aktuelle Dauer
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionDuration'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: setSessionDuration
+      summary: Feste Sitzungsdauer ändern (Administrator)
+      description: 1 bis 720 Stunden, nicht abschaltbar. Eine Verkürzung gilt für bestehende Sitzungen ab ihrer nächsten Anfrage, eine Verlängerung nur für neue Anmeldungen.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [hours]
+              properties:
+                hours: {type: integer, minimum: 1, maximum: 720}
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionDuration'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Problem:
+      description: |
+        Fehler im Problemformat. Maßgeblich sind Status und `code`, nie der Text. Codes dieses Vertrags:
+        request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
+        auth.one_time_password_expired, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
+        password.current_incorrect, password.policy_violation (mit violations), account.not_found,
+        account.username_taken, account.last_administrator, account.not_administrator.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+        WWW-Authenticate:
+          description: Nur bei 401, `Session realm="task-manager"`.
+          schema: {type: string}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    TooManyAttempts:
+      description: Wartezeit nach wiederholten Fehlversuchen (auth.too_many_attempts).
+      headers:
+        Retry-After:
+          description: Sekunden bis zum nächsten möglichen Versuch.
+          schema: {type: integer, minimum: 1}
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string, description: 'urn:uuid: der Korrelationskennung, nie ein Teil der Anfrage'}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+          description: Stabile Gründe wie password.too_short, password.too_common, password.equals_username, password.unchanged, username.invalid, hours.out_of_range.
+      additionalProperties: true
+    Session:
+      type: object
+      required: [authenticated, administrator]
+      properties:
+        authenticated: {type: boolean}
+        username: {type: [string, 'null']}
+        displayName: {type: [string, 'null']}
+        level:
+          type: [string, 'null']
+          enum: [full, password_change_required, null]
+        administrator:
+          type: boolean
+          description: Vorläufige technische Kennzeichnung bis zum Rechtemodul (TASK-025), kein Rechtemodell.
+        expiresAt: {type: [string, 'null'], format: date-time}
+        passwordChangeBy:
+          type: [string, 'null']
+          format: date-time
+          description: Ende der eingeschränkten Sitzung (höchstens 30 Minuten), nur bei password_change_required.
+        csrfToken:
+          type: [string, 'null']
+          description: Nur gesetzt, wenn der Server gerade ein Token ausgegeben hat.
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string}
+        password: {type: string, maxLength: 1024, writeOnly: true}
+    PasswordChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: {type: string, maxLength: 1024, writeOnly: true}
+        newPassword: {type: string, minLength: 12, maxLength: 128, writeOnly: true}
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username: {type: string, pattern: '^[a-z0-9][a-z0-9._@+-]{2,63}$', description: 'Wird in Kleinbuchstaben gespeichert; die Eindeutigkeit ignoriert die Schreibweise.'}
+        displayName: {type: [string, 'null'], minLength: 1, maxLength: 100}
+        administrator: {type: boolean, default: false}
+    Account:
+      type: object
+      required: [id, username, active, administrator, passwordChangeRequired, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        displayName: {type: [string, 'null']}
+        active: {type: boolean}
+        administrator: {type: boolean}
+        passwordChangeRequired: {type: boolean}
+        createdAt: {type: string, format: date-time}
+    IssuedAccount:
+      type: object
+      required: [account, oneTimePassword, oneTimePasswordExpiresAt]
+      properties:
+        account: {$ref: '#/components/schemas/Account'}
+        oneTimePassword:
+          type: string
+          readOnly: true
+          description: Wird einmal angezeigt, taucht in keinem Protokoll auf und ist nicht erneut abrufbar.
+        oneTimePasswordExpiresAt: {type: string, format: date-time}
+    SessionDuration:
+      type: object
+      required: [hours, minimumHours, maximumHours]
+      properties:
+        hours: {type: integer}
+        minimumHours: {type: integer}
+        maximumHours: {type: integer}
