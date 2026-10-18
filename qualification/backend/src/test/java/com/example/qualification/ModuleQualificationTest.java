@@ -19,11 +19,13 @@ class ModuleQualificationTest {
     @Test void foreignInternalAccessIsRejected() {
         ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidaccess", INCLUDE_TEST_FIXTURES);
         assertEquals(2, modules.stream().count());
-        assertThrows(Violations.class, modules::verify);
+        Violations violations = assertThrows(Violations.class, modules::verify);
+        assertTrue(violations.getMessage().contains("depends on non-exposed type"), violations.getMessage());
     }
     @Test void dependencyCyclesAreRejected() {
         ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidcycle", INCLUDE_TEST_FIXTURES);
         assertEquals(2, modules.stream().count());
-        assertThrows(Violations.class, modules::verify);
+        Violations violations = assertThrows(Violations.class, modules::verify);
+        assertTrue(violations.getMessage().contains("Cycle detected"), violations.getMessage());
     }
 }

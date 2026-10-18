@@ -85,6 +85,17 @@ Java ergibt zusammen **8/8**, Node **6/6**, Repository **12/12** erfolgreiche Te
 - [Zweiter CI-Lauf 39063368895](https://github.com/1uedev/task-manager/actions/runs/39063368895): Testcontainers akzeptierte die kombinierte Tag-/Digest-Angabe nicht als PostgreSQL-Familie. Die Referenz verwendet jetzt den unveränderten offiziellen Digest ohne Tag und erklärt dessen PostgreSQL-Kompatibilität explizit. Die Prüfung der tatsächlichen Serverversion bleibt erhalten.
 - Das getrennte KI-Review fand eine unquotierte Beschreibung mit Komma in einer YAML-Flow-Map. Sie ist quotiert und die Typdatei neu generiert; die vollständige Abgrenzung von Fachversion und ETag bleibt erhalten.
 
+### Nachtrag aus TASK-035 am 18. Oktober 2026
+
+Die Befunde Q1 bis Q4 der [Claude-Gegenprüfung](REVIEW_TASK-021_TASK-033.md) sind im Versuch behoben; Versionen und Vertragsregeln bleiben unverändert.
+
+- Q1: `TransactionQualificationTest` prüft zusätzlich, dass `Records.create` und `Projection.index` ohne bestehende Transaktion mit `IllegalTransactionStateException` abgewiesen werden und nichts schreiben. Gegenprobe: Mit vorübergehend entfernter Transaktionspflicht schlägt genau dieser Test fehl ([Lauf 39116009163](https://github.com/1uedev/task-manager/actions/runs/39116009163), 9 Tests, 1 Fehler); die Gegenprobe ist im Ergebnis zurückgenommen.
+- Q2: Die beiden Modulith-Negativtests prüfen zusätzlich die Verstoßart („depends on non-exposed type“ beziehungsweise „Cycle detected“).
+- Q3: `.gitattributes` checkt `*.cmd` mit CRLF aus; `mvnw.cmd` ist damit bytegleich mit dem Wrapper-Archiv 3.3.4. Der gespeicherte Inhalt ändert sich nicht.
+- Q4: `TransportFixtureTest` verwendet `asString()` statt des veralteten `asText()`; die Deprecation-Meldung entfällt.
+
+Damit ergibt Java **9/9** Tests (Modulprüfung 3, PostgreSQL/Transaktion 5, Transportfixture 1); Node bleibt bei **6/6**. Die Zahlen und Läufe in der Tabelle oben beschreiben weiterhin den ursprünglichen Stand `79ad5fe`.
+
 Keine Produktanmeldung, Fachrechte, Suchleistung oder Restore-Erfüllung wird aus diesem Versuch abgeleitet. TASK-021 ist ein technisches Ergebnis zur Prüfung; Annahme der gemeinsamen Vertragsgrundlage und Auftrag für die nächsten Produktschritte bleiben getrennt.
 
 

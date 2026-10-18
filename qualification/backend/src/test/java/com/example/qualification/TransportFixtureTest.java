@@ -15,7 +15,7 @@ class TransportFixtureTest {
         Path directory = Path.of("target", "contract-fixtures");
         Files.createDirectories(directory);
         String body = mapper.writeValueAsString(new Probe(UUID.fromString("00000000-0000-4000-8000-000000000021"), "Prüfdatensatz", "opaque-v1", null));
-        assertEquals("opaque-v1", mapper.readTree(body).get("version").asText());
+        assertEquals("opaque-v1", mapper.readTree(body).get("version").asString());
         Files.writeString(directory.resolve("success.json"), body);
         Files.writeString(directory.resolve("conflict.json"), mapper.writeValueAsString(new Problem("about:blank", "Version conflict", 412, "VERSION_CONFLICT")));
         Files.writeString(directory.resolve("forbidden.json"), mapper.writeValueAsString(new Problem("about:blank", "Forbidden", 403, "FORBIDDEN")));

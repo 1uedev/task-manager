@@ -55,3 +55,5 @@ Die dokumentierten Versionen, Prüfsummen, Testzahlen und Aussagegrenzen sind zu
 ## Abgrenzung
 
 Dieser Bericht ist eine technische Gegenprüfung durch eine Claude-Sitzung. Er ist kein Nachweis einer fachlichen Abnahme und keine menschliche technische Prüfung. Er hebt keine Blockierung von TASK-022 bis TASK-031 auf und erteilt keinen Implementierungsauftrag. Die Befunde Q1 bis Q4 und T1 bis T2 werden nicht in diesem Ergebnis korrigiert, weil TASK-034 die geprüften Ergebnisse nicht ohne gesonderte Abstimmung ändert.
+
+**Nachtrag aus TASK-035 am 18. Oktober 2026:** Holger hat entschieden, Q1 bis Q4 sofort zu beheben. Die Korrekturen und ihre Nachweise stehen in [TECHNICAL_BASELINE.md](TECHNICAL_BASELINE.md) im Nachtrag aus TASK-035. T1, T2 und Q5 bis Q7 bleiben offen.
