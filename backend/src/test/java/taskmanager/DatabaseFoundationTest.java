@@ -30,20 +30,24 @@ class DatabaseFoundationTest {
     }
 
     @Test
-    void flywayAppliedExactlyTheKnownMigrations() {
+    void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0003"), versions);
+        assertEquals(List.of("0001", "0002", "0003"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
     @Test
-    void onlyTheMigrationHistoryAndTheIdentityTablesExist() {
+    void onlyOwnedSchemaObjectsExistAndNoDefaultGrantsAreSeeded() {
         List<String> tables = jdbc.queryForList(
             "select table_name from information_schema.tables where table_schema = current_schema() order by table_name",
             String.class);
         assertEquals(List.of("flyway_schema_history", "identity_account", "identity_audit_event", "identity_login_throttle",
-            "identity_session", "identity_setting"), tables);
+            "identity_session", "identity_setting", "permissions_action", "permissions_audit", "permissions_field",
+            "permissions_group", "permissions_membership", "permissions_revision"), tables);
+        assertEquals(0, jdbc.queryForObject("select count(*) from identity_account", Integer.class), "no account is seeded");
+        assertEquals(0, jdbc.queryForObject("select count(*) from permissions_revision", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from permissions_action", Integer.class));
     }
 
     @Test

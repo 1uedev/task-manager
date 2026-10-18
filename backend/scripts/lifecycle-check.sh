@@ -83,17 +83,19 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(echo "$after_first" | cut -d' ' -f1,2 | paste -sd, -)" = "0001 true,0003 true" ] || fail "unexpected history after first start"
-grep -q 'Successfully applied 2 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true' ] \
+  || fail "unexpected history after first start"
+grep -q 'Successfully applied 3 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" \
-  = flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision' ] \
   || fail "unexpected schema objects"
+[ "$(sql "select (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
+  || fail "unexpected default identities or grants"
 [ "$(sql "select count(*) from identity_account")" = 0 ] || fail "a migration or start created an account"
 
 phase=bootstrap-admin
