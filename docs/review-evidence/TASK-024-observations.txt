@@ -1,0 +1,13 @@
+Review-only observations on product commit 508f0df5fcf47ab67969344f5362573e578cf441
+Temurin 25.0.4.1+1; Maven 3.9.16; native PostgreSQL 18.6; synthetic isolated database
+Baseline before probes: 73 tests, 0 failures, 0 errors, 0 skipped; verify successful
+IMPORTANT: passing counterexamples below confirm the vulnerable behavior; they are not acceptance tests.
+
+REVIEW R4: canonical protected route=401; path aliases=200; aliased login without CSRF/with foreign Origin=200
+REVIEW R2: same expired token becomes FULL again after duration 24 -> 1 -> 24
+REVIEW R1: old-password login after reset = FULL while account requires password change
+REVIEW R5: six failures across names from one source = six 401 responses, no 429 delay
+REVIEW R3: one credential accepted for three logins, including after restricted-session expiry
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 12.27 s -- in taskmanager.identity.IdentitySecurityProbeTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
