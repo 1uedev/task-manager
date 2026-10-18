@@ -1,6 +1,6 @@
-# Backendgrundlage (TASK-022)
+# Backendgrundlage und Berechtigungsmodul (TASK-022, TASK-025)
 
-Spring-Boot-Anwendung des modularen Monolithen mit PostgreSQL. Dieser Stand enthält Build, leere Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung und den Migrationsweg. Er enthält **keine Fachfunktion**: keine Anmeldung, Rechte, Projekte, Tickets, Tags oder Suche. Diese folgen in TASK-024 bis TASK-029. Versionen stammen aus [TECHNICAL_BASELINE.md](../docs/TECHNICAL_BASELINE.md).
+Spring-Boot-Anwendung des modularen Monolithen mit PostgreSQL. Dieser Stand enthält Build, Modulgrenzen, Konfiguration, gemeinsame Fehlerbehandlung, Datenbankanbindung und den Migrationsweg. TASK-025 ergänzt Gruppen-, Aktions-/Projekt-/Feldrechte und Audit. Der [Berechtigungsvertrag](PERMISSIONS.md) beschreibt Nutzung und Grenzen. Ohne echten Identitätsadapter verweigert das Modul Zugriff. Anmeldung, Projekte, Tickets, Tags und Suche sind noch nicht implementiert. Versionen stammen aus [TECHNICAL_BASELINE.md](../docs/TECHNICAL_BASELINE.md).
 
 ## Voraussetzungen und Befehle
 
@@ -54,7 +54,7 @@ Flyway ist der einzige Weg für Schemaänderungen. Hibernate prüft nur (`ddl-au
 - Eine nach main übernommene Migration wird nie geändert. Korrekturen sind neue Migrationen. Flyway weist geänderte Prüfsummen beim Start ab.
 - Ein Modul legt nur eigene Objekte an und liest keine fremden Tabellen.
 
-`MigrationConventionTest` prüft Name, Modul und Eindeutigkeit ohne Datenbank. `V0001__platform_baseline.sql` ist bewusst leer und beginnt die Schemahistorie.
+`MigrationConventionTest` prüft Name, Modul und Eindeutigkeit ohne Datenbank. `V0001__platform_baseline.sql` ist bewusst leer und beginnt die Schemahistorie. `V0002__permissions_baseline.sql` legt sechs ausschließlich vom Berechtigungsmodul besessene Tabellen ohne Startdaten an. Lifecycle- und Foundation-Prüfungen erwarten genau diese zwei Migrationen und keine Defaultrechte.
 
 ## Fehlerantworten
 
