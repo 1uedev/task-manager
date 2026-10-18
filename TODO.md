@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 8 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 7 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -30,13 +30,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
+| [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | claude-20261018-frontend-01 | 2026-10-18 |
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | — | 2026-10-17 |
 | [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
 | [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
@@ -492,9 +492,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-023 React-Grundfläche mit Sprachen und API-Anbindung aufbauen
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-frontend-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001. **Abhängigkeiten:** TASK-021; Frontend-/Browservertrag angenommen und Implementierungsauftrag erteilt. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001. **Abhängigkeiten:** TASK-021; Frontend-/Browservertrag angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte „Welche Aufgabe soll ich als Nächstes per Claim PR starten?“ TASK-023 gewählt; die Karte nannte als Grundlage DE/EN und aktuelle Chromium-Browser. Das ist der Implementierungsauftrag für diesen Umfang, keine Freigabe von TASK-024 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung dieses Claim-PR. Die Eintragung des Auftrags in DECISIONS.md und der Umfangsbeschreibung in AGENTS.md, CLAUDE.md und README.md folgt koordiniert im Ergebnis-PR, wie bei TASK-022.
 
 **Umfang:** React/TypeScript-Oberfläche, Navigation, DE/EN-Sprachpakete, Farb-/Logo-Grundstruktur und generierten API-Client aufbauen. Zustände für Laden, leere Daten, Fehler, fehlende Rechte und Konflikte vorsehen.
 
@@ -502,7 +502,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Reproduzierbarer Build mit strenger Typprüfung, Sprachumschaltung und Tastaturbedienung geprüft; keine hart verdrahteten Fachtexte oder Sitzungstokens im Lokalspeicher. Testantworten ausdrücklich synthetisch, keine behauptete Backendfunktion. Getrennte KI prüft Client-/Fehlervertrag und UI-Zustände.
 
-**Nächster Schritt:** Sprach-/Browserdetails für den ersten Abschnitt bestätigen; nach Autorisierung reservieren.
+**Nächster Schritt:** Reservierung integrieren; anschließend `frontend/` aufbauen, im CI nachweisen und als Ergebnis-PR übergeben.
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 
