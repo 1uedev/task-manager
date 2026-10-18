@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | claude-20261018-identity-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
@@ -66,7 +68,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | claude-20261018-identity-01 | 2026-10-18 |
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
@@ -490,9 +491,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-identity-01 · **Aktualisiert:** 2026-10-18
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-identity-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. Holger hat am 18. Oktober 2026 im Projektgespräch die zehn Details der [Entscheidungsvorlage](https://claude.ai/code/artifact/c3c32fc1-b94a-440e-8f63-935a4b546019) mit „alles so“ bestätigt und auf einer Entscheidungskarte „Soll ich TASK-024 jetzt als Implementierungsauftrag per Claim PR starten?“ die Option „Ja, starten“ gewählt. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031; mit dem Merge der Reservierung (Claim PR #73) hob die Koordination die Blockierung auf. **Arbeitsstand:** claude/project-thread-qfsobf nach Reservierung #73; die Beschlüsse sind als DEC-058 eingetragen.
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-AUTH-005, REQ-SEC-001. **Abhängigkeiten:** TASK-021, TASK-022; verbleibende Kontolebenszyklus-/Kennwortdetails, Fristgrenzen/-änderungen und beauftragter Umfang entschieden; Grundauswahl DEC-052/DEC-053 bestätigt. Holger hat am 18. Oktober 2026 im Projektgespräch die zehn Details der [Entscheidungsvorlage](https://claude.ai/code/artifact/c3c32fc1-b94a-440e-8f63-935a4b546019) mit „alles so“ bestätigt und auf einer Entscheidungskarte „Soll ich TASK-024 jetzt als Implementierungsauftrag per Claim PR starten?“ die Option „Ja, starten“ gewählt. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031; mit dem Merge der Reservierung (Claim PR #73) hob die Koordination die Blockierung auf. **Arbeitsstand:** claude/project-thread-qfsobf nach Reservierung #73; die Beschlüsse sind als DEC-058 eingetragen. Erneute Reservierung für die Nachbesserung R1 bis R5 aus der Codex-Sicherheitsprüfung ([PR #77](https://github.com/1uedev/task-manager/pull/77)); Holger hat am 18. Oktober 2026 auf einer Entscheidungskarte „Alle beheben“ gewählt, das schließt die Adressschwelle von fünf Fehlversuchen nach DEC-058 ein. Branch claude/project-thread-qfsobf, Reservierung gilt nach dem Merge dieses Claim PRs.
 
 **Umfang:** Administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel, Anmeldung, Abmeldung, Kontodeaktivierung und feste Sitzungsdauer mit 24 Stunden als Standard neuer Installationen umsetzen. Anmeldeanbieter kapseln. Vor Beginn Gültigkeit, sichere Übergabe, Erstadministrator, Wiederherstellung und initialen Sitzungsübergang konkretisieren. Synthetische Entwicklungskonten ersetzen den gewählten Kontoanlageweg nicht; SMTP ist nicht als Kennwort-Übergabekanal beschlossen.
 
@@ -508,7 +509,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Offen und Übergabe:** (1) Eine getrennte KI Prüfung der Sicherheitsgrenzen nach DEC-040 und Holgers Abnahme stehen aus; der Umfang ist ausdrücklich nur Backend ohne Anmeldeseite (TASK-030), ohne LDAP, Portalkonten und zweiten Faktor. (2) Anbindung an TASK-025: Dessen Port `IdentityAccess` erwartet Mandant, Organisation, Rechteversion und einen Adapter außerhalb des Identitätsmoduls, das Identitätsmodul führt diese Daten noch nicht. Das Feld `administrator` ist nur eine vorläufige technische Kennzeichnung. Adapter und Datenmodell sind mit der Koordination und der Codex Sitzung abzustimmen und nicht Teil dieses Ergebnisses. (3) Migrationsnummer: V0003, weil V0002 der Berechtigung aus TASK-025 gehört; Foundation, Lebenszyklusprüfung und Tabellenliste erwarten nach der Zusammenführung mit main genau V0001 bis V0003. (4) Quelladresse hinter einem Proxy, kleine Passwortliste und Aufbewahrung des Prüfprotokolls (OPEN-014) sind in backend/README.md als Grenzen vermerkt.
 
-**Nächster Schritt:** Gegenseitige KI Prüfung der Sicherheitsgrenzen nach DEC-040 (Codex), danach Holgers Entscheidung über die Annahme. Bis dahin bleibt TASK-024 zur Prüfung in TODO.md; TASK-026 bis TASK-031 bleiben blockiert.
+**Nächster Schritt:** Nach Merge der Reservierung R1 bis R5 beheben, jeweils mit negativem Regressionstest statt der Gegenprobe, und als Ergebnis PR mit Verweis auf docs/REVIEW_TASK-024_PR-75.md übergeben; danach gezielte Nachprüfung durch Codex am Korrekturcommit und Holgers Entscheidung über die Annahme. TASK-026 bis TASK-031 bleiben blockiert.
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
