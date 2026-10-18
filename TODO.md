@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 9 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 8 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | codex-20261018-permissions-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
@@ -36,7 +38,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | — | 2026-10-17 |
 | [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
-| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | — | 2026-10-17 |
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
 | [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
@@ -519,9 +520,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** codex-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021, TASK-022; Rechtealgorithmus und Administrationsgrenzen entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021 als Werkzeug-/Vertragsbasis und die abgenommene Backendgrundlage TASK-022. Holger bestätigt am 18. Oktober 2026 im Projektgespräch TASK-025 als nächsten Implementierungsauftrag für Codex und die vorgeschlagenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; Feldverbote gewinnen, Schreiben verlangt zusätzlich Leserecht; Systemadministratoren erhalten keinen automatischen Zugriff auf Fachinhalte, delegierte Administration bleibt begrenzt. Weitere offene Detailregeln werden dadurch nicht pauschal angenommen. **Arbeitsstand:** Reservierung für codex-20261018-permissions-01; geplanter Arbeitsbranch task/task-025-codex-permissions-01, eigenes Arbeitsverzeichnis. Vorgesehene erste Migration: V0002__permissions_baseline.sql; weitere Nummern vor Verwendung koordinieren. Kein Produktcode vor Übernahme dieses Claim-PRs.
 
 **Umfang:** Gruppen, Aktions-/Projekt-/Feldregeln, aktuelle Autorisierung und protokollierbare Verwaltungsoperationen implementieren. Bestätigter Vorrang ausdrücklicher Feldverbote; weitere Konfliktregeln nur nach Auswahl.
 
@@ -529,7 +530,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Positive, negative und Mehrgruppenfälle einschließlich Feldverbot, Rechteentzug und konkurrierender Änderung geprüft. Fehlender Kontext verweigert Zugriff; Testdoubles werden im integrierten Betrieb ersetzt. Getrennte KI prüft Rechtealgorithmus, Auditgrenzen und konkurrierenden Entzug.
 
-**Nächster Schritt:** Rechtematrix und gemeinsame Schnittstellen annehmen; Umfang freigeben und anschließend reservieren.
+**Nächster Schritt:** Koordination prüft Auftrag, Zuständigkeit und Migrationsnummer und integriert die Reservierung. Anschließend vom aktualisierten main aus innerhalb des bestätigten Umfangs implementieren. Identitäts-/Objektverträge und Änderungen zentraler Dateien koordiniert abstimmen; TASK-023 bleibt bei Claude, TASK-024 und TASK-026 bis TASK-031 bleiben blockiert. Bestätigte Rechteregeln und Auftrag im Ergebnis nachvollziehbar in Entscheidungen und Umfangsbeschreibung nachführen; Ergebnis mit Prüfungen und getrennter KI-Prüfung übergeben. Keine fachliche Abnahme vorwegnehmen.
 
 ## TASK-026 Projekte und minimale Konfiguration implementieren
 
