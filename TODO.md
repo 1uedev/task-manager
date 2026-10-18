@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-035](#task-035-befunde-q1-bis-q4-der-claude-gegenprüfung-im-qualifikationsversuch-beheben) | Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben | claude-20261018-qualfix-01 | 2026-10-18 |
 
 ### Blockiert – BLOCKIERT
 
@@ -684,3 +686,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 **Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Die einzelnen Java-, Node- und CI-Nachweise und ihre Abweichungen von der Zielumgebung (Java 21 statt 25, Node 22 statt 24, kein lokales PostgreSQL) stehen im Bericht. Der Bericht ist selbst eine KI-Prüfung; eine weitere Gegenprüfung des Berichts und die fachliche Abnahme stehen aus.
 
 **Nächster Schritt:** Holger entscheidet über die Annahme der Befunde und darüber, ob Q1 bis Q4 als Korrektur zu TASK-021 oder beim Übertrag in TASK-022 behoben werden. TASK-022 bis TASK-031 bleiben BLOCKIERT.
+
+## TASK-035 Befunde Q1 bis Q4 der Claude-Gegenprüfung im Qualifikationsversuch beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-qualfix-01 · **Aktualisiert:** 2026-10-18
+
+**Bezug:** REQ-ARCH-002, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-021 (Qualifikationsversuch) und TASK-034 (Prüfbericht); DEC-054 für den begrenzten Arbeitsbereich unter `qualification/`; ausdrücklicher Auftrag vom 18. Oktober 2026, Q1 bis Q4 jetzt zu beheben. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+
+**Umfang:** Die Befunde Q1 bis Q4 aus [REVIEW_TASK-021_TASK-033.md](docs/REVIEW_TASK-021_TASK-033.md) beheben: Negativtest für die Transaktionspflicht der Moduloperationen (Q1), konkrete Verstoßarten in den Modulith-Negativtests (Q2), CRLF-Zeilenenden für Windows-Batchdateien über `.gitattributes` (Q3), Ersatz des veralteten `asText()` (Q4). Keine Produktimplementierung, keine Versionsänderung, keine Änderung an Q5 bis Q7 oder an TASK-022 bis TASK-031.
+
+**Schnittstellen und Arbeitsbereich:** Tests unter `qualification/backend/src/test`, `qualification/backend/mvnw.cmd` (nur Zeilenenden) und eine Zeile in der zentralen `.gitattributes`. Der Qualifikationsbericht in TECHNICAL_BASELINE.md erhält nur angepasste Testzahlen und einen kurzen Korrekturvermerk.
+
+**Abnahmekriterien:** Der neue Negativtest schlägt nachweislich fehl, wenn die Transaktionspflicht entfernt wird, und besteht mit ihr. Die Modulith-Negativtests prüfen die erwartete Verstoßart. `mvnw.cmd` wird mit CRLF ausgecheckt und ist inhaltlich gleich mit dem Wrapper-Archiv 3.3.4. Keine Deprecation-Warnung mehr aus TransportFixtureTest. Der vollständige Qualifikationslauf mit PostgreSQL ist grün. Getrennte KI prüft die Änderung.
+
+**Nächster Schritt:** Reservierung integrieren; anschließend Korrekturen umsetzen, im CI nachweisen und als Ergebnis-PR übergeben.
