@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | claude-20261018-permissions-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -68,6 +66,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | claude-20261018-permissions-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -490,7 +489,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-025 Gruppen-, Projekt- und Feldrechte implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-permissions-01 · **Aktualisiert:** 2026-10-18
 
 **Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-021 als Werkzeug-/Vertragsbasis und die abgenommene Backendgrundlage TASK-022. Holger bestätigt am 18. Oktober 2026 im Projektgespräch TASK-025 als nächsten Implementierungsauftrag für Codex und die vorgeschlagenen Regeln: Aktionsfreigaben aus Gruppen werden zusammengeführt, ohne Freigabe kein Zugriff; Feldverbote gewinnen, Schreiben verlangt zusätzlich Leserecht; Systemadministratoren erhalten keinen automatischen Zugriff auf Fachinhalte, delegierte Administration bleibt begrenzt. Weitere offene Detailregeln werden dadurch nicht pauschal angenommen. **Arbeitsstand:** Claim-PR #69 auf main übernommen; Umsetzung durch codex-20261018-permissions-01 auf task/task-025-codex-permissions-01 in eigenem Arbeitsverzeichnis. Migration V0002__permissions_baseline.sql. Öffentliche Ports verbleiben im Berechtigungsmodul; keine Änderung fremder Modulverträge. Technische Ausgestaltung und Integrationspflichten in backend/PERMISSIONS.md; DEC-057 führt den bereits im Claim verzeichneten Auftrag nach. **Übergabe für die Nachbesserung P1 und P7:** Holger hat am 18. Oktober 2026 im Projektgespräch nach dem Gegenreview ([PR #76](https://github.com/1uedev/task-manager/pull/76), [Bericht](docs/REVIEW_TASK-025_PR-74.md)) mit „Beide wie vorgeschlagen umsetzen“ beauftragt, (P1) Änderungen zu verweigern, nach denen kein aktives Mitglied mehr `permissions.manage` auf Unternehmensebene hält, mit Konkurrenztest, und (P7) Projektverwaltern nur die Rücknahme eigener Setzungen zu erlauben statt der Verbote anderer Gruppen. Bisheriger Besitzer war codex-20261018-permissions-01; die Übergabe gilt nur für diese beiden Korrekturen im Berechtigungsmodul und erst nach dem Merge dieses Claim PRs. Branch claude/project-thread-qfsobf. Weitere Befunde (P2 bis P6) und die Abnahme bleiben unverändert.
 
@@ -505,6 +504,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Eigenprüfungen:** Lokal mit festgelegtem Temurin 25.0.4.1+1 und Maven 3.9.16 sieben datenbankfreie Backendtests erfolgreich (4 Policy, 2 Modulstruktur, 1 Migrationskonvention); alle Testquellen kompiliert. Repository-Validator, Übersichtsprüfung, 25 Repositorytests und Diffprüfung erfolgreich. Ein lokaler Lauf mit ProblemResponsesTest scheiterte am fehlenden Docker-Daemon; kein lokaler PostgreSQL-Erfolg behauptet. [Backend-CI 39135636061](https://github.com/1uedev/task-manager/actions/runs/39135636061) auf `19a6755`: PostgreSQL 18.6, `verify` mit 28 erfolgreichen Tests, null Fehler/Fehlschläge/übersprungene Tests, darunter 10 Berechtigungsintegrationstests. Mehrgruppen, fehlender/alter Kontext, fehlende/mehrdeutige Adapter, Pflichtwechsel, Audit/Rollback und Delegationsgrenzen geprüft. Konkurrenztests erzwingen beide Reihenfolgen für Gruppenentzug, synthetischen Identitätsentzug und Projektmitgliedschaftsentzug; tatsächliche Sperrwartebeziehung über `pg_blocking_pids`. Gepacktes JAR: fehlende Konfiguration verweigert, leerer Start migriert V0001+V0002, geordneter Stopp und Neustart mit identischer Historie bestanden. Repository-, Frontend- und Qualifikations-CI desselben Stands ebenfalls grün. Die abschließende Verschärfung auf genau einen Identitätsadapter und die Übergabedokumentation werden mit dem finalen PR-Stand erneut durch CI geprüft.
 
 **Getrennte KI-Prüfung:** [Bericht](docs/REVIEW_TASK-025.md) des separaten Codex-Prüfers `permissions_review`: statische Prüfung von Algorithmus, Audit und Entzug. Mittlerer Befund R1 zur bis Commit fehlenden Sperrpflicht der Identitäts-/Ressourcenadapter adressiert; geschärfter Vertrag und synthetische Sperrtests nachgeprüft. Keine weiteren konkreten Befunde. Prüfer führte keine Tests selbst aus. Dies ist kein gegenseitiger Claude-Review; dieser bleibt gemäß DEC-040 vor Annahme ausstehend.
+
+**Nachbesserung P1 und P7 (DEC-059):** Auf Holgers Auftrag nach dem Gegenreview ([PR #76](https://github.com/1uedev/task-manager/pull/76)) setzt `JdbcPermissions` zwei Entscheidungen um. P1: `setAction` (Entzug von `permissions.manage` auf Unternehmensebene) und `setMember` (Mitgliedschaft entfernen) weisen ab und rollen zurück, wenn danach keine Gruppe mit diesem Recht ein vom Identitätsadapter über `userExists` bekanntes Mitglied hat; die Prüfung läuft nach der Änderung unter der exklusiven Revisionssperre. P7: Eine Projektdelegation darf ein bestehendes Verbot nur ändern, entfernen oder ersetzen, wenn sie es selbst gesetzt hat; dafür speichert die Migration V0005 `permissions_field.set_by`, ältere Zeilen ohne Herkunft zählen als fremd. Vier neue Integrationstests zu letzter Administration mit Geistergruppe, verbleibender Administration, gleichzeitigem gegenseitigem Entzug und Delegationsherkunft; lokal mit OpenJDK 21 und PostgreSQL 16 87 Tests ohne Fehler und ohne übersprungene Tests, Lifecycle-Prüfung am gepackten JAR mit fünf Migrationen bestanden. Auf dem Stand vor der Korrektur scheitern drei der vier neuen Tests; der Test des gleichzeitigen Entzugs besteht dort ebenfalls, weil die veraltete Rechteversion den zweiten Auftrag schon abweist, er belegt also nur die Serialisierung mit echter Sperrwartebeziehung. Nicht abgedeckt: Deaktivieren des letzten Administrationskontos im Identitätsmodul (Pflicht des künftigen Adapters). Ein erneuter Review der Änderung durch eine getrennte KI hat nicht stattgefunden.
 
 **Offen und Übergabe:** Echte Identitäts-/Sitzungs- und Projekt-/Objektadapter fehlen weiterhin (TASK-024/TASK-026). Ohne genau einen echten Identitätsadapter verweigert das Modul Zugriff; synthetische Adapter sind nur im Test registriert. Diese Folgeaufgaben müssen alle Konto-/Sitzungs-/Organisations-/Objektwechsel mit gemeinsamen Transaktionen, passenden Sperren und eigenen Konkurrenztests nachweisen. Bootstrap/Unternehmensinitialisierung, Dienst-/Worker-Kontexte, konkrete HTTP-Fachfehler und Auditaufbewahrung (OPEN-014) sind nicht vorweggenommen. Neue Ports gehören ausschließlich dem Berechtigungsmodul; vor Verbrauch durch Folgeaufgaben koordiniert integrieren. Die konservative Delegationsgrenze und technische Aktionsschlüssel werden mit diesem Ergebnis geprüft.
 

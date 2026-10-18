@@ -197,6 +197,110 @@ class PermissionsIntegrationTest {
     }
 
     @Test
+    void theLastCompanyAdministrationCannotRemoveItselfAndGhostGroupsDoNotCount() {
+        long before = permissions.currentVersion(COMPANY);
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setAction(actor(ADMIN), ADMINS,
+            () -> ResourceContext.company(COMPANY), "permissions.manage", false)));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setMember(actor(ADMIN), ADMINS, ADMIN, false)));
+        assertEquals(before, permissions.currentVersion(COMPANY));
+        assertEquals(1, companyManagerGroups());
+        // A group whose only member is no known account is not an administration.
+        UUID ghosts = UUID.randomUUID();
+        jdbc.update("insert into permissions_group(company_id,id,name) values (?,?,?)", COMPANY, ghosts, "synthetic-ghosts");
+        member(ghosts, UUID.randomUUID());
+        action(ghosts, null, "permissions.manage");
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setAction(actor(ADMIN), ADMINS,
+            () -> ResourceContext.company(COMPANY), "permissions.manage", false)));
+        // Unrelated membership changes stay possible while an administration remains.
+        mutate(() -> administration.setMember(actor(ADMIN), READERS, USER, false));
+        assertEquals(before + 1, permissions.currentVersion(COMPANY));
+    }
+
+    @Test
+    void anotherAdministrationMakesRemovalPossibleAndTheRemainingOneIsProtected() {
+        UUID second = UUID.randomUUID(), secondGroup = UUID.randomUUID();
+        jdbc.update("insert into test_identity_state values (?,true)", second);
+        jdbc.update("insert into permissions_group(company_id,id,name) values (?,?,?)", COMPANY, secondGroup, "synthetic-second");
+        member(secondGroup, second);
+        action(secondGroup, null, "permissions.manage");
+        mutate(() -> administration.setMember(actor(ADMIN), ADMINS, ADMIN, false));
+        assertEquals(1, companyManagerGroups());
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setMember(actor(second), secondGroup, second, false)));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setAction(actor(second), secondGroup,
+            () -> ResourceContext.company(COMPANY), "permissions.manage", false)));
+        assertEquals(1, companyManagerGroups());
+    }
+
+    @Test
+    void twoAdministrationsRevokingEachOtherConcurrentlyNeverLeaveNone() throws Exception {
+        UUID second = UUID.randomUUID(), secondGroup = UUID.randomUUID();
+        jdbc.update("insert into test_identity_state values (?,true)", second);
+        jdbc.update("insert into permissions_group(company_id,id,name) values (?,?,?)", COMPANY, secondGroup, "synthetic-second");
+        member(secondGroup, second);
+        action(secondGroup, null, "permissions.manage");
+        AccessContext firstActor = actor(ADMIN), secondActor = actor(second);
+        CountDownLatch revoked = new CountDownLatch(1), release = new CountDownLatch(1);
+        AtomicInteger otherPid = new AtomicInteger();
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<?> first = pool.submit(() -> mutate(() -> {
+                administration.setAction(firstActor, ADMINS, () -> ResourceContext.company(COMPANY), "permissions.manage", false);
+                revoked.countDown(); await(release);
+            }));
+            assertTrue(revoked.await(10, TimeUnit.SECONDS));
+            Future<?> other = pool.submit(() -> mutate(() -> {
+                otherPid.set(jdbc.queryForObject("select pg_backend_pid()", Integer.class));
+                administration.setAction(secondActor, secondGroup, () -> ResourceContext.company(COMPANY), "permissions.manage", false);
+            }));
+            try { assertBlocked(otherPid); } finally { release.countDown(); }
+            first.get(10, TimeUnit.SECONDS);
+            ExecutionException rejected = assertThrows(ExecutionException.class, () -> other.get(10, TimeUnit.SECONDS));
+            assertInstanceOf(PermissionDenied.class, rejected.getCause());
+        } finally { release.countDown(); }
+        assertEquals(1, companyManagerGroups());
+    }
+
+    @Test
+    void projectDelegatesWithdrawOnlyOwnDeniesNeverThoseOfOthers() {
+        var write = PermissionAdministration.Operation.WRITE;
+        var read = PermissionAdministration.Operation.READ;
+        var deny = PermissionAdministration.Effect.DENY;
+        var allow = PermissionAdministration.Effect.ALLOW;
+        var remove = PermissionAdministration.Effect.REMOVE;
+        // A deny set by the company administration stays out of reach for removal, replacement and takeover.
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", write, deny));
+        for (var attempt : new PermissionAdministration.Effect[] {remove, allow, deny})
+            assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(actor(DELEGATE), READERS, scope(), "title", write, attempt)));
+        assertEquals("ADMIN", fieldRule(READERS, "title", "WRITE").setBy());
+        // A deny without recorded origin counts as set by someone else.
+        field(READERS, PROJECT, "title", "READ", "DENY");
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(actor(DELEGATE), READERS, scope(), "title", read, remove)));
+        // Own denies can be withdrawn, new ones set and ALLOW rows of others changed as before.
+        mutate(() -> administration.setField(actor(DELEGATE), RESTRICTED, scope(), "title", write, deny));
+        assertEquals("DELEGATE", fieldRule(RESTRICTED, "title", "WRITE").setBy());
+        mutate(() -> administration.setField(actor(DELEGATE), RESTRICTED, scope(), "title", write, remove));
+        assertNull(fieldRule(RESTRICTED, "title", "WRITE"));
+        // Once the company administration takes over the rule, the delegate loses the right to withdraw it.
+        mutate(() -> administration.setField(actor(DELEGATE), RESTRICTED, scope(), "title", write, deny));
+        mutate(() -> administration.setField(actor(ADMIN), RESTRICTED, scope(), "title", write, deny));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(actor(DELEGATE), RESTRICTED, scope(), "title", write, remove)));
+        // The company administration itself is unrestricted.
+        mutate(() -> administration.setField(actor(ADMIN), RESTRICTED, scope(), "title", write, remove));
+        assertNull(fieldRule(RESTRICTED, "title", "WRITE"));
+    }
+
+    private record Rule(String effect, String setBy) {}
+    private Rule fieldRule(UUID group, String field, String operation) {
+        var rows = jdbc.query("select effect, set_by from permissions_field where company_id=? and group_id=? and project_id=? and resource_type='ticket' and field_key=? and operation=?",
+            (rs, row) -> new Rule(rs.getString(1), name(rs.getObject(2, UUID.class))), COMPANY, group, PROJECT, field, operation);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+    private static String name(UUID user) { return ADMIN.equals(user) ? "ADMIN" : DELEGATE.equals(user) ? "DELEGATE" : user == null ? null : "OTHER"; }
+    private int companyManagerGroups() {
+        return jdbc.queryForObject("select count(*) from permissions_action where project_id is null and action_key='permissions.manage'", Integer.class)
+            - jdbc.queryForObject("select count(*) from permissions_action a where project_id is null and action_key='permissions.manage' and not exists (select 1 from permissions_membership m where m.company_id=a.company_id and m.group_id=a.group_id and m.user_id in (select user_id from test_identity_state))", Integer.class);
+    }
+
+    @Test
     void revocationCommittedFirstPreventsWaitingOldWrite() throws Exception {
         AccessContext old = actor(USER);
         CountDownLatch revoked = new CountDownLatch(1), release = new CountDownLatch(1);
