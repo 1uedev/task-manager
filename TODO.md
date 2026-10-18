@@ -1,6 +1,6 @@
 # Zentrale offene Aufgaben
 
-Stand 18. Oktober 2026 · Planung, Repository-Infrastruktur und Backendgrundlage (TASK-022)
+Stand 18. Oktober 2026 · Planung, Repository-Infrastruktur und Frontend-Grundfläche (TASK-023)
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 8 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | claude-20261018-frontend-01 | 2026-10-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -70,6 +68,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | claude-20261018-frontend-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -466,7 +465,7 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
-Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-023 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. Für TASK-024 bis TASK-031 ist kein Besitzer oder Arbeitsbranch reserviert. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
 
 ## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
 
@@ -492,9 +491,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-023 React-Grundfläche mit Sprachen und API-Anbindung aufbauen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261018-frontend-01 · **Aktualisiert:** 2026-10-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261018-frontend-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001. **Abhängigkeiten:** TASK-021; Frontend-/Browservertrag angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte „Welche Aufgabe soll ich als Nächstes per Claim PR starten?“ TASK-023 gewählt; die Karte nannte als Grundlage DE/EN und aktuelle Chromium-Browser. Das ist der Implementierungsauftrag für diesen Umfang, keine Freigabe von TASK-024 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung dieses Claim-PR. Die Eintragung des Auftrags in DECISIONS.md und der Umfangsbeschreibung in AGENTS.md, CLAUDE.md und README.md folgt koordiniert im Ergebnis-PR, wie bei TASK-022.
+**Bezug:** REQ-ARCH-001, REQ-API-001, REQ-I18N-001, REQ-I18N-002, REQ-BRAND-001, REQ-UX-001. **Abhängigkeiten:** TASK-021; Frontend-/Browservertrag angenommen und Implementierungsauftrag erteilt. Holger hat am 18. Oktober 2026 im Projektgespräch auf einer Entscheidungskarte „Welche Aufgabe soll ich als Nächstes per Claim PR starten?“ TASK-023 gewählt; die Karte nannte als Grundlage DE/EN und aktuelle Chromium-Browser. Das ist der Implementierungsauftrag für diesen Umfang (DEC-056), keine Freigabe von TASK-024 bis TASK-031. TASK-021 bleibt in TODO.md, bis seine Abnahme gesondert eingetragen ist. **Arbeitsstand:** claude/project-thread-qfsobf, separates Arbeitsverzeichnis nach Reservierung dieses Claim-PR. Auftrag als DEC-056 eingetragen, Umfangsbeschreibung in AGENTS.md, CLAUDE.md, README.md und docs/AI_WORKFLOW.md nachgeführt.
 
 **Umfang:** React/TypeScript-Oberfläche, Navigation, DE/EN-Sprachpakete, Farb-/Logo-Grundstruktur und generierten API-Client aufbauen. Zustände für Laden, leere Daten, Fehler, fehlende Rechte und Konflikte vorsehen.
 
@@ -502,7 +501,15 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Reproduzierbarer Build mit strenger Typprüfung, Sprachumschaltung und Tastaturbedienung geprüft; keine hart verdrahteten Fachtexte oder Sitzungstokens im Lokalspeicher. Testantworten ausdrücklich synthetisch, keine behauptete Backendfunktion. Getrennte KI prüft Client-/Fehlervertrag und UI-Zustände.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend `frontend/` aufbauen, im CI nachweisen und als Ergebnis-PR übergeben.
+**Ergebnis:** Die [Frontend-Grundfläche](frontend/README.md) unter `frontend/` verwendet die Versionen aus TASK-021 ohne Abweichung: Node 24.22.0, npm 11.19.1, React 19.3.1, TypeScript 5.9.3, Vite 8.3.4, openapi-typescript 7.13.0 und openapi-fetch 0.17.0; hinzu kommen nur die Prüfwerkzeuge `playwright-core` 1.64.1 und `@types/node`. Laufzeitabhängigkeiten sind React, React DOM und openapi-fetch. Streng gesetzte Compileroptionen (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`). Oberflächenrahmen mit Sprunglink, Landmarken, Navigation und Seitenwahl über den URL-Anker. Sprachumschaltung Deutsch und Englisch mit Katalogen, Rückfallregel (gewählte Sprache, Englisch, Schlüssel), Mehrzahlformen, Sprachwahl aus gespeicherter Wahl, Browser und Deutsch, sowie einer weiteren Sprache nur über den Katalog (Test mit Polnisch). Datum, Zeit und Zahlen nach Sprache bei unverändertem Austauschwert; Dezimaleingaben nach Schreibweise der Sprache. Unternehmensauftritt aus einer geprüften Einstellung (Farben, Logo, Kontrast), zurücksetzbar. API Client aus dem synthetischen Vertrag erzeugt, mit Laufzeitprüfung der Antworten, getrennter `ETag` und Fachversion. Gemeinsame Zustände für Laden, leere Daten, Erfolg, fehlende Rechte, nicht gefunden, Konflikt (412), fehlende Vorbedingung (428), nicht erreichbar, Serverfehler und Netzwerkfehler; Fehlertexte stammen aus Status und stabilem Code, nie vom Server, mit Referenzkennung für den Support. Beispielformular mit Fehlerzusammenfassung und Fehlerkorrektur. Browserspeicher nur für die Sprachwahl, keine Sitzungstokens. Neuer Workflow [frontend.yml](.github/workflows/frontend.yml). Keine Fachfunktion, keine Anmeldung, keine Backendanbindung, kein Docker-Image. Alle Daten sind synthetisch und als solche gekennzeichnet.
+
+**Eigenprüfung am 2026-10-18:** Lokal mit dem offiziellen Node 24.22.0 (SHA-256 geprüft) und npm 11.19.1: `npm ci --ignore-scripts`, Typerzeugung ohne Abweichung, strenge Typprüfung, 53 Unit-Tests ohne Auslassung (Sprachkataloge, Rückfall, Mehrzahl, Formate, Auftritt, Fehlerabbildung, Client gegen synthetische Antworten, Formularregeln, statische Regeln für Text, Speicher und Netzzugriff), Build. 19 Browserprüfungen mit Chromium 141 und Tastatur, Deutsch und Englisch: Sprachumschaltung und Wiederherstellung nach Neuladen, Sprunglink, Navigation, Fokus auf die neue Überschrift, sichtbarer Fokus, jeder Zustand einschließlich Laden und veralteter Antwort, Wiederherstellungsaktionen, Formular mit Fehlerzusammenfassung und Sprungverweisen, Auftritt anwenden und zurücksetzen, keine horizontale Verschiebung bei 320 Pixel, keine Konsolenwarnungen oder Fehler in allen Abläufen. Gegenproben: ohne Fokus auf die Überschrift und ohne `aria-describedby` scheitern genau die zwei zugehörigen Browserprüfungen; ein fest eingebauter Text in einer Komponente wird von der statischen Prüfung abgewiesen. Repository-Validator, Übersichtsprüfung, 25 Regressionstests und `git diff --check` erfolgreich. Der Lauf auf einem frischen GitHub-Runner steht aus und wird nach dem CI Ergebnis ergänzt.
+
+**KI-Gegenprüfung:** Noch nicht erfolgt. Das Kriterium verlangt eine getrennte KI, die Client-/Fehlervertrag und Zustände prüft. Holger bestimmt, wer prüft.
+
+**Offen und Übergabe:** (1) Das Schema `Problem` im synthetischen Vertrag kennt `correlationId` und `instance` nicht und ist geschlossen; der Produktvertrag muss beides aufnehmen und für Erweiterungsfelder öffnen (Q5). (2) Noch nicht festgelegt: verbindlicher Barrierefreiheitsstandard, unterstützte Browser außerhalb von Chromium, mobile Mindestansichten (REQ-UX-001). Es gab weder eine automatische Barrierefreiheitsprüfung noch eine Prüfung mit Screenreader. (3) Seitenwahl, Übersetzungs- und Komponentenbibliothek bleiben eine spätere Entscheidung. (4) Verwaltung des Unternehmensauftritts, Benutzereinstellung für Zeitzone, Anmeldung mit Cookie und CSRF sowie Übersetzung konfigurierbarer Feldbezeichnungen folgen mit den Fachaufgaben (TASK-024 und später).
+
+**Nächster Schritt:** Holger entscheidet, wer die Frontend-Grundfläche gegenprüft, und über die Annahme. TASK-023 bleibt bis dahin zur Prüfung in TODO.md. TASK-024 bis TASK-031 bleiben blockiert.
 
 ## TASK-024 Lokale Anmeldung und feste Sitzungsfristen implementieren
 

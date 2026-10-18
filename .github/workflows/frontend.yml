@@ -1,0 +1,62 @@
+name: Frontend
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.0'
+      - name: Record tool versions
+        run: |
+          node --version
+          npm --version
+          google-chrome --version
+          test "$(node --version)" = "v24.22.0"
+          test "$(npm --version)" = "11.19.1"
+      - name: Locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Generate client types, check types, run unit tests and build
+        run: |
+          mkdir -p test-results
+          npm run verify 2>&1 | tee test-results/verify.txt
+          git diff --exit-code -- src/api/generated/api.d.ts
+      - name: Real browser checks in German and English with keyboard
+        run: npm run test:browser 2>&1 | tee test-results/browser.txt
+      - name: No skipped tests
+        run: |
+          if grep -E '^ℹ (skipped|todo|cancelled) [1-9]' test-results/verify.txt test-results/browser.txt; then
+            echo "Skipped, todo or cancelled tests are not allowed" >&2
+            exit 1
+          fi
+      - name: Preserve frontend evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-evidence
+          retention-days: 7
+          path: |
+            frontend/test-results/
+            frontend/dist/
