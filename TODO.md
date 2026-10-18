@@ -1,12 +1,81 @@
 # Zentrale offene Aufgaben
 
-Stand 17. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
+Stand 18. Oktober 2026 · Planung und Repository-Infrastruktur ohne Produktimplementierung
 
 Diese Datei enthält den gemeinsamen Arbeitsstand aller beauftragten KI-Sitzungen. Status und Zuständigkeit werden gemäß [AGENTS.md](AGENTS.md) koordiniert. Eine Aufgabe kann mehrere Anforderungen konkretisieren. Ein offener Entwurf gilt nicht als fachlich abgenommen.
 
 Repository: [1uedev/task-manager](https://github.com/1uedev/task-manager). Maßgeblich ist diese Datei auf main. TASK-013 richtet die Arbeitsumgebung ein. Die übergreifende Koordination liegt bei Holger oder einer ausdrücklich von ihm benannten Sitzung. Aufgaben werden über einen reservierenden Pull Request vergeben; siehe docs/AI_WORKFLOW.md. GitHub Issues sind Diskussions- und Einstiegspunkte, keine zweite Aufgabenquelle.
 
 Planungsentwürfe aus TASK-002 bis TASK-011 dürfen auf der vorhandenen Fassung von TASK-001 vorbereitet werden. Die noch offene fachliche Abnahme von TASK-001 verhindert solche Entwürfe nicht. Abhängige Festlegungen und die Produktimplementierung werden dadurch nicht vorweggenommen.
+
+<!-- TASK-BOARD:START -->
+## Aufgabenübersicht
+
+Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TODO.md auf main; eine lokale Kopie kann veraltet sein. Aktualisieren: `python3 scripts/task_board.py --write`.
+
+| Kategorie | Anzahl | Bedeutung |
+|---|---:|---|
+| Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 10 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 22 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+
+Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
+
+### Frei und bearbeitbar – OFFEN
+
+Derzeit keine Aufgaben in dieser Kategorie.
+
+### Durch eine KI reserviert – IN ARBEIT
+
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+
+### Blockiert – BLOCKIERT
+
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-022](#task-022-backend-und-postgresql-grundlage-aufbauen) | Backend und PostgreSQL-Grundlage aufbauen | — | 2026-10-17 |
+| [TASK-023](#task-023-react-grundfläche-mit-sprachen-und-api-anbindung-aufbauen) | React-Grundfläche mit Sprachen und API-Anbindung aufbauen | — | 2026-10-17 |
+| [TASK-024](#task-024-lokale-anmeldung-und-feste-sitzungsfristen-implementieren) | Lokale Anmeldung und feste Sitzungsfristen implementieren | — | 2026-10-17 |
+| [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | — | 2026-10-17 |
+| [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
+| [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
+| [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
+| [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | — | 2026-10-17 |
+| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | — | 2026-10-17 |
+| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | — | 2026-10-17 |
+
+### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
+
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-001](#task-001-erste-zentrale-spezifikation-erstellen-und-prüfen) | Erste zentrale Spezifikation erstellen und prüfen | Codex-Hauptsitzung-2026-10-12 | 2026-10-12 |
+| [TASK-002](#task-002-umfang-und-spätere-funktionen-vervollständigen) | Umfang und spätere Funktionen vervollständigen | codex-20261016-inventory-01 | 2026-10-16 |
+| [TASK-003](#task-003-architekturentscheidungen-vorbereiten) | Architekturentscheidungen vorbereiten | codex-20261013-architecture-01 | 2026-10-13 |
+| [TASK-004](#task-004-identität-und-berechtigungen-spezifizieren) | Identität und Berechtigungen spezifizieren | codex-20261013-rights-fallback-01 | 2026-10-13 |
+| [TASK-005](#task-005-fachmodell-und-projektkonfiguration-konkretisieren) | Fachmodell und Projektkonfiguration konkretisieren | codex-20261013-domain-01 | 2026-10-13 |
+| [TASK-006](#task-006-helpdesk-portal-und-sla-regeln-ausarbeiten) | Helpdesk Portal und SLA Regeln ausarbeiten | codex-20261013-helpdesk-01 | 2026-10-13 |
+| [TASK-007](#task-007-wiki-sprachen-und-unternehmensauftritt-spezifizieren) | Wiki Sprachen und Unternehmensauftritt spezifizieren | codex-20261015-wiki-01 | 2026-10-15 |
+| [TASK-008](#task-008-ki-umfang-und-freigabeablauf-festlegen) | KI Umfang und Freigabeablauf festlegen | codex-20261015-ai-01 | 2026-10-15 |
+| [TASK-009](#task-009-git-und-spätere-migration-eingrenzen) | Git und spätere Migration eingrenzen | codex-20261015-git-01 | 2026-10-15 |
+| [TASK-010](#task-010-betrieb-sicherheit-und-leistung-planen) | Betrieb Sicherheit und Leistung planen | codex-20261015-ops-01 | 2026-10-15 |
+| [TASK-011](#task-011-gemeinsamen-entwicklungs-und-review-ablauf-beschließen) | Gemeinsamen Entwicklungs und Review Ablauf beschließen | codex-20261016-review-01 | 2026-10-16 |
+| [TASK-012](#task-012-planungsstand-zur-architekturfreigabe-zusammenführen) | Planungsstand zur Architekturfreigabe zusammenführen | codex-20261016-readiness-01 | 2026-10-16 |
+| [TASK-013](#task-013-github-arbeitsumgebung-einrichten) | GitHub Arbeitsumgebung einrichten | Codex-Hauptsitzung-2026-10-13 | 2026-10-13 |
+| [TASK-014](#task-014-regressionstest-von-freien-aufgaben-entkoppeln) | Regressionstest von freien Aufgaben entkoppeln | codex-20261016-contract-fix-01 | 2026-10-16 |
+| [TASK-015](#task-015-bestätigte-backend--review--und-prioritätsentscheidungen-eintragen) | Bestätigte Backend-, Review- und Prioritätsentscheidungen eintragen | codex-20261016-decisions-01 | 2026-10-16 |
+| [TASK-016](#task-016-frontend--modul--und-api-verträge-konkretisieren) | Frontend-, Modul- und API-Verträge konkretisieren | codex-20261016-contracts-01 | 2026-10-16 |
+| [TASK-017](#task-017-bestätigte-frontend--modul--und-api-auswahl-eintragen) | Bestätigte Frontend-, Modul- und API-Auswahl eintragen | codex-20261016-architecture-decisions-01 | 2026-10-16 |
+| [TASK-018](#task-018-sitzungsfristen-v1-tags-und-suche-spezifizieren) | Sitzungsfristen, V1-Tags und Suche spezifizieren | codex-20261017-tags-search-01 | 2026-10-17 |
+| [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
+| [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
+| [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
+
+Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
+<!-- TASK-BOARD:END -->
 
 ## TASK-001 Erste zentrale Spezifikation erstellen und prüfen
 
@@ -582,10 +651,10 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragt inzwisc
 
 **Status:** IN ARBEIT · **Verantwortlich:** codex-20261018-task-board-01 · **Aktualisiert:** 2026-10-18
 
-**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene zentrale Aufgabenverwaltung aus TASK-013; ausdrücklicher Auftrag vom 18. Oktober 2026 zur Übersicht bearbeitbarer und durch KI reservierter Aufgaben. **Arbeitsstand:** task/task-033-codex-board, separates Arbeitsverzeichnis; Reservierungs-PR vor inhaltlicher Arbeit.
+**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene zentrale Aufgabenverwaltung aus TASK-013; ausdrücklicher Auftrag vom 18. Oktober 2026 zur Übersicht bearbeitbarer und durch KI reservierter Aufgaben. **Arbeitsstand:** task/task-033-codex-overview, separates Arbeitsverzeichnis nach integrierter Reservierung #57.
 
 **Umfang:** Kompakte, aus den Aufgabeneinträgen erzeugte Übersicht in TODO.md für bearbeitbare, reservierte, blockierte und zur Prüfung bereite Aufgaben. Zuständigkeit und letzter Aktualisierungsstand sichtbar machen, Aktualisierung und Konsistenzprüfung automatisieren und den Einstieg für neue KI-Sitzungen erklären. Bestehende Produktaufgaben nicht eigenmächtig freigeben.
 
 **Abnahmekriterien:** Jede offene Aufgabe erscheint genau in der passenden Statusgruppe. Reservierte Aufgaben nennen die zuständige Sitzung. Freie und blockierte Arbeit ist eindeutig getrennt; offene Aufgaben mit zugeordnetem Besitzer werden nicht als frei angeboten. Die Übersicht ist eine abgeleitete Ansicht derselben TODO-Datei, keine zweite Statusquelle. Veraltete Übersichten werden von CI erkannt. Bestehende Aufgaben, Entscheidungen und Abnahmen bleiben erhalten. Getrennte KI prüft Verfahren und Nachweise.
 
-**Nächster Schritt:** Reservierung integrieren; anschließend Übersicht, Generator, Konsistenzprüfungen und Einstiegshinweise erstellen und prüfen.
+**Nächster Schritt:** Getrennte KI-Gegenprüfung und GitHub-Prüfungen abschließen; anschließend Ergebnis und Übergabe dokumentieren. Übersicht, Generator und 21 lokale Regressionstests sind erstellt und bestehen.

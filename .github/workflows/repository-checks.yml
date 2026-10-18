@@ -26,6 +26,8 @@ jobs:
           persist-credentials: false
       - name: Validate requirements and task ledger
         run: python3 scripts/validate_repository.py
+      - name: Check generated task overview
+        run: python3 scripts/task_board.py --check
       - name: Test validation failure cases
         run: python3 -m unittest discover -s tests -v
       - name: Check whitespace

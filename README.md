@@ -8,6 +8,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 
 ## Start here
 
+- Find work: [available, reserved, blocked and review-ready tasks](TODO.md#aufgabenübersicht). The overview is generated from the task entries and checked by CI. Reservations become effective after their claim PR is merged.
 - Technical qualification: [pinned candidates, common contracts and evidence](docs/TECHNICAL_BASELINE.md), [reproducible commands](qualification/README.md). DEC-054 authorizes this isolated proof only.
 - Prepare a bounded first product development order: [recommendations, open questions and planned AI tasks](docs/DEVELOPMENT_START.md). Application implementation still needs an explicit order.
 - Review the broader decision round: [architecture readiness, open choices and review evidence](docs/ARCHITECTURE_READINESS.md).
@@ -53,10 +54,13 @@ Only Git and Python 3.10 or later are needed for the documentation/repository ch
 git clone https://github.com/1uedev/task-manager.git
 cd task-manager
 python3 scripts/validate_repository.py
+python3 scripts/task_board.py --check
 python3 -m unittest discover -s tests -v
 ```
 
 Use a separate clone or worktree for each concurrent AI. Task reservation and handoff examples are in docs/AI_WORKFLOW.md.
+
+After changing task metadata, run `python3 scripts/task_board.py --write` to update the overview in TODO.md. With no option, the command prints the overview. This does not assign work, unlock blocked tasks or monitor running agents.
 
 ## Repository contents
 

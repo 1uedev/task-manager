@@ -78,6 +78,17 @@ class RepositoryContractTests(unittest.TestCase):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Ergebnis:** drafted\n")
         self.assertTrue(any("missing completion field Abnahme" in e for e in validate(self.root)))
 
+    def test_open_task_cannot_keep_a_reserved_owner(self):
+        self.append("TODO.md", """
+## TASK-999 Synthetic availability check
+**Status:** OFFEN · **Verantwortlich:** another-session · **Aktualisiert:** 2026-10-18
+**Bezug:** REQ-DEV-002. **Abhängigkeiten:** keine. **Arbeitsstand:** synthetic fixture.
+**Umfang:** Check task availability.
+**Abnahmekriterien:** An owned task must never be advertised as free.
+**Nächster Schritt:** Coordinate the handoff.
+""")
+        self.assertEqual(validate(self.root), ["TASK-999: open task must be unassigned"])
+
     def test_pending_acceptance_must_stay_in_todo(self):
         self.append("DONE.md", "\n## TASK-999 Premature completion\n**Abnahme:** offen\n")
         self.assertTrue(any("pending acceptance belongs in TODO" in e for e in validate(self.root)))

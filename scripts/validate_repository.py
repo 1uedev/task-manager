@@ -21,6 +21,7 @@ REQUIRED = (
 )
 SKIP = {".git", ".venv", "venv", "node_modules", ".worktrees", "__pycache__"}
 STATUSES = {"OFFEN", "IN ARBEIT", "BLOCKIERT", "BEREIT ZUR PRÜFUNG"}
+UNASSIGNED = {"unbesetzt", "offen"}
 TASK_FIELDS = (
     "Status", "Verantwortlich", "Aktualisiert", "Bezug", "Abhängigkeiten",
     "Arbeitsstand", "Umfang", "Abnahmekriterien", "Nächster Schritt",
@@ -94,8 +95,10 @@ def validate(root):
         if status not in STATUSES:
             errors.append(f"{key}: invalid status {status!r}")
         owner = field(body, "Verantwortlich")
-        if status in {"IN ARBEIT", "BEREIT ZUR PRÜFUNG"} and owner.lower() in {"", "unbesetzt", "offen"}:
+        if status in {"IN ARBEIT", "BEREIT ZUR PRÜFUNG"} and owner.casefold() in {""} | UNASSIGNED:
             errors.append(f"{key}: active/review task needs a session owner")
+        if status == "OFFEN" and owner.casefold() not in UNASSIGNED:
+            errors.append(f"{key}: open task must be unassigned")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", field(body, "Aktualisiert")):
             errors.append(f"{key}: update date must use YYYY-MM-DD")
         if not re.search(REQ_ID, field(body, "Bezug")):
