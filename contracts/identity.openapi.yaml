@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Identität (TASK-024)
+  title: Task Manager API, Identität (TASK-024, TASK-040)
   version: 0.1.0
   description: |
     Lokale Konten, Anmeldung, feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
@@ -8,6 +8,11 @@ info:
     und `__Host-tm-csrf`, lesbar, beide Secure und SameSite=Lax). Jede Anfrage mit einer Methode außer GET, HEAD und OPTIONS
     muss den Wert des CSRF Cookies im Header `X-CSRF-Token` senden; der Origin Header, falls vorhanden, muss zum Host passen.
     Alle Pfade unter /api verlangen eine Sitzung, außer /api/v1/session. Antworten sind `Cache-Control: no-store`.
+
+    Die Verwaltungspfade verlangen je ein Unternehmensrecht des Berechtigungsmoduls (TASK-040): `accounts.manage` für die Konten,
+    `session_duration.manage` für die Sitzungsdauer. Fehlt es, antwortet der Server mit 403 `auth.forbidden`; das gilt ebenso für ein
+    veraltetes Recht, ein deaktiviertes Konto und eine abgelaufene Sitzung und verrät nicht, welcher Fall vorlag. Die Kennzeichnung
+    `administrator` gibt es nicht mehr. Die Liste `rights` der Sitzung dient nur der Anzeige; maßgeblich ist immer die Prüfung des Servers.
 servers:
   - url: /api/v1
 security:
@@ -32,7 +37,7 @@ paths:
         Mit dem Passwort beginnt die feste Sitzungsdauer. Mit einem Einmalpasswort entsteht eine eingeschränkte Sitzung
         (`level` = `password_change_required`), die nur den Passwortwechsel und das Abmelden erlaubt. Das Einmalpasswort wird
         mit dieser ersten erfolgreichen Anmeldung verbraucht; jede weitere Anmeldung damit, auch nach Ablauf der eingeschränkten
-        Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Administrator ein neues ausgibt. Fehlgeschlagene
+        Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Konto mit dem Recht `accounts.manage` ein neues ausgibt. Fehlgeschlagene
         Versuche führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
       security: []
       requestBody:
@@ -84,7 +89,7 @@ paths:
   /accounts:
     get:
       operationId: listAccounts
-      summary: Konten auflisten (Administrator)
+      summary: Konten auflisten (Recht accounts.manage)
       responses:
         '200':
           description: Alle lokalen Konten
@@ -97,7 +102,7 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
     post:
       operationId: createAccount
-      summary: Konto anlegen (Administrator)
+      summary: Konto anlegen (Recht accounts.manage)
       description: Das Einmalpasswort steht nur in dieser Antwort und ist danach nicht mehr abrufbar. Es gilt 72 Stunden für genau eine erfolgreiche Anmeldung.
       requestBody:
         required: true
@@ -119,8 +124,8 @@ paths:
       - {$ref: '#/components/parameters/AccountId'}
     post:
       operationId: deactivateAccount
-      summary: Konto deaktivieren (Administrator)
-      description: Beendet alle Sitzungen des Kontos sofort. Der letzte aktive Administrator kann nicht deaktiviert werden, ebenso nicht das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`); beides meldet `account.last_administrator`.
+      summary: Konto deaktivieren (Recht accounts.manage)
+      description: Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
       responses:
         '200':
           description: Deaktiviert
@@ -136,7 +141,7 @@ paths:
       - {$ref: '#/components/parameters/AccountId'}
     post:
       operationId: reactivateAccount
-      summary: Konto wieder aktivieren (Administrator)
+      summary: Konto wieder aktivieren (Recht accounts.manage)
       responses:
         '200':
           description: Aktiviert
@@ -151,7 +156,7 @@ paths:
       - {$ref: '#/components/parameters/AccountId'}
     post:
       operationId: resetAccountPassword
-      summary: Passwort zurücksetzen (Administrator)
+      summary: Passwort zurücksetzen (Recht accounts.manage)
       description: Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
       responses:
         '200':
@@ -165,7 +170,7 @@ paths:
   /settings/session-duration:
     get:
       operationId: getSessionDuration
-      summary: Feste Sitzungsdauer lesen (Administrator)
+      summary: Feste Sitzungsdauer lesen (Recht session_duration.manage)
       responses:
         '200':
           description: Aktuelle Dauer
@@ -176,7 +181,7 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
     put:
       operationId: setSessionDuration
-      summary: Feste Sitzungsdauer ändern (Administrator)
+      summary: Feste Sitzungsdauer ändern (Recht session_duration.manage)
       description: 1 bis 720 Stunden, nicht abschaltbar. Eine Verkürzung gilt für bestehende Sitzungen ab ihrer nächsten Anfrage, eine Verlängerung nur für neue Anmeldungen.
       requestBody:
         required: true
@@ -253,7 +258,7 @@ components:
       additionalProperties: true
     Session:
       type: object
-      required: [authenticated, administrator]
+      required: [authenticated]
       properties:
         authenticated: {type: boolean}
         username: {type: [string, 'null']}
@@ -261,9 +266,15 @@ components:
         level:
           type: [string, 'null']
           enum: [full, password_change_required, null]
-        administrator:
-          type: boolean
-          description: Vorläufige technische Kennzeichnung bis zum Rechtemodul (TASK-025), kein Rechtemodell.
+        rights:
+          type: array
+          items:
+            type: string
+            enum: [accounts.manage, appearance.manage, session_duration.manage]
+          description: |
+            Die Verwaltungsrechte, die diese Sitzung gerade hält, sortiert. Nur in der Antwort auf den Zustand einer angemeldeten
+            Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
+            Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
         expiresAt: {type: [string, 'null'], format: date-time}
         passwordChangeBy:
           type: [string, 'null']
@@ -293,16 +304,14 @@ components:
       properties:
         username: {type: string, pattern: '^[a-z0-9][a-z0-9._@+-]{2,63}$', description: 'Wird in Kleinbuchstaben gespeichert; die Eindeutigkeit ignoriert die Schreibweise.'}
         displayName: {type: [string, 'null'], minLength: 1, maxLength: 100}
-        administrator: {type: boolean, default: false}
     Account:
       type: object
-      required: [id, username, active, administrator, passwordChangeRequired, createdAt]
+      required: [id, username, active, passwordChangeRequired, createdAt]
       properties:
         id: {type: string, format: uuid}
         username: {type: string}
         displayName: {type: [string, 'null']}
         active: {type: boolean}
-        administrator: {type: boolean}
         passwordChangeRequired: {type: boolean}
         createdAt: {type: string, format: date-time}
     IssuedAccount:

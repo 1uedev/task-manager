@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AccountRepository {
     private static final String COLUMNS =
-        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, administrator, created_at, updated_at";
+        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at";
 
     private final JdbcClient jdbc;
 
@@ -28,16 +28,15 @@ public class AccountRepository {
             Db.instant(rs, "one_time_expires_at"),
             Db.instant(rs, "one_time_used_at"),
             rs.getBoolean("active"),
-            rs.getBoolean("administrator"),
             Db.instant(rs, "created_at"),
             Db.instant(rs, "updated_at"));
     }
 
     public void insert(AccountRecord account) {
-        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(account.id(), account.username(), account.displayName(), account.passwordHash(),
                 account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), Db.ts(account.oneTimeUsedAt()), account.active(),
-                account.administrator(), Db.ts(account.createdAt()), Db.ts(account.updatedAt()))
+                Db.ts(account.createdAt()), Db.ts(account.updatedAt()))
             .update();
     }
 
@@ -64,10 +63,6 @@ public class AccountRepository {
 
     public long count() {
         return jdbc.sql("select count(*) from identity_account").query(Long.class).single();
-    }
-
-    public long countActiveAdministrators() {
-        return jdbc.sql("select count(*) from identity_account where administrator and active").query(Long.class).single();
     }
 
     /** Replaces the credential. A one time password is stored with its expiry; a chosen password without one. */

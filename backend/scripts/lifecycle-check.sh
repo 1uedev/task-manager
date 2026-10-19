@@ -83,9 +83,9 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 8 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 9 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
@@ -109,11 +109,11 @@ grep -q '^Account: lifecycle-admin$' "$logs/bootstrap.out" || fail "bootstrap-ad
 secret=$(sed -n 's/^One time password (shown only now): //p' "$logs/bootstrap.out")
 [ "${#secret}" -eq 20 ] || fail "bootstrap-admin did not print a one time password"
 ! grep -q "$secret" "$logs/bootstrap.err" || fail "one time password reached the error output"
-[ "$(sql "select count(*) from identity_account where administrator and password_change_required and password_hash like '\$argon2id\$%'")" = 1 ] \
-  || fail "administrator account is not stored as expected"
+[ "$(sql "select count(*) from identity_account where password_change_required and password_hash like '\$argon2id\$%'")" = 1 ] \
+  || fail "first account is not stored as expected"
 [ "$(sql "select count(*) from identity_account where password_hash like '%$secret%'")" = 0 ] || fail "one time password stored in clear"
 # TASK-039: the same transaction created the company and the initial rights, and nothing beyond them.
-[ "$(sql "select (select count(*) from platform_company) || ',' || (select count(*) from permissions_group) || ',' || (select count(*) from permissions_action where action_key = 'permissions.manage' and project_id is null) || ',' || (select count(*) from permissions_membership m join identity_account a on a.id = m.user_id where a.username = 'lifecycle-admin') || ',' || (select count(*) from permissions_field)")" = '1,1,1,1,0' ] \
+[ "$(sql "select (select count(*) from platform_company) || ',' || (select count(*) from permissions_group) || ',' || (select count(*) from permissions_action where action_key in ('permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage') and project_id is null) || ',' || (select count(*) from permissions_membership m join identity_account a on a.id = m.user_id where a.username = 'lifecycle-admin') || ',' || (select count(*) from permissions_field)")" = '1,1,4,1,0' ] \
   || fail "bootstrap-admin did not create the company and the initial administration as expected"
 
 phase=bootstrap-refused

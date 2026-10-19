@@ -1,10 +1,10 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Erscheinungsbild (TASK-036)
+  title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040)
   version: 0.1.0
   description: |
-    Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur ein Administrator
-    (vorläufige technische Kennzeichnung aus der Identität, bis das Rechtemodul angebunden ist). Sitzung, CSRF und
+    Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur, wer das Unternehmensrecht
+    `appearance.manage` des Berechtigungsmoduls hält (sonst 403 `auth.forbidden`, TASK-040). Sitzung, CSRF und
     `Cache-Control: no-store` gelten wie im Identitätsvertrag. Der `ETag` ist die Version der Einstellung; jede Änderung
     braucht sie als `If-Match`. Fehlt der Kopf, antwortet der Server mit 428, passt er nicht, mit 412.
 servers:
@@ -28,7 +28,7 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
     put:
       operationId: changeAccentColor
-      summary: Akzentfarbe ändern (nur Administrator)
+      summary: Akzentfarbe ändern (Recht appearance.manage)
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -67,7 +67,7 @@ paths:
         '404': {$ref: '#/components/responses/Problem'}
     put:
       operationId: replaceLogo
-      summary: Logo ersetzen (nur Administrator)
+      summary: Logo ersetzen (Recht appearance.manage)
       description: |
         PNG, JPEG oder WebP bis 512 KiB als Rohdaten. Der Typ wird an den ersten Bytes erkannt und muss zum
         `Content-Type` passen. SVG wird nicht angenommen, weil es Skript enthalten kann.
@@ -96,7 +96,7 @@ paths:
         '428': {$ref: '#/components/responses/Problem'}
     delete:
       operationId: removeLogo
-      summary: Logo entfernen (nur Administrator)
+      summary: Logo entfernen (Recht appearance.manage)
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:

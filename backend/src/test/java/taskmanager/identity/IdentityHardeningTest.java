@@ -105,7 +105,7 @@ class IdentityHardeningTest {
     }
 
     private Full fullAccount() {
-        var created = accounts.create("test", "hardening-" + UUID.randomUUID().toString().substring(0, 8), null, true);
+        var created = accounts.create("test", "hardening-" + UUID.randomUUID().toString().substring(0, 8), null);
         var restricted = sessions.login(created.account().username(), created.oneTimePassword(), "setup");
         var resolved = sessions.resolve(restricted.sessionToken()).orElseThrow();
         var full = sessions.changePassword(resolved.sessionId(), created.oneTimePassword(), STRONG, "setup");
@@ -148,7 +148,7 @@ class IdentityHardeningTest {
 
     @Test
     void r1BAFullSessionNeverBelongsToAnAccountThatStillHasToChangeItsPassword() {
-        var created = accounts.create("test", "hardening-pending", null, false);
+        var created = accounts.create("test", "hardening-pending", null);
         var restricted = sessions.login(created.account().username(), created.oneTimePassword(), "pending");
         assertEquals(AuthenticationLevel.PASSWORD_CHANGE_REQUIRED, sessions.resolve(restricted.sessionToken()).orElseThrow().view().level());
         // A full session that would exist next to a pending change (what the race of the review produced) is not accepted.
@@ -229,7 +229,8 @@ class IdentityHardeningTest {
                 var rotation = pool.submit(() -> sessions.changePassword(sessionId, STRONG, "Review-New-Password-92", "n1"));
                 assertTrue(waitsAt("update identity_session set revoked_at%"), "the rotation did not reach the revocation");
                 var shortening = pool.submit(() -> duration.change("review", 1));
-                assertTrue(waitsAt("update identity_setting%"),
+                // TASK-040: the change locks the setting row first, with a locking read, before any check of the caller.
+                assertTrue(waitsAt("select value from identity_setting%for update"),
                     "the shortening must wait for the rotation at the setting row, not pass it");
                 release.countDown();
                 blocker.get(10, TimeUnit.SECONDS);
@@ -300,7 +301,7 @@ class IdentityHardeningTest {
 
     @Test
     void r3AOneTimePasswordOpensExactlyOneSessionAndIsGoneAfterItEnds() {
-        var created = accounts.create("test", "hardening-once", null, false);
+        var created = accounts.create("test", "hardening-once", null);
         String name = created.account().username();
         var first = sessions.login(name, created.oneTimePassword(), "once");
         assertEquals(AuthenticationLevel.PASSWORD_CHANGE_REQUIRED, sessions.resolve(first.sessionToken()).orElseThrow().view().level());
@@ -321,7 +322,7 @@ class IdentityHardeningTest {
 
     @Test
     void r3BTheForcedChangeStillWorksInTheSessionThatConsumedThePassword() {
-        var created = accounts.create("test", "hardening-change", null, false);
+        var created = accounts.create("test", "hardening-change", null);
         var restricted = sessions.login(created.account().username(), created.oneTimePassword(), "change");
         var resolved = sessions.resolve(restricted.sessionToken()).orElseThrow();
         var full = sessions.changePassword(resolved.sessionId(), created.oneTimePassword(), STRONG, "change");
@@ -332,7 +333,7 @@ class IdentityHardeningTest {
 
     @Test
     void r3CParallelLoginsWithTheSameOneTimePasswordOpenOnlyOneSession() throws Exception {
-        var created = accounts.create("test", "hardening-parallel", null, false);
+        var created = accounts.create("test", "hardening-parallel", null);
         try (var pool = Executors.newFixedThreadPool(4)) {
             var attempts = java.util.stream.IntStream.range(0, 4).mapToObj(i -> pool.submit(() -> {
                 try {
@@ -374,7 +375,7 @@ class IdentityHardeningTest {
 
     @Test
     void r4AliasedLoginNeedsTheCsrfTokenAndAMatchingOrigin() {
-        var created = accounts.create("test", "hardening-path", null, false);
+        var created = accounts.create("test", "hardening-path", null);
         Map<String, String> credentials = Map.of("username", created.account().username(), "password", created.oneTimePassword());
         for (String path : new String[] {"/api;x/v1/session", "/%61pi/v1/session", "/api/v1/session;x=y"}) {
             ApiClient withoutCsrf = new ApiClient(port);

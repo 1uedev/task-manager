@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
-import { createServerApi, readAppearance, readSession, type LoadedAppearance, type ServerApi } from '../api/client.ts';
+import { APPEARANCE_RIGHT, createServerApi, readAppearance, readSession, type LoadedAppearance, type ServerApi } from '../api/client.ts';
 import { readStoredTheme, storeTheme } from '../app/preferences.ts';
 import { accentBrand, brandToCssVariables, DEFAULT_ACCENT, isAccentColor, type Brand } from './brand.ts';
 
@@ -12,7 +12,7 @@ export type Connection =
   | { readonly state: 'loading' }
   | { readonly state: 'offline' }
   | { readonly state: 'anonymous' }
-  | { readonly state: 'ready'; readonly administrator: boolean; readonly loaded: LoadedAppearance };
+  | { readonly state: 'ready'; readonly mayChangeAppearance: boolean; readonly loaded: LoadedAppearance };
 
 interface BrandState {
   readonly brand: Brand;
@@ -70,7 +70,7 @@ export function BrandProvider({ children, api: given }: { readonly children: Rea
       const appearance = await readAppearance(api, abort.signal);
       if (abort.signal.aborted) return;
       if (appearance.kind !== 'ok') return setConnection({ state: 'offline' });
-      setConnection({ state: 'ready', administrator: session.data.administrator, loaded: appearance.data });
+      setConnection({ state: 'ready', mayChangeAppearance: session.data.rights.includes(APPEARANCE_RIGHT), loaded: appearance.data });
     })().catch(() => {
       // Aborted because the provider went away or a newer load started.
     });

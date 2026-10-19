@@ -12,7 +12,6 @@ public record AccountRecord(
         Instant oneTimeExpiresAt,
         Instant oneTimeUsedAt,
         boolean active,
-        boolean administrator,
         Instant createdAt,
         Instant updatedAt) {
 }

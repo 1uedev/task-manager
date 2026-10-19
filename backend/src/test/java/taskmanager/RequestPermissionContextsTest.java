@@ -24,7 +24,7 @@ class RequestPermissionContextsTest {
     private static final UUID SESSION = UUID.randomUUID();
 
     private static AccessContext request(AuthenticationLevel level) {
-        return new AccessContext(ACCOUNT, "someone", SESSION, level, false, Instant.now());
+        return new AccessContext(ACCOUNT, "someone", SESSION, level, Instant.now());
     }
 
     private static RequestPermissionContexts builder(Optional<AccessContext> request, Optional<UUID> company, Permissions permissions) {

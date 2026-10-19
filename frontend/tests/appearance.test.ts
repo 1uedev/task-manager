@@ -41,9 +41,13 @@ test('only a well formed CSRF cookie is read', () => {
 });
 
 test('session and appearance answers are checked again at runtime', () => {
-  assert.deepEqual(parseSession({ authenticated: true, administrator: true, level: 'full' }), { authenticated: true, full: true, administrator: true });
-  assert.deepEqual(parseSession({ authenticated: true, administrator: true, level: 'password_change_required' }), { authenticated: true, full: false, administrator: true });
-  assert.equal(parseSession({ authenticated: 'yes', administrator: false }), null);
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 'accounts.manage'] }), { authenticated: true, full: true, rights: ['appearance.manage', 'accounts.manage'] });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'password_change_required', rights: [] }), { authenticated: true, full: false, rights: [] });
+  // No list, or one that is not a list of texts, means no right; a state without the flag is not a state at all.
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full' }), { authenticated: true, full: true, rights: [] });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 7, null] }), { authenticated: true, full: true, rights: ['appearance.manage'] });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: 'appearance.manage' }), { authenticated: true, full: true, rights: [] });
+  assert.equal(parseSession({ authenticated: 'yes', rights: [] }), null);
 
   assert.equal(parseAppearance(APPEARANCE)?.accentColor, '#f97316');
   for (const broken of [
@@ -72,7 +76,7 @@ test('reads go to the versioned API and return the version separately', async ()
   const outcome = await readAppearance(api);
   assert.equal(outcome.kind === 'ok' && outcome.data.etag, '"4"');
   assert.equal(seen[0]?.url, 'http://localhost/api/v1/appearance');
-  const session = recorder(200, { authenticated: false, administrator: false });
+  const session = recorder(200, { authenticated: false });
   assert.equal((await readSession(session.api)).kind, 'ok');
   assert.equal(session.seen[0]?.url, 'http://localhost/api/v1/session');
 });

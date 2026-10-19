@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-040](#task-040-verwaltungsrechte-statt-administratorkennzeichnung-einführen) | Verwaltungsrechte statt Administratorkennzeichnung einführen | claude-20261019-rights-01 | 2026-10-19 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -70,6 +68,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-040](#task-040-verwaltungsrechte-statt-administratorkennzeichnung-einführen) | Verwaltungsrechte statt Administratorkennzeichnung einführen | claude-20261019-rights-01 | 2026-10-19 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -612,7 +611,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-040 Verwaltungsrechte statt Administratorkennzeichnung einführen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-rights-01 · **Aktualisiert:** 2026-10-19
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261019-rights-01 · **Aktualisiert:** 2026-10-19
 
 **Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-AUTH-003, REQ-BRAND-001, REQ-SEC-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-036, TASK-038 und TASK-039 sind abgenommen und integriert; TASK-026 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Holger hat am 19. Oktober 2026 im Projektgespräch auf die Frage nach dem nächsten Auftrag mit „rechte“ geantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und keine Freigabe weiterer Fachmodule. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-064, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt.
 
@@ -622,4 +621,10 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Jeder bisher durch die Kennzeichnung geschützte Endpunkt (Konten, Sitzungsdauer, Akzentfarbe, Logo) verlangt das jeweilige Recht: Ein Konto mit Kennzeichen, aber ohne Recht erhält 403; ein Konto mit Recht, aber ohne Kennzeichen, ist erfolgreich. Ohne Adapter, mit veraltetem Kontext, nach Entzug des Rechts oder der Mitgliedschaft, bei deaktiviertem Konto und bei abgelaufener Sitzung wird verweigert, mit Konkurrenztest auf echter PostgreSQL Sperrwartebeziehung für Rechteentzug gegen eine laufende Änderung. Das Audit der Änderungen bleibt vollständig; der Entzug eines der Rechte ändert die Rechteversion. `bootstrap-admin` legt Gruppe, Mitgliedschaft und alle Rechte atomar an. Der Notfallzugang und der Schutz der letzten Unternehmensverwaltung bleiben durch Tests belegt. Die Oberfläche blendet Verwaltung ohne Recht aus und zeigt sie mit Recht; Frontendtests und Browsertests angepasst und grün. Alle bestehenden Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. Getrennte KI prüft das Ergebnis; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-064 übergeben.
+**Ergebnis:** Before: Konten verwalten, die Sitzungsdauer ändern und Akzentfarbe und Logo ändern durfte jedes Konto mit der Kennzeichnung `administrator`. After: Diese drei Bereiche verlangen die Unternehmensrechte `accounts.manage`, `session_duration.manage` und `appearance.manage` des Berechtigungsmoduls (DEC-064). Die Module Identität und Erscheinungsbild prüfen sie über den Port `AdministrationRights` aus dem Plattformmodul, den der Anwendungseinstieg mit `Permissions.require` in der Transaktion der Änderung bedient; ohne Recht, mit veraltetem Kontext, deaktiviertem Konto oder abgelaufener Sitzung folgt `403 auth.forbidden`. Das Lesen des Erscheinungsbilds bleibt für jede vollständige Anmeldung offen. `GET /api/v1/session` liefert die gehaltenen Rechte als Liste `rights`; die Oberfläche nutzt sie nur zur Anzeige. `bootstrap-admin` ordnet der Gruppe „Unternehmensverwaltung“ neben `permissions.manage` die drei Rechte zu (sechs Versionen und Auditeinträge, atomar mit dem ersten Konto). Migration V0010 entfernt die Spalte `identity_account.administrator`; die Vertragsfelder entfallen, ein mitgesendetes `administrator` gewährt nichts. Der Notbefehl `reset-admin-password` und der Schutz der letzten Unternehmensverwaltung funktionieren weiter (Port `EmergencyResetPolicy` und Schranke aus DEC-063). Sperrreihenfolge: Beim Deaktivieren steht die Rechteprüfung nach der Schranke, bei der Sitzungsdauer wird zuerst die Einstellungszeile gesperrt; ohne diese Vorsperre ergibt der Test einen echten Deadlock mit Antwort 500 (Mutationsnachweis, Einzelheiten in DEC-064 und backend/README.md, Abschnitt „Verwaltungsrechte“).
+
+**Eigenprüfung am 2026-10-19:** Backend `clean verify` mit 130 Tests grün (lokal Java 21 und PostgreSQL 16), darunter 7 neue API-Tests in `AdministrationRightsApiTest`: Rechtematrix je Endpunkt (Kennzeichen ohne Recht 403, Recht ohne Kennzeichen erfolgreich), Rechteliste der Sitzung, Anmeldung ohne Rechte, sofortiger Rechteentzug, Entzug während eine Änderung auf die Rechtesperre wartet (echte PostgreSQL Sperrwartebeziehung) und der deterministische Deadlocktest für die Sitzungsdauer. `lifecycle-check.sh` grün mit neun Migrationen und den vier Verwaltungsrechten nach dem ersten Start. Frontend `npm run verify` grün, Browserprüfungen 45 von 45 grün (lokal Node 22 und Chromium). Repository-Validator, Übersichtsprüfung, Python-Regressionstests und `git diff --check` erfolgreich. Maßgeblich ist CI mit PostgreSQL 18.6.
+
+**Abweichung und Grenzen:** (1) Ohne HTTP Endpunkte für Rechte (TASK-030) kann kein weiteres Konto Verwaltungsrechte erhalten; bisher setzte die Kontoanlage dafür die Kennzeichnung, dieser Weg entfällt. (2) Die Seite Erscheinungsbild bleibt für jede vollständige Anmeldung als Vorschau sichtbar, nur das Speichern verlangt das Recht; Seiten für Konten und Sitzungsdauer gibt es in der Oberfläche noch nicht. (3) Eine nach TASK-039 gestartete Entwicklungsdatenbank hat die Rechte nicht und wird neu angelegt; eine Datenmigration entfällt, weil sie Auditeinträge mit erfundenem Akteur bräuchte. (4) Die Prüfung gilt zum Sperrzeitpunkt, eine Abschlussprüfung beim Commit gibt es nicht. (5) Die Befunde F1 bis F3 aus PR #96 und P2 bis P6 sind nicht enthalten; der Appearance Controller kann mit deren Korrekturen zusammentreffen.
+
+**Nächster Schritt:** Holger prüft das Ergebnis; eine getrennte KI-Prüfung (Codex) von Rechteprüfung, Sperrreihenfolge und Notweg steht nach DEC-040 aus und ist angeboten.

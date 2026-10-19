@@ -137,7 +137,7 @@ test('the default accent is a saturated orange with dark text, because white on 
   assert.ok(contrastRatio('#ffffff', DEFAULT_ACCENT) < 3);
 });
 
-test('text on any accent an administrator can pick reaches 4.5', () => {
+test('text on any accent that can be picked reaches 4.5', () => {
   let checked = 0;
   for (let red = 0; red <= 255; red += 17) {
     for (let green = 0; green <= 255; green += 17) {

@@ -22,10 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
 import taskmanager.identity.account.AccountService;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.CompanyContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -62,6 +66,8 @@ class AppearanceApiTest {
     @Value("${local.server.port}") int port;
     @Autowired AccountService accounts;
     @Autowired JdbcTemplate jdbc;
+    @Autowired CompanyContext companies;
+    @Autowired PlatformTransactionManager transactions;
 
     @BeforeEach
     void defaults() {
@@ -153,8 +159,17 @@ class AppearanceApiTest {
         return browser;
     }
 
+    /** A person with a complete login who administers the company, or with no right at all. */
     private Browser person(boolean administrator) {
-        var issued = accounts.create("test", (administrator ? "admin-" : "user-") + COUNTER.incrementAndGet(), null, administrator);
+        return person(administrator ? AdministrationRight.values() : new AdministrationRight[0]);
+    }
+
+    /** A person with a complete login who holds exactly these administrative rights. */
+    private Browser person(AdministrationRight... rights) {
+        var issued = accounts.create("test", (rights.length > 0 ? "admin-" : "user-") + COUNTER.incrementAndGet(), null);
+        if (rights.length > 0) {
+            AdministrationFixture.grant(jdbc, companies, transactions, issued.account().id(), rights);
+        }
         Browser browser = anonymous();
         Response login = browser.json("POST", "/api/v1/session",
             Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null);
@@ -188,7 +203,7 @@ class AppearanceApiTest {
     }
 
     @Test
-    void everyLoggedInPersonReadsTheDefaultButOnlyAnAdministratorChangesIt() {
+    void everyLoggedInPersonReadsTheDefaultButOnlyAHolderOfTheRightChangesIt() {
         Browser user = person(false);
         Response read = user.get("/api/v1/appearance");
         assertEquals(200, read.status(), read.body());
@@ -206,7 +221,7 @@ class AppearanceApiTest {
     }
 
     @Test
-    void anAdministratorChangesTheColorWhichIsNormalizedVersionedAndAudited() {
+    void aHolderOfTheRightChangesTheColorWhichIsNormalizedVersionedAndAudited() {
         Browser admin = person(true);
         Response changed = admin.accent("#1D4ED8", "\"1\"");
         assertEquals(200, changed.status(), changed.body());
@@ -294,7 +309,7 @@ class AppearanceApiTest {
     }
 
     @Test
-    void anAdministratorRemovesTheLogo() {
+    void aHolderOfTheRightRemovesTheLogo() {
         Browser admin = person(true);
         assertProblem(admin.get("/api/v1/appearance/logo"), 404, "appearance.logo_not_found");
         assertEquals(200, admin.logo("image/png", PNG, "\"1\"").status());
@@ -309,7 +324,8 @@ class AppearanceApiTest {
 
     @Test
     void aPersonWhoMustStillChangeThePasswordCannotReadIt() {
-        var issued = accounts.create("test", "pending-" + COUNTER.incrementAndGet(), null, true);
+        var issued = accounts.create("test", "pending-" + COUNTER.incrementAndGet(), null);
+        AdministrationFixture.grantAdministration(jdbc, companies, transactions, issued.account().id());
         Browser browser = anonymous();
         assertEquals(200, browser.json("POST", "/api/v1/session",
             Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null).status());

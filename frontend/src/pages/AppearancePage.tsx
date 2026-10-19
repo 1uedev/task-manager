@@ -12,12 +12,12 @@ import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 type Pending = ReturnType<typeof changeAccentColor>;
 type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo } | { readonly kind: 'invalid'; readonly text: MessageKey };
 
-// Company accent color and logo. Only an administrator saves them, and the server checks that again; everyone
-// else gets a preview in this window that is never sent anywhere.
+// Company accent color and logo. Only an account with the right to change them saves them, and the server checks that
+// again; everyone else gets a preview in this window that is never sent anywhere.
 export function AppearancePage() {
   const { t, language } = useI18n();
   const { connection, api, savedAccent, defaultAccent, preview, accept, reload, brand } = useBrand();
-  const admin = connection.state === 'ready' && connection.administrator;
+  const admin = connection.state === 'ready' && connection.mayChangeAppearance;
   const loaded = connection.state === 'ready' ? connection.loaded : null;
   const [draft, setDraft] = useState(savedAccent);
   const [hex, setHex] = useState(savedAccent.toUpperCase());

@@ -29,7 +29,7 @@ export function contrastRatio(foreground: string, background: string): number {
 }
 
 // TASK-036: the company sets one accent color (and a logo); light and dark surfaces are fixed. Text on the
-// accent is chosen here so that it always reaches 4.5, whatever color an administrator picks.
+// accent is chosen here so that it always reaches 4.5, whatever color is picked.
 export const DEFAULT_ACCENT = '#f97316';
 export const ACCENT_PRESETS = [
   { id: 'orange', color: '#f97316' },

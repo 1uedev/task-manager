@@ -66,20 +66,21 @@ class AdminCommandTest {
         assertTrue(first.out().contains("Account: chef"), first.out());
         String oneTime = first.oneTimePassword();
         assertEquals(20, oneTime.length());
-        assertEquals(List.of("chef|true|true|true"), query(database,
-            "select username || '|' || administrator || '|' || active || '|' || password_change_required from identity_account"));
+        assertEquals(List.of("chef|true|true"), query(database,
+            "select username || '|' || active || '|' || password_change_required from identity_account"));
         // Only a hash is stored, the password is neither in the audit trail nor logged.
         assertFalse(query(database, "select password_hash from identity_account").get(0).contains(oneTime));
         assertEquals(List.of("account.created"), query(database, "select event from identity_audit_event"));
         assertFalse(first.err().contains(oneTime));
         // TASK-039: the same transaction created the company and the initial rights, and nothing else.
         assertEquals(List.of("1"), query(database, "select count(*) from platform_company"));
-        assertEquals(List.of("Unternehmensverwaltung|permissions.manage|chef"), query(database,
+        assertEquals(List.of("Unternehmensverwaltung|accounts.manage|chef", "Unternehmensverwaltung|appearance.manage|chef",
+                "Unternehmensverwaltung|permissions.manage|chef", "Unternehmensverwaltung|session_duration.manage|chef"), query(database,
             "select g.name || '|' || a.action_key || '|' || u.username from permissions_group g "
             + "join permissions_action a on a.group_id = g.id join permissions_membership m on m.group_id = g.id "
-            + "join identity_account u on u.id = m.user_id"));
+            + "join identity_account u on u.id = m.user_id order by a.action_key"));
         assertEquals(List.of("1"), query(database, "select count(*) from permissions_group"));
-        assertEquals(List.of("3"), query(database, "select revision from permissions_revision"));
+        assertEquals(List.of("6"), query(database, "select revision from permissions_revision"));
 
         Result second = run(database, "bootstrap-admin", "someone-else");
         assertEquals(2, second.exitCode());
@@ -124,8 +125,8 @@ class AdminCommandTest {
         assertTrue(unknown.err().contains("account.not_found"), unknown.err());
         try (Connection connection = DriverManager.getConnection(database, TestDatabase.username(), TestDatabase.password());
              Statement statement = connection.createStatement()) {
-            statement.executeUpdate("insert into identity_account (id, username, password_hash, password_change_required, one_time_expires_at, active, administrator, created_at, updated_at) "
-                + "values (gen_random_uuid(), 'plain', 'x', true, now() + interval '1 day', true, false, now(), now())");
+            statement.executeUpdate("insert into identity_account (id, username, password_hash, password_change_required, one_time_expires_at, active, created_at, updated_at) "
+                + "values (gen_random_uuid(), 'plain', 'x', true, now() + interval '1 day', true, now(), now())");
         }
         Result plain = run(database, "reset-admin-password", "plain");
         assertEquals(2, plain.exitCode());

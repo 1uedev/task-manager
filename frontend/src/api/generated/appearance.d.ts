@@ -13,7 +13,7 @@ export interface paths {
         };
         /** Aktuelles Erscheinungsbild */
         get: operations["getAppearance"];
-        /** Akzentfarbe ändern (nur Administrator) */
+        /** Akzentfarbe ändern (Recht appearance.manage) */
         put: operations["changeAccentColor"];
         post?: never;
         delete?: never;
@@ -36,13 +36,13 @@ export interface paths {
          */
         get: operations["getLogo"];
         /**
-         * Logo ersetzen (nur Administrator)
+         * Logo ersetzen (Recht appearance.manage)
          * @description PNG, JPEG oder WebP bis 512 KiB als Rohdaten. Der Typ wird an den ersten Bytes erkannt und muss zum
          *     `Content-Type` passen. SVG wird nicht angenommen, weil es Skript enthalten kann.
          */
         put: operations["replaceLogo"];
         post?: never;
-        /** Logo entfernen (nur Administrator) */
+        /** Logo entfernen (Recht appearance.manage) */
         delete: operations["removeLogo"];
         options?: never;
         head?: never;

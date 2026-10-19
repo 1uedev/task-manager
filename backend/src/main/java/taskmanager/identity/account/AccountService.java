@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.identity.AccountDeactivationGuard;
+import taskmanager.identity.EmergencyResetPolicy;
 import taskmanager.identity.FirstAdministratorHandler;
 import taskmanager.identity.config.IdentityProperties;
 import taskmanager.platform.ApiProblemException;
@@ -18,6 +19,9 @@ import taskmanager.platform.ApiProblemException;
  * Administrative account life cycle: creation with a one time password, deactivation, reactivation and
  * password reset. Every credential change and every deactivation ends the sessions of the account in the
  * same transaction. The one time password is returned exactly once and stored only as a hash.
+ *
+ * <p>The methods do not decide who may call them. The web layer asks for the right to manage accounts in the transaction
+ * of the call (TASK-040); the container commands act with the access to the server.
  */
 @Service
 public class AccountService {
@@ -31,10 +35,12 @@ public class AccountService {
     private final IdentityProperties properties;
     private final ObjectProvider<AccountDeactivationGuard> deactivationGuard;
     private final ObjectProvider<FirstAdministratorHandler> firstAdministrator;
+    private final ObjectProvider<EmergencyResetPolicy> emergencyReset;
 
     AccountService(AccountRepository accounts, PasswordHasher hasher, OneTimePasswords oneTimePasswords,
             JdbcClient jdbc, Clock clock, IdentityProperties properties,
-            ObjectProvider<AccountDeactivationGuard> deactivationGuard, ObjectProvider<FirstAdministratorHandler> firstAdministrator) {
+            ObjectProvider<AccountDeactivationGuard> deactivationGuard, ObjectProvider<FirstAdministratorHandler> firstAdministrator,
+            ObjectProvider<EmergencyResetPolicy> emergencyReset) {
         this.accounts = accounts;
         this.hasher = hasher;
         this.oneTimePasswords = oneTimePasswords;
@@ -43,6 +49,7 @@ public class AccountService {
         this.properties = properties;
         this.deactivationGuard = deactivationGuard;
         this.firstAdministrator = firstAdministrator;
+        this.emergencyReset = emergencyReset;
     }
 
     /** An account together with the one time password that was just issued. The password is shown only once. */
@@ -54,7 +61,7 @@ public class AccountService {
     }
 
     @Transactional
-    public Issued create(String actor, String rawUsername, String displayName, boolean administrator) {
+    public Issued create(String actor, String rawUsername, String displayName) {
         String username = UsernameRules.normalize(rawUsername);
         if (!UsernameRules.isValid(username)) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("username.invalid"));
@@ -67,7 +74,7 @@ public class AccountService {
         String oneTime = oneTimePasswords.next();
         Instant expires = now.plus(properties.oneTimePasswordValidity());
         AccountRecord account = new AccountRecord(UUID.randomUUID(), username, name, hasher.hash(oneTime), true, expires, null,
-            true, administrator, now, now);
+            true, now, now);
         if (accounts.findByUsername(username).isPresent()) {
             throw ApiProblemException.of(409, "account.username_taken");
         }
@@ -76,24 +83,33 @@ public class AccountService {
         } catch (DuplicateKeyException race) {
             throw ApiProblemException.of(409, "account.username_taken");
         }
-        accounts.audit(actor, "account.created", account.id(), administrator ? "administrator" : "user", now);
+        accounts.audit(actor, "account.created", account.id(), null, now);
         return new Issued(account, oneTime, expires);
     }
 
     @Transactional
     public AccountRecord deactivate(String actor, UUID id) {
+        return deactivate(actor, id, () -> {
+        });
+    }
+
+    /**
+     * Deactivates the account. {@code authorize} runs in the transaction of the deactivation right after the guard and
+     * before the account is locked: the guard takes the exclusive rights lock, so the caller's own check must come after it
+     * (a shared rights lock taken earlier could not be upgraded without a deadlock). Whatever it throws ends the deactivation.
+     */
+    @Transactional
+    public AccountRecord deactivate(String actor, UUID id, Runnable authorize) {
         // Before any identity lock: other modules order their own locks (rights) ahead of the identity locks.
         if (!exactlyOne(deactivationGuard).mayDeactivate(id)) {
             throw ApiProblemException.of(409, "account.last_administrator");
         }
+        authorize.run();
         // Serializes deactivations, so two administrators cannot deactivate each other at the same time.
         jdbc.sql("select pg_advisory_xact_lock(?)").param(ADMINISTRATOR_LOCK).query().singleValue();
         AccountRecord account = lock(id);
         Instant now = clock.instant();
         if (account.active()) {
-            if (account.administrator() && accounts.countActiveAdministrators() <= 1) {
-                throw ApiProblemException.of(409, "account.last_administrator");
-            }
             accounts.setActive(id, false, now);
             revokeSessions(id, "account.deactivated", now);
             accounts.audit(actor, "account.deactivated", id, null, now);
@@ -130,7 +146,7 @@ public class AccountService {
         if (accounts.count() > 0) {
             throw ApiProblemException.of(409, "bootstrap.accounts_exist");
         }
-        Issued issued = create("cli", rawUsername, null, true);
+        Issued issued = create("cli", rawUsername, null);
         // Same transaction: the company and the initial rights appear with the account or not at all.
         exactlyOne(firstAdministrator).firstAdministratorCreated(issued.account().id());
         return issued;
@@ -155,7 +171,7 @@ public class AccountService {
         AccountRecord account = accounts.findByUsername(username)
             .flatMap(found -> accounts.findByIdForUpdate(found.id()))
             .orElseThrow(() -> ApiProblemException.of(404, "account.not_found"));
-        if (!account.administrator()) {
+        if (!exactlyOne(emergencyReset).mayReset(account.id())) {
             throw ApiProblemException.of(409, "account.not_administrator");
         }
         Instant now = clock.instant();

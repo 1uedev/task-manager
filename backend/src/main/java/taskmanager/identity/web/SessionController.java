@@ -1,11 +1,13 @@
 package taskmanager.identity.web;
 
 import jakarta.servlet.http.HttpServletRequest;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,8 @@ import taskmanager.identity.session.SessionService.Issued;
 import taskmanager.identity.session.SessionService.Resolved;
 import taskmanager.identity.session.SessionService.SessionView;
 import taskmanager.identity.session.Tokens;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.AdministrationRights;
 import taskmanager.platform.ApiProblemException;
 
 /** State of the own session, login, logout and the password change of the logged in person. */
@@ -27,10 +31,12 @@ import taskmanager.platform.ApiProblemException;
 class SessionController {
     private final SessionService sessions;
     private final Clock clock;
+    private final ObjectProvider<AdministrationRights> rights;
 
-    SessionController(SessionService sessions, Clock clock) {
+    SessionController(SessionService sessions, Clock clock, ObjectProvider<AdministrationRights> rights) {
         this.sessions = sessions;
         this.clock = clock;
+        this.rights = rights;
     }
 
     record LoginRequest(String username, String password) {
@@ -42,17 +48,20 @@ class SessionController {
     /**
      * @param authenticated false for an anonymous visitor
      * @param level {@code full} or {@code password_change_required}; null when anonymous
+     * @param rights keys of the administrative rights the session holds, sorted; only in the answer to the state of an
+     *        authenticated request, empty while the login is incomplete. A hint for what an interface shows, never a permission
      * @param csrfToken only present when the server just issued a token (anonymous visit, login, password change)
      */
-    record SessionBody(boolean authenticated, String username, String displayName, String level, boolean administrator,
+    record SessionBody(boolean authenticated, String username, String displayName, String level,
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<String> rights,
             Instant expiresAt, Instant passwordChangeBy, String csrfToken) {
         static SessionBody anonymous(String csrfToken) {
-            return new SessionBody(false, null, null, null, false, null, null, csrfToken);
+            return new SessionBody(false, null, null, null, null, null, null, csrfToken);
         }
 
-        static SessionBody of(SessionView view, String csrfToken) {
+        static SessionBody of(SessionView view, List<String> rights, String csrfToken) {
             String level = view.level() == AuthenticationLevel.FULL ? "full" : "password_change_required";
-            return new SessionBody(true, view.username(), view.displayName(), level, view.administrator(), view.expiresAt(),
+            return new SessionBody(true, view.username(), view.displayName(), level, rights, view.expiresAt(),
                 view.restrictedUntil(), csrfToken);
         }
     }
@@ -61,7 +70,7 @@ class SessionController {
     SessionBody state(HttpServletRequest request, HttpServletResponse response) {
         Resolved resolved = (Resolved) request.getAttribute(AuthenticationFilter.RESOLVED);
         if (resolved != null) {
-            return SessionBody.of(resolved.view(), null);
+            return SessionBody.of(resolved.view(), heldRights(), null);
         }
         String existing = Cookies.read(request, Cookies.CSRF);
         if (existing != null) {
@@ -70,6 +79,11 @@ class SessionController {
         String csrf = Tokens.random();
         response.addHeader(HttpHeaders.SET_COOKIE, Cookies.csrf(csrf, Duration.ofHours(12)));
         return SessionBody.anonymous(csrf);
+    }
+
+    private List<String> heldRights() {
+        var port = rights.getIfUnique();
+        return port == null ? List.of() : port.held().stream().map(AdministrationRight::key).sorted().toList();
     }
 
     @PostMapping
@@ -113,6 +127,6 @@ class SessionController {
         Duration lifetime = Duration.between(clock.instant(), issued.view().expiresAt());
         response.addHeader(HttpHeaders.SET_COOKIE, Cookies.session(issued.sessionToken(), lifetime));
         response.addHeader(HttpHeaders.SET_COOKIE, Cookies.csrf(issued.csrfToken(), lifetime));
-        return SessionBody.of(issued.view(), issued.csrfToken());
+        return SessionBody.of(issued.view(), null, issued.csrfToken());
     }
 }
