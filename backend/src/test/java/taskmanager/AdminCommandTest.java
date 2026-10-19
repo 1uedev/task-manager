@@ -72,12 +72,21 @@ class AdminCommandTest {
         assertFalse(query(database, "select password_hash from identity_account").get(0).contains(oneTime));
         assertEquals(List.of("account.created"), query(database, "select event from identity_audit_event"));
         assertFalse(first.err().contains(oneTime));
+        // TASK-039: the same transaction created the company and the initial rights, and nothing else.
+        assertEquals(List.of("1"), query(database, "select count(*) from platform_company"));
+        assertEquals(List.of("Unternehmensverwaltung|permissions.manage|chef"), query(database,
+            "select g.name || '|' || a.action_key || '|' || u.username from permissions_group g "
+            + "join permissions_action a on a.group_id = g.id join permissions_membership m on m.group_id = g.id "
+            + "join identity_account u on u.id = m.user_id"));
+        assertEquals(List.of("1"), query(database, "select count(*) from permissions_group"));
+        assertEquals(List.of("3"), query(database, "select revision from permissions_revision"));
 
         Result second = run(database, "bootstrap-admin", "someone-else");
         assertEquals(2, second.exitCode());
         assertTrue(second.err().contains("bootstrap.accounts_exist"), second.err());
         assertFalse(second.out().contains("One time password"));
         assertEquals(List.of("1"), query(database, "select count(*) from identity_account"));
+        assertEquals(List.of("1"), query(database, "select count(*) from platform_company"));
     }
 
     @Test

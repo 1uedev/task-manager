@@ -23,11 +23,12 @@ Fachregeln wie Statusübergänge, veröffentlichte Portalbeiträge oder eine erw
 Objektversion prüft weiterhin das zuständige Fachmodul zusätzlich.
 
 Es gibt keine HTTP-Endpunkte, Rollen mit Sonderzugriff, Standardgruppen, Initialrechte,
-Benutzerkopien oder Bootstrapkonten. Ohne genau einen echten `IdentityAccess`-Adapter
-verweigert die Anwendung alle Auswertungen/Verwaltungsaufrufe. Tests verwenden ausschließlich
-synthetische Adapter unter `src/test`. TASK-024 ist separat für Claude reserviert (Claim-PR #73); Anmeldung,
-Sitzungen, LDAP, API-/Job-/Dienstkontexte und produktiver Bootstrap sind nicht implementiert.
-TASK-026 muss die echten Projekt-/Objektadapter liefern. Deren integrierte Sicherheit ist
+Benutzerkopien oder Bootstrapkonten im Berechtigungsmodul selbst. Ohne genau einen echten `IdentityAccess`-Adapter
+verweigert die Anwendung alle Auswertungen/Verwaltungsaufrufe. Seit TASK-039 (DEC-063) besteht dieser Adapter am
+Anwendungseinstieg; Aufbau, Sperren und der erste Start stehen in `backend/README.md`, Abschnitt
+„Adapter zwischen Identität und Berechtigungen“. Die Rechte-Tests verwenden weiterhin ausschließlich synthetische
+Adapter unter `src/test`, die den echten unter demselben Beannamen ersetzen. LDAP und API-/Job-/Dienstkontexte sind
+nicht implementiert. TASK-026 muss die echten Projekt-/Objektadapter liefern. Deren integrierte Sicherheit ist
 durch die synthetischen Nachweise nicht belegt. Die Administrationsoberfläche folgt TASK-030.
 
 ## Öffentlicher Java-Vertrag und Datenhoheit
@@ -74,9 +75,10 @@ keine Gruppe mit diesem Unternehmensrecht ein Mitglied hat, das der Identitätsa
 `userActive` als aktives internes Konto der Firma meldet; ein bekanntes, aber deaktiviertes
 Konto zählt nicht (Nachprüfung R1, DEC-062). `userExists` bleibt für das Hinzufügen von
 Mitgliedern bestehen. Die Prüfung läuft nach der Änderung unter der exklusiven Revisionssperre,
-gleichzeitige Entzüge werden dadurch serialisiert. Grenze: Der Schutz gilt für Änderungen über
-dieses Modul. Deaktiviert oder löscht der Identitätsadapter später das letzte Konto einer
-Administrationsgruppe, muss er dieselbe Schranke auf seinem Entzugsweg selbst durchsetzen.
+gleichzeitige Entzüge werden dadurch serialisiert. Der Schutz gilt für Änderungen über
+dieses Modul und seit TASK-039 auch für das Deaktivieren eines Kontos: Die Identität fragt vor ihren Sperren
+`CompanyAdministration.remainsWithout`, das die exklusive Revisionssperre nimmt und ein anderes aktives Konto mit dem
+Unternehmensrecht verlangt. Löscht ein künftiger Weg Konten, muss er dieselbe Schranke durchsetzen.
 
 Namen sind auf 80 Zeichen, technische Schlüssel auf 120 Zeichen begrenzt. Schlüssel sind
 kleine ASCII-Kennungen mit Ziffern, Punkt und Unterstrich. Weder vertrauliche Feldwerte noch
@@ -130,9 +132,10 @@ und [Spring-Transaktionspropagierung](https://docs.spring.io/spring-framework/re
 Gruppe, Gruppenmitgliedschaft, Aktion, Feldregel und Audit. Unternehmensbezogene Schlüssel
 und Fremdschlüssel verhindern fremde Gruppenzuordnung; `UNIQUE NULLS NOT DISTINCT` schützt
 auch Unternehmensregeln ohne Projekt-ID. Keine Fremdschlüssel oder SELECTs auf fremde
-Modultabellen. Keine Seeds, automatische Unternehmensanlage oder Defaultfreigaben.
-Der echte Initialisierungspfad benötigt den abgestimmten Bootstrap aus TASK-024; die Tests
-säen ausschließlich synthetische Ausgangspolicies direkt in ihre getrennte Testdatenbank.
+Modultabellen. Keine Seeds oder Defaultfreigaben in Migrationen. Der Initialisierungspfad ist seit TASK-039
+`CompanyAdministration.initialize`, aufgerufen vom Containerbefehl `bootstrap-admin` in der Transaktion des ersten Kontos:
+Rechteversion, genau eine Gruppe mit `permissions.manage` und der Erstadministrator als Mitglied, ohne Fachrechte und ohne
+Auditrecht. Die Rechte-Tests säen weiterhin synthetische Ausgangspolicies direkt in ihre getrennte Testdatenbank.
 
 Audit enthält Zeitpunkt, Akteur-, Gruppen-, gegebenenfalls betroffene Benutzer-/Projekt-ID,
 Operation, technische Aktions-/Feldkennung, Wirkung und Rechteversion. Keine Namen,

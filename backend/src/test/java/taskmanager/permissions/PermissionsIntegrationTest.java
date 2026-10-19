@@ -23,7 +23,10 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.TestDatabase;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+// The fixture takes the bean name of the production adapter (taskmanager.IdentityPermissionsAdapter) and replaces it, so
+// the application still sees exactly one IdentityAccess. Only this test class does that; production never registers it.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = "spring.main.allow-bean-definition-overriding=true")
 @Import(PermissionsIntegrationTest.IdentityFixture.class)
 class PermissionsIntegrationTest {
     private static String database;
@@ -48,7 +51,7 @@ class PermissionsIntegrationTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class IdentityFixture {
         volatile boolean current = true;
-        @Bean IdentityAccess syntheticIdentity(JdbcTemplate jdbc) {
+        @Bean(name = "identityPermissionsAdapter") IdentityAccess syntheticIdentity(JdbcTemplate jdbc) {
             return new IdentityAccess() {
                 public boolean isCurrent(AccessContext context) {
                     if (!current || !context.companyId().equals(COMPANY) || !context.sessionId().equals(SESSION)) return false;
