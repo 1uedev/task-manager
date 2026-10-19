@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -632,3 +634,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-036 Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-design-01 · **Aktualisiert:** 2026-10-19
+
+**Bezug:** REQ-PROD-004, REQ-BRAND-001, REQ-UX-001, REQ-I18N-001. **Abhängigkeiten:** TASK-023 (abgenommen); für das Speichern der Akzentfarbe die Identitäts- und Rechtegrundlage aus TASK-024 und TASK-025. Holger hat am 18. Oktober 2026 im Projektgespräch zu den Screenshots der Grundfläche geschrieben: „das design schaut bei weitem nach 2000 aus, das muss modern nach 2026 ausschauen“. Am 19. Oktober 2026 wählte er auf Entscheidungskarten den mutigeren Entwurf B, schrieb „Entwurf B aber nicht mir der Farbe sondern einem satten orange, erstelle dafür nochmal besipielbilder, und die farbe muss von einem admin änderbar sein. die ui und ux muss auch viele wenn möglich drag and drop elemente unterstützen“ und wählte danach für den Umfang „Mit Board Vorschau“. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031 und keine Vorwegnahme von Kanban (DEC-041). Der Beschluss wird im Ergebnis-PR als DEC-060 in DECISIONS.md übernommen; DEC-059 ist durch PR #82 belegt. **Arbeitsstand:** claude/project-thread-783mg8, separates Arbeitsverzeichnis nach Reservierung dieses Claim PR. Entwurfsbilder liegen außerhalb des Repositorys im Projektordner.
+
+**Umfang:** Oberflächenrahmen mit Seitenleiste, Symbolen und Darstellung Hell, Dunkel oder System; sattes Orange (#F97316) als Standard-Akzentfarbe mit automatisch gewählter Schriftfarbe für ausreichenden Kontrast. Verwaltungsseite „Erscheinungsbild“ für Akzentfarbe (Vorlagen und freie Farbe) und Logo, sichtbar und speicherbar nur mit dem Recht zur Verwaltung des Unternehmensauftritts; Backend-Endpunkt mit Migration, Rechteprüfung und Audit für diese Einstellung, abgestimmt mit dem Rechtemodul aus TASK-025. Drag and Drop mit gleichwertiger Tastaturbedienung für Reihenfolge der Navigation, Karten der Startseite, Logo-Ablage und eine Board-Vorschau mit synthetischen Beispielkarten ohne Fachdaten oder Speicherung. Bestehende Seiten, Sprachen, Zustände und Browserprüfungen bleiben erhalten und werden angepasst.
+
+**Schnittstellen und Arbeitsbereich:** frontend/ für Rahmen, Seiten, Styles, Kataloge und Browserprüfungen; backend/ nur für die Einstellung des Unternehmensauftritts. Neue Rechte oder Änderungen am Rechtemodul werden mit der Sitzung von TASK-025 abgestimmt und nicht an ihr vorbei eingeführt. Keine echten Kundendaten, Logos nur synthetisch.
+
+**Abnahmekriterien:** Neue Gestaltung in Deutsch und Englisch, hell und dunkel sowie bei 320 Pixel Breite ohne horizontales Scrollen der Seite. Text auf der Akzentfarbe erreicht mindestens Kontrast 4,5, Rahmen und Fokus 3. Akzentfarbe und Logo sind nur mit dem passenden Recht änderbar; serverseitig abgelehnte Änderungen ohne Recht sind per Test belegt, ungültige Werte werden abgewiesen. Jede Drag-and-Drop-Aktion ist auch per Tastatur möglich und wird angesagt. Die Board-Vorschau ist als Beispieldaten gekennzeichnet und speichert nichts. Unit-, Backend- und Browserprüfungen grün; neue Screenshots im Ergebnis-PR. Getrennte KI prüft Barrierefreiheit und Rechtegrenzen.
+
+**Nächster Schritt:** Reservierung integrieren; danach Frontend nach Entwurf umsetzen, Einstellung im Backend mit dem Recht abstimmen und als Ergebnis-PR mit DEC-060 übergeben.
