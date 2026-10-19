@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
+| [TASK-038](#task-038-rechtemodul-aktive-administration-und-herkunft-von-feldverboten-nachbessern) | Rechtemodul: aktive Administration und Herkunft von Feldverboten nachbessern | claude-20261019-permissions-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -667,3 +668,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Prüfungen:** Lokal auf PostgreSQL 16 und Java 21: `./mvnw clean verify` mit 89 Tests (bisher 87) ohne Fehler, `backend/scripts/lifecycle-check.sh` bestanden, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests` und `git diff --check` (siehe Ergebnis PR). CI auf PostgreSQL 18.6 und Temurin 25 wird im Ergebnis PR verlinkt. Nicht geprüft: eine getrennte KI Nachprüfung des Korrekturcommits; sie wird angeboten, ist aber nicht Voraussetzung der Abnahme.
 
 **Nächster Schritt:** Holger nimmt TASK-037 funktional ab oder fordert eine gezielte Nachprüfung am Korrekturcommit an; danach Verschiebung nach DONE.md in einem eigenen PR.
+
+## TASK-038 Rechtemodul: aktive Administration und Herkunft von Feldverboten nachbessern
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-permissions-01 · **Aktualisiert:** 2026-10-19
+
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-025 (BEREIT ZUR PRÜFUNG, Nachbesserung P1 und P7 aus PR #82 integriert). Verknüpfte Folgeaufgabe zu TASK-025: Die gezielte Nachprüfung von PR #82 durch codex-20261019-permissions-followup-01 ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-025-pr82-codex/docs/REVIEW_TASK-025_PR-82.md), [PR #87](https://github.com/1uedev/task-manager/pull/87)) fand R1 (ein deaktiviertes Konto zählt als verbleibende Administration) und K1 (ein früherer Unternehmensverwalter kann sein eigenes Firmenverbot als Delegierter aufheben). Holger hat am 19. Oktober 2026 auf einer Entscheidungskarte „Soll ich R1 und K1 aus dem Codex Bericht zu PR #82 beheben?“ die Option „R1 und K1 streng“ gewählt. Das ist der Auftrag für den unten beschriebenen Umfang im Berechtigungsmodul, keine Freigabe von TASK-026 bis TASK-031, keine Abnahme von TASK-025 und keine Entscheidung zu P2 bis P6. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-062.
+
+**Umfang:** (R1) Die Schranke für die letzte Unternehmensverwaltung zählt nur ein Mitglied, das der Identitätsadapter als aktiv kennt: Der Port `IdentityAccess` erhält eine Prüfung „aktives internes Konto der Firma“ für ein beliebiges Konto, die wie `isCurrent` unter Sperre bis zum Ende der Transaktion gilt und ohne Adapter verweigert. `userExists` entfällt oder wird durch sie ersetzt; keine fremden Identitätstabellen werden gelesen. (K1) Bei einem Feldverbot wird zusätzlich zur Urheberkennung festgehalten, ob es mit Unternehmensverwaltung gesetzt wurde. Eine Projektdelegation ändert, entfernt oder ersetzt nur Verbote, die sie selbst als Delegation gesetzt hat; Firmenverbote und Regeln ohne erfasste Herkunft bleiben auch nach einem späteren Rollenwechsel des Urhebers geschützt. Neue Vorwärtsmigration, V0005 bleibt unverändert; die Nummer wird mit der offenen Migration V0006 aus TASK-036 (PR #85) abgestimmt und ist V0007. DEC-059 und der Backendvertrag werden berichtigt.
+
+**Schnittstellen und Arbeitsbereich:** Berechtigungsmodul (`backend/src/main/java/taskmanager/permissions`), dessen Migration und Tests, backend/PERMISSIONS.md, backend/README.md, DECISIONS.md (DEC-062). Keine Änderung am Identitätsmodul, am Frontend oder an fremden Verträgen; der echte Identitätsadapter bleibt offen und unzugewiesen.
+
+**Abnahmekriterien:** Je ein ablehnender Regressionstest für Entzug über `setMember` und über `setAction`, wenn das einzige weitere Mitglied deaktiviert ist (Aktivität des Testadapters, nicht bloße Existenz), plus ein Fall, in dem ein aktives Mitglied verbleibt. Für K1 ein Test des Rollenwechsels aus dem Bericht (Firmenverbot bleibt für die ehemalige Verwaltung geschützt) und ein Test, dass eigene Delegationsverbote weiter änderbar sind. Die neuen Tests scheitern auf dem Stand vor der Korrektur. Migrationstest vom Stand V0005 mit vorhandener Regel (Herkunft bleibt geschützt). Bestehende Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. Eine gezielte Nachprüfung durch eine getrennte KI am Korrekturcommit wird angeboten, ist aber nicht Voraussetzung der Abnahme von TASK-025 durch Holger.
+
+**Nächster Schritt:** Reservierung integrieren; danach R1 und K1 umsetzen und als Ergebnis PR mit DEC-062 übergeben.
