@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-039](#task-039-adapter-zwischen-identität-und-berechtigungen-implementieren) | Adapter zwischen Identität und Berechtigungen implementieren | claude-20261019-integration-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -630,3 +632,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Grenzen:** Keine Anmeldeseite (TASK-030); ohne Anmeldung zeigt die Oberfläche das Standardorange und eine Vorschau. Keine Leseschnittstelle für das Audit. Kein Screenreader- und kein Windows-Test.
 
 **Nächster Schritt:** Holger prüft Gestaltung und Screenshots; die vorläufige Administratorkennzeichnung hat er bestätigt. Eine getrennte KI-Prüfung von Barrierefreiheit und Rechtegrenzen steht nach DEC-040 aus.
+
+## TASK-039 Adapter zwischen Identität und Berechtigungen implementieren
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-integration-01 · **Aktualisiert:** 2026-10-19
+
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-AUTH-003, REQ-ORG-001, REQ-SEC-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-036 und TASK-038 sind abgenommen oder integriert; TASK-026 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Holger hat am 19. Oktober 2026 im Projektgespräch auf die Frage, wer den fehlenden Adapter zwischen Anmeldung (TASK-024) und Berechtigungen (TASK-025) baut, mit „claude“ geantwortet; Codex prüft ihn danach unabhängig nach DEC-040. Das ist der Auftrag für den unten beschriebenen Umfang und keine Freigabe weiterer Fachmodule. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-063, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt.
+
+**Umfang:** Der Port `IdentityAccess` aus TASK-025 wird erstmals von einem echten Adapter bedient; die Rechte werden erst dann für Anfragen wirksam. (1) Unternehmenskontext: Eine Installation hat genau ein Unternehmen (DEC-006, docs/ARCHITECTURE.md). Seine Kennung wird serverseitig geführt und nie vom Browser geliefert; Ort, Format und Anlage legt das Ergebnis mit DEC-063 fest (Vorschlag: einmalige Anlage beim Containerbefehl `bootstrap-admin`). (2) Öffentliche Prüfung im Identitätsmodul ohne Rückwärtsabhängigkeit auf `permissions`: Sie liefert für Konto und Sitzung, ob sie aktuell sind (Sitzung offen und nicht abgelaufen, vollständige Anmeldung, Konto aktiv, kein offener Pflichtwechsel), und sperrt beide Zeilen gemeinsam bis zum Commit der Transaktion des Aufrufers (`FOR SHARE`). Alle Entzugswege des Identitätsmoduls (Abmelden, Deaktivieren, Zurücksetzen, Passwortwechsel, Fristverkürzung) nehmen dazu unverträgliche Sperren. Dieselbe Prüfung beantwortet `userExists` und `userActive` für beliebige Konten. (3) Adapter und Kontextbildung am Anwendungseinstieg außerhalb beider Module: genau ein `IdentityAccess` Bean, und die Berechtigungs-`AccessContext` wird aus der Identitätssicht, der Unternehmenskennung und der aktuellen Rechteversion gebildet (`external = false`, ohne Organisation, solange es keine Portalkonten gibt). (4) Schutz der letzten Unternehmensverwaltung auf dem Entzugsweg der Identität: Das Deaktivieren eines Kontos wird abgewiesen, wenn danach keine aktive Unternehmensverwaltung mehr bleibt. Die Identität darf `permissions` nicht aufrufen; sie ruft dazu einen eigenen Schrankenport auf, den der Anwendungseinstieg mit einer Prüfung des Berechtigungsmoduls bedient. Sperrreihenfolge bleibt Rechte, dann Identität, dann Ressource, dann Fachobjekt; die Schranke läuft deshalb vor der Sperre des Zielkontos. (5) Minimaler Start: `bootstrap-admin` legt in derselben Transaktion das Unternehmen, die Rechteversion und genau eine Gruppe mit dem Unternehmensrecht `permissions.manage` an und ordnet den Erstadministrator ihr zu; keine Fachrechte, kein Auditrecht, keine Projekte, keine weiteren Gruppen. Das ist der von der Sitzung gewählte Standard und gilt, solange Holger beim Merge dieses Claim PRs nichts anderes sagt. Die Kennzeichnung `administrator` im Identitätsmodul bleibt unverändert; ihre Ablösung durch Rechte (zum Beispiel für TASK-036) ist nicht Teil dieser Aufgabe. Nicht Teil: HTTP Endpunkte für Rechte, Anmeldeseite, LDAP, Portalkonten, zweiter Faktor, Projekt- und Objektadapter (TASK-026), Dienst- und Jobkontexte, P2 bis P6.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (neue öffentliche Prüfung und Schrankenport, deren Tests), Anwendungseinstieg `taskmanager` für Adapter und Verdrahtung, Erweiterung von `bootstrap-admin` samt Test, backend/README.md, backend/PERMISSIONS.md, DECISIONS.md (DEC-063), AGENTS.md, CLAUDE.md, README.md (Umfangssatz). Eine neue Migration nur, wenn die Unternehmenskennung eine braucht (nächste freie Nummer V0009; V0006 bleibt frei). Der Port `IdentityAccess` im Berechtigungsmodul ändert sich nur, wenn die Prüfung es zeigt, und dann mit Begründung im Ergebnis. Keine Änderung an Verträgen von Appearance oder fremden Modulen.
+
+**Abnahmekriterien:** Konkurrenztests mit echter PostgreSQL Sperrwartebeziehung in beiden Reihenfolgen: Rechteänderung oder Fachauftrag gegen Abmelden, Deaktivieren, Zurücksetzen, Passwortwechsel und Ablauf der Sitzung; nach dem Commit eines Entzugs greift kein alter Kontext mehr. Die letzte aktive Unternehmensverwaltung lässt sich über die Identität nicht deaktivieren, auch nicht gleichzeitig mit `setMember` oder `setAction`, die Schranke zählt nur aktive interne Konten. `bootstrap-admin` legt Unternehmen, Rechteversion, Gruppe und Mitgliedschaft atomar an und lehnt einen zweiten Aufruf ab. Ohne Adapter, bei mehr als einem Adapter, ohne Unternehmenskennung oder mit veraltetem Kontext wird verweigert; im Produktstart ist keine Testfixture registriert. Ein Test mit dem echten Adapter weist nach, dass ein deaktiviertes Konto und eine abgelaufene Sitzung keine Berechtigung mehr erhalten. Alle bestehenden Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. Getrennte KI prüft den Adapter, die Sperrreihenfolge und die Schranke nach dem Ergebnis; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
+
+**Nächster Schritt:** Reservierung integrieren; danach Adapter umsetzen und als Ergebnis PR mit DEC-063 übergeben.
