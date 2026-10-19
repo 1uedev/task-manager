@@ -1,0 +1,17 @@
+diff --git a/backend/src/test/java/taskmanager/identity/IdentityHardeningTest.java b/backend/src/test/java/taskmanager/identity/IdentityHardeningTest.java
+index 3d81f10..5a9e179 100644
+--- a/backend/src/test/java/taskmanager/identity/IdentityHardeningTest.java
++++ b/backend/src/test/java/taskmanager/identity/IdentityHardeningTest.java
+@@ -269,6 +269,12 @@ class IdentityHardeningTest {
+                 shortening.get(10, TimeUnit.SECONDS);
+                 var replacement = rotation.get(10, TimeUnit.SECONDS);
+                 assertEquals(started.plus(Duration.ofHours(1)), storedEnd(replacement.sessionToken()));
++                assertEquals(started, replacement.view().startedAt(), "rotation preserves the original login time");
++                assertTrue(sessions.resolve(target.issued().sessionToken()).isEmpty(), "old token remains revoked");
++                CLOCK.advance(Duration.ofHours(2));
++                assertTrue(sessions.resolve(replacement.sessionToken()).isEmpty(), "replacement has expired at one hour");
++                duration.change("review", 24);
++                assertTrue(sessions.resolve(replacement.sessionToken()).isEmpty(), "later extension must not revive it");
+             } finally {
+                 release.countDown();
+             }

@@ -1,0 +1,24 @@
+Independent targeted review of TASK-037 / PR #88
+Executed product main d8374632ee91030fd851468b3f6ecd75a7b74cd1; backend equals PR head 5ef853c587c74c7e6bf33ee014ed3106de2e2a24
+Temurin 25.0.4.1+1 / Maven 3.9.16 / native PostgreSQL 18.6 / isolated synthetic databases
+
+BASELINE: unchanged verify
+[INFO] Tests run: 89, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+MUTATION: only replacement setting read changed from hoursForShare() to hours(); clamp preserved
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 33.28 s <<< FAILURE! -- in taskmanager.identity.IdentityHardeningTest
+[ERROR]   IdentityHardeningTest.n1ARotationInFlightIsShortenedByAConcurrentChangeOfThePeriod:232 the shortening must wait for the rotation at the setting row, not pass it ==> expected: <true> but was: <false>
+[ERROR]   IdentityHardeningTest.n1BARotationThatWaitsForAnUncommittedShorteningReadsTheShortenedPeriod:267 the rotation must wait at the setting row ==> expected: <true> but was: <false>
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+[INFO] BUILD FAILURE
+
+FIRST RESTORE ATTEMPT: source restored, but stale mutation classes reused; not product-code evidence
+[INFO] Nothing to compile - all classes are up to date.
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 32.09 s <<< FAILURE! -- in taskmanager.identity.IdentityHardeningTest
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+
+CLEAN RESTORED RUN: correct product source recompiled; reviewer assertions extend second ordering
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.46 s -- in taskmanager.identity.IdentityHardeningTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS

@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0006"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 

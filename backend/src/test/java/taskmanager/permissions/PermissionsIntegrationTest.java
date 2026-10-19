@@ -58,6 +58,9 @@ class PermissionsIntegrationTest {
                 public boolean userExists(UUID company, UUID user) {
                     return COMPANY.equals(company) && !jdbc.queryForList("select active from test_identity_state where user_id=? for share", Boolean.class, user).isEmpty();
                 }
+                public boolean userActive(UUID company, UUID user) {
+                    return COMPANY.equals(company) && jdbc.queryForList("select active from test_identity_state where user_id=? for share", Boolean.class, user).contains(true);
+                }
             };
         }
     }
@@ -232,6 +235,78 @@ class PermissionsIntegrationTest {
     }
 
     @Test
+    void aDeactivatedAccountDoesNotKeepTheCompanyAdministrationAlive() {
+        UUID second = UUID.randomUUID(), secondGroup = UUID.randomUUID();
+        jdbc.update("insert into test_identity_state values (?,false)", second);
+        jdbc.update("insert into permissions_group(company_id,id,name) values (?,?,?)", COMPANY, secondGroup, "synthetic-second");
+        member(secondGroup, second);
+        action(secondGroup, null, "permissions.manage");
+        long before = permissions.currentVersion(COMPANY);
+        int audits = jdbc.queryForObject("select count(*) from permissions_audit", Integer.class);
+        // Both withdrawal paths of the last active administration are refused although a deactivated holder is known.
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setMember(actor(ADMIN), ADMINS, ADMIN, false)));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setAction(actor(ADMIN), ADMINS,
+            () -> ResourceContext.company(COMPANY), "permissions.manage", false)));
+        assertEquals(before, permissions.currentVersion(COMPANY));
+        assertEquals(audits, jdbc.queryForObject("select count(*) from permissions_audit", Integer.class));
+        assertEquals(1, jdbc.queryForObject("select count(*) from permissions_membership where group_id=? and user_id=?", Integer.class, ADMINS, ADMIN));
+        assertTrue(permissions.inspect(actor(ADMIN), () -> ResourceContext.company(COMPANY), "permissions.manage", Set.of()).allowed());
+        // Once that account is active again it counts, and the withdrawal is possible.
+        jdbc.update("update test_identity_state set active=true where user_id=?", second);
+        mutate(() -> administration.setMember(actor(ADMIN), ADMINS, ADMIN, false));
+        assertEquals(before + 1, permissions.currentVersion(COMPANY));
+    }
+
+    @Test
+    void aCompanyDenyStaysProtectedAfterItsAuthorLosesTheCompanyRoleButKeepsADelegation() {
+        var write = PermissionAdministration.Operation.WRITE;
+        var deny = PermissionAdministration.Effect.DENY;
+        UUID second = UUID.randomUUID(), secondGroup = UUID.randomUUID();
+        jdbc.update("insert into test_identity_state values (?,true)", second);
+        jdbc.update("insert into permissions_group(company_id,id,name) values (?,?,?)", COMPANY, secondGroup, "synthetic-second");
+        member(secondGroup, second);
+        action(secondGroup, null, "permissions.manage");
+        member(DELEGATES, ADMIN);
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", write, deny));
+        assertEquals(Boolean.TRUE, fieldRuleFromCompany(READERS, "title", "WRITE"));
+        // An independent administration removes only the company role; the person keeps the project delegation.
+        mutate(() -> administration.setMember(actor(second), ADMINS, ADMIN, false));
+        assertFalse(permissions.inspect(actor(ADMIN), () -> ResourceContext.company(COMPANY), "permissions.manage", Set.of()).allowed());
+        assertTrue(permissions.inspect(actor(ADMIN), scope(), "permissions.manage", Set.of()).allowed());
+        for (var attempt : PermissionAdministration.Effect.values())
+            assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", write, attempt)));
+        assertEquals("DENY", fieldRule(READERS, "title", "WRITE").effect());
+        // A deny the same person sets now, as a delegate, can be withdrawn again; one of unknown origin cannot.
+        mutate(() -> administration.setField(actor(ADMIN), RESTRICTED, scope(), "title", write, deny));
+        assertEquals(Boolean.FALSE, fieldRuleFromCompany(RESTRICTED, "title", "WRITE"));
+        mutate(() -> administration.setField(actor(ADMIN), RESTRICTED, scope(), "title", write, PermissionAdministration.Effect.REMOVE));
+        assertNull(fieldRule(RESTRICTED, "title", "WRITE"));
+        jdbc.update("insert into permissions_field(company_id,group_id,project_id,resource_type,field_key,operation,effect,set_by) values (?,?,?,?,?,?,?,?)",
+            COMPANY, RESTRICTED, PROJECT, "ticket", "title", "WRITE", "DENY", ADMIN);
+        assertNull(fieldRuleFromCompany(RESTRICTED, "title", "WRITE"));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(actor(ADMIN), RESTRICTED, scope(), "title", write,
+            PermissionAdministration.Effect.REMOVE)));
+    }
+
+    @Test
+    void upgradeFromV0005KeepsAnExistingRuleWithUnknownRoleAndItsAuthor() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+        org.flywaydb.core.Flyway.configure().dataSource(url, TestDatabase.username(), TestDatabase.password()).target("0005").load().migrate();
+        var upgrade = new JdbcTemplate(new org.springframework.jdbc.datasource.DriverManagerDataSource(url, TestDatabase.username(), TestDatabase.password()));
+        UUID company = UUID.randomUUID(), group = UUID.randomUUID();
+        upgrade.update("insert into permissions_revision(company_id) values (?)", company);
+        upgrade.update("insert into permissions_group(company_id,id,name) values (?,?,?)", company, group, "synthetic-legacy");
+        upgrade.update("insert into permissions_field(company_id,group_id,project_id,resource_type,field_key,operation,effect,set_by) values (?,?,?,'ticket','title','WRITE','DENY',?)",
+            company, group, PROJECT, DELEGATE);
+        var applied = upgrade.queryForList("select version,checksum from flyway_schema_history where success order by installed_rank");
+        org.flywaydb.core.Flyway.configure().dataSource(url, TestDatabase.username(), TestDatabase.password()).load().migrate();
+        assertEquals(applied, upgrade.queryForList("select version,checksum from flyway_schema_history where success and version<='0005' order by installed_rank"));
+        assertEquals("DENY", upgrade.queryForObject("select effect from permissions_field where group_id=?", String.class, group));
+        assertEquals(DELEGATE, upgrade.queryForObject("select set_by from permissions_field where group_id=?", UUID.class, group));
+        assertNull(upgrade.queryForObject("select set_by_company from permissions_field where group_id=?", Boolean.class, group));
+    }
+
+    @Test
     void twoAdministrationsRevokingEachOtherConcurrentlyNeverLeaveNone() throws Exception {
         UUID second = UUID.randomUUID(), secondGroup = UUID.randomUUID();
         jdbc.update("insert into test_identity_state values (?,true)", second);
@@ -293,6 +368,10 @@ class PermissionsIntegrationTest {
         var rows = jdbc.query("select effect, set_by from permissions_field where company_id=? and group_id=? and project_id=? and resource_type='ticket' and field_key=? and operation=?",
             (rs, row) -> new Rule(rs.getString(1), name(rs.getObject(2, UUID.class))), COMPANY, group, PROJECT, field, operation);
         return rows.isEmpty() ? null : rows.getFirst();
+    }
+    private Boolean fieldRuleFromCompany(UUID group, String field, String operation) {
+        return jdbc.queryForObject("select set_by_company from permissions_field where company_id=? and group_id=? and project_id=? and resource_type='ticket' and field_key=? and operation=?",
+            Boolean.class, COMPANY, group, PROJECT, field, operation);
     }
     private static String name(UUID user) { return ADMIN.equals(user) ? "ADMIN" : DELEGATE.equals(user) ? "DELEGATE" : user == null ? null : "OTHER"; }
     private int companyManagerGroups() {
