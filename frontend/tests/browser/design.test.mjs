@@ -68,6 +68,14 @@ async function withPage(options, body) {
 }
 
 const accent = (page) => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim());
+// The accent follows a choice after React committed the next render; wait for it instead of reading at once.
+async function accentBecomes(page, expected, message) {
+  try {
+    await page.waitForFunction((color) => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() === color, expected, { timeout: 3000 });
+  } catch {
+    assert.equal(await accent(page), expected, message);
+  }
+}
 const live = (page) => page.evaluate(() => [...document.querySelectorAll('[aria-live]')].map((element) => element.textContent.trim()).filter(Boolean).join(' | '));
 
 describe('light and dark', () => {
@@ -159,11 +167,11 @@ describe('company appearance', () => {
       await page.getByTestId('appearance-mode').waitFor();
       assert.match(await page.getByTestId('appearance-mode').innerText(), /Nur Administratoren/);
       await page.getByRole('button', { name: 'Grün' }).click();
-      assert.equal(await accent(page), '#16a34a', 'the preview shows everywhere');
+      await accentBecomes(page, '#16a34a', 'the preview shows everywhere');
       assert.equal(await page.getByRole('button', { name: 'Für alle speichern' }).isDisabled(), true);
       await page.getByRole('link', { name: 'Start' }).click();
       await page.waitForSelector('h1:has-text("Willkommen")');
-      assert.equal(await accent(page), '#2563eb', 'leaving the page shows the saved color again');
+      await accentBecomes(page, '#2563eb', 'leaving the page shows the saved color again');
       assert.deepEqual(server.writes(), []);
     });
   });
@@ -181,7 +189,7 @@ describe('company appearance', () => {
       assert.deepEqual(JSON.parse(write.body.toString()), { accentColor: '#16a34a' });
       assert.equal(await page.getByRole('button', { name: 'Für alle speichern' }).isDisabled(), true);
       await page.getByRole('link', { name: 'Start' }).click();
-      assert.equal(await accent(page), '#16a34a');
+      await accentBecomes(page, '#16a34a');
     });
   });
 
@@ -194,7 +202,7 @@ describe('company appearance', () => {
       await page.getByText('Bitte einen Farbwert mit # und sechs Stellen eingeben').waitFor();
       await field.fill('#7C3AED');
       assert.equal(await field.getAttribute('aria-invalid'), null);
-      assert.equal(await accent(page), '#7c3aed');
+      await accentBecomes(page, '#7c3aed');
       assert.match(await page.getByTestId('contrast').innerText(), /Kontrast \d+,\d zu 1/);
     });
   });
