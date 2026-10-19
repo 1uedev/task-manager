@@ -18,10 +18,23 @@ const files = sources(root);
 
 test('source files were found', () => assert.ok(files.length > 10));
 
-test('browser storage is used for the language choice only', () => {
-  const users = files.filter((file) => /localStorage|sessionStorage|indexedDB|document\.cookie/.test(readFileSync(file, 'utf8')));
-  assert.deepEqual(users.map((file) => relative(root, file).split('\\').join('/')), ['i18n/storage.ts']);
-  assert.match(readFileSync(join(root, 'i18n/storage.ts'), 'utf8'), /'taskmanager\.language'/);
+const name = (file: string) => relative(root, file).split('\\').join('/');
+
+test('browser storage holds personal display preferences only', () => {
+  const users = files.filter((file) => /localStorage|sessionStorage|indexedDB/.test(readFileSync(file, 'utf8')));
+  assert.deepEqual(users.map(name), ['app/preferences.ts']);
+  const text = readFileSync(join(root, 'app/preferences.ts'), 'utf8');
+  const keys = [...text.matchAll(/'(taskmanager\.[a-z.]+)'/g)].map((match) => match[1]);
+  assert.deepEqual(keys, ['taskmanager.language', 'taskmanager.theme', 'taskmanager.order.navigation', 'taskmanager.order.cards']);
+  assert.ok(!/sessionStorage|indexedDB/.test(text));
+});
+
+test('the only cookie read is the CSRF token, and no cookie is written', () => {
+  const users = files.filter((file) => /document\??\.cookie/.test(readFileSync(file, 'utf8')));
+  assert.deepEqual(users.map(name), ['api/csrf.ts']);
+  const text = readFileSync(join(root, 'api/csrf.ts'), 'utf8');
+  assert.match(text, /'__Host-tm-csrf'/);
+  assert.ok(!/document\??\.cookie\s*=[^=]/.test(text));
 });
 
 test('no way to run or inject markup', () => {

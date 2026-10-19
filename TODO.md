@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | claude-20261018-permissions-01 | 2026-10-18 |
-| [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -71,6 +70,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -635,7 +635,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-036 Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-design-01 · **Aktualisiert:** 2026-10-19
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261019-design-01 · **Aktualisiert:** 2026-10-19
 
 **Bezug:** REQ-PROD-004, REQ-BRAND-001, REQ-UX-001, REQ-I18N-001. **Abhängigkeiten:** TASK-023 (abgenommen); für das Speichern der Akzentfarbe die Identitäts- und Rechtegrundlage aus TASK-024 und TASK-025. Holger hat am 18. Oktober 2026 im Projektgespräch zu den Screenshots der Grundfläche geschrieben: „das design schaut bei weitem nach 2000 aus, das muss modern nach 2026 ausschauen“. Am 19. Oktober 2026 wählte er auf Entscheidungskarten den mutigeren Entwurf B, schrieb „Entwurf B aber nicht mir der Farbe sondern einem satten orange, erstelle dafür nochmal besipielbilder, und die farbe muss von einem admin änderbar sein. die ui und ux muss auch viele wenn möglich drag and drop elemente unterstützen“ und wählte danach für den Umfang „Mit Board Vorschau“. Das ist der Implementierungsauftrag für den unten beschriebenen Umfang, keine Freigabe von TASK-026 bis TASK-031 und keine Vorwegnahme von Kanban (DEC-041). Der Beschluss wird im Ergebnis-PR als DEC-060 in DECISIONS.md übernommen; DEC-059 ist durch PR #82 belegt. **Arbeitsstand:** claude/project-thread-783mg8, separates Arbeitsverzeichnis nach Reservierung dieses Claim PR. Entwurfsbilder liegen außerhalb des Repositorys im Projektordner.
 
@@ -645,4 +645,12 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Neue Gestaltung in Deutsch und Englisch, hell und dunkel sowie bei 320 Pixel Breite ohne horizontales Scrollen der Seite. Text auf der Akzentfarbe erreicht mindestens Kontrast 4,5, Rahmen und Fokus 3. Akzentfarbe und Logo sind nur mit dem passenden Recht änderbar; serverseitig abgelehnte Änderungen ohne Recht sind per Test belegt, ungültige Werte werden abgewiesen. Jede Drag-and-Drop-Aktion ist auch per Tastatur möglich und wird angesagt. Die Board-Vorschau ist als Beispieldaten gekennzeichnet und speichert nichts. Unit-, Backend- und Browserprüfungen grün; neue Screenshots im Ergebnis-PR. Getrennte KI prüft Barrierefreiheit und Rechtegrenzen.
 
-**Nächster Schritt:** Reservierung integrieren; danach Frontend nach Entwurf umsetzen, Einstellung im Backend mit dem Recht abstimmen und als Ergebnis-PR mit DEC-060 übergeben.
+**Ergebnis:** Neues Modul `appearance` im Backend mit Migration V0006 (eine Einstellungszeile mit Standard `#f97316`, Audittabelle), Vertrag [appearance.openapi.yaml](contracts/appearance.openapi.yaml) und Endpunkten zum Lesen und Ändern von Akzentfarbe und Logo mit Versionsprüfung (`If-Match`, 428 und 412), CSRF und Audit; Logos nur als PNG, JPEG oder WebP bis 512 KiB, am Inhalt erkannt, mit `nosniff` und Sandbox ausgeliefert. Frontend mit Seitenleiste, Hell, Dunkel oder System, Orange als Standard mit automatisch lesbarer Schrift, Seite Erscheinungsbild mit Vorlagen, freier Farbe, Live-Vorschau, Logoablage per Drag and Drop und Speichern über die API, verschiebbare Navigation und Startkarten (Reihenfolge je Browser gespeichert) und Board-Vorschau mit Beispielkarten. Jede Verschiebung geht mit Alt und Pfeiltasten, behält den Fokus und wird angesagt. DEC-060 ist eingetragen.
+
+**Abweichung zur Prüfung:** Ändern dürfen vorläufig Konten mit der technischen Administratorkennzeichnung aus TASK-024, nicht ein eigenes Recht des Rechtemoduls. Der Identitätsadapter, der Konten an das Rechtemodul aus TASK-025 anbindet, existiert noch nicht; ein Recht „Unternehmensauftritt verwalten“ wäre ohne ihn nicht prüfbar. Das Rechtemodul wurde nicht verändert. Mit dem Adapter wird die Prüfung im Controller auf das neue Recht umgestellt.
+
+**Eigenprüfung am 2026-10-19:** Backend `mvn verify` mit 93 Tests grün, darunter 9 API-Tests des Erscheinungsbilds (ohne Anmeldung 401, ohne Administratorkennzeichnung 403 bei allen Änderungen, ungültige Farben 400, fehlende oder veraltete Version 428 und 412, gefälschtes CSRF-Token 403, Logotyp am Inhalt geprüft 415, Größe 413, Auslieferungsköpfe, Audit) und der Vertragsabgleich; `lifecycle-check.sh` grün mit fünf Migrationen. Lokal mit Java 25.0.4 und PostgreSQL 16, nicht mit dem festgelegten PostgreSQL 18.6; maßgeblich ist CI. Frontend `npm run verify` mit 71 Unit-Tests und 45 Browserprüfungen grün (lokal Node 22 und Chromium statt Node 24 und Chrome), darunter Kontrast jedes sichtbaren Textes auf allen fünf Seiten in Hell und Dunkel, 320 Pixel ohne waagrechtes Scrollen auf allen Seiten, Tastaturverschiebung mit Ansage und Fokus, Speichern mit `If-Match` und CSRF, Konfliktanzeige, Logoablage und Ablehnung von SVG. Zusätzlich ein lokaler Durchlauf mit dem gebauten Backend und PostgreSQL hinter `vite preview`: Administrator speichert Farbe und Logo, ein zweites Konto sieht beides, sein direkter Schreibversuch wird vom Server mit 403 `auth.forbidden` abgewiesen, das Audit enthält drei Einträge. Die Screenshots im PR stammen aus diesem Durchlauf. Repository-Validator, Übersichtsprüfung, Python-Regressionstests und `git diff --check` erfolgreich.
+
+**Grenzen:** Keine Anmeldeseite (TASK-030); ohne Anmeldung zeigt die Oberfläche das Standardorange und eine Vorschau. Keine Leseschnittstelle für das Audit. Kein Screenreader- und kein Windows-Test. Wird PR #82 (Migration V0005) nach diesem PR gemergt, laufen bestehende Entwicklungsdatenbanken mit V0006 auf einen Flyway-Reihenfolgefehler; frische Datenbanken und CI sind nicht betroffen.
+
+**Nächster Schritt:** Holger prüft Gestaltung und Screenshots und entscheidet über die vorläufige Administratorkennzeichnung. Eine getrennte KI-Prüfung von Barrierefreiheit und Rechtegrenzen steht nach DEC-040 aus.
