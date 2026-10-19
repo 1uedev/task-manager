@@ -55,8 +55,21 @@ keine Gruppen/Mitgliedschaften oder Unternehmensregeln verändern und keine
 `permissions.*`-Aktionen weitergeben. Aktionen kann sie nur innerhalb ihrer eigenen Freigabe
 ändern. Für **jede** Feldregeländerung einschließlich Entfernen eines Verbots muss sie Lesen
 **und** Schreiben des Felds besitzen: Auch eine Lesefreigabe könnte sonst eine bereits
-vorhandene Schreibfreigabe eines Empfängers aktivieren. Diese konservative Delegationsgrenze
-ist ein überprüfbarer Umsetzungsvorschlag; differenziertere Delegationsprofile bleiben offen.
+vorhandene Schreibfreigabe eines Empfängers aktivieren. Ein bestehendes **Verbot** darf eine
+Projektdelegation nur ändern, entfernen oder ersetzen, wenn sie es selbst gesetzt hat
+(`permissions_field.set_by`); Verbote der Unternehmensverwaltung, anderer Delegierter und
+Regeln ohne erfasste Herkunft bleiben unberührt (Entscheidung Holger 2026-10-18, Review P7).
+Die Unternehmensverwaltung ist davon nicht eingeschränkt. Diese Delegationsgrenze ist ein
+überprüfbarer Umsetzungsvorschlag; differenziertere Delegationsprofile bleiben offen.
+
+**Schutz der letzten Administration (Review P1):** `setAction` (Entzug von `permissions.manage`
+auf Unternehmensebene) und `setMember` (Entfernen einer Mitgliedschaft) werden mit
+`PermissionDenied` abgewiesen und mit der gemeinsamen Transaktion zurückgerollt, wenn danach
+keine Gruppe mit diesem Unternehmensrecht ein Mitglied hat, das der Identitätsadapter über
+`userExists` noch kennt. Die Prüfung läuft nach der Änderung unter der exklusiven Revisionssperre,
+gleichzeitige Entzüge werden dadurch serialisiert. Grenze: Der Schutz gilt für Änderungen über
+dieses Modul. Deaktiviert oder löscht der Identitätsadapter später das letzte Konto einer
+Administrationsgruppe, muss er dieselbe Schranke auf seinem Entzugsweg selbst durchsetzen.
 
 Namen sind auf 80 Zeichen, technische Schlüssel auf 120 Zeichen begrenzt. Schlüssel sind
 kleine ASCII-Kennungen mit Ziffern, Punkt und Unterstrich. Weder vertrauliche Feldwerte noch

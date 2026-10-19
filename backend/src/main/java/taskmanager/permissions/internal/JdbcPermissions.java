@@ -85,6 +85,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
             actor.companyId(), groupId, userId);
         else jdbc.update("delete from permissions_membership where company_id = ? and group_id = ? and user_id = ?",
             actor.companyId(), groupId, userId);
+        if (!enabled) companyManagerRemains(actor);
         changed(actor, "membership.changed", groupId, userId, null, null, null, null, enabled ? "ALLOW" : "REMOVE");
     }
 
@@ -103,6 +104,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
             actor.companyId(), groupId, resource.projectId(), action);
         if (enabled) jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
             actor.companyId(), groupId, resource.projectId(), action);
+        else if (resource.projectId() == null && MANAGE.equals(action)) companyManagerRemains(actor);
         changed(actor, "action.changed", groupId, null, resource.projectId(), action, null, null, enabled ? "ALLOW" : "REMOVE");
     }
 
@@ -120,10 +122,15 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
                 || !policy.field(resource.resourceType(), field, "WRITE", resource.projectId())))
             throw new PermissionDenied();
         group(actor, groupId);
+        // A delegate may only withdraw restrictions that the delegate set; a deny of anyone else stays untouched.
+        if (!isCompanyManager(actor, policy) && jdbc.query("select effect, set_by from permissions_field where company_id = ? and group_id = ? and project_id is not distinct from ? and resource_type = ? and field_key = ? and operation = ?",
+                (rs, row) -> "DENY".equals(rs.getString(1)) && !actor.userId().equals(rs.getObject(2, UUID.class)),
+                actor.companyId(), groupId, resource.projectId(), resource.resourceType(), field, operation.name()).contains(true))
+            throw new PermissionDenied();
         jdbc.update("delete from permissions_field where company_id = ? and group_id = ? and project_id is not distinct from ? and resource_type = ? and field_key = ? and operation = ?",
             actor.companyId(), groupId, resource.projectId(), resource.resourceType(), field, operation.name());
-        if (effect != Effect.REMOVE) jdbc.update("insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect) values (?, ?, ?, ?, ?, ?, ?)",
-            actor.companyId(), groupId, resource.projectId(), resource.resourceType(), field, operation.name(), effect.name());
+        if (effect != Effect.REMOVE) jdbc.update("insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect, set_by) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            actor.companyId(), groupId, resource.projectId(), resource.resourceType(), field, operation.name(), effect.name(), actor.userId());
         changed(actor, "field." + operation.name().toLowerCase(java.util.Locale.ROOT), groupId, null,
             resource.projectId(), null, resource.resourceType(), field, effect.name());
     }
@@ -184,6 +191,16 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
         if (!actor.companyId().equals(resource.companyId())) throw new PermissionDenied();
         if (!isCompanyManager(actor, policy) && (resource.projectId() == null
                 || !policy.decide(actor, resource, MANAGE, Set.of()).allowed())) throw new PermissionDenied();
+    }
+
+    /**
+     * Runs after the change under the exclusive revision lock; a denial rolls the whole transaction back.
+     * Only accounts the identity adapter still knows count, so a group without a real member does not.
+     */
+    private void companyManagerRemains(AccessContext actor) {
+        var holders = jdbc.queryForList("select distinct m.user_id from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id where a.company_id = ? and a.project_id is null and a.action_key = ? order by m.user_id",
+            UUID.class, actor.companyId(), MANAGE);
+        if (holders.stream().noneMatch(user -> adapter().userExists(actor.companyId(), user))) throw new PermissionDenied();
     }
 
     private void group(AccessContext actor, UUID groupId) {
