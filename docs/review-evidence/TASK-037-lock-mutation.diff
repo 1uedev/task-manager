@@ -1,0 +1,13 @@
+diff --git a/backend/src/main/java/taskmanager/identity/session/SessionService.java b/backend/src/main/java/taskmanager/identity/session/SessionService.java
+index 64c8cbd..dab2dae 100644
+--- a/backend/src/main/java/taskmanager/identity/session/SessionService.java
++++ b/backend/src/main/java/taskmanager/identity/session/SessionService.java
+@@ -217,7 +217,7 @@ public class SessionService {
+     private Issued replacePassword(UUID sessionId, String current, String next, Instant now) {
+         // Setting row first, shared, as in a login: a concurrent shortening waits for this replacement and then
+         // also shortens the new session, or it commits first and this replacement reads the shortened value.
+-        int hours = duration.hoursForShare();
++        int hours = duration.hours();
+         UUID accountId = jdbc.sql("select account_id from identity_session where id = ?").param(sessionId).query(UUID.class).single();
+         AccountRecord account = accounts.findByIdForUpdate(accountId).orElseThrow();
+         // The session may have ended while the account row was locked by a concurrent change.
