@@ -1,0 +1,19 @@
+--- a/backend/src/main/java/taskmanager/identity/session/JdbcIdentityVerification.java
++++ b/backend/src/main/java/taskmanager/identity/session/JdbcIdentityVerification.java
+@@ -43,7 +43,7 @@
+         if (account == null || !account.active() || account.passwordChangeRequired()) {
+             return false;
+         }
+-        Instant now = clock.instant();
++
+         return jdbc.sql("""
+                 select s.started_at, s.expires_at, s.restricted,
+                        (select value from identity_setting where name = 'session_duration_hours') as duration_hours
+@@ -53,6 +53,7 @@
+                 """)
+             .params(sessionId, accountId)
+             .query((rs, row) -> {
++                Instant now = clock.instant();
+                 Instant started = Db.instant(rs, "started_at");
+                 Instant stored = Db.instant(rs, "expires_at");
+                 Instant current = started.plus(Duration.ofHours(Long.parseLong(rs.getString("duration_hours"))));
