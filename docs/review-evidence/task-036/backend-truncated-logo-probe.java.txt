@@ -1,0 +1,12 @@
+
+    @Test
+    void reviewProbeTruncatedImageMustNotBecomeTheCompanyLogo() {
+        Browser admin = person(true);
+        byte[] truncated = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+        Response write = admin.logo("image/png", truncated, "\"1\"");
+        Response read = admin.get("/api/v1/appearance/logo");
+        System.out.println("REVIEW_PROBE_LOGO write=" + write.status() + " read=" + read.status()
+            + " bytes=" + read.raw().length + " version="
+            + jdbc.queryForObject("select version from appearance_setting", Long.class) + " audit=" + auditCount());
+        assertEquals(415, write.status(), "A PNG signature alone is not a decodable image");
+    }
