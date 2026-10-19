@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
+| [TASK-037](#task-037-sitzungsfrist-bei-gleichzeitigem-passwortwechsel-absichern) | Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern | claude-20261019-identity-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -648,3 +649,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Abnahmekriterien:** Neue Gestaltung in Deutsch und Englisch, hell und dunkel sowie bei 320 Pixel Breite ohne horizontales Scrollen der Seite. Text auf der Akzentfarbe erreicht mindestens Kontrast 4,5, Rahmen und Fokus 3. Akzentfarbe und Logo sind nur mit dem passenden Recht änderbar; serverseitig abgelehnte Änderungen ohne Recht sind per Test belegt, ungültige Werte werden abgewiesen. Jede Drag-and-Drop-Aktion ist auch per Tastatur möglich und wird angesagt. Die Board-Vorschau ist als Beispieldaten gekennzeichnet und speichert nichts. Unit-, Backend- und Browserprüfungen grün; neue Screenshots im Ergebnis-PR. Getrennte KI prüft Barrierefreiheit und Rechtegrenzen.
 
 **Nächster Schritt:** Reservierung integrieren; danach Frontend nach Entwurf umsetzen, Einstellung im Backend mit dem Recht abstimmen und als Ergebnis-PR mit DEC-060 übergeben.
+
+## TASK-037 Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-identity-01 · **Aktualisiert:** 2026-10-19
+
+**Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-SEC-001. **Abhängigkeiten:** TASK-024 (abgenommen, in DONE.md). Verknüpfte Folgeaufgabe zu TASK-024: Die gezielte Nachprüfung der Korrekturen R1 bis R5 durch codex-20261019-identity-followup-01 ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-024-fixes-79-codex/docs/REVIEW_TASK-024_PR-79.md), [PR #83](https://github.com/1uedev/task-manager/pull/83)) fand zwei Restlücken N1 und N2. Holger hat am 19. Oktober 2026 auf einer Entscheidungskarte „Soll ich die Codex Befunde N1 und N2 zu TASK-024 als Folgeaufgabe beheben?“ die Option „Nur N1“ gewählt. Das ist der Auftrag für den unten beschriebenen Umfang im Identitätsmodul, keine Freigabe von TASK-026 bis TASK-031 und keine Änderung der Abnahme von TASK-024. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-061.
+
+**Umfang:** N1 beheben: Der Passwortwechsel (`SessionService.replacePassword`) darf bei gleichzeitiger Verkürzung der Sitzungsdauer keine Ersatzsitzung mit der alten Frist hinterlassen. Alle Wege, die eine Sitzung anlegen oder ersetzen, nehmen die Einstellung der Sitzungsdauer unter derselben gemeinsamen Sperre in fester Reihenfolge vor Konto- und Sitzungssperren und begrenzen die Ablaufgrenze auf den aktuellen Wert. N2 (Update einer Datenbank, die zwischen V0003 und V0004 bestand, gibt ein bereits benutztes Einmalpasswort wieder frei) wird nicht behoben, sondern in backend/README.md als Grenze für solche Altdatenbanken dokumentiert; es gibt keine Installation und keine echten Konten. Keine neue Migration.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (`backend/src/main/java/taskmanager/identity`), dessen Tests, backend/README.md, DECISIONS.md (DEC-061). Keine Änderung am Berechtigungsmodul, an Verträgen oder fremden Modulen.
+
+**Abnahmekriterien:** Regressionstest mit echter PostgreSQL Sperrwartebeziehung (beide Reihenfolgen von Passwortwechsel und Fristverkürzung): Nach Verkürzung auf eine Stunde und anschließender Verlängerung auf 24 Stunden bleibt das Token der Ersatzsitzung nach Ablauf der einen Stunde ungültig. Der Test scheitert auf dem Stand vor der Korrektur. Bestehende 87 Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. N2 als Grenze dokumentiert. Eine gezielte Nachprüfung durch eine getrennte KI am Korrekturcommit wird angeboten, ist aber nicht Voraussetzung der Abnahme durch Holger.
+
+**Nächster Schritt:** Reservierung integrieren; danach N1 beheben und als Ergebnis-PR mit DEC-061 übergeben.
