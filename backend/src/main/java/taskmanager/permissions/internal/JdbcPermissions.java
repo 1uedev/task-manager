@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.permissions.AccessContext;
+import taskmanager.permissions.CompanyAdministration;
 import taskmanager.permissions.Decision;
 import taskmanager.permissions.IdentityAccess;
 import taskmanager.permissions.PermissionAdministration;
@@ -24,9 +25,10 @@ import taskmanager.permissions.ResourceContext;
 /** Only reads permissions-owned tables. The revision row orders revocations and business commits. */
 @Service
 @Transactional(isolation = Isolation.READ_COMMITTED)
-public class JdbcPermissions implements Permissions, PermissionAdministration {
+public class JdbcPermissions implements Permissions, PermissionAdministration, CompanyAdministration {
     private static final String MANAGE = "permissions.manage";
     private static final String AUDIT = "permissions.audit.read";
+    private static final String COMPANY_GROUP = "Unternehmensverwaltung";
     private final JdbcTemplate jdbc;
     private final ObjectProvider<IdentityAccess> identity;
 
@@ -139,6 +141,34 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void initialize(UUID companyId, UUID administratorId) {
+        if (companyId == null || administratorId == null || !adapter().userExists(companyId, administratorId)) throw new PermissionDenied();
+        // The primary key refuses a company that already has rights; the surrounding transaction then rolls back.
+        jdbc.update("insert into permissions_revision(company_id) values (?)", companyId);
+        UUID group = UUID.randomUUID();
+        jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, COMPANY_GROUP);
+        changed(companyId, administratorId, "group.created", group, null, null, null, null, null, null);
+        jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, ?)", companyId, group, MANAGE);
+        changed(companyId, administratorId, "action.changed", group, null, null, MANAGE, null, null, "ALLOW");
+        jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, administratorId);
+        changed(companyId, administratorId, "membership.changed", group, administratorId, null, null, null, null, "ALLOW");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean remainsWithout(UUID companyId, UUID userId) {
+        if (companyId == null || userId == null) return false;
+        readCommittedWithLockTimeout();
+        // The same exclusive lock as every rights change, taken before any identity lock of the caller.
+        if (jdbc.queryForList("select revision from permissions_revision where company_id = ? for update", Long.class, companyId).size() != 1)
+            return false;
+        var holders = companyManagers(companyId);
+        if (!holders.contains(userId)) return true;
+        return holders.stream().filter(holder -> !holder.equals(userId)).anyMatch(holder -> adapter().userActive(companyId, holder));
+    }
+
+    @Override
     public List<Group> groups(AccessContext actor) {
         companyManager(actor, lock(actor, false));
         return jdbc.query("select id, name from permissions_group where company_id = ? order by name, id",
@@ -160,10 +190,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
 
     private Policy lock(AccessContext actor, boolean exclusive) {
         if (actor == null || actor.passwordChangeRequired()) throw new PermissionDenied();
-        // An older snapshot must not reuse pre-revocation group rows after waiting for the lock.
-        if (!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) connection ->
-                connection.getTransactionIsolation() == Connection.TRANSACTION_READ_COMMITTED))) throw new PermissionDenied();
-        jdbc.queryForObject("select set_config('lock_timeout', '5s', true)", String.class);
+        readCommittedWithLockTimeout();
         var versions = jdbc.queryForList("select revision from permissions_revision where company_id = ? for "
             + (exclusive ? "update" : "share"), Long.class, actor.companyId());
         if (versions.size() != 1 || versions.getFirst() != actor.rightsVersion() || !adapter().isCurrent(actor))
@@ -174,6 +201,13 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
             (rs, row) -> new Policy.Field(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)),
             actor.companyId(), actor.userId());
         return new Policy(actions, fields);
+    }
+
+    /** An older snapshot must not reuse pre-revocation group rows after waiting for the lock. */
+    private void readCommittedWithLockTimeout() {
+        if (!Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) connection ->
+                connection.getTransactionIsolation() == Connection.TRANSACTION_READ_COMMITTED))) throw new PermissionDenied();
+        jdbc.queryForObject("select set_config('lock_timeout', '5s', true)", String.class);
     }
 
     private IdentityAccess adapter() {
@@ -202,9 +236,12 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
      * deactivated account keeps the company administration alive.
      */
     private void companyManagerRemains(AccessContext actor) {
-        var holders = jdbc.queryForList("select distinct m.user_id from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id where a.company_id = ? and a.project_id is null and a.action_key = ? order by m.user_id",
-            UUID.class, actor.companyId(), MANAGE);
-        if (holders.stream().noneMatch(user -> adapter().userActive(actor.companyId(), user))) throw new PermissionDenied();
+        if (companyManagers(actor.companyId()).stream().noneMatch(user -> adapter().userActive(actor.companyId(), user))) throw new PermissionDenied();
+    }
+
+    private List<UUID> companyManagers(UUID companyId) {
+        return jdbc.queryForList("select distinct m.user_id from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id where a.company_id = ? and a.project_id is null and a.action_key = ? order by m.user_id",
+            UUID.class, companyId, MANAGE);
     }
 
     private void group(AccessContext actor, UUID groupId) {
@@ -214,10 +251,15 @@ public class JdbcPermissions implements Permissions, PermissionAdministration {
 
     private void changed(AccessContext actor, String operation, UUID group, UUID subject, UUID project,
             String action, String type, String field, String effect) {
+        changed(actor.companyId(), actor.userId(), operation, group, subject, project, action, type, field, effect);
+    }
+
+    private void changed(UUID company, UUID actor, String operation, UUID group, UUID subject, UUID project,
+            String action, String type, String field, String effect) {
         long version = jdbc.queryForObject("update permissions_revision set revision=revision+1 where company_id=? returning revision",
-            Long.class, actor.companyId());
+            Long.class, company);
         jdbc.update("insert into permissions_audit(company_id, id, actor_id, operation, group_id, subject_id, project_id, action_key, resource_type, field_key, effect, rights_version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            actor.companyId(), UUID.randomUUID(), actor.userId(), operation, group, subject, project, action, type, field, effect, version);
+            company, UUID.randomUUID(), actor, operation, group, subject, project, action, type, field, effect, version);
     }
 
     private static ResourceContext resource(Supplier<ResourceContext> supplier) {

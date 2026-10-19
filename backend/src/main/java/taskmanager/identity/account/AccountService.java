@@ -4,10 +4,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.identity.AccountDeactivationGuard;
+import taskmanager.identity.FirstAdministratorHandler;
 import taskmanager.identity.config.IdentityProperties;
 import taskmanager.platform.ApiProblemException;
 
@@ -26,15 +29,20 @@ public class AccountService {
     private final JdbcClient jdbc;
     private final Clock clock;
     private final IdentityProperties properties;
+    private final ObjectProvider<AccountDeactivationGuard> deactivationGuard;
+    private final ObjectProvider<FirstAdministratorHandler> firstAdministrator;
 
     AccountService(AccountRepository accounts, PasswordHasher hasher, OneTimePasswords oneTimePasswords,
-            JdbcClient jdbc, Clock clock, IdentityProperties properties) {
+            JdbcClient jdbc, Clock clock, IdentityProperties properties,
+            ObjectProvider<AccountDeactivationGuard> deactivationGuard, ObjectProvider<FirstAdministratorHandler> firstAdministrator) {
         this.accounts = accounts;
         this.hasher = hasher;
         this.oneTimePasswords = oneTimePasswords;
         this.jdbc = jdbc;
         this.clock = clock;
         this.properties = properties;
+        this.deactivationGuard = deactivationGuard;
+        this.firstAdministrator = firstAdministrator;
     }
 
     /** An account together with the one time password that was just issued. The password is shown only once. */
@@ -74,6 +82,10 @@ public class AccountService {
 
     @Transactional
     public AccountRecord deactivate(String actor, UUID id) {
+        // Before any identity lock: other modules order their own locks (rights) ahead of the identity locks.
+        if (!exactlyOne(deactivationGuard).mayDeactivate(id)) {
+            throw ApiProblemException.of(409, "account.last_administrator");
+        }
         // Serializes deactivations, so two administrators cannot deactivate each other at the same time.
         jdbc.sql("select pg_advisory_xact_lock(?)").param(ADMINISTRATOR_LOCK).query().singleValue();
         AccountRecord account = lock(id);
@@ -109,7 +121,8 @@ public class AccountService {
 
     /**
      * Creates the very first account. Allowed only while no account exists at all, so the command cannot be
-     * used to add administrators to a running installation.
+     * used to add administrators to a running installation. The application entry point hooks company and initial
+     * rights into the same transaction through {@link FirstAdministratorHandler}.
      */
     @Transactional
     public Issued bootstrapAdministrator(String rawUsername) {
@@ -117,7 +130,19 @@ public class AccountService {
         if (accounts.count() > 0) {
             throw ApiProblemException.of(409, "bootstrap.accounts_exist");
         }
-        return create("cli", rawUsername, null, true);
+        Issued issued = create("cli", rawUsername, null, true);
+        // Same transaction: the company and the initial rights appear with the account or not at all.
+        exactlyOne(firstAdministrator).firstAdministratorCreated(issued.account().id());
+        return issued;
+    }
+
+    /** A missing or ambiguous port is a wiring error, not a client error: nothing is changed. */
+    private static <T> T exactlyOne(ObjectProvider<T> provider) {
+        var candidates = provider.stream().limit(2).toList();
+        if (candidates.size() != 1) {
+            throw new IllegalStateException("Exactly one implementation of the port is required");
+        }
+        return candidates.getFirst();
     }
 
     /**

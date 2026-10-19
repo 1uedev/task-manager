@@ -6,7 +6,10 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
-/** Composition root. Direct sub-packages are application modules checked by Spring Modulith. */
+/**
+ * Composition root. Direct sub-packages are application modules checked by Spring Modulith. The classes in this package
+ * wire ports of one module to what another module offers, because no module may depend on the other in that direction.
+ */
 @SpringBootApplication
 public class TaskManagerApplication {
     /** Container commands that run once and exit instead of starting the web server (TASK-024). */

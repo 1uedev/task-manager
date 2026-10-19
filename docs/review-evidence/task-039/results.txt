@@ -1,0 +1,33 @@
+Reviewed PR head: 18d6774290b1d1aa1972e9fceb4819d34e45f2af
+Base main: b57a63f00210e216494daed1e86b66a821ada70d
+Session: codex-20261019-adapter-review-01
+Native PostgreSQL 18.6; Temurin 25.0.4.1+1; Maven 3.9.16.
+Unchanged verify: 120 tests passed, no failures/errors/skips.
+Additional evidence run: 21 tests, 20 passed, 1 expected expiry regression failure, 0 execution errors/skips.
+All 17 author adapter tests passed with the more specific blocker check; all 16 waits matched the known holder.
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_BOOTSTRAP_LATE allEightTablesEmpty=true
+REVIEW_EXPIRY exactWait=true oldCheckAllowed=true freshAllowed=false committedEffects=1
+REVIEW_BOOTSTRAP_CONCURRENT exactWait=true secondRefused=true singleSetup=true
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for share
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=update identity_session set revoked_at
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=identity_account where id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=identity_account where id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=update identity_session set expires_at
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=for share of s
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for share
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=identity_account where id = $1 for share
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=identity_account where id = $1 for share
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=for share of s
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=permissions_revision where company_id = $1 for update
+REVIEW_EMERGENCY resetWait=true checkWait=true oldContextsDenied=true
+Temporary later-clock experiment: 1 test passed, no errors/skips.
+REVIEW_EXPIRY exactWait=true oldCheckAllowed=false freshAllowed=false committedEffects=0
+Both source files restored byte-for-byte after experiments.
+Restored clean test: 18 tests passed, no failures/errors/skips.
+Report repository: validator and task board passed; 25 Python tests passed with PYTHONUTF8=1.
+Author CI backend run 39255208031, job 118068652135: 120 tests passed; PostgreSQL 18.6; Lifecycle check passed.
