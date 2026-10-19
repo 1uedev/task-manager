@@ -12,8 +12,6 @@ import java.util.UUID;
  * @param username normalized login name
  * @param sessionId server side session reference
  * @param level {@link AuthenticationLevel#FULL} for regular access
- * @param systemAdministrator technical marker for the accounts that administer accounts and the session
- *        duration. It is not a group or project right (TASK-025).
  * @param sessionExpiresAt end of the fixed session period
  */
 public record AccessContext(
@@ -21,6 +19,5 @@ public record AccessContext(
         String username,
         UUID sessionId,
         AuthenticationLevel level,
-        boolean systemAdministrator,
         Instant sessionExpiresAt) {
 }

@@ -29,8 +29,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import taskmanager.platform.CompanyContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
 import taskmanager.identity.ApiClient.Response;
 import taskmanager.identity.account.AccountService;
@@ -77,6 +80,8 @@ class IdentityApiTest {
     @Value("${local.server.port}") int port;
     @Autowired AccountService accounts;
     @Autowired JdbcTemplate jdbc;
+    @Autowired CompanyContext companies;
+    @Autowired PlatformTransactionManager transactions;
 
     // ---------------------------------------------------------------- helpers
 
@@ -102,7 +107,10 @@ class IdentityApiTest {
 
     /** Creates an account with a one time password, completes the forced change and returns the logged in person. */
     private Person person(boolean administrator) {
-        Issued issued = accounts.create("test", name(administrator ? "admin" : "user"), null, administrator);
+        Issued issued = accounts.create("test", name(administrator ? "admin" : "user"), null);
+        if (administrator) {
+            AdministrationFixture.grantAdministration(jdbc, companies, transactions, issued.account().id());
+        }
         ApiClient browser = browser();
         assertEquals(200, login(browser, issued.account().username(), issued.oneTimePassword()).status());
         Response changed = browser.post("/api/v1/session/password", Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG));
@@ -143,7 +151,7 @@ class IdentityApiTest {
 
     @Test
     void loginNeedsTheCsrfTokenFromTheCookie() {
-        Issued issued = accounts.create("test", name("csrf"), null, false);
+        Issued issued = accounts.create("test", name("csrf"), null);
         ApiClient noToken = browser();
         noToken.sendCsrf = false;
         assertProblem(login(noToken, issued.account().username(), issued.oneTimePassword()), 403, "auth.csrf_invalid");
@@ -163,7 +171,7 @@ class IdentityApiTest {
 
     @Test
     void anOriginOfThisHostIsAccepted() {
-        Issued issued = accounts.create("test", name("origin"), null, false);
+        Issued issued = accounts.create("test", name("origin"), null);
         ApiClient own = browser();
         own.headers.put("Origin", "http://localhost:" + port);
         assertEquals(200, login(own, issued.account().username(), issued.oneTimePassword()).status());
@@ -185,7 +193,7 @@ class IdentityApiTest {
 
     @Test
     void cookiesCarryTheDocumentedAttributes() {
-        Issued issued = accounts.create("test", name("cookie"), null, false);
+        Issued issued = accounts.create("test", name("cookie"), null);
         ApiClient browser = browser();
         Response response = login(browser, issued.account().username(), issued.oneTimePassword());
         List<String> cookies = response.setCookies();
@@ -207,7 +215,8 @@ class IdentityApiTest {
 
     @Test
     void theOneTimePasswordOnlyOpensTheForcedPasswordChange() {
-        Issued issued = accounts.create("test", name("forced"), null, true);
+        Issued issued = accounts.create("test", name("forced"), null);
+        AdministrationFixture.grantAdministration(jdbc, companies, transactions, issued.account().id());
         String username = issued.account().username();
         ApiClient browser = browser();
         Response login = login(browser, username, issued.oneTimePassword());
@@ -249,7 +258,7 @@ class IdentityApiTest {
 
     @Test
     void aConsumedOneTimePasswordCannotBeUsedAgain() {
-        Issued issued = accounts.create("test", name("consumed"), null, false);
+        Issued issued = accounts.create("test", name("consumed"), null);
         String username = issued.account().username();
         ApiClient first = browser();
         assertEquals(200, login(first, username, issued.oneTimePassword()).status());
@@ -263,7 +272,7 @@ class IdentityApiTest {
 
     @Test
     void twoSimultaneousChangesWithTheSameOneTimePasswordCannotBothSucceed() throws Exception {
-        Issued issued = accounts.create("test", name("race"), null, false);
+        Issued issued = accounts.create("test", name("race"), null);
         ApiClient first = browser();
         assertEquals(200, login(first, issued.account().username(), issued.oneTimePassword()).status());
         ApiClient second = new ApiClient(port);
@@ -311,7 +320,7 @@ class IdentityApiTest {
 
     @Test
     void theRestrictedSessionEndsAfterThirtyMinutes() {
-        Issued issued = accounts.create("test", name("slow"), null, false);
+        Issued issued = accounts.create("test", name("slow"), null);
         ApiClient browser = browser();
         assertEquals(200, login(browser, issued.account().username(), issued.oneTimePassword()).status());
         CLOCK.advance(Duration.ofMinutes(31));
@@ -449,7 +458,7 @@ class IdentityApiTest {
 
     @Test
     void secretsAreStoredOnlyAsHashes() {
-        Issued issued = accounts.create("test", name("hash"), null, false);
+        Issued issued = accounts.create("test", name("hash"), null);
         String hash = jdbc.queryForObject("select password_hash from identity_account where username = ?", String.class, issued.account().username());
         assertTrue(hash.startsWith("$argon2id$"), hash);
         assertFalse(hash.contains(issued.oneTimePassword()));
@@ -487,7 +496,8 @@ class IdentityApiTest {
     @Test
     void theLastActiveAdministratorCannotBeDeactivated() {
         Person admin = person(true);
-        jdbc.update("update identity_account set administrator = false where username <> ?", admin.username());
+        // Other tests of this class left administrations behind; this account is the only one that remains.
+        jdbc.update("delete from permissions_membership where user_id <> (select id from identity_account where username = ?)", admin.username());
         String id = idOf(admin.browser().get("/api/v1/accounts"), admin.username());
         assertProblem(admin.browser().post("/api/v1/accounts/" + id + "/deactivate", Map.of()), 409, "account.last_administrator");
         assertEquals(200, admin.browser().get("/api/v1/accounts").status());
@@ -580,7 +590,7 @@ class IdentityApiTest {
     @Test
     void passwordsAndTokensNeverReachTheLog(CapturedOutput output) {
         Person person = person(false);
-        Issued issued = accounts.create("test", name("log"), null, false);
+        Issued issued = accounts.create("test", name("log"), null);
         login(browser(), issued.account().username(), "a-wrong-password-for-the-log-test");
         assertFalse(output.getAll().contains(STRONG));
         assertFalse(output.getAll().contains(issued.oneTimePassword()));
@@ -610,7 +620,8 @@ class IdentityApiTest {
         Person admin = person(true);
         Response state = admin.browser().get("/api/v1/session");
         assertEquals(admin.username(), state.json().get("username").asString());
-        assertTrue(state.json().get("administrator").asBoolean());
+        assertEquals(List.of("accounts.manage", "appearance.manage", "session_duration.manage"),
+            java.util.stream.StreamSupport.stream(state.json().get("rights").spliterator(), false).map(node -> node.asString()).toList());
         assertNull(state.json().get("csrfToken").isNull() ? null : state.json().get("csrfToken"));
     }
 

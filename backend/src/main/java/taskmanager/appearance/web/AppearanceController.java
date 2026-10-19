@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,12 +20,14 @@ import taskmanager.appearance.internal.Logo;
 import taskmanager.identity.AccessContext;
 import taskmanager.identity.AccessContexts;
 import taskmanager.identity.AuthenticationLevel;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.AdministrationRights;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * Accent color and logo of the company. Reading needs a complete login; changing needs the administrator marker
- * from the identity module, the same marker that guards accounts and the session duration. The ETag is the
- * version of the setting and every change needs it as If-Match.
+ * Accent color and logo of the company. Reading needs a complete login; changing needs the right {@code appearance.manage}
+ * (TASK-040). The service checks it authoritatively in the transaction of the change; the endpoint refuses a request that
+ * clearly lacks it before it reads a body. The ETag is the version of the setting and every change needs it as If-Match.
  */
 @RestController
 @RequestMapping("/api/v1/appearance")
@@ -33,10 +36,12 @@ class AppearanceController {
 
     private final AppearanceService appearance;
     private final AccessContexts contexts;
+    private final ObjectProvider<AdministrationRights> rights;
 
-    AppearanceController(AppearanceService appearance, AccessContexts contexts) {
+    AppearanceController(AppearanceService appearance, AccessContexts contexts, ObjectProvider<AdministrationRights> rights) {
         this.appearance = appearance;
         this.contexts = contexts;
+        this.rights = rights;
     }
 
     record LogoBody(String contentType, int size, String url) {
@@ -102,9 +107,11 @@ class AppearanceController {
         return context;
     }
 
+    /** A snapshot of the right: it spares an unauthorized request the work, the service decides. */
     private AccessContext administrator() {
         AccessContext context = reader();
-        if (!context.systemAdministrator()) {
+        var port = rights.getIfUnique();
+        if (port == null || !port.held().contains(AdministrationRight.APPEARANCE_MANAGE)) {
             throw ApiProblemException.of(403, "auth.forbidden");
         }
         return context;

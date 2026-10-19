@@ -142,8 +142,11 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void initialize(UUID companyId, UUID administratorId) {
-        if (companyId == null || administratorId == null || !adapter().userExists(companyId, administratorId)) throw new PermissionDenied();
+    public void initialize(UUID companyId, UUID administratorId, Set<String> rights) {
+        if (companyId == null || administratorId == null || rights == null || !adapter().userExists(companyId, administratorId)) throw new PermissionDenied();
+        // Sorted, so the audit trail of a start is the same every time; MANAGE is always granted and never listed twice.
+        var granted = new java.util.TreeSet<>(keys(rights));
+        granted.remove(MANAGE);
         // The primary key refuses a company that already has rights; the surrounding transaction then rolls back.
         jdbc.update("insert into permissions_revision(company_id) values (?)", companyId);
         UUID group = UUID.randomUUID();
@@ -151,6 +154,10 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         changed(companyId, administratorId, "group.created", group, null, null, null, null, null, null);
         jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, ?)", companyId, group, MANAGE);
         changed(companyId, administratorId, "action.changed", group, null, null, MANAGE, null, null, "ALLOW");
+        for (String right : granted) {
+            jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, ?)", companyId, group, right);
+            changed(companyId, administratorId, "action.changed", group, null, null, right, null, null, "ALLOW");
+        }
         jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, administratorId);
         changed(companyId, administratorId, "membership.changed", group, administratorId, null, null, null, null, "ALLOW");
     }
@@ -166,6 +173,11 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         var holders = companyManagers(companyId);
         if (!holders.contains(userId)) return true;
         return holders.stream().filter(holder -> !holder.equals(userId)).anyMatch(holder -> adapter().userActive(companyId, holder));
+    }
+
+    @Override
+    public boolean isAdministrator(UUID companyId, UUID userId) {
+        return companyId != null && userId != null && companyManagers(companyId).contains(userId);
     }
 
     @Override

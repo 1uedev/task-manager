@@ -141,8 +141,8 @@ class IdentityPermissionsAdapterTest {
         return complete(accounts.bootstrapAdministrator(username));
     }
 
-    private Person account(String username, boolean administrator) {
-        return complete(accounts.create("test", username, null, administrator));
+    private Person account(String username) {
+        return complete(accounts.create("test", username, null));
     }
 
     /** Completes the forced password change, so the person holds a full session. */
@@ -271,20 +271,28 @@ class IdentityPermissionsAdapterTest {
         assertEquals(IdentityPermissionsAdapter.class, AopUtils.getTargetClass(adapters.values().iterator().next()));
         assertEquals(1, context.getBeansOfType(taskmanager.identity.AccountDeactivationGuard.class).size());
         assertEquals(1, context.getBeansOfType(taskmanager.identity.FirstAdministratorHandler.class).size());
+        assertEquals(1, context.getBeansOfType(taskmanager.identity.EmergencyResetPolicy.class).size());
+        assertEquals(1, context.getBeansOfType(taskmanager.platform.AdministrationRights.class).size());
     }
 
     @Test
     void bootstrapCreatesCompanyRightsAndTheSingleAdministrationGroupInOneStepAndRefusesASecondCall() {
         Person chef = bootstrap("chef");
         assertEquals(1, jdbc.queryForObject("select count(*) from platform_company", Integer.class));
-        assertEquals(3L, jdbc.queryForObject("select revision from permissions_revision where company_id = ?", Long.class, company()));
+        assertEquals(6L, jdbc.queryForObject("select revision from permissions_revision where company_id = ?", Long.class, company()));
         assertEquals(List.of("Unternehmensverwaltung"), jdbc.queryForList("select name from permissions_group", String.class));
-        assertEquals(List.of("permissions.manage|"), jdbc.queryForList(
-            "select action_key || '|' || coalesce(project_id::text, '') from permissions_action", String.class));
+        assertEquals(List.of("accounts.manage|", "appearance.manage|", "permissions.manage|", "session_duration.manage|"), jdbc.queryForList(
+            "select action_key || '|' || coalesce(project_id::text, '') from permissions_action order by action_key", String.class));
         assertEquals(List.of(chef.id()), jdbc.queryForList("select user_id from permissions_membership", UUID.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from permissions_field", Integer.class), "no business rights");
-        assertEquals(List.of("group.created", "action.changed", "membership.changed"),
+        assertEquals(List.of("group.created", "action.changed", "action.changed", "action.changed", "action.changed", "membership.changed"),
             jdbc.queryForList("select operation from permissions_audit order by rights_version", String.class));
+        assertEquals(List.of("permissions.manage", "accounts.manage", "appearance.manage", "session_duration.manage"),
+            jdbc.queryForList("select action_key from permissions_audit where action_key is not null order by rights_version", String.class),
+            "the administrative rights are audited in a fixed order");
+        for (String right : List.of("accounts.manage", "session_duration.manage", "appearance.manage")) {
+            assertTrue(allowed(chef, right), right);
+        }
         assertTrue(allowed(chef, "permissions.manage"));
         assertFalse(allowed(chef, "permissions.audit.read"), "the audit right is not granted");
         assertFalse(allowed(chef, "ticket.read"), "no implicit business access");
@@ -322,7 +330,7 @@ class IdentityPermissionsAdapterTest {
     @Test
     void theAdapterAnswersOnlyForTheCompanyOfTheInstallationAndAFullSessionOfTheSameAccount() {
         Person chef = bootstrap("chef");
-        Person other = account("other", false);
+        Person other = account("other");
         long version = permissions.currentVersion(company());
         assertTrue(allowed(chef, "permissions.manage"));
         // Anything that does not match the server side facts is refused.
@@ -346,7 +354,7 @@ class IdentityPermissionsAdapterTest {
     @Test
     void withoutACompanyNothingIsGrantedAndNothingIsProtected() {
         Person chef = bootstrap("chef");
-        Person other = account("other", false);
+        Person other = account("other");
         UUID company = company();
         long version = permissions.currentVersion(company);
         jdbc.update("delete from platform_company");
@@ -359,7 +367,7 @@ class IdentityPermissionsAdapterTest {
     @Test
     void aSessionWithoutARestrictedLevelIsRequired() {
         Person chef = bootstrap("chef");
-        var issued = accounts.create("test", "newcomer", null, false);
+        var issued = accounts.create("test", "newcomer", null);
         var restricted = sessions.login("newcomer", issued.oneTimePassword(), "198.51.100.2");
         UUID restrictedSession = sessions.resolve(restricted.sessionToken()).orElseThrow().sessionId();
         assertFalse(inTransaction(() -> verification.isCurrentFullSession(issued.account().id(), restrictedSession)),
@@ -379,7 +387,7 @@ class IdentityPermissionsAdapterTest {
         Person chef = bootstrap("chef");
         int count = 0;
         for (Revocation revocation : revocations()) {
-            Person reader = account("reader-" + (count++), false);
+            Person reader = account("reader-" + (count++));
             grantTicketRead(chef, reader);
             assertTrue(allowed(reader, "ticket.read"), revocation.name());
             AccessContext before = ctx(reader);
@@ -419,7 +427,7 @@ class IdentityPermissionsAdapterTest {
     @Test
     void aReactivatedAccountNeedsANewLoginBecauseItsSessionsEnded() {
         Person chef = bootstrap("chef");
-        Person reader = account("reader", false);
+        Person reader = account("reader");
         grantTicketRead(chef, reader);
         accounts.deactivate("test", reader.id());
         accounts.reactivate("test", reader.id());
@@ -433,7 +441,7 @@ class IdentityPermissionsAdapterTest {
         Person chef = bootstrap("chef");
         int count = 0;
         for (Revocation revocation : revocations()) {
-            Person reader = account("reader-" + (count++), false);
+            Person reader = account("reader-" + (count++));
             grantTicketRead(chef, reader);
             AccessContext reading = ctx(reader);
             Held<Boolean> business = hold(() -> {
@@ -463,7 +471,7 @@ class IdentityPermissionsAdapterTest {
         Person chef = bootstrap("chef");
         int count = 0;
         for (Revocation revocation : revocations()) {
-            Person reader = account("reader-" + (count++), false);
+            Person reader = account("reader-" + (count++));
             grantTicketRead(chef, reader);
             AccessContext reading = ctx(reader);
             assertTrue(allowed(reader, "ticket.read"), revocation.name());
@@ -490,7 +498,7 @@ class IdentityPermissionsAdapterTest {
     @Test
     void aRightsChangeWaitsForARunningCheckOfTheAffectedAccountAndTheOtherWayRound() throws Exception {
         Person chef = bootstrap("chef");
-        Person reader = account("reader", false);
+        Person reader = account("reader");
         UUID group = grantTicketRead(chef, reader);
         AccessContext reading = ctx(reader);
         Held<Boolean> business = hold(() -> {
@@ -522,7 +530,7 @@ class IdentityPermissionsAdapterTest {
     void aCheckThatWaitedForAShorteningReadsTheClockAfterTheWaitNotBefore() throws Exception {
         // Codex review of PR #97, F1: the end of the session was compared with a time read before the lock wait.
         Person chef = bootstrap("chef");
-        Person reader = account("reader", false);
+        Person reader = account("reader");
         grantTicketRead(chef, reader);
         AccessContext reading = ctx(reader);
         CLOCK.advance(Duration.ofHours(1).minusSeconds(1));
@@ -550,25 +558,25 @@ class IdentityPermissionsAdapterTest {
     private record Admins(Person chef, Person second) {
     }
 
-    /** Two accounts that both carry the identity marker, and are both in the company group. */
+    /** Two accounts that are both in the company group. */
     private Admins twoAdministrators() {
         Person chef = bootstrap("chef");
-        Person second = account("second", true);
+        Person second = account("second");
         inTransaction(() -> administration.setMember(ctx(chef), companyGroup(), second.id(), true));
         return new Admins(chef, second);
     }
 
     @Test
-    void theLastCompanyAdministrationCannotBeDeactivatedEvenWhenTheIdentityMarkerWouldAllowIt() {
+    void theLastCompanyAdministrationCannotBeDeactivatedWhileOtherActiveAccountsExist() {
         Person chef = bootstrap("chef");
-        Person marked = account("marked", true); // administrator marker, but not in the company group
+        Person outsider = account("outsider"); // an active account that is not in the company group
         ApiProblemException refused = assertThrows(ApiProblemException.class, () -> accounts.deactivate("test", chef.id()));
         assertEquals("account.last_administrator", refused.code());
         assertTrue(allowed(chef, "permissions.manage"), "nothing was deactivated and the session is intact");
         // An account outside the administration may be deactivated.
-        assertFalse(accounts.deactivate("test", marked.id()).active());
+        assertFalse(accounts.deactivate("test", outsider.id()).active());
         // Once a second account is in the administration, the first may go, and then the second is the last.
-        Person second = account("second", true);
+        Person second = account("second");
         inTransaction(() -> administration.setMember(ctx(chef), companyGroup(), second.id(), true));
         assertFalse(accounts.deactivate("test", chef.id()).active());
         assertEquals("account.last_administrator",
@@ -580,7 +588,7 @@ class IdentityPermissionsAdapterTest {
     void aDeactivatedAccountDoesNotKeepTheAdministrationAlive() {
         Admins admins = twoAdministrators();
         accounts.deactivate("test", admins.chef().id());
-        Person helper = account("helper", true);
+        Person helper = account("helper");
         // The only active holder is the second account: removing it as a member must fail although a deactivated holder remains.
         assertThrows(PermissionDenied.class, () -> inTransaction(
             () -> administration.setMember(ctx(admins.second()), companyGroup(), admins.second().id(), false)));

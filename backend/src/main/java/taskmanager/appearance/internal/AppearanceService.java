@@ -5,15 +5,19 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.identity.AccessContext;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.AdministrationRights;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * Reads and changes the single appearance row. Every change needs the version the client last saw, so two
- * administrators cannot overwrite each other unnoticed, and every change is written to the audit trail.
+ * Reads and changes the single appearance row. Every change needs the right {@code appearance.manage}, checked first in
+ * the transaction of the change (TASK-040), and the version the client last saw, so two administrators cannot overwrite each
+ * other unnoticed, and every change is written to the audit trail.
  */
 @Service
 public class AppearanceService {
@@ -22,10 +26,12 @@ public class AppearanceService {
 
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final ObjectProvider<AdministrationRights> rights;
 
-    AppearanceService(JdbcClient jdbc, Clock clock) {
+    AppearanceService(JdbcClient jdbc, Clock clock, ObjectProvider<AdministrationRights> rights) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.rights = rights;
     }
 
     public record LogoContent(String type, byte[] content) {
@@ -45,6 +51,7 @@ public class AppearanceService {
 
     @Transactional
     public Appearance changeAccent(AccessContext actor, long expectedVersion, String accentColor) {
+        requireRight();
         if (accentColor == null || !COLOR.matcher(accentColor).matches()) {
             throw ApiProblemException.of(400, "appearance.color_invalid");
         }
@@ -58,6 +65,7 @@ public class AppearanceService {
 
     @Transactional
     public Appearance replaceLogo(AccessContext actor, long expectedVersion, String declaredType, byte[] content) {
+        requireRight();
         if (content.length == 0) {
             throw ApiProblemException.of(400, "appearance.logo_empty");
         }
@@ -77,11 +85,21 @@ public class AppearanceService {
 
     @Transactional
     public Appearance removeLogo(AccessContext actor, long expectedVersion) {
+        requireRight();
         locked(expectedVersion);
         jdbc.sql("update appearance_setting set logo = null, logo_type = null, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(ts(), actor.accountId()).update();
         audit(actor, "appearance.logo_removed", null);
         return current();
+    }
+
+    /** Before anything else of the change: the rights lock and the identity locks of the requester come first. */
+    private void requireRight() {
+        var port = rights.getIfUnique();
+        if (port == null) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        port.require(AdministrationRight.APPEARANCE_MANAGE);
     }
 
     /** Locks the row and checks the version the client last saw. */

@@ -26,7 +26,7 @@ function appearance(version, accentColor, logo = null) {
 }
 
 // A small stand in for the backend: one appearance row with a version, like the real endpoint.
-function backend({ authenticated = true, administrator = true, accent = '#2563eb' } = {}) {
+function backend({ authenticated = true, mayChange = true, accent = '#2563eb' } = {}) {
   const state = { version: 3, accent, logo: null, requests: [] };
   const json = (route, status, body, headers = {}) => route.fulfill({
     status,
@@ -41,7 +41,7 @@ function backend({ authenticated = true, administrator = true, accent = '#2563eb
       const request = route.request();
       const path = new URL(request.url()).pathname;
       state.requests.push({ method: request.method(), path, ifMatch: request.headers()['if-match'] ?? null, csrf: request.headers()['x-csrf-token'] ?? null, type: request.headers()['content-type'] ?? null, body: request.postDataBuffer() });
-      if (path === '/api/v1/session') return json(route, 200, { authenticated, administrator, level: authenticated ? 'full' : null });
+      if (path === '/api/v1/session') return json(route, 200, { authenticated, level: authenticated ? 'full' : null, ...(authenticated ? { rights: mayChange ? ['accounts.manage', 'appearance.manage'] : ['accounts.manage'] } : {}) });
       if (!authenticated) return json(route, 401, { code: 'auth.required', status: 401 });
       if (path === '/api/v1/appearance/logo' && request.method() === 'GET') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       if (request.method() === 'GET') return json(route, 200, current());
@@ -154,18 +154,18 @@ describe('company appearance', () => {
   });
 
   test('the saved company color applies to everyone at start', async () => {
-    const server = backend({ administrator: false });
+    const server = backend({ mayChange: false });
     await withPage({ setup: server.install }, async (page) => {
       await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() === '#2563eb');
       assert.match(await page.getByTestId('brand-current').innerText(), /#2563EB/);
     });
   });
 
-  test('a person without the administrator marker gets a preview that is never sent', async () => {
-    const server = backend({ administrator: false });
+  test('a person without the right to change the appearance gets a preview that is never sent', async () => {
+    const server = backend({ mayChange: false });
     await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
       await page.getByTestId('appearance-mode').waitFor();
-      assert.match(await page.getByTestId('appearance-mode').innerText(), /Nur Administratoren/);
+      assert.match(await page.getByTestId('appearance-mode').innerText(), /Nur Konten mit dem Recht dazu/);
       await page.getByRole('button', { name: 'Grün' }).click();
       await accentBecomes(page, '#16a34a', 'the preview shows everywhere');
       assert.equal(await page.getByRole('button', { name: 'Für alle speichern' }).isDisabled(), true);
@@ -176,7 +176,7 @@ describe('company appearance', () => {
     });
   });
 
-  test('an administrator saves a color with the version and the CSRF token', async () => {
+  test('a holder of the right saves a color with the version and the CSRF token', async () => {
     const server = backend();
     await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');

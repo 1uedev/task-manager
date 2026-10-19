@@ -7,15 +7,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.identity.session.SessionDuration;
+import taskmanager.platform.AdministrationRight;
 
-/** The fixed session duration in hours. A shortened value reaches existing sessions at their next request. */
+/**
+ * The fixed session duration in hours; both endpoints need the right {@code session_duration.manage}. A shortened value
+ * reaches existing sessions at their next request.
+ */
 @RestController
 @RequestMapping("/api/v1/settings/session-duration")
 class SettingsController {
     private final SessionDuration duration;
+    private final AdministrationRequests administration;
 
-    SettingsController(SessionDuration duration) {
+    SettingsController(SessionDuration duration, AdministrationRequests administration) {
         this.duration = duration;
+        this.administration = administration;
     }
 
     record DurationRequest(Integer hours) {
@@ -25,15 +31,16 @@ class SettingsController {
     }
 
     @GetMapping
-    DurationBody read(HttpServletRequest request) {
-        AdministratorOnly.require(request);
-        return body();
+    DurationBody read() {
+        return administration.run(AdministrationRight.SESSION_DURATION_MANAGE, this::body);
     }
 
     @PutMapping
     DurationBody change(@RequestBody(required = false) DurationRequest body, HttpServletRequest request) {
-        var actor = AdministratorOnly.require(request);
-        duration.change(actor.view().username(), body == null ? null : body.hours());
+        var actor = AdministrationRequests.actor(request);
+        // The change locks the setting row first and calls the check behind it, in its own transaction.
+        duration.change(actor.view().username(), body == null ? null : body.hours(),
+            () -> administration.require(AdministrationRight.SESSION_DURATION_MANAGE));
         return body();
     }
 

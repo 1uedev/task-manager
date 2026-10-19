@@ -22,7 +22,7 @@ export interface paths {
          * @description Mit dem Passwort beginnt die feste Sitzungsdauer. Mit einem Einmalpasswort entsteht eine eingeschränkte Sitzung
          *     (`level` = `password_change_required`), die nur den Passwortwechsel und das Abmelden erlaubt. Das Einmalpasswort wird
          *     mit dieser ersten erfolgreichen Anmeldung verbraucht; jede weitere Anmeldung damit, auch nach Ablauf der eingeschränkten
-         *     Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Administrator ein neues ausgibt. Fehlgeschlagene
+         *     Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Konto mit dem Recht `accounts.manage` ein neues ausgibt. Fehlgeschlagene
          *     Versuche führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
          */
         post: operations["login"];
@@ -64,11 +64,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Konten auflisten (Administrator) */
+        /** Konten auflisten (Recht accounts.manage) */
         get: operations["listAccounts"];
         put?: never;
         /**
-         * Konto anlegen (Administrator)
+         * Konto anlegen (Recht accounts.manage)
          * @description Das Einmalpasswort steht nur in dieser Antwort und ist danach nicht mehr abrufbar. Es gilt 72 Stunden für genau eine erfolgreiche Anmeldung.
          */
         post: operations["createAccount"];
@@ -90,8 +90,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Konto deaktivieren (Administrator)
-         * @description Beendet alle Sitzungen des Kontos sofort. Der letzte aktive Administrator kann nicht deaktiviert werden, ebenso nicht das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`); beides meldet `account.last_administrator`.
+         * Konto deaktivieren (Recht accounts.manage)
+         * @description Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
          */
         post: operations["deactivateAccount"];
         delete?: never;
@@ -111,7 +111,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Konto wieder aktivieren (Administrator) */
+        /** Konto wieder aktivieren (Recht accounts.manage) */
         post: operations["reactivateAccount"];
         delete?: never;
         options?: never;
@@ -131,7 +131,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Passwort zurücksetzen (Administrator)
+         * Passwort zurücksetzen (Recht accounts.manage)
          * @description Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
          */
         post: operations["resetAccountPassword"];
@@ -148,10 +148,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Feste Sitzungsdauer lesen (Administrator) */
+        /** Feste Sitzungsdauer lesen (Recht session_duration.manage) */
         get: operations["getSessionDuration"];
         /**
-         * Feste Sitzungsdauer ändern (Administrator)
+         * Feste Sitzungsdauer ändern (Recht session_duration.manage)
          * @description 1 bis 720 Stunden, nicht abschaltbar. Eine Verkürzung gilt für bestehende Sitzungen ab ihrer nächsten Anfrage, eine Verlängerung nur für neue Anmeldungen.
          */
         put: operations["setSessionDuration"];
@@ -186,8 +186,12 @@ export interface components {
             displayName?: string | null;
             /** @enum {string|null} */
             level?: "full" | "password_change_required" | null;
-            /** @description Vorläufige technische Kennzeichnung bis zum Rechtemodul (TASK-025), kein Rechtemodell. */
-            administrator: boolean;
+            /**
+             * @description Die Verwaltungsrechte, die diese Sitzung gerade hält, sortiert. Nur in der Antwort auf den Zustand einer angemeldeten
+             *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
+             *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
+             */
+            rights?: ("accounts.manage" | "appearance.manage" | "session_duration.manage")[];
             /** Format: date-time */
             expiresAt?: string | null;
             /**
@@ -210,8 +214,6 @@ export interface components {
             /** @description Wird in Kleinbuchstaben gespeichert; die Eindeutigkeit ignoriert die Schreibweise. */
             username: string;
             displayName?: string | null;
-            /** @default false */
-            administrator: boolean;
         };
         Account: {
             /** Format: uuid */
@@ -219,7 +221,6 @@ export interface components {
             username: string;
             displayName?: string | null;
             active: boolean;
-            administrator: boolean;
             passwordChangeRequired: boolean;
             /** Format: date-time */
             createdAt: string;

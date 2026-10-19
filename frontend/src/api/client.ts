@@ -90,15 +90,20 @@ export interface SessionState {
   readonly authenticated: boolean;
   // Only a complete login counts; a login that still has to change its one time password does not.
   readonly full: boolean;
-  // Provisional technical marker of the identity module, not a permission model. The server decides.
-  readonly administrator: boolean;
+  // Keys of the administrative rights the session holds, as the server lists them. Only a hint for what to show: the server
+  // checks every change again and answers 403 without the right.
+  readonly rights: readonly string[];
 }
+
+export const APPEARANCE_RIGHT = 'appearance.manage';
 
 export function parseSession(value: unknown): SessionState | null {
   if (typeof value !== 'object' || value === null) return null;
   const item = value as Record<string, unknown>;
-  if (typeof item.authenticated !== 'boolean' || typeof item.administrator !== 'boolean') return null;
-  return { authenticated: item.authenticated, full: item.authenticated && item.level === 'full', administrator: item.administrator };
+  if (typeof item.authenticated !== 'boolean') return null;
+  // The list is only sent for a signed in request; anything that is not a list of texts counts as no right.
+  const rights = Array.isArray(item.rights) ? item.rights.filter((right): right is string => typeof right === 'string') : [];
+  return { authenticated: item.authenticated, full: item.authenticated && item.level === 'full', rights };
 }
 
 export interface AppearanceLogo {

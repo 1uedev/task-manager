@@ -10,7 +10,7 @@ import taskmanager.identity.account.Db;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * The administrator setting for the fixed session period in hours. A new installation starts with 24 hours
+ * The setting for the fixed session period in hours. A new installation starts with 24 hours
  * (migration). The value is always read from the database, never cached. A shortened value is written into
  * the sessions that already exist when it is set and takes effect at their next request; it is never undone for
  * them. An extended value only applies to later logins.
@@ -42,6 +42,19 @@ public class SessionDuration {
 
     @Transactional
     public void change(String actor, Integer hours) {
+        change(actor, hours, () -> {
+        });
+    }
+
+    /**
+     * Changes the setting. The setting row is locked first, as in a login and in a password change, which read it before they
+     * lock the account; {@code authorize} then runs in the same transaction and takes the rights and identity locks of the
+     * requester behind it. Whatever it throws ends the change, and nothing is written before it returned.
+     */
+    @Transactional
+    public void change(String actor, Integer hours, Runnable authorize) {
+        jdbc.sql("select value from identity_setting where name = ? for update").param(SETTING).query(String.class).single();
+        authorize.run();
         if (hours == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("hours.required"));
         }

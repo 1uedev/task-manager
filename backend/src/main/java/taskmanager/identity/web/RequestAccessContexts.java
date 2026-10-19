@@ -18,6 +18,6 @@ class RequestAccessContexts implements AccessContexts {
         }
         var view = resolved.view();
         return Optional.of(new AccessContext(view.accountId(), view.username(), resolved.sessionId(), view.level(),
-            view.administrator(), view.expiresAt()));
+            view.expiresAt()));
     }
 }

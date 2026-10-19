@@ -15,26 +15,32 @@ import org.springframework.http.HttpStatus;
 import taskmanager.identity.account.AccountRecord;
 import taskmanager.identity.account.AccountService;
 import taskmanager.identity.account.AccountService.Issued;
+import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
 
-/** Administrative account management. The one time password appears only in the response that issues it. */
+/**
+ * Administrative account management; every endpoint needs the right {@code accounts.manage}. The one time password appears
+ * only in the response that issues it.
+ */
 @RestController
 @RequestMapping("/api/v1/accounts")
 class AccountController {
     private final AccountService accounts;
+    private final AdministrationRequests administration;
 
-    AccountController(AccountService accounts) {
+    AccountController(AccountService accounts, AdministrationRequests administration) {
         this.accounts = accounts;
+        this.administration = administration;
     }
 
-    record CreateAccountRequest(String username, String displayName, Boolean administrator) {
+    record CreateAccountRequest(String username, String displayName) {
     }
 
-    record AccountBody(UUID id, String username, String displayName, boolean active, boolean administrator,
-            boolean passwordChangeRequired, Instant createdAt) {
+    record AccountBody(UUID id, String username, String displayName, boolean active, boolean passwordChangeRequired,
+            Instant createdAt) {
         static AccountBody of(AccountRecord account) {
             return new AccountBody(account.id(), account.username(), account.displayName(), account.active(),
-                account.administrator(), account.passwordChangeRequired(), account.createdAt());
+                account.passwordChangeRequired(), account.createdAt());
         }
     }
 
@@ -45,37 +51,40 @@ class AccountController {
     }
 
     @GetMapping
-    List<AccountBody> list(HttpServletRequest request) {
-        AdministratorOnly.require(request);
-        return accounts.list().stream().map(AccountBody::of).toList();
+    List<AccountBody> list() {
+        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> accounts.list().stream().map(AccountBody::of).toList());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     IssuedBody create(@RequestBody(required = false) CreateAccountRequest body, HttpServletRequest request) {
-        var actor = AdministratorOnly.require(request);
-        if (body == null || body.username() == null) {
-            throw ApiProblemException.withViolations(400, "request.invalid", List.of("username.required"));
-        }
-        return IssuedBody.of(accounts.create(actor.view().username(), body.username(), body.displayName(),
-            Boolean.TRUE.equals(body.administrator())));
+        var actor = AdministrationRequests.actor(request);
+        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> {
+            if (body == null || body.username() == null) {
+                throw ApiProblemException.withViolations(400, "request.invalid", List.of("username.required"));
+            }
+            return IssuedBody.of(accounts.create(actor.view().username(), body.username(), body.displayName()));
+        });
     }
 
     @PostMapping("/{id}/deactivate")
     AccountBody deactivate(@PathVariable UUID id, HttpServletRequest request) {
-        var actor = AdministratorOnly.require(request);
-        return AccountBody.of(accounts.deactivate(actor.view().username(), id));
+        var actor = AdministrationRequests.actor(request);
+        // The deactivation takes its rights lock itself, ahead of the check; the snapshot keeps others from reaching it.
+        administration.early(AdministrationRight.ACCOUNTS_MANAGE);
+        return AccountBody.of(accounts.deactivate(actor.view().username(), id,
+            () -> administration.require(AdministrationRight.ACCOUNTS_MANAGE)));
     }
 
     @PostMapping("/{id}/reactivate")
     AccountBody reactivate(@PathVariable UUID id, HttpServletRequest request) {
-        var actor = AdministratorOnly.require(request);
-        return AccountBody.of(accounts.reactivate(actor.view().username(), id));
+        var actor = AdministrationRequests.actor(request);
+        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> AccountBody.of(accounts.reactivate(actor.view().username(), id)));
     }
 
     @PostMapping("/{id}/password-reset")
     IssuedBody resetPassword(@PathVariable UUID id, HttpServletRequest request) {
-        var actor = AdministratorOnly.require(request);
-        return IssuedBody.of(accounts.resetPassword(actor.view().username(), id));
+        var actor = AdministrationRequests.actor(request);
+        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> IssuedBody.of(accounts.resetPassword(actor.view().username(), id)));
     }
 }
