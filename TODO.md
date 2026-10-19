@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-040](#task-040-verwaltungsrechte-statt-administratorkennzeichnung-einführen) | Verwaltungsrechte statt Administratorkennzeichnung einführen | claude-20261019-rights-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -607,3 +609,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-040 Verwaltungsrechte statt Administratorkennzeichnung einführen
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-rights-01 · **Aktualisiert:** 2026-10-19
+
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-AUTH-003, REQ-BRAND-001, REQ-SEC-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-036, TASK-038 und TASK-039 sind abgenommen und integriert; TASK-026 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Holger hat am 19. Oktober 2026 im Projektgespräch auf die Frage nach dem nächsten Auftrag mit „rechte“ geantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und keine Freigabe weiterer Fachmodule. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-064, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt.
+
+**Umfang:** Die vorläufige Kennzeichnung `administrator` (DEC-058, DEC-060) entscheidet nicht mehr über Befugnisse; diese kommen aus dem Berechtigungsmodul über den Adapter aus TASK-039. (1) Drei Unternehmensrechte als Aktionsschlüssel ohne Projektbezug (Vorschlag der Sitzung: `accounts.manage` für Konten anlegen, deaktivieren, reaktivieren und Passwort zurücksetzen, `identity.session_duration.manage` für die Sitzungsdauer, `appearance.manage` für Akzentfarbe und Logo; endgültige Schlüssel und Zuschnitt legt DEC-064 fest). (2) Die Endpunkte des Identitätsmoduls und des Erscheinungsbilds prüfen das Recht innerhalb der Transaktion der Änderung über je einen verbrauchereigenen Port, den der Anwendungseinstieg mit `Permissions.require` bedient; die Module importieren `permissions` nicht. Sperrreihenfolge bleibt Rechte, dann Identität, dann Ressource, dann Fachobjekt; ein mit der Anfrage gebildeter, inzwischen veralteter Kontext verweigert. Lesen des Erscheinungsbilds bleibt für jede vollständige Anmeldung offen. (3) `bootstrap-admin` vergibt der Gruppe „Unternehmensverwaltung“ neben `permissions.manage` genau diese drei Rechte, mit Audit; keine Fachrechte und kein Auditrecht. Für Installationen, die nach TASK-039 gestartet wurden, legt das Ergebnis fest, ob eine Vorwärtsmigration (nächste freie Nummer V0010) den vorhandenen Verwaltungsgruppen die Rechte zuordnet oder ob der Dev Bestand neu anzulegen ist. (4) Die Oberfläche erfährt ihre Befugnisse vom Server statt aus dem Kennzeichen, zum Beispiel über eine Liste der Verwaltungsrechte in der Sitzungsantwort; Vertrag, erzeugte Typen und Frontend entsprechend anpassen, Menüpunkte und Seiten für Konten, Sitzungsdauer und Erscheinungsbild nur bei vorhandenem Recht. (5) Das Kennzeichen `administrator` verliert jede Rechtewirkung. Ob Spalte und Vertragsfeld entfallen oder als bloße Anzeige bleiben, entscheidet das Ergebnis mit Begründung; der Schutz der letzten Unternehmensverwaltung bleibt über die Rechteprüfung aus TASK-039 erhalten, und der Notfallzugang des Containerbefehls für ausgesperrte Verwaltungen muss weiterhin funktionieren. Nicht Teil: HTTP Endpunkte zum Verwalten von Gruppen und Rechten, eigene Rechtegruppen für Unterstützungsrollen, Anmeldeseite, LDAP, Portalkonten, zweiter Faktor, Projekt- und Objektadapter (TASK-026), Prüfung beim Commit statt beim Sperren, P2 bis P6, die Korrekturen zu den Befunden F1 bis F3 aus PR #96 (eigene Zuweisung durch Holger).
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Ports, Endpunkte, Notfallbefehl), Erscheinungsbild (Endpunkte, Port), Anwendungseinstieg `taskmanager` für die Verdrahtung, `permissions` nur für die Initialisierung der Gruppe in `CompanyAdministration` und seine Tests, contracts/identity.openapi.yaml samt erzeugten Typen, Frontend (Sitzungs- und Rechteanzeige, Menü, Seiten), backend/README.md, backend/PERMISSIONS.md, DECISIONS.md (DEC-064), AGENTS.md, CLAUDE.md, README.md (Umfangssatz). Eine neue Migration nur, wenn die Umstellung bestehender Installationen oder der Wegfall der Spalte sie braucht (nächste freie Nummer V0010; V0006 bleibt frei). Änderungen am Appearance Controller können mit den späteren Korrekturen zu PR #96 zusammentreffen; wer später merged, führt den Stand von main nach.
+
+**Abnahmekriterien:** Jeder bisher durch die Kennzeichnung geschützte Endpunkt (Konten, Sitzungsdauer, Akzentfarbe, Logo) verlangt das jeweilige Recht: Ein Konto mit Kennzeichen, aber ohne Recht erhält 403; ein Konto mit Recht, aber ohne Kennzeichen, ist erfolgreich. Ohne Adapter, mit veraltetem Kontext, nach Entzug des Rechts oder der Mitgliedschaft, bei deaktiviertem Konto und bei abgelaufener Sitzung wird verweigert, mit Konkurrenztest auf echter PostgreSQL Sperrwartebeziehung für Rechteentzug gegen eine laufende Änderung. Das Audit der Änderungen bleibt vollständig; der Entzug eines der Rechte ändert die Rechteversion. `bootstrap-admin` legt Gruppe, Mitgliedschaft und alle Rechte atomar an. Der Notfallzugang und der Schutz der letzten Unternehmensverwaltung bleiben durch Tests belegt. Die Oberfläche blendet Verwaltung ohne Recht aus und zeigt sie mit Recht; Frontendtests und Browsertests angepasst und grün. Alle bestehenden Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. Getrennte KI prüft das Ergebnis; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-064 übergeben.
