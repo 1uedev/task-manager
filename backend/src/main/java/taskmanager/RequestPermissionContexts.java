@@ -31,7 +31,8 @@ class RequestPermissionContexts implements PermissionContexts {
     public Optional<AccessContext> current() {
         var request = identity.current();
         var companyId = company.find();
-        if (request.isEmpty() || companyId.isEmpty()) {
+        // A login that is not complete (forced password change) never yields a context, as the port promises.
+        if (request.isEmpty() || request.get().level() != AuthenticationLevel.FULL || companyId.isEmpty()) {
             return Optional.empty();
         }
         try {
@@ -39,7 +40,7 @@ class RequestPermissionContexts implements PermissionContexts {
             var who = request.get();
             // No portal accounts yet: never external, without organization.
             return Optional.of(new AccessContext(companyId.get(), who.accountId(), who.sessionId(), version,
-                who.level() != AuthenticationLevel.FULL, false, null));
+                false, false, null));
         } catch (PermissionDenied unknownCompany) {
             return Optional.empty();
         }

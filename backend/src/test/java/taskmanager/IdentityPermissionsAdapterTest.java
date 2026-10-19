@@ -518,6 +518,33 @@ class IdentityPermissionsAdapterTest {
         assertTrue(allowed(reader, "ticket.read"));
     }
 
+    @Test
+    void aCheckThatWaitedForAShorteningReadsTheClockAfterTheWaitNotBefore() throws Exception {
+        // Codex review of PR #97, F1: the end of the session was compared with a time read before the lock wait.
+        Person chef = bootstrap("chef");
+        Person reader = account("reader", false);
+        grantTicketRead(chef, reader);
+        AccessContext reading = ctx(reader);
+        CLOCK.advance(Duration.ofHours(1).minusSeconds(1));
+        assertTrue(allowed(reader, "ticket.read"), "one second before the end of the shortened period");
+        Held<Boolean> shortening = hold(() -> {
+            duration.change("test", 1);
+            return true;
+        });
+        Future<Boolean> check = POOL.submit(() -> {
+            try {
+                inTransaction(() -> permissions.require(reading, companyScope(), "ticket.read", Set.of(), Set.of()));
+                return true;
+            } catch (PermissionDenied denied) {
+                return false;
+            }
+        });
+        assertTrue(waitsAt("for share of s"), "the check must wait at the session row for the open shortening");
+        CLOCK.advance(Duration.ofSeconds(2));
+        assertTrue(shortening.finish());
+        assertFalse(check.get(15, TimeUnit.SECONDS), "the period ended while the check waited, so the check must deny");
+    }
+
     // ------------------------------------------------------------------------------------------ concurrency: last administration
 
     private record Admins(Person chef, Person second) {
