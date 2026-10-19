@@ -56,9 +56,14 @@ keine Gruppen/Mitgliedschaften oder Unternehmensregeln verändern und keine
 ändern. Für **jede** Feldregeländerung einschließlich Entfernen eines Verbots muss sie Lesen
 **und** Schreiben des Felds besitzen: Auch eine Lesefreigabe könnte sonst eine bereits
 vorhandene Schreibfreigabe eines Empfängers aktivieren. Ein bestehendes **Verbot** darf eine
-Projektdelegation nur ändern, entfernen oder ersetzen, wenn sie es selbst gesetzt hat
-(`permissions_field.set_by`); Verbote der Unternehmensverwaltung, anderer Delegierter und
-Regeln ohne erfasste Herkunft bleiben unberührt (Entscheidung Holger 2026-10-18, Review P7).
+Projektdelegation nur ändern, entfernen oder ersetzen, wenn sie es selbst **als Delegation**
+gesetzt hat (`permissions_field.set_by` und `set_by_company = false`); Verbote der
+Unternehmensverwaltung, anderer Delegierter und Regeln ohne erfasste Herkunft bleiben
+unberührt (Entscheidung Holger 2026-10-18, Review P7). Die Herkunft hält fest, ob die setzende
+Person zum Zeitpunkt der Setzung Unternehmensverwaltung war. Ein Firmenverbot bleibt deshalb
+auch dann geschützt, wenn dieselbe Person die Unternehmensrolle später verliert und eine
+Projektdelegation behält (Entscheidung Holger 2026-10-19, Nachprüfung K1, DEC-062). Regeln aus
+der Zeit vor V0007 haben keine Rollenangabe (`NULL`) und zählen als geschützt.
 Die Unternehmensverwaltung ist davon nicht eingeschränkt. Diese Delegationsgrenze ist ein
 überprüfbarer Umsetzungsvorschlag; differenziertere Delegationsprofile bleiben offen.
 
@@ -66,7 +71,9 @@ Die Unternehmensverwaltung ist davon nicht eingeschränkt. Diese Delegationsgren
 auf Unternehmensebene) und `setMember` (Entfernen einer Mitgliedschaft) werden mit
 `PermissionDenied` abgewiesen und mit der gemeinsamen Transaktion zurückgerollt, wenn danach
 keine Gruppe mit diesem Unternehmensrecht ein Mitglied hat, das der Identitätsadapter über
-`userExists` noch kennt. Die Prüfung läuft nach der Änderung unter der exklusiven Revisionssperre,
+`userActive` als aktives internes Konto der Firma meldet; ein bekanntes, aber deaktiviertes
+Konto zählt nicht (Nachprüfung R1, DEC-062). `userExists` bleibt für das Hinzufügen von
+Mitgliedern bestehen. Die Prüfung läuft nach der Änderung unter der exklusiven Revisionssperre,
 gleichzeitige Entzüge werden dadurch serialisiert. Grenze: Der Schutz gilt für Änderungen über
 dieses Modul. Deaktiviert oder löscht der Identitätsadapter später das letzte Konto einer
 Administrationsgruppe, muss er dieselbe Schranke auf seinem Entzugsweg selbst durchsetzen.

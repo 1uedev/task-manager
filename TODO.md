@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 26 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
-| [TASK-038](#task-038-rechtemodul-aktive-administration-und-herkunft-von-feldverboten-nachbessern) | Rechtemodul: aktive Administration und Herkunft von Feldverboten nachbessern | claude-20261019-permissions-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -73,6 +72,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 | [TASK-037](#task-037-sitzungsfrist-bei-gleichzeitigem-passwortwechsel-absichern) | Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern | claude-20261019-identity-01 | 2026-10-19 |
+| [TASK-038](#task-038-rechtemodul-aktive-administration-und-herkunft-von-feldverboten-nachbessern) | Rechtemodul: aktive Administration und Herkunft von Feldverboten nachbessern | claude-20261019-permissions-01 | 2026-10-19 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -671,7 +671,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-038 Rechtemodul: aktive Administration und Herkunft von Feldverboten nachbessern
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-permissions-01 · **Aktualisiert:** 2026-10-19
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261019-permissions-01 · **Aktualisiert:** 2026-10-19
 
 **Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005. **Abhängigkeiten:** TASK-025 (BEREIT ZUR PRÜFUNG, Nachbesserung P1 und P7 aus PR #82 integriert). Verknüpfte Folgeaufgabe zu TASK-025: Die gezielte Nachprüfung von PR #82 durch codex-20261019-permissions-followup-01 ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-025-pr82-codex/docs/REVIEW_TASK-025_PR-82.md), [PR #87](https://github.com/1uedev/task-manager/pull/87)) fand R1 (ein deaktiviertes Konto zählt als verbleibende Administration) und K1 (ein früherer Unternehmensverwalter kann sein eigenes Firmenverbot als Delegierter aufheben). Holger hat am 19. Oktober 2026 auf einer Entscheidungskarte „Soll ich R1 und K1 aus dem Codex Bericht zu PR #82 beheben?“ die Option „R1 und K1 streng“ gewählt. Das ist der Auftrag für den unten beschriebenen Umfang im Berechtigungsmodul, keine Freigabe von TASK-026 bis TASK-031, keine Abnahme von TASK-025 und keine Entscheidung zu P2 bis P6. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-062.
 
@@ -681,4 +681,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Je ein ablehnender Regressionstest für Entzug über `setMember` und über `setAction`, wenn das einzige weitere Mitglied deaktiviert ist (Aktivität des Testadapters, nicht bloße Existenz), plus ein Fall, in dem ein aktives Mitglied verbleibt. Für K1 ein Test des Rollenwechsels aus dem Bericht (Firmenverbot bleibt für die ehemalige Verwaltung geschützt) und ein Test, dass eigene Delegationsverbote weiter änderbar sind. Die neuen Tests scheitern auf dem Stand vor der Korrektur. Migrationstest vom Stand V0005 mit vorhandener Regel (Herkunft bleibt geschützt). Bestehende Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. Eine gezielte Nachprüfung durch eine getrennte KI am Korrekturcommit wird angeboten, ist aber nicht Voraussetzung der Abnahme von TASK-025 durch Holger.
 
-**Nächster Schritt:** Reservierung integrieren; danach R1 und K1 umsetzen und als Ergebnis PR mit DEC-062 übergeben.
+**Ergebnis:** (R1) `IdentityAccess` hat den neuen Portbefehl `userActive(companyId, userId)` (Standard: verweigert); `JdbcPermissions.companyManagerRemains` zählt damit nur aktive Konten. `userExists` bleibt nur für das Hinzufügen von Mitgliedern. (K1) Migration `V0007__permissions_rule_origin_role.sql` ergänzt `permissions_field.set_by_company`; `setField` speichert, ob mit Unternehmensverwaltung gesetzt wurde, und eine Delegation ändert ein Verbot nur, wenn Urheber und `set_by_company = false` stimmen. Alte Zeilen (`NULL`) sind geschützt. DEC-059 ist durch DEC-062 berichtigt, backend/PERMISSIONS.md und backend/README.md sind angepasst. Neue Tests in `PermissionsIntegrationTest`: deaktiviertes Konto zählt nicht (beide Entzugswege mit Rollback von Revision und Audit, danach aktiv erlaubt), Firmenverbot nach Rollenverlust geschützt und eigenes Delegationsverbot weiter änderbar, Upgrade von V0005 behält Regel, Urheber und Prüfsummen. R1 wurde auf dem Stand vor der Korrektur geprüft: Der neue Test scheitert dort an der erwarteten Ablehnung; der K1 Test scheitert dort an der fehlenden Herkunftsangabe (die Verhaltensprobe von K1 liefert der Bericht aus PR #87). Grenze: Gegen den echten Identitätsadapter ist `userActive` weiterhin nur mit Testfixture belegt; der Adapter bleibt offen und unzugewiesen.
+
+**Prüfungen:** Lokal auf PostgreSQL 16 und Java 21: `./mvnw clean verify` mit 92 Tests (bisher 89) ohne Fehler, `backend/scripts/lifecycle-check.sh` bestanden, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests` und `git diff --check`. CI auf PostgreSQL 18.6 wird im Ergebnis PR verlinkt. Migrationsnummer: V0007, weil V0006 für TASK-036 (PR #85) vorgesehen ist; bis dahin enthalten die Testlisten die Lücke bei 0006 und müssen beim späteren Merge der zweiten Seite angeglichen werden. Nicht geprüft: eine getrennte KI Nachprüfung des Korrekturcommits.
+
+**Nächster Schritt:** Holger nimmt TASK-038 mit TASK-025 ab oder fordert eine gezielte Nachprüfung am Korrekturcommit an; danach Verschiebung nach DONE.md in einem eigenen PR.
