@@ -1,0 +1,178 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Erscheinungsbild (TASK-036)
+  version: 0.1.0
+  description: |
+    Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur ein Administrator
+    (vorläufige technische Kennzeichnung aus der Identität, bis das Rechtemodul angebunden ist). Sitzung, CSRF und
+    `Cache-Control: no-store` gelten wie im Identitätsvertrag. Der `ETag` ist die Version der Einstellung; jede Änderung
+    braucht sie als `If-Match`. Fehlt der Kopf, antwortet der Server mit 428, passt er nicht, mit 412.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /appearance:
+    get:
+      operationId: getAppearance
+      summary: Aktuelles Erscheinungsbild
+      responses:
+        '200':
+          description: Akzentfarbe, Logo und Version
+          headers:
+            ETag: {schema: {type: string}, description: 'Version in Anführungszeichen, zum Beispiel "3"'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Appearance'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: changeAccentColor
+      summary: Akzentfarbe ändern (nur Administrator)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AccentRequest'}
+      responses:
+        '200':
+          description: Geändert. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Appearance'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /appearance/logo:
+    get:
+      operationId: getLogo
+      summary: Logo als Bild
+      description: |
+        Ausgeliefert mit `X-Content-Type-Options: nosniff` und `Content-Security-Policy: default-src 'none'; sandbox`.
+        Ohne Logo 404 mit `appearance.logo_not_found`.
+      responses:
+        '200':
+          description: Bilddaten
+          content:
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: replaceLogo
+      summary: Logo ersetzen (nur Administrator)
+      description: |
+        PNG, JPEG oder WebP bis 512 KiB als Rohdaten. Der Typ wird an den ersten Bytes erkannt und muss zum
+        `Content-Type` passen. SVG wird nicht angenommen, weil es Skript enthalten kann.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          image/png: {schema: {type: string, format: binary}}
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/webp: {schema: {type: string, format: binary}}
+      responses:
+        '200':
+          description: Ersetzt. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Appearance'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeLogo
+      summary: Logo entfernen (nur Administrator)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Entfernt. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Appearance'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag der zuletzt gelesenen Fassung.
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.logo_empty,
+        appearance.logo_type_invalid, appearance.logo_not_found, appearance.version_conflict,
+        appearance.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
+        auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    AccentRequest:
+      type: object
+      additionalProperties: false
+      required: [accentColor]
+      properties:
+        accentColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+    Logo:
+      type: object
+      required: [contentType, size, url]
+      properties:
+        contentType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+        size: {type: integer, minimum: 1, maximum: 524288}
+        url: {type: string, description: 'Pfad auf dem eigenen Server, mit der Version als Abfrageparameter'}
+    Appearance:
+      type: object
+      required: [accentColor, defaultAccentColor, logo, version, updatedAt]
+      properties:
+        accentColor: {type: string, pattern: '^#[0-9a-f]{6}$'}
+        defaultAccentColor: {type: string, pattern: '^#[0-9a-f]{6}$'}
+        logo:
+          oneOf:
+            - $ref: '#/components/schemas/Logo'
+            - type: 'null'
+        version: {type: integer, minimum: 1}
+        updatedAt: {type: string, format: date-time}

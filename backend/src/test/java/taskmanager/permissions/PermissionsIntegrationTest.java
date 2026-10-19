@@ -300,7 +300,7 @@ class PermissionsIntegrationTest {
             company, group, PROJECT, DELEGATE);
         var applied = upgrade.queryForList("select version,checksum from flyway_schema_history where success order by installed_rank");
         org.flywaydb.core.Flyway.configure().dataSource(url, TestDatabase.username(), TestDatabase.password()).load().migrate();
-        assertEquals(applied, upgrade.queryForList("select version,checksum from flyway_schema_history where success and version<>'0007' order by installed_rank"));
+        assertEquals(applied, upgrade.queryForList("select version,checksum from flyway_schema_history where success and version<='0005' order by installed_rank"));
         assertEquals("DENY", upgrade.queryForObject("select effect from permissions_field where group_id=?", String.class, group));
         assertEquals(DELEGATE, upgrade.queryForObject("select set_by from permissions_field where group_id=?", UUID.class, group));
         assertNull(upgrade.queryForObject("select set_by_company from permissions_field where group_id=?", Boolean.class, group));

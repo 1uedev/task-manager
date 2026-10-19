@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
@@ -42,7 +42,7 @@ class DatabaseFoundationTest {
         List<String> tables = jdbc.queryForList(
             "select table_name from information_schema.tables where table_schema = current_schema() order by table_name",
             String.class);
-        assertEquals(List.of("flyway_schema_history", "identity_account", "identity_audit_event", "identity_login_throttle",
+        assertEquals(List.of("appearance_audit_event", "appearance_setting", "flyway_schema_history", "identity_account", "identity_audit_event", "identity_login_throttle",
             "identity_session", "identity_setting", "permissions_action", "permissions_audit", "permissions_field",
             "permissions_group", "permissions_membership", "permissions_revision"), tables);
         assertEquals(0, jdbc.queryForObject("select count(*) from identity_account", Integer.class), "no account is seeded");

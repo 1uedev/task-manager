@@ -42,7 +42,8 @@ jobs:
         run: |
           mkdir -p test-results
           npm run verify 2>&1 | tee test-results/verify.txt
-          git diff --exit-code -- src/api/generated/api.d.ts
+          git diff --exit-code -- src/api/generated/
+          test -z "$(git status --porcelain -- src/api/generated/)"
       - name: Real browser checks in German and English with keyboard
         run: npm run test:browser 2>&1 | tee test-results/browser.txt
       - name: No skipped tests

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { brandToCssVariables, contrastRatio, darkSyntheticBrand, defaultBrand, derivePalette, parseBrand, syntheticBrand, type Brand } from '../src/brand/brand.ts';
+import { ACCENT_PRESETS, accentBrand, brandToCssVariables, contrastRatio, DEFAULT_ACCENT, defaultBrand, derivePalette, parseBrand, textOn, type Brand } from '../src/brand/brand.ts';
+
+const darkBrand = accentBrand(DEFAULT_ACCENT, null, 'dark');
 
 test('built in brandings are valid and readable', () => {
-  for (const brand of [defaultBrand, syntheticBrand, darkSyntheticBrand]) {
+  for (const brand of [defaultBrand, darkBrand, ...ACCENT_PRESETS.flatMap(({ color }) => [accentBrand(color, null, 'light'), accentBrand(color, null, 'dark')])]) {
     const result = parseBrand(brand);
     assert.equal(result.ok, true);
     assert.ok(contrastRatio(brand.colors.onPrimary, brand.colors.primary) >= 4.5);
@@ -23,7 +25,7 @@ test('only a complete setting is accepted', () => {
 });
 
 test('unreadable color combinations are rejected', () => {
-  const result = parseBrand({ ...defaultBrand, colors: { ...defaultBrand.colors, primary: '#ffff00' } });
+  const result = parseBrand({ ...defaultBrand, colors: { ...defaultBrand.colors, primary: '#ffff00', onPrimary: '#ffffff' } });
   assert.deepEqual(result, { ok: false, problems: ['contrast.primary'] });
 });
 
@@ -51,15 +53,15 @@ test('names are limited and trimmed', () => {
 
 test('css variables are produced from the validated setting only', () => {
   assert.deepEqual(brandToCssVariables(defaultBrand), {
-    '--brand-primary': '#1f4e79',
-    '--brand-on-primary': '#ffffff',
+    '--brand-primary': '#f97316',
+    '--brand-on-primary': '#1c0f05',
     '--brand-background': '#ffffff',
-    '--brand-text': '#1b1b1b',
-    '--muted': '#545454',
-    '--border': '#828282',
+    '--brand-text': '#17140f',
+    '--muted': '#514f4b',
+    '--border': '#7f7e7b',
     '--error': '#8f1d1d',
     '--focus': '#b35c00',
-    '--link': '#1f4e79',
+    '--link': '#b55714',
   });
 });
 
@@ -103,7 +105,7 @@ function ratiosOf(brand: Brand): Record<string, number> {
 }
 
 test('secondary colors keep their contrast on a dark branding', () => {
-  const ratios = ratiosOf(darkSyntheticBrand);
+  const ratios = ratiosOf(darkBrand);
   for (const name of ['muted', 'error', 'link']) assert.ok(ratios[name]! >= 4.5, `${name} ${ratios[name]}`);
   for (const name of ['border', 'focus']) assert.ok(ratios[name]! >= 3, `${name} ${ratios[name]}`);
 });
@@ -127,4 +129,34 @@ test('every accepted branding yields a readable palette', () => {
     }
   }
   assert.ok(accepted > 200, `only ${accepted} combinations were checked`);
+});
+
+test('the default accent is a saturated orange with dark text, because white on it reaches only 2.8', () => {
+  assert.equal(DEFAULT_ACCENT, '#f97316');
+  assert.equal(textOn(DEFAULT_ACCENT), '#1c0f05');
+  assert.ok(contrastRatio('#ffffff', DEFAULT_ACCENT) < 3);
+});
+
+test('text on any accent an administrator can pick reaches 4.5', () => {
+  let checked = 0;
+  for (let red = 0; red <= 255; red += 17) {
+    for (let green = 0; green <= 255; green += 17) {
+      for (let blue = 0; blue <= 255; blue += 17) {
+        const accent = `#${[red, green, blue].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+        assert.ok(contrastRatio(textOn(accent), accent) >= 4.5, accent);
+        for (const surface of ['light', 'dark'] as const) {
+          const brand = accentBrand(accent, null, surface);
+          assert.equal(parseBrand(brand).ok, true, `${accent} ${surface}`);
+          assert.ok(contrastRatio(derivePalette(brand).link, brand.colors.background) >= 4.5, `${accent} ${surface} link`);
+        }
+        checked += 1;
+      }
+    }
+  }
+  assert.equal(checked, 4096);
+});
+
+test('an invalid accent falls back to the default instead of reaching the style sheet', () => {
+  for (const value of ['red', '#fff', 'url(x)', '#12345g']) assert.equal(accentBrand(value, null, 'light').colors.primary, DEFAULT_ACCENT);
+  assert.equal(accentBrand('#1D4ED8', null, 'light').colors.primary, '#1d4ed8');
 });

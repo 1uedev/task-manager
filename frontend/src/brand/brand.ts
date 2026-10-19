@@ -11,24 +11,6 @@ export interface Brand {
   };
 }
 
-export const defaultBrand: Brand = {
-  name: 'Task Manager',
-  logoUrl: null,
-  colors: { primary: '#1f4e79', onPrimary: '#ffffff', background: '#ffffff', text: '#1b1b1b' },
-};
-
-export const syntheticBrand: Brand = {
-  name: 'Beispiel GmbH',
-  logoUrl: null,
-  colors: { primary: '#7a2e0e', onPrimary: '#ffffff', background: '#fdf8f3', text: '#2a1a12' },
-};
-
-export const darkSyntheticBrand: Brand = {
-  name: 'Nacht AG',
-  logoUrl: null,
-  colors: { primary: '#ffffff', onPrimary: '#000000', background: '#000000', text: '#ffffff' },
-};
-
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const MIN_CONTRAST = 4.5;
 
@@ -46,12 +28,50 @@ export function contrastRatio(foreground: string, background: string): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+// TASK-036: the company sets one accent color (and a logo); light and dark surfaces are fixed. Text on the
+// accent is chosen here so that it always reaches 4.5, whatever color an administrator picks.
+export const DEFAULT_ACCENT = '#f97316';
+export const ACCENT_PRESETS = [
+  { id: 'orange', color: '#f97316' },
+  { id: 'amber', color: '#f59e0b' },
+  { id: 'red', color: '#e11d48' },
+  { id: 'green', color: '#16a34a' },
+  { id: 'blue', color: '#2563eb' },
+  { id: 'violet', color: '#7c3aed' },
+] as const;
+
+export type Surface = 'light' | 'dark';
+const SURFACES: Readonly<Record<Surface, { readonly background: string; readonly text: string }>> = {
+  light: { background: '#ffffff', text: '#17140f' },
+  dark: { background: '#121110', text: '#efebe6' },
+};
+const WARM_INK = '#1c0f05';
+
+export function isAccentColor(value: unknown): value is string {
+  return typeof value === 'string' && HEX.test(value);
+}
+
+// A warm dark ink or white, whichever reads better; pure black or white as the last resort. For every color one
+// of black and white reaches at least 4.58, so the result always meets 4.5.
+export function textOn(accent: string): string {
+  const preferred = contrastRatio(WARM_INK, accent) >= contrastRatio('#ffffff', accent) ? WARM_INK : '#ffffff';
+  if (contrastRatio(preferred, accent) >= MIN_CONTRAST) return preferred;
+  return contrastRatio('#000000', accent) >= contrastRatio('#ffffff', accent) ? '#000000' : '#ffffff';
+}
+
+export function accentBrand(accent: string, logoUrl: string | null, surface: Surface): Brand {
+  const primary = isAccentColor(accent) ? accent.toLowerCase() : DEFAULT_ACCENT;
+  return { name: 'Task Manager', logoUrl, colors: { primary, onPrimary: textOn(primary), ...SURFACES[surface] } };
+}
+
+export const defaultBrand: Brand = accentBrand(DEFAULT_ACCENT, null, 'light');
+
 // A logo is either a path on the own origin or an https address. The value is parsed against a fixed
 // base instead of being judged by its first characters: browsers treat a backslash like a slash and drop
 // tabs and line breaks, so a value that starts with a slash and a backslash would otherwise point to another host.
 const LOGO_BASE = 'https://brand.invalid';
 
-function acceptableLogo(url: string): string | null {
+export function acceptableLogo(url: string): string | null {
   if (url === '' || url.length > 2048 || /[\u0000-\u0020\u007f-\u009f\\]/.test(url)) return null;
   try {
     if (url.startsWith('/')) {
@@ -133,8 +153,18 @@ export function derivePalette(brand: Brand): Palette {
     border: contrastRatio(outline, background) >= 3 ? outline : text,
     error: best(['#8f1d1d', '#ff9d9d'], background, MIN_CONTRAST, text),
     focus: best(['#b35c00', '#ffbf47'], background, 3, text),
-    link: best([primary], background, MIN_CONTRAST, text),
+    link: ink(primary, text, background),
   };
+}
+
+// The accent darkened (or lightened) toward the text color just enough to be readable as text on the page,
+// used for links and accent colored labels. The text color itself always reaches 4.5, so the loop ends.
+function ink(primary: string, text: string, background: string): string {
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = mix(text, primary, step / 20);
+    if (contrastRatio(candidate, background) >= MIN_CONTRAST) return candidate;
+  }
+  return text;
 }
 
 export function brandToCssVariables(brand: Brand): Record<string, string> {

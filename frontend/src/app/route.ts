@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const routes = ['start', 'states', 'form'] as const;
+export const routes = ['start', 'board', 'states', 'form', 'appearance'] as const;
 export type Route = (typeof routes)[number];
 
 export function routeFromHash(hash: string): Route {

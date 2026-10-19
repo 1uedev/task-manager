@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { resolveLanguage, translate, type Params } from './core.ts';
 import { registry, supportedLanguages, type MessageKey } from './index.ts';
-import { readStoredLanguage, storeLanguage } from './storage.ts';
+import { readStoredLanguage, storeLanguage } from '../app/preferences.ts';
 
 interface I18n {
   readonly language: string;

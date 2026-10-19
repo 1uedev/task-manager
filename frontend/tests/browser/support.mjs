@@ -44,9 +44,11 @@ export async function launch() {
 }
 
 // Opens a page and records everything the application writes to the console or throws.
-export async function open(browser, url, { locale = 'de-DE', viewport = { width: 1100, height: 800 } } = {}) {
-  const context = await browser.newContext({ locale, viewport });
+// `setup` runs before the first navigation, for example to answer API requests in place of the backend.
+export async function open(browser, url, { locale = 'de-DE', viewport = { width: 1100, height: 800 }, colorScheme = 'light', setup } = {}) {
+  const context = await browser.newContext({ locale, viewport, colorScheme });
   const page = await context.newPage();
+  if (setup) await setup(context, page);
   const problems = [];
   page.on('console', (message) => {
     if (['warning', 'error'].includes(message.type())) problems.push(`${message.type()}: ${message.text()}`);
