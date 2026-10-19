@@ -39,7 +39,8 @@ import taskmanager.identity.session.SessionService;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * Regression tests for the five findings of the security review in PR #77 (R1 to R5). Each test is the
+ * Regression tests for the five findings of the security review in PR #77 (R1 to R5) and finding N1 of the follow-up
+ * review in PR #83 (TASK-037). Each test is the
  * counterexample of the review turned around: it fails on the code of the review and passes with the
  * corrections. Production defaults are used on purpose; in particular the throttle thresholds are not raised
  * as they are in {@link IdentityApiTest}.
@@ -200,6 +201,99 @@ class IdentityHardeningTest {
         // Later logins do get the extended period.
         Full later = fullAccount();
         assertEquals(Duration.ofHours(24), Duration.between(later.issued().view().startedAt(), later.issued().view().expiresAt()));
+    }
+
+    // ------------------------------------------------------------------------------------------------ N1 (TASK-037)
+
+    /**
+     * Finding N1 of the review in PR #83: a password change that waits for a row lock must not escape a concurrent
+     * shortening of the period. The change takes the setting row shared before anything else, so the shortening
+     * waits for it and then also shortens the new session.
+     */
+    @Test
+    void n1ARotationInFlightIsShortenedByAConcurrentChangeOfThePeriod() throws Exception {
+        Full target = fullAccount();
+        UUID sessionId = sessions.resolve(target.issued().sessionToken()).orElseThrow().sessionId();
+        Instant started = target.issued().view().startedAt();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(3)) {
+            // Holds the session row, so the rotation stops at the revocation of the old session.
+            var blocker = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.queryForObject("select restricted from identity_session where id = ? for update", Boolean.class, sessionId);
+                locked.countDown();
+                await(release);
+            }));
+            try {
+                assertTrue(locked.await(5, TimeUnit.SECONDS));
+                var rotation = pool.submit(() -> sessions.changePassword(sessionId, STRONG, "Review-New-Password-92", "n1"));
+                assertTrue(waitsAt("update identity_session set revoked_at%"), "the rotation did not reach the revocation");
+                var shortening = pool.submit(() -> duration.change("review", 1));
+                assertTrue(waitsAt("update identity_setting%"),
+                    "the shortening must wait for the rotation at the setting row, not pass it");
+                release.countDown();
+                blocker.get(10, TimeUnit.SECONDS);
+                var replacement = rotation.get(10, TimeUnit.SECONDS);
+                shortening.get(10, TimeUnit.SECONDS);
+                assertEquals(started.plus(Duration.ofHours(1)), storedEnd(replacement.sessionToken()),
+                    "the replacement session must carry the shortened end");
+                CLOCK.advance(Duration.ofHours(2));
+                assertTrue(sessions.resolve(replacement.sessionToken()).isEmpty(), "expired under the one hour setting");
+                duration.change("review", 24);
+                assertTrue(sessions.resolve(replacement.sessionToken()).isEmpty(), "extending must not revive the replacement");
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
+    @Test
+    void n1BARotationThatWaitsForAnUncommittedShorteningReadsTheShortenedPeriod() throws Exception {
+        Full target = fullAccount();
+        UUID sessionId = sessions.resolve(target.issued().sessionToken()).orElseThrow().sessionId();
+        Instant started = target.issued().view().startedAt();
+        CountDownLatch written = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            // The shortening is written but not committed yet and holds the setting row.
+            var shortening = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                duration.change("review", 1);
+                written.countDown();
+                await(release);
+            }));
+            try {
+                assertTrue(written.await(5, TimeUnit.SECONDS));
+                var rotation = pool.submit(() -> sessions.changePassword(sessionId, STRONG, "Review-New-Password-92", "n1"));
+                assertTrue(waitsAt("select value from identity_setting%"), "the rotation must wait at the setting row");
+                release.countDown();
+                shortening.get(10, TimeUnit.SECONDS);
+                var replacement = rotation.get(10, TimeUnit.SECONDS);
+                assertEquals(started.plus(Duration.ofHours(1)), storedEnd(replacement.sessionToken()));
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
+    private Instant storedEnd(String sessionToken) {
+        return jdbc.queryForObject("select expires_at from identity_session where token_hash = ?",
+            (rs, row) -> taskmanager.identity.account.Db.instant(rs, "expires_at"), taskmanager.identity.session.Tokens.hash(sessionToken));
+    }
+
+    private boolean waitsAt(String queryPrefix) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            boolean waiting = Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from pg_stat_activity
+                where datname = current_database() and pid <> pg_backend_pid()
+                and ltrim(query) ilike ? and cardinality(pg_blocking_pids(pid)) > 0)
+                """, Boolean.class, queryPrefix));
+            if (waiting) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------------------------------------ R3

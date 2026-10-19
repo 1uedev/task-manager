@@ -215,6 +215,9 @@ public class SessionService {
     }
 
     private Issued replacePassword(UUID sessionId, String current, String next, Instant now) {
+        // Setting row first, shared, as in a login: a concurrent shortening waits for this replacement and then
+        // also shortens the new session, or it commits first and this replacement reads the shortened value.
+        int hours = duration.hoursForShare();
         UUID accountId = jdbc.sql("select account_id from identity_session where id = ?").param(sessionId).query(UUID.class).single();
         AccountRecord account = accounts.findByIdForUpdate(accountId).orElseThrow();
         // The session may have ended while the account row was locked by a concurrent change.
@@ -244,8 +247,10 @@ public class SessionService {
             .params(Db.ts(now), accountId).update();
         accounts.audit(account.username(), "password.changed", accountId, account.passwordChangeRequired() ? "forced" : "chosen", now);
         AccountRecord updated = accounts.findById(accountId).orElseThrow();
-        // Same start and end as the session it replaces: the change must not extend the fixed period.
-        Instant effectiveEnd = expires;
+        // Same start and end as the session it replaces: the change must not extend the fixed period, and the
+        // end never exceeds start plus the duration that is current while the setting is held.
+        Instant limit = started.plus(Duration.ofHours(hours));
+        Instant effectiveEnd = expires.isBefore(limit) ? expires : limit;
         return insertSession(updated, started, effectiveEnd, null, now);
     }
 

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-036](#task-036-moderne-oberfläche-mit-admin-akzentfarbe-und-drag-and-drop-umsetzen) | Moderne Oberfläche mit Admin-Akzentfarbe und Drag and Drop umsetzen | claude-20261019-design-01 | 2026-10-19 |
-| [TASK-037](#task-037-sitzungsfrist-bei-gleichzeitigem-passwortwechsel-absichern) | Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern | claude-20261019-identity-01 | 2026-10-19 |
 
 ### Blockiert – BLOCKIERT
 
@@ -72,6 +71,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-025](#task-025-gruppen--projekt--und-feldrechte-implementieren) | Gruppen-, Projekt- und Feldrechte implementieren | claude-20261018-permissions-01 | 2026-10-18 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-037](#task-037-sitzungsfrist-bei-gleichzeitigem-passwortwechsel-absichern) | Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern | claude-20261019-identity-01 | 2026-10-19 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -652,7 +652,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-037 Sitzungsfrist bei gleichzeitigem Passwortwechsel absichern
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261019-identity-01 · **Aktualisiert:** 2026-10-19
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261019-identity-01 · **Aktualisiert:** 2026-10-19
 
 **Bezug:** REQ-AUTH-001, REQ-AUTH-003, REQ-SEC-001. **Abhängigkeiten:** TASK-024 (abgenommen, in DONE.md). Verknüpfte Folgeaufgabe zu TASK-024: Die gezielte Nachprüfung der Korrekturen R1 bis R5 durch codex-20261019-identity-followup-01 ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-024-fixes-79-codex/docs/REVIEW_TASK-024_PR-79.md), [PR #83](https://github.com/1uedev/task-manager/pull/83)) fand zwei Restlücken N1 und N2. Holger hat am 19. Oktober 2026 auf einer Entscheidungskarte „Soll ich die Codex Befunde N1 und N2 zu TASK-024 als Folgeaufgabe beheben?“ die Option „Nur N1“ gewählt. Das ist der Auftrag für den unten beschriebenen Umfang im Identitätsmodul, keine Freigabe von TASK-026 bis TASK-031 und keine Änderung der Abnahme von TASK-024. **Arbeitsstand:** Branch claude/project-thread-qfsobf nach dem Merge dieses Claim PRs; Ergebnis mit DEC-061.
 
@@ -662,4 +662,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Regressionstest mit echter PostgreSQL Sperrwartebeziehung (beide Reihenfolgen von Passwortwechsel und Fristverkürzung): Nach Verkürzung auf eine Stunde und anschließender Verlängerung auf 24 Stunden bleibt das Token der Ersatzsitzung nach Ablauf der einen Stunde ungültig. Der Test scheitert auf dem Stand vor der Korrektur. Bestehende 87 Backendtests, Lifecycle-Prüfung und CI auf PostgreSQL 18.6 grün. N2 als Grenze dokumentiert. Eine gezielte Nachprüfung durch eine getrennte KI am Korrekturcommit wird angeboten, ist aber nicht Voraussetzung der Abnahme durch Holger.
 
-**Nächster Schritt:** Reservierung integrieren; danach N1 beheben und als Ergebnis-PR mit DEC-061 übergeben.
+**Ergebnis:** `SessionService.replacePassword` nimmt als erste Anweisung die Einstellung der Sitzungsdauer gemeinsam gesperrt (`hoursForShare`, wie schon `startSession`) und begrenzt das Ablaufdatum der Ersatzsitzung auf Beginn plus aktuelle Dauer. Es gibt nur diese beiden Wege, die eine Sitzung anlegen. Zwei neue Regressionstests in `IdentityHardeningTest` (`n1A`, `n1B`) prüfen mit echter PostgreSQL Sperrwartebeziehung (`pg_stat_activity`, `pg_blocking_pids`) beide Reihenfolgen: (A) der Wechsel wartet auf die Sitzungszeile, die Verkürzung muss am Einstellungsdatensatz auf ihn warten, danach trägt die Ersatzsitzung die verkürzte Frist, ist nach zwei Stunden ungültig und wird durch die Verlängerung auf 24 Stunden nicht wiederbelebt; (B) der Wechsel wartet am Einstellungsdatensatz auf eine nicht festgeschriebene Verkürzung und liest danach den verkürzten Wert. Beide Tests scheitern auf dem Stand vor der Korrektur (lokal geprüft, jeweils an der Wartebehauptung) und bestehen mit ihr. N2 ist in backend/README.md als Grenze für Altdatenbanken dokumentiert, DEC-061 hält die Entscheidung fest.
+
+**Prüfungen:** Lokal auf PostgreSQL 16 und Java 21: `./mvnw clean verify` mit 89 Tests (bisher 87) ohne Fehler, `backend/scripts/lifecycle-check.sh` bestanden, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests` und `git diff --check` (siehe Ergebnis PR). CI auf PostgreSQL 18.6 und Temurin 25 wird im Ergebnis PR verlinkt. Nicht geprüft: eine getrennte KI Nachprüfung des Korrekturcommits; sie wird angeboten, ist aber nicht Voraussetzung der Abnahme.
+
+**Nächster Schritt:** Holger nimmt TASK-037 funktional ab oder fordert eine gezielte Nachprüfung am Korrekturcommit an; danach Verschiebung nach DONE.md in einem eigenen PR.
