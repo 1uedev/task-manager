@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
@@ -44,8 +44,9 @@ class DatabaseFoundationTest {
             String.class);
         assertEquals(List.of("appearance_audit_event", "appearance_setting", "flyway_schema_history", "identity_account", "identity_audit_event", "identity_login_throttle",
             "identity_session", "identity_setting", "permissions_action", "permissions_audit", "permissions_field",
-            "permissions_group", "permissions_membership", "permissions_revision"), tables);
+            "permissions_group", "permissions_membership", "permissions_revision", "platform_company"), tables);
         assertEquals(0, jdbc.queryForObject("select count(*) from identity_account", Integer.class), "no account is seeded");
+        assertEquals(0, jdbc.queryForObject("select count(*) from platform_company", Integer.class), "no company is seeded");
         assertEquals(0, jdbc.queryForObject("select count(*) from permissions_revision", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from permissions_action", Integer.class));
     }

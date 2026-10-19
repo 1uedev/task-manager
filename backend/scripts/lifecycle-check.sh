@@ -83,18 +83,18 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 7 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 8 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company' ] \
   || fail "unexpected schema objects"
-[ "$(sql "select (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
+[ "$(sql "select (select count(*) from platform_company) + (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
 [ "$(sql "select count(*) from identity_account")" = 0 ] || fail "a migration or start created an account"
 
@@ -112,6 +112,9 @@ secret=$(sed -n 's/^One time password (shown only now): //p' "$logs/bootstrap.ou
 [ "$(sql "select count(*) from identity_account where administrator and password_change_required and password_hash like '\$argon2id\$%'")" = 1 ] \
   || fail "administrator account is not stored as expected"
 [ "$(sql "select count(*) from identity_account where password_hash like '%$secret%'")" = 0 ] || fail "one time password stored in clear"
+# TASK-039: the same transaction created the company and the initial rights, and nothing beyond them.
+[ "$(sql "select (select count(*) from platform_company) || ',' || (select count(*) from permissions_group) || ',' || (select count(*) from permissions_action where action_key = 'permissions.manage' and project_id is null) || ',' || (select count(*) from permissions_membership m join identity_account a on a.id = m.user_id where a.username = 'lifecycle-admin') || ',' || (select count(*) from permissions_field)")" = '1,1,1,1,0' ] \
+  || fail "bootstrap-admin did not create the company and the initial administration as expected"
 
 phase=bootstrap-refused
 set +e
@@ -122,6 +125,7 @@ set -e
 grep -q 'bootstrap.accounts_exist' "$logs/bootstrap-second.err" || fail "second bootstrap-admin did not name the reason"
 ! grep -q 'One time password' "$logs/bootstrap-second.out" || fail "second bootstrap-admin printed a password"
 [ "$(sql "select count(*) from identity_account")" = 1 ] || fail "second bootstrap-admin created an account"
+[ "$(sql "select count(*) from platform_company")" = 1 ] || fail "second bootstrap-admin created a company"
 
 phase=started-with-admin
 echo "== Start with an existing account"

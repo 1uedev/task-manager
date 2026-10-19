@@ -91,7 +91,7 @@ export interface paths {
         put?: never;
         /**
          * Konto deaktivieren (Administrator)
-         * @description Beendet alle Sitzungen des Kontos sofort. Der letzte aktive Administrator kann nicht deaktiviert werden.
+         * @description Beendet alle Sitzungen des Kontos sofort. Der letzte aktive Administrator kann nicht deaktiviert werden, ebenso nicht das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`); beides meldet `account.last_administrator`.
          */
         post: operations["deactivateAccount"];
         delete?: never;
