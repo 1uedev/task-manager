@@ -1,0 +1,12 @@
+Independent review of PR #82, fixed head 8a2a57283caa7ea1fa2b12b79b0c2df2599a78d6
+Temurin 25.0.4.1+1 / Maven 3.9.16 / native PostgreSQL 18.6 / isolated synthetic databases
+Unmodified baseline verify: 87 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS
+N1/N2 assertions intentionally confirm observations, not acceptance. Two control methods check safe behavior.
+
+FOLLOWUP N2: after loss of company role, same person replaced a company-origin deny with ALLOW using project delegation
+FOLLOWUP N1: membership and action withdrawal committed; only known inactive company administrator remained
+FOLLOWUP CONTROL: real V0004 -> V0005 upgrade preserved existing deny, NULL provenance and prior migration checksums
+FOLLOWUP CONTROL: unknown backup rejected; both withdrawal paths rolled back policy, revision and audit
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.82 s -- in taskmanager.permissions.PermissionsFixesFollowupProbeTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
