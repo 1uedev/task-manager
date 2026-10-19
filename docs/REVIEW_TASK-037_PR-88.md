@@ -18,6 +18,10 @@ TASK-037 oder erneute Sicherheitsfreigabe des gesamten Identitätsmoduls.
 - Tatsächlich lokal geprüft: main `d8374632ee91030fd851468b3f6ecd75a7b74cd1`.
   Eigener Git-Vergleich mit dem PR-Head: Backend, Verträge und Workflows identisch.
   Die nachfolgende Reservierung von TASK-038 betrifft die Aufgabenkoordination.
+- Der Berichtsbranch wurde bei Veröffentlichung auf main
+  `5dbe32efb7ac362dd70351f35f32c5240f4d385d` (TASK-038) aktualisiert.
+  Identitätsquellen und -tests sind unverändert; die Rechtekorrektur aus TASK-038 ist
+  kein Gegenstand dieses Berichts oder seines lokalen 89-Test-Laufs.
 - Maßgeblich: TASK-037, DEC-061 und DEC-040; REQ-AUTH-001, REQ-AUTH-003,
   REQ-SEC-001 sowie die feste Frist aus REQ-AUTH-005/DEC-048/DEC-058.
 - Gelesen: gemeinsame Einstiegs-/Arbeitsregeln einschließlich CLAUDE.md, technische Basis,
