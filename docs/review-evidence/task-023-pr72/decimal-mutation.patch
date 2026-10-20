@@ -1,0 +1,7 @@
+diff --git a/frontend/src/i18n/format.ts b/frontend/src/i18n/format.ts
+index ee5c66c..41c53fc 100644
+--- a/frontend/src/i18n/format.ts
++++ b/frontend/src/i18n/format.ts
+@@ -32 +32 @@ export function parseDecimal(text: string, language: string): number | null {
+-  const trimmed = text.trim();
++  const trimmed = text.replace(/\s/g, '');

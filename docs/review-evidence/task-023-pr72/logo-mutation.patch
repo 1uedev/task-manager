@@ -1,0 +1,6 @@
+diff --git a/frontend/src/brand/brand.ts b/frontend/src/brand/brand.ts
+index 4cf886b..9fa45e5 100644
+--- a/frontend/src/brand/brand.ts
++++ b/frontend/src/brand/brand.ts
+@@ -54,0 +55 @@ function acceptableLogo(url: string): string | null {
++  if (url.startsWith('/') && !url.startsWith('//')) return url;
