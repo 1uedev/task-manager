@@ -1,0 +1,7 @@
+diff --git a/frontend/src/brand/brand.ts b/frontend/src/brand/brand.ts
+index 4cf886b..9fe97e8 100644
+--- a/frontend/src/brand/brand.ts
++++ b/frontend/src/brand/brand.ts
+@@ -132 +132 @@ export function derivePalette(brand: Brand): Palette {
+-    muted: contrastRatio(softened, background) >= MIN_CONTRAST ? softened : text,
++    muted: '#4a4a4a',
