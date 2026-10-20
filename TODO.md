@@ -503,7 +503,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Eigenprüfung:** Backend `verify` gegen lokale PostgreSQL 16.15 mit 154 Tests ohne Fehler, darunter `ProjectConfigurationTest`, `ProjectsApiTest` (Rechte, Sichtbarkeit fremder Projekte über Liste und Kennung, Delegation per Projektrecht, Versionen, Konfiguration, Mitglieder, Wartesperre bei Entfernung) und `ProjectsContractTest`. Gegenprobe: ohne Zeilensperre im Projektadapter scheitert die Sperrprüfung. Maßgeblich ist CI auf PostgreSQL 18.6. Eine unabhängige Prüfung nach DEC-040 steht aus.
 
-**Nächster Schritt:** Codex prüft unabhängig nach DEC-040, Holger nimmt fachlich ab; danach Übertrag nach DONE.md.
+**Korrektur nach unabhängiger Prüfung:** Codex hat in docs/REVIEW_TASK-026_PR-109.md (PR #113) zwei Befunde gemeldet, beide behoben. F1 (P2): Eine Statuskategorie `null` oder ohne Angabe ergab 500; sie antwortet jetzt `400 request.invalid` mit `statuses.category_invalid`. F2 (P3): Ein fremdes Projekt, dessen Zeile eine gleichzeitige Änderung hielt, wartete auf die Sperre und antwortete nach der Wartefrist mit 500 statt 404; der Projektadapter weist ein Konto ohne Mitgliedschaft jetzt vor der Zeilensperre ab, ohne zu warten, und prüft die Mitgliedschaft unter der Sperre erneut. Das gilt auch für die Ticketendpunkte aus TASK-027, die vorher 503 geantwortet hätten. Regressionen in `ProjectsApiTest` und `TicketsApiTest` schlagen ohne die Korrektur fehl; Backend `verify` lokal mit 168 Tests ohne Fehler.
+
+**Nächster Schritt:** Codex prüft die Korrektur nach, sobald es wieder verfügbar ist; Holger nimmt fachlich ab; danach Übertrag nach DONE.md.
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 

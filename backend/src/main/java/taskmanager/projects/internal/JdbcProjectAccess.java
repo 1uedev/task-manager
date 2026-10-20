@@ -26,8 +26,10 @@ class JdbcProjectAccess implements ProjectAccess {
 
     /** Runs inside the transaction of the permissions check that calls the supplier. */
     private ResourceContext locked(UUID companyId, UUID projectId, UUID accountId, String resourceType, boolean exclusive) {
-        boolean member = projectId != null && accountId != null && projects.lock(companyId, projectId, exclusive).isPresent()
-            && projects.isMember(projectId, accountId);
+        // A non member is refused without waiting for the project row: a project that is locked by a concurrent change
+        // must answer like an unknown one (review F2 of TASK-026). A membership that is just being added counts from its commit.
+        boolean member = projectId != null && accountId != null && projects.isMember(projectId, accountId)
+            && projects.lock(companyId, projectId, exclusive).isPresent() && projects.isMember(projectId, accountId);
         // Without the project the context still names it, so the permissions module refuses it as a project resource.
         return new ResourceContext(companyId, projectId == null ? new UUID(0, 0) : projectId, null, member, resourceType);
     }

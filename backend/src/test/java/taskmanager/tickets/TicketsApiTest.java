@@ -558,6 +558,41 @@ class TicketsApiTest {
         assertNull(retried.json().get("violations"));
     }
 
+    /** Like a project (review F2 of TASK-026): the tickets of a foreign project held by a change answer 404 at once, not 503. */
+    @Test
+    void theTicketsOfAForeignProjectHeldByAChangeAnswerLikeAnUnknownProject() throws Exception {
+        Person member = person();
+        Person outsider = person();
+        Project project = project(member);
+        grant(member.id(), project.id(), FULL);
+        grant(outsider.id(), null, FULL);
+        assertEquals(201, create(member, project, "Verborgen").status());
+
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from project where id = ? for update", project.id());
+            locked.countDown();
+            try {
+                assertTrue(release.await(30, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        try {
+            assertTrue(locked.await(15, TimeUnit.SECONDS));
+            long started = System.nanoTime();
+            assertProblem(outsider.get(tickets(project)), 404, "project.not_found");
+            assertProblem(outsider.get(tickets(project) + "/1"), 404, "project.not_found");
+            assertProblem(create(outsider, project, "Fremd"), 404, "project.not_found");
+            assertProblem(patch(outsider, project, 1, map("title", "Fremd"), "\"1\""), 404, "project.not_found");
+            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(3), "the refusal must not wait for the project row");
+        } finally {
+            release.countDown();
+            holder.get(15, TimeUnit.SECONDS);
+        }
+    }
+
     private boolean waitsAt(String statementPart) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
