@@ -521,6 +521,24 @@ class TagsApiTest {
         assertProblem(project.manager().get("/api/v1/projects/" + UUID.randomUUID() + "/tags"), 404, "project.not_found");
     }
 
+    @Test
+    void unicodeSpacesAndCaseFoldingYieldTheSameName() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        String token = "u" + COUNTER.incrementAndGet();
+        Response first = post(admin, "/api/v1/tags", Map.of("name", "Nord Süd " + token));
+        assertEquals(201, first.status(), first.body());
+        for (String space : List.of("\u1680", "\u2028", "\u2029", "\u2003 \u2003")) {
+            assertProblem(post(admin, "/api/v1/tags", Map.of("name", "Nord" + space + "Süd " + token)), 409, "tag.name_taken");
+        }
+        Response separated = post(admin, "/api/v1/tags", Map.of("name", "Ost\u2028West " + token));
+        assertEquals("Ost West " + token, separated.json().get("name").asString(), "a line separator becomes one space (review F1)");
+
+        assertEquals(201, post(admin, "/api/v1/tags", Map.of("name", "Straße " + token)).status());
+        assertProblem(post(admin, "/api/v1/tags", Map.of("name", "STRASSE " + token)), 409, "tag.name_taken");
+        assertEquals(List.of("Straße " + token), tagNames(admin.get("/api/v1/tags?q=strasse%20" + token)),
+            "search folds the case in the same way (review F2)");
+    }
+
     // ---------------------------------------------------------------- locks
 
     @Test
@@ -548,6 +566,60 @@ class TagsApiTest {
         } finally {
             release.countDown();
             assignment.get(30, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Runs the statements in a transaction of its own and keeps it open until the returned action releases it. */
+    private Runnable hold(String... statements) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            for (String statement : statements) {
+                jdbc.execute(statement);
+            }
+            locked.countDown();
+            try {
+                assertTrue(release.await(60, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertTrue(locked.await(15, TimeUnit.SECONDS));
+        return () -> {
+            release.countDown();
+            try {
+                holder.get(60, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+    }
+
+    @Test
+    void aLockedTagOfAnotherCatalogAnswersLikeAnUnknownOneWithoutWaiting() throws Exception {
+        Person worker = person();
+        Person stranger = person();
+        Project project = project(worker);
+        Project foreign = project(stranger);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tags.manage");
+        grant(stranger.id(), foreign.id(), "ticket.read", "tag.create");
+        UUID secret = tag(stranger, catalog(foreign), "Geheimprojekt");
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        UUID company = tag(admin, "/api/v1/tags", "Gemeinsam " + COUNTER.incrementAndGet());
+        long number = ticket(worker, project, "Fremder Tag");
+
+        Runnable release = hold("select id from tag where id = '" + secret + "' for update",
+            "select id from tag where id = '" + company + "' for share");
+        try {
+            long start = System.nanoTime();
+            assertProblem(post(worker, ticketTags(project, number), Map.of("tagId", secret.toString())), 404, "tag.not_found");
+            assertProblem(patch(worker, catalog(project) + "/" + company, Map.of("archived", true), "\"1\""), 404, "tag.not_found");
+            assertProblem(patch(worker, catalog(project) + "/" + secret, Map.of("archived", true), "\"1\""), 404, "tag.not_found");
+            assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 3000,
+                "tags of other catalogs are neither locked nor waited for (review F3)");
+        } finally {
+            release.run();
         }
     }
 
