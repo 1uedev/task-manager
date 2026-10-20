@@ -1,0 +1,408 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Tags (TASK-028)
+  version: 0.1.0
+  description: |
+    Tag Kataloge und Tag Zuordnungen (DEC-068). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
+    `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Kataloge: Der Unternehmenskatalog enthält gemeinsame Begriffe und die Tags für Projekte; jede vollständige interne
+    Anmeldung liest ihn. Jedes Projekt hat einen eigenen Katalog, den nur Mitglieder lesen, und zwar mit einer der Aktionen
+    `project.read`, `project.manage`, `ticket.read`, `tag.create` oder `tags.manage` im Projekt; sonst antwortet das Projekt
+    mit 404 `project.not_found`. `tag.create` legt Tags an, `tags.manage` legt an, benennt um, archiviert und stellt wieder
+    her. Beide gelten für den Unternehmenskatalog als Unternehmensrecht und für einen Projektkatalog im Projekt, wo sie die
+    Mitgliedschaft verlangen. `tags.manage` ist ein Verwaltungsrecht des Unternehmens; die Ersteinrichtung vergibt es.
+    Portalkonten erhalten bis zur Entscheidung über das Portal keinen Katalog (403).
+
+    Namen: Unicode NFKC, äußere Leerzeichen entfernt, innere zu einem Leerzeichen zusammengefasst, 1 bis 50 Zeichen, keine
+    Steuer oder Formatzeichen. Ein Name kommt je Katalog einmal vor, ohne Unterschied der Groß und Kleinschreibung
+    (409 `tag.name_taken`). Derselbe Name darf im Unternehmenskatalog und in jedem Projektkatalog je einmal stehen. Tags
+    werden archiviert statt gelöscht; ein archivierter Tag bleibt zugeordnet, wird aber nicht neu zugeordnet
+    (409 `tag.archived`).
+
+    Zuordnungen: Ein Ticket nimmt Tags des Unternehmenskatalogs und des Katalogs seines Projekts. Lesen verlangt
+    `ticket.read` und eine Leseregel für das Feld `tags` des Ressourcentyps `ticket`, ändern verlangt `ticket.edit` und eine
+    Schreibregel für dieses Feld. Ein Projekt nimmt Tags des Unternehmenskatalogs; lesen folgt den Projektrechten
+    (`projects.manage`, `project.read`, `project.manage`), ändern verlangt `projects.manage` oder `project.manage`.
+    Zuordnen und Entfernen sind wiederholbar und antworten mit 204. Eine Zuordnung ändert die Version des Tickets oder
+    Projekts nicht. Wird ein Tag über den Namen zugeordnet und fehlt er im Katalog, legt der Server ihn dort an, wenn die
+    anfragende Person `tag.create` oder `tags.manage` für diesen Katalog hat.
+
+    Der `ETag` ist die Version des Tags; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
+    Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `tag.busy` und `Retry-After`; die
+    ganze Anfrage darf wiederholt werden.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /tags:
+    get:
+      operationId: listCompanyTags
+      summary: Unternehmenskatalog, nach Namen geordnet
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Archived'
+        - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createCompanyTag
+      summary: Tag im Unternehmenskatalog anlegen (tag.create oder tags.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/TagId'
+    get:
+      operationId: getCompanyTag
+      summary: Ein Tag des Unternehmenskatalogs
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: changeCompanyTag
+      summary: Umbenennen, archivieren oder wiederherstellen (tags.manage)
+      description: Ohne echte Änderung bleibt die Version gleich.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/catalog/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listProjectCatalogTags
+      summary: Katalog des Projekts, nach Namen geordnet
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Archived'
+        - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createProjectCatalogTag
+      summary: Tag im Projektkatalog anlegen (tag.create oder tags.manage im Projekt)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/catalog/tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TagId'
+    get:
+      operationId: getProjectCatalogTag
+      summary: Ein Tag des Projektkatalogs
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: changeProjectCatalogTag
+      summary: Umbenennen, archivieren oder wiederherstellen (tags.manage im Projekt)
+      description: Ohne echte Änderung bleibt die Version gleich.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listProjectTags
+      summary: Tags, die dem Projekt zugeordnet sind
+      responses:
+        '200':
+          description: Tags, nach Namen geordnet
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Tag'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: assignProjectTag
+      summary: Tag des Unternehmenskatalogs dem Projekt zuordnen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProjectAssignment'}
+      responses:
+        '204': {description: Zugeordnet oder schon zugeordnet}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TagId'
+    delete:
+      operationId: unassignProjectTag
+      summary: Zuordnung zum Projekt entfernen
+      responses:
+        '204': {description: Entfernt oder nicht zugeordnet}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: listTicketTags
+      summary: Tags eines Tickets (ticket.read und Leseregel für tags)
+      responses:
+        '200':
+          description: Tags, nach Namen geordnet, archivierte eingeschlossen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Tag'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: assignTicketTag
+      summary: Tag dem Ticket zuordnen (ticket.edit und Schreibregel für tags)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TicketAssignment'}
+      responses:
+        '204': {description: Zugeordnet oder schon zugeordnet}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+      - $ref: '#/components/parameters/TagId'
+    delete:
+      operationId: unassignTicketTag
+      summary: Zuordnung zum Ticket entfernen (ticket.edit und Schreibregel für tags)
+      responses:
+        '204': {description: Entfernt oder nicht zugeordnet}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    TagId:
+      name: tagId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    Search:
+      name: q
+      in: query
+      description: Teil des Namens, ohne Unterschied der Groß und Kleinschreibung.
+      schema: {type: string}
+    Archived:
+      name: archived
+      in: query
+      description: Auch archivierte Tags zeigen.
+      schema: {type: boolean, default: false}
+    After:
+      name: after
+      in: query
+      description: Name des letzten Tags der vorigen Seite, zum Weiterblättern.
+      schema: {type: string}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag der zuletzt gelesenen Fassung.
+      schema: {type: string}
+  responses:
+    Tag:
+      description: Tag. Version im ETag.
+      headers:
+        ETag: {schema: {type: string}, description: 'Version in Anführungszeichen, zum Beispiel "3"'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Tag'}
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found, tag.not_found,
+        tag.name_taken, tag.archived, tag.version_conflict, tag.precondition_required, tag.busy, auth.required,
+        auth.forbidden, auth.csrf_invalid, auth.password_change_required. Gründe in `violations`: name.invalid,
+        archived.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous, fields.required,
+        fields.unknown, paging.invalid.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+        Retry-After: {schema: {type: integer}, description: Nur bei 503.}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    CreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+    ChangeRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+        archived: {type: boolean}
+    ProjectAssignment:
+      description: Ein vorhandener Tag über `tagId` oder ein Name des Unternehmenskatalogs.
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required: [tagId]
+        - required: [name]
+      properties:
+        tagId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 50}
+    TicketAssignment:
+      description: Ein vorhandener Tag über `tagId` oder ein Name mit Katalog; ohne `catalog` gilt der Projektkatalog.
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required: [tagId]
+        - required: [name]
+      properties:
+        tagId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 50}
+        catalog: {type: string, enum: [project, company], default: project}
+    Tag:
+      type: object
+      required: [id, name, catalog, projectId, archived, version, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        catalog: {type: string, enum: [company, project]}
+        projectId: {type: [string, 'null'], format: uuid, description: 'Projekt des Katalogs, null im Unternehmenskatalog'}
+        archived: {type: boolean}
+        version: {type: integer, minimum: 1}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}

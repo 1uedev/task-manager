@@ -17,7 +17,13 @@ public enum AdministrationRight {
      * Create projects and manage every project of the company, its configuration and its members, without being a member
      * (TASK-026, DEC-065). Gives no access to the content of a project such as tickets.
      */
-    PROJECTS_MANAGE("projects.manage");
+    PROJECTS_MANAGE("projects.manage"),
+    /**
+     * Rename, archive and restore the tags of the company catalog (TASK-028, DEC-068). Granted for one project, or held
+     * company wide by a member, it covers the catalog of that project too; the permissions module then requires the
+     * membership.
+     */
+    TAGS_MANAGE("tags.manage");
 
     private final String key;
 

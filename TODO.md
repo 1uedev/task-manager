@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | claude-20261020-tags-01 | 2026-10-20 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -65,6 +63,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | claude-20261020-tags-01 | 2026-10-20 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -487,9 +486,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-028 Tag-Kern für Tickets und Projekte implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-tags-01 · **Aktualisiert:** 2026-10-20
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-tags-01 · **Aktualisiert:** 2026-10-20
 
-**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-TKT-004. **Abhängigkeiten:** TASK-027 (auf main, BEREIT ZUR PRÜFUNG) und TASK-025. Holger hat am 20. Oktober 2026 im Projektgespräch mit „kannst du weitermachen“ das nächste Paket beauftragt und auf die Frage „Welchen Tag Katalog soll der Tag Kern (TASK-028) zuerst bekommen?“ die Variante „Beides“ gewählt: ein Unternehmenskatalog für gemeinsame Begriffe und Tags an Projekten, dazu je Projekt ein eigener Katalog, nur für Mitglieder sichtbar. Vorgeschlagene Vergaberegeln aus derselben Frage: eigenes Recht zum Anlegen neuer Tags, Zuordnen zu einem Ticket braucht das Änderungsrecht am Ticket, Zuordnen zu einem Projekt das Projektverwaltungsrecht, Umbenennen und Archivieren ein eigenes Unternehmensrecht, Namen ohne Groß und Kleinschreibung eindeutig im jeweiligen Katalog, Portalnutzer später mit dem Portal. TASK-029 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Eine getrennte KI prüft das Ergebnis danach nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs. Ergebnis mit DEC-068, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0013.
+**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-TKT-004. **Abhängigkeiten:** TASK-027 (auf main, BEREIT ZUR PRÜFUNG) und TASK-025. Holger hat am 20. Oktober 2026 im Projektgespräch mit „kannst du weitermachen“ das nächste Paket beauftragt und auf die Frage „Welchen Tag Katalog soll der Tag Kern (TASK-028) zuerst bekommen?“ die Variante „Beides“ gewählt: ein Unternehmenskatalog für gemeinsame Begriffe und Tags an Projekten, dazu je Projekt ein eigener Katalog, nur für Mitglieder sichtbar. Vorgeschlagene Vergaberegeln aus derselben Frage: eigenes Recht zum Anlegen neuer Tags, Zuordnen zu einem Ticket braucht das Änderungsrecht am Ticket, Zuordnen zu einem Projekt das Projektverwaltungsrecht, Umbenennen und Archivieren ein eigenes Unternehmensrecht, Namen ohne Groß und Kleinschreibung eindeutig im jeweiligen Katalog, Portalnutzer später mit dem Portal. TASK-029 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Eine getrennte KI prüft das Ergebnis danach nach DEC-040. **Arbeitsstand:** Ergebnis auf Branch claude/project-thread-r4dri5 mit DEC-068, Migration V0013, Vertrag `contracts/tags.openapi.yaml` und Abschnitt „Tags (TASK-028)“ in backend/README.md; AGENTS.md, CLAUDE.md und README.md nennen den Umfang. Übergabe: Unternehmens- und Projektkatalog mit Anlegen, Umbenennen, Archivieren und Wiederherstellen; Zuordnung zu Tickets (Feld `tags`) und Projekten, auch kombiniert mit Anlage über den Namen in einer Transaktion; Recht `tags.manage`, Aktion `tag.create`, Port `TicketAccess`. `TagsApiTest` prüft Mehrfachzuordnung, Wiederholbarkeit, unberechtigtes Erstellen und Zuordnen, verborgene Projektkataloge, gleichzeitige Anlage und die Sperrfolge beim Archivieren. Offen für V1: Beschreibung und Farbe, Zusammenführen, Massenänderung, Filter, Autovervollständigung über Objekte, Suche (TASK-029), Oberfläche (TASK-030) und Portaltags.
 
 **Umfang:** Katalog, Erstell-/Zuordnungsrechte, Tag-Erstellung und Zuordnung zu Tickets sowie Projekten für den internen Ablauf umsetzen. Vertrag für weitere V1-Verwaltungsfunktionen und berechtigte externe Ersteller erhalten.
 
@@ -497,7 +496,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-068 übergeben.
+**Nächster Schritt:** Getrennte KI Prüfung nach DEC-040 (Entdeckungsgrenzen, Modultransaktionen); danach Abnahme durch Holger.
 
 ## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
 
