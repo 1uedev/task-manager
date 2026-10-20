@@ -1,0 +1,37 @@
+Unabhängige Prüfung TASK-028, PR #119, main 6ba41750facf6e204b72911fc360edc57f9c3870
+Sitzung claude-20261020-tags-review-01, 20. Oktober 2026. Gekürzte, selbst ausgeführte Ergebnisse.
+Umgebung: Temurin 25.0.1+8, Maven 3.9.11 (der Wrapper konnte seine Verteilung nicht laden),
+lokale PostgreSQL 16 mit synthetischen Daten über -Dtaskmanager.test.*. Kein Nachweis für die festgelegte Version 18.6.
+
+1. Backend clean verify auf unverändertem main
+   179 Tests, 0 Fehler, 0 Fehlschläge, 0 übersprungen (27 Testklassen, darunter TagsApiTest und TagsContractTest).
+
+2. Proben TagsReviewProbeTest (12 Tests): 8 bestanden, 4 erwartete Fehlschläge
+
+   Fehlschläge (Befunde):
+   reviewInnerUnicodeSpacesMustCountAsOneSpace
+     "Nord Süd <t>" 201, danach "Nord Süd <t>" 201 und "Nord Süd <t>" 201 (erwartet 409 oder 400)  -> F1
+   reviewUpperCaseSharpSMustBeTheSameName
+     "Straße S36" 201, danach "STRASSE S36" 201 (erwartet 409 tag.name_taken)                                -> F2
+   reviewLockedForeignTagMustAnswerLikeAnUnknownOne
+     ohne Sperre 404 tag.not_found; mit FOR UPDATE auf dem fremden Projekttag 503 tag.busy nach 5048 ms      -> F3
+   reviewChangeThroughAForeignCatalogMustNotWaitForTheTag
+     PATCH über den eigenen Projektkatalog auf einen Unternehmenstag, der FOR SHARE gehalten wird:
+     503 tag.busy nach 5034 ms statt sofort 404 tag.not_found                                                 -> F3
+
+   Bestanden:
+   reviewAssignmentWaitsForConcurrentRevocationAndIsRefused   wartet an permissions_revision, danach 404 project.not_found, keine Zuordnung
+   reviewAssignmentWaitsForConcurrentRemovalFromTheProject    wartet an der Projektzeile, danach 404 project.not_found, kein Tag angelegt
+   reviewDenyOnTheTagsFieldWins                               DENY-READ:tags gewinnt: Lesen, Zuordnen und Entfernen 403
+   reviewCombinedCreationIsAtomic                             fehlende Rechte oder Ticket: kein Tag im Katalog
+   reviewBadParametersAreRefusedCleanly                       falsche Parameterarten 400; q und after mit NUL und 5000 Zeichen 200
+   reviewArchivedNameBlocksANewTag                            dokumentiert H3
+   reviewTagChangesAreNotInTheTicketHistory                   dokumentiert H1 und H4 (Audit: tag.created mit target_type tag, target_id = Projekt)
+   reviewEditWithoutReadAssignsProjectTagsByIdentifier        dokumentiert H2
+
+3. Abfrageplan (PostgreSQL 16, enable_seqscan=off, generischer Plan)
+   project_id is not distinct from $1: Index tag_catalog nur mit company_id und normalized als Bedingung,
+   project_id als Filter. Der eindeutige Index tag_name_per_catalog (coalesce) wird von den Abfragen nicht genutzt. -> H5
+
+4. Gelesen, nicht selbst ausgeführt
+   CI von PR #119: backend, frontend, qualification und repository-checks erfolgreich (Backendlauf 39443250337).
