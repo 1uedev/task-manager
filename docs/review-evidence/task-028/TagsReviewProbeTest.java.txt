@@ -1,0 +1,561 @@
+package taskmanager.tags;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.StreamSupport;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.AdministrationFixture;
+import taskmanager.TestDatabase;
+import taskmanager.identity.account.AccountService;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.CompanyContext;
+import taskmanager.projects.ProjectConfiguration;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * TASK-028: tag catalogs and tag assignments through the real HTTP interface, the real permissions, projects and tickets
+ * modules and a real PostgreSQL. Business actions and field rules are granted directly in the tables, as no rights endpoint
+ * exists yet (TASK-030).
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class TagsReviewProbeTest {
+    private static final String DATABASE = freshDatabase();
+    private static final String STRONG = "Correct-Horse-Battery-9";
+    private static final AtomicInteger COUNTER = new AtomicInteger();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final ExecutorService POOL = Executors.newCachedThreadPool();
+    private static final List<String> ALL_FIELDS = ProjectConfiguration.FIELD_KEYS;
+    private static final String[] TICKETS = {"ticket.read", "ticket.create", "ticket.edit", "READ:*", "WRITE:*", "READ:tags", "WRITE:tags"};
+
+    private static String freshDatabase() {
+        try {
+            return TestDatabase.createEmptyDatabase();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> DATABASE);
+        registry.add("spring.datasource.username", TestDatabase::username);
+        registry.add("spring.datasource.password", TestDatabase::password);
+    }
+
+    @AfterAll
+    static void stopThreads() {
+        POOL.shutdownNow();
+    }
+
+    @Value("${local.server.port}") int port;
+    @Autowired AccountService accounts;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired CompanyContext companies;
+    @Autowired PlatformTransactionManager transactions;
+
+    // ---------------------------------------------------------------- a minimal browser
+
+    record Response(int status, String body, Map<String, List<String>> headers) {
+        String header(String name) {
+            return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name))
+                .flatMap(e -> e.getValue().stream()).findFirst().orElse(null);
+        }
+
+        JsonNode json() {
+            return JSON.readTree(body);
+        }
+
+        String code() {
+            return json().get("code").asString();
+        }
+
+        List<String> violations() {
+            return StreamSupport.stream(json().get("violations").spliterator(), false).map(JsonNode::asString).toList();
+        }
+
+        JsonNode fields() {
+            return json().get("fields");
+        }
+    }
+
+    final class Browser {
+        private final HttpClient http = HttpClient.newHttpClient();
+        final Map<String, String> cookies = new LinkedHashMap<>();
+
+        Response send(String method, String path, Object body, String ifMatch) {
+            try {
+                HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+                if (body != null) {
+                    request.header("Content-Type", "application/json");
+                    request.method(method, HttpRequest.BodyPublishers.ofString(body instanceof String s ? s : JSON.writeValueAsString(body)));
+                } else {
+                    request.method(method, HttpRequest.BodyPublishers.noBody());
+                }
+                if (ifMatch != null) {
+                    request.header("If-Match", ifMatch);
+                }
+                if (!cookies.isEmpty()) {
+                    List<String> pairs = new ArrayList<>();
+                    cookies.forEach((name, value) -> pairs.add(name + "=" + value));
+                    request.header("Cookie", String.join("; ", pairs));
+                }
+                String csrf = cookies.get("__Host-tm-csrf");
+                if (csrf != null) {
+                    request.header("X-CSRF-Token", csrf);
+                }
+                HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+                for (String cookie : response.headers().allValues("set-cookie")) {
+                    String pair = cookie.substring(0, cookie.indexOf(';') < 0 ? cookie.length() : cookie.indexOf(';'));
+                    String name = pair.substring(0, pair.indexOf('='));
+                    if (cookie.toLowerCase().contains("max-age=0")) {
+                        cookies.remove(name);
+                    } else {
+                        cookies.put(name, pair.substring(pair.indexOf('=') + 1));
+                    }
+                }
+                return new Response(response.statusCode(), response.body(), response.headers().map());
+            } catch (java.io.IOException | InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        Response get(String path) {
+            return send("GET", path, null, null);
+        }
+    }
+
+    /** A person with a complete login. */
+    private record Person(Browser browser, UUID id) {
+        Response get(String path) {
+            return browser.get(path);
+        }
+    }
+
+    private Browser anonymous() {
+        Browser browser = new Browser();
+        assertEquals(200, browser.get("/api/v1/session").status());
+        return browser;
+    }
+
+    private Person person(AdministrationRight... rights) {
+        var issued = accounts.create("test", "tags-" + COUNTER.incrementAndGet(), null);
+        if (rights.length > 0) {
+            AdministrationFixture.grant(jdbc, companies, transactions, issued.account().id(), rights);
+        }
+        Browser browser = anonymous();
+        Response login = browser.send("POST", "/api/v1/session",
+            Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null);
+        assertEquals(200, login.status(), login.body());
+        Response changed = browser.send("POST", "/api/v1/session/password",
+            Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG), null);
+        assertEquals(200, changed.status(), changed.body());
+        return new Person(browser, issued.account().id());
+    }
+
+    /**
+     * Grants rules in a group of their own, for one project or, with {@code null}, for every project of the company: an
+     * action key such as {@code ticket.read}, or a field rule {@code READ:title}, {@code WRITE:title}, {@code DENY-READ:title}
+     * for the resource type {@code ticket}; {@code *} stands for all five fields, and {@code tags} is the field of the tags.
+     */
+    private void grant(UUID account, UUID project, String... rules) {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            UUID companyId = companies.find().orElseGet(companies::create);
+            jdbc.update("insert into permissions_revision(company_id) values (?) on conflict do nothing", companyId);
+            UUID group = UUID.randomUUID();
+            jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, "fixture-" + group);
+            for (String rule : rules) {
+                if (!rule.contains(":")) {
+                    jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
+                        companyId, group, project, rule);
+                    continue;
+                }
+                String[] parts = rule.split(":");
+                boolean deny = parts[0].startsWith("DENY-");
+                String operation = deny ? parts[0].substring(5) : parts[0];
+                for (String field : parts[1].equals("*") ? ALL_FIELDS : List.of(parts[1])) {
+                    jdbc.update("""
+                            insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect)
+                            values (?, ?, ?, 'ticket', ?, ?, ?)
+                            """, companyId, group, project, field, operation, deny ? "DENY" : "ALLOW");
+                }
+            }
+            jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
+            jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
+        });
+    }
+
+    /** A project created by its own manager, with the given people as members. */
+    private record Project(UUID id, String key, Person manager) {
+    }
+
+    private Project project(Person... members) {
+        Person manager = person(AdministrationRight.PROJECTS_MANAGE);
+        String key = "G" + COUNTER.incrementAndGet();
+        Response created = manager.browser().send("POST", "/api/v1/projects", Map.of("key", key, "name", "Tags " + key), null);
+        assertEquals(201, created.status(), created.body());
+        UUID id = UUID.fromString(created.json().get("id").asString());
+        String version = created.header("ETag");
+        for (Person member : members) {
+            Response added = manager.browser().send("PUT", "/api/v1/projects/" + id + "/members/" + member.id(), null, version);
+            assertEquals(200, added.status(), added.body());
+            version = added.header("ETag");
+        }
+        return new Project(id, key, manager);
+    }
+
+    private static String catalog(Project project) {
+        return "/api/v1/projects/" + project.id() + "/catalog/tags";
+    }
+
+    private static String ticketTags(Project project, long number) {
+        return "/api/v1/projects/" + project.id() + "/tickets/" + number + "/tags";
+    }
+
+    private static String projectTags(Project project) {
+        return "/api/v1/projects/" + project.id() + "/tags";
+    }
+
+    private static Response post(Person person, String path, Object body) {
+        return person.browser().send("POST", path, body, null);
+    }
+
+    private static Response patch(Person person, String path, Object body, String ifMatch) {
+        return person.browser().send("PATCH", path, body, ifMatch);
+    }
+
+    private static Response delete(Person person, String path) {
+        return person.browser().send("DELETE", path, null, null);
+    }
+
+    /** Creates a tag and returns its identifier. */
+    private static UUID tag(Person person, String path, String name) {
+        Response created = post(person, path, Map.of("name", name));
+        assertEquals(201, created.status(), created.body());
+        return UUID.fromString(created.json().get("id").asString());
+    }
+
+    private static long ticket(Person person, Project project, String title) {
+        Response created = post(person, "/api/v1/projects/" + project.id() + "/tickets", Map.of("type", "task", "title", title));
+        assertEquals(201, created.status(), created.body());
+        return created.json().get("number").asLong();
+    }
+
+    private static Map<String, Object> map(Object... pairs) {
+        Map<String, Object> map = new HashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            map.put((String) pairs[i], pairs[i + 1]);
+        }
+        return map;
+    }
+
+    private static void assertProblem(Response response, int status, String code) {
+        assertEquals(status, response.status(), response.body());
+        assertEquals(code, response.code(), response.body());
+    }
+
+    private static List<String> tagNames(Response response) {
+        assertEquals(200, response.status(), response.body());
+        return StreamSupport.stream(response.json().spliterator(), false).map(tag -> tag.get("name").asString()).toList();
+    }
+
+    private List<String> audit(UUID tagId) {
+        return jdbc.queryForList("select operation from tag_audit_event where tag_id = ? order by id", String.class, tagId);
+    }
+
+    // ---------------------------------------------------------------- review probes (TASK-028, PR #119)
+
+    /** Runs the statements in a transaction of its own and keeps it open until the returned release runs. */
+    private Runnable hold(String... statements) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            for (String statement : statements) {
+                jdbc.execute(statement);
+            }
+            locked.countDown();
+            try {
+                assertTrue(release.await(60, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertTrue(locked.await(15, TimeUnit.SECONDS));
+        return () -> {
+            release.countDown();
+            try {
+                holder.get(60, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+    }
+
+    /** F1: other Unicode spaces inside a name are neither collapsed nor refused. */
+    @Test
+    void reviewInnerUnicodeSpacesMustCountAsOneSpace() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        String token = "u" + COUNTER.incrementAndGet();
+        assertEquals(201, post(admin, "/api/v1/tags", Map.of("name", "Nord Süd " + token)).status());
+        Response ogham = post(admin, "/api/v1/tags", Map.of("name", "Nord Süd " + token));
+        Response lineSeparator = post(admin, "/api/v1/tags", Map.of("name", "Nord Süd " + token));
+        System.out.println("REVIEW F1 ogham " + ogham.status() + " " + ogham.body());
+        System.out.println("REVIEW F1 line separator " + lineSeparator.status() + " " + lineSeparator.body());
+        assertTrue(ogham.status() == 409 || ogham.status() == 400, "U+1680 must count as the same name or be refused");
+        assertTrue(lineSeparator.status() == 409 || lineSeparator.status() == 400, "U+2028 must count as the same name or be refused");
+    }
+
+    /** F2: the upper case form of ß is SS, yet both names are stored side by side. */
+    @Test
+    void reviewUpperCaseSharpSMustBeTheSameName() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        String token = "s" + COUNTER.incrementAndGet();
+        assertEquals(201, post(admin, "/api/v1/tags", Map.of("name", "Straße " + token)).status());
+        Response upper = post(admin, "/api/v1/tags", Map.of("name", ("Straße " + token).toUpperCase()));
+        System.out.println("REVIEW F2 " + ("Straße " + token).toUpperCase() + " " + upper.status() + " " + upper.body());
+        assertProblem(upper, 409, "tag.name_taken");
+    }
+
+    /** F3: a tag of a foreign project that another transaction locks must answer like an unknown tag, at once. */
+    @Test
+    void reviewLockedForeignTagMustAnswerLikeAnUnknownOne() throws Exception {
+        Person worker = person();
+        Person stranger = person();
+        Project project = project(worker);
+        Project foreign = project(stranger);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(stranger.id(), foreign.id(), "ticket.read", "tag.create");
+        UUID secret = tag(stranger, catalog(foreign), "Geheimprojekt");
+        long number = ticket(worker, project, "Fremder Tag");
+
+        assertProblem(post(worker, ticketTags(project, number), Map.of("tagId", secret.toString())), 404, "tag.not_found");
+        Runnable release = hold("select id from tag where id = '" + secret + "' for update");
+        try {
+            long start = System.nanoTime();
+            Response locked = post(worker, ticketTags(project, number), Map.of("tagId", secret.toString()));
+            long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            System.out.println("REVIEW F3 assign " + locked.status() + " after " + millis + " ms " + locked.body());
+            assertProblem(locked, 404, "tag.not_found");
+        } finally {
+            release.run();
+        }
+    }
+
+    /** F3, second path: changing a company tag through a project catalog locks it exclusively before it is refused. */
+    @Test
+    void reviewChangeThroughAForeignCatalogMustNotWaitForTheTag() throws Exception {
+        Person member = person();
+        Project project = project(member);
+        grant(member.id(), project.id(), "ticket.read", "tags.manage");
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        UUID company = tag(admin, "/api/v1/tags", "Unternehmen " + COUNTER.incrementAndGet());
+
+        Runnable release = hold("select id from tag where id = '" + company + "' for share");
+        try {
+            long start = System.nanoTime();
+            Response change = patch(member, catalog(project) + "/" + company, Map.of("archived", true), "\"1\"");
+            long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            System.out.println("REVIEW F3 change " + change.status() + " after " + millis + " ms " + change.body());
+            assertProblem(change, 404, "tag.not_found");
+        } finally {
+            release.run();
+        }
+    }
+
+    /** Revocation: an assignment waits for a concurrent removal from the group and is then refused. */
+    @Test
+    void reviewAssignmentWaitsForConcurrentRevocationAndIsRefused() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        UUID company = tag(admin, "/api/v1/tags", "Entzug " + COUNTER.incrementAndGet());
+        long number = ticket(worker, project, "Entzug");
+        UUID companyId = companies.find().orElseThrow();
+
+        Runnable release = hold(
+            "select revision from permissions_revision where company_id = '" + companyId + "' for update",
+            "delete from permissions_membership where user_id = '" + worker.id() + "'",
+            "update permissions_revision set revision = revision + 1 where company_id = '" + companyId + "'");
+        Future<Response> assignment = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("tagId", company.toString())));
+        try {
+            assertTrue(waitsAt("permissions_revision"), "the assignment must wait for the revocation");
+            assertFalse(assignment.isDone());
+        } finally {
+            release.run();
+        }
+        Response refused = assignment.get(30, TimeUnit.SECONDS);
+        System.out.println("REVIEW revocation " + refused.status() + " " + refused.body());
+        assertTrue(refused.status() == 403 || refused.status() == 404, refused.body());
+        assertEquals(0, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ?", Integer.class, company));
+    }
+
+    /** Membership: an assignment waits for a concurrent removal from the project and is then refused. */
+    @Test
+    void reviewAssignmentWaitsForConcurrentRemovalFromTheProject() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Mitgliedschaft");
+
+        Runnable release = hold(
+            "select id from project where id = '" + project.id() + "' for update",
+            "delete from project_member where project_id = '" + project.id() + "' and account_id = '" + worker.id() + "'");
+        Future<Response> assignment = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", "Neu im Projekt")));
+        try {
+            assertTrue(waitsAt("from project"), "the assignment must wait for the project row");
+            assertFalse(assignment.isDone());
+        } finally {
+            release.run();
+        }
+        Response refused = assignment.get(30, TimeUnit.SECONDS);
+        System.out.println("REVIEW membership " + refused.status() + " " + refused.body());
+        assertProblem(refused, 404, "project.not_found");
+        assertEquals(0, jdbc.queryForObject("select count(*) from tag where project_id = ?", Integer.class, project.id()),
+            "the combined creation is rolled back with the assignment");
+    }
+
+    /** Field rule: a deny on tags wins over an allow from another group, for reading and for writing. */
+    @Test
+    void reviewDenyOnTheTagsFieldWins() {
+        Person worker = person();
+        Person denied = person();
+        Project project = project(worker, denied);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(denied.id(), project.id(), TICKETS);
+        grant(denied.id(), project.id(), "DENY-READ:tags");
+        long number = ticket(worker, project, "Verbot");
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("name", "Sichtbar")).status());
+        assertProblem(denied.get(ticketTags(project, number)), 403, "auth.forbidden");
+        assertProblem(post(denied, ticketTags(project, number), Map.of("name", "Sichtbar")), 403, "auth.forbidden");
+        assertProblem(delete(denied, ticketTags(project, number) + "/" + UUID.randomUUID()), 403, "auth.forbidden");
+    }
+
+    /** Combined creation and assignment stay atomic when the assignment cannot happen. */
+    @Test
+    void reviewCombinedCreationIsAtomic() {
+        Person worker = person();
+        Person editor = person();
+        Project project = project(worker, editor);
+        grant(worker.id(), project.id(), "ticket.read", "tag.create", "READ:*", "READ:tags");
+        grant(editor.id(), project.id(), TICKETS);
+        long number = ticket(editor, project, "Atomar");
+        String name = "Atomar " + COUNTER.incrementAndGet();
+        assertProblem(post(worker, ticketTags(project, number), Map.of("name", name)), 403, "auth.forbidden");
+        assertProblem(post(editor, ticketTags(project, 999), Map.of("name", name)), 404, "ticket.not_found");
+        assertEquals(List.of(), tagNames(worker.get(catalog(project) + "?q=" + name.replace(" ", "%20"))));
+    }
+
+    /** Parameters of the wrong kind must be a 400, not a 500; NUL in the search text must not break the query. */
+    @Test
+    void reviewBadParametersAreRefusedCleanly() {
+        Person reader = person();
+        Project project = project(reader);
+        grant(reader.id(), project.id(), TICKETS);
+        for (String path : List.of("/api/v1/tags?archived=ja", "/api/v1/tags?limit=viel", "/api/v1/tags/kein-uuid",
+                "/api/v1/projects/" + project.id() + "/tickets/abc/tags", "/api/v1/projects/kein-uuid/catalog/tags")) {
+            Response response = reader.get(path);
+            System.out.println("REVIEW params " + path + " " + response.status());
+            assertEquals(400, response.status(), path + " " + response.body());
+        }
+        assertEquals(200, reader.get("/api/v1/tags?q=%00").status());
+        assertEquals(200, reader.get("/api/v1/tags?after=%00").status());
+        assertEquals(200, reader.get("/api/v1/tags?q=" + "x".repeat(5000)).status());
+    }
+
+    /** Documents: an archived name blocks a new tag of that name, and a named assignment finds the archived one. */
+    @Test
+    void reviewArchivedNameBlocksANewTag() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), null, "tag.create");
+        String name = "Alt " + COUNTER.incrementAndGet();
+        UUID old = tag(admin, "/api/v1/tags", name);
+        assertEquals(200, patch(admin, "/api/v1/tags/" + old, Map.of("archived", true), "\"1\"").status());
+        assertProblem(post(worker, "/api/v1/tags", Map.of("name", name)), 409, "tag.name_taken");
+        long number = ticket(worker, project, "Archiv");
+        assertProblem(post(worker, ticketTags(project, number), Map.of("name", name, "catalog", "company")), 409, "tag.archived");
+    }
+
+    /** Documents: tag changes do not appear in the ticket history, and the audit has no read path. */
+    @Test
+    void reviewTagChangesAreNotInTheTicketHistory() {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Historie");
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("name", "Historie")).status());
+        Response history = worker.get("/api/v1/projects/" + project.id() + "/tickets/" + number + "/history");
+        System.out.println("REVIEW history " + history.body());
+        assertEquals(200, history.status());
+        assertFalse(history.body().contains("tags"), "the ticket history knows nothing of the tag");
+        var rows = jdbc.queryForList("select operation, target_type, target_id from tag_audit_event a join tag t on t.id = a.tag_id where t.project_id = ? order by a.id", project.id());
+        System.out.println("REVIEW audit " + rows);
+        assertEquals("tag", rows.get(0).get("target_type"));
+        assertEquals(project.id(), rows.get(0).get("target_id"), "the creation names the project as target of the type tag");
+    }
+
+    /** Documents: ticket.edit without a reader action assigns a project tag by identifier, not by name. */
+    @Test
+    void reviewEditWithoutReadAssignsProjectTagsByIdentifier() {
+        Person member = person();
+        Person writer = person();
+        Project project = project(member, writer);
+        grant(member.id(), project.id(), TICKETS);
+        grant(member.id(), project.id(), "tag.create");
+        grant(writer.id(), project.id(), "ticket.edit", "READ:tags", "WRITE:tags");
+        UUID local = tag(member, catalog(project), "Nur Projekt");
+        long number = ticket(member, project, "Schreiben ohne Lesen");
+        assertProblem(writer.get(catalog(project)), 404, "project.not_found");
+        assertProblem(post(writer, ticketTags(project, number), Map.of("name", "Nur Projekt")), 403, "auth.forbidden");
+        assertEquals(204, post(writer, ticketTags(project, number), Map.of("tagId", local.toString())).status());
+        assertProblem(post(writer, ticketTags(project, number), Map.of("tagId", UUID.randomUUID().toString())), 404, "tag.not_found");
+    }
+
+    private boolean waitsAt(String statementPart) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists(select 1 from pg_stat_activity
+                    where datname = current_database() and pid <> pg_backend_pid()
+                    and query ilike ? and cardinality(pg_blocking_pids(pid)) > 0)
+                    """, Boolean.class, "%" + statementPart + "%"))) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
+    }
+}
