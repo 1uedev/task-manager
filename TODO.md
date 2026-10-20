@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,13 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | — | 2026-10-17 |
 | [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
 | [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | — | 2026-10-17 |
@@ -488,17 +489,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-026 Projekte und minimale Konfiguration implementieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-projects-01 · **Aktualisiert:** 2026-10-20
 
-**Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025; deren für Projekte benötigte Ergebnisse angenommen, Projektkonfiguration entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-039 und TASK-040 sind abgenommen und integriert. Holger hat am 20. Oktober 2026 im Projektgespräch die Frage, ob TASK-026 mit der minimalen Projektkonfiguration aus docs/DEVELOPMENT_START.md beansprucht werden soll, mit „ja“ beantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und bestätigt diese minimale Konfiguration für den ersten Abschnitt; TASK-027 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; Ergebnis mit DEC-065, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0011.
 
-**Umfang:** Projekte, Mitgliedschaften sowie minimale pro Projekt gepflegte Typ-/Status-/Feldkonfiguration mit Verwaltungs-API umsetzen. Zwei unterschiedliche synthetische Projekte vorbereiten. Keine globale unveränderliche Workflow-Schablone.
+**Umfang:** Projekte, Mitgliedschaften sowie minimale pro Projekt gepflegte Typ-/Status-/Feldkonfiguration mit Verwaltungs-API umsetzen. Bestätigte minimale Konfiguration: Ticketfelder Titel, Beschreibung, Typ, Status und Zuständigkeit; Ausgangsablauf „Neu → In Arbeit → Erledigt“ wird je Projekt als Konfiguration angelegt und ist dort änderbar, keine globale unveränderliche Workflow-Schablone. Projektbezogene Rechte über den Adapter zwischen Projektmodul und Berechtigungsmodul (Objektkontext Projekt); keine zweite Benutzer- oder Gruppenverwaltung. Zwei unterschiedliche synthetische Projekte für Tests vorbereiten. Nicht Teil: Tickets (TASK-027), Tags, Suche, Oberfläche für Projekte (TASK-030), HTTP Endpunkte zur Gruppen- und Rechtepflege, Formulare und Automationen, Prüfung beim Commit statt beim Sperren, P2 bis P6, F1 bis F3 aus PR #96.
 
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Projektmodul und dessen Migrationen. Mitgliedschaft und Regeln werden über vereinbarte Rechteverträge verbunden; keine zweite Benutzerverwaltung. Liefert Projekt-/Konfigurationsversion und Objektkontext an Tickets.
+**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Projektmodul und dessen Migrationen, eigener OpenAPI Vertrag unter contracts/, Verdrahtung im Anwendungseinstieg, Tests. Mitgliedschaft und Regeln werden über vereinbarte Rechteverträge verbunden. Liefert Projekt-/Konfigurationsversion und Objektkontext an Tickets.
 
-**Abnahmekriterien:** Berechtigter Zugriff und Administration funktionieren; fremde Projekte bleiben über Listen und IDs geschützt. Konfigurationsversionen und ungültige Änderungen werden nach Fachvertrag behandelt. Getrennte KI prüft Datenhoheit, Projektgrenzen und administrativen Rechteentzug.
+**Abnahmekriterien:** Berechtigter Zugriff und Administration funktionieren; fremde Projekte bleiben über Listen und IDs geschützt. Konfigurationsversionen und ungültige Änderungen werden nach Fachvertrag behandelt. Getrennte KI prüft Datenhoheit, Projektgrenzen und administrativen Rechteentzug; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
 
-**Nächster Schritt:** Anmeldung/Rechte und notwendige Projektregeln akzeptieren; ausdrücklich autorisierten Auftrag reservieren.
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-065 übergeben.
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 
