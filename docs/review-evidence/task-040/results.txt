@@ -1,0 +1,72 @@
+TASK-040 / PR #101 — independent review evidence
+Session: codex-20261019-admin-rights-review-01
+Executed: 2026-10-20
+Checkout: main 78a858c6e9d4692e5daf5348764c0be94b6fb071
+PR final head: e2f0581ee8225fb0739c2f4c62eae1c85c38a455
+Product code unchanged between PR #101 integration and this checkout.
+Only synthetic local data; shortened excerpts, no cookies, issued credentials or private paths.
+
+SELF-EXECUTED BASELINE
+Java: Temurin 25.0.4.1+1
+Maven wrapper: 3.9.16
+PostgreSQL: native 18.6, dedicated loopback-only cluster
+Backend: clean verify
+[INFO] Tests run: 130, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+SELF-EXECUTED EXTRA PROBES — intentionally fail their expected safe behavior
+AdministrationRightsApiTest#reviewMutualPasswordResetsDoNotReturnServerError
+[review040] session holder=28004, exact blocked HTTP pids=[11388, 24024]
+Both request queries: FOR SHARE OF s; exact holder verified with pg_blocking_pids.
+PostgreSQL reported:
+  ERROR: deadlock detected
+  Process 11388 waits for ShareLock on transaction 2884; blocked by process 24024.
+  Process 24024 waits for ShareLock on transaction 2885; blocked by process 11388.
+  Both statements: select ... from identity_account where id = $1 for update
+[review040] mutual reset statuses=200,500; accounts changed=1
+Assertion failed: A and B manage the other account, not themselves: statuses=200,500
+
+AdministrationRightsWiringReviewTest#reviewTwoPortsIncludingAPrimaryMustFailClosed
+Assertion failed: Expected ApiProblemException to be thrown, but nothing was thrown.
+
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+[INFO] BUILD FAILURE
+No production code was modified. No error in creating the fixtures or reaching the assertions.
+
+SELF-EXECUTED RESTORATION
+Original AdministrationRightsApiTest.java restored byte-for-byte.
+Original and restored SHA-256:
+B43E5D8301A120E351A3A4EB9EB79A169BB11B01E4439E971485536D7393308E
+Temporary wiring test removed.
+git diff --exit-code -- backend frontend: exit 0
+clean test -Dtest=AdministrationRightsApiTest,IdentityPermissionsAdapterTest,AdminCommandTest
+[INFO] Tests run: 30, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+SELF-EXECUTED FRONTEND
+Node: 24.22.0
+npm ci --ignore-scripts: exit 0
+npm run verify: exit 0
+OpenAPI generation, TypeScript check, 71 tests, Vite production build: passed
+npm run test:browser (local Chrome, simulated API): exit 0
+tests 45; pass 45; fail 0; cancelled 0; skipped 0; todo 0
+
+SELF-EXECUTED REPOSITORY CHECKS
+Repository contract: OK (IDs, links, task metadata and completion evidence)
+Task board: current
+Python regression suite: Ran 25 tests — OK
+git diff --check: exit 0
+
+SEPARATELY READ CI EVIDENCE — NOT A LOCAL REEXECUTION OF THE LINUX LIFECYCLE SCRIPT
+Final PR #101 head: e2f0581ee8225fb0739c2f4c62eae1c85c38a455
+Backend run: https://github.com/1uedev/task-manager/actions/runs/39271290318
+Backend job: 118123951232
+2026-10-19T14:43:19.2864413Z [INFO] Tests run: 130, Failures: 0, Errors: 0, Skipped: 0
+2026-10-19T14:43:23.2777374Z [INFO] BUILD SUCCESS
+2026-10-19T14:43:32.2339888Z PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)
+2026-10-19T14:44:05.0704317Z Lifecycle check passed
+All final-head PR workflows completed successfully:
+Repository checks 39271290570
+Frontend 39271290398
+Technical qualification 39271290297
+Backend 39271290318
