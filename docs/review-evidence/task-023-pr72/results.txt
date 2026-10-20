@@ -1,0 +1,104 @@
+TASK-023 / PR #72 — independent correction follow-up
+Session: codex-20261020-frontend-followup-01
+Executed: 2026-10-20
+Historical exact PR #72 head: 78eed607f339dc61a66606833205da17b8433627
+Tested current main: 3e3349ec7cfd8854138af6c4d9b405d33e4a32f2
+Publication base: 6c59d4c34805234233e09fa941df565f06b6ce37
+Only TODO.md changed between tested current main and publication base (Claude TASK-026 claim #104).
+Separate worktrees; the historical Windows directory included spaces and an umlaut.
+
+SELF-EXECUTED VERSIONS
+Node v24.22.0
+npm 11.19.1
+Google Chrome 155.0.8059.82
+
+HISTORICAL PR HEAD — UNMODIFIED ORIGINAL FILES AND TEST HARNESS
+npm ci --ignore-scripts: success
+npm run verify: generation, typecheck, unit tests and Vite build successful
+tests 59; pass 59; fail 0; skipped 0
+npm run test:browser
+tests 21; pass 21; fail 0; cancelled 0; skipped 0
+No path adaptation was needed, unlike the first review of the older PR #70 code.
+
+CURRENT MAIN — UNMODIFIED PRODUCT FILES
+npm ci --ignore-scripts: success
+npm run verify: generation, typecheck, unit tests and Vite build successful
+tests 71; pass 71; fail 0; skipped 0
+npm run test:browser
+tests 45; pass 45; fail 0; cancelled 0; skipped 0
+Generated API files unchanged on both revisions.
+
+FOCUSED PROBE — SAME OBSERVATIONS ON HISTORICAL AND CURRENT CODE
+Nine malformed number inputs refused in both parser and sample form:
+de/en/fr each with ordinary, no-break and narrow no-break space between 1 and 5.
+Valid de/en decimals and fully grouped French number accepted.
+Seven invalid logo strings rejected, including the original slash/backslash host-switch case.
+Valid local query path preserved; valid HTTPS host spelling normalized.
+No external logo request made.
+Original black-and-white brand accepted.
+muted color: #bfbfbf
+contrast against #000000:
+  --muted 11.419911464087086
+  --error 10.561652609781106
+  --link 21
+  --border 6.245013150593924
+  --focus 12.795307144606257
+Local test server statuses:
+  root: 200
+  encoded parent/backslash escape to package.json: 404
+  malformed percent encoding: 400
+Own loopback server closed in finally.
+
+F1 MUTATION — HISTORICAL CHECKOUT ONLY
+Replaced text.trim() with text.replace(/\s/g, '').
+node --test tests/format.test.ts
+tests 7; pass 5; fail 2; skipped 0
+Failed cases:
+  spaces never join digits that are not a complete group
+  only outer whitespace is ignored
+Expected assertion failures; original restored before the next mutation.
+
+F2 MUTATION — HISTORICAL CHECKOUT ONLY
+Accepted a leading slash raw path before URL validation, except two leading slashes.
+node --test tests/brand.test.ts
+tests 11; pass 10; fail 1; skipped 0
+Failed case: logo addresses are normalized and cannot point to another host
+Expected assertion failure; original restored before the next mutation.
+
+F3 MUTATION — HISTORICAL CHECKOUT ONLY
+Replaced derived muted color with #4a4a4a.
+node --test tests/brand.test.ts
+tests 11; pass 8; fail 3; skipped 0
+Failed cases:
+  css variables are produced from the validated setting only
+  secondary colors keep their contrast on a dark branding
+  every accepted branding yields a readable palette
+Then npm run build and full npm run test:browser:
+tests 21; pass 20; fail 1; skipped 0
+Sole failed case: a dark branding keeps hints, errors, borders and focus readable
+AssertionError: hint 2.3695633968880028
+
+RESTORATION AND POSITIVE RETURN
+format.ts and brand.ts restored byte-for-byte; SHA-256 matched the saved originals.
+Historical frontend git diff: empty
+Current frontend git diff: empty throughout the experiments
+Historical npm run verify repeated: 59 pass, 0 fail, 0 skipped; build successful
+Historical npm run test:browser repeated: 21 pass, 0 fail, 0 skipped
+Focused probe repeated after restoration: positive observations and server statuses above.
+No deliberately broken build output left behind.
+
+REPOSITORY CHECKS
+Repository validator, task board, 25 Python regression tests and staged diff whitespace check: successful.
+
+SEPARATELY READ CI — NOT AN ADDITIONAL SELF-EXECUTED RUN
+PR #72 final-head frontend run:
+https://github.com/1uedev/task-manager/actions/runs/39134912439
+Job 117697352084
+2026-10-18T14:12:17.1411758Z tests 59
+2026-10-18T14:12:17.1442367Z pass 59
+2026-10-18T14:12:17.1442971Z fail 0
+2026-10-18T14:12:17.1443487Z skipped 0
+2026-10-18T14:12:35.6668026Z tests 21
+2026-10-18T14:12:35.6668505Z pass 21
+2026-10-18T14:12:35.6668683Z fail 0
+2026-10-18T14:12:35.6669080Z skipped 0
