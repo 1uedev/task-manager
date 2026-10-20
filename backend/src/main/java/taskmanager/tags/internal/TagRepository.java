@@ -18,6 +18,13 @@ class TagRepository {
     private static final String TAG_COLUMNS = "t.id, t.company_id, t.project_id, t.name, t.normalized, t.archived, t.version, "
         + "t.created_at, t.created_by, t.updated_at, t.updated_by";
 
+    /**
+     * The catalog condition in the form of the unique index {@code tag_name_per_catalog}, so PostgreSQL can use it with a
+     * parameter (hint H5 of the TASK-028 review); the parameter is {@code null} for the company catalog.
+     */
+    private static final String IN_CATALOG = "coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+        + " = coalesce(cast(? as uuid), '00000000-0000-0000-0000-000000000000'::uuid)";
+
     private final JdbcClient jdbc;
 
     TagRepository(JdbcClient jdbc) {
@@ -36,7 +43,7 @@ class TagRepository {
      * text is compared with the normalized name; {@code after} is the normalized name of the last tag of the previous page.
      */
     List<Tag> catalog(UUID companyId, UUID projectId, String search, boolean includeArchived, String after, int limit) {
-        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and project_id is not distinct from ?"
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and " + IN_CATALOG
                 + " and (? or not archived) and (cast(? as text) is null or position(cast(? as text) in normalized) > 0)"
                 + " and (cast(? as text) is null or normalized > cast(? as text)) order by normalized limit ?")
             .params(companyId, projectId, includeArchived, search, search, after, after, limit)
@@ -48,20 +55,32 @@ class TagRepository {
             .query(TagRepository::map).optional();
     }
 
-    /** Reads and locks the tag row until the end of the transaction: shared to assign it, exclusive to change it. */
-    Optional<Tag> lock(UUID companyId, UUID id, boolean exclusive) {
-        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and id = ? " + (exclusive ? "for update" : "for share"))
-            .params(companyId, id).query(TagRepository::map).optional();
+    /**
+     * Reads the tag of exactly this catalog and locks it exclusively until the end of the transaction. A tag of another
+     * catalog is neither returned nor locked, so it answers like an unknown one without waiting (review F3 of TASK-028).
+     */
+    Optional<Tag> lockForChange(UUID companyId, UUID id, UUID projectId) {
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and id = ? and " + IN_CATALOG + " for update")
+            .params(companyId, id, projectId).query(TagRepository::map).optional();
+    }
+
+    /**
+     * Reads a tag of the company catalog, or of the catalog of {@code projectId} when it is given, and locks it shared until
+     * the end of the transaction. Tags of other catalogs are neither returned nor locked (review F3 of TASK-028).
+     */
+    Optional<Tag> lockForAssignment(UUID companyId, UUID id, UUID projectId) {
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and id = ? and (project_id is null or project_id = ?) for share")
+            .params(companyId, id, projectId).query(TagRepository::map).optional();
     }
 
     /** Finds the tag of the catalog with this normalized name and locks it shared. */
     Optional<Tag> lockByName(UUID companyId, UUID projectId, String normalized) {
-        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and project_id is not distinct from ? and normalized = ? for share")
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and " + IN_CATALOG + " and normalized = ? for share")
             .params(companyId, projectId, normalized).query(TagRepository::map).optional();
     }
 
     boolean nameTaken(UUID companyId, UUID projectId, String normalized, UUID except) {
-        return jdbc.sql("select exists (select 1 from tag where company_id = ? and project_id is not distinct from ? and normalized = ? and id <> ?)")
+        return jdbc.sql("select exists (select 1 from tag where company_id = ? and " + IN_CATALOG + " and normalized = ? and id <> ?)")
             .params(companyId, projectId, normalized, except).query(Boolean.class).single();
     }
 

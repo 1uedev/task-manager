@@ -14,9 +14,11 @@ info:
     Mitgliedschaft verlangen. `tags.manage` ist ein Verwaltungsrecht des Unternehmens; die Ersteinrichtung vergibt es.
     Portalkonten erhalten bis zur Entscheidung über das Portal keinen Katalog (403).
 
-    Namen: Unicode NFKC, äußere Leerzeichen entfernt, innere zu einem Leerzeichen zusammengefasst, 1 bis 50 Zeichen, keine
-    Steuer oder Formatzeichen. Ein Name kommt je Katalog einmal vor, ohne Unterschied der Groß und Kleinschreibung
-    (409 `tag.name_taken`). Derselbe Name darf im Unternehmenskatalog und in jedem Projektkatalog je einmal stehen. Tags
+    Namen: Unicode NFKC, äußere Leerzeichen entfernt, innerer Leerraum jeder Unicode Art zu einem Leerzeichen
+    zusammengefasst, 1 bis 50 Zeichen, keine Steuer oder Formatzeichen. Ein Name kommt je Katalog einmal vor, ohne
+    Unterschied der Groß und Kleinschreibung, verglichen über Groß und danach Kleinschreibung, sodass `STRASSE` und
+    `Straße` derselbe Name sind (409 `tag.name_taken`). Ein archivierter Tag hält seinen Namen besetzt. Ein Tag eines
+    anderen Katalogs antwortet wie eine unbekannte Kennung mit 404 `tag.not_found`. Derselbe Name darf im Unternehmenskatalog und in jedem Projektkatalog je einmal stehen. Tags
     werden archiviert statt gelöscht; ein archivierter Tag bleibt zugeordnet, wird aber nicht neu zugeordnet
     (409 `tag.archived`).
 

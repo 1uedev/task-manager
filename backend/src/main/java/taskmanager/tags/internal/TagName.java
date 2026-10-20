@@ -2,13 +2,17 @@ package taskmanager.tags.internal;
 
 import java.text.Normalizer;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
- * The rules for tag names (TASK-028, DEC-068): Unicode NFKC, outer white space removed, inner white space collapsed to one
- * space, 1 to 50 characters, no control or format characters. Two names are the same when their lower case forms match.
+ * The rules for tag names (TASK-028, DEC-068): Unicode NFKC, outer white space removed, inner white space of any Unicode kind
+ * (also line and paragraph separators) collapsed to one space, 1 to 50 characters, no control or format characters. Two
+ * names are the same when their case folded forms match, so {@code STRASSE} and {@code Straße} are one name.
  */
 final class TagName {
     static final int MAX = 50;
+    /** Every Unicode white space, not only ASCII (review F1 of TASK-028). */
+    private static final Pattern WHITE_SPACE = Pattern.compile("[\\s\\p{Z}]+", Pattern.UNICODE_CHARACTER_CLASS);
 
     private TagName() {
     }
@@ -18,7 +22,7 @@ final class TagName {
         if (raw == null) {
             return null;
         }
-        String name = Normalizer.normalize(raw, Normalizer.Form.NFKC).strip().replaceAll("\\s+", " ");
+        String name = collapse(Normalizer.normalize(raw, Normalizer.Form.NFKC));
         if (name.isEmpty() || name.codePointCount(0, name.length()) > MAX) {
             return null;
         }
@@ -35,12 +39,19 @@ final class TagName {
         if (raw == null) {
             return null;
         }
-        String key = Normalizer.normalize(raw, Normalizer.Form.NFKC).strip().replaceAll("\\s+", " ").replace("\u0000", "");
+        String key = collapse(Normalizer.normalize(raw, Normalizer.Form.NFKC)).replace("\u0000", "");
         return key.isEmpty() ? null : normalized(key);
     }
 
-    /** The form for comparisons of a cleaned name. */
+    /**
+     * The form for comparisons of a cleaned name: upper case first, then lower case, which folds {@code ß} and {@code SS}
+     * together (review F2 of TASK-028).
+     */
     static String normalized(String cleaned) {
-        return cleaned.toLowerCase(Locale.ROOT);
+        return cleaned.toUpperCase(Locale.ROOT).toLowerCase(Locale.ROOT);
+    }
+
+    private static String collapse(String text) {
+        return WHITE_SPACE.matcher(text).replaceAll(" ").strip();
     }
 }

@@ -496,7 +496,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
 
-**Nächster Schritt:** Getrennte KI Prüfung nach DEC-040 (Entdeckungsgrenzen, Modultransaktionen); danach Abnahme durch Holger.
+**Nächster Schritt:** Die unabhängige Claude Prüfung (docs/REVIEW_TASK-028_PR-119.md, PR #120) hat F1 bis F3 als P3 gemeldet; sie sind auf Holgers Auftrag behoben (Unicode Leerraum, Faltung von `ß`, keine Sperre auf Tags fremder Kataloge), dazu H3 bis H5, siehe DEC-068 Nachtrag (9). Offen ist Holgers Entscheidung zu H1 (Tags in der Tickethistorie); danach Abnahme durch Holger.
 
 ## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
 

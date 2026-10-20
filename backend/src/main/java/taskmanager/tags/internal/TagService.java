@@ -3,7 +3,6 @@ package taskmanager.tags.internal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -204,7 +203,7 @@ public class TagService {
         if (!tags.insert(tag)) {
             throw ApiProblemException.of(409, "tag.name_taken");
         }
-        tags.audit(actor.companyId(), tag.id(), "tag.created", TAG_RESOURCE, projectId, tag.name(), actor.userId(), tag.createdAt());
+        tags.audit(actor.companyId(), tag.id(), "tag.created", catalogTarget(projectId), projectId, tag.name(), actor.userId(), tag.createdAt());
         return tag;
     }
 
@@ -219,8 +218,7 @@ public class TagService {
     }
 
     private Tag change(AccessContext actor, UUID projectId, UUID id, long expectedVersion, Change change) {
-        Tag tag = tags.lock(actor.companyId(), id, true).filter(found -> Objects.equals(found.projectId(), projectId))
-            .orElseThrow(TagService::tagNotFound);
+        Tag tag = tags.lockForChange(actor.companyId(), id, projectId).orElseThrow(TagService::tagNotFound);
         if (tag.version() != expectedVersion) {
             throw ApiProblemException.of(412, "tag.version_conflict");
         }
@@ -249,10 +247,10 @@ public class TagService {
             throw ApiProblemException.of(409, "tag.name_taken");
         }
         if (renamed) {
-            tags.audit(actor.companyId(), id, "tag.renamed", TAG_RESOURCE, projectId, tag.name(), actor.userId(), now);
+            tags.audit(actor.companyId(), id, "tag.renamed", catalogTarget(projectId), projectId, tag.name(), actor.userId(), now);
         }
         if (archived != tag.archived()) {
-            tags.audit(actor.companyId(), id, archived ? "tag.archived" : "tag.restored", TAG_RESOURCE, projectId, null, actor.userId(), now);
+            tags.audit(actor.companyId(), id, archived ? "tag.archived" : "tag.restored", catalogTarget(projectId), projectId, null, actor.userId(), now);
         }
         return changed;
     }
@@ -263,8 +261,7 @@ public class TagService {
      */
     private Tag resolve(AccessContext actor, UUID projectId, Target target, boolean companyOnly) {
         if (target.tagId() != null) {
-            Tag tag = tags.lock(actor.companyId(), target.tagId(), false)
-                .filter(found -> found.inCompanyCatalog() || (!companyOnly && projectId.equals(found.projectId())))
+            Tag tag = tags.lockForAssignment(actor.companyId(), target.tagId(), companyOnly ? null : projectId)
                 .orElseThrow(TagService::tagNotFound);
             return assignable(tag);
         }
@@ -291,8 +288,16 @@ public class TagService {
             // Created concurrently: the insert waited for that commit, so the tag is visible now.
             return assignable(tags.lockByName(actor.companyId(), catalog, tag.normalized()).orElseThrow(TagService::tagNotFound));
         }
-        tags.audit(actor.companyId(), tag.id(), "tag.created", TAG_RESOURCE, catalog, tag.name(), actor.userId(), tag.createdAt());
+        tags.audit(actor.companyId(), tag.id(), "tag.created", catalogTarget(catalog), catalog, tag.name(), actor.userId(), tag.createdAt());
         return tag;
+    }
+
+    /**
+     * The audit target of a catalog event: the project of a project catalog, nothing for the company catalog (hint H4 of the
+     * TASK-028 review). Assignments name the ticket or project they change.
+     */
+    private static String catalogTarget(UUID projectId) {
+        return projectId == null ? null : PROJECT_RESOURCE;
     }
 
     private static Tag assignable(Tag tag) {
