@@ -22,6 +22,7 @@ import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
+import taskmanager.tickets.TicketAccess;
 
 /**
  * Tickets of a project with history and conflict detection (TASK-027, DEC-067).
@@ -44,6 +45,8 @@ public class TicketService {
     public static final String EDIT = "ticket.edit";
     static final String RESOURCE = "ticket";
     static final Set<String> FIELDS = Set.copyOf(ProjectConfiguration.FIELD_KEYS);
+    /** The fields of the history: the five fields and the tags the tags module records (TASK-042). */
+    private static final Set<String> HISTORY_FIELDS = with(FIELDS, TicketAccess.TAGS_FIELD);
     private static final int TITLE_MAX = 200;
     private static final int DESCRIPTION_MAX = 20_000;
 
@@ -94,20 +97,35 @@ public class TicketService {
         return view(ticket, read.readableFields(), writable(actor, resource));
     }
 
+    /**
+     * The history, oldest first. The changes of the fields of one version form one entry. Each assignment or removal of a
+     * tag forms an entry of its own with the field {@code tags} and the version the ticket had then, so several entries can
+     * share a version (TASK-042); they need the read rule for {@code tags}.
+     */
     @Transactional
     public List<HistoryEntry> history(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
-        Set<String> readable = readable(actor, resource).readableFields();
+        Set<String> readable = readable(actor, resource, HISTORY_FIELDS).readableFields();
         Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
-        Map<Long, HistoryEntry> entries = new LinkedHashMap<>();
+        List<HistoryEntry> entries = new ArrayList<>();
+        HistoryEntry fields = null;
         for (TicketRepository.Change change : tickets.changes(ticket.id())) {
             if (!readable.contains(change.field())) {
                 continue;
             }
-            entries.computeIfAbsent(change.version(), version -> new HistoryEntry(version, change.occurredAt(), change.actor(), new ArrayList<>()))
-                .changes().add(new FieldChange(change.field(), change.oldValue(), change.newValue()));
+            FieldChange fieldChange = new FieldChange(change.field(), change.oldValue(), change.newValue());
+            if (TicketAccess.TAGS_FIELD.equals(change.field())) {
+                entries.add(new HistoryEntry(change.version(), change.occurredAt(), change.actor(), List.of(fieldChange)));
+                fields = null;
+            } else if (fields != null && fields.version() == change.version()) {
+                fields.changes().add(fieldChange);
+            } else {
+                fields = new HistoryEntry(change.version(), change.occurredAt(), change.actor(), new ArrayList<>(List.of(fieldChange)));
+                entries.add(fields);
+            }
         }
-        return List.copyOf(entries.values());
+        return entries.stream().map(entry -> new HistoryEntry(entry.version(), entry.occurredAt(), entry.actor(), List.copyOf(entry.changes())))
+            .toList();
     }
 
     @Transactional
@@ -289,7 +307,11 @@ public class TicketService {
 
     /** The read decision with the readable fields; without {@code ticket.read} the project does not exist for the caller. */
     private Decision readable(AccessContext actor, Supplier<ResourceContext> resource) {
-        Decision read = permissions.inspect(actor, resource, READ, FIELDS);
+        return readable(actor, resource, FIELDS);
+    }
+
+    private Decision readable(AccessContext actor, Supplier<ResourceContext> resource, Set<String> fields) {
+        Decision read = permissions.inspect(actor, resource, READ, fields);
         if (!read.allowed()) {
             throw projectNotFound();
         }
@@ -330,6 +352,12 @@ public class TicketService {
     private TicketView view(Ticket ticket, Set<String> readable, Set<String> writable) {
         String key = projects.key(ticket.projectId()).orElseThrow(TicketService::projectNotFound);
         return new TicketView(ticket, key, readable, writable);
+    }
+
+    private static Set<String> with(Set<String> fields, String field) {
+        Set<String> all = new HashSet<>(fields);
+        all.add(field);
+        return Set.copyOf(all);
     }
 
     private static ApiProblemException projectNotFound() {

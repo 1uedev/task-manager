@@ -35,17 +35,20 @@ import taskmanager.tickets.TicketAccess;
  * {@code ticket.edit} with a write rule for that field. A project takes tags of the company catalog; reading follows the
  * project rights ({@code projects.manage}, {@code project.read}, {@code project.manage}), changing needs
  * {@code projects.manage} or {@code project.manage}. An archived tag stays assigned but is not assigned again. A tag
- * assignment does not change the version of the ticket or of the project.
+ * assignment does not change the version of the ticket or of the project. An actual assignment or removal at a ticket
+ * is recorded in the history of the ticket through {@link TicketAccess#recordTagChange} in the same transaction
+ * (TASK-042); a repeated assignment or the removal of a tag that is not assigned records nothing.
  *
  * <p>Locks, in this order: rights, identity of the requester, project row ({@code FOR SHARE}, held by the project adapter
  * until the commit), then the tag row ({@code FOR SHARE} to assign it, {@code FOR UPDATE} to change it). Archiving thus
- * waits for an assignment that already holds the tag, and an assignment that waits sees the archived tag.
+ * waits for an assignment that already holds the tag, and an assignment that waits sees the archived tag. A change at a
+ * ticket finally locks the ticket row ({@code FOR SHARE}) to record it in the history.
  */
 @Service
 public class TagService {
     public static final String CREATE = "tag.create";
     public static final String MANAGE = AdministrationRight.TAGS_MANAGE.key();
-    static final String FIELD = "tags";
+    static final String FIELD = TicketAccess.TAGS_FIELD;
     private static final String TAG_RESOURCE = "tag";
     private static final String PROJECT_RESOURCE = "project";
     private static final List<String> CATALOG_READERS = List.of("project.read", "project.manage", "ticket.read", CREATE, MANAGE);
@@ -183,8 +186,10 @@ public class TagService {
     public void assignTicket(AccessContext actor, UUID projectId, long number, Target target) {
         UUID ticket = changeableTicket(actor, projectId, number);
         Tag tag = resolve(actor, projectId, target, false);
-        if (tags.assignTicket(ticket, tag.id(), projectId, clock.instant(), actor.userId())) {
-            tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), clock.instant());
+        Instant now = clock.instant();
+        if (tags.assignTicket(ticket, tag.id(), projectId, now, actor.userId())) {
+            tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), now);
+            tickets.recordTagChange(ticket, now, actor.userId(), null, tag.id());
         }
     }
 
@@ -192,7 +197,9 @@ public class TagService {
     public void unassignTicket(AccessContext actor, UUID projectId, long number, UUID tagId) {
         UUID ticket = changeableTicket(actor, projectId, number);
         if (tags.unassignTicket(ticket, tagId)) {
-            tags.audit(actor.companyId(), tagId, "tag.unassigned", "ticket", ticket, null, actor.userId(), clock.instant());
+            Instant now = clock.instant();
+            tags.audit(actor.companyId(), tagId, "tag.unassigned", "ticket", ticket, null, actor.userId(), now);
+            tickets.recordTagChange(ticket, now, actor.userId(), tagId, null);
         }
     }
 
