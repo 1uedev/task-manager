@@ -390,6 +390,23 @@ class ProjectsApiTest {
         assertProblem(person().get("/api/v1/projects/" + project + "/configurations/1"), 404, "project.not_found");
     }
 
+    /** Review F1 of TASK-026: a status without a category is an invalid configuration, not a server error. */
+    @Test
+    void aStatusWithoutCategoryIsRefusedAsInvalid() {
+        Person manager = manager();
+        UUID project = idOf(manager.create(nextKey(), "Kategorie"));
+        String initial = JSON.writeValueAsString(ProjectConfiguration.initial());
+        for (String body : List.of(initial.replace("\"category\":\"open\"", "\"category\":null"),
+                initial.replace(",\"category\":\"open\"", ""))) {
+            assertTrue(!body.equals(initial), "the probe must change the configuration");
+            Response refused = manager.configure(project, body, "\"1\"");
+            assertProblem(refused, 400, "request.invalid");
+            assertEquals(List.of("statuses.category_invalid"), refused.violations());
+        }
+        assertEquals(1L, jdbc.queryForObject("select version from project where id = ?", Long.class, project));
+        assertEquals(1, jdbc.queryForObject("select count(*) from project_configuration where project_id = ?", Integer.class, project));
+    }
+
     // ---------------------------------------------------------------- the login and the locks
 
     @Test
@@ -434,6 +451,42 @@ class ProjectsApiTest {
             release.countDown();
             writer.get(15, TimeUnit.SECONDS);
             assertProblem(read.get(20, TimeUnit.SECONDS), 404, "project.not_found");
+        } finally {
+            release.countDown();
+            writer.get(15, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Review F2 of TASK-026: a foreign project that a concurrent change holds answers at once like an unknown one, instead of
+     * waiting for the lock and failing in a way that tells it apart.
+     */
+    @Test
+    void aForeignProjectHeldByAConcurrentChangeAnswersLikeAnUnknownOne() throws Exception {
+        Person manager = manager();
+        UUID project = idOf(manager.create(nextKey(), "Verborgen"));
+        Person outsider = person();
+        grant(outsider.id(), null, READ, MANAGE);
+        assertProblem(outsider.get("/api/v1/projects/" + UUID.randomUUID()), 404, "project.not_found");
+
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> writer = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from project where id = ? for update", project);
+            locked.countDown();
+            try {
+                assertTrue(release.await(30, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        try {
+            assertTrue(locked.await(15, TimeUnit.SECONDS));
+            long started = System.nanoTime();
+            assertProblem(outsider.get("/api/v1/projects/" + project), 404, "project.not_found");
+            assertProblem(outsider.browser().send("PUT", "/api/v1/projects/" + project, Map.of("name", "x"), "\"1\""), 404, "project.not_found");
+            assertProblem(outsider.get("/api/v1/projects/" + project + "/members"), 404, "project.not_found");
+            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(3), "the refusal must not wait for the project row");
         } finally {
             release.countDown();
             writer.get(15, TimeUnit.SECONDS);

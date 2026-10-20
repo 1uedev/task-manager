@@ -92,7 +92,7 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
             "ticketTypes", MAX_TYPES, violations);
         Set<String> statusKeys = keys(statuses == null ? null : statuses.stream().map(s -> s == null ? null : new Named(s.key(), s.name())).toList(),
             "statuses", MAX_STATUSES, violations);
-        if (statuses != null && statuses.stream().anyMatch(s -> s != null && !CATEGORIES.contains(s.category()))) {
+        if (statuses != null && statuses.stream().anyMatch(s -> s != null && (s.category() == null || !CATEGORIES.contains(s.category())))) {
             violations.add("statuses.category_invalid");
         }
         if (initialStatus == null || !statusKeys.contains(initialStatus)) {

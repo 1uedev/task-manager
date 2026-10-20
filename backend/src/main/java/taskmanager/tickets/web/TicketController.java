@@ -78,8 +78,8 @@ class TicketController {
         }
     }
 
-    record CreateRequest(String type, String title, String description, String assignee) {
-    }
+    /** The fields a creation may name; the status always starts as the initial status of the configuration. */
+    private static final List<String> CREATE_FIELDS = List.of("type", "title", "description", "assignee");
 
     @GetMapping
     List<TicketBody> list(@PathVariable UUID projectId, @RequestParam(required = false) Integer limit,
@@ -93,12 +93,13 @@ class TicketController {
     }
 
     @PostMapping
-    ResponseEntity<TicketBody> create(@PathVariable UUID projectId, @RequestBody(required = false) CreateRequest body) {
+    ResponseEntity<TicketBody> create(@PathVariable UUID projectId, @RequestBody(required = false) JsonNode body) {
         AccessContext actor = actor();
-        if (body == null) {
+        if (body == null || !body.isObject()) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("title.invalid", "type.unknown"));
         }
-        Draft draft = new Draft(body.type(), body.title(), body.description(), body.assignee());
+        Map<String, String> values = strings(body, CREATE_FIELDS);
+        Draft draft = new Draft(values.get("type"), values.get("title"), values.get("description"), values.get("assignee"));
         return ticket(HttpStatus.CREATED, retrying(() -> tickets.create(actor, projectId, draft)));
     }
 
@@ -128,12 +129,17 @@ class TicketController {
         if (body == null || !body.isObject() || body.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("fields.required"));
         }
+        return strings(body, ProjectConfiguration.FIELD_KEYS);
+    }
+
+    /** The string or {@code null} values of an object body; another key or another kind of value is refused. */
+    private static Map<String, String> strings(JsonNode body, List<String> allowed) {
         Map<String, String> changes = new HashMap<>();
         List<String> violations = new ArrayList<>();
         for (var entry : body.properties()) {
             String field = entry.getKey();
             JsonNode value = entry.getValue();
-            if (!ProjectConfiguration.FIELD_KEYS.contains(field)) {
+            if (!allowed.contains(field)) {
                 violations.add("fields.unknown");
             } else if (value.isNull()) {
                 changes.put(field, null);

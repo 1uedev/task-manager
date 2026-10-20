@@ -13,7 +13,8 @@ import taskmanager.permissions.ResourceContext;
  * ({@code FOR SHARE}, or {@code FOR UPDATE} for {@code exclusive}) and reads whether the account is a member. Every change
  * of the membership locks the project row {@code FOR UPDATE}, so a removal waits for a change that already passed its check,
  * and a change that waits sees the removal. The lock is held until the end of the transaction. A missing project yields a
- * context without membership, which denies.
+ * context without membership, which denies. An account that is not a member is refused before the lock, without waiting,
+ * so a project locked by a concurrent change cannot be told apart from an unknown one.
  */
 public interface ProjectAccess {
     Supplier<ResourceContext> resource(UUID companyId, UUID projectId, UUID accountId, String resourceType, boolean exclusive);

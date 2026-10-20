@@ -10,7 +10,9 @@ info:
     verlangen die Mitgliedschaft. Jedes der fünf Felder (title, description, type, status, assignee) braucht zusätzlich eine
     Leseregel für den Ressourcentyp `ticket`, um gezeigt zu werden, und eine Schreibregel, um geändert zu werden; ein
     verborgenes Feld fehlt in `fields` und in der Historie. Ohne eine der drei Aktionen antwortet das Projekt mit 404
-    `project.not_found`. Das Unternehmensrecht `projects.manage` gibt keinen Zugriff auf Tickets.
+    `project.not_found`. Wer nur anlegen oder nur ändern, aber nicht lesen darf, erhält als Antwort das Ticket ohne
+    Feldwerte. Das Unternehmensrecht `projects.manage` gibt keinen Zugriff auf Tickets. Titel und Beschreibung dürfen
+    kein NUL Zeichen enthalten; unbekannte Felder werden bei Anlage und Änderung mit `fields.unknown` abgelehnt.
 
     Typ, Status, Übergänge und Pflichtfelder kommen aus der aktuellen Projektkonfiguration. Ein neues Ticket beginnt im
     Anfangsstatus. Zuständig kann nur ein aktives Mitglied des Projekts sein.
@@ -176,7 +178,7 @@ components:
         ticket.version_conflict, ticket.precondition_required, ticket.transition_not_allowed,
         ticket.required_field_inaccessible, ticket.busy, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required. Gründe in `violations`: title.invalid, description.required, description.too_long,
-        type.unknown, status.unknown, assignee.required, assignee.not_member, fields.required, fields.unknown,
+        description.invalid, type.unknown, status.unknown, assignee.required, assignee.not_member, fields.required, fields.unknown,
         <feld>.invalid, paging.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
