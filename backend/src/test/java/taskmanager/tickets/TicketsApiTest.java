@@ -394,6 +394,53 @@ class TicketsApiTest {
         assertEquals(201, create(restricted, project, "Ohne Text").status(), "without the hidden field the creation works");
     }
 
+    /** Review F1 of TASK-027: creating or changing without ticket.read works and answers without field values. */
+    @Test
+    void creatingOrChangingWithoutTheReadActionWorksAndShowsNoValues() {
+        Person reporter = person();
+        Person editor = person();
+        Person owner = person();
+        Project project = project(reporter, editor, owner);
+        grant(owner.id(), project.id(), FULL);
+        grant(reporter.id(), project.id(), "ticket.create", "READ:*", "WRITE:*");
+        grant(editor.id(), project.id(), "ticket.edit", "READ:*", "WRITE:*");
+
+        Response reported = create(reporter, project, map("type", "bug", "title", "Gemeldet", "description", "Details"));
+        assertEquals(201, reported.status(), reported.body());
+        assertEquals(List.of(), names(reported.fields()), "without ticket.read the answer shows no values");
+        assertEquals(1, reported.json().get("number").asLong());
+        assertProblem(reporter.get(tickets(project) + "/1"), 404, "project.not_found");
+
+        Response edited = patch(editor, project, 1, map("title", "Bearbeitet"), "\"1\"");
+        assertEquals(200, edited.status(), edited.body());
+        assertEquals(List.of(), names(edited.fields()));
+        assertEquals("\"2\"", edited.header("ETag"));
+        assertEquals("Bearbeitet", owner.get(tickets(project) + "/1").fields().get("title").asString());
+        assertEquals(2, owner.get(tickets(project) + "/1/history").json().size());
+    }
+
+    /** Review F2 and F3 of TASK-027: a NUL character and an unknown field are invalid input, not a server error or silence. */
+    @Test
+    void aNulCharacterOrAnUnknownFieldIsRefused() {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), FULL);
+
+        assertEquals(List.of("title.invalid"), create(worker, project, map("type", "task", "title", "a\u0000b")).violations());
+        assertEquals(List.of("description.invalid"),
+            create(worker, project, map("type", "task", "title", "Text", "description", "x\u0000y")).violations());
+        Response unknown = create(worker, project, map("type", "task", "title", "Mit Status", "status", "done", "priority", "hoch"));
+        assertProblem(unknown, 400, "request.invalid");
+        assertEquals(List.of("fields.unknown"), unknown.violations());
+        assertEquals(List.of("title.invalid"), create(worker, project, map("type", "task", "title", 5)).violations());
+        assertEquals(0, worker.get(tickets(project)).json().size(), "no refused creation stored a ticket");
+
+        assertEquals(201, create(worker, project, "Gültig").status());
+        assertEquals(List.of("title.invalid"), patch(worker, project, 1, map("title", "a\u0000b"), "\"1\"").violations());
+        assertEquals(List.of("description.invalid"), patch(worker, project, 1, map("description", "x\u0000y"), "\"1\"").violations());
+        assertEquals("\"1\"", worker.get(tickets(project) + "/1").header("ETag"));
+    }
+
     // ---------------------------------------------------------------- the configuration
 
     @Test

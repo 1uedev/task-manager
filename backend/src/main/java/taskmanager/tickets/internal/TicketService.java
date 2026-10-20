@@ -163,7 +163,7 @@ public class TicketService {
                 tickets.change(ticket.id(), 1, now, actor.userId(), field, null, value);
             }
         });
-        return view(ticket, readable(actor, resource).readableFields(), writable(actor, resource));
+        return view(ticket, readableFields(actor, resource), writable(actor, resource));
     }
 
     /**
@@ -226,20 +226,20 @@ public class TicketService {
         Map<String, String> after = changed.values();
         List<String> differing = before.keySet().stream().filter(field -> !Objects.equals(before.get(field), after.get(field))).toList();
         if (differing.isEmpty()) {
-            return view(ticket, readable(actor, resource).readableFields(), writable(actor, resource));
+            return view(ticket, readableFields(actor, resource), writable(actor, resource));
         }
         tickets.update(changed);
         for (String field : differing) {
             tickets.change(ticket.id(), changed.version(), now, actor.userId(), field, before.get(field), after.get(field));
         }
-        return view(changed, readable(actor, resource).readableFields(), writable(actor, resource));
+        return view(changed, readableFields(actor, resource), writable(actor, resource));
     }
 
     // ------------------------------------------------------------------------------------------------ rules
 
     private static String title(String raw, List<String> violations) {
         String title = raw == null ? null : raw.strip();
-        if (title == null || title.isEmpty() || title.codePointCount(0, title.length()) > TITLE_MAX) {
+        if (title == null || title.isEmpty() || title.codePointCount(0, title.length()) > TITLE_MAX || title.indexOf('\u0000') >= 0) {
             violations.add("title.invalid");
             return null;
         }
@@ -252,6 +252,9 @@ public class TicketService {
             violations.add("description.required");
         } else if (description != null && description.codePointCount(0, description.length()) > DESCRIPTION_MAX) {
             violations.add("description.too_long");
+        } else if (description != null && description.indexOf('\u0000') >= 0) {
+            // PostgreSQL cannot store the NUL character in text (review F2 of TASK-027).
+            violations.add("description.invalid");
         }
         return description;
     }
@@ -291,6 +294,15 @@ public class TicketService {
             throw projectNotFound();
         }
         return read;
+    }
+
+    /**
+     * The fields the answer of a creation or change shows. Without {@code ticket.read} it shows none, as {@code ticket.create}
+     * or {@code ticket.edit} alone may write a ticket they cannot read (review F1 of TASK-027).
+     */
+    private Set<String> readableFields(AccessContext actor, Supplier<ResourceContext> resource) {
+        Decision read = permissions.inspect(actor, resource, READ, FIELDS);
+        return read.allowed() ? read.readableFields() : Set.of();
     }
 
     private Set<String> writable(AccessContext actor, Supplier<ResourceContext> resource) {
