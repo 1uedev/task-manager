@@ -79,12 +79,17 @@ class AccountController {
     @PostMapping("/{id}/reactivate")
     AccountBody reactivate(@PathVariable UUID id, HttpServletRequest request) {
         var actor = AdministrationRequests.actor(request);
-        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> AccountBody.of(accounts.reactivate(actor.view().username(), id)));
+        // The snapshot keeps requests without the right away from the serialization the reactivation takes first.
+        administration.early(AdministrationRight.ACCOUNTS_MANAGE);
+        return AccountBody.of(accounts.reactivate(actor.view().username(), id,
+            () -> administration.require(AdministrationRight.ACCOUNTS_MANAGE)));
     }
 
     @PostMapping("/{id}/password-reset")
     IssuedBody resetPassword(@PathVariable UUID id, HttpServletRequest request) {
         var actor = AdministrationRequests.actor(request);
-        return administration.run(AdministrationRight.ACCOUNTS_MANAGE, () -> IssuedBody.of(accounts.resetPassword(actor.view().username(), id)));
+        administration.early(AdministrationRight.ACCOUNTS_MANAGE);
+        return IssuedBody.of(accounts.resetPassword(actor.view().username(), id,
+            () -> administration.require(AdministrationRight.ACCOUNTS_MANAGE)));
     }
 }

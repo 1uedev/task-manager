@@ -25,8 +25,6 @@ import taskmanager.platform.ApiProblemException;
  */
 @Service
 public class AccountService {
-    private static final long ADMINISTRATOR_LOCK = 7_240_001L;
-
     private final AccountRepository accounts;
     private final PasswordHasher hasher;
     private final OneTimePasswords oneTimePasswords;
@@ -100,13 +98,13 @@ public class AccountService {
      */
     @Transactional
     public AccountRecord deactivate(String actor, UUID id, Runnable authorize) {
+        // First of all, so two administrators cannot deactivate, reset or reactivate each other at the same time.
+        accounts.serializeAdministration();
         // Before any identity lock: other modules order their own locks (rights) ahead of the identity locks.
         if (!exactlyOne(deactivationGuard).mayDeactivate(id)) {
             throw ApiProblemException.of(409, "account.last_administrator");
         }
         authorize.run();
-        // Serializes deactivations, so two administrators cannot deactivate each other at the same time.
-        jdbc.sql("select pg_advisory_xact_lock(?)").param(ADMINISTRATOR_LOCK).query().singleValue();
         AccountRecord account = lock(id);
         Instant now = clock.instant();
         if (account.active()) {
@@ -119,6 +117,15 @@ public class AccountService {
 
     @Transactional
     public AccountRecord reactivate(String actor, UUID id) {
+        return reactivate(actor, id, () -> {
+        });
+    }
+
+    /** Reactivates the account. {@code authorize} runs after the serialization and before the account is locked. */
+    @Transactional
+    public AccountRecord reactivate(String actor, UUID id, Runnable authorize) {
+        accounts.serializeAdministration();
+        authorize.run();
         AccountRecord account = lock(id);
         Instant now = clock.instant();
         if (!account.active()) {
@@ -131,6 +138,15 @@ public class AccountService {
     /** Administrative reset: new one time password, forced change, all sessions of the account end. */
     @Transactional
     public Issued resetPassword(String actor, UUID id) {
+        return resetPassword(actor, id, () -> {
+        });
+    }
+
+    /** Administrative reset; {@code authorize} runs after the serialization and before the account is locked. */
+    @Transactional
+    public Issued resetPassword(String actor, UUID id, Runnable authorize) {
+        accounts.serializeAdministration();
+        authorize.run();
         AccountRecord account = lock(id);
         return issueNewOneTimePassword(actor, account, "password.reset");
     }

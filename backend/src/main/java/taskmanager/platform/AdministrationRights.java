@@ -1,6 +1,7 @@
 package taskmanager.platform;
 
 import java.util.Set;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Port through which the product modules ask whether the current request may use an {@link AdministrationRight}
@@ -11,7 +12,7 @@ import java.util.Set;
  * <p>{@link #require} is the authoritative check. It joins the transaction of the change, takes the rights lock and the
  * identity locks of the requester and holds them until the commit, so a right or a login that is withdrawn is seen by the
  * change that waits for it. Call it before any other lock of the change, except those a module orders ahead of the rights
- * on purpose (the setting row of the session duration, the serialization of deactivations), which the module documents.
+ * on purpose (the setting row of the session duration, the serialization of administrative account changes), which the module documents.
  */
 public interface AdministrationRights {
     /**
@@ -26,4 +27,13 @@ public interface AdministrationRights {
      * refusing a request early; it never authorizes a change.
      */
     Set<AdministrationRight> held();
+
+    /**
+     * The one implementation the provider offers, or {@code null} when there is none or more than one. Counts the candidates
+     * instead of asking for a unique bean, because a unique lookup lets a primary bean win among several (TASK-041).
+     */
+    static AdministrationRights unique(ObjectProvider<AdministrationRights> provider) {
+        var candidates = provider.stream().limit(2).toList();
+        return candidates.size() == 1 ? candidates.getFirst() : null;
+    }
 }

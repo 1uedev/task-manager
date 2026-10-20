@@ -95,7 +95,7 @@ public class AppearanceService {
 
     /** Before anything else of the change: the rights lock and the identity locks of the requester come first. */
     private void requireRight() {
-        var port = rights.getIfUnique();
+        var port = AdministrationRights.unique(rights);
         if (port == null) {
             throw ApiProblemException.of(403, "auth.forbidden");
         }

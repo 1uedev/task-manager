@@ -110,7 +110,7 @@ class AppearanceController {
     /** A snapshot of the right: it spares an unauthorized request the work, the service decides. */
     private AccessContext administrator() {
         AccessContext context = reader();
-        var port = rights.getIfUnique();
+        var port = AdministrationRights.unique(rights);
         if (port == null || !port.held().contains(AdministrationRight.APPEARANCE_MANAGE)) {
             throw ApiProblemException.of(403, "auth.forbidden");
         }

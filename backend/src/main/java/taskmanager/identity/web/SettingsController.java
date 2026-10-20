@@ -38,7 +38,9 @@ class SettingsController {
     @PutMapping
     DurationBody change(@RequestBody(required = false) DurationRequest body, HttpServletRequest request) {
         var actor = AdministrationRequests.actor(request);
-        // The change locks the setting row first and calls the check behind it, in its own transaction.
+        // The change locks the setting row and the administrative serialization first and calls the check behind them, in
+        // its own transaction; the snapshot keeps requests without the right away from both.
+        administration.early(AdministrationRight.SESSION_DURATION_MANAGE);
         duration.change(actor.view().username(), body == null ? null : body.hours(),
             () -> administration.require(AdministrationRight.SESSION_DURATION_MANAGE));
         return body();
