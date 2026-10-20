@@ -1,0 +1,51 @@
+TASK-026 independent review, 2026-10-20
+Session: codex-20261020-projects-admin-review-01
+Reviewed main: cf89e43292ba6d7415aa507edc2d4ab8186a2401
+Runtime: Java 25.0.4.1+1, native PostgreSQL 18.6, synthetic external test database
+
+OWN EXECUTION: unchanged backend clean verify
+Tests run: 154, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+OWN EXECUTION: selected added probes (shared run with TASK-041)
+[review026] foreign routes=404; delegation adds membership, no permission rows or revision changed
+[review026] exact project holder=27408, HTTP waiters=[24728]
+[review026] unknown=404, busy foreign=500
+[review026] exact rights holder=27408, HTTP waiters=[19536]
+[review026] queued right withdrawal ->404, fresh read=200, fresh write=403
+[review026] removal [19536] waits on authorized read 27408
+[review026] mixed project/member and reset HTTP pids=[19536, 24728] -> account holder=27408
+[review026] mixed project/member and reset statuses=200,200
+[review026] concurrent ETag statuses=[200, 412], one audit, version=2
+[review026] exact project holder=27408, HTTP waiters=[19536]
+[review026] removal before waiting write commit ->404, no write
+[review026] null/missing category statuses=[500, 500]; project/configuration unchanged
+ProjectsApiTest: Tests run: 8, Failures: 2, Errors: 0, Skipped: 0
+Failed: reviewNullOrMissingCategoryMustBeValidation400
+  Expected [400, 400], actual [500, 500].
+Failed: reviewBusyForeignProjectMustStayIndistinguishableFromUnknown
+  Expected 404, actual 500.
+Combined TASK-041/TASK-026 probe run: Tests run: 12, Failures: 2, Errors: 0, Skipped: 0
+
+OWN EXECUTION: after byte-identical restoration, clean test of original classes
+AdministrationRightsApiTest, AdministrationRightsWiringTest, ProjectsApiTest
+Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-20T12:36:52+02:00
+
+READ CI EVIDENCE (not an own lifecycle execution)
+PR #110 head: 7d47dd6cab4b9e433c4fe206c7b1fcd4b0427915
+Backend run: https://github.com/1uedev/task-manager/actions/runs/39402996996
+Backend job: 118562043550
+2026-10-20T09:46:53.4475182Z Tests run: 154, Failures: 0, Errors: 0, Skipped: 0
+2026-10-20T09:47:04.0086744Z PostgreSQL 18.6
+2026-10-20T09:47:40.1220809Z Lifecycle check passed
+
+Scope: selected excerpts, not a full raw log or an exhaustive proof of all interleavings.
+
+OWN DOCUMENTATION CHECKS
+Repository contract: OK
+Task board: current
+Python unittest: Ran 25 tests, OK
+git diff --cached --check: clean
+Own synthetic PostgreSQL instance stopped after PID and executable-path verification.
