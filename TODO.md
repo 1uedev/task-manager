@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,13 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | claude-20261020-tickets-01 | 2026-10-20 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | — | 2026-10-17 |
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | — | 2026-10-17 |
 | [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | — | 2026-10-17 |
 | [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | — | 2026-10-17 |
@@ -507,17 +508,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-tickets-01 · **Aktualisiert:** 2026-10-20
 
-**Bezug:** REQ-TKT-001, REQ-TKT-005, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-026 sowie angenommener Ticket-/Konfigurationsvertrag. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-TKT-001, REQ-TKT-005, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-026 (auf main, BEREIT ZUR PRÜFUNG) sowie angenommener Ticket-/Konfigurationsvertrag. Holger hat am 20. Oktober 2026 im Projektgespräch mit „kannst du mit task 27 schon mal anfangen“ den Ticketkern beauftragt, parallel zur laufenden unabhängigen Prüfung von TASK-026 und TASK-041; Befunde daraus fließen nach. TASK-028 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs. Ergebnis mit DEC-067, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0012.
 
-**Umfang:** Tickets mit Titel, Beschreibung, Typ, Status und Zuständigkeit erstellen, lesen und ändern. Projektkonfiguration, Feldrechte, Änderungshistorie und Versionskonflikte durchsetzen. Tags und Suche folgen über vereinbarte Verträge.
+**Umfang:** Tickets mit Titel, Beschreibung, Typ, Status und Zuständigkeit erstellen, lesen und ändern. Projektkonfiguration, Feldrechte, Änderungshistorie und Versionskonflikte durchsetzen. Tickets gehören zu genau einem Projekt, tragen eine Nummer je Projekt und die Konfigurationsversion des Projekts, mit der sie zuletzt geprüft wurden; Typ, Status, Übergänge und Pflichtfelder kommen aus der Projektkonfiguration aus TASK-026, die Zuständigkeit ist ein Konto, das Mitglied des Projekts ist. Rechte über Ticketaktionen des Berechtigungsmoduls im Projektkontext. Tags und Suche folgen über vereinbarte Verträge. Nicht Teil: Kommentare, Anhänge, Beziehungen, Benachrichtigungen, Oberfläche, Tags (TASK-028), Suche (TASK-029), Prüfung beim Commit statt beim Sperren. Von den offenen Punkten der Gegenprüfung von TASK-025 berührt nur P4 (Sperrzeitüberschreitung und Verklemmung als Ausnahme) den Ticketkern; die Ticketendpunkte beantworten diese Fälle als wiederholbaren Fehler statt mit 500, P2, P3, P5 und P6 bleiben unberührt.
 
 **Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Ticketmodul, API-Operationen und eigene Migrationen. Öffentliche Kontext-/Änderungs- und Projektionsverträge für TASK-028/TASK-029; keine direkten Abfragen anderer Modultabellen.
 
 **Abnahmekriterien:** Erfolgs- und Negativfälle, Feldfilterung, verbotene Übergänge, veraltete Versionen und vollständige Rückabwicklung geprüft. Aktuelle Rechte gelten auch bei konkurrierendem Entzug bis zur Schreibgrenze. Getrennte KI prüft Transaktion, Historie und API-Konfliktantworten.
 
-**Nächster Schritt:** Benötigte Projektergebnisse fachlich/technisch annehmen; nach Beauftragung reservieren.
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-067 übergeben.
 
 ## TASK-028 Tag-Kern für Tickets und Projekte implementieren
 
