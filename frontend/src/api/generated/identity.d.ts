@@ -191,7 +191,7 @@ export interface components {
              *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
              *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
              */
-            rights?: ("accounts.manage" | "appearance.manage" | "session_duration.manage")[];
+            rights?: ("accounts.manage" | "appearance.manage" | "projects.manage" | "session_duration.manage")[];
             /** Format: date-time */
             expiresAt?: string | null;
             /**

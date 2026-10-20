@@ -270,7 +270,7 @@ components:
           type: array
           items:
             type: string
-            enum: [accounts.manage, appearance.manage, session_duration.manage]
+            enum: [accounts.manage, appearance.manage, projects.manage, session_duration.manage]
           description: |
             Die Verwaltungsrechte, die diese Sitzung gerade hält, sortiert. Nur in der Antwort auf den Zustand einer angemeldeten
             Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf

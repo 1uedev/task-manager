@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -67,6 +65,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 | [TASK-041](#task-041-befunde-f1-und-f2-der-nachprüfung-von-task-040-beheben) | Befunde F1 und F2 der Nachprüfung von TASK-040 beheben | claude-20261020-adminfix-01 | 2026-10-20 |
@@ -490,7 +489,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-026 Projekte und minimale Konfiguration implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-projects-01 · **Aktualisiert:** 2026-10-20
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-projects-01 · **Aktualisiert:** 2026-10-20
 
 **Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-039 und TASK-040 sind abgenommen und integriert. Holger hat am 20. Oktober 2026 im Projektgespräch die Frage, ob TASK-026 mit der minimalen Projektkonfiguration aus docs/DEVELOPMENT_START.md beansprucht werden soll, mit „ja“ beantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und bestätigt diese minimale Konfiguration für den ersten Abschnitt; TASK-027 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; dieselbe Sitzung liefert zuerst die kleinere TASK-041 und setzt den Branch danach für TASK-026 neu von main auf. Ergebnis mit DEC-065, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0011.
 
@@ -500,7 +499,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Berechtigter Zugriff und Administration funktionieren; fremde Projekte bleiben über Listen und IDs geschützt. Konfigurationsversionen und ungültige Änderungen werden nach Fachvertrag behandelt. Getrennte KI prüft Datenhoheit, Projektgrenzen und administrativen Rechteentzug; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-065 übergeben.
+**Ergebnis:** Projektmodul nach DEC-065. Migration V0011 (Projekt, Konfigurationsversionen, Mitglieder, Audit), Unternehmensrecht `projects.manage` beim ersten Start, Projektaktionen `project.read` und `project.manage` mit Mitgliedschaft, Projektadapter `ProjectAccess` mit Zeilensperre der Projekte, Endpunkte unter `/api/v1/projects` mit Vertrag `contracts/projects.openapi.yaml`, Ausgangskonfiguration Neu, In Arbeit, Erledigt mit den fünf festen Feldern, Konfigurationsänderung als neue Version, ETag und `If-Match` auf die Projektversion. Beschreibung und Grenzen in backend/README.md, Abschnitt „Projekte (TASK-026)“.
+
+**Eigenprüfung:** Backend `verify` gegen lokale PostgreSQL 16.15 mit 154 Tests ohne Fehler, darunter `ProjectConfigurationTest`, `ProjectsApiTest` (Rechte, Sichtbarkeit fremder Projekte über Liste und Kennung, Delegation per Projektrecht, Versionen, Konfiguration, Mitglieder, Wartesperre bei Entfernung) und `ProjectsContractTest`. Gegenprobe: ohne Zeilensperre im Projektadapter scheitert die Sperrprüfung. Maßgeblich ist CI auf PostgreSQL 18.6. Eine unabhängige Prüfung nach DEC-040 steht aus.
+
+**Nächster Schritt:** Codex prüft unabhängig nach DEC-040, Holger nimmt fachlich ab; danach Übertrag nach DONE.md.
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 

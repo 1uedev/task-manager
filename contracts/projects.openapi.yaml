@@ -1,0 +1,357 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Projekte (TASK-026)
+  version: 0.1.0
+  description: |
+    Projekte des Unternehmens, ihre Mitglieder und Konfigurationsversionen (DEC-065). Alle Aufrufe verlangen eine vollständige
+    Anmeldung; Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Rechte: Das Unternehmensrecht `projects.manage` legt Projekte an und verwaltet jedes Projekt des Unternehmens samt
+    Konfiguration und Mitgliedern, ohne Mitglied zu sein. Im Projekt zeigt `project.read` das Projekt und `project.manage`
+    ändert es; beide verlangen die Mitgliedschaft und können für das ganze Unternehmen oder für ein Projekt vergeben werden.
+    Ein Projekt, das jemand nicht lesen darf, antwortet mit 404 `project.not_found`; ein lesbares, aber nicht änderbares
+    Projekt mit 403 `auth.forbidden`.
+
+    Der `ETag` ist die Version des Projekts. Sie ändert sich mit jeder Änderung von Projekt, Konfiguration oder Mitgliedern,
+    und jede Änderung braucht sie als `If-Match`. Fehlt der Kopf, antwortet der Server mit 428, passt er nicht, mit 412.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /projects:
+    get:
+      operationId: listProjects
+      summary: Lesbare Projekte
+      description: Mit `projects.manage` alle Projekte des Unternehmens, sonst die eigenen Projekte mit `project.read`.
+      responses:
+        '200':
+          description: Projekte, sortiert nach Kennung
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProjectSummary'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createProject
+      summary: Projekt anlegen (Recht projects.manage)
+      description: |
+        Das neue Projekt erhält die Ausgangskonfiguration (Version 1) mit den Feldern Titel, Beschreibung, Typ, Status und
+        Zuständigkeit und dem Ablauf Neu, In Arbeit, Erledigt. Wer es anlegt, wird Mitglied. Der Schlüssel wird in
+        Großbuchstaben gespeichert und ist im Unternehmen eindeutig (409 `project.key_taken`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /projects/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getProject
+      summary: Projekt mit aktueller Konfiguration
+      responses:
+        '200':
+          description: Projekt
+          headers:
+            ETag: {schema: {type: string}, description: 'Version in Anführungszeichen, zum Beispiel "3"'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: updateProject
+      summary: Name und Beschreibung ändern (project.manage oder projects.manage)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRequest'}
+      responses:
+        '200':
+          description: Geändert. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/configuration:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    put:
+      operationId: changeProjectConfiguration
+      summary: Konfiguration ändern (project.manage oder projects.manage)
+      description: |
+        Speichert die vollständige Konfiguration als nächste Version; frühere Versionen bleiben unverändert lesbar. Ungültige
+        Konfigurationen antworten mit 400 `request.invalid` und den Gründen in `violations`, etwa `ticketTypes.required`,
+        `statuses.key_duplicate`, `statuses.category_invalid`, `initialStatus.unknown`, `transitions.status_unknown`,
+        `transitions.same_status`, `transitions.duplicate`, `fields.invalid` oder `fields.required_fixed`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Configuration'}
+      responses:
+        '200':
+          description: Gespeichert. Neue Version im ETag, neue Konfigurationsversion im Körper.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/configurations/{version}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - name: version
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1}
+    get:
+      operationId: getProjectConfiguration
+      summary: Eine gespeicherte Konfigurationsversion
+      responses:
+        '200':
+          description: Konfiguration dieser Version
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Configuration'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/members:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listProjectMembers
+      summary: Mitglieder des Projekts
+      responses:
+        '200':
+          description: Mitglieder; der ETag ist die Version des Projekts
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Member'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/members/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - name: accountId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    put:
+      operationId: addProjectMember
+      summary: Mitglied hinzufügen (project.manage oder projects.manage)
+      description: Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein vorhandenes Mitglied bleibt unverändert.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Mitglieder nach der Änderung; neue Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Member'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeProjectMember
+      summary: Mitglied entfernen (project.manage oder projects.manage)
+      description: Ein laufender Aufruf des entfernten Mitglieds, der seine Prüfung schon bestanden hat, endet vorher; danach gilt die Entfernung.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Mitglieder nach der Änderung; neue Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Member'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag der zuletzt gelesenen Fassung.
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, project.key_taken,
+        project.configuration_not_found, project.version_conflict, project.precondition_required, auth.required,
+        auth.forbidden, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    CreateRequest:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key: {type: string, pattern: '^[A-Za-z][A-Za-z0-9]{1,9}$', description: 'Wird in Großbuchstaben gespeichert'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        description: {type: [string, 'null'], maxLength: 2000}
+    UpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        description: {type: [string, 'null'], maxLength: 2000}
+    ProjectSummary:
+      type: object
+      required: [id, key, name, description, version, manageable]
+      properties:
+        id: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        version: {type: integer}
+        manageable: {type: boolean, description: 'Ob die Anfrage das Projekt ändern darf; nur ein Hinweis für die Oberfläche'}
+    Project:
+      type: object
+      required: [id, key, name, description, version, configurationVersion, configuration, manageable, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        version: {type: integer}
+        configurationVersion: {type: integer, minimum: 1}
+        configuration: {$ref: '#/components/schemas/Configuration'}
+        manageable: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    Configuration:
+      type: object
+      additionalProperties: false
+      required: [ticketTypes, statuses, initialStatus, transitions, fields]
+      properties:
+        ticketTypes:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key: {type: string, pattern: '^[a-z][a-z0-9_]{0,39}$'}
+              name: {type: string, minLength: 1, maxLength: 80}
+        statuses:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: object
+            required: [key, name, category]
+            properties:
+              key: {type: string, pattern: '^[a-z][a-z0-9_]{0,39}$'}
+              name: {type: string, minLength: 1, maxLength: 80}
+              category: {type: string, enum: [open, in_progress, done]}
+        initialStatus: {type: string, description: 'Schlüssel eines Status'}
+        transitions:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: {type: string}
+              to: {type: string}
+        fields:
+          type: array
+          description: Genau die festen Felder in dieser Reihenfolge; title, type und status sind immer Pflicht.
+          minItems: 5
+          maxItems: 5
+          items:
+            type: object
+            required: [key, required]
+            properties:
+              key: {type: string, enum: [title, description, type, status, assignee]}
+              required: {type: boolean}
+    Member:
+      type: object
+      required: [accountId, addedAt]
+      properties:
+        accountId: {type: string, format: uuid}
+        addedAt: {type: string, format: date-time}
