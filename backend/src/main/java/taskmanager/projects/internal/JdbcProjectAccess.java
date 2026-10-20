@@ -43,4 +43,16 @@ class JdbcProjectAccess implements ProjectAccess {
     public Optional<ProjectConfiguration> configuration(UUID projectId, long version) {
         return projects.configuration(projectId, version);
     }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean isMember(UUID projectId, UUID accountId) {
+        return projects.isMember(projectId, accountId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> key(UUID projectId) {
+        return projects.key(projectId);
+    }
 }

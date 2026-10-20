@@ -83,16 +83,16 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 10 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 11 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_member' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_member,ticket,ticket_change,ticket_counter' ] \
   || fail "unexpected schema objects"
 [ "$(sql "select (select count(*) from platform_company) + (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
