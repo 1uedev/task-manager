@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 26 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | claude-20261020-tickets-01 | 2026-10-20 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -67,6 +65,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
+| [TASK-027](#task-027-ticketkern-mit-historie-und-konflikterkennung-implementieren) | Ticketkern mit Historie und Konflikterkennung implementieren | claude-20261020-tickets-01 | 2026-10-20 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 | [TASK-041](#task-041-befunde-f1-und-f2-der-nachprüfung-von-task-040-beheben) | Befunde F1 und F2 der Nachprüfung von TASK-040 beheben | claude-20261020-adminfix-01 | 2026-10-20 |
@@ -508,7 +507,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-tickets-01 · **Aktualisiert:** 2026-10-20
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-tickets-01 · **Aktualisiert:** 2026-10-20
 
 **Bezug:** REQ-TKT-001, REQ-TKT-005, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-026 (auf main, BEREIT ZUR PRÜFUNG) sowie angenommener Ticket-/Konfigurationsvertrag. Holger hat am 20. Oktober 2026 im Projektgespräch mit „kannst du mit task 27 schon mal anfangen“ den Ticketkern beauftragt, parallel zur laufenden unabhängigen Prüfung von TASK-026 und TASK-041; Befunde daraus fließen nach. TASK-028 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs. Ergebnis mit DEC-067, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0012.
 
@@ -518,7 +517,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Erfolgs- und Negativfälle, Feldfilterung, verbotene Übergänge, veraltete Versionen und vollständige Rückabwicklung geprüft. Aktuelle Rechte gelten auch bei konkurrierendem Entzug bis zur Schreibgrenze. Getrennte KI prüft Transaktion, Historie und API-Konfliktantworten.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-067 übergeben.
+**Ergebnis:** Ticketmodul nach DEC-067. Migration V0012 (Tickets, Nummernzähler je Projekt, Feldhistorie), Aktionen `ticket.read`, `ticket.create` und `ticket.edit` mit Mitgliedschaft im Projektkontext, Feldregeln des Ressourcentyps `ticket` für Lesen und Schreiben, Typ, Status, Übergänge und Pflichtfelder aus der aktuellen Projektkonfiguration, Zuständigkeit nur für aktive Mitglieder, Ticketversion als ETag mit `If-Match`, Historie je Feldänderung, 503 `ticket.busy` bei Sperrproblemen (P4). Endpunkte unter `/api/v1/projects/{projectId}/tickets` mit Vertrag `contracts/tickets.openapi.yaml`; der Projektport `ProjectAccess` liefert zusätzlich Mitgliedschaft und Projektschlüssel. Beschreibung und Grenzen in backend/README.md, Abschnitt „Tickets (TASK-027)“.
+
+**Eigenprüfung:** Backend `verify` gegen lokale PostgreSQL 16.15 mit 165 Tests ohne Fehler, darunter `TicketsApiTest` (Anlage und Nummern, gleichzeitige Anlage, Sichtbarkeit und Projektgrenzen, verborgene Felder in Antwort und Historie, Konfiguration und Übergänge, geänderte Konfiguration und Pflichtfelder, Versionen, Anmeldung mit offenem Passwortwechsel, Warten bei gleichzeitigem Entfernen des Mitglieds, 503 bei gehaltener Ticketsperre) und `TicketsContractTest`; Lifecycle-Prüfung lokal bestanden. Maßgeblich ist CI auf PostgreSQL 18.6. Eine unabhängige Prüfung nach DEC-040 steht aus.
+
+**Nächster Schritt:** Codex prüft unabhängig nach DEC-040, Holger nimmt fachlich ab; danach Übertrag nach DONE.md.
 
 ## TASK-028 Tag-Kern für Tickets und Projekte implementieren
 

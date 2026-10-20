@@ -1,0 +1,264 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Tickets (TASK-027)
+  version: 0.1.0
+  description: |
+    Tickets eines Projekts mit Historie und Konflikterkennung (DEC-067). Alle Aufrufe verlangen eine vollständige Anmeldung;
+    Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Rechte: Die Aktionen `ticket.read`, `ticket.create` und `ticket.edit` des Berechtigungsmoduls gelten im Projekt und
+    verlangen die Mitgliedschaft. Jedes der fünf Felder (title, description, type, status, assignee) braucht zusätzlich eine
+    Leseregel für den Ressourcentyp `ticket`, um gezeigt zu werden, und eine Schreibregel, um geändert zu werden; ein
+    verborgenes Feld fehlt in `fields` und in der Historie. Ohne eine der drei Aktionen antwortet das Projekt mit 404
+    `project.not_found`. Das Unternehmensrecht `projects.manage` gibt keinen Zugriff auf Tickets.
+
+    Typ, Status, Übergänge und Pflichtfelder kommen aus der aktuellen Projektkonfiguration. Ein neues Ticket beginnt im
+    Anfangsstatus. Zuständig kann nur ein aktives Mitglied des Projekts sein.
+
+    Der `ETag` ist die Version des Tickets; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
+    Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `ticket.busy` und `Retry-After`; die
+    ganze Anfrage darf wiederholt werden.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /projects/{projectId}/tickets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listTickets
+      summary: Tickets des Projekts, neueste zuerst
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+        - name: before
+          in: query
+          description: Nur Tickets mit kleinerer Nummer, zum Weiterblättern mit der kleinsten Nummer der vorigen Seite.
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Ticket'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createTicket
+      summary: Ticket anlegen (ticket.create)
+      description: |
+        Titel und Typ sind immer nötig, dazu Schreibrechte auf alle mitgegebenen Felder. Ist Beschreibung oder Zuständigkeit
+        in der Konfiguration Pflicht und darf die anfragende Person das Feld nicht schreiben, antwortet der Server mit 409
+        `ticket.required_field_inaccessible`, statt sie zu einem Feld zu zwingen, das sie nicht bearbeiten darf.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ticket'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: getTicket
+      summary: Ein Ticket
+      responses:
+        '200':
+          description: Ticket
+          headers:
+            ETag: {schema: {type: string}, description: 'Version in Anführungszeichen, zum Beispiel "3"'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ticket'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateTicket
+      summary: Felder ändern (ticket.edit)
+      description: |
+        Ändert genau die Felder im Körper; `null` leert Beschreibung oder Zuständigkeit. Für jedes genannte Feld braucht es
+        eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein Statuswechsel muss in der aktuellen
+        Konfiguration als Übergang vorgesehen sein (409 `ticket.transition_not_allowed`). Felder, die ihren Wert behalten,
+        werden nicht geschrieben; ohne echte Änderung bleibt die Version gleich.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRequest'}
+      responses:
+        '200':
+          description: Geändert. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ticket'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/history:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: getTicketHistory
+      summary: Historie eines Tickets
+      description: Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz.
+      responses:
+        '200':
+          description: Historie, älteste Version zuerst
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/HistoryEntry'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag der zuletzt gelesenen Fassung.
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found,
+        ticket.version_conflict, ticket.precondition_required, ticket.transition_not_allowed,
+        ticket.required_field_inaccessible, ticket.busy, auth.required, auth.forbidden, auth.csrf_invalid,
+        auth.password_change_required. Gründe in `violations`: title.invalid, description.required, description.too_long,
+        type.unknown, status.unknown, assignee.required, assignee.not_member, fields.required, fields.unknown,
+        <feld>.invalid, paging.invalid.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+        Retry-After: {schema: {type: integer}, description: Nur bei 503.}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    CreateRequest:
+      type: object
+      additionalProperties: false
+      required: [type, title]
+      properties:
+        type: {type: string, description: 'Schlüssel eines Typs der Projektkonfiguration'}
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: [string, 'null'], maxLength: 20000}
+        assignee: {type: [string, 'null'], format: uuid}
+    UpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: [string, 'null'], maxLength: 20000}
+        type: {type: string}
+        status: {type: string}
+        assignee: {type: [string, 'null'], format: uuid}
+    Ticket:
+      type: object
+      required: [id, projectId, key, number, version, configurationVersion, fields, writableFields, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        key: {type: string, description: 'Projektschlüssel und Nummer, zum Beispiel PLAT-12'}
+        number: {type: integer, minimum: 1}
+        version: {type: integer, minimum: 1}
+        configurationVersion: {type: integer, minimum: 1, description: 'Konfigurationsversion, gegen die das Ticket zuletzt geprüft wurde'}
+        fields:
+          type: object
+          description: Nur die lesbaren Felder; ein fehlender Schlüssel heißt verborgen, `null` heißt leer.
+          additionalProperties: false
+          properties:
+            title: {type: string}
+            description: {type: [string, 'null']}
+            type: {type: string}
+            status: {type: string}
+            assignee: {type: [string, 'null'], format: uuid}
+        writableFields:
+          type: array
+          description: Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche.
+          items: {type: string, enum: [title, description, type, status, assignee]}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    HistoryEntry:
+      type: object
+      required: [version, occurredAt, actor, changes]
+      properties:
+        version: {type: integer, minimum: 1}
+        occurredAt: {type: string, format: date-time}
+        actor: {type: string, format: uuid}
+        changes:
+          type: array
+          items:
+            type: object
+            required: [field, from, to]
+            properties:
+              field: {type: string, enum: [title, description, type, status, assignee]}
+              from: {type: [string, 'null']}
+              to: {type: [string, 'null']}

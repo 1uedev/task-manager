@@ -26,4 +26,14 @@ public interface ProjectAccess {
 
     /** One stored version of the configuration; versions never change. */
     Optional<ProjectConfiguration> configuration(UUID projectId, long version);
+
+    /**
+     * Whether the account is a member of the project. Call it after {@link #resource} locked the project in the same
+     * transaction; every change of the membership locks the project row exclusively, so the answer stays current until
+     * the commit (TASK-027).
+     */
+    boolean isMember(UUID projectId, UUID accountId);
+
+    /** The key of the project, for example {@code PLAT}; keys never change. */
+    Optional<String> key(UUID projectId);
 }

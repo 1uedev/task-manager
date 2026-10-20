@@ -11,3 +11,5 @@ Vor der jeweiligen Fachimplementierung erhält die produktive API einen eigenen 
 [appearance.openapi.yaml](appearance.openapi.yaml) beschreibt Akzentfarbe und Logo des Unternehmens (TASK-036): Lesen mit vollständiger Anmeldung, Ändern mit der vorläufigen Administratorkennzeichnung, jede Änderung mit `If-Match` auf die Version der Einstellung. `AppearanceContractTest` gleicht ihn mit den Routen ab. Die Oberfläche erzeugt ihre Typen aus diesem Vertrag und aus `identity.openapi.yaml`; die Identitätstypen nutzt sie bisher nur für den Sitzungszustand.
 
 [projects.openapi.yaml](projects.openapi.yaml) beschreibt Projekte, Mitglieder und Konfigurationsversionen (TASK-026, DEC-065). `ProjectsContractTest` gleicht ihn mit den Routen ab. Die Oberfläche nutzt ihn noch nicht und erzeugt daraus keine Typen; das folgt mit der Projektoberfläche. Der Identitätsvertrag nennt seither `projects.manage` in der Rechteliste der Sitzung.
+
+[tickets.openapi.yaml](tickets.openapi.yaml) beschreibt Tickets eines Projekts mit Feldrechten, Historie und Versionen (TASK-027, DEC-067). `TicketsContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht.

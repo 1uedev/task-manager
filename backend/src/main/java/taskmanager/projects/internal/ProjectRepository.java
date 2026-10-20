@@ -56,6 +56,10 @@ class ProjectRepository {
             .params(projectId, accountId).query(Boolean.class).single();
     }
 
+    Optional<String> key(UUID projectId) {
+        return jdbc.sql("select key from project where id = ?").param(projectId).query(String.class).optional();
+    }
+
     boolean keyTaken(UUID companyId, String key) {
         return jdbc.sql("select exists(select 1 from project where company_id = ? and key = ?)")
             .params(companyId, key).query(Boolean.class).single();
