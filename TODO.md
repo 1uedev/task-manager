@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
+| [TASK-041](#task-041-befunde-f1-und-f2-der-nachprüfung-von-task-040-beheben) | Befunde F1 und F2 der Nachprüfung von TASK-040 beheben | claude-20261020-adminfix-01 | 2026-10-20 |
 
 ### Blockiert – BLOCKIERT
 
@@ -491,7 +492,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-projects-01 · **Aktualisiert:** 2026-10-20
 
-**Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-039 und TASK-040 sind abgenommen und integriert. Holger hat am 20. Oktober 2026 im Projektgespräch die Frage, ob TASK-026 mit der minimalen Projektkonfiguration aus docs/DEVELOPMENT_START.md beansprucht werden soll, mit „ja“ beantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und bestätigt diese minimale Konfiguration für den ersten Abschnitt; TASK-027 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; Ergebnis mit DEC-065, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0011.
+**Bezug:** REQ-ORG-001, REQ-ORG-003, REQ-ACL-001, REQ-API-001. **Abhängigkeiten:** TASK-024, TASK-025, TASK-039 und TASK-040 sind abgenommen und integriert. Holger hat am 20. Oktober 2026 im Projektgespräch die Frage, ob TASK-026 mit der minimalen Projektkonfiguration aus docs/DEVELOPMENT_START.md beansprucht werden soll, mit „ja“ beantwortet. Das ist der Auftrag für den unten beschriebenen Umfang und bestätigt diese minimale Konfiguration für den ersten Abschnitt; TASK-027 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; dieselbe Sitzung liefert zuerst die kleinere TASK-041 und setzt den Branch danach für TASK-026 neu von main auf. Ergebnis mit DEC-065, der auch den Satz zum Umfang in AGENTS.md, CLAUDE.md und README.md nachführt. Migrationen ab der nächsten freien Nummer V0011.
 
 **Umfang:** Projekte, Mitgliedschaften sowie minimale pro Projekt gepflegte Typ-/Status-/Feldkonfiguration mit Verwaltungs-API umsetzen. Bestätigte minimale Konfiguration: Ticketfelder Titel, Beschreibung, Typ, Status und Zuständigkeit; Ausgangsablauf „Neu → In Arbeit → Erledigt“ wird je Projekt als Konfiguration angelegt und ist dort änderbar, keine globale unveränderliche Workflow-Schablone. Projektbezogene Rechte über den Adapter zwischen Projektmodul und Berechtigungsmodul (Objektkontext Projekt); keine zweite Benutzer- oder Gruppenverwaltung. Zwei unterschiedliche synthetische Projekte für Tests vorbereiten. Nicht Teil: Tickets (TASK-027), Tags, Suche, Oberfläche für Projekte (TASK-030), HTTP Endpunkte zur Gruppen- und Rechtepflege, Formulare und Automationen, Prüfung beim Commit statt beim Sperren, P2 bis P6, F1 bis F3 aus PR #96.
 
@@ -608,3 +609,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-041 Befunde F1 und F2 der Nachprüfung von TASK-040 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-adminfix-01 · **Aktualisiert:** 2026-10-20
+
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-SEC-001. **Abhängigkeiten:** TASK-040 ist abgenommen und integriert; die unabhängige Codex Nachprüfung [docs/REVIEW_TASK-040_PR-101.md](docs/REVIEW_TASK-040_PR-101.md) (PR #103) liegt auf main. Holger hat am 20. Oktober 2026 im Projektgespräch auf den Hinweis, dass die beiden Befunde einen eigenen Auftrag brauchen, mit „ja mache dafür einen eigenen auftrag“ geantwortet. Das ist der Auftrag für den unten beschriebenen Umfang; TASK-027 bis TASK-031 bleiben blockiert. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs, vor TASK-026 derselben Sitzung; eine nötige Festlegung zur Sperrreihenfolge kommt als DEC-066.
+
+**Umfang:** (F1, P2) Gleichzeitige Verwaltungsaufrufe zweier Berechtigter, die jeweils das Konto des anderen verwalten (Passwort zurücksetzen, deaktivieren, reaktivieren), dürfen nicht mit einem Deadlock und HTTP 500 enden. Eine gemeinsame Sperrreihenfolge oder vorgeschaltete Serialisierung für Abläufe festlegen, die neben dem Anfragenden weitere Identitäten sperren; Sitzungsdauer und Anmelde- sowie Entzugswege dabei berücksichtigen. Die Rechteprüfung bleibt in der Transaktion der Änderung wirksam. (F2, P3) Alle Verbraucher des Verwaltungsports (`AdministrationRequests`, `SessionController`, `AppearanceController`, `AppearanceService`) zählen die Kandidaten streng wie `AccountService` und `JdbcPermissions`, sodass ein zusätzlicher Primary Adapter nicht still gewinnt; bei Mehrdeutigkeit verweigern und keine Verwaltungsrechte in der Sitzungsantwort melden. Nicht Teil: Prüfung beim Commit statt beim Sperren, Endpunkte zur Gruppen- und Rechtepflege, P2 bis P6 aus TASK-025, F1 bis F3 aus PR #96.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Kontoverwaltung, sperrende Identitätsprüfung, Verwaltungsanfragen, Sitzungsantwort), Erscheinungsbild (Controller, Dienst), gegebenenfalls Anwendungseinstieg `taskmanager`, Tests, backend/PERMISSIONS.md oder backend/README.md, DECISIONS.md. Keine Migration erwartet; falls doch, nächste freie Nummer nach den von TASK-026 belegten.
+
+**Abnahmekriterien:** Der Kreuzfall aus F1 läuft als Regressionstest mit echter PostgreSQL Wartebeziehung: beide Aufrufe enden ohne 500 und ohne Deadlock, das Ergebnis ist fachlich eindeutig. Bestehende Konkurrenz-, Entzugs- und Schutztests bleiben grün. Für F2 Tests mit keinem, genau einem, mehreren ohne und mehreren mit Primary Adapter an jedem Verbraucher; nur genau ein Adapter erlaubt. Alle Backendtests und CI auf PostgreSQL 18.6 grün. Getrennte KI prüft das Ergebnis; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR übergeben.
