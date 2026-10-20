@@ -48,12 +48,14 @@ public class SessionDuration {
 
     /**
      * Changes the setting. The setting row is locked first, as in a login and in a password change, which read it before they
-     * lock the account; {@code authorize} then runs in the same transaction and takes the rights and identity locks of the
+     * lock the account; the administrative serialization follows, because the change writes the sessions of every account
+     * (TASK-041); {@code authorize} then runs in the same transaction and takes the rights and identity locks of the
      * requester behind it. Whatever it throws ends the change, and nothing is written before it returned.
      */
     @Transactional
     public void change(String actor, Integer hours, Runnable authorize) {
         jdbc.sql("select value from identity_setting where name = ? for update").param(SETTING).query(String.class).single();
+        accounts.serializeAdministration();
         authorize.run();
         if (hours == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("hours.required"));

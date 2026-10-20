@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class AccountRepository {
+    private static final long ADMINISTRATION_LOCK = 7_240_001L;
     private static final String COLUMNS =
         "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at";
 
@@ -48,6 +49,17 @@ public class AccountRepository {
     public Optional<AccountRecord> findById(UUID id) {
         return jdbc.sql("select " + COLUMNS + " from identity_account where id = ?")
             .param(id).query(AccountRepository::map).optional();
+    }
+
+    /**
+     * Serializes the administrative changes that lock an account other than the requester's, and the change of the session
+     * duration, which writes the sessions of all accounts (TASK-041, DEC-066). The authoritative rights check holds the
+     * requester's own account and session rows {@code FOR SHARE}; two such changes aimed at each other's accounts would
+     * otherwise wait for each other. Take it before the rights check and before any identity lock; only the setting row of
+     * the session duration comes earlier. Held until the end of the transaction.
+     */
+    public void serializeAdministration() {
+        jdbc.sql("select pg_advisory_xact_lock(?)").param(ADMINISTRATION_LOCK).query().singleValue();
     }
 
     /** Locks the row until the end of the transaction, so concurrent changes of the same account are serialized. */

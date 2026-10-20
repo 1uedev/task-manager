@@ -82,7 +82,7 @@ class SessionController {
     }
 
     private List<String> heldRights() {
-        var port = rights.getIfUnique();
+        var port = AdministrationRights.unique(rights);
         return port == null ? List.of() : port.held().stream().map(AdministrationRight::key).sorted().toList();
     }
 

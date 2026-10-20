@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-026](#task-026-projekte-und-minimale-konfiguration-implementieren) | Projekte und minimale Konfiguration implementieren | claude-20261020-projects-01 | 2026-10-20 |
-| [TASK-041](#task-041-befunde-f1-und-f2-der-nachprüfung-von-task-040-beheben) | Befunde F1 und F2 der Nachprüfung von TASK-040 beheben | claude-20261020-adminfix-01 | 2026-10-20 |
 
 ### Blockiert – BLOCKIERT
 
@@ -70,6 +69,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-041](#task-041-befunde-f1-und-f2-der-nachprüfung-von-task-040-beheben) | Befunde F1 und F2 der Nachprüfung von TASK-040 beheben | claude-20261020-adminfix-01 | 2026-10-20 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -612,9 +612,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-041 Befunde F1 und F2 der Nachprüfung von TASK-040 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-adminfix-01 · **Aktualisiert:** 2026-10-20
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-adminfix-01 · **Aktualisiert:** 2026-10-20
 
-**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-SEC-001. **Abhängigkeiten:** TASK-040 ist abgenommen und integriert; die unabhängige Codex Nachprüfung [docs/REVIEW_TASK-040_PR-101.md](docs/REVIEW_TASK-040_PR-101.md) (PR #103) liegt auf main. Holger hat am 20. Oktober 2026 im Projektgespräch auf den Hinweis, dass die beiden Befunde einen eigenen Auftrag brauchen, mit „ja mache dafür einen eigenen auftrag“ geantwortet. Das ist der Auftrag für den unten beschriebenen Umfang; TASK-027 bis TASK-031 bleiben blockiert. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs, vor TASK-026 derselben Sitzung; eine nötige Festlegung zur Sperrreihenfolge kommt als DEC-066.
+**Bezug:** REQ-ACL-001, REQ-ACL-003, REQ-AUTH-001, REQ-SEC-001. **Abhängigkeiten:** TASK-040 ist abgenommen und integriert; die unabhängige Codex Nachprüfung [docs/REVIEW_TASK-040_PR-101.md](docs/REVIEW_TASK-040_PR-101.md) (PR #103) liegt auf main. Holger hat am 20. Oktober 2026 im Projektgespräch auf den Hinweis, dass die beiden Befunde einen eigenen Auftrag brauchen, mit „ja mache dafür einen eigenen auftrag“ geantwortet. Das ist der Auftrag für den unten beschriebenen Umfang; TASK-027 bis TASK-031 bleiben blockiert. Codex prüft das Ergebnis danach unabhängig nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5, Ergebnis PR mit DEC-066.
 
 **Umfang:** (F1, P2) Gleichzeitige Verwaltungsaufrufe zweier Berechtigter, die jeweils das Konto des anderen verwalten (Passwort zurücksetzen, deaktivieren, reaktivieren), dürfen nicht mit einem Deadlock und HTTP 500 enden. Eine gemeinsame Sperrreihenfolge oder vorgeschaltete Serialisierung für Abläufe festlegen, die neben dem Anfragenden weitere Identitäten sperren; Sitzungsdauer und Anmelde- sowie Entzugswege dabei berücksichtigen. Die Rechteprüfung bleibt in der Transaktion der Änderung wirksam. (F2, P3) Alle Verbraucher des Verwaltungsports (`AdministrationRequests`, `SessionController`, `AppearanceController`, `AppearanceService`) zählen die Kandidaten streng wie `AccountService` und `JdbcPermissions`, sodass ein zusätzlicher Primary Adapter nicht still gewinnt; bei Mehrdeutigkeit verweigern und keine Verwaltungsrechte in der Sitzungsantwort melden. Nicht Teil: Prüfung beim Commit statt beim Sperren, Endpunkte zur Gruppen- und Rechtepflege, P2 bis P6 aus TASK-025, F1 bis F3 aus PR #96.
 
@@ -622,4 +622,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Der Kreuzfall aus F1 läuft als Regressionstest mit echter PostgreSQL Wartebeziehung: beide Aufrufe enden ohne 500 und ohne Deadlock, das Ergebnis ist fachlich eindeutig. Bestehende Konkurrenz-, Entzugs- und Schutztests bleiben grün. Für F2 Tests mit keinem, genau einem, mehreren ohne und mehreren mit Primary Adapter an jedem Verbraucher; nur genau ein Adapter erlaubt. Alle Backendtests und CI auf PostgreSQL 18.6 grün. Getrennte KI prüft das Ergebnis; ihre Prüfung ist angeboten, aber nicht Voraussetzung der Abnahme durch Holger.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR übergeben.
+**Ergebnis:** DEC-066. (F1) Deaktivieren, Reaktivieren, Passwortzurücksetzen und die Änderung der Sitzungsdauer nehmen vor der Rechteprüfung eine gemeinsame transaktionsgebundene Advisory Sperre (`AccountRepository.serializeAdministration`); die Sitzungsdauer direkt nach ihrer Einstellungszeile, das Deaktivieren vor der Schranke der letzten Verwaltung, in der die bisherige Deaktivierungssperre aufgeht. Zwei Berechtigte, die gleichzeitig das Konto des anderen verwalten, laufen dadurch nacheinander: der erste gewinnt, der zweite sieht dessen Ergebnis (zum Beispiel 403, weil seine eigene Anmeldung durch das Zurücksetzen endete) statt Deadlock und 500. Endpunkte für Reaktivieren, Zurücksetzen und Sitzungsdauer prüfen vorher eine Momentaufnahme des Rechts, damit Anfragen ohne Recht die Serialisierung nicht belegen. (F2) `AdministrationRights.unique` zählt die Kandidaten; alle fünf Verwendungen in `AdministrationRequests`, `SessionController`, `AppearanceController` und `AppearanceService` nutzen es statt `getIfUnique`. Kein Vertrag, keine Migration, keine Oberflächenänderung.
+
+**Eigenprüfung am 2026-10-20:** Backend `verify` mit Temurin 25.0.4.1+1 gegen eine lokale PostgreSQL 16.15 (Docker war in dieser Umgebung nicht verfügbar, daher Entwicklerweg über `-Dtaskmanager.test.jdbc-url`; maßgeblich ist der CI-Lauf auf 18.6): 138 Tests, 0 Fehler, 0 übersprungen. Neu: drei Konkurrenztests in `AdministrationRightsApiTest` (gegenseitiges Zurücksetzen; Deaktivieren und Reaktivieren gegen Zurücksetzen; Sitzungsdauer gegen Zurücksetzen des Anfragenden), die die Serialisierung festhalten, belegen, dass beide Anfragen dort ohne Identitätssperre warten, und danach eindeutige Ergebnisse ohne 500 prüfen; fünf Tests in `AdministrationRightsWiringTest` (kein, ein, zwei ohne und zwei mit Primary Adapter sowie Quelltextprüfung, dass kein Verbraucher `getIfUnique` für den Port nutzt). Gegenprobe: Mit wirkungsloser Serialisierung und mit `getIfUnique` in `unique` scheitern genau diese 5 neuen Prüfungen (3 + 2), danach Originale wiederhergestellt. Repository Validator, Übersichtsprüfung, Python Tests und git diff --check erfolgreich. Der ursprüngliche Prüfversuch von Codex wurde nicht unverändert wiederholt: Er erwartet beide Anfragen wartend an der Sitzungssperre, was die Serialisierung gerade verhindert.
+
+**Nächster Schritt:** Codex prüft unabhängig nach DEC-040; Holger nimmt fachlich ab.

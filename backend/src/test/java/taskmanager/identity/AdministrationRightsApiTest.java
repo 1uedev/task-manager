@@ -31,6 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
 import taskmanager.identity.ApiClient.Response;
+import taskmanager.identity.account.AccountRepository;
 import taskmanager.identity.account.AccountService;
 import taskmanager.identity.session.SessionDuration;
 import taskmanager.platform.AdministrationRight;
@@ -71,6 +72,7 @@ class AdministrationRightsApiTest {
 
     @Value("${local.server.port}") int port;
     @Autowired AccountService accounts;
+    @Autowired AccountRepository accountRepository;
     @Autowired SessionDuration duration;
     @Autowired JdbcTemplate jdbc;
     @Autowired CompanyContext companies;
@@ -314,6 +316,128 @@ class AdministrationRightsApiTest {
         login.get(15, TimeUnit.SECONDS);
         Response changed = change.get(15, TimeUnit.SECONDS);
         assertEquals(200, changed.status(), changed.body());
+    }
+
+    // ------------------------------------------------------------------------------- administration of each other (TASK-041)
+
+    /**
+     * Two persons with the right to manage accounts reset each other's password at the same time. The rights check holds
+     * the requester's own account and session shared; without a common serialization ahead of it, each reset would then
+     * wait for the other's account (review of TASK-040, F1). Both requests must wait at the serialization before they
+     * hold any identity lock; the first one wins, and the second one sees that its own login ended with the reset.
+     */
+    @Test
+    void twoAdministratorsResettingEachOthersPasswordAreSerializedInsteadOfDeadlocking() throws Exception {
+        Person a = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        Person b = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        List<Response> results = whileTheSerializationIsHeld(
+            () -> a.browser().post("/api/v1/accounts/" + b.id() + "/password-reset", Map.of()),
+            () -> b.browser().post("/api/v1/accounts/" + a.id() + "/password-reset", Map.of()));
+        assertEquals(200, results.get(0).status(), results.get(0).body());
+        assertForbidden(results.get(1), "the reset whose requester was reset first");
+        assertEquals(List.of(b.id()), jdbc.queryForList(
+            "select id from identity_account where id in (?, ?) and password_change_required", UUID.class, a.id(), b.id()));
+    }
+
+    /** The same for a deactivation against a reset, and a reactivation against a reset, in both directions of the first. */
+    @Test
+    void deactivationAndReactivationAgainstAResetOfTheOtherAccountAreSerializedToo() throws Exception {
+        Person a = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        Person b = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        List<Response> deactivation = whileTheSerializationIsHeld(
+            () -> a.browser().post("/api/v1/accounts/" + b.id() + "/deactivate", Map.of()),
+            () -> b.browser().post("/api/v1/accounts/" + a.id() + "/password-reset", Map.of()));
+        assertEquals(200, deactivation.get(0).status(), deactivation.get(0).body());
+        assertForbidden(deactivation.get(1), "the reset of a deactivated requester");
+
+        Person c = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        List<Response> reactivation = whileTheSerializationIsHeld(
+            () -> c.browser().post("/api/v1/accounts/" + a.id() + "/password-reset", Map.of()),
+            () -> a.browser().post("/api/v1/accounts/" + b.id() + "/reactivate", Map.of()));
+        assertEquals(200, reactivation.get(0).status(), reactivation.get(0).body());
+        assertForbidden(reactivation.get(1), "the reactivation of a requester who was reset first");
+        assertFalse(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, b.id()));
+    }
+
+    /**
+     * A shortening of the session duration writes the sessions of every account, the other person's included, while its
+     * requester holds their own account shared. It takes the same serialization behind the setting row.
+     */
+    @Test
+    void aSessionDurationChangeAgainstAResetOfTheRequesterIsSerialized() throws Exception {
+        Person a = person(false, AdministrationRight.SESSION_DURATION_MANAGE);
+        Person b = person(false, AdministrationRight.ACCOUNTS_MANAGE);
+        try {
+            List<Response> results = whileTheSerializationIsHeld(
+                () -> a.browser().put("/api/v1/settings/session-duration", Map.of("hours", 2)),
+                () -> b.browser().post("/api/v1/accounts/" + a.id() + "/password-reset", Map.of()));
+            assertEquals(200, results.get(0).status(), results.get(0).body());
+            assertEquals(200, results.get(1).status(), results.get(1).body());
+            assertEquals(2, duration.hours());
+        } finally {
+            duration.change("test", 24);
+        }
+    }
+
+    /**
+     * Holds the administrative serialization, starts {@code first}, waits until it waits for the serialization, then does
+     * the same for {@code second}, and checks that neither holds an identity lock while it waits. PostgreSQL grants the
+     * waiters in the order in which they queued. Returns both responses in that order; none may be a server error.
+     */
+    private List<Response> whileTheSerializationIsHeld(java.util.concurrent.Callable<Response> first,
+            java.util.concurrent.Callable<Response> second) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            accountRepository.serializeAdministration();
+            locked.countDown();
+            try {
+                assertTrue(release.await(30, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        try {
+            assertTrue(locked.await(15, TimeUnit.SECONDS));
+            Future<Response> one = POOL.submit(first);
+            assertEquals(1, waitingAt("pg_advisory_xact_lock", 1).size(), "the first request must wait at the serialization");
+            Future<Response> two = POOL.submit(second);
+            List<Integer> waiting = waitingAt("pg_advisory_xact_lock", 2);
+            assertEquals(2, waiting.size(), "the second request must wait at the serialization as well");
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from pg_locks l join pg_class c on c.oid = l.relation
+                    where l.pid = any(?) and c.relname in ('identity_account', 'identity_session')
+                    """, Integer.class, (Object) waiting.toArray(Integer[]::new)),
+                "a request waiting at the serialization must not hold an identity lock yet");
+            release.countDown();
+            holder.get(15, TimeUnit.SECONDS);
+            List<Response> results = List.of(one.get(20, TimeUnit.SECONDS), two.get(20, TimeUnit.SECONDS));
+            for (Response result : results) {
+                assertTrue(result.status() < 500, "no server error: " + result.status() + " " + result.body());
+            }
+            return results;
+        } finally {
+            release.countDown();
+            holder.get(15, TimeUnit.SECONDS);
+        }
+    }
+
+    /** The backends blocked in a statement on the text, once there are {@code expected} of them or after ten seconds. */
+    private List<Integer> waitingAt(String statementPart, int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        List<Integer> pids = List.of();
+        while (System.nanoTime() < deadline) {
+            pids = jdbc.queryForList("""
+                    select pid from pg_stat_activity
+                    where datname = current_database() and pid <> pg_backend_pid()
+                    and query ilike ? and cardinality(pg_blocking_pids(pid)) > 0 order by pid
+                    """, Integer.class, "%" + statementPart + "%");
+            if (pids.size() >= expected) {
+                return pids;
+            }
+            Thread.sleep(10);
+        }
+        return pids;
     }
 
     /** True once a backend runs a statement on the text and PostgreSQL reports it as blocked. */

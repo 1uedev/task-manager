@@ -46,7 +46,7 @@ class AdministrationRequests {
 
     /** The authoritative check; call it inside the transaction of the change. */
     void require(AdministrationRight right) {
-        var port = rights.getIfUnique();
+        var port = AdministrationRights.unique(rights);
         if (port == null) {
             throw ApiProblemException.of(403, "auth.forbidden");
         }
@@ -58,7 +58,7 @@ class AdministrationRequests {
      * only what is clearly not allowed and never replaces {@link #require}.
      */
     void early(AdministrationRight right) {
-        var port = rights.getIfUnique();
+        var port = AdministrationRights.unique(rights);
         if (port == null || !port.held().contains(right)) {
             throw ApiProblemException.of(403, "auth.forbidden");
         }
