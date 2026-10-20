@@ -1,0 +1,70 @@
+diff --git a/backend/src/test/java/taskmanager/identity/AdministrationRightsApiTest.java b/backend/src/test/java/taskmanager/identity/AdministrationRightsApiTest.java
+index f06b074..5c72eae 100644
+--- a/backend/src/test/java/taskmanager/identity/AdministrationRightsApiTest.java
++++ b/backend/src/test/java/taskmanager/identity/AdministrationRightsApiTest.java
+@@ -331,4 +331,65 @@ class AdministrationRightsApiTest {
+         }
+         return false;
+     }
++
++    // Temporary independent review probe; no production code or authorization is replaced.
++    @Test
++    void reviewMutualPasswordResetsDoNotReturnServerError() throws Exception {
++        Person a = person(false, AdministrationRight.ACCOUNTS_MANAGE);
++        Person b = person(false, AdministrationRight.ACCOUNTS_MANAGE);
++        CountDownLatch locked = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        AtomicInteger holderPid = new AtomicInteger();
++        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
++            holderPid.set(jdbc.queryForObject("select pg_backend_pid()", Integer.class));
++            var rows = jdbc.queryForList("""
++                select id from identity_session where account_id in (?, ?)
++                and revoked_at is null and not restricted order by id for update
++                """, UUID.class, a.id(), b.id());
++            assertEquals(2, rows.size());
++            locked.countDown();
++            try {
++                assertTrue(release.await(30, TimeUnit.SECONDS));
++            } catch (InterruptedException failure) {
++                Thread.currentThread().interrupt();
++                throw new IllegalStateException(failure);
++            }
++        }));
++        try {
++            assertTrue(locked.await(15, TimeUnit.SECONDS));
++            Future<Response> first = POOL.submit(() ->
++                a.browser().post("/api/v1/accounts/" + b.id() + "/password-reset", Map.of()));
++            Future<Response> second = POOL.submit(() ->
++                b.browser().post("/api/v1/accounts/" + a.id() + "/password-reset", Map.of()));
++            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
++            List<Integer> waiters = List.of();
++            while (System.nanoTime() < deadline) {
++                waiters = jdbc.queryForList("""
++                    select pid from pg_stat_activity where datname = current_database()
++                    and pid <> pg_backend_pid() and query ilike '%for share of s%'
++                    and ? = any(pg_blocking_pids(pid)) order by pid
++                    """, Integer.class, holderPid.get());
++                if (waiters.size() == 2) break;
++                Thread.sleep(10);
++            }
++            System.out.println("[review040] session holder=" + holderPid.get() + ", exact blocked HTTP pids=" + waiters);
++            assertEquals(2, waiters.size(), "Both requests must have passed their actor account SHARE locks");
++            release.countDown();
++            holder.get(15, TimeUnit.SECONDS);
++            Response firstResult = first.get(20, TimeUnit.SECONDS);
++            Response secondResult = second.get(20, TimeUnit.SECONDS);
++            int changes = jdbc.queryForObject("""
++                select count(*) from identity_account where id in (?, ?) and password_change_required
++                """, Integer.class, a.id(), b.id());
++            System.out.println("[review040] mutual reset statuses=" + firstResult.status() + "," + secondResult.status()
++                + "; accounts changed=" + changes);
++            assertTrue(firstResult.status() != 500 && secondResult.status() != 500,
++                "A and B manage the other account, not themselves: statuses="
++                    + firstResult.status() + "," + secondResult.status());
++        } finally {
++            release.countDown();
++            holder.get(15, TimeUnit.SECONDS);
++        }
++    }
++
+ }

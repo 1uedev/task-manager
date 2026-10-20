@@ -1,0 +1,33 @@
+package taskmanager.identity.web;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.AdministrationRights;
+import taskmanager.platform.ApiProblemException;
+
+/** Temporary review probe: the mandatory uniqueness rule must survive Spring's Primary selection. */
+class AdministrationRightsWiringReviewTest {
+    @Test
+    void reviewTwoPortsIncludingAPrimaryMustFailClosed() {
+        var beans = new DefaultListableBeanFactory();
+        var ordinary = new RootBeanDefinition(AdministrationRights.class, () -> new Port());
+        var primary = new RootBeanDefinition(AdministrationRights.class, () -> new Port());
+        primary.setPrimary(true);
+        beans.registerBeanDefinition("ordinary", ordinary);
+        beans.registerBeanDefinition("primary", primary);
+        var requests = new AdministrationRequests(beans.getBeanProvider(AdministrationRights.class),
+            new DataSourceTransactionManager());
+        assertThrows(ApiProblemException.class,
+            () -> requests.require(AdministrationRight.ACCOUNTS_MANAGE));
+    }
+
+    private static class Port implements AdministrationRights {
+        @Override public void require(AdministrationRight right) { }
+        @Override public Set<AdministrationRight> held() { return Set.of(AdministrationRight.values()); }
+    }
+}
