@@ -84,7 +84,7 @@ class PermissionContextsProbeTest {
         assertEquals(200, response.status(), response.body());
         assertEquals(jdbc.queryForObject("select id from platform_company", String.class), response.json().get("companyId").asString());
         assertEquals(issued.account().id().toString(), response.json().get("userId").asString());
-        assertEquals(7, response.json().get("rightsVersion").asInt(), "the version after the initial setup: group, five rights, member");
+        assertEquals(8, response.json().get("rightsVersion").asInt(), "the version after the initial setup: group, six rights, member");
         assertFalse(response.json().get("passwordChangeRequired").asBoolean());
         assertFalse(response.json().get("external").asBoolean());
         assertEquals("null", response.json().get("organization").asString());
