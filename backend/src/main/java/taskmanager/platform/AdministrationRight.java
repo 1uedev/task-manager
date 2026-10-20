@@ -12,7 +12,12 @@ public enum AdministrationRight {
     /** Read and change the fixed session duration. */
     SESSION_DURATION_MANAGE("session_duration.manage"),
     /** Change the accent color and the logo of the company. */
-    APPEARANCE_MANAGE("appearance.manage");
+    APPEARANCE_MANAGE("appearance.manage"),
+    /**
+     * Create projects and manage every project of the company, its configuration and its members, without being a member
+     * (TASK-026, DEC-065). Gives no access to the content of a project such as tickets.
+     */
+    PROJECTS_MANAGE("projects.manage");
 
     private final String key;
 
