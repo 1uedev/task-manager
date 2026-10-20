@@ -1,0 +1,12 @@
+diff --git a/qualification/backend/src/test/java/com/example/qualification/valid/records/internal/RecordService.java b/qualification/backend/src/test/java/com/example/qualification/valid/records/internal/RecordService.java
+index 3798092..daaaa3c 100644
+--- a/qualification/backend/src/test/java/com/example/qualification/valid/records/internal/RecordService.java
++++ b/qualification/backend/src/test/java/com/example/qualification/valid/records/internal/RecordService.java
+@@ -11,7 +11,6 @@ class RecordService implements Records {
+     private final RecordRepository repository;
+     RecordService(RecordRepository repository) { this.repository = repository; }
+     @Override
+-    @Transactional(propagation = Propagation.MANDATORY)
+     public void create(UUID id, String label) {
+         // Flush makes the row visible to JDBC in the same transaction before its FK insert.
+         repository.saveAndFlush(new StoredRecord(id, label));
