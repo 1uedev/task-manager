@@ -1,0 +1,9 @@
+TagHistoryReviewProbeTest auf main b85abdd: 7 Tests, 1 Fehlschlag, 0 Fehler
+bestanden   reviewConcurrentFieldAndTagChangesNeitherDeadlockNorMixUpTheHistory  (4.165 s)
+bestanden   reviewTagChangesLeaveVersionAndLastChangedByOfTheTicketAsTheyAre  (1.32 s)
+bestanden   reviewSeveralTagChangesShareOneVersionAndArchivedTagsAreRecordedOnRemoval  (1.251 s)
+bestanden   reviewProjectBoundariesAndMissingReadActionHideTheHistory  (1.648 s)
+bestanden   reviewRevokedOrDeniedTagReadRuleHidesTheEntriesAtOnce  (0.965 s)
+bestanden   reviewAFailedHistoryWriteRollsTheAssignmentBack  (5.448 s)
+FEHLSCHLAG  reviewAnAssignmentThatWaitsForAFieldChangeTakesTheNewVersionAndALaterTime  (1.013 s)
+    the later entry must not carry an earlier time: field 2026-10-20T20:12:09.296539Z, tag 2026-10-20T20:12:08.786637Z ==> expected: <false> but was: <true>
