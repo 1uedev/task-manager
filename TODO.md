@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-042](#task-042-tagänderungen-in-der-tickethistorie-zeigen) | Tagänderungen in der Tickethistorie zeigen | claude-20261020-taghistory-01 | 2026-10-20 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -68,6 +66,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | claude-20261020-tags-01 | 2026-10-20 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-042](#task-042-tagänderungen-in-der-tickethistorie-zeigen) | Tagänderungen in der Tickethistorie zeigen | claude-20261020-taghistory-01 | 2026-10-20 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -498,11 +497,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
 
-**Nächster Schritt:** Die unabhängige Claude Prüfung (docs/REVIEW_TASK-028_PR-119.md, PR #120) hat F1 bis F3 als P3 gemeldet; sie sind auf Holgers Auftrag behoben (Unicode Leerraum, Faltung von `ß`, keine Sperre auf Tags fremder Kataloge), dazu H3 bis H5, siehe DEC-068 Nachtrag (9). Offen ist Holgers Entscheidung zu H1 (Tags in der Tickethistorie); danach Abnahme durch Holger.
+**Nächster Schritt:** Die unabhängige Claude Prüfung (docs/REVIEW_TASK-028_PR-119.md, PR #120) hat F1 bis F3 als P3 gemeldet; sie sind auf Holgers Auftrag behoben (Unicode Leerraum, Faltung von `ß`, keine Sperre auf Tags fremder Kataloge), dazu H3 bis H5, siehe DEC-068 Nachtrag (9). H1 hat Holger mit „In Tickethistorie“ entschieden, umgesetzt als TASK-042 (DEC-068 Nachtrag (10)). Nächster Schritt ist die Abnahme durch Holger.
 
 ## TASK-042 Tagänderungen in der Tickethistorie zeigen
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261020-taghistory-01 · **Aktualisiert:** 2026-10-20
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-taghistory-01 · **Aktualisiert:** 2026-10-20
 
 **Bezug:** REQ-TKT-005, REQ-TAG-001, REQ-ACL-003. **Abhängigkeiten:** TASK-028 (auf main, BEREIT ZUR PRÜFUNG) und TASK-027 (abgenommen). Holger hat am 20. Oktober 2026 auf die Frage zum Hinweis H1 der unabhängigen Prüfung von TASK-028 (docs/REVIEW_TASK-028_PR-119.md, PR #120) die Option „In Tickethistorie“ gewählt: „Ein kleiner Folgeauftrag zeigt Zuordnen und Entfernen in der Tickethistorie, nur für Personen mit Leserecht auf das Feld tags.“ TASK-029 bis TASK-031 bleiben blockiert. Eine getrennte KI prüft das Ergebnis nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; Ergebnis mit einem Nachtrag zu DEC-068 und, falls nötig, der nächsten freien Migration.
 
@@ -512,7 +511,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Zuordnen und Entfernen stehen in der Historie, mehrfaches Zuordnen erzeugt keinen doppelten Eintrag; ohne Leserecht auf `tags` fehlen die Einträge ganz; die Ticketversion bleibt unverändert, wie in DEC-068 festgelegt. Getrennte KI prüft Sichtbarkeit und Transaktion.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR übergeben.
+**Übergabe:** Umgesetzt auf claude/project-thread-r4dri5 ohne Migration. Port `TicketAccess.recordTagChange` (Ticketzeile geteilt gesperrt, Version unverändert), Aufruf aus `TagService.assignTicket` und `unassignTicket` nur bei tatsächlicher Änderung, Historie zeigt jeden Tageintrag für sich und nur mit der Leseregel für `tags`. Vertrag `contracts/tickets.openapi.yaml` (Feld `tags`), Nachtrag (10) zu DEC-068, backend/README.md. Test `assignmentsAndRemovalsAppearInTheTicketHistoryOnlyForReadersOfTheTags`.
+
+**Nächster Schritt:** Getrennte KI prüft Sichtbarkeit und Transaktion; danach Abnahme durch Holger.
 
 ## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
 

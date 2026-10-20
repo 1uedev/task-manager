@@ -51,6 +51,11 @@ class TicketRepository {
             .params(companyId, projectId, number).query(TicketRepository::map).optional();
     }
 
+    /** Locks the ticket row {@code FOR SHARE} until the end of the transaction and returns its version. */
+    long lockShared(UUID ticketId) {
+        return jdbc.sql("select version from ticket where id = ? for share").param(ticketId).query(Long.class).single();
+    }
+
     /** Hands out the next number of the project; the counter row stays locked until the commit. */
     long nextNumber(UUID projectId) {
         return jdbc.sql("""

@@ -480,6 +480,57 @@ class TagsApiTest {
     }
 
     @Test
+    void assignmentsAndRemovalsAppearInTheTicketHistoryOnlyForReadersOfTheTags() {
+        Person worker = person();
+        Person viewer = person();
+        Person blind = person();
+        Project project = project(worker, viewer, blind);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        grant(viewer.id(), project.id(), "ticket.read", "READ:*", "READ:tags");
+        grant(blind.id(), project.id(), "ticket.read", "READ:*");
+        long number = ticket(worker, project, "Mit Historie");
+        UUID tagId = tag(worker, catalog(project), "Verlauf");
+        String history = "/api/v1/projects/" + project.id() + "/tickets/" + number + "/history";
+
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", tagId.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", tagId.toString())).status());
+        Response edited = patch(worker, "/api/v1/projects/" + project.id() + "/tickets/" + number, Map.of("title", "Geändert"), "\"1\"");
+        assertEquals(200, edited.status(), edited.body());
+        assertEquals(204, delete(worker, ticketTags(project, number) + "/" + tagId).status());
+        assertEquals(204, delete(worker, ticketTags(project, number) + "/" + tagId).status());
+        assertEquals("\"2\"", worker.get("/api/v1/projects/" + project.id() + "/tickets/" + number).header("ETag"),
+            "only the change of the title raises the version");
+
+        Response seen = viewer.get(history);
+        assertEquals(200, seen.status(), seen.body());
+        List<String> entries = new ArrayList<>();
+        for (JsonNode entry : seen.json()) {
+            JsonNode changes = entry.get("changes");
+            if (changes.get(0).get("field").asString().equals("tags")) {
+                assertEquals(1, changes.size(), seen.body());
+                assertEquals(worker.id().toString(), entry.get("actor").asString());
+                JsonNode from = changes.get(0).get("from");
+                JsonNode to = changes.get(0).get("to");
+                entries.add(entry.get("version").asLong() + (from.isNull() ? " +" + to.asString() : " -" + from.asString()));
+            } else {
+                entries.add(entry.get("version").asLong() + " fields");
+            }
+        }
+        assertEquals(List.of("1 fields", "1 +" + tagId, "2 fields", "2 -" + tagId), entries,
+            "one entry per actual assignment and removal, with the version the ticket had");
+
+        Response hidden = blind.get(history);
+        assertEquals(200, hidden.status(), hidden.body());
+        assertEquals(2, hidden.json().size(), hidden.body());
+        for (JsonNode entry : hidden.json()) {
+            for (JsonNode change : entry.get("changes")) {
+                assertFalse(change.get("field").asString().equals("tags"), hidden.body());
+            }
+        }
+    }
+
+    @Test
     void assignmentBodiesAreChecked() {
         Person worker = person();
         Project project = project(worker);
