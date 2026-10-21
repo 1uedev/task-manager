@@ -36,30 +36,35 @@ public class SearchProjection {
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(ProjectChanged project) {
+        search.enterWrite();
         search.upsertProject(project);
     }
 
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(TicketChanged ticket) {
+        search.enterWrite();
         search.upsertTicket(ticket);
     }
 
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(TagChanged tag) {
+        search.enterWrite();
         search.upsertTag(tag);
     }
 
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(TicketTagChanged assignment) {
+        search.enterWrite();
         search.ticketTag(assignment.ticketId(), assignment.tagId(), assignment.assigned());
     }
 
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(ProjectTagChanged assignment) {
+        search.enterWrite();
         search.projectTag(assignment.projectId(), assignment.tagId(), assignment.assigned());
     }
 

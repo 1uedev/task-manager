@@ -495,9 +495,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
 
-**Übergabe:** Umgesetzt wie vorgesehen. Die Projektion gehört dem Suchmodul und folgt jeder Änderung in derselben Transaktion; Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. Nachweise: SearchApiTest (9 Fälle: Präfix und Kennung, Ordnung und Seiten, Filter, verborgene Felder ohne Einfluss auf Treffer, Rang und Anzahl, Nichtmitglieder und Rechteentzug, Projektion bei Änderungen, Rückabwicklung, Neuaufbau), SearchContractTest, AdminCommandTest für `rebuild-search`, Lifecycle-Prüfung mit dem Befehl. Grenzen stehen in backend/README.md.
+**Übergabe:** Umgesetzt wie vorgesehen. Die Projektion gehört dem Suchmodul und folgt jeder Änderung in derselben Transaktion; Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. Nachweise: SearchApiTest (9 Fälle: Präfix und Kennung, Ordnung und Seiten, Filter, verborgene Felder ohne Einfluss auf Treffer, Rang und Anzahl, Nichtmitglieder und Rechteentzug, Projektion bei Änderungen, Rückabwicklung, Neuaufbau), SearchContractTest, AdminCommandTest für `rebuild-search`, Lifecycle-Prüfung mit dem Befehl. Grenzen stehen in backend/README.md. Die unabhängige Prüfung von Codex (docs/REVIEW_TASK-029_PR-128.md, PR #129) meldete F1 (P2, Anfrage und Index zerlegen Text unterschiedlich), F2 (P2, Verklemmung zwischen Neuaufbau und Tagumbenennung) und F3 (P3, Feldindizes tragen den Mehrfeldvergleich nicht); alle drei sind mit Migration V0015 und Nachtrag (8) zu DEC-069 behoben, mit drei Regressionstests in SearchApiTest.
 
-**Nächster Schritt:** Unabhängige Prüfung durch eine getrennte KI nach DEC-040, danach Abnahme durch Holger.
+**Nächster Schritt:** Nachprüfung der Behebung von F1 bis F3 durch eine getrennte KI oder Abnahme durch Holger.
 
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 

@@ -16,6 +16,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -552,7 +557,7 @@ class SearchApiTest {
         String tagWord = word();
         long number = ticket(worker, project, token);
         assertEquals(204, post(worker, ticketTags(project, number), Map.of("name", tagWord, "catalog", "company")).status());
-        jdbc.update("update search_ticket set title = 'verdorben', tags_text = '' where project_id = ?", project.id());
+        jdbc.update("update search_ticket set title = 'verdorben', title_terms = 'verdorben', tags_text = '' where project_id = ?", project.id());
         assertEquals(List.of(), keys(worker, "q=" + token));
 
         projection.rebuild(companies.find().orElseThrow());
@@ -565,7 +570,7 @@ class SearchApiTest {
             jdbc.queryForObject("select count(*) from search_ticket_tag", Long.class));
         UUID company = companies.find().orElseThrow();
         assertEquals(false, projection.buildIfMissing(company), "a built projection is not built again at the start");
-        jdbc.update("update search_ticket set title = 'verdorben' where project_id = ?", project.id());
+        jdbc.update("update search_ticket set title = 'verdorben', title_terms = 'verdorben' where project_id = ?", project.id());
         jdbc.update("delete from search_state");
         assertEquals(true, projection.buildIfMissing(company), "a company without a built projection gets one");
         assertEquals(List.of(key), keys(worker, "q=" + token));
@@ -606,5 +611,118 @@ class SearchApiTest {
         Response hit = reader.get("/api/v1/search/projects?q=" + token);
         assertEquals("Lager " + token, hit.json().get("items").get(0).get("name").asString());
         assertEquals(1, hit.json().get("total").asLong());
+    }
+    // ---------------------------------------------------------------- findings of the independent review (PR #129)
+
+    @Test
+    void theSameTextFindsWhatWasStoredAlsoInFullWidthAndStructuredForm() {
+        Person worker = person();
+        String wide = "Ｆｕｌｌｗｉｄｔｈ" + COUNTER.incrementAndGet();
+        Project project = project(wide, worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "project.read", "tag.create");
+        long titled = ticket(worker, project, wide);
+        String address = "support" + COUNTER.incrementAndGet() + "@example.test";
+        long mailed = ticket(worker, project, Map.of("title", "Anfrage", "description", "Antwort an " + address));
+        String tagged = "Ｔａｇ" + COUNTER.incrementAndGet() + "-Wert";
+        long withTag = ticket(worker, project, "Mit Tag");
+        assertEquals(204, post(worker, ticketTags(project, withTag), Map.of("name", tagged)).status());
+        String p = project.key() + "-";
+
+        assertEquals(List.of(p + titled), keys(worker, "q=" + encode(wide)), "full width input finds its stored text");
+        assertEquals(List.of(p + titled), keys(worker, "q=" + encode(wide.toLowerCase())));
+        assertEquals(List.of(p + mailed), keys(worker, "q=" + encode(address)), "a mail address is split alike on both sides");
+        assertEquals(List.of(p + mailed), keys(worker, "q=" + encode(address.substring(0, 9))));
+        assertEquals(List.of(p + withTag), keys(worker, "q=" + encode(tagged)));
+        assertEquals(List.of(project.key()), projectKeys(worker, "q=" + encode(wide)));
+        assertEquals(List.of(project.key()), projectKeys(project.manager(), "q=" + encode(wide)));
+        JsonNode hit = tickets(worker, "q=" + encode(wide)).json().get("items").get(0);
+        assertEquals(wide, hit.get("fields").get("title").asString(), "the answer keeps the original text");
+    }
+
+    @Test
+    void aTagRenameAndARebuildWaitForEachOtherInsteadOfDeadlocking() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create", "tags.manage");
+        long number = ticket(worker, project, "Ziel");
+        UUID tag = tag(worker, "/api/v1/projects/" + project.id() + "/catalog/tags", word());
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", tag.toString())).status());
+        UUID company = companies.find().orElseThrow();
+        String renamed = word();
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            CountDownLatch locked = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            AtomicInteger gatePid = new AtomicInteger();
+            // Holds search_tag so that the rename has entered the projection when the rebuild starts.
+            Future<?> gate = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.execute("lock table search_tag in share mode");
+                gatePid.set(jdbc.queryForObject("select pg_backend_pid()", Integer.class));
+                locked.countDown();
+                await(release);
+            }));
+            try {
+                assertTrue(locked.await(10, TimeUnit.SECONDS));
+                Future<Response> rename = pool.submit(() -> worker.browser().send("PATCH",
+                    "/api/v1/projects/" + project.id() + "/catalog/tags/" + tag, Map.of("name", renamed), "\"1\""));
+                int renamePid = waiter(gatePid.get(), "search_tag");
+                Future<String> rebuild = pool.submit(() -> {
+                    try {
+                        projection.rebuild(company);
+                        return "ok";
+                    } catch (RuntimeException failed) {
+                        return failed.getClass().getSimpleName();
+                    }
+                });
+                waiter(renamePid, "lock table search_state");
+                release.countDown();
+                gate.get(10, TimeUnit.SECONDS);
+                assertEquals(200, rename.get(15, TimeUnit.SECONDS).status());
+                assertEquals("ok", rebuild.get(15, TimeUnit.SECONDS), "the rebuild waits for the rename that entered first");
+            } finally {
+                release.countDown();
+                gate.get(15, TimeUnit.SECONDS);
+            }
+        }
+        assertEquals(List.of(project.key() + "-" + number), keys(worker, "q=" + renamed));
+    }
+
+    @Test
+    void everyReadableFieldVectorServesTheTextMatchWithItsIndex() {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("set local enable_seqscan = off");
+            String plan = String.join(" | ", jdbc.queryForList("""
+                    explain (costs off) select ticket_id from search_ticket s where
+                    (s.title_tsv @@ to_tsquery('simple', ?) or s.description_tsv @@ to_tsquery('simple', ?)
+                        or s.tags_tsv @@ to_tsquery('simple', ?))
+                    """, String.class, "'wort':*", "'wort':*", "'wort':*"));
+            assertTrue(plan.contains("search_ticket_title") && plan.contains("search_ticket_description")
+                && plan.contains("search_ticket_tags") && !plan.contains("Seq Scan"), plan);
+        });
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(20, TimeUnit.SECONDS));
+        } catch (InterruptedException interrupted) {
+            throw new IllegalStateException(interrupted);
+        }
+    }
+
+    /** The backend that waits for {@code holder} while running a statement containing {@code statement}. */
+    private int waiter(int holder, String statement) throws InterruptedException {
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < until) {
+            List<Integer> pids = jdbc.queryForList("""
+                    select pid from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()
+                    and ? = any(pg_blocking_pids(pid)) and query ilike ?
+                    """, Integer.class, holder, "%" + statement + "%");
+            if (!pids.isEmpty()) {
+                return pids.get(0);
+            }
+            Thread.sleep(10);
+        }
+        throw new AssertionError("nothing waits for " + holder + " in " + statement);
     }
 }
