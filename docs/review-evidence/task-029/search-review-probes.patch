@@ -1,0 +1,313 @@
+diff --git a/backend/src/test/java/taskmanager/search/SearchApiTest.java b/backend/src/test/java/taskmanager/search/SearchApiTest.java
+index fd9e73a..53210cf 100644
+--- a/backend/src/test/java/taskmanager/search/SearchApiTest.java
++++ b/backend/src/test/java/taskmanager/search/SearchApiTest.java
+@@ -293,0 +294,308 @@ class SearchApiTest {
++
++    // Independent review probes, synthetic fixtures only.
++    @Autowired taskmanager.search.internal.SearchService reviewSearch;
++
++    private List<Integer> reviewWaiters(int holder, String query) {
++        return jdbc.queryForList("""
++            select pid from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
++            and ?=any(pg_blocking_pids(pid)) and query ilike ?
++            """,Integer.class,holder,"%"+query+"%");
++    }
++    private List<Integer> reviewAwait(int holder,String query,int count) throws InterruptedException {
++        long until=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
++        while(System.nanoTime()<until) {
++            var pids=reviewWaiters(holder,query);
++            if(pids.size()>=count) return pids;
++            Thread.sleep(10);
++        }
++        throw new AssertionError("Missing exact blocker "+holder+" for "+query);
++    }
++    private Response reviewFence(String sql,UUID id,String query,Runnable change,
++            java.util.concurrent.Callable<Response> request) throws Exception {
++        try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
++            var locked=new java.util.concurrent.CountDownLatch(1);
++            var release=new java.util.concurrent.CountDownLatch(1);
++            var pid=new AtomicInteger();
++            var holder=pool.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++                jdbc.queryForList(sql,id); pid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class)); locked.countDown();
++                try { assertTrue(release.await(25,java.util.concurrent.TimeUnit.SECONDS)); }
++                catch(InterruptedException e) { throw new IllegalStateException(e); }
++                change.run();
++            }));
++            try {
++                assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
++                var call=pool.submit(request);
++                System.out.println("[review029] "+query+" holder="+pid+", waiter="+reviewAwait(pid.get(),query,1));
++                release.countDown(); holder.get(10,java.util.concurrent.TimeUnit.SECONDS);
++                return call.get(15,java.util.concurrent.TimeUnit.SECONDS);
++            } finally { release.countDown();holder.get(15,java.util.concurrent.TimeUnit.SECONDS); }
++        }
++    }
++    private static List<String> reviewItems(Response response) {
++        assertEquals(200,response.status(),response.body());
++        return StreamSupport.stream(response.json().get("items").spliterator(),false).map(n->n.get("key").asString()).toList();
++    }
++
++    @Test
++    void reviewSameUnicodeInputMustFindItsStoredText() {
++        Person worker=person();String wide="Ｆｕｌｌｗｉｄｔｈ"+COUNTER.incrementAndGet();
++        Project project=project(wide,worker);grant(worker.id(),project.id(),TICKETS);
++        long n=ticket(worker,project,wide);
++        Response byKey=tickets(worker,"q="+project.key()+"-"+n);assertEquals(1,byKey.json().get("total").asLong());
++        Response found=tickets(worker,"q="+encode(wide));
++        Response projects=project.manager().get("/api/v1/search/projects?q="+encode(wide));
++        assertEquals(200,found.status(),found.body());assertEquals(200,projects.status(),projects.body());
++        System.out.println("[review029] same fullwidth text: tickets="+found.json().get("total").asLong()
++            +", projects="+projects.json().get("total").asLong()+", identifier control=1");
++        assertEquals(List.of(1L,1L),List.of(found.json().get("total").asLong(),projects.json().get("total").asLong()));
++    }
++
++    @Test
++    void reviewDeclaredWordTokenizerMustAlsoApplyToIndexedEmailText() {
++        Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++        String address="support"+COUNTER.incrementAndGet()+"@example.test";
++        long n=ticket(worker,project,address);
++        Response result=tickets(worker,"q="+encode(address));
++        assertEquals(200,result.status(),result.body());
++        assertEquals(1,tickets(worker,"q="+project.key()+"-"+n).json().get("total").asLong());
++        System.out.println("[review029] same email text: total="+result.json().get("total").asLong()+", identifier control=1");
++        assertEquals(1,result.json().get("total").asLong(),"Query and indexed text must agree on words");
++    }
++
++    @Test
++    void reviewFieldViewsAndHiddenChangesCannotAlterRankCountOrPage() {
++        Person writer=person(),viewer=person();Project a=project(writer,viewer),b=project(writer,viewer);
++        grant(writer.id(),a.id(),TICKETS);grant(writer.id(),b.id(),TICKETS);
++        grant(viewer.id(),a.id(),"ticket.read","READ:title");
++        grant(viewer.id(),b.id(),"ticket.read","READ:description");
++        String visible=word(),secret=word();
++        long older=ticket(writer,a,Map.of("title",visible,"description",secret));
++        long newer=ticket(writer,a,visible);
++        long inB=ticket(writer,b,Map.of("title",secret,"description",visible));
++        Response before=tickets(viewer,"q="+visible+"&limit=1");
++        String initial=before.body();
++        assertEquals(3,before.json().get("total").asLong());
++        assertEquals(List.of(),reviewItems(tickets(viewer,"q="+secret)));
++        String path="/api/v1/projects/"+a.id()+"/tickets/"+older;
++        assertEquals(200,writer.browser().send("PATCH",path,Map.of("description",(visible+" ").repeat(30)),"\"1\"").status());
++        Response after=tickets(viewer,"q="+visible+"&limit=1");
++        assertEquals(initial,after.body(),"Hidden text changes neither rank, count, page nor allowed fields");
++        assertEquals(0,tickets(viewer,"q="+visible+"&status=new").json().get("total").asLong());
++        Response all=tickets(viewer,"q="+visible);
++        for(JsonNode item:all.json().get("items")) {
++            if(item.get("projectId").asString().equals(a.id().toString())) assertEquals(List.of("title"),sortedNames(item.get("fields")));
++            else assertEquals(List.of("description"),sortedNames(item.get("fields")));
++            assertTrue(item.get("tags").isNull());
++        }
++        assertTrue(reviewItems(tickets(writer,"q="+visible)).contains(a.key()+"-"+older));
++        System.out.println("[review029] distinct field-view UNION groups: hidden mutation leaves exact page/total unchanged");
++    }
++
++    @Test
++    void reviewForeignFiltersAndCompanyProjectAdministrationDoNotGrantTicketSearch() {
++        Person member=person(),outsider=person();Project a=project(member),b=project(member);
++        grant(member.id(),a.id(),TICKETS);grant(outsider.id(),null,TICKETS);
++        String token=word();ticket(member,a,token);
++        grant(member.id(),a.id(),"tag.create");
++        UUID hidden=tag(member,"/api/v1/projects/"+a.id()+"/catalog/tags",word());
++        Response foreign=tickets(outsider,"project="+a.id()),unknown=tickets(outsider,"project="+UUID.randomUUID());
++        assertEquals(foreign.violations(),unknown.violations());assertInvalid(foreign,"project.unknown");
++        assertInvalid(tickets(member,"project="+b.id()),"project.unknown");
++        assertEquals(List.of(),reviewItems(tickets(a.manager(),"q="+token)));
++        assertEquals(List.of(),reviewItems(tickets(outsider,"q="+token)));
++        assertInvalid(tickets(outsider,"tag="+hidden),"tag.unknown");
++        assertInvalid(tickets(outsider,"tag="+UUID.randomUUID()),"tag.unknown");
++        assertTrue(projectKeys(a.manager(),"q=Suche").contains(a.key()));
++        System.out.println("[review029] foreign/unknown filters same errors; company project right grants no ticket hits");
++    }
++
++    @Test
++    void reviewQueuedRevocationsTakeEffectBeforeMatchingAndCounting() throws Exception {
++        for(String kind:List.of("action","field","membership")) {
++            Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++            String token=word();ticket(worker,project,Map.of("title","Allowed title","description",token));
++            UUID company=companies.find().orElseThrow();
++            boolean membership=kind.equals("membership");
++            Response result=reviewFence(membership?"select id from project where id=? for update":
++                "select revision from permissions_revision where company_id=? for update",
++                membership?project.id():company,membership?"from project":"permissions_revision",()->{
++                    if(membership) {
++                        jdbc.update("delete from project_member where project_id=? and account_id=?",project.id(),worker.id());
++                        jdbc.update("update project set version=version+1 where id=?",project.id());
++                    } else {
++                        if(kind.equals("action")) jdbc.update("""
++                            delete from permissions_action where action_key='ticket.read' and company_id=?
++                            and group_id in(select group_id from permissions_membership where company_id=? and user_id=?)
++                            """,company,company,worker.id());
++                        else jdbc.update("""
++                            update permissions_field set effect='DENY' where field_key='description' and operation='READ' and company_id=?
++                            and group_id in(select group_id from permissions_membership where company_id=? and user_id=?)
++                            """,company,company,worker.id());
++                        jdbc.update("update permissions_revision set revision=revision+1 where company_id=?",company);
++                    }
++                },()->tickets(worker,"q="+token));
++            assertEquals(List.of(),reviewItems(result));assertEquals(0,result.json().get("total").asLong());
++            assertEquals(List.of(),reviewItems(tickets(worker,"q="+token)));
++            if(kind.equals("field")) assertEquals(1,tickets(worker,"q="+encode(project.key()+"-1")).json().get("total").asLong());
++            System.out.println("[review029] queued "+kind+" revocation ->200, total=0, items=[]; fresh result agrees");
++        }
++    }
++
++    @Test
++    void reviewAuthorizedSearchHoldsProjectUntilMemberRemoval() throws Exception {
++        Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++        String token=word();ticket(worker,project,token);UUID company=companies.find().orElseThrow();
++        UUID session=jdbc.queryForObject("select id from identity_session where account_id=? and revoked_at is null",UUID.class,worker.id());
++        long version=jdbc.queryForObject("select revision from permissions_revision where company_id=?",Long.class,company);
++        var actor=new taskmanager.permissions.AccessContext(company,worker.id(),session,version,false,false,null);
++        try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
++            var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var pid=new AtomicInteger();
++            var read=pool.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++                var page=reviewSearch.tickets(actor,new taskmanager.search.internal.SearchService.TicketQuery(
++                    token,List.of(),List.of(),List.of(),List.of(),List.of(),20,0));
++                assertEquals(1,page.total());pid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class));locked.countDown();
++                try { assertTrue(release.await(20,java.util.concurrent.TimeUnit.SECONDS)); }
++                catch(InterruptedException e) { throw new IllegalStateException(e); }
++            }));
++            try {
++                assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
++                String etag=project.manager().get("/api/v1/projects/"+project.id()).header("ETag");
++                var remove=pool.submit(()->project.manager().browser().send("DELETE","/api/v1/projects/"+project.id()+"/members/"+worker.id(),null,etag));
++                System.out.println("[review029] removal "+reviewAwait(pid.get(),"from project",1)+" waits for authorized search "+pid);
++                release.countDown();read.get(10,java.util.concurrent.TimeUnit.SECONDS);
++                assertEquals(200,remove.get(15,java.util.concurrent.TimeUnit.SECONDS).status());
++                assertEquals(List.of(),reviewItems(tickets(worker,"q="+token)));
++            } finally {release.countDown();read.get(15,java.util.concurrent.TimeUnit.SECONDS);}
++        }
++    }
++
++    @Test
++    void reviewProjectionFailureRollsBackRealTicketAndTagChanges() {
++        Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++        grant(worker.id(),project.id(),"tag.create");String old=word();long n=ticket(worker,project,old);
++        UUID tag=tag(worker,"/api/v1/projects/"+project.id()+"/catalog/tags",word());
++        jdbc.execute("""
++            create function review_fail_search() returns trigger language plpgsql as $$
++            begin
++              if TG_TABLE_NAME='search_ticket_tag' then raise exception 'synthetic projection rejection';
++              elsif new.title='reviewreject' then raise exception 'synthetic projection rejection'; end if;
++              return new;
++            end $$
++            """);
++        jdbc.execute("create trigger review_search_ticket before insert or update on search_ticket for each row execute function review_fail_search()");
++        jdbc.execute("create trigger review_search_assignment before insert on search_ticket_tag for each row execute function review_fail_search()");
++        try {
++            Response update=worker.browser().send("PATCH","/api/v1/projects/"+project.id()+"/tickets/"+n,Map.of("title","reviewreject"),"\"1\"");
++            Response assign=post(worker,ticketTags(project,n),Map.of("tagId",tag.toString()));
++            assertEquals(List.of(500,500),List.of(update.status(),assign.status()));
++            assertTrue(!update.body().contains("synthetic projection rejection")&&!assign.body().contains("synthetic projection rejection"));
++            assertEquals(old,jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++            assertEquals(old,jdbc.queryForObject("select title from search_ticket where project_id=?",String.class,project.id()));
++            assertEquals(1L,jdbc.queryForObject("select version from ticket where project_id=?",Long.class,project.id()));
++            assertEquals(0,jdbc.queryForObject("select count(*) from tag_ticket where project_id=?",Integer.class,project.id()));
++            assertEquals(0,jdbc.queryForObject("select count(*) from search_ticket_tag a join search_ticket s on s.ticket_id=a.ticket_id where s.project_id=?",Integer.class,project.id()));
++            assertEquals(0,jdbc.queryForObject("select count(*) from ticket_change c join ticket t on t.id=c.ticket_id where t.project_id=? and (c.version>1 or c.field='tags')",Integer.class,project.id()));
++            assertEquals(1,tickets(worker,"q="+old).json().get("total").asLong());
++            System.out.println("[review029] late projection failures: source, version, history and assignments all roll back");
++        } finally {
++            jdbc.execute("drop trigger review_search_ticket on search_ticket");
++            jdbc.execute("drop trigger review_search_assignment on search_ticket_tag");
++            jdbc.execute("drop function review_fail_search()");
++        }
++    }
++
++    @Test
++    void reviewRebuildAllowsOldReadsAndLaterWriterWins() throws Exception {
++        Person writer=person(),reader=person();Project project=project(writer,reader);
++        grant(writer.id(),project.id(),TICKETS);grant(reader.id(),project.id(),"ticket.read","READ:title");
++        String old=word(),next=word();ticket(writer,project,old);UUID company=companies.find().orElseThrow();
++        try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
++            var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var pid=new AtomicInteger();
++            var rebuild=pool.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++                projection.rebuild(company);pid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class));locked.countDown();
++                try {assertTrue(release.await(20,java.util.concurrent.TimeUnit.SECONDS));}catch(InterruptedException e){throw new IllegalStateException(e);}
++            }));
++            try {
++                assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
++                var write=pool.submit(()->writer.browser().send("PATCH","/api/v1/projects/"+project.id()+"/tickets/1",Map.of("title",next),"\"1\""));
++                System.out.println("[review029] writer "+reviewAwait(pid.get(),"search_ticket",1)+" waits for rebuild "+pid);
++                assertEquals(1,tickets(reader,"q="+old).json().get("total").asLong());
++                release.countDown();rebuild.get(10,java.util.concurrent.TimeUnit.SECONDS);
++                assertEquals(200,write.get(15,java.util.concurrent.TimeUnit.SECONDS).status());
++                assertEquals(1,tickets(reader,"q="+next).json().get("total").asLong());
++                assertEquals(0,tickets(reader,"q="+old).json().get("total").asLong());
++                System.out.println("[review029] rebuild holds: old committed search readable, later write indexed without loss");
++            } finally {release.countDown();rebuild.get(15,java.util.concurrent.TimeUnit.SECONDS);}
++        }
++    }
++
++    @Test
++    void reviewWriterAlreadyInProjectionCommitsBeforeRebuild() throws Exception {
++        Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++        String old=word(),next=word();ticket(worker,project,old);UUID company=companies.find().orElseThrow();
++        try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
++            var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var pid=new AtomicInteger();
++            var gate=pool.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++                jdbc.queryForList("select ticket_id from search_ticket where project_id=? for update",project.id());
++                pid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class));locked.countDown();
++                try {assertTrue(release.await(20,java.util.concurrent.TimeUnit.SECONDS));}catch(InterruptedException e){throw new IllegalStateException(e);}
++            }));
++            try {
++                assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
++                var write=pool.submit(()->worker.browser().send("PATCH","/api/v1/projects/"+project.id()+"/tickets/1",Map.of("title",next),"\"1\""));
++                int writer=reviewAwait(pid.get(),"search_ticket",1).getFirst();
++                var rebuild=pool.submit(()->projection.rebuild(company));
++                System.out.println("[review029] rebuild "+reviewAwait(writer,"lock table search_state",1)+" waits for writer "+writer+" -> gate "+pid);
++                release.countDown();gate.get(10,java.util.concurrent.TimeUnit.SECONDS);
++                assertEquals(200,write.get(15,java.util.concurrent.TimeUnit.SECONDS).status());rebuild.get(15,java.util.concurrent.TimeUnit.SECONDS);
++                assertEquals(1,tickets(worker,"q="+next).json().get("total").asLong());
++                assertEquals(0,tickets(worker,"q="+old).json().get("total").asLong());
++            } finally {release.countDown();gate.get(15,java.util.concurrent.TimeUnit.SECONDS);}
++        }
++    }
++
++    @Test
++    void reviewTagRenameAndRebuildMustNotTakeTablesInOppositeOrder() throws Exception {
++        Person worker=person();Project project=project(worker);grant(worker.id(),project.id(),TICKETS);
++        grant(worker.id(),project.id(),"tag.create","tags.manage");ticket(worker,project,"Tag target");
++        UUID tag=tag(worker,"/api/v1/projects/"+project.id()+"/catalog/tags",word());
++        assertEquals(204,post(worker,ticketTags(project,1),Map.of("tagId",tag.toString())).status());
++        UUID company=companies.find().orElseThrow();
++        try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
++            var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var pid=new AtomicInteger();
++            var gate=pool.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++                jdbc.execute("lock table search_tag in share mode");pid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class));locked.countDown();
++                try {assertTrue(release.await(20,java.util.concurrent.TimeUnit.SECONDS));}catch(InterruptedException e){throw new IllegalStateException(e);}
++            }));
++            try {
++                assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
++                var rename=pool.submit(()->worker.browser().send("PATCH","/api/v1/projects/"+project.id()+"/catalog/tags/"+tag,Map.of("name",word()),"\"1\""));
++                int renamePid=reviewAwait(pid.get(),"insert into search_tag",1).getFirst();
++                var rebuild=pool.submit(()->{
++                    try {projection.rebuild(company);return "ok";}
++                    catch(RuntimeException e){return e.getClass().getSimpleName();}
++                });
++                List<Integer> rebuildPids=reviewAwait(pid.get(),"lock table search_state",1);
++                System.out.println("[review029] tag rename "+renamePid+" and rebuild "+rebuildPids+" queued at gate "+pid);
++                release.countDown();gate.get(10,java.util.concurrent.TimeUnit.SECONDS);
++                int status=rename.get(15,java.util.concurrent.TimeUnit.SECONDS).status();
++                String built=rebuild.get(15,java.util.concurrent.TimeUnit.SECONDS);
++                System.out.println("[review029] overlapping tag rename/rebuild: HTTP="+status+", rebuild="+built);
++                assertEquals("200/ok",status+"/"+built,"A normal writer and rebuild should serialize without a table-lock deadlock");
++            } finally {release.countDown();gate.get(15,java.util.concurrent.TimeUnit.SECONDS);}
++        }
++    }
++
++    @Test
++    void reviewGinPlansForSingleAndCombinedReadableVectors() {
++        new TransactionTemplate(transactions).executeWithoutResult(status->{
++            jdbc.execute("set local enable_seqscan=off");
++            String one=String.join(" | ",jdbc.queryForList("explain (costs off) select ticket_id from search_ticket where title_tsv @@ to_tsquery('simple',?)",String.class,"'reviewword':*"));
++            String all=String.join(" | ",jdbc.queryForList("explain (costs off) select ticket_id from search_ticket where (title_tsv || description_tsv || tags_tsv) @@ to_tsquery('simple',?)",String.class,"'reviewword':*"));
++            System.out.println("[review029] one readable vector plan: "+one);
++            System.out.println("[review029] all readable vectors plan: "+all);
++            assertTrue(one.contains("search_ticket_title"),one);
++            assertTrue(all.contains("Seq Scan"),all);
++        });
++    }
++
