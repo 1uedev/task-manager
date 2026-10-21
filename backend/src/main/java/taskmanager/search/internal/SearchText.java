@@ -49,6 +49,29 @@ record SearchText(String tsquery, String key, Long number, boolean given) {
         return new SearchText(tsquery, key, number, true);
     }
 
+    /**
+     * The words of a stored text as the index keeps them, separated by spaces: the same normalization and splitting as a
+     * search text, without its limits, so every word a search can ask for is a word of the index.
+     */
+    static String terms(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        StringBuilder terms = new StringBuilder();
+        for (String word : SEPARATORS.split(normalized)) {
+            if (!word.isEmpty()) {
+                terms.append(terms.isEmpty() ? "" : " ").append(word);
+            }
+        }
+        return terms.toString();
+    }
+
+    /** The words of the text, each as a prefix query of its own; empty without words. */
+    List<String> words() {
+        return tsquery == null ? List.of() : List.of(tsquery.split(" & "));
+    }
+
     /** A text was given; with neither words nor an identifier it matches nothing. */
     boolean present() {
         return given;

@@ -12,10 +12,18 @@ import taskmanager.tickets.TicketChanged;
 /**
  * The projection tables of the search module. Nobody else reads them. Rows that a write changes are locked before the
  * names of their tags are written again, so the statement that writes them reads every assignment committed before.
+ *
+ * <p>Searchable text is stored a second time as terms: the words of {@link SearchText#terms}, which also splits the search
+ * text, so a search and the index agree on every word (finding F1 of the review of TASK-029).
+ *
+ * <p>Lock order: every write first takes {@code search_state} in {@code ROW SHARE} mode ({@link #enterWrite}), a rebuild
+ * takes it first in {@code EXCLUSIVE} mode. Writes do not wait for each other there, but a rebuild waits for every write
+ * that already entered, and a later write waits before it touches any other projection table, so a write and a rebuild
+ * never hold tables the other one needs (finding F2).
  */
 @Repository
 class SearchRepository {
-    private static final String TAG_NAMES = "coalesce((select string_agg(g.name, ' ' order by g.name) from %s a "
+    private static final String TAG_NAMES = "coalesce((select string_agg(g.terms, ' ' order by g.name, g.tag_id) from %s a "
         + "join search_tag g on g.tag_id = a.tag_id where a.%s = s.%s), '')";
 
     private final JdbcClient jdbc;
@@ -24,29 +32,40 @@ class SearchRepository {
         this.jdbc = jdbc;
     }
 
+    /** The first statement of every write of the projection; see the lock order above. */
+    void enterWrite() {
+        jdbc.sql("lock table search_state in row share mode").update();
+    }
+
     void upsertProject(ProjectChanged project) {
+        String terms = SearchText.terms(project.key() + " " + project.name() + " " + (project.description() == null ? "" : project.description()));
         jdbc.sql("""
-                insert into search_project (project_id, company_id, key, name, description) values (?, ?, ?, ?, ?)
-                on conflict (project_id) do update set key = excluded.key, name = excluded.name, description = excluded.description
-                """).params(project.projectId(), project.companyId(), project.key(), project.name(), project.description()).update();
+                insert into search_project (project_id, company_id, key, name, description, terms) values (?, ?, ?, ?, ?, ?)
+                on conflict (project_id) do update set key = excluded.key, name = excluded.name, description = excluded.description,
+                    terms = excluded.terms
+                """).params(project.projectId(), project.companyId(), project.key(), project.name(), project.description(), terms)
+            .update();
     }
 
     void upsertTicket(TicketChanged ticket) {
         jdbc.sql("""
-                insert into search_ticket (ticket_id, company_id, project_id, number, type, status, assignee, title, description)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                insert into search_ticket (ticket_id, company_id, project_id, number, type, status, assignee, title, description,
+                    title_terms, description_terms)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict (ticket_id) do update set type = excluded.type, status = excluded.status, assignee = excluded.assignee,
-                    title = excluded.title, description = excluded.description
+                    title = excluded.title, description = excluded.description, title_terms = excluded.title_terms,
+                    description_terms = excluded.description_terms
                 """).params(ticket.ticketId(), ticket.companyId(), ticket.projectId(), ticket.number(), ticket.type(), ticket.status(),
-                ticket.assignee(), ticket.title(), ticket.description()).update();
+                ticket.assignee(), ticket.title(), ticket.description(), SearchText.terms(ticket.title()),
+                SearchText.terms(ticket.description())).update();
     }
 
     /** Stores the tag and writes the tag names of every ticket and project that carries it again. */
     void upsertTag(TagChanged tag) {
         jdbc.sql("""
-                insert into search_tag (tag_id, company_id, project_id, name) values (?, ?, ?, ?)
-                on conflict (tag_id) do update set name = excluded.name
-                """).params(tag.tagId(), tag.companyId(), tag.projectId(), tag.name()).update();
+                insert into search_tag (tag_id, company_id, project_id, name, terms) values (?, ?, ?, ?, ?)
+                on conflict (tag_id) do update set name = excluded.name, terms = excluded.terms
+                """).params(tag.tagId(), tag.companyId(), tag.projectId(), tag.name(), SearchText.terms(tag.name())).update();
         refreshTickets(jdbc.sql("select ticket_id from search_ticket_tag where tag_id = ?").param(tag.tagId()).query(UUID.class).list());
         refreshProjects(jdbc.sql("select project_id from search_project_tag where tag_id = ?").param(tag.tagId()).query(UUID.class).list());
     }
@@ -100,8 +119,8 @@ class SearchRepository {
     }
 
     /**
-     * Locks the projection against every write until the commit; a write that already wrote waits for the rebuild to start,
-     * one that writes later waits for its end.
+     * Locks the projection against every write until the commit, {@code search_state} first: a write that already entered
+     * finishes before the rebuild starts, one that enters later waits for its end.
      */
     void lockForRebuild() {
         jdbc.sql("lock table search_state, search_project, search_ticket, search_tag, search_ticket_tag, search_project_tag "

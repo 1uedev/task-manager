@@ -129,8 +129,9 @@ public class SearchService {
             return;
         }
         List<Object> local = new ArrayList<>();
-        String vector = String.join(" || ", TICKET_FIELDS.stream().filter(TEXT_VECTORS::containsKey).filter(fields::contains)
-            .map(TEXT_VECTORS::get).toList());
+        List<String> vectors = TICKET_FIELDS.stream().filter(TEXT_VECTORS::containsKey).filter(fields::contains)
+            .map(TEXT_VECTORS::get).toList();
+        String vector = String.join(" || ", vectors);
         String rank = "0";
         StringBuilder where = new StringBuilder("s.company_id = ? and s.project_id in (" + placeholders(ids.size()) + ")");
         if (text.present()) {
@@ -138,8 +139,14 @@ public class SearchService {
             List<Object> matchParams = new ArrayList<>();
             if (text.tsquery() != null && !vector.isEmpty()) {
                 rank = "ts_rank(" + vector + ", to_tsquery('simple', ?))";
-                matches.add("(" + vector + ") @@ to_tsquery('simple', ?)");
-                matchParams.add(text.tsquery());
+                // Every word in one of the readable fields, each field vector on its own, so the GIN index of each field
+                // serves the match (finding F3); the same result as matching the joined vector.
+                List<String> words = new ArrayList<>();
+                for (String word : text.words()) {
+                    words.add("(" + String.join(" or ", vectors.stream().map(v -> v + " @@ to_tsquery('simple', ?)").toList()) + ")");
+                    vectors.forEach(v -> matchParams.add(word));
+                }
+                matches.add("(" + String.join(" and ", words) + ")");
             }
             if (text.key() != null) {
                 // The identifier is not a field: who may read the ticket may find it by its key.
