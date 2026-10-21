@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,14 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
+| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-21 |
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | — | 2026-10-17 |
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | — | 2026-10-17 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -484,9 +484,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-ui-01 · **Aktualisiert:** 2026-10-21
 
-**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** Holger hat am 21. Oktober 2026 im Projektgespräch mit „Ja mach mit beiden tasks weiter“ TASK-030 und TASK-031 beauftragt, auf den Hinweis, dass beide als Nächstes seinen Auftrag brauchen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-070 und Migrationen ab V0016. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Umsetzung in zwei Ergebnis PRs. Teil 1 im Backend: Verwaltungsendpunkte des Berechtigungsmoduls für frei anlegbare Gruppen, Mitglieder, Aktionen je Projekt oder Unternehmen und Feldregeln Lesen und Schreiben, geschützt durch das vorhandene Recht `permissions.manage`, mit Vertrag und Tests; dazu fehlende Lesewege, die die Oberfläche braucht. Teil 2 in der Oberfläche: Anmeldung mit Pflichtwechsel, Kontoverwaltung mit Einmalpasswort, Projekte mit Mitgliedern, Ticketliste, Anlage und Bearbeitung mit Feldrechten und Versionskonflikt, Tags, Suche und Gruppenverwaltung, Deutsch und Englisch, mit Browserprüfung zweier unterschiedlich berechtigter Benutzer. Keine festen Rollen, Fachregeln bleiben serverseitig. Nicht Teil: Kanban, Portal, LDAP, Wiki, Anforderungen.
 
 **Umfang:** Administrative lokale Kontoanlage, Anmeldung mit Pflichtwechsel, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
 
@@ -494,13 +494,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
 
-**Nächster Schritt:** Passende Backend-/UI-Ergebnisse und Demoablauf annehmen; nach Beauftragung reservieren.
+**Nächster Schritt:** Reservierung integrieren; danach Teil 1 und Teil 2 umsetzen und mit DEC-070 übergeben.
 
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-21
 
-**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** Beauftragt von Holger am 21. Oktober 2026 zusammen mit TASK-030 („Ja mach mit beiden tasks weiter“). Beginnt fachlich nach TASK-030, das Image kann vorher entstehen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-071. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: ein Image mit Backend und ausgelieferter Oberfläche, Docker Compose mit PostgreSQL und benanntem Volume, Konfiguration nur über Umgebungsvariablen ohne Standardkennwörter, Ersteinrichtung über `bootstrap-admin`, ein Befehl für synthetische Demodaten. Messprofil: der Referenzbestand aus OPERATIONS.md (20 Projekte, 90.000 Tickets, 100 Konten) synthetisch erzeugt, 15 gleichzeitige Benutzer mit dem Suchanteil aus OPERATIONS.md und TAGS_SEARCH.md, Auswertung je Messklasse mit p50 und p95 gegen die vorgeschlagenen Ziele auf der dokumentierten Messmaschine, ohne Zusage für die Referenzhardware. Nachweise zu den zehn geplanten Punkten aus DEVELOPMENT_START.md. Nicht Teil: TLS, Sicherung und Wiederherstellung, Hochverfügbarkeit, Veröffentlichung des Images.
 
 **Umfang:** Reproduzierbares Anwendungsimage mit Oberfläche, PostgreSQL-Anbindung, Startanleitung und synthetischen Demodaten liefern. Durchgängige Funktions-/Rechte-/Konfliktnachweise und begrenzte Suchmessung des tatsächlich vorhandenen Umfangs durchführen.
 
@@ -508,7 +508,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
 
-**Nächster Schritt:** Betriebs-/Messprofil und Vorführung freigeben; nach Beauftragung reservieren. Spätere V1-Aufgaben erst anschließend mit unverändertem bestätigtem Umfang konkretisieren.
+**Nächster Schritt:** Reservierung integrieren; nach TASK-030 umsetzen und mit DEC-071 übergeben.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 
