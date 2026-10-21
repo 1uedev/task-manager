@@ -28,6 +28,8 @@ Fehlt eine Pflichtangabe, bricht der Start ab, bevor Webserver oder Datenbankver
 
 `/actuator/health`, `/actuator/health/liveness` und `/actuator/health/readiness` melden nur den Zustand ohne Details. Weitere Actuator-Endpunkte sind nicht freigegeben. Alle übrigen Pfade unter `/api` verlangen eine Anmeldung (siehe [Identität](#identität-task-024)).
 
+Das Vorführimage (TASK-031, [DEMO.md](../docs/DEMO.md)) legt die gebaute Oberfläche unter `static/` in das Archiv; der Server liefert sie dann unter `/` aus. Ohne sie, etwa bei `./mvnw package`, gibt es dort nur die API. Jede Antwort trägt Content Security Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` und `Cross-Origin-Opener-Policy: same-origin`; Dateien unter `/assets/` dürfen lange zwischengespeichert werden, andere Seiten außerhalb von `/api` und `/actuator` erhalten `Cache-Control: no-cache` (`WebInterfaceHeadersFilter`).
+
 ## Module
 
 Jedes direkte Unterpaket von `taskmanager` ist ein Modul. Spring Modulith prüft im Test Zyklen, Zugriffe auf interne Pakete und die in `package-info.java` erlaubten Abhängigkeiten.

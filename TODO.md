@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-21 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -62,6 +60,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
+| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-21 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -500,7 +499,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-21
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-21
 
 **Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** Beauftragt von Holger am 21. Oktober 2026 zusammen mit TASK-030 („Ja mach mit beiden tasks weiter“). Beginnt fachlich nach TASK-030, das Image kann vorher entstehen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-071. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: ein Image mit Backend und ausgelieferter Oberfläche, Docker Compose mit PostgreSQL und benanntem Volume, Konfiguration nur über Umgebungsvariablen ohne Standardkennwörter, Ersteinrichtung über `bootstrap-admin`, ein Befehl für synthetische Demodaten. Messprofil: der Referenzbestand aus OPERATIONS.md (20 Projekte, 90.000 Tickets, 100 Konten) synthetisch erzeugt, 15 gleichzeitige Benutzer mit dem Suchanteil aus OPERATIONS.md und TAGS_SEARCH.md, Auswertung je Messklasse mit p50 und p95 gegen die vorgeschlagenen Ziele auf der dokumentierten Messmaschine, ohne Zusage für die Referenzhardware. Nachweise zu den zehn geplanten Punkten aus DEVELOPMENT_START.md. Nicht Teil: TLS, Sicherung und Wiederherstellung, Hochverfügbarkeit, Veröffentlichung des Images.
 
@@ -510,7 +509,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
 
-**Nächster Schritt:** Reservierung integrieren; nach TASK-030 umsetzen und mit DEC-071 übergeben.
+**Ergebnis:** DEC-071. `Dockerfile` baut ein Image mit Backend und Oberfläche, die der Server unter `/` vom selben Ursprung wie die API mit Content Security Policy und Cacheregeln ausliefert (`WebInterfaceHeadersFilter`). `compose.yaml` startet es mit PostgreSQL 18.6 im benannten Volume; Pflichtwerte ohne Standard aus `.env` (Vorlage `.env.example`), Ersteinrichtung mit `bootstrap-admin`. `tools/demo/demo.py` legt über die öffentliche API Demodaten (vier Konten mit unterschiedlichen Rechten, vier Projekte, 43 Tickets) oder den Referenzbestand an, prüft Rechte, Konflikt, Suche und Sitzung (`verify`) und misst mit gleichzeitigen Sitzungen (`measure`). `tools/demo/image-check.sh` prüft das Image als Workflow `Image` in CI. [DEMO.md](docs/DEMO.md) beschreibt Start, Demodaten, den Ablauf zur fachlichen Abnahme, Nachweise zu den zehn Punkten aus DEVELOPMENT_START.md und die Messung. Messung mit 15 Sitzungen auf 90.000 Tickets, 5.000 Tags und rund 450.000 Zuordnungen: alle vorgeschlagenen p95 Ziele eingehalten, keine Fehler; Werte, Laststufen und Grenzen in DEMO.md. Nicht enthalten: TLS, Sicherung, Hochverfügbarkeit, Veröffentlichung, Zweistundenlauf, Browserzeit der Suche, Kommentare, Wiki und Anforderungen im Bestand.
+
+**Eigenprüfung am 2026-10-21:** Image lokal aus vorab gebautem Archiv gebaut (der mehrstufige Build braucht Netzzugriff, der in der Sitzung nicht für Container freigegeben ist; er läuft im Workflow `Image`). `image-check.sh` lokal grün: Ablehnung ohne Einstellungen, erster Start mit Healthcheck, Kopfzeilen, Demodaten, zwölf Prüfungen von `verify`, Neustart mit erhaltenen Daten und gleichem Sitzungsende. Browserlauf gegen das Image ohne CSP Verstoß. Backendtest `WebInterfaceHeadersTest` neu. Repository-Validator, Aufgabenübersicht, Regressionstests und `git diff --check` erfolgreich.
+
+**Übergabe:** Getrennte KI prüft Image, Compose, Kopfzeilen, Werkzeug und Messverfahren; Holger nimmt mit dem Ablauf aus DEMO.md fachlich ab.
+
+**Nächster Schritt:** Getrennte KI Prüfung von TASK-031; danach Abnahme durch Holger.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 
