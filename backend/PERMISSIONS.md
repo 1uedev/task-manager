@@ -22,14 +22,14 @@ mehrere Organisationszugehörigkeiten werden hier nicht als entschieden eingefü
 Fachregeln wie Statusübergänge, veröffentlichte Portalbeiträge oder eine erwartete
 Objektversion prüft weiterhin das zuständige Fachmodul zusätzlich.
 
-Es gibt keine HTTP-Endpunkte, Rollen mit Sonderzugriff, Standardgruppen, Initialrechte,
+Es gibt keine HTTP-Endpunkte im Modul selbst (die Verwaltung über HTTP liegt seit TASK-030 am Anwendungseinstieg, siehe `backend/README.md`), keine Rollen mit Sonderzugriff, Standardgruppen, Initialrechte,
 Benutzerkopien oder Bootstrapkonten im Berechtigungsmodul selbst. Ohne genau einen echten `IdentityAccess`-Adapter
 verweigert die Anwendung alle Auswertungen/Verwaltungsaufrufe. Seit TASK-039 (DEC-063) besteht dieser Adapter am
 Anwendungseinstieg; Aufbau, Sperren und der erste Start stehen in `backend/README.md`, Abschnitt
 „Adapter zwischen Identität und Berechtigungen“. Die Rechte-Tests verwenden weiterhin ausschließlich synthetische
 Adapter unter `src/test`, die den echten unter demselben Beannamen ersetzen. LDAP und API-/Job-/Dienstkontexte sind
 nicht implementiert. TASK-026 muss die echten Projekt-/Objektadapter liefern. Deren integrierte Sicherheit ist
-durch die synthetischen Nachweise nicht belegt. Die Administrationsoberfläche folgt TASK-030.
+durch die synthetischen Nachweise nicht belegt. Die Verwaltungsendpunkte liefert TASK-030 Teil 1 (DEC-070), die Oberfläche Teil 2.
 
 ## Öffentlicher Java-Vertrag und Datenhoheit
 

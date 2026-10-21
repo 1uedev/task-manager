@@ -9,8 +9,8 @@ import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
 
 /**
- * Gives test accounts company rights the way the start of an installation does, but directly in the tables: no HTTP
- * endpoint for rights exists yet (TASK-030). Every call adds a group of its own, so a test can hand out exactly the rights it
+ * Gives test accounts company rights the way the start of an installation does, but directly in the tables, so a test does
+ * not depend on the group administration of TASK-030. Every call adds a group of its own, so a test can hand out exactly the rights it
  * wants. The rights version moves with each grant, like a change through the permissions module, and no audit entry is written.
  */
 public final class AdministrationFixture {
@@ -47,7 +47,7 @@ public final class AdministrationFixture {
             if (manage) {
                 jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, 'permissions.manage')", companyId, group);
             }
-            Arrays.stream(rights).forEach(right -> jdbc.update(
+            Arrays.stream(rights).filter(right -> !(manage && right == AdministrationRight.PERMISSIONS_MANAGE)).forEach(right -> jdbc.update(
                 "insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, ?)", companyId, group, right.key()));
             jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
             jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
