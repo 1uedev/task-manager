@@ -10,6 +10,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS backend
+# The Maven wrapper verifies the checksum of the zip distribution and needs unzip for it; the base image has none.
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends unzip \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /build/backend
 COPY backend/mvnw ./
 COPY backend/.mvn/ .mvn/
