@@ -1,0 +1,84 @@
+TASK-029 independent review, 2026-10-21
+Session: codex-20261021-search-review-01
+Reviewed main: 90f43be75a220eb78591a5673858cae1aff6e882
+PR #128 head: 3ad90081958c076007b0926a6e9f0bd8b7cec96b
+Runtime: Java 25.0.4.1+1, native PostgreSQL 18.6, own synthetic test instance
+
+OWN EXECUTION: unchanged backend clean verify
+Tests run: 193, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-21T16:35:47+02:00
+
+OWN EXECUTION: first ten added probes, selected output
+[review029] foreign/unknown filters same errors; company project right grants no ticket hits
+[review029] tag rename 14516 and rebuild [28724] queued at gate 5684
+[review029] overlapping tag rename/rebuild: HTTP=200, rebuild=PessimisticLockingFailureException
+[review029] same fullwidth text: tickets=0, projects=0, identifier control=1
+[review029] writer [14516] waits for rebuild 5684
+[review029] rebuild holds: old committed search readable, later write indexed without loss
+[review029] rebuild [28724] waits for writer 14516 -> gate 5684
+[review029] distinct field-view UNION groups: hidden mutation leaves exact page/total unchanged
+[review029] permissions_revision holder=5684, waiter=[14516]
+[review029] queued action revocation ->200, total=0, items=[]; fresh result agrees
+[review029] permissions_revision holder=5684, waiter=[14516]
+[review029] queued field revocation ->200, total=0, items=[]; fresh result agrees
+[review029] from project holder=5684, waiter=[14516]
+[review029] queued membership revocation ->200, total=0, items=[]; fresh result agrees
+[review029] removal [14516] waits for authorized search 5684
+[review029] late projection failures: source, version, history and assignments all roll back
+[review029] same email text: total=0, identifier control=1
+Tests run: 10, Failures: 3, Errors: 0, Skipped: 0
+Assertion failures:
+  reviewSameUnicodeInputMustFindItsStoredText: expected [1, 1], actual [0, 0] (F1).
+  reviewDeclaredWordTokenizerMustAlsoApplyToIndexedEmailText: expected 1, actual 0 (F1).
+  reviewTagRenameAndRebuildMustNotTakeTablesInOppositeOrder: expected 200/ok,
+    actual 200/PessimisticLockingFailureException (F2).
+
+OWN DATABASE LOG: actual product-method cycle after the scheduling gate committed
+2026-10-21 16:39:33.645 CEST [28724] ERROR: deadlock detected
+Process 28724 waits for ExclusiveLock on relation 26948 of database 26474; blocked by process 14516.
+Process 14516 waits for RowShareLock on relation 26922 of database 26474; blocked by process 28724.
+Process 28724: lock table search_state, search_project, search_ticket, search_tag, search_ticket_tag, search_project_tag in exclusive mode
+Process 14516: select ticket_id from search_ticket where ticket_id in ($1) order by ticket_id for update
+Gate process 5684 had committed before this cycle; both remaining paths are unmodified product methods.
+
+OWN EXECUTION: separate added plan diagnostic
+SET LOCAL enable_seqscan=off; EXPLAIN (COSTS OFF), without ANALYZE
+One readable vector:
+  Bitmap Heap Scan on search_ticket
+    Recheck Cond: (title_tsv @@ '''reviewword'':*'::tsquery)
+    -> Bitmap Index Scan on search_ticket_title
+         Index Cond: (title_tsv @@ '''reviewword'':*'::tsquery)
+All three readable vectors:
+  Seq Scan on search_ticket
+    Disabled: true
+    Filter: (((title_tsv || description_tsv) || tags_tsv) @@ '''reviewword'':*'::tsquery)
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+This observational test expects the observed index mismatch; success does not mean F3 is fixed.
+No elapsed-time, load or SLA claim.
+
+OWN EXECUTION: after byte-identical restoration of SearchApiTest.java
+clean test: SearchApiTest,SearchContractTest
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-21T16:43:10+02:00
+Patch applicability checked with git apply --check --unidiff-zero.
+Own PostgreSQL instance stopped after PID and executable-path verification.
+
+READ CI EVIDENCE (not an own Docker/Linux lifecycle execution)
+Backend run: https://github.com/1uedev/task-manager/actions/runs/39600717031
+Backend job: 119225525614
+2026-10-21T12:39:36.7905567Z Tests run: 193, Failures: 0, Errors: 0, Skipped: 0
+2026-10-21T12:39:47.1142281Z PostgreSQL 18.6
+2026-10-21T12:40:19.8426266Z Lifecycle check passed
+
+Scope: selected excerpts, not a full raw log or exhaustive proof of concurrency interleavings.
+No functional acceptance or general V1/production qualification claimed.
+
+OWN DOCUMENTATION CHECKS
+Repository contract: OK
+Task board: current
+Python unittest: Ran 25 tests, OK
+git diff --cached --check: clean
+Product sources, contracts, TODO.md and DONE.md unchanged.
