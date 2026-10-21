@@ -43,6 +43,12 @@ class ProjectRepository {
             .param(companyId).query(ProjectRepository::map).list();
     }
 
+    /** The projects of the company without locks, for a rebuild of the search projection. */
+    List<Project> all(UUID companyId) {
+        return jdbc.sql("select " + COLUMNS + " from project where company_id = ? order by id").param(companyId)
+            .query(ProjectRepository::map).list();
+    }
+
     /** The identifiers of the projects the account is a member of, without locks. */
     List<UUID> memberships(UUID companyId, UUID accountId) {
         return jdbc.sql("""

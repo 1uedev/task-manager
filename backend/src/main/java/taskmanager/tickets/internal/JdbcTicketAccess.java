@@ -1,12 +1,14 @@
 package taskmanager.tickets.internal;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.tickets.TicketAccess;
+import taskmanager.tickets.TicketChanged;
 
 /** The ticket port for other modules; see {@link TicketAccess}. */
 @Service
@@ -31,6 +33,12 @@ class JdbcTicketAccess implements TicketAccess {
         }
         long version = tickets.lockShared(ticketId);
         tickets.change(ticketId, version, occurredAt, actor, TAGS_FIELD, text(removed), text(added));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<TicketChanged> searchSources(UUID companyId) {
+        return tickets.all(companyId).stream().map(Ticket::changed).toList();
     }
 
     private static String text(UUID tag) {

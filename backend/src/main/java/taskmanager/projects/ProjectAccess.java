@@ -1,5 +1,6 @@
 package taskmanager.projects;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -37,4 +38,13 @@ public interface ProjectAccess {
 
     /** The key of the project, for example {@code PLAT}; keys never change. */
     Optional<String> key(UUID projectId);
+
+    /**
+     * The projects of the company the account is a member of, without locks (TASK-029). A caller that relies on a membership
+     * checks it again with {@link #resource}.
+     */
+    List<UUID> memberships(UUID companyId, UUID accountId);
+
+    /** Every project of the company with key, name and description, to rebuild a projection (TASK-029). Needs a transaction. */
+    List<ProjectChanged> searchSources(UUID companyId);
 }
