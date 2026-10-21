@@ -1,0 +1,192 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Suche (TASK-029)
+  version: 0.1.0
+  description: |
+    Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
+    Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
+    Entscheidung über das Portal keine Suche (403).
+
+    Rechte zuerst: Jede Suche prüft die aktuellen Rechte der anfragenden Person, bevor sie vergleicht, ordnet oder zählt.
+    Tickets findet nur, wer im Projekt Mitglied ist und dort `ticket.read` hat. Suchwörter treffen nur Felder, die die
+    Person lesen darf (Titel, Beschreibung, Tagnamen über die Leseregel des Feldes `tags`), ein Filter auf ein nicht
+    lesbares Feld trifft im betreffenden Projekt nichts, und Rang, `total` und Seite entstehen nur aus erlaubten Treffern.
+    Ein verborgenes Feld ändert also weder, ob ein Ticket gefunden wird, noch wo es steht. Projekte findet, wer
+    `projects.manage` für das Unternehmen hat (alle Projekte), sonst Mitglieder mit `project.read` oder `project.manage`.
+
+    Suchtext: Unicode NFKC, höchstens 200 Zeichen, zerlegt in Wörter aus Buchstaben und Ziffern, höchstens 10 Wörter zu je
+    höchstens 50 Zeichen (sonst 400 mit `q.invalid`). Jedes Wort muss als Wortanfang vorkommen, ohne Unterschied der Groß
+    und Kleinschreibung und ohne sprachabhängige Wortstämme. Ein Text ohne Wörter trifft nichts. Ein Text der Form
+    `KEY-12` nennt zusätzlich das Ticket 12 des Projekts KEY und steht dann vorn. Sonderzeichen sind keine Suchsyntax.
+
+    Filter: Wiederholte Werte eines Filters verbinden sich mit oder, verschiedene Filter mit und; jeder genannte Tag muss
+    zugeordnet sein. Ein Projekt außerhalb der eigenen Suche antwortet mit `project.unknown`, ein unbekannter oder nicht
+    sichtbarer Tag mit `tag.unknown`. Sichtbar sind der Unternehmenskatalog und die Kataloge der Projekte, in denen die
+    Person Tickets lesen darf; für Projekte gilt nur der Unternehmenskatalog.
+
+    Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel). Der Index folgt
+    jeder Änderung in derselben Transaktion. Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server
+    mit 503 `search.busy` und `Retry-After`; die Suche darf wiederholt werden.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /search/tickets:
+    get:
+      operationId: searchTickets
+      summary: Tickets suchen und filtern
+      parameters:
+        - $ref: '#/components/parameters/Text'
+        - name: project
+          in: query
+          description: Projektkennung, wiederholbar (höchstens 20).
+          schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+          explode: true
+        - name: status
+          in: query
+          description: Statusschlüssel, wiederholbar.
+          schema: {type: array, items: {type: string, minLength: 1, maxLength: 100}, maxItems: 20}
+          explode: true
+        - name: type
+          in: query
+          description: Typschlüssel, wiederholbar.
+          schema: {type: array, items: {type: string, minLength: 1, maxLength: 100}, maxItems: 20}
+          explode: true
+        - name: assignee
+          in: query
+          description: Konto der Zuständigkeit, wiederholbar.
+          schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+          explode: true
+        - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Treffer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: {type: integer, minimum: 0}
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/TicketHit'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /search/projects:
+    get:
+      operationId: searchProjects
+      summary: Projekte nach Schlüssel, Name, Beschreibung und Tags suchen
+      parameters:
+        - $ref: '#/components/parameters/Text'
+        - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Treffer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: {type: integer, minimum: 0}
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/ProjectHit'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    Text:
+      name: q
+      in: query
+      description: Suchtext; ohne ihn gelten nur die Filter.
+      schema: {type: string, maxLength: 200}
+    Tag:
+      name: tag
+      in: query
+      description: Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein.
+      schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+      explode: true
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 50, default: 20}
+    Offset:
+      name: offset
+      in: query
+      schema: {type: integer, minimum: 0, maximum: 1000, default: 0}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
+        auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
+        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, paging.invalid.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+        Retry-After: {schema: {type: integer}, description: Nur bei 503.}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    TagRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+    TicketHit:
+      type: object
+      required: [id, projectId, key, number, fields, tags]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        key: {type: string, description: 'Projektschlüssel und Nummer, zum Beispiel "KUNDE-12"'}
+        number: {type: integer, minimum: 1}
+        fields:
+          description: Nur die lesbaren Felder unter title, description, type, status und assignee; ein verborgenes Feld fehlt.
+          type: object
+          additionalProperties: {type: [string, 'null']}
+        tags:
+          description: Zugeordnete Tags nach Namen; null ohne Leseregel für das Feld `tags`.
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/TagRef'}
+    ProjectHit:
+      type: object
+      required: [id, key, name, description, tags]
+      properties:
+        id: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        tags:
+          type: array
+          items: {$ref: '#/components/schemas/TagRef'}

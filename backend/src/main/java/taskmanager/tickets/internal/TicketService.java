@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.identity.IdentityVerification;
@@ -55,13 +56,16 @@ public class TicketService {
     private final Permissions permissions;
     private final IdentityVerification identity;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock) {
+    TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
+            ApplicationEventPublisher events) {
         this.tickets = tickets;
         this.projects = projects;
         this.permissions = permissions;
         this.identity = identity;
         this.clock = clock;
+        this.events = events;
     }
 
     /** A ticket with the key of its project and the fields the caller may read and write. */
@@ -181,6 +185,7 @@ public class TicketService {
                 tickets.change(ticket.id(), 1, now, actor.userId(), field, null, value);
             }
         });
+        events.publishEvent(ticket.changed());
         return view(ticket, readableFields(actor, resource), writable(actor, resource));
     }
 
@@ -250,6 +255,7 @@ public class TicketService {
         for (String field : differing) {
             tickets.change(ticket.id(), changed.version(), now, actor.userId(), field, before.get(field), after.get(field));
         }
+        events.publishEvent(changed.changed());
         return view(changed, readableFields(actor, resource), writable(actor, resource));
     }
 

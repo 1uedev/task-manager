@@ -40,6 +40,12 @@ class TicketRepository {
             .params(companyId, projectId, before == null ? Long.MAX_VALUE : before, limit).query(TicketRepository::map).list();
     }
 
+    /** Every ticket of the company, for a rebuild of the search projection. */
+    List<Ticket> all(UUID companyId) {
+        return jdbc.sql("select " + COLUMNS + " from ticket where company_id = ? order by id").param(companyId)
+            .query(TicketRepository::map).list();
+    }
+
     Optional<Ticket> find(UUID companyId, UUID projectId, long number) {
         return jdbc.sql("select " + COLUMNS + " from ticket where company_id = ? and project_id = ? and number = ?")
             .params(companyId, projectId, number).query(TicketRepository::map).optional();

@@ -15,3 +15,5 @@ Vor der jeweiligen Fachimplementierung erhält die produktive API einen eigenen 
 [tickets.openapi.yaml](tickets.openapi.yaml) beschreibt Tickets eines Projekts mit Feldrechten, Historie und Versionen (TASK-027, DEC-067). `TicketsContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht.
 
 [tags.openapi.yaml](tags.openapi.yaml) beschreibt den Unternehmenskatalog, die Projektkataloge und die Tag Zuordnungen zu Tickets und Projekten (TASK-028, DEC-068). `TagsContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht. Der Identitätsvertrag nennt seither `tags.manage` in der Rechteliste der Sitzung.
+
+[search.openapi.yaml](search.openapi.yaml) beschreibt die Suche und die Filter für Tickets und Projekte (TASK-029, DEC-069). `SearchContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht.

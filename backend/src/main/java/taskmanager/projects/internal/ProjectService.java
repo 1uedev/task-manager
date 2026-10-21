@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,14 +51,16 @@ public class ProjectService {
     private final Permissions permissions;
     private final IdentityVerification identity;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     ProjectService(ProjectRepository projects, ProjectAccess access, Permissions permissions, IdentityVerification identity,
-            Clock clock) {
+            Clock clock, ApplicationEventPublisher events) {
         this.projects = projects;
         this.access = access;
         this.permissions = permissions;
         this.identity = identity;
         this.clock = clock;
+        this.events = events;
     }
 
     /** A project with its current configuration, and whether the caller may change it. */
@@ -113,6 +116,7 @@ public class ProjectService {
         projects.insertConfiguration(project.id(), 1, ProjectConfiguration.initial(), now, actor.userId());
         projects.addMember(project.id(), actor.userId(), now, actor.userId());
         projects.audit(project.id(), actor.userId(), "project.created", key, now);
+        events.publishEvent(project.changed());
         return view(project, true);
     }
 
@@ -135,7 +139,9 @@ public class ProjectService {
         Instant now = clock.instant();
         projects.update(id, name, description, now, actor.userId());
         projects.audit(id, actor.userId(), "project.updated", null, now);
-        return current(actor, id);
+        ProjectView view = current(actor, id);
+        events.publishEvent(view.project().changed());
+        return view;
     }
 
     @Transactional

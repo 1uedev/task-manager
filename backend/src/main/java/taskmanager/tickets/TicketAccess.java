@@ -1,6 +1,7 @@
 package taskmanager.tickets;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,12 @@ public interface TicketAccess {
      * the ticket has. The ticket row is locked {@code FOR SHARE} until the commit, so no change of the fields interleaves.
      */
     void recordTagChange(UUID ticketId, Instant occurredAt, UUID actor, UUID removed, UUID added);
+
+    /**
+     * Every ticket of the company with its five fields, to rebuild a projection (TASK-029). Needs a transaction; the fields
+     * must not be shown without the read rules of the reader.
+     */
+    List<TicketChanged> searchSources(UUID companyId);
 
     /** The resource type of tickets in the permissions module, for field rules such as the field {@code tags}. */
     String RESOURCE_TYPE = "ticket";

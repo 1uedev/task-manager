@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | claude-20261021-search-01 | 2026-10-21 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -64,6 +62,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
+| [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | claude-20261021-search-01 | 2026-10-21 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -486,9 +485,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-search-01 · **Aktualisiert:** 2026-10-21
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-search-01 · **Aktualisiert:** 2026-10-21
 
-**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Abhängigkeiten:** TASK-028 und TASK-042 (von Holger am 21. Oktober 2026 abgenommen), TASK-026 und TASK-027 (abgenommen). Holger hat am 21. Oktober 2026 im Projektgespräch mit „abgenommen 029“ TASK-029 beauftragt, auf den Vorschlag „TASK-029 beauftragen, Filter und Suche. Das ist das nächste Paket bis zur ersten Vorführung“. Den Projektions- und Sichtbarkeitsvertrag schlägt die Sitzung mit dem Ergebnis als DEC-069 vor; die Messziele bleiben Vorschlag und werden erst in TASK-031 gemessen. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Tickets nach Kennung (Projektschlüssel und Nummer), Titel, Beschreibung und Tagnamen; Projekte nach Schlüssel, Name, Beschreibung und Tagnamen; Filter nach Projekt, Status, Typ, Zuständigkeit und Tags (alle gewählten Tags); PostgreSQL Volltext ohne sprachabhängige Wortstämme mit Präfixsuche und GIN Indizes; die Projektion je Feld wird in derselben Transaktion aktualisiert, Rechte werden bei jeder Suche aktuell geprüft. TASK-030 und TASK-031 bleiben blockiert. Eine getrennte KI prüft das Ergebnis nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; Ergebnis mit DEC-069 und Migrationen ab V0014. Nicht Teil: Wiki und Anforderungen (Module fehlen, Erweiterungsvertrag bleibt), Kommentare, Dateinamen, Portal, Oberfläche (TASK-030), Messung (TASK-031).
+**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Abhängigkeiten:** TASK-028 und TASK-042 (von Holger am 21. Oktober 2026 abgenommen), TASK-026 und TASK-027 (abgenommen). Holger hat am 21. Oktober 2026 im Projektgespräch mit „abgenommen 029“ TASK-029 beauftragt, auf den Vorschlag „TASK-029 beauftragen, Filter und Suche. Das ist das nächste Paket bis zur ersten Vorführung“. Den Projektions- und Sichtbarkeitsvertrag schlägt die Sitzung mit dem Ergebnis als DEC-069 vor; die Messziele bleiben Vorschlag und werden erst in TASK-031 gemessen. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Tickets nach Kennung (Projektschlüssel und Nummer), Titel, Beschreibung und Tagnamen; Projekte nach Schlüssel, Name, Beschreibung und Tagnamen; Filter nach Projekt, Status, Typ, Zuständigkeit und Tags (alle gewählten Tags); PostgreSQL Volltext ohne sprachabhängige Wortstämme mit Präfixsuche und GIN Indizes; die Projektion je Feld wird in derselben Transaktion aktualisiert, Rechte werden bei jeder Suche aktuell geprüft. TASK-030 und TASK-031 bleiben blockiert. Eine getrennte KI prüft das Ergebnis nach DEC-040. **Arbeitsstand:** Ergebnis auf Branch claude/project-thread-r4dri5 mit DEC-069, Migration V0014, Vertrag `contracts/search.openapi.yaml`, Befehl `rebuild-search` und Abschnitt „Suche (TASK-029)“ in backend/README.md. Nicht Teil: Wiki und Anforderungen (Module fehlen, Erweiterungsvertrag bleibt), Kommentare, Dateinamen, Portal, Oberfläche (TASK-030), Messung (TASK-031).
 
 **Umfang:** Text-/Projekt-/Status-/Tag-Suche für Tickets und Projekte, PostgreSQL-Indizes, Rechtefilterung und konsistente Aktualisierung implementieren. Erweiterungsverträge für Wiki und Anforderungen erhalten; diese bleiben notwendige V1-Folgearbeit.
 
@@ -496,7 +495,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und als Ergebnis PR mit DEC-069 übergeben.
+**Übergabe:** Umgesetzt wie vorgesehen. Die Projektion gehört dem Suchmodul und folgt jeder Änderung in derselben Transaktion; Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. Nachweise: SearchApiTest (9 Fälle: Präfix und Kennung, Ordnung und Seiten, Filter, verborgene Felder ohne Einfluss auf Treffer, Rang und Anzahl, Nichtmitglieder und Rechteentzug, Projektion bei Änderungen, Rückabwicklung, Neuaufbau), SearchContractTest, AdminCommandTest für `rebuild-search`, Lifecycle-Prüfung mit dem Befehl. Grenzen stehen in backend/README.md.
+
+**Nächster Schritt:** Unabhängige Prüfung durch eine getrennte KI nach DEC-040, danach Abnahme durch Holger.
 
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 

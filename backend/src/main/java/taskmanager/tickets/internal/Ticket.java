@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import taskmanager.tickets.TicketChanged;
 
 /** One ticket as stored; {@link #values} holds the five configurable fields as text, in the order of the configuration. */
 public record Ticket(UUID id, UUID companyId, UUID projectId, long number, String title, String description, String type,
@@ -19,5 +20,10 @@ public record Ticket(UUID id, UUID companyId, UUID projectId, long number, Strin
         values.put("status", status);
         values.put("assignee", assignee == null ? null : assignee.toString());
         return values;
+    }
+
+    /** The event other modules derive their data from (TASK-029). */
+    TicketChanged changed() {
+        return new TicketChanged(id, companyId, projectId, number, title, description, type, status, assignee);
     }
 }
