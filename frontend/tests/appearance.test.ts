@@ -41,12 +41,12 @@ test('only a well formed CSRF cookie is read', () => {
 });
 
 test('session and appearance answers are checked again at runtime', () => {
-  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 'accounts.manage'] }), { authenticated: true, full: true, rights: ['appearance.manage', 'accounts.manage'] });
-  assert.deepEqual(parseSession({ authenticated: true, level: 'password_change_required', rights: [] }), { authenticated: true, full: false, rights: [] });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 'accounts.manage'] }), { authenticated: true, full: true, rights: ['appearance.manage', 'accounts.manage'], username: null, displayName: null, passwordChangeBy: null });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'password_change_required', rights: [] }), { authenticated: true, full: false, rights: [], username: null, displayName: null, passwordChangeBy: null });
   // No list, or one that is not a list of texts, means no right; a state without the flag is not a state at all.
-  assert.deepEqual(parseSession({ authenticated: true, level: 'full' }), { authenticated: true, full: true, rights: [] });
-  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 7, null] }), { authenticated: true, full: true, rights: ['appearance.manage'] });
-  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: 'appearance.manage' }), { authenticated: true, full: true, rights: [] });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full' }), { authenticated: true, full: true, rights: [], username: null, displayName: null, passwordChangeBy: null });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: ['appearance.manage', 7, null] }), { authenticated: true, full: true, rights: ['appearance.manage'], username: null, displayName: null, passwordChangeBy: null });
+  assert.deepEqual(parseSession({ authenticated: true, level: 'full', rights: 'appearance.manage' }), { authenticated: true, full: true, rights: [], username: null, displayName: null, passwordChangeBy: null });
   assert.equal(parseSession({ authenticated: 'yes', rights: [] }), null);
 
   assert.equal(parseAppearance(APPEARANCE)?.accentColor, '#f97316');

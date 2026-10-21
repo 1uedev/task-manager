@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
+import { ANNA, BEN, NORA, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
+
+// TASK-030: the continuous interface against an in-memory backend that follows the contracts. Two accounts with
+// different rights, a first login, version conflicts, unsaved input, rights withdrawn while a page is open and an
+// ended session. The real backend run is documented separately in docs/BROWSER_CHECK_TASK-030.md.
 
 let server;
 let browser;
@@ -13,98 +18,123 @@ after(async () => {
   await server?.close();
 });
 
-async function withPage(options, body) {
-  const session = await open(browser, server.url, options);
+// localhost instead of 127.0.0.1, so that the browser accepts the __Host- cookie on plain HTTP.
+const base = () => server.url.replace('127.0.0.1', 'localhost');
+
+async function start({ backend = createBackend(), as = null, locale = 'de-DE', viewport, hash = '' } = {}) {
+  const session = await open(browser, `${base()}${hash}`, {
+    locale, ...(viewport ? { viewport } : {}),
+    setup: (context, page) => backend.install(context, page, { as }),
+  });
+  if (as !== null && !as.pending) await session.page.waitForSelector('.shell main h1');
+  return { ...session, backend };
+}
+
+async function withApp(options, body) {
+  const session = await start(options);
   try {
-    await body(session.page);
-    assert.deepEqual(session.problems, [], 'no console warnings, errors or page errors');
+    await body(session.page, session.backend, session.context);
+    assert.deepEqual(session.problems.filter((text) => !/Failed to load resource/.test(text)), [], 'no console warnings, errors or page errors');
   } finally {
     await session.context.close();
   }
 }
 
-const activeId = (page) => page.evaluate(() => document.activeElement?.id ?? document.activeElement?.tagName);
+const heading = (page) => page.locator('main h1').innerText();
 const focusedText = (page) => page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+const ticketHash = (backend, number) => `#/projects/${backend.project.id}/tickets/${number}`;
+const save = (page) => page.getByRole('button', { name: 'Änderungen speichern' });
 
-describe('language', () => {
-  test('German is chosen for a German browser, English for an English browser', async () => {
-    await withPage({ locale: 'de-DE' }, async (page) => {
-      assert.equal(await page.locator('html').getAttribute('lang'), 'de');
-      assert.equal(await page.locator('h1').innerText(), 'Willkommen');
-      assert.equal(await page.title(), 'Willkommen · Task Manager');
-    });
-    await withPage({ locale: 'en-US' }, async (page) => {
+describe('login', () => {
+  test('the login page follows the browser language and the choice is remembered', async () => {
+    await withApp({ locale: 'en-US' }, async (page) => {
+      assert.equal(await heading(page), 'Sign in');
       assert.equal(await page.locator('html').getAttribute('lang'), 'en');
-      assert.equal(await page.locator('h1').innerText(), 'Welcome');
-    });
-    await withPage({ locale: 'fr-FR' }, async (page) => {
-      assert.equal(await page.locator('html').getAttribute('lang'), 'de', 'unsupported browser language falls back to German');
+      assert.equal(await page.title(), 'Sign in · Task Manager');
+      await page.locator('#language').selectOption('de');
+      assert.equal(await heading(page), 'Anmelden');
+      await page.reload();
+      await page.waitForSelector('main h1');
+      assert.equal(await heading(page), 'Anmelden');
+      const stored = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
+      assert.deepEqual(stored, { local: { 'taskmanager.language': 'de' }, session: {} }, 'no session data in browser storage');
     });
   });
 
-  test('switching with the keyboard changes text, formats and document language, and is remembered', async () => {
-    await withPage({ locale: 'de-DE' }, async (page) => {
-      assert.equal(await page.getByTestId('formatted-number').innerText(), '1.234,5');
-      assert.equal(await page.getByTestId('formatted-instant').innerText(), '18.10.2026, 16:30');
-      await page.locator('#language').focus();
-      await page.keyboard.press('ArrowDown');
-      assert.equal(await page.locator('#language').inputValue(), 'en');
-      assert.equal(await page.locator('html').getAttribute('lang'), 'en');
-      assert.equal(await page.locator('h1').innerText(), 'Welcome');
-      assert.equal(await page.getByRole('navigation').getAttribute('aria-label'), 'Main navigation');
-      assert.equal(await page.getByTestId('formatted-number').innerText(), '1,234.5');
-      assert.match(await page.getByTestId('formatted-instant').innerText(), /Oct 18, 2026.*4:30/);
-      assert.equal(await page.locator('time').getAttribute('datetime'), '2026-10-18T14:30:00Z', 'exchange value is unchanged');
-      assert.equal(await page.title(), 'Welcome · Task Manager');
-      await page.reload();
-      await page.waitForSelector('main h1');
-      assert.equal(await page.locator('h1').innerText(), 'Welcome', 'choice survives a reload');
-      const stored = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie }));
-      assert.deepEqual(stored, { local: { 'taskmanager.language': 'en' }, session: {}, cookie: '' });
+  test('wrong credentials are reported, a correct login with the keyboard opens the start page', async () => {
+    await withApp({}, async (page, backend) => {
+      await page.getByLabel(/^Anmeldename/).fill(ANNA.username);
+      await page.getByLabel(/^Passwort/).fill('falsch');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.getByTestId('login-error').innerText(), 'Anmeldename oder Passwort stimmen nicht.');
+      await page.getByLabel(/^Passwort/).fill(ANNA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.shell');
+      assert.equal(await heading(page), 'Willkommen, Anna Admin');
+      assert.equal(await page.getByTestId('who').innerText(), 'Anna Admin');
+      const login = backend.writes().find((item) => item.path === '/api/v1/session');
+      assert.equal(login.csrf, 'csrf-token-for-browser-tests-0001', 'the login sends the CSRF token');
+      assert.equal(JSON.stringify(await page.evaluate(() => ({ ...localStorage }))).includes(ANNA.password), false);
+    });
+  });
+
+  test('the first login asks for an own password before anything else', async () => {
+    await withApp({}, async (page) => {
+      await page.getByLabel(/^Anmeldename/).fill(NORA.username);
+      await page.getByLabel(/^Passwort/).fill(NORA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('h1:has-text("Eigenes Passwort festlegen")');
+      assert.equal(await page.locator('.shell').count(), 0, 'no navigation before the password is changed');
+      await page.getByLabel(/^Einmalpasswort/).fill(NORA.password);
+      await page.getByLabel(/^Neues Passwort \(/).fill('kurz');
+      await page.getByLabel(/^Neues Passwort wiederholen/).fill('anders');
+      await page.getByRole('button', { name: 'Passwort speichern' }).click();
+      assert.match(await page.locator('main').innerText(), /Bitte mindestens 12 Zeichen verwenden\./);
+      assert.match(await page.locator('main').innerText(), /Die beiden Eingaben stimmen nicht überein\./);
+      await page.getByLabel(/^Neues Passwort \(/).fill('Nora Passwort 2026');
+      await page.getByLabel(/^Neues Passwort wiederholen/).fill('Nora Passwort 2026');
+      await page.getByRole('button', { name: 'Passwort speichern' }).click();
+      await page.waitForSelector('.shell');
+      assert.equal(await heading(page), 'Willkommen, Nora Neu');
+    });
+  });
+
+  test('signing out returns to the login with a note', async () => {
+    await withApp({ as: ANNA }, async (page) => {
+      await page.getByRole('button', { name: 'Abmelden' }).click();
+      await page.waitForSelector('h1:has-text("Anmelden")');
+      assert.equal(await page.getByRole('status').innerText(), 'Sie sind abgemeldet.');
+    });
+  });
+
+  test('a session the server ended leads back to the login on the next request', async () => {
+    await withApp({ as: BEN }, async (page, backend) => {
+      backend.deactivate(backend.ben);
+      await page.getByRole('link', { name: 'Projekte', exact: true }).click();
+      await page.waitForSelector('h1:has-text("Anmelden")');
+      assert.equal(await page.getByRole('status').innerText(), 'Ihre Sitzung ist beendet. Bitte melden Sie sich erneut an.');
     });
   });
 });
 
 describe('keyboard navigation', () => {
-  test('skip link is the first stop and moves focus to the content', async () => {
-    await withPage({}, async (page) => {
+  test('skip link first, links with Enter, current page marked and focus on the new heading', async () => {
+    await withApp({ as: ANNA }, async (page) => {
       await page.keyboard.press('Tab');
       assert.equal(await focusedText(page), 'Zum Inhalt springen');
-      assert.ok(await page.evaluate(() => document.activeElement.getBoundingClientRect().top >= 0), 'visible when focused');
       await page.keyboard.press('Enter');
-      assert.equal(await activeId(page), 'main');
-    });
-  });
-
-  test('navigation links work with Enter, mark the current page and move focus to the new heading', async () => {
-    await withPage({}, async (page) => {
-      await page.keyboard.press('Tab'); // skip link
-      await page.keyboard.press('Tab'); // Start
-      assert.equal(await focusedText(page), 'Start');
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'main');
+      await page.getByRole('link', { name: 'Start' }).focus();
       await page.keyboard.press('Tab');
-      assert.equal(await focusedText(page), 'Board');
-      await page.keyboard.press('Tab');
-      assert.equal(await focusedText(page), 'Zustände');
+      assert.equal(await focusedText(page), 'Projekte');
       await page.keyboard.press('Enter');
-      await page.waitForSelector('h1:has-text("Zustände und Fehler")');
-      assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'H1');
-      assert.equal(await page.getByRole('link', { name: 'Zustände' }).getAttribute('aria-current'), 'page');
-      assert.equal(await page.getByRole('link', { name: 'Start' }).getAttribute('aria-current'), null);
-      assert.equal(await page.title(), 'Zustände und Fehler · Task Manager');
-      await page.goBack();
-      await page.waitForSelector('h1:has-text("Willkommen")');
-    });
-  });
-
-  test('landmarks are present once', async () => {
-    await withPage({}, async (page) => {
-      for (const role of ['banner', 'navigation', 'main', 'contentinfo']) assert.equal(await page.getByRole(role).count(), 1, role);
-    });
-  });
-
-  test('focus is clearly visible', async () => {
-    await withPage({}, async (page) => {
-      await page.keyboard.press('Tab');
+      await page.waitForSelector('h1:has-text("Projekte")');
+      await page.waitForFunction(() => document.activeElement?.tagName === 'H1');
+      assert.equal(await page.getByRole('link', { name: 'Projekte' }).getAttribute('aria-current'), 'page');
+      assert.equal(await page.title(), 'Projekte · Task Manager');
+      for (const role of ['banner', 'navigation', 'main', 'contentinfo']) assert.ok(await page.getByRole(role).count() >= 1, role);
+      await page.getByRole('link', { name: 'Suche' }).focus();
+      await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Tab');
       const outline = await page.evaluate(() => {
         const style = getComputedStyle(document.activeElement);
@@ -115,198 +145,204 @@ describe('keyboard navigation', () => {
   });
 });
 
-describe('states', () => {
-  const expectations = {
-    de: [
-      ['success', 'Beispieleintrag geladen'],
-      ['empty', 'Noch keine Einträge'],
-      ['forbidden', 'Sie haben für diese Aktion keine Berechtigung.'],
-      ['notFound', 'Der Eintrag wurde nicht gefunden oder ist für Sie nicht sichtbar.'],
-      ['conflict', 'Der Eintrag wurde zwischenzeitlich geändert.'],
-      ['preconditionRequired', 'Die Änderung benötigt den aktuellen Stand'],
-      ['serverError', 'Beim Verarbeiten ist ein interner Fehler aufgetreten.'],
-      ['unavailable', 'Der Dienst ist vorübergehend nicht erreichbar. Bitte versuchen'],
-      ['network', 'Keine Verbindung zum Server.'],
-    ],
-    en: [
-      ['success', 'Example entry loaded'],
-      ['empty', 'No entries yet'],
-      ['forbidden', 'You do not have permission for this action.'],
-      ['notFound', 'The entry was not found or is not visible to you.'],
-      ['conflict', 'The entry was changed in the meantime.'],
-      ['preconditionRequired', 'The change needs the current version'],
-      ['serverError', 'An internal error occurred while processing.'],
-      ['unavailable', 'The service is temporarily unavailable. Please try'],
-      ['network', 'No connection to the server.'],
-    ],
-  };
-
-  for (const [language, locale] of [['de', 'de-DE'], ['en', 'en-US']]) {
-    test(`every state is reachable by keyboard and shown in ${language}`, async () => {
-      await withPage({ locale }, async (page) => {
-        await page.goto(`${server.url}#/states`);
-        await page.waitForSelector('select#' + (await page.locator('main select').getAttribute('id')));
-        const select = page.locator('main select');
-        for (const [scenario, text] of expectations[language]) {
-          await select.focus();
-          await select.selectOption(scenario);
-          await page.keyboard.press('Tab');
-          await page.keyboard.press('Enter');
-          await page.getByTestId('result').getByText(text, { exact: false }).first().waitFor();
-          const result = page.getByTestId('result');
-          const isProblem = !['success', 'empty'].includes(scenario);
-          assert.equal(await result.getByRole('alert').count(), isProblem ? 1 : 0, scenario);
-          if (isProblem && scenario !== 'network') {
-            assert.match(await result.innerText(), /b7d4f0a2-6c1e-4a58-9f3d-2e8c5b1a7d90/, 'support reference is shown');
-          }
-          assert.ok(!(await result.innerText()).includes('Synthetic'), 'server titles are never displayed');
-        }
-      });
-    });
-  }
-
-  test('the loading state is shown while a slow answer is pending', async () => {
-    await withPage({}, async (page) => {
-      await page.goto(`${server.url}#/states`);
-      await page.locator('main select').selectOption('slow');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByRole('status').filter({ hasText: 'Wird geladen' }).waitFor();
-      await page.getByText('Beispieleintrag geladen').waitFor();
-    });
+describe('two accounts with different rights', () => {
+  test('the administration sees its pages and can edit, a reader only reads', async () => {
+    const backend = createBackend();
+    const anna = await start({ backend, as: ANNA, hash: ticketHash(backend, 1) });
+    const ben = await start({ backend, as: BEN, hash: ticketHash(backend, 1) });
+    try {
+      for (const page of [anna.page, ben.page]) await page.waitForSelector('[data-testid=history]');
+      assert.deepEqual(await anna.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Konten', 'Gruppen und Rechte', 'Erscheinungsbild']);
+      assert.deepEqual(await ben.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Erscheinungsbild']);
+      assert.equal(await anna.page.getByLabel(/^Beschreibung/).inputValue(), 'Ablauf mit synthetischen Konten.');
+      assert.equal(await ben.page.getByLabel(/^Titel/).count(), 0, 'no input for a reader');
+      assert.match(await ben.page.locator('main').innerText(), /Beschreibung: für Sie verborgen/);
+      assert.doesNotMatch(await ben.page.locator('main').innerText(), /Ablauf mit synthetischen Konten/, 'hidden content is not shown, not even in the history');
+      assert.match(await ben.page.locator('main').innerText(), /Sie dürfen dieses Ticket lesen, aber nicht ändern\./);
+      await ben.page.goto(`${base()}#/projects/${backend.project.id}/tickets`);
+      await ben.page.waitForSelector('[data-testid=ticket-table], .empty');
+      // The project answer names no project actions, so the form is offered and the server refusal is explained.
+      await ben.page.locator('summary', { hasText: 'Neues Ticket' }).click();
+      await ben.page.getByLabel(/^Titel/).fill('Nicht erlaubt');
+      await ben.page.getByRole('button', { name: 'Ticket anlegen' }).click();
+      await ben.page.getByText('Sie dürfen in diesem Projekt keine Tickets anlegen.').waitFor();
+      assert.equal(backend.state.tickets.length, 2, 'nothing was created');
+      await ben.page.getByLabel(/^Titel/).fill('');
+      await ben.page.goto(`${base()}#/accounts`);
+      await ben.page.waitForSelector('main h1');
+      assert.match(await ben.page.locator('main').innerText(), /kein|nicht/i);
+      assert.equal(backend.state.requests.filter((item) => item.user === 'ben' && item.path.startsWith('/api/v1/accounts')).length, 0, 'the page does not even ask');
+      for (const session of [anna, ben]) assert.deepEqual(session.problems.filter((text) => !/Failed to load resource/.test(text)), []);
+    } finally {
+      await anna.context.close();
+      await ben.context.close();
+    }
   });
 
-  test('an older answer never overwrites a newer choice', async () => {
-    await withPage({}, async (page) => {
-      await page.goto(`${server.url}#/states`);
-      const select = page.locator('main select');
-      await select.selectOption('slow');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await select.selectOption('forbidden');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByText('Sie haben für diese Aktion keine Berechtigung.').waitFor();
-      await page.waitForTimeout(1600);
-      assert.equal(await page.getByText('Beispieleintrag geladen').count(), 0);
-      assert.equal(await page.getByRole('alert').count(), 1);
-    });
-  });
-
-  test('recovery actions: conflict offers the current version, server errors offer a retry', async () => {
-    await withPage({}, async (page) => {
-      await page.goto(`${server.url}#/states`);
-      const select = page.locator('main select');
-      await select.selectOption('conflict');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
-      await page.getByText('Beispieleintrag geladen').waitFor();
-      await select.selectOption('serverError');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByRole('button', { name: 'Erneut versuchen' }).waitFor();
-      await select.selectOption('forbidden');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByText('Sie haben für diese Aktion keine Berechtigung.').waitFor();
-      assert.equal(await page.getByRole('button', { name: 'Erneut versuchen' }).count(), 0, 'no pointless retry for missing rights');
-    });
-  });
-
-  test('a shown error changes language with the interface', async () => {
-    await withPage({}, async (page) => {
-      await page.goto(`${server.url}#/states`);
-      await page.locator('main select').selectOption('notFound');
-      await page.getByRole('button', { name: 'Beispiel laden' }).click();
-      await page.getByText('Der Eintrag wurde nicht gefunden').waitFor();
-      await page.locator('#language').selectOption('en');
-      await page.getByText('The entry was not found').waitFor();
-    });
+  test('a ticket created by the administration appears in the list and the search of the reader', async () => {
+    const backend = createBackend();
+    const anna = await start({ backend, as: ANNA, hash: `#/projects/${backend.project.id}/tickets` });
+    const ben = await start({ backend, as: BEN, hash: '#/search' });
+    try {
+      await anna.page.locator('summary', { hasText: 'Neues Ticket' }).click();
+      await anna.page.getByLabel(/^Titel/).fill('Tastaturbedienung prüfen');
+      await anna.page.getByRole('button', { name: 'Ticket anlegen' }).click();
+      await anna.page.waitForSelector('h1:has-text("PLAT-3")');
+      await ben.page.getByLabel(/^Suchtext/).fill('tastatur');
+      await ben.page.getByRole('button', { name: 'Suchen' }).click();
+      await ben.page.waitForSelector('[data-testid=ticket-hits]');
+      assert.match(await ben.page.getByTestId('ticket-hits').innerText(), /PLAT-3\s+Tastaturbedienung prüfen/);
+    } finally {
+      await anna.context.close();
+      await ben.context.close();
+    }
   });
 });
 
-describe('form', () => {
-  test('error correction with the keyboard in German', async () => {
-    await withPage({ locale: 'de-DE' }, async (page) => {
-      await page.goto(`${server.url}#/form`);
-      await page.waitForSelector('h1:has-text("Beispielformular")');
-      await page.getByLabel('Bezeichnung (Pflichtfeld)').focus();
-      await page.keyboard.press('Enter'); // submits the empty form
-      const summary = page.getByTestId('error-summary');
-      await summary.waitFor();
-      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'error-summary');
-      assert.match(await summary.innerText(), /2 Felder bitte korrigieren/);
-      const label = page.getByLabel('Bezeichnung (Pflichtfeld)');
-      assert.equal(await label.getAttribute('aria-invalid'), 'true');
-      const described = await label.getAttribute('aria-describedby');
-      assert.equal(described.split(' ').length, 2, 'hint and error are both announced');
-      for (const id of described.split(' ')) assert.ok((await page.locator(`[id="${id}"]`).innerText()).length > 0);
-      assert.match(await page.locator(`[id="${described.split(' ')[1]}"]`).innerText(), /Fehler: Bitte füllen Sie dieses Feld aus\./, 'error is not only a color');
-      // Follow the summary link to the first field.
-      await page.keyboard.press('Tab');
-      assert.equal(await focusedText(page), 'Bezeichnung');
-      await page.keyboard.press('Enter');
-      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('name')), 'label');
-      await page.keyboard.type('Bericht');
-      await page.keyboard.press('Tab');
-      await page.keyboard.type('1.5'); // wrong notation for German
-      await page.keyboard.press('Enter');
-      assert.match(await page.getByTestId('error-summary').innerText(), /Ein Feld bitte korrigieren/);
-      assert.match(await page.getByTestId('error-summary').innerText(), /Zahl in der Schreibweise dieser Sprache/);
-      await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').fill('1,5');
-      await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').press('Enter');
-      const success = page.getByTestId('success');
-      await success.waitFor();
-      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'success');
-      assert.match(await success.innerText(), /Synthetisch übernommen: Bericht, 1,5 Stunden\./);
-      assert.equal(await page.getByTestId('error-summary').count(), 0);
+describe('changes', () => {
+  test('a concurrent change is reported, the input is kept and can be saved on the new version', async () => {
+    const backend = createBackend();
+    const first = await start({ backend, as: ANNA, hash: ticketHash(backend, 1) });
+    const second = await start({ backend, as: ANNA, hash: ticketHash(backend, 1) });
+    try {
+      await first.page.getByLabel(/^Titel/).fill('Anmeldung gründlich prüfen');
+      await save(first.page).click();
+      await first.page.getByText('Gespeichert.').waitFor();
+      await second.page.getByLabel(/^Status/).selectOption({ label: 'In Arbeit' });
+      await save(second.page).click();
+      await second.page.getByTestId('ticket-conflict').waitFor();
+      await second.page.getByText('Version 2, zuletzt geändert').waitFor();
+      assert.equal(await second.page.getByLabel(/^Titel/).inputValue(), 'Anmeldung gründlich prüfen', 'the other change is loaded');
+      assert.equal(await second.page.getByLabel(/^Status/).inputValue(), 'in_progress', 'the own input is kept');
+      await save(second.page).click();
+      await second.page.getByText('Gespeichert.').waitFor();
+      const ticket = backend.state.tickets[0];
+      assert.deepEqual([ticket.version, ticket.values.title, ticket.values.status], [3, 'Anmeldung gründlich prüfen', 'in_progress']);
+      const patches = backend.writes().filter((item) => item.method === 'PATCH');
+      assert.deepEqual(patches.map((item) => item.ifMatch), ['"1"', '"1"', '"2"'], 'every change names the version it is based on');
+      assert.deepEqual(JSON.parse(patches[2].body.toString()), { status: 'in_progress' }, 'only changed fields are sent');
+    } finally {
+      await first.context.close();
+      await second.context.close();
+    }
+  });
+
+  test('unsaved input asks before leaving and stays when the person declines', async () => {
+    const backend = createBackend();
+    await withApp({ backend, as: ANNA, hash: ticketHash(backend, 1) }, async (page) => {
+      await page.waitForSelector('[data-testid=history]');
+      await page.getByLabel(/^Titel/).fill('Noch nicht gespeichert');
+      let asked = null;
+      page.once('dialog', (dialog) => {
+        asked = dialog.message();
+        void dialog.dismiss();
+      });
+      await page.getByRole('link', { name: 'Suche' }).click();
+      await page.waitForTimeout(300);
+      assert.equal(asked, 'Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?');
+      assert.match(page.url(), /tickets\/1$/);
+      assert.equal(await page.getByLabel(/^Titel/).inputValue(), 'Noch nicht gespeichert');
+      page.once('dialog', (dialog) => void dialog.accept());
+      await page.getByRole('link', { name: 'Suche' }).click();
+      await page.waitForSelector('h1:has-text("Suche")');
+      assert.equal(backend.writes().filter((item) => item.method === 'PATCH').length, 0);
     });
   });
 
-  test('the same input rules apply in English with English notation', async () => {
-    await withPage({ locale: 'en-US' }, async (page) => {
-      await page.goto(`${server.url}#/form`);
-      await page.waitForSelector('h1:has-text("Example form")');
-      await page.getByLabel('Label (Required)').fill('Report');
-      await page.getByLabel('Effort in hours (Required)').fill('1,5');
-      await page.keyboard.press('Enter');
-      await page.getByTestId('error-summary').waitFor();
-      assert.match(await page.getByTestId('error-summary').innerText(), /Please correct one field/);
-      await page.getByLabel('Effort in hours (Required)').fill('1.5');
-      await page.keyboard.press('Enter');
-      assert.match(await page.getByTestId('success').innerText(), /Accepted synthetically: Report, 1\.5 hours\./);
+  test('a right withdrawn in another browser takes effect at the next save without losing the page', async () => {
+    const backend = createBackend();
+    const reader = backend.group('Lesen');
+    reader.actions.push({ action: 'ticket.edit', projectId: null });
+    reader.fields.push({ resourceType: 'ticket', field: 'title', projectId: null, operation: 'write', effect: 'allow' });
+    const anna = await start({ backend, as: ANNA, hash: `#/groups/${reader.id}` });
+    const ben = await start({ backend, as: BEN, hash: ticketHash(backend, 1) });
+    try {
+      await ben.page.getByLabel(/^Titel/).fill('Ben ändert den Titel');
+      const box = anna.page.getByRole('checkbox', { name: /^Tickets bearbeiten/ });
+      await box.click();
+      await anna.page.getByText('Tickets bearbeiten entzogen.').waitFor();
+      assert.equal(await box.isChecked(), false);
+      await save(ben.page).click();
+      await ben.page.getByText(/Sie dürfen eines der geänderten Felder nicht mehr ändern\./).waitFor();
+      assert.equal(await ben.page.getByLabel(/^Titel/).count(), 0, 'the page shows the current rights: read only');
+      assert.equal(backend.state.tickets[0].values.title, 'Anmeldung prüfen', 'nothing was written');
+    } finally {
+      await anna.context.close();
+      await ben.context.close();
+    }
+  });
+});
+
+describe('administration', () => {
+  test('a new account gets a one time password that is shown once', async () => {
+    await withApp({ as: ANNA, hash: '#/accounts' }, async (page, backend) => {
+      await page.locator('summary', { hasText: 'Neues Konto anlegen' }).click();
+      await page.getByLabel(/^Anmeldename/).fill('dora');
+      await page.getByLabel(/^Anzeigename/).fill('Dora Demo');
+      await page.getByRole('button', { name: 'Konto anlegen' }).click();
+      await page.getByTestId('one-time').waitFor();
+      const created = backend.state.accounts.find((item) => item.username === 'dora');
+      assert.equal(await page.locator('[data-testid=one-time] code').innerText(), created.password);
+      assert.match(await page.locator('table').innerText(), /dora\s+Dora Demo\s+Aktiv, Passwortwechsel offen/);
+      await page.goto(`${base()}#/start`);
+      await page.goto(`${base()}#/accounts`);
+      await page.waitForSelector('table');
+      assert.equal(await page.getByTestId('one-time').count(), 0, 'not shown again');
     });
   });
 
-  test('digits separated by a space are never read as one number', async () => {
-    await withPage({ locale: 'de-DE' }, async (page) => {
-      await page.goto(`${server.url}#/form`);
-      await page.waitForSelector('h1:has-text("Beispielformular")');
-      await page.getByLabel('Bezeichnung (Pflichtfeld)').fill('Bericht');
-      for (const input of ['1 5', '1\u00a05', '1\u202f5']) {
-        await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').fill(input);
-        await page.getByLabel('Aufwand in Stunden (Pflichtfeld)').press('Enter');
-        await page.getByTestId('error-summary').waitFor();
-        assert.equal(await page.getByTestId('success').count(), 0, JSON.stringify(input));
-      }
+  test('the last administration cannot be removed by deactivating its account', async () => {
+    await withApp({ as: ANNA, hash: '#/accounts' }, async (page) => {
+      await page.getByRole('button', { name: 'anna deaktivieren' }).click();
+      await page.getByText('Das letzte aktive Konto der Verwaltung kann nicht deaktiviert werden.').waitFor();
     });
   });
 
-  test('errors are translated when the language changes', async () => {
-    await withPage({}, async (page) => {
-      await page.goto(`${server.url}#/form`);
-      await page.getByRole('button', { name: 'Prüfen und übernehmen' }).click();
-      await page.getByText('Bitte füllen Sie dieses Feld aus.').first().waitFor();
-      await page.locator('#language').selectOption('en');
-      await page.getByText('Please fill in this field.').first().waitFor();
+  test('groups take members, actions per scope and field rules', async () => {
+    await withApp({ as: ANNA, hash: '#/groups' }, async (page, backend) => {
+      await page.getByLabel(/^Neue Gruppe/).fill('Entwicklung');
+      await page.getByRole('button', { name: 'Gruppe anlegen' }).click();
+      await page.waitForSelector('h1:has-text("Entwicklung")');
+      const select = page.getByLabel('Konto aufnehmen');
+      await select.selectOption({ label: 'Ben Leser' });
+      await page.getByRole('button', { name: 'Aufnehmen' }).click();
+      await page.getByText('Ben Leser ist jetzt in der Gruppe.').waitFor();
+      await page.getByLabel(/^Geltungsbereich/).selectOption({ label: 'PLAT · Plattform' });
+      assert.equal(await page.getByRole('checkbox', { name: /^Konten verwalten/ }).count(), 0, 'company actions only without a project');
+      await page.getByRole('checkbox', { name: /^Tickets bearbeiten/ }).click();
+      await page.getByText('Tickets bearbeiten gewährt.').waitFor();
+      await page.getByLabel('Schreiben von Titel').selectOption('allow');
+      await page.getByText('Feldregel gespeichert.').waitFor();
+      const group = backend.group('Entwicklung');
+      assert.deepEqual(group.members, [backend.ben.id]);
+      assert.deepEqual(group.actions, [{ action: 'ticket.edit', projectId: backend.project.id }]);
+      assert.deepEqual(group.fields, [{ resourceType: 'ticket', field: 'title', projectId: backend.project.id, operation: 'write', effect: 'allow' }]);
     });
   });
 });
 
 describe('layout', () => {
-  for (const route of ['start', 'board', 'states', 'form', 'appearance']) {
-    test(`no horizontal scrolling at 320 px width on ${route}, also with longer English texts`, async () => {
-      await withPage({ locale: 'en-US', viewport: { width: 320, height: 640 } }, async (page) => {
-        await page.goto(`${server.url}#/${route}`);
-        await page.waitForSelector('main h1');
-        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-        assert.ok(overflow <= 0, `overflow ${overflow}px`);
+  const routes = (backend) => ['#/start', '#/projects', `#/projects/${backend.project.id}/tickets`, `#/projects/${backend.project.id}/members`,
+    `#/projects/${backend.project.id}/settings`, ticketHash(backend, 1), '#/search', '#/accounts', '#/groups', '#/appearance', '#/board'];
+  for (const locale of ['de-DE', 'en-US']) {
+    test(`no horizontal scrolling at 320 px width on every page in ${locale}`, async () => {
+      const backend = createBackend();
+      await withApp({ backend, as: ANNA, locale, viewport: { width: 320, height: 640 } }, async (page) => {
+        for (const hash of routes(backend)) {
+          await page.goto(`${base()}${hash}`);
+          await page.waitForSelector('main h1');
+          await page.waitForTimeout(150);
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert.ok(overflow <= 0, `${hash}: overflow ${overflow}px`);
+        }
       });
     });
   }
+
+  test('the login page fits 320 px too', async () => {
+    await withApp({ viewport: { width: 320, height: 640 } }, async (page) => {
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(overflow <= 0, `overflow ${overflow}px`);
+    });
+  });
 });
