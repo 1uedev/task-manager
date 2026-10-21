@@ -167,6 +167,24 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+  /directory/accounts:
+    get:
+      operationId: listDirectory
+      summary: Namen der Konten (jede vollständige Anmeldung)
+      description: |
+        Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
+        sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
+        Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+      responses:
+        '200':
+          description: Verzeichnis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DirectoryEntry'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
   /settings/session-duration:
     get:
       operationId: getSessionDuration
@@ -270,7 +288,7 @@ components:
           type: array
           items:
             type: string
-            enum: [accounts.manage, appearance.manage, projects.manage, session_duration.manage, tags.manage]
+            enum: [accounts.manage, appearance.manage, permissions.manage, projects.manage, session_duration.manage, tags.manage]
           description: |
             Die Verwaltungsrechte, die diese Sitzung gerade hält, sortiert. Nur in der Antwort auf den Zustand einer angemeldeten
             Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
@@ -314,6 +332,14 @@ components:
         active: {type: boolean}
         passwordChangeRequired: {type: boolean}
         createdAt: {type: string, format: date-time}
+    DirectoryEntry:
+      type: object
+      required: [id, username, active]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        displayName: {type: [string, 'null']}
+        active: {type: boolean}
     IssuedAccount:
       type: object
       required: [account, oneTimePassword, oneTimePasswordExpiresAt]

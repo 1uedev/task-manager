@@ -3,6 +3,7 @@ package taskmanager.permissions.internal;
 import java.sql.Connection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -17,6 +18,7 @@ import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.CompanyAdministration;
 import taskmanager.permissions.Decision;
 import taskmanager.permissions.IdentityAccess;
+import taskmanager.permissions.LastAdministration;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionDenied;
 import taskmanager.permissions.Permissions;
@@ -81,7 +83,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
     @Transactional(propagation = Propagation.MANDATORY)
     public void setMember(AccessContext actor, UUID groupId, UUID userId, boolean enabled) {
         companyManager(actor, lock(actor, true));
-        group(actor, groupId);
+        requireGroup(actor, groupId);
         if (userId == null || !adapter().userExists(actor.companyId(), userId)) throw new PermissionDenied();
         if (enabled) jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?) on conflict do nothing",
             actor.companyId(), groupId, userId);
@@ -101,7 +103,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         // Delegates may neither delegate administration nor distribute an action they do not hold.
         if (!isCompanyManager(actor, policy) && (action.startsWith("permissions.")
                 || !policy.decide(actor, resource, action, Set.of()).allowed())) throw new PermissionDenied();
-        group(actor, groupId);
+        requireGroup(actor, groupId);
         jdbc.update("delete from permissions_action where company_id = ? and group_id = ? and project_id is not distinct from ? and action_key = ?",
             actor.companyId(), groupId, resource.projectId(), action);
         if (enabled) jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
@@ -123,7 +125,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         if (!isCompanyManager(actor, policy) && (!policy.field(resource.resourceType(), field, "READ", resource.projectId())
                 || !policy.field(resource.resourceType(), field, "WRITE", resource.projectId())))
             throw new PermissionDenied();
-        group(actor, groupId);
+        requireGroup(actor, groupId);
         // A delegate may only withdraw restrictions that the delegate set as a delegate; a deny of anyone else, one set
         // with company administration (even by the same person before losing that role) and one of unknown origin stay untouched.
         boolean company = isCompanyManager(actor, policy);
@@ -188,6 +190,22 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
     }
 
     @Override
+    public Optional<GroupDetail> group(AccessContext actor, UUID groupId) {
+        companyManager(actor, lock(actor, false));
+        var names = groupId == null ? List.<String>of()
+            : jdbc.queryForList("select name from permissions_group where company_id = ? and id = ?", String.class, actor.companyId(), groupId);
+        if (names.isEmpty()) return Optional.empty();
+        var members = jdbc.queryForList("select user_id from permissions_membership where company_id = ? and group_id = ? order by user_id",
+            UUID.class, actor.companyId(), groupId);
+        var actions = jdbc.query("select project_id, action_key from permissions_action where company_id = ? and group_id = ? order by project_id nulls first, action_key",
+            (rs, row) -> new ActionRule(rs.getObject(1, UUID.class), rs.getString(2)), actor.companyId(), groupId);
+        var fields = jdbc.query("select project_id, resource_type, field_key, operation, effect from permissions_field where company_id = ? and group_id = ? order by project_id nulls first, resource_type, field_key, operation",
+            (rs, row) -> new FieldRule(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
+                Operation.valueOf(rs.getString(4)), Effect.valueOf(rs.getString(5))), actor.companyId(), groupId);
+        return Optional.of(new GroupDetail(new Group(groupId, names.getFirst()), members, actions, fields));
+    }
+
+    @Override
     public List<Audit> audit(AccessContext actor, int limit) {
         Policy policy = lock(actor, false);
         if (limit < 1 || limit > 100 || !policy.decide(actor, ResourceContext.company(actor.companyId()), AUDIT, Set.of()).allowed())
@@ -248,7 +266,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
      * deactivated account keeps the company administration alive.
      */
     private void companyManagerRemains(AccessContext actor) {
-        if (companyManagers(actor.companyId()).stream().noneMatch(user -> adapter().userActive(actor.companyId(), user))) throw new PermissionDenied();
+        if (companyManagers(actor.companyId()).stream().noneMatch(user -> adapter().userActive(actor.companyId(), user))) throw new LastAdministration();
     }
 
     private List<UUID> companyManagers(UUID companyId) {
@@ -256,7 +274,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             UUID.class, companyId, MANAGE);
     }
 
-    private void group(AccessContext actor, UUID groupId) {
+    private void requireGroup(AccessContext actor, UUID groupId) {
         if (groupId == null || jdbc.queryForObject("select count(*) from permissions_group where company_id=? and id=?",
                 Integer.class, actor.companyId(), groupId) != 1) throw new PermissionDenied();
     }

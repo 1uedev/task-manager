@@ -494,7 +494,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
 
-**Nächster Schritt:** Reservierung integrieren; danach Teil 1 und Teil 2 umsetzen und mit DEC-070 übergeben.
+**Nächster Schritt:** Teil 1 (Backend: Gruppenverwaltung unter `/api/v1/permissions`, Kontenverzeichnis, DEC-070) liegt als Ergebnis PR vor; danach Teil 2 (Oberfläche) umsetzen und gemeinsam mit Teil 1 zur Prüfung übergeben.
 
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 

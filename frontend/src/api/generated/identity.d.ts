@@ -141,6 +141,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/directory/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Namen der Konten (jede vollständige Anmeldung)
+         * @description Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
+         *     sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
+         *     Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+         */
+        get: operations["listDirectory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/session-duration": {
         parameters: {
             query?: never;
@@ -191,7 +213,7 @@ export interface components {
              *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
              *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
              */
-            rights?: ("accounts.manage" | "appearance.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
+            rights?: ("accounts.manage" | "appearance.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
             /** Format: date-time */
             expiresAt?: string | null;
             /**
@@ -224,6 +246,13 @@ export interface components {
             passwordChangeRequired: boolean;
             /** Format: date-time */
             createdAt: string;
+        };
+        DirectoryEntry: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            displayName?: string | null;
+            active: boolean;
         };
         IssuedAccount: {
             account: components["schemas"]["Account"];
@@ -498,6 +527,28 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verzeichnis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getSessionDuration: {
