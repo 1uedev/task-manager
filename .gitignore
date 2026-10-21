@@ -32,3 +32,6 @@ build/
 target/
 coverage/
 *.log
+
+# Results of local demo measurements
+demo-results/

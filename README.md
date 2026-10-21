@@ -28,6 +28,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
 - Git and migration review: [provider variants, source permissions and staged Redmine import](docs/GIT_MIGRATION.md).
 - Operations review: [Docker, recovery targets, storage calculation and proposed load tests](docs/OPERATIONS.md).
+- Demonstration: [Docker image, synthetic demo data, acceptance walk through and search measurement](docs/DEMO.md) (TASK-031, German).
 - Review policy proposal: [risk-based checks, responsibilities and coordination examples](docs/DEVELOPMENT_REVIEW.md).
 - AI contributors: [shared instructions](AGENTS.md), then [workflow and starter prompts](docs/AI_WORKFLOW.md).
 - Work state: [central TODO](TODO.md), [central DONE](DONE.md), [GitHub task discussions](https://github.com/1uedev/task-manager/issues).
