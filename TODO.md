@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,14 +28,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
+| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-21 |
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | — | 2026-10-17 |
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | — | 2026-10-17 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -62,7 +62,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | claude-20261021-search-01 | 2026-10-21 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -483,27 +482,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Nächster Schritt:** Holger prüft die qualifizierte Werkzeugbasis und die gemeinsamen Vertragsregeln. Danach können TASK-022 (Backend-/PostgreSQL-Grundlage) und TASK-023 (React-Grundfläche) mit benannten Grenzen beauftragt werden; benötigte Browser-/Betriebsdetails sind vorher festzuhalten. Sie bleiben bis dahin BLOCKIERT und unbesetzt. TASK-021 bleibt zur Prüfung in TODO.md.
 
-## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-search-01 · **Aktualisiert:** 2026-10-21
-
-**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Abhängigkeiten:** TASK-028 und TASK-042 (von Holger am 21. Oktober 2026 abgenommen), TASK-026 und TASK-027 (abgenommen). Holger hat am 21. Oktober 2026 im Projektgespräch mit „abgenommen 029“ TASK-029 beauftragt, auf den Vorschlag „TASK-029 beauftragen, Filter und Suche. Das ist das nächste Paket bis zur ersten Vorführung“. Den Projektions- und Sichtbarkeitsvertrag schlägt die Sitzung mit dem Ergebnis als DEC-069 vor; die Messziele bleiben Vorschlag und werden erst in TASK-031 gemessen. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Tickets nach Kennung (Projektschlüssel und Nummer), Titel, Beschreibung und Tagnamen; Projekte nach Schlüssel, Name, Beschreibung und Tagnamen; Filter nach Projekt, Status, Typ, Zuständigkeit und Tags (alle gewählten Tags); PostgreSQL Volltext ohne sprachabhängige Wortstämme mit Präfixsuche und GIN Indizes; die Projektion je Feld wird in derselben Transaktion aktualisiert, Rechte werden bei jeder Suche aktuell geprüft. TASK-030 und TASK-031 bleiben blockiert. Eine getrennte KI prüft das Ergebnis nach DEC-040. **Arbeitsstand:** Ergebnis auf Branch claude/project-thread-r4dri5 mit DEC-069, Migration V0014, Vertrag `contracts/search.openapi.yaml`, Befehl `rebuild-search` und Abschnitt „Suche (TASK-029)“ in backend/README.md. Nicht Teil: Wiki und Anforderungen (Module fehlen, Erweiterungsvertrag bleibt), Kommentare, Dateinamen, Portal, Oberfläche (TASK-030), Messung (TASK-031).
-
-**Umfang:** Text-/Projekt-/Status-/Tag-Suche für Tickets und Projekte, PostgreSQL-Indizes, Rechtefilterung und konsistente Aktualisierung implementieren. Erweiterungsverträge für Wiki und Anforderungen erhalten; diese bleiben notwendige V1-Folgearbeit.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Suchmodul mit eigenen Projektionstabellen und Indizes. Quellen liefern berechtigungstrennbare Segmente über Verträge; Such-SQL liest keine fremden internen Tabellen. Rechteprüfung vor Ranking, Zählung und Seitenauswahl.
-
-**Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
-
-**Übergabe:** Umgesetzt wie vorgesehen. Die Projektion gehört dem Suchmodul und folgt jeder Änderung in derselben Transaktion; Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. Nachweise: SearchApiTest (9 Fälle: Präfix und Kennung, Ordnung und Seiten, Filter, verborgene Felder ohne Einfluss auf Treffer, Rang und Anzahl, Nichtmitglieder und Rechteentzug, Projektion bei Änderungen, Rückabwicklung, Neuaufbau), SearchContractTest, AdminCommandTest für `rebuild-search`, Lifecycle-Prüfung mit dem Befehl. Grenzen stehen in backend/README.md. Die unabhängige Prüfung von Codex (docs/REVIEW_TASK-029_PR-128.md, PR #129) meldete F1 (P2, Anfrage und Index zerlegen Text unterschiedlich), F2 (P2, Verklemmung zwischen Neuaufbau und Tagumbenennung) und F3 (P3, Feldindizes tragen den Mehrfeldvergleich nicht); alle drei sind mit Migration V0015 und Nachtrag (8) zu DEC-069 behoben, mit drei Regressionstests in SearchApiTest.
-
-**Nächster Schritt:** Nachprüfung der Behebung von F1 bis F3 durch eine getrennte KI oder Abnahme durch Holger.
-
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-ui-01 · **Aktualisiert:** 2026-10-21
 
-**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** Holger hat am 21. Oktober 2026 im Projektgespräch mit „Ja mach mit beiden tasks weiter“ TASK-030 und TASK-031 beauftragt, auf den Hinweis, dass beide als Nächstes seinen Auftrag brauchen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-070 und Migrationen ab V0016. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Umsetzung in zwei Ergebnis PRs. Teil 1 im Backend: Verwaltungsendpunkte des Berechtigungsmoduls für frei anlegbare Gruppen, Mitglieder, Aktionen je Projekt oder Unternehmen und Feldregeln Lesen und Schreiben, geschützt durch das vorhandene Recht `permissions.manage`, mit Vertrag und Tests; dazu fehlende Lesewege, die die Oberfläche braucht. Teil 2 in der Oberfläche: Anmeldung mit Pflichtwechsel, Kontoverwaltung mit Einmalpasswort, Projekte mit Mitgliedern, Ticketliste, Anlage und Bearbeitung mit Feldrechten und Versionskonflikt, Tags, Suche und Gruppenverwaltung, Deutsch und Englisch, mit Browserprüfung zweier unterschiedlich berechtigter Benutzer. Keine festen Rollen, Fachregeln bleiben serverseitig. Nicht Teil: Kanban, Portal, LDAP, Wiki, Anforderungen.
 
 **Umfang:** Administrative lokale Kontoanlage, Anmeldung mit Pflichtwechsel, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
 
@@ -511,13 +494,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
 
-**Nächster Schritt:** Passende Backend-/UI-Ergebnisse und Demoablauf annehmen; nach Beauftragung reservieren.
+**Nächster Schritt:** Reservierung integrieren; danach Teil 1 und Teil 2 umsetzen und mit DEC-070 übergeben.
 
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-21
 
-**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
+**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** Beauftragt von Holger am 21. Oktober 2026 zusammen mit TASK-030 („Ja mach mit beiden tasks weiter“). Beginnt fachlich nach TASK-030, das Image kann vorher entstehen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-071. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: ein Image mit Backend und ausgelieferter Oberfläche, Docker Compose mit PostgreSQL und benanntem Volume, Konfiguration nur über Umgebungsvariablen ohne Standardkennwörter, Ersteinrichtung über `bootstrap-admin`, ein Befehl für synthetische Demodaten. Messprofil: der Referenzbestand aus OPERATIONS.md (20 Projekte, 90.000 Tickets, 100 Konten) synthetisch erzeugt, 15 gleichzeitige Benutzer mit dem Suchanteil aus OPERATIONS.md und TAGS_SEARCH.md, Auswertung je Messklasse mit p50 und p95 gegen die vorgeschlagenen Ziele auf der dokumentierten Messmaschine, ohne Zusage für die Referenzhardware. Nachweise zu den zehn geplanten Punkten aus DEVELOPMENT_START.md. Nicht Teil: TLS, Sicherung und Wiederherstellung, Hochverfügbarkeit, Veröffentlichung des Images.
 
 **Umfang:** Reproduzierbares Anwendungsimage mit Oberfläche, PostgreSQL-Anbindung, Startanleitung und synthetischen Demodaten liefern. Durchgängige Funktions-/Rechte-/Konfliktnachweise und begrenzte Suchmessung des tatsächlich vorhandenen Umfangs durchführen.
 
@@ -525,7 +508,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
 
-**Nächster Schritt:** Betriebs-/Messprofil und Vorführung freigeben; nach Beauftragung reservieren. Spätere V1-Aufgaben erst anschließend mit unverändertem bestätigtem Umfang konkretisieren.
+**Nächster Schritt:** Reservierung integrieren; nach TASK-030 umsetzen und mit DEC-071 übergeben.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 

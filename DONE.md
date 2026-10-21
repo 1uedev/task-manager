@@ -131,6 +131,24 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
+
+**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Verantwortlich:** claude-20261021-search-01. **Abgeschlossen:** 2026-10-21.
+
+**Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
+
+**Ergebnis:** Suchmodul nach DEC-069 mit eigener Projektion von Projekten, Tickets, Tags und Zuordnungen (Migrationen V0014 und V0015). Projekte, Tickets und Tags veröffentlichen jede Änderung als Ereignis in ihrer Transaktion; die Projektion folgt synchron und rollt mit zurück. `GET /api/v1/search/tickets` findet Tickets nach Kennung, Titel, Beschreibung und Tagnamen und filtert nach Projekt, Status, Typ, Zuständigkeit und Tags; `GET /api/v1/search/projects` findet Projekte nach Schlüssel, Name, Beschreibung und Tags des Unternehmenskatalogs. Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. PostgreSQL Volltext `simple` mit Präfixsuche und GIN Index je Feld, Suchwörter nach derselben Regel wie der Suchtext. Containerbefehl `rebuild-search` und einmaliger Aufbau beim ersten Start. Vertrag `contracts/search.openapi.yaml`, backend/README.md Abschnitt „Suche (TASK-029)“. Korrektur nach unabhängiger Prüfung (PR #130, Nachtrag (8) zu DEC-069, auf Holgers Wahl „Alle drei“): F1 gleiche Zerlegung von Anfrage und Index, F2 gemeinsame Sperrordnung für Neuaufbau und Projektion, F3 indexfähiger Vergleich je Feld.
+
+**Prüfungen:** Backend `verify` gegen lokale PostgreSQL 16 mit 196 Tests ohne Fehler nach PR #130, darunter `SearchApiTest` (12 Fälle, davon drei Regressionstests zu F1 bis F3), `SearchContractTest` und `AdminCommandTest` für `rebuild-search`; Lifecycle Prüfung mit dem gepackten Programm einschließlich `rebuild-search` lokal bestanden. CI auf PostgreSQL 18.6 grün auf PR #128 und PR #130 sowie auf main nach dem Merge von PR #128.
+
+**Review:** Unabhängige Prüfung durch Codex (codex-20261021-search-review-01, Bericht `docs/REVIEW_TASK-029_PR-128.md` in PR #129): Projekt und Feldgrenzen, Rang und Seitenstabilität bei verborgenen Änderungen, wartender Rechte, Feld und Mitgliedschaftsentzug sowie Rückabwicklung von Quelle, Historie und Projektion halten; keine Rechteumgehung. Befunde F1 (P2, unterschiedliche Textaufbereitung), F2 (P2, Verklemmung zwischen Neuaufbau und Tagumbenennung) und F3 (P3, Feldindizes für den Mehrfeldvergleich ungenutzt) sind mit PR #130 behoben, jeweils mit Regressionstest. Eine Nachprüfung der Korrekturen durch eine getrennte KI hat nicht stattgefunden und war nicht Voraussetzung der Abnahme.
+
+**Abnahme:** Holger, 2026-10-21, im Projektgespräch („Ich nehme ab“ nach dem Merge von PR #130); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Wiki, Anforderungen, Kommentare, Anhänge und Dateinamen sind noch nicht durchsuchbar, ebenso fehlen Vorschläge und Autovervollständigung; das bleibt bestätigter V1 Umfang. (2) Portalkonten suchen nicht, bis das Portal entschieden ist. (3) Antwortzeiten sind nicht gemessen (TASK-031); Zählung aller erlaubten Treffer und Rechteprüfung je Mitgliedsprojekt können bei großen Datenmengen teuer werden. (4) Die Rechteprüfung gilt zum Sperrzeitpunkt der Suche. (5) Nach V0015 findet die Textsuche bis zum Ende des Aufbaus beim nächsten Start nichts. (6) Eine Suchoberfläche folgt mit TASK-030.
+
+**Referenz:** Reservierung #127, Ergebnis #128 (90f43be), Prüfbericht #129 (2da06c1), Korrektur #130 (f662b6a); verknüpft mit TASK-026, TASK-027, TASK-028, TASK-042 und DEC-069.
+
 ## TASK-042 Tagänderungen in der Tickethistorie zeigen
 
 **Bezug:** REQ-TKT-005, REQ-TAG-001, REQ-ACL-003. **Verantwortlich:** claude-20261020-taghistory-01. **Abgeschlossen:** 2026-10-21.
