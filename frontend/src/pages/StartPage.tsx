@@ -1,25 +1,25 @@
 import { useState, type ReactElement } from 'react';
-import { ClockIcon, GripIcon, PaletteIcon } from '../app/Icons.tsx';
+import { listProjects } from '../api/product.ts';
+import { FolderIcon, GripIcon, PaletteIcon, SearchIcon } from '../app/Icons.tsx';
+import { useLoad } from '../app/hooks.ts';
 import { readStoredOrder, storeOrder } from '../app/preferences.ts';
 import { hrefFor } from '../app/route.ts';
+import { useSession } from '../app/session.tsx';
+import { EmptyText, LoadedView } from '../app/ui.tsx';
 import { useReorder } from '../app/useReorder.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
-import { formatDateTime, formatNumber } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 
-// Exchanged values stay fixed; only their presentation depends on the selected language.
-const EXAMPLE_INSTANT = '2026-10-18T14:30:00Z';
-const EXAMPLE_ZONE = 'Europe/Berlin';
-const EXAMPLE_NUMBER = 1234.5;
-
-const CARDS = ['format', 'brand'] as const;
+const CARDS = ['projects', 'search', 'brand'] as const;
 type CardId = (typeof CARDS)[number];
-const CARD_TITLE: Record<CardId, MessageKey> = { format: 'start.format.title', brand: 'start.brand.title' };
+const CARD_TITLE: Record<CardId, MessageKey> = { projects: 'start.projects.title', search: 'start.search.title', brand: 'start.brand.title' };
 
 export function StartPage() {
-  const { t, language } = useI18n();
-  const { savedAccent } = useBrand();
+  const { t } = useI18n();
+  const { savedAccent, api } = useBrand();
+  const { view } = useSession();
+  const [projects, reload] = useLoad(() => listProjects(api), [api]);
   const [cards, setCardsState] = useState<CardId[]>(() => readStoredOrder('cards', CARDS));
   const setCards = (next: CardId[]) => {
     storeOrder('cards', next);
@@ -27,6 +27,7 @@ export function StartPage() {
   };
   const { itemProps, announcement } = useReorder(cards, setCards, (id, position, count) =>
     t('dnd.position', { name: t(CARD_TITLE[id]), position, count }), 'horizontal');
+  const who = view.state === 'ready' ? view.session.displayName ?? view.session.username ?? '' : '';
 
   // The handle is the keyboard stop of a card: Alt with the left or right arrow moves the card.
   const grip = (id: CardId) => (
@@ -37,30 +38,35 @@ export function StartPage() {
   );
 
   const content: Record<CardId, ReactElement> = {
-    format: (
+    projects: (
       <>
         <div className="card-head">
-          <div className="card-icon" aria-hidden="true"><ClockIcon /></div>
-          {grip('format')}
+          <div className="card-icon" aria-hidden="true"><FolderIcon /></div>
+          {grip('projects')}
         </div>
-        <h2 id="format-heading">{t('start.format.title')}</h2>
-        <p>{t('start.format.intro')}</p>
-        <dl>
-          <dt>{t('start.format.instant')}</dt>
-          <dd data-testid="formatted-instant">{formatDateTime(EXAMPLE_INSTANT, language, EXAMPLE_ZONE)}</dd>
-          <dt>{t('start.format.zone')}</dt>
-          <dd>{EXAMPLE_ZONE}</dd>
-          <dt>{t('start.format.instantIso')}</dt>
-          <dd>
-            <time dateTime={EXAMPLE_INSTANT}>{EXAMPLE_INSTANT}</time>
-          </dd>
-          <dt>{t('start.format.number')}</dt>
-          <dd data-testid="formatted-number">{formatNumber(EXAMPLE_NUMBER, language)}</dd>
-        </dl>
-        <ul className="chips">
-          <li>{t('start.format.items', { count: 1 })}</li>
-          <li>{t('start.format.items', { count: 3 })}</li>
-        </ul>
+        <h2 id="projects-heading">{t('start.projects.title')}</h2>
+        <LoadedView loaded={projects} retry={reload}>
+          {(items) => items.length === 0
+            ? <EmptyText text={t('start.projects.empty')} /> : (
+            <ul className="plain-list" data-testid="start-projects">
+              {items.slice(0, 6).map((project) => (
+                <li key={project.id}><a href={hrefFor({ name: 'project', id: project.id, tab: 'tickets' })}>{`${project.key} · ${project.name}`}</a></li>
+              ))}
+            </ul>
+          )}
+        </LoadedView>
+        <p className="actions"><a className="button" href={hrefFor('projects')}>{t('start.projects.open')}</a></p>
+      </>
+    ),
+    search: (
+      <>
+        <div className="card-head">
+          <div className="card-icon" aria-hidden="true"><SearchIcon /></div>
+          {grip('search')}
+        </div>
+        <h2 id="search-heading">{t('start.search.title')}</h2>
+        <p>{t('start.search.intro')}</p>
+        <p className="actions"><a className="button" href={hrefFor('search')}>{t('start.search.open')}</a></p>
       </>
     ),
     brand: (
@@ -85,7 +91,7 @@ export function StartPage() {
   return (
     <>
       <div className="hero">
-        <h1 tabIndex={-1}>{t('start.title')}</h1>
+        <h1 tabIndex={-1}>{who === '' ? t('start.title') : t('start.greeting', { name: who })}</h1>
         <p>{t('start.intro')}</p>
         <p className="hero-hint" id="cards-hint">{t('start.cards.hint')}</p>
       </div>

@@ -40,6 +40,7 @@ export function auditContrast(page) {
       const box = element.getBoundingClientRect();
       if (box.width === 0 || box.height === 0 || style.visibility === 'hidden' || element.closest('.visually-hidden,[hidden],option')) continue;
       if (element.closest('button:disabled')) continue; // WCAG excludes inactive controls
+      if (element.closest('details:not([open]) > :not(summary)')) continue; // content of a closed disclosure is not shown
       const size = parseFloat(style.fontSize);
       const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
       const value = ratio(blend(rgba(style.color), backgroundOf(element)), backgroundOf(element));

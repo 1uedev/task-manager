@@ -1,0 +1,228 @@
+import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
+import type { components as IdentityTypes } from './generated/identity';
+import type { components as PermissionTypes } from './generated/permissions';
+import type { components as ProjectTypes } from './generated/projects';
+import type { components as SearchTypes } from './generated/search';
+import type { components as TagTypes } from './generated/tags';
+import type { components as TicketTypes } from './generated/tickets';
+import { readProblem, type ProblemInfo } from './problem.ts';
+
+// The product API of TASK-030. Types come from the published contracts; every answer is checked again at runtime for
+// the fields the interface relies on, so a server that breaks the contract yields a problem instead of a broken page.
+
+export type Account = IdentityTypes['schemas']['Account'];
+export type IssuedAccount = IdentityTypes['schemas']['IssuedAccount'];
+export type DirectoryEntry = IdentityTypes['schemas']['DirectoryEntry'];
+export type ProjectSummary = ProjectTypes['schemas']['ProjectSummary'];
+export type Project = ProjectTypes['schemas']['Project'];
+export type Configuration = ProjectTypes['schemas']['Configuration'];
+export type Member = ProjectTypes['schemas']['Member'];
+export type Ticket = TicketTypes['schemas']['Ticket'];
+export type HistoryEntry = TicketTypes['schemas']['HistoryEntry'];
+export type Tag = TagTypes['schemas']['Tag'];
+export type TicketHit = SearchTypes['schemas']['TicketHit'];
+export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
+export type Group = PermissionTypes['schemas']['Group'];
+export type GroupDetail = PermissionTypes['schemas']['GroupDetail'];
+export type Catalog = PermissionTypes['schemas']['Catalog'];
+
+export interface Versioned<T> {
+  readonly value: T;
+  // The representation version from the ETag header, sent back as If-Match; null when the endpoint has none.
+  readonly etag: string | null;
+}
+
+export type Result<T> = Outcome<Versioned<T>>;
+
+export interface LoginProblem extends ProblemInfo {
+  readonly retryAfter: number | null;
+  readonly violations: readonly string[];
+}
+
+interface Raw {
+  readonly data?: unknown;
+  readonly error?: unknown;
+  readonly response: Response;
+}
+
+const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const hasStrings = (value: unknown, ...keys: string[]) => record(value) && keys.every((key) => typeof value[key] === 'string');
+const listOf = <T>(check: (item: unknown) => boolean) => (value: unknown): T[] | null =>
+  Array.isArray(value) && value.every(check) ? (value as T[]) : null;
+const one = <T>(check: (item: unknown) => boolean) => (value: unknown): T | null => (check(value) ? (value as T) : null);
+const nothing = (): true => true;
+
+export const isAccount = (v: unknown) => hasStrings(v, 'id', 'username') && typeof (v as Account).active === 'boolean';
+export const isDirectoryEntry = (v: unknown) => hasStrings(v, 'id', 'username') && typeof (v as DirectoryEntry).active === 'boolean';
+export const isProjectSummary = (v: unknown) => hasStrings(v, 'id', 'key', 'name') && typeof (v as ProjectSummary).manageable === 'boolean';
+export const isProject = (v: unknown) => isProjectSummary(v) && record((v as Project).configuration)
+  && Array.isArray((v as Project).configuration.statuses) && Array.isArray((v as Project).configuration.ticketTypes);
+export const isMember = (v: unknown) => hasStrings(v, 'accountId');
+export const isTicket = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key') && typeof (v as Ticket).number === 'number'
+  && typeof (v as Ticket).version === 'number' && record((v as Ticket).fields) && Array.isArray((v as Ticket).writableFields);
+export const isHistoryEntry = (v: unknown) => record(v) && typeof v.version === 'number' && Array.isArray(v.changes);
+export const isTag = (v: unknown) => hasStrings(v, 'id', 'name', 'catalog') && typeof (v as Tag).archived === 'boolean';
+export const isGroup = (v: unknown) => hasStrings(v, 'id', 'name');
+export const isGroupDetail = (v: unknown) => isGroup(v) && Array.isArray((v as GroupDetail).members)
+  && Array.isArray((v as GroupDetail).actions) && Array.isArray((v as GroupDetail).fields);
+const isPage = (item: (v: unknown) => boolean) => (v: unknown) => record(v) && typeof v.total === 'number' && Array.isArray(v.items) && v.items.every(item);
+
+async function run<T>(call: () => Promise<Raw>, parse: (value: unknown) => T | null): Promise<Result<T>> {
+  return guarded(async () => {
+    const { data, error, response } = await call();
+    if (!response.ok) {
+      return { kind: 'problem', problem: readProblem(response.status, error, response.headers.get('X-Correlation-Id')) };
+    }
+    const value = parse(response.status === 204 ? undefined : data);
+    if (value === null) return { kind: 'problem', problem: INVALID_RESPONSE };
+    return { kind: 'ok', data: { value, etag: response.headers.get('ETag') } };
+  });
+}
+
+const ifMatch = (etag: string) => ({ header: { 'If-Match': etag } });
+
+// ---------------------------------------------------------------- session
+
+// Login and password change carry details the generic problem drops: the waiting time and the reasons of a policy.
+async function sessionCall(call: () => Promise<Raw>): Promise<Outcome<SessionState> | { kind: 'refused'; problem: LoginProblem }> {
+  try {
+    const { data, error, response } = await call();
+    if (!response.ok) {
+      const base = readProblem(response.status, error, response.headers.get('X-Correlation-Id'));
+      const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
+      const raw = record(error) && Array.isArray(error.violations) ? error.violations : [];
+      return { kind: 'refused', problem: { ...base, retryAfter: Number.isFinite(retry) ? retry : null, violations: raw.filter((v): v is string => typeof v === 'string') } };
+    }
+    const session = parseSession(data);
+    return session ? { kind: 'ok', data: session } : { kind: 'problem', problem: INVALID_RESPONSE };
+  } catch (failure) {
+    if (failure instanceof DOMException && failure.name === 'AbortError') throw failure;
+    return { kind: 'problem', problem: { kind: 'network', status: null, code: null, correlationId: null } };
+  }
+}
+
+export const login = (api: ServerApi, username: string, password: string) =>
+  sessionCall(() => api.identity.POST('/session', { body: { username, password } }));
+
+export const changePassword = (api: ServerApi, currentPassword: string, newPassword: string) =>
+  sessionCall(() => api.identity.POST('/session/password', { body: { currentPassword, newPassword } }));
+
+export const logout = (api: ServerApi) => run(() => api.identity.DELETE('/session'), nothing);
+
+// ---------------------------------------------------------------- accounts and directory
+
+export const listAccounts = (api: ServerApi) => run(() => api.identity.GET('/accounts'), listOf<Account>(isAccount));
+export const createAccount = (api: ServerApi, username: string, displayName: string | null) =>
+  run(() => api.identity.POST('/accounts', { body: { username, displayName } }),
+    one<IssuedAccount>((v) => record(v) && isAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const deactivateAccount = (api: ServerApi, id: string) =>
+  run(() => api.identity.POST('/accounts/{accountId}/deactivate', { params: { path: { accountId: id } } }), one<Account>(isAccount));
+export const reactivateAccount = (api: ServerApi, id: string) =>
+  run(() => api.identity.POST('/accounts/{accountId}/reactivate', { params: { path: { accountId: id } } }), one<Account>(isAccount));
+export const resetPassword = (api: ServerApi, id: string) =>
+  run(() => api.identity.POST('/accounts/{accountId}/password-reset', { params: { path: { accountId: id } } }),
+    one<IssuedAccount>((v) => record(v) && isAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
+
+// ---------------------------------------------------------------- projects
+
+export const listProjects = (api: ServerApi) => run(() => api.projects.GET('/projects'), listOf<ProjectSummary>(isProjectSummary));
+export const createProject = (api: ServerApi, key: string, name: string, description: string | null) =>
+  run(() => api.projects.POST('/projects', { body: { key, name, description } }), one<Project>(isProject));
+export const readProject = (api: ServerApi, id: string) =>
+  run(() => api.projects.GET('/projects/{id}', { params: { path: { id } } }), one<Project>(isProject));
+export const updateProject = (api: ServerApi, id: string, etag: string, name: string, description: string | null) =>
+  run(() => api.projects.PUT('/projects/{id}', { params: { path: { id }, ...ifMatch(etag) }, body: { name, description } }), one<Project>(isProject));
+export const listMembers = (api: ServerApi, id: string) =>
+  run(() => api.projects.GET('/projects/{id}/members', { params: { path: { id } } }), listOf<Member>(isMember));
+export const addMember = (api: ServerApi, id: string, etag: string, accountId: string) =>
+  run(() => api.projects.PUT('/projects/{id}/members/{accountId}', { params: { path: { id, accountId }, ...ifMatch(etag) } }), listOf<Member>(isMember));
+export const removeMember = (api: ServerApi, id: string, etag: string, accountId: string) =>
+  run(() => api.projects.DELETE('/projects/{id}/members/{accountId}', { params: { path: { id, accountId }, ...ifMatch(etag) } }), listOf<Member>(isMember));
+
+// ---------------------------------------------------------------- tickets
+
+export interface TicketDraft {
+  readonly type: string;
+  readonly title: string;
+  readonly description?: string | null;
+  readonly assignee?: string | null;
+}
+
+export type TicketChange = Partial<{ title: string; description: string | null; type: string; status: string; assignee: string | null }>;
+
+export const listTickets = (api: ServerApi, projectId: string, before?: number) =>
+  run(() => api.tickets.GET('/projects/{projectId}/tickets', { params: { path: { projectId }, query: { limit: 50, ...(before ? { before } : {}) } } }),
+    listOf<Ticket>(isTicket));
+export const createTicket = (api: ServerApi, projectId: string, draft: TicketDraft) =>
+  run(() => api.tickets.POST('/projects/{projectId}/tickets', { params: { path: { projectId } }, body: draft }), one<Ticket>(isTicket));
+export const readTicket = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tickets.GET('/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }), one<Ticket>(isTicket));
+export const updateTicket = (api: ServerApi, projectId: string, number: number, etag: string, change: TicketChange) =>
+  run(() => api.tickets.PATCH('/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number }, ...ifMatch(etag) }, body: change }),
+    one<Ticket>(isTicket));
+export const readHistory = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tickets.GET('/projects/{projectId}/tickets/{number}/history', { params: { path: { projectId, number } } }),
+    listOf<HistoryEntry>(isHistoryEntry));
+
+// ---------------------------------------------------------------- tags
+
+export const companyTags = (api: ServerApi) => run(() => api.tags.GET('/tags'), listOf<Tag>(isTag));
+export const projectTags = (api: ServerApi, projectId: string) =>
+  run(() => api.tags.GET('/projects/{projectId}/catalog/tags', { params: { path: { projectId } } }), listOf<Tag>(isTag));
+export const createProjectTag = (api: ServerApi, projectId: string, name: string) =>
+  run(() => api.tags.POST('/projects/{projectId}/catalog/tags', { params: { path: { projectId } }, body: { name } }), one<Tag>(isTag));
+export const createCompanyTag = (api: ServerApi, name: string) => run(() => api.tags.POST('/tags', { body: { name } }), one<Tag>(isTag));
+export const ticketTags = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tags.GET('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } } }), listOf<Tag>(isTag));
+export const assignTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
+  run(() => api.tags.POST('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, // The default catalog is not sent; the server reads it only together with a name.
+    body: { tagId } as { tagId: string; catalog: 'project' } }), nothing);
+export const removeTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
+  run(() => api.tags.DELETE('/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
+
+// ---------------------------------------------------------------- search
+
+export interface TicketQuery {
+  readonly q?: string;
+  readonly project?: readonly string[];
+  readonly status?: readonly string[];
+  readonly tag?: readonly string[];
+  readonly offset?: number;
+}
+
+export const searchTickets = (api: ServerApi, query: TicketQuery) =>
+  run(() => api.search.GET('/search/tickets', {
+    params: { query: { ...(query.q ? { q: query.q } : {}), ...(query.project?.length ? { project: [...query.project] } : {}),
+      ...(query.status?.length ? { status: [...query.status] } : {}), ...(query.tag?.length ? { tag: [...query.tag] } : {}),
+      limit: 20, offset: query.offset ?? 0 } },
+    querySerializer: { array: { style: 'form', explode: true } },
+  }), one<{ total: number; items: TicketHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'projectId'))));
+export const searchProjects = (api: ServerApi, q: string) =>
+  run(() => api.search.GET('/search/projects', { params: { query: { q, limit: 20 } } }),
+    one<{ total: number; items: ProjectHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'name'))));
+
+// ---------------------------------------------------------------- groups and rights
+
+export const permissionCatalog = (api: ServerApi) =>
+  run(() => api.permissions.GET('/permissions/catalog'), one<Catalog>((v) => record(v) && Array.isArray(v.companyActions) && Array.isArray(v.projectActions) && Array.isArray(v.fields)));
+export const listGroups = (api: ServerApi) => run(() => api.permissions.GET('/permissions/groups'), listOf<Group>(isGroup));
+export const createGroup = (api: ServerApi, name: string) =>
+  run(() => api.permissions.POST('/permissions/groups', { body: { name } }), one<GroupDetail>(isGroupDetail));
+export const readGroup = (api: ServerApi, groupId: string) =>
+  run(() => api.permissions.GET('/permissions/groups/{groupId}', { params: { path: { groupId } } }), one<GroupDetail>(isGroupDetail));
+
+// A change answers with the group, or with nothing when the person took the right to manage groups from themselves.
+const detailOrNothing = (value: unknown): GroupDetail | 'gone' | null => (value === undefined ? 'gone' : isGroupDetail(value) ? (value as GroupDetail) : null);
+
+export const setGroupMember = (api: ServerApi, groupId: string, accountId: string, enabled: boolean) =>
+  run(() => (enabled
+    ? api.permissions.PUT('/permissions/groups/{groupId}/members/{accountId}', { params: { path: { groupId, accountId } } })
+    : api.permissions.DELETE('/permissions/groups/{groupId}/members/{accountId}', { params: { path: { groupId, accountId } } })), detailOrNothing);
+export const setGroupAction = (api: ServerApi, groupId: string, action: string, projectId: string | null, enabled: boolean) =>
+  run(() => api.permissions.PUT('/permissions/groups/{groupId}/actions', { params: { path: { groupId } }, body: { action, projectId, enabled } }), detailOrNothing);
+export type TicketField = 'title' | 'description' | 'type' | 'status' | 'assignee' | 'tags';
+
+export const setGroupField = (api: ServerApi, groupId: string, field: TicketField, projectId: string | null,
+  operation: 'read' | 'write', effect: 'allow' | 'deny' | 'remove') =>
+  run(() => api.permissions.PUT('/permissions/groups/{groupId}/fields', { params: { path: { groupId } }, body: { resourceType: 'ticket', field, projectId, operation, effect } }), detailOrNothing);
