@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import datetime
+import http.client
 import http.server
 import os
 import random
@@ -9,6 +10,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "demo"))
@@ -104,16 +106,16 @@ class LostAnswerTests(unittest.TestCase):
         self.assertEqual(self.server.seen, [("PATCH", "/api/v1/projects/p/tickets/1")])
 
     def test_change_that_could_not_connect_stays_a_plain_error(self):
-        # Nothing left the client, so the outcome is certain: nothing was saved.
-        port = self.server.server_address[1]
-        self.server.shutdown()
-        self.server.server_close()
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
-        self.server.seen, self.server.drops, self.server.lock, self.server.behavior = [], 0, threading.Lock(), None
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
-        closed = demo.Client(f"http://127.0.0.1:{port}", timeout=2)
-        with self.assertRaises(ConnectionRefusedError):
-            closed.call("POST", "/tags", {"name": "nie"})
+        # Nothing left the client, so the outcome is certain: nothing was saved. Which error a failed connection setup
+        # raises depends on the system (refused on Linux, often a timeout on Windows), so each one is injected here.
+        for failure in (ConnectionRefusedError, TimeoutError, OSError):
+            with self.subTest(failure=failure.__name__):
+                self.client.close()
+                with mock.patch.object(http.client.HTTPConnection, "connect", side_effect=failure("synthetisch")):
+                    with self.assertRaises(failure) as raised:
+                        self.client.call("POST", "/tags", {"name": "nie"})
+                self.assertIs(type(raised.exception), failure, "passed on unchanged, not as an unclear outcome")
+                self.assertEqual(self.server.seen, [])
 
     def test_reading_request_is_repeated_once(self):
         self.server.drops = 1
