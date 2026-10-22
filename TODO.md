@@ -517,7 +517,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** Getrennte KI prüft Image, Compose, Kopfzeilen, Werkzeug und Messverfahren; Holger nimmt mit dem Ablauf aus DEMO.md fachlich ab.
 
-**Nächster Schritt:** Gezielte Nachprüfung von F1 und F2 sowie des Nebenbefunds; danach Abnahme durch Holger.
+**Nachprüfung am 2026-10-22:** PR #137 (codex-20261022-task031-followup-01): im geprüften Umfang technisch abnahmefähig, F1 bis F4 und Nebenbefund geschlossen, kein P1 oder P2. Der verbleibende P3 Befund N1 (abgeschnittene Antwort und Zeitüberschreitung nach einer Änderung wurden nicht als unklarer Ausgang gemeldet) ist behoben, mit drei weiteren Werkzeugtests.
+
+**Nächster Schritt:** Fachliche Abnahme durch Holger mit dem Ablauf aus DEMO.md.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 

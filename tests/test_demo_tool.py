@@ -37,6 +37,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             self.connection.close()
             return
+        if server.behavior == "truncate":
+            # Saved, but the answer stops in the middle of its announced body.
+            self.send_response(201)
+            self.send_header("Content-Length", "100")
+            self.end_headers()
+            self.wfile.write(b'{"id": "12')
+            self.wfile.flush()
+            self.close_connection = True
+            self.connection.close()
+            return
+        if server.behavior == "slow":
+            # Saved, but the answer comes later than the client waits.
+            time.sleep(1.5)
         body = b'{"ok": true}'
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -53,7 +66,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 class LostAnswerTests(unittest.TestCase):
     def setUp(self):
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
-        self.server.seen, self.server.drops, self.server.lock = [], 0, threading.Lock()
+        self.server.seen, self.server.drops, self.server.lock, self.server.behavior = [], 0, threading.Lock(), None
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.client = demo.Client(f"http://127.0.0.1:{self.server.server_address[1]}", timeout=5)
 
@@ -76,6 +89,31 @@ class LostAnswerTests(unittest.TestCase):
                 with self.assertRaises(demo.UnclearOutcome):
                     self.client.call(method, "/x", {"a": 1} if method != "DELETE" else None)
                 self.assertEqual(len(self.server.seen), 1)
+
+    def test_change_with_cut_off_answer_is_unclear_and_not_sent_again(self):
+        self.server.behavior = "truncate"
+        with self.assertRaises(demo.UnclearOutcome):
+            self.client.call("POST", "/tags", {"name": "einmal"})
+        self.assertEqual(self.server.seen, [("POST", "/api/v1/tags")])
+
+    def test_change_answered_too_late_is_unclear_and_not_sent_again(self):
+        self.server.behavior = "slow"
+        self.client.timeout = 0.5
+        with self.assertRaises(demo.UnclearOutcome):
+            self.client.call("PATCH", "/projects/p/tickets/1", {"title": "einmal"})
+        self.assertEqual(self.server.seen, [("PATCH", "/api/v1/projects/p/tickets/1")])
+
+    def test_change_that_could_not_connect_stays_a_plain_error(self):
+        # Nothing left the client, so the outcome is certain: nothing was saved.
+        port = self.server.server_address[1]
+        self.server.shutdown()
+        self.server.server_close()
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self.server.seen, self.server.drops, self.server.lock, self.server.behavior = [], 0, threading.Lock(), None
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        closed = demo.Client(f"http://127.0.0.1:{port}", timeout=2)
+        with self.assertRaises(ConnectionRefusedError):
+            closed.call("POST", "/tags", {"name": "nie"})
 
     def test_reading_request_is_repeated_once(self):
         self.server.drops = 1
