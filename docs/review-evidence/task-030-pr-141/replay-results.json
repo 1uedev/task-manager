@@ -1,0 +1,115 @@
+[
+  {
+    "id": "F1",
+    "result": "PASS",
+    "unchangedVersion": 3,
+    "descriptionChanges": 0,
+    "staleHistoryVisibleWhileLoading": false
+  },
+  {
+    "id": "F2",
+    "result": "PASS",
+    "committedBeforeDelivery": true,
+    "laterInputPreserved": true,
+    "navigationAsked": true,
+    "secondSavePersisted": true
+  },
+  {
+    "id": "F3-project-de-DE",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F3-account-de-DE",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F3-group-de-DE",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F3-project-en-US",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F3-account-en-US",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F3-group-en-US",
+    "result": "PASS",
+    "navigationAsked": true,
+    "cancelledInputRetained": true,
+    "beforeUnloadAsked": true,
+    "successfulCreationWithoutQuestion": true
+  },
+  {
+    "id": "F4",
+    "result": "PASS",
+    "samePageWithoutReload": true,
+    "actualCookieCsrfSequence": [
+      {
+        "method": "DELETE",
+        "path": "/api/v1/session",
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/session",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/session",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/session",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/session",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "id": "F6",
+    "result": "PASS",
+    "freshRights": [],
+    "administrationLinks": 0,
+    "writableTitleInputs": 0
+  },
+  {
+    "id": "F5",
+    "result": "PASS",
+    "status": 503,
+    "code": "permissions.busy",
+    "retryAfter": "1",
+    "correlation": true,
+    "elapsedSeconds": 5.01,
+    "rolledBack": true,
+    "retryAfterRelease": 201
+  }
+]
