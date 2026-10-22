@@ -141,8 +141,9 @@ export function AppearancePage() {
             </p>
             <p className="hint">{t('appearance.contrast.auto')}</p>
             <p className="actions">
-              <button type="button" disabled={!admin || busy || draft === savedAccent || !loaded}
-                onClick={() => loaded && void run(() => changeAccentColor(api, loaded.etag, draft), 'appearance.color.saved')}>
+              {/* An invalid typed value blocks saving: draft still holds the last valid color, which is not what the field shows. */}
+              <button type="button" disabled={!admin || busy || !hexValid || draft === savedAccent || !loaded}
+                onClick={() => loaded && isAccentColor(hex) && void run(() => changeAccentColor(api, loaded.etag, draft), 'appearance.color.saved')}>
                 {t('appearance.save')}
               </button>
               <button type="button" className="secondary" disabled={busy || draft === defaultAccent} onClick={() => choose(defaultAccent)}>

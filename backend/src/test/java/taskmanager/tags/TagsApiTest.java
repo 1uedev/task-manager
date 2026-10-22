@@ -674,6 +674,51 @@ class TagsApiTest {
         }
     }
 
+    @Test
+    void anAssignmentThatWaitedForAFieldChangeCarriesALaterTime() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Reihenfolge");
+        UUID tag = tag(worker, catalog(project), "Später");
+        UUID ticket = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, project.id(), number);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        // A field change holds the ticket row, then writes its entry with the time after its lock (TASK-042 review, F1).
+        Future<?> change = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from ticket where id = ? for update", ticket);
+            locked.countDown();
+            try {
+                assertTrue(release.await(30, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            jdbc.update("update ticket set version = version + 1, title = 'Neu' where id = ?", ticket);
+            jdbc.update("""
+                    insert into ticket_change (ticket_id, version, occurred_at, actor_account_id, field, old_value, new_value)
+                    select id, version, clock_timestamp(), ?, 'title', 'Reihenfolge', 'Neu' from ticket where id = ?
+                    """, worker.id(), ticket);
+        }));
+        assertTrue(locked.await(15, TimeUnit.SECONDS));
+        Future<Response> assign = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("tagId", tag.toString())));
+        assertTrue(waitsAt("select version from ticket"), "the assignment waits at the ticket row");
+        Thread.sleep(300);
+        release.countDown();
+        change.get(30, TimeUnit.SECONDS);
+        assertEquals(204, assign.get(30, TimeUnit.SECONDS).status());
+        var entries = jdbc.queryForList("select version, field, occurred_at from ticket_change where ticket_id = ? order by id", ticket);
+        var field = entries.stream().filter(row -> "title".equals(row.get("field")) && ((Number) row.get("version")).longValue() == 2)
+            .findFirst().orElseThrow();
+        var tagged = entries.getLast();
+        assertEquals("tags", tagged.get("field"));
+        assertEquals(2L, ((Number) tagged.get("version")).longValue());
+        assertFalse(((java.sql.Timestamp) tagged.get("occurred_at")).before((java.sql.Timestamp) field.get("occurred_at")),
+            "the later entry must not carry an earlier time");
+        assertFalse(jdbc.queryForObject("select assigned_at from tag_ticket where ticket_id = ? and tag_id = ?", java.sql.Timestamp.class, ticket, tag)
+            .before((java.sql.Timestamp) field.get("occurred_at")));
+    }
+
     private boolean waitsAt(String statementPart) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {

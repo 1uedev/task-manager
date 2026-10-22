@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Gruppen und Rechte (TASK-030)
-  version: 0.1.0
+  title: Task Manager API, Gruppen und Rechte (TASK-030, TASK-043)
+  version: 0.2.0
   description: |
     Verwaltung der Gruppen, ihrer Mitglieder, Aktionen und Feldregeln des Berechtigungsmoduls (TASK-025, DEC-070). Jeder
     Aufruf verlangt eine vollständige Anmeldung und das Unternehmensrecht `permissions.manage`; fehlt es, ist es veraltet
@@ -15,8 +15,15 @@ info:
     eines Feldes, `remove` entfernt die Regel. Ein Verbot gewinnt über jede Erlaubnis, Schreiben setzt Lesen voraus.
     Maßgeblich sind die Regeln aller Gruppen eines Kontos zusammen.
 
-    Jede Änderung wird protokolliert und erhöht die Rechteversion; Anfragen, die mit der alten Version begonnen haben,
-    werden abgelehnt. Eine Änderung, die kein aktives Konto mit `permissions.manage` übrig ließe, wird mit 409
+    Projektverwaltungen (ein internes Konto mit `permissions.manage` für ein Projekt) lesen die Regeln ihres Projekts über
+    `/permissions/projects/{projectId}/groups` und ändern sie über dieselben Endpunkte wie die Unternehmensverwaltung. Sie
+    vergeben nur Projektaktionen, die sie dort selbst haben, und nur Feldregeln für Felder, die sie dort lesen und schreiben
+    dürfen; `permissions.*` vergeben sie nie. Weil sie die ganze Gruppe nicht lesen dürfen, antwortet eine solche Änderung mit
+    204. Externe Konten verwalten nie Rechte, auch wenn eine Gruppe ihnen `permissions.manage` gibt.
+
+    Jede wirksame Änderung wird protokolliert und erhöht die Rechteversion; Anfragen, die mit der alten Version begonnen
+    haben, werden abgelehnt. Eine Änderung ohne Wirkung (dasselbe Mitglied erneut aufnehmen, eine fehlende Regel entfernen)
+    schreibt nichts: keine neue Version, kein Protokolleintrag. Eine Änderung, die kein aktives Konto mit `permissions.manage` übrig ließe, wird mit 409
     `permissions.last_administrator` abgelehnt. Wartet eine Änderung länger als fünf Sekunden auf die Rechtesperre, antwortet
     der Server mit 503 `permissions.busy` und `Retry-After`; nichts wurde geändert. Änderungen sind wiederholbar: dasselbe
     Setzen zweimal ergibt denselben Zustand. Gruppen können noch nicht umbenannt oder gelöscht werden.
@@ -75,6 +82,7 @@ paths:
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /permissions/groups/{groupId}:
     parameters:
@@ -179,12 +187,19 @@ paths:
   /permissions/audit:
     get:
       operationId: getPermissionAudit
-      summary: Letzte Rechteänderungen (Recht permissions.audit.read)
-      description: Verlangt statt `permissions.manage` das Unternehmensrecht `permissions.audit.read`. Neueste zuerst.
+      summary: Rechteänderungen seitenweise (Recht permissions.audit.read)
+      description: |
+        Verlangt statt `permissions.manage` das Unternehmensrecht `permissions.audit.read`. Neueste zuerst. Die nächste Seite
+        holt `before` mit der kleinsten `rightsVersion` der letzten Seite; eine leere Seite ist das Ende. So ist jeder Eintrag
+        erreichbar, auch jenseits von 100.
       parameters:
         - in: query
           name: limit
           schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - in: query
+          name: before
+          description: Nur Einträge mit kleinerer Rechteversion.
+          schema: {type: integer, minimum: 1}
       responses:
         '200':
           description: Protokoll
@@ -196,6 +211,30 @@ paths:
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /permissions/projects/{projectId}/groups:
+    parameters:
+      - in: path
+        name: projectId
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: getProjectRights
+      summary: Gruppen mit ihren Regeln in einem Projekt (TASK-043)
+      description: |
+        Für die Unternehmensverwaltung und für Projektverwaltungen dieses Projekts. Enthält jede Gruppe des Unternehmens, weil
+        die Projektverwaltung die Regeln jeder Gruppe in ihrem Projekt ändern darf, aber nur deren Regeln für dieses Projekt:
+        keine Mitglieder, keine Unternehmensregeln, keine Regeln anderer Projekte. `actions` und `fields` nennen, was die
+        anfragende Person hier vergeben darf.
+      responses:
+        '200':
+          description: Rechte im Projekt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProjectRights'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
@@ -211,7 +250,9 @@ components:
       schema: {type: string, format: uuid}
   responses:
     RightLost:
-      description: Geändert; die anfragende Person hat damit selbst `permissions.manage` verloren und sieht die Gruppe nicht mehr.
+      description: |
+        Geändert; die anfragende Person darf die ganze Gruppe nicht lesen, weil sie damit selbst `permissions.manage` verloren
+        hat oder nur ein Projekt verwaltet.
     GroupDetail:
       description: Die Gruppe nach der Änderung
       content:
@@ -221,8 +262,10 @@ components:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.required, auth.forbidden,
         auth.password_change_required, permissions.group_not_found, project.not_found, permissions.last_administrator,
+        permissions.group_name_taken (409, Name schon vergeben, ohne Rücksicht auf Groß- und Kleinschreibung),
         permissions.busy (mit Retry-After). Gründe in `violations`: name.invalid, action.unknown, action.company_only,
-        enabled.required, resourceType.unknown, field.unknown, operation.invalid, effect.invalid, limit.out_of_range.
+        enabled.required, resourceType.unknown, field.unknown, operation.invalid, effect.invalid, limit.out_of_range,
+        before.out_of_range.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -313,4 +356,55 @@ components:
         resourceType: {type: [string, 'null']}
         field: {type: [string, 'null']}
         effect: {type: [string, 'null'], enum: [allow, deny, remove, null]}
+        previousEffect:
+          type: [string, 'null']
+          enum: [allow, deny, null]
+          description: Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Eintrag älter als TASK-043 ist.
         rightsVersion: {type: integer}
+    ProjectRights:
+      type: object
+      required: [actions, fields, groups]
+      properties:
+        actions:
+          type: array
+          description: Projektaktionen, die die anfragende Person hier vergeben darf
+          items: {type: string}
+        fields:
+          type: array
+          description: Felder je Objektart, für die sie hier Regeln setzen darf
+          items:
+            type: object
+            required: [resourceType, fields]
+            properties:
+              resourceType: {type: string}
+              fields:
+                type: array
+                items: {type: string}
+        groups:
+          type: array
+          items: {$ref: '#/components/schemas/ProjectGroup'}
+    ProjectGroup:
+      type: object
+      required: [id, name, actions, fields]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        actions:
+          type: array
+          items:
+            type: object
+            required: [action]
+            properties:
+              action: {type: string}
+              projectId: {type: [string, 'null'], format: uuid}
+        fields:
+          type: array
+          items:
+            type: object
+            required: [resourceType, field, operation, effect]
+            properties:
+              resourceType: {type: string}
+              field: {type: string}
+              projectId: {type: [string, 'null'], format: uuid}
+              operation: {type: string, enum: [read, write]}
+              effect: {type: string, enum: [allow, deny]}

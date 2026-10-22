@@ -21,6 +21,12 @@ public interface TicketAccess {
     void recordTagChange(UUID ticketId, Instant occurredAt, UUID actor, UUID removed, UUID added);
 
     /**
+     * Locks the ticket row {@code FOR SHARE} until the commit, as {@link #recordTagChange} does, but before the caller takes
+     * the time of its change (TASK-043): a change that waited for a field change then carries a time after it.
+     */
+    void lockForTagChange(UUID ticketId);
+
+    /**
      * Every ticket of the company with its five fields, to rebuild a projection (TASK-029). Needs a transaction; the fields
      * must not be shown without the read rules of the reader.
      */

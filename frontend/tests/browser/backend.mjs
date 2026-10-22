@@ -47,6 +47,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         fields: ['title', 'type', 'status', 'assignee', TAG_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
     appearance: { version: 3, accent, logo: null },
+    // The rights log, newest last; pages are cut by rightsVersion like on the server.
+    audit: [],
     requests: [],
   };
 
@@ -189,7 +191,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         .map((item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, tags: [] }));
       return ok({ total: items.length, items });
     }
-    if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body);
+    if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body, query);
     return problem(404, 'resource.not_found');
   }
 
@@ -260,12 +262,37 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return problem(404, 'resource.not_found');
   }
 
-  function permissionsRoute(account, session, method, p, body) {
-    if (!may(account, 'permissions.manage')) return problem(403, 'auth.forbidden');
+  // A project administration: permissions.manage for this one project, as a member of it (TASK-043).
+  const managesProject = (account, projectId) => may(account, 'permissions.manage') || (isMember(account, projectId)
+    && groupsOf(account).some((group) => group.actions.some((rule) => rule.action === 'permissions.manage' && rule.projectId === projectId)));
+
+  function permissionsRoute(account, session, method, p, body, query) {
+    if (p === '/permissions/audit' && method === 'GET') {
+      if (!companyRights(account).includes('permissions.audit.read')) return problem(403, 'auth.forbidden');
+      const before = Number(query.get('before') ?? Infinity);
+      const limit = Number(query.get('limit') ?? 50);
+      return ok(state.audit.filter((entry) => entry.rightsVersion < before).sort((a, b) => b.rightsVersion - a.rightsVersion).slice(0, limit));
+    }
+    const projectRights = p.match(/^\/permissions\/projects\/([^/]+)\/groups$/);
+    if (projectRights && method === 'GET') {
+      const projectId = projectRights[1];
+      if (!managesProject(account, projectId)) return problem(403, 'auth.forbidden');
+      const company = may(account, 'permissions.manage');
+      return ok({
+        actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
+        fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD].sort().filter((name) => company || field(account, projectId, name, 'write')) }],
+        groups: state.groups.map((group) => ({ id: group.id, name: group.name,
+          actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
+          fields: group.fields.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })) })),
+      });
+    }
+    const delegated = method === 'PUT' && /^\/permissions\/groups\/[^/]+\/(actions|fields)$/.test(p) && body?.projectId && managesProject(account, body.projectId);
+    if (!may(account, 'permissions.manage') && !delegated) return problem(403, 'auth.forbidden');
     const detail = (group) => ({ id: group.id, name: group.name, members: [...group.members], actions: group.actions.map((rule) => ({ ...rule })), fields: group.fields.map((rule) => ({ ...rule })) });
     if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD].sort() }] });
     if (p === '/permissions/groups' && method === 'GET') return ok(state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
     if (p === '/permissions/groups' && method === 'POST') {
+      if (state.groups.some((entry) => entry.name.toLowerCase() === body.name.toLowerCase())) return problem(409, 'permissions.group_name_taken');
       const group = { id: uuid(), name: body.name, members: [], actions: [], fields: [] };
       state.groups.push(group);
       return ok(detail(group));

@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import {
-  addMember, companyTags, createProjectTag, createTicket, listMembers, listTickets, projectTags, readProject, removeMember,
-  updateProject, type Member, type Project, type Ticket,
+  addMember, companyTags, createProjectTag, createTicket, listMembers, listTickets, projectTags, readProject, readProjectRights,
+  removeMember, updateProject, type Member, type Project, type Ticket,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
@@ -11,8 +11,11 @@ import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, us
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
+import { ProjectRightsTab } from './ProjectRights.tsx';
 
-const TAB_LABEL: Record<ProjectTab, MessageKey> = { tickets: 'project.tab.tickets', members: 'project.tab.members', tags: 'project.tab.tags', settings: 'project.tab.settings' };
+const TAB_LABEL: Record<ProjectTab, MessageKey> = {
+  tickets: 'project.tab.tickets', members: 'project.tab.members', tags: 'project.tab.tags', settings: 'project.tab.settings', rights: 'project.tab.rights',
+};
 
 export function statusName(project: Project, key: string | null | undefined): string {
   return project.configuration.statuses.find((status) => status.key === key)?.name ?? key ?? '';
@@ -27,6 +30,8 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
   const { t } = useI18n();
   const { api } = useBrand();
   const [project, reload, replace] = useLoad(() => readProject(api, id), [api, id]);
+  // Only the company administration and a project administration of this project get an answer; for everyone else the tab stays away.
+  const [rights, reloadRights] = useLoad(() => readProjectRights(api, id), [api, id]);
 
   return (
     <LoadedView loaded={project} retry={reload}>
@@ -34,7 +39,8 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
         <>
           <PageHead title={`${value.key} · ${value.name}`} intro={value.description ?? undefined} />
           <nav className="tabs" aria-label={t('project.tabs')}>
-            {(['tickets', 'members', 'tags', 'settings'] as const).filter((name) => name !== 'settings' || value.manageable).map((name) => (
+            {(['tickets', 'members', 'tags', 'settings', 'rights'] as const)
+              .filter((name) => (name !== 'settings' || value.manageable) && (name !== 'rights' || rights.state === 'ok')).map((name) => (
               <a key={name} href={hrefFor({ name: 'project', id, tab: name })} aria-current={name === tab ? 'page' : undefined}>{t(TAB_LABEL[name])}</a>
             ))}
           </nav>
@@ -44,6 +50,7 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
           {tab === 'settings' && value.manageable && etag !== null && (
             <SettingsTab project={value} etag={etag} onSaved={(next, nextEtag) => replace({ value: next, etag: nextEtag })} />
           )}
+          {tab === 'rights' && rights.state === 'ok' && <ProjectRightsTab projectId={id} rights={rights.value} reload={reloadRights} />}
         </>
       )}
     </LoadedView>

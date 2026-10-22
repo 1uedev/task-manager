@@ -195,6 +195,8 @@ public class TagService {
     public void assignTicket(AccessContext actor, UUID projectId, long number, Target target) {
         UUID ticket = changeableTicket(actor, projectId, number);
         Tag tag = resolve(actor, projectId, target, false);
+        // Ticket after tag, as DEC-068 orders the locks; the time is read only once the ticket row is held (TASK-043).
+        tickets.lockForTagChange(ticket);
         Instant now = clock.instant();
         if (tags.assignTicket(ticket, tag.id(), projectId, now, actor.userId())) {
             tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), now);
@@ -207,6 +209,7 @@ public class TagService {
     public void unassignTicket(AccessContext actor, UUID projectId, long number, UUID tagId) {
         UUID ticket = changeableTicket(actor, projectId, number);
         if (tags.unassignTicket(ticket, tagId)) {
+            tickets.lockForTagChange(ticket);
             Instant now = clock.instant();
             tags.audit(actor.companyId(), tagId, "tag.unassigned", "ticket", ticket, null, actor.userId(), now);
             tickets.recordTagChange(ticket, now, actor.userId(), tagId, null);

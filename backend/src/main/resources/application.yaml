@@ -6,6 +6,11 @@ spring:
     url: ${TASK_MANAGER_DB_URL}
     username: ${TASK_MANAGER_DB_USER}
     password: ${TASK_MANAGER_DB_PASSWORD}
+    hikari:
+      # Every connection waits at most five seconds for a row lock; the modules answer that as retryable (busy). Until
+      # TASK-043 this limit leaked from the rights check into the rest of each transaction; now it is the session default
+      # and the rights check only puts it back after its own lock waits.
+      connection-init-sql: SET lock_timeout = '5s'
   jpa:
     open-in-view: false
     hibernate:

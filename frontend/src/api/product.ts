@@ -25,6 +25,9 @@ export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
 export type Group = PermissionTypes['schemas']['Group'];
 export type GroupDetail = PermissionTypes['schemas']['GroupDetail'];
 export type Catalog = PermissionTypes['schemas']['Catalog'];
+export type AuditEntry = PermissionTypes['schemas']['AuditEntry'];
+export type ProjectRights = PermissionTypes['schemas']['ProjectRights'];
+export type ProjectGroup = PermissionTypes['schemas']['ProjectGroup'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -222,6 +225,17 @@ export const setGroupMember = (api: ServerApi, groupId: string, accountId: strin
 export const setGroupAction = (api: ServerApi, groupId: string, action: string, projectId: string | null, enabled: boolean) =>
   run(() => api.permissions.PUT('/permissions/groups/{groupId}/actions', { params: { path: { groupId } }, body: { action, projectId, enabled } }), detailOrNothing);
 export type TicketField = 'title' | 'description' | 'type' | 'status' | 'assignee' | 'tags';
+
+export const AUDIT_PAGE = 50;
+const isAuditEntry = (v: unknown) => hasStrings(v, 'id', 'actorId', 'occurredAt', 'operation') && typeof (v as AuditEntry).rightsVersion === 'number';
+// Newest first; the next page starts below the lowest rights version of the previous one (TASK-043).
+export const readAudit = (api: ServerApi, before: number | null) =>
+  run(() => api.permissions.GET('/permissions/audit', { params: { query: { limit: AUDIT_PAGE, ...(before === null ? {} : { before }) } } }),
+    listOf<AuditEntry>(isAuditEntry));
+export const readProjectRights = (api: ServerApi, projectId: string) =>
+  run(() => api.permissions.GET('/permissions/projects/{projectId}/groups', { params: { path: { projectId } } }),
+    one<ProjectRights>((v) => record(v) && Array.isArray(v.actions) && Array.isArray(v.fields) && Array.isArray(v.groups)
+      && v.groups.every((group) => isGroup(group) && Array.isArray((group as ProjectGroup).actions) && Array.isArray((group as ProjectGroup).fields))));
 
 export const setGroupField = (api: ServerApi, groupId: string, field: TicketField, projectId: string | null,
   operation: 'read' | 'write', effect: 'allow' | 'deny' | 'remove') =>

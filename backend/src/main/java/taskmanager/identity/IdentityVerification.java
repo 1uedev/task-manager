@@ -1,5 +1,7 @@
 package taskmanager.identity;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -17,6 +19,12 @@ public interface IdentityVerification {
      * the account is active and has no pending forced password change. Both rows stay locked until the commit.
      */
     boolean isCurrentFullSession(UUID accountId, UUID sessionId);
+
+    /**
+     * The same check as {@link #isCurrentFullSession}, with the end of the session period when it passes: the earlier of the
+     * stored end and the start plus the current session duration. Empty when the check fails (TASK-043).
+     */
+    Optional<Instant> currentFullSessionEnd(UUID accountId, UUID sessionId);
 
     /** True if an account with this identifier exists, active or not. The row stays locked until the commit. */
     boolean accountExists(UUID accountId);
