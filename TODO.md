@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-043](#task-043-rechtekern-härten) | Rechtekern härten | claude-20261022-hardening-01 | 2026-10-22 |
 
 ### Blockiert – BLOCKIERT
 
@@ -516,3 +518,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-043 Rechtekern härten
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261022-hardening-01 · **Aktualisiert:** 2026-10-22
+
+**Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001. **Abhängigkeiten:** TASK-025, TASK-039 bis TASK-042 und TASK-030 (alle abgenommen). **Arbeitsstand:** Holger hat am 22. Oktober 2026 im Projektgespräch mit „ich nehme deinen vorschlag“ die vorgeschlagene Reihenfolge der V1 Pakete ([Vorschlag](https://claude.ai/artifact/PpdVLPknatE17QzZiSmbbc)) gewählt; Paket 1 ist die Härtung des Rechtekerns. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-072, Migrationen ab V0016. Die Reihenfolge der übrigen Pakete wird mit DEC-072 festgehalten; sie startet keines davon.
+
+**Umfang:** (1) P2 bis P6 der Gegenprüfung von TASK-025 (docs/REVIEW_TASK-025_PR-74.md): Rechteprotokoll blätterbar mit Vorgängerwert (P2), keine Verwaltungsbefugnis für externe Konten (P3), doppelter Gruppenname als Fachfehler und dokumentierte wiederholbare Sperrfehler (P4), Sperrzeitgrenze nur für die Rechteprüfung (P5), wirkungslose Änderungen ohne neue Rechteversion und ohne Protokoll (P6). (2) Rechteprüfung zum Commit Zeitpunkt zusätzlich zur Prüfung beim Sperren, für Änderungen der Fachmodule. (3) Eingeschränkter Lesepfad, über den Projektverwaltungen Gruppen für die Delegation sehen, ohne `permissions.manage` des Unternehmens. (4) Restpunkte F1 bis F3 der Gegenprüfung von TASK-036 (PR #96) und F1 der Prüfung von TASK-042 (PR #124), soweit noch offen. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: alle Punkte nach den Vorschlägen der jeweiligen Berichte. Nicht Teil: neue Fachmodule, Portal, LDAP, Projektkonfiguration (A2).
+
+**Schnittstellen und Arbeitsbereich:** Berechtigungsmodul, Adapter am Anwendungseinstieg, Rechtecontroller, Erscheinungsbild und Tagmodul für die Restpunkte, Verträge `contracts/permissions.openapi.yaml` und betroffene Fachverträge, Oberfläche nur für Protokoll und Gruppenlesepfad, Tests.
+
+**Abnahmekriterien:** Jeder umgesetzte Punkt hat eine Regression, die ohne Korrektur fehlschlägt; ein zwischen Sperre und Commit entzogenes Recht verhindert die Änderung; Projektverwaltungen sehen nur die Gruppen, die sie delegieren dürfen; das Protokoll ist über 100 Einträge hinaus erreichbar. Getrennte KI prüft Rechtegrenzen und Nebenläufigkeit; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-072 als Ergebnis PR übergeben.
