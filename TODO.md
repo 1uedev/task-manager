@@ -60,7 +60,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-21 |
+| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-22 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -499,7 +499,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-21
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-22
 
 **Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** Beauftragt von Holger am 21. Oktober 2026 zusammen mit TASK-030 („Ja mach mit beiden tasks weiter“). Beginnt fachlich nach TASK-030, das Image kann vorher entstehen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-071. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: ein Image mit Backend und ausgelieferter Oberfläche, Docker Compose mit PostgreSQL und benanntem Volume, Konfiguration nur über Umgebungsvariablen ohne Standardkennwörter, Ersteinrichtung über `bootstrap-admin`, ein Befehl für synthetische Demodaten. Messprofil: der Referenzbestand aus OPERATIONS.md (20 Projekte, 90.000 Tickets, 100 Konten) synthetisch erzeugt, 15 gleichzeitige Benutzer mit dem Suchanteil aus OPERATIONS.md und TAGS_SEARCH.md, Auswertung je Messklasse mit p50 und p95 gegen die vorgeschlagenen Ziele auf der dokumentierten Messmaschine, ohne Zusage für die Referenzhardware. Nachweise zu den zehn geplanten Punkten aus DEVELOPMENT_START.md. Nicht Teil: TLS, Sicherung und Wiederherstellung, Hochverfügbarkeit, Veröffentlichung des Images.
 
@@ -513,9 +513,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Eigenprüfung am 2026-10-21:** Image lokal aus vorab gebautem Archiv gebaut (der mehrstufige Build braucht Netzzugriff, der in der Sitzung nicht für Container freigegeben ist; er läuft im Workflow `Image`). `image-check.sh` lokal grün: Ablehnung ohne Einstellungen, erster Start mit Healthcheck, Kopfzeilen, Demodaten, zwölf Prüfungen von `verify`, Neustart mit erhaltenen Daten und gleichem Sitzungsende. Browserlauf gegen das Image ohne CSP Verstoß. Backendtest `WebInterfaceHeadersTest` neu. Repository-Validator, Aufgabenübersicht, Regressionstests und `git diff --check` erfolgreich.
 
+**Nachbesserung am 2026-10-22:** Unabhängige Prüfung in PR #135 (codex-20261022-task031-review-01) mit F1 und F2 (P2) sowie F3 und F4 (P3); alle vier behoben, Nachtrag zu DEC-071. Komplexe Suche in eine Klasse mit Treffern aus sichtbaren Tickets und eine selektive Klasse geteilt, Trefferzahl je Suche erfasst (F1). Keine automatische Wiederholung von Änderungen nach verlorener Antwort, sondern unklarer Ausgang (F2). Sitzungsfrist in UTC (F3). Ticketänderung als Speichern mit Vergleichswert 1 s und als ganze Aktion gemessen (F4). Wortlaut zu 101 Konten und aggregierten Ergebnissen korrigiert. Nebenbefund der Nachmessung behoben: Der Neuaufbau der Suchprojektion scheiterte ab 65.535 Tickets, der Server startete auf dem Referenzbestand nicht neu. Nachmessung mit 15 Sitzungen: alle Ziele eingehalten, komplexe Suche mit Treffern in 113 von 113 Fällen mit Treffer, p95 43 ms. Geprüft: zehn neue Werkzeugtests unter `tests/`, neuer Backendtest mit 70.000 Tickets (ohne Korrektur rot), alle 207 Backendtests, Repository-Validator, Aufgabenübersicht und `git diff --check`.
+
 **Übergabe:** Getrennte KI prüft Image, Compose, Kopfzeilen, Werkzeug und Messverfahren; Holger nimmt mit dem Ablauf aus DEMO.md fachlich ab.
 
-**Nächster Schritt:** Getrennte KI Prüfung von TASK-031; danach Abnahme durch Holger.
+**Nächster Schritt:** Gezielte Nachprüfung von F1 und F2 sowie des Nebenbefunds; danach Abnahme durch Holger.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 

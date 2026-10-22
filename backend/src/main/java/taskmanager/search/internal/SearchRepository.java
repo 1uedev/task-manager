@@ -145,9 +145,16 @@ class SearchRepository {
         jdbc.sql("delete from search_tag where company_id = ?").param(companyId).update();
     }
 
+    /**
+     * Fills the tag terms of every ticket and project of the company in one statement each. Only a rebuild calls this,
+     * with all projection tables already locked; a list of identifiers would exceed the 65,535 parameters PostgreSQL
+     * accepts in one statement for a stock such as the 90,000 tickets of the reference profile.
+     */
     void refreshCompany(UUID companyId) {
-        refreshTickets(jdbc.sql("select ticket_id from search_ticket where company_id = ?").param(companyId).query(UUID.class).list());
-        refreshProjects(jdbc.sql("select project_id from search_project where company_id = ?").param(companyId).query(UUID.class).list());
+        jdbc.sql("update search_ticket s set tags_text = " + TAG_NAMES.formatted("search_ticket_tag", "ticket_id", "ticket_id")
+            + " where s.company_id = ?").param(companyId).update();
+        jdbc.sql("update search_project s set tags_text = " + TAG_NAMES.formatted("search_project_tag", "project_id", "project_id")
+            + " where s.company_id = ?").param(companyId).update();
     }
 
     /** The identifiers of the tags among {@code ids} in the company catalog or in one of the given project catalogs. */

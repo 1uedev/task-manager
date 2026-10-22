@@ -576,6 +576,24 @@ class SearchApiTest {
         assertEquals(List.of(key), keys(worker, "q=" + token));
     }
 
+    @Test
+    void aRebuildCopesWithMoreTicketsThanOneStatementTakesParameters() {
+        Person worker = person();
+        Project project = project(worker);
+        UUID company = companies.find().orElseThrow();
+        // 70,000 tickets exceed the 65,535 parameters of one PostgreSQL statement; the reference profile has 90,000.
+        int many = 70_000;
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("insert into ticket (id, company_id, project_id, number, title, type, status, configuration_version, "
+                + "version, created_at, created_by, updated_at, updated_by) select gen_random_uuid(), ?, ?, n, 'Masse ' || n, "
+                + "'task', 'new', 1, 1, now(), ?, now(), ? from generate_series(1, ?) n",
+                company, project.id(), worker.id(), worker.id(), many);
+            projection.rebuild(company);
+            assertEquals(many, jdbc.queryForObject("select count(*) from search_ticket where project_id = ?", Long.class, project.id()));
+            status.setRollbackOnly();
+        });
+    }
+
     // ---------------------------------------------------------------- projects
 
     @Test
