@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -59,7 +59,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-22 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -479,22 +478,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein mittlerer Befund (fehlender Negativtest für die Transaktionspflicht) und mehrere niedrige Befunde und Hinweise zur Übergabe an TASK-022/TASK-023. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die qualifizierte Werkzeugbasis und die gemeinsamen Vertragsregeln. Danach können TASK-022 (Backend-/PostgreSQL-Grundlage) und TASK-023 (React-Grundfläche) mit benannten Grenzen beauftragt werden; benötigte Browser-/Betriebsdetails sind vorher festzuhalten. Sie bleiben bis dahin BLOCKIERT und unbesetzt. TASK-021 bleibt zur Prüfung in TODO.md.
-
-## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-ui-01 · **Aktualisiert:** 2026-10-22
-
-**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** Holger hat am 21. Oktober 2026 im Projektgespräch mit „Ja mach mit beiden tasks weiter“ TASK-030 und TASK-031 beauftragt, auf den Hinweis, dass beide als Nächstes seinen Auftrag brauchen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-070 und Migrationen ab V0016. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Umsetzung in zwei Ergebnis PRs. Teil 1 im Backend: Verwaltungsendpunkte des Berechtigungsmoduls für frei anlegbare Gruppen, Mitglieder, Aktionen je Projekt oder Unternehmen und Feldregeln Lesen und Schreiben, geschützt durch das vorhandene Recht `permissions.manage`, mit Vertrag und Tests; dazu fehlende Lesewege, die die Oberfläche braucht. Teil 2 in der Oberfläche: Anmeldung mit Pflichtwechsel, Kontoverwaltung mit Einmalpasswort, Projekte mit Mitgliedern, Ticketliste, Anlage und Bearbeitung mit Feldrechten und Versionskonflikt, Tags, Suche und Gruppenverwaltung, Deutsch und Englisch, mit Browserprüfung zweier unterschiedlich berechtigter Benutzer. Keine festen Rollen, Fachregeln bleiben serverseitig. Nicht Teil: Kanban, Portal, LDAP, Wiki, Anforderungen.
-
-**Umfang:** Administrative lokale Kontoanlage, Anmeldung mit Pflichtwechsel, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Frontend-Fachansichten und Browserprüfungen. Backendänderungsbedarf als koordinierte Vertragskorrektur übergeben; keine unabhängigen API-Sonderwege. Keine echten Kundendaten in Beispielen.
-
-**Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
-
-**Übergabe:** Teil 1 (Backend, PR #132) ist auf main. Teil 2 (Oberfläche, DEC-070 Nachtrag 8 bis 13) liegt als Ergebnis PR vor: Anmeldung mit Pflichtwechsel, Konten, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte, Deutsch und Englisch. Nachweise: Unit-Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Die unabhängige Prüfung (docs/REVIEW_TASK-030_PR-133.md) fand F1 bis F6; die Nachbesserung behebt alle sechs mit je einer Regression (DEC-070 Nachtrag 14). Offen sind die Nachprüfung und Holgers Abnahme.
-
-**Nächster Schritt:** Nachprüfung der Befunde F1 bis F6; danach Abnahme durch Holger.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 

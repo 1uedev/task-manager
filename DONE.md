@@ -131,6 +131,24 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
+
+**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001, REQ-ACL-001, REQ-ACL-003. **Verantwortlich:** claude-20261021-ui-01. **Abgeschlossen:** 2026-10-22.
+
+**Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
+
+**Ergebnis:** DEC-070. Teil 1 im Backend (PR #132): Gruppen, Mitglieder, Aktionen je Unternehmen oder Projekt und Feldregeln werden über `/api/v1/permissions` mit dem Recht `permissions.manage` verwaltet, das Protokoll mit `permissions.audit.read`; Schutz der letzten Verwaltung (409 `permissions.last_administrator`), Kontoverzeichnis `GET /api/v1/directory/accounts`, Verträge `contracts/permissions.openapi.yaml` und Ergänzungen in `contracts/identity.openapi.yaml`, keine Migration. Teil 2 in der Oberfläche (PR #133, DEC-070 Nachtrag 8 bis 13): Anmeldung mit Pflichtwechsel des Einmalpassworts, Konten mit Einmalpasswort, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte sowie Erscheinungsbild, in Deutsch und Englisch; Schutz ungespeicherter Eingaben und Rückkehr zur Anmeldung bei Sitzungsende. Nachbesserung nach unabhängiger Prüfung (PR #141, DEC-070 Nachtrag 14): Historie und Tags laden nach einer Ablehnung beim Speichern neu (F1), Eingaben während einer Speicherung bleiben erhalten (F2), Anlegeformulare fragen vor dem Verlassen (F3), nach der Abmeldung wird das CSRF Cookie neu ausgestellt (F4), Sperrfehler der Rechteverwaltung antworten mit 503 `permissions.busy` (F5), jede 403 Antwort liest die Rechte der Sitzung neu (F6). Der Test des Demowerkzeugs zu Verbindungsfehlern läuft seit PR #143 systemunabhängig (H1 der Nachprüfung).
+
+**Prüfungen:** Eigenprüfung: Unit Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Nach der Nachbesserung lokal 208 Backendtests gegen PostgreSQL 16, 68 Unit Tests und 67 Browsertests, davon sieben neue Regressionen, die ohne Korrektur rot waren; Backendtest `aRightsLockNotGrantedInTimeAnswersRetryableBusy` mit echter Sperre. CI mit Backend, Frontend, Qualifikation, Repository Prüfungen und Workflow `Image` grün auf PR #132, #133, #141 und #143.
+
+**Review:** Unabhängige Prüfung durch Codex (Bericht `docs/REVIEW_TASK-030_PR-133.md` in PR #140): F1 bis F5 (P2) und F6 (P3), Rechteendpunkte, Verzeichnis, letzte Verwaltung, verborgene Felder und Versionskonflikt ohne Befund. Nachprüfung durch Codex (codex-20261022-task030-followup-01, Bericht `docs/REVIEW_TASK-030_PR-141.md` in PR #142): F1 bis F6 im nachgespielten Umfang mit elf Gegenproben am echten Backend behoben, technisch abnahmefähig, kein neuer P1 oder P2; der Hinweis H1 (P3, Demotest unter Windows) ist mit PR #143 behoben, ohne weitere Nachprüfung.
+
+**Abnahme:** Holger, 2026-10-22, im Projektgespräch („030 ist abgenommen“ nach dem Merge von PR #142 und #143); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Projektkonfiguration nur lesend; Gruppen lassen sich nicht umbenennen oder löschen; kein Bildschirm für das Rechteprotokoll. (2) Die Ticketanlage wird angeboten, weil die Projektantwort keine Projektaktionen nennt; der Server lehnt ohne Recht ab. (3) Suche ohne zusätzliche Fachfilter in der Oberfläche; Board bleibt Vorschau mit Beispieldaten. (4) Jede 403 Antwort löst eine zusätzliche Sitzungsabfrage aus, auch erwartete. (5) Kein Kanban, Portal, LDAP, Wiki und keine Anforderungen.
+
+**Referenz:** Reservierung #131, Teil 1 #132 (4cbb0c9), Teil 2 #133 (58ffc87), Prüfbericht #140, Nachbesserung #141 (a8489bc), Nachprüfung #142, Korrektur H1 #143 (97633a9); verknüpft mit TASK-029, TASK-031, DEC-070.
+
 ## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
 
 **Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Verantwortlich:** claude-20261021-demo-01. **Abgeschlossen:** 2026-10-22.
