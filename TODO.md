@@ -59,7 +59,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
+| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-22 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -482,7 +482,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-ui-01 · **Aktualisiert:** 2026-10-21
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-ui-01 · **Aktualisiert:** 2026-10-22
 
 **Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** Holger hat am 21. Oktober 2026 im Projektgespräch mit „Ja mach mit beiden tasks weiter“ TASK-030 und TASK-031 beauftragt, auf den Hinweis, dass beide als Nächstes seinen Auftrag brauchen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-070 und Migrationen ab V0016. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Umsetzung in zwei Ergebnis PRs. Teil 1 im Backend: Verwaltungsendpunkte des Berechtigungsmoduls für frei anlegbare Gruppen, Mitglieder, Aktionen je Projekt oder Unternehmen und Feldregeln Lesen und Schreiben, geschützt durch das vorhandene Recht `permissions.manage`, mit Vertrag und Tests; dazu fehlende Lesewege, die die Oberfläche braucht. Teil 2 in der Oberfläche: Anmeldung mit Pflichtwechsel, Kontoverwaltung mit Einmalpasswort, Projekte mit Mitgliedern, Ticketliste, Anlage und Bearbeitung mit Feldrechten und Versionskonflikt, Tags, Suche und Gruppenverwaltung, Deutsch und Englisch, mit Browserprüfung zweier unterschiedlich berechtigter Benutzer. Keine festen Rollen, Fachregeln bleiben serverseitig. Nicht Teil: Kanban, Portal, LDAP, Wiki, Anforderungen.
 
@@ -492,9 +492,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
 
-**Übergabe:** Teil 1 (Backend, PR #132) ist auf main. Teil 2 (Oberfläche, DEC-070 Nachtrag 8 bis 13) liegt als Ergebnis PR vor: Anmeldung mit Pflichtwechsel, Konten, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte, Deutsch und Englisch. Nachweise: Unit-Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Offen sind die getrennte KI Prüfung von Teil 1 und Teil 2 und Holgers Abnahme.
+**Übergabe:** Teil 1 (Backend, PR #132) ist auf main. Teil 2 (Oberfläche, DEC-070 Nachtrag 8 bis 13) liegt als Ergebnis PR vor: Anmeldung mit Pflichtwechsel, Konten, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte, Deutsch und Englisch. Nachweise: Unit-Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Die unabhängige Prüfung (docs/REVIEW_TASK-030_PR-133.md) fand F1 bis F6; die Nachbesserung behebt alle sechs mit je einer Regression (DEC-070 Nachtrag 14). Offen sind die Nachprüfung und Holgers Abnahme.
 
-**Nächster Schritt:** Getrennte KI Prüfung von Ablauf und sichtbaren Grenzen; danach Abnahme durch Holger.
+**Nächster Schritt:** Nachprüfung der Befunde F1 bis F6; danach Abnahme durch Holger.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 

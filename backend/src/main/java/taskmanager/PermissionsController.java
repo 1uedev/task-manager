@@ -1,5 +1,6 @@
 package taskmanager;
 
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,7 @@ import taskmanager.projects.ProjectAccess;
 @RestController
 @RequestMapping("/api/v1/permissions")
 class PermissionsController {
+    private static final Set<String> RETRYABLE_STATES = Set.of("55P03", "40P01", "40001");
     static final String TICKET = "ticket";
     /** Company wide only: no project can narrow them. */
     static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "permissions.audit.read",
@@ -268,8 +270,11 @@ class PermissionsController {
             return transaction.execute(status -> work.apply(actor));
         } catch (PermissionDenied denied) {
             throw forbidden();
-        } catch (PessimisticLockingFailureException busy) {
-            throw busy();
+        } catch (RuntimeException failure) {
+            if (retryable(failure)) {
+                throw busy();
+            }
+            throw failure;
         }
     }
 
@@ -281,14 +286,17 @@ class PermissionsController {
                 return transaction.execute(status -> work.apply(current));
             } catch (LastAdministration last) {
                 throw ApiProblemException.of(409, "permissions.last_administrator");
-            } catch (PessimisticLockingFailureException busy) {
-                throw busy();
             } catch (PermissionDenied denied) {
                 AccessContext fresh = attempt == 1 ? contexts.current().orElse(null) : null;
                 if (fresh == null || fresh.rightsVersion() == actor.rightsVersion()) {
                     throw forbidden();
                 }
                 actor = fresh;
+            } catch (RuntimeException failure) {
+                if (retryable(failure)) {
+                    throw busy();
+                }
+                throw failure;
             }
         }
     }
@@ -317,6 +325,21 @@ class PermissionsController {
             }
         }
         return null;
+    }
+
+    /**
+     * A lock timeout (55P03), deadlock (40P01) or serialization failure (40001), wherever in the cause chain the driver puts
+     * it; Spring does not translate every lock timeout into {@link PessimisticLockingFailureException}. Other SQL errors stay
+     * internal errors.
+     */
+    private static boolean retryable(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof PessimisticLockingFailureException
+                    || (cause instanceof SQLException sql && RETRYABLE_STATES.contains(sql.getSQLState()))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A lock was not granted in time (the rights lock waits at most five seconds); nothing changed, the call may be repeated. */

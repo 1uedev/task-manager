@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { onSessionLost, readSession, type SessionState } from '../api/client.ts';
+import { onForbidden, onSessionLost, readSession, type SessionState } from '../api/client.ts';
 import { logout as endSession, readDirectory, type DirectoryEntry } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 
@@ -40,7 +40,13 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
 
   useEffect(() => {
     void refresh();
-    return onSessionLost(() => setView({ state: 'anonymous', reason: 'expired' }));
+    const stopLost = onSessionLost(() => setView({ state: 'anonymous', reason: 'expired' }));
+    // A refusal means the rights may have changed; the navigation and every offered action follow the fresh state.
+    const stopForbidden = onForbidden(() => void refresh());
+    return () => {
+      stopLost();
+      stopForbidden();
+    };
   }, [refresh]);
 
   // The company appearance needs a complete login; it is loaded again whenever the login changes.
@@ -61,8 +67,11 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
     return () => abort.abort();
   }, [api, ready, directoryRound]);
 
+  // Logging out also removes the CSRF cookie. GET /session issues a new one for the anonymous session before the login
+  // form is shown again, whatever stage the login had reached; otherwise the next login would be refused.
   const signOut = useCallback(async () => {
     await endSession(api);
+    await readSession(api);
     setView({ state: 'anonymous', reason: 'loggedOut' });
   }, [api]);
 

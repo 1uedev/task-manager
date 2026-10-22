@@ -32,6 +32,9 @@ export function TicketPage({ projectId, number }: { readonly projectId: string; 
   const [project, reloadProject] = useLoad(() => readProject(api, projectId), [api, projectId]);
   const [ticket, reloadTicket, replaceTicket] = useLoad(() => readTicket(api, projectId, number), [api, projectId, number]);
   const [round, setRound] = useState(0);
+  // Counts refusals: after one the rights may have changed, so tags and history are loaded again from scratch and their old
+  // content is not shown meanwhile, even though the ticket version stayed the same (finding F1 of the review of TASK-030).
+  const [refusals, setRefusals] = useState(0);
 
   return (
     <LoadedView loaded={project} retry={reloadProject}>
@@ -39,9 +42,14 @@ export function TicketPage({ projectId, number }: { readonly projectId: string; 
         <LoadedView loaded={ticket} retry={reloadTicket}>
           {(ticketValue, etag) => (
             <TicketView key={ticketValue.id} project={projectValue} ticket={ticketValue} etag={etag ?? `"${ticketValue.version}"`} round={round}
+              refusals={refusals}
               onChanged={(next, nextEtag) => {
                 replaceTicket({ value: next, etag: nextEtag });
                 setRound((value) => value + 1);
+              }}
+              onRefused={() => {
+                reloadTicket();
+                setRefusals((value) => value + 1);
               }}
               reloadTicket={reloadTicket} />
           )}
@@ -51,18 +59,21 @@ export function TicketPage({ projectId, number }: { readonly projectId: string; 
   );
 }
 
-function TicketView({ project, ticket, etag, round, onChanged, reloadTicket }: {
+function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefused, reloadTicket }: {
   readonly project: Project;
   readonly ticket: Ticket;
   readonly etag: string;
   readonly round: number;
+  readonly refusals: number;
   readonly onChanged: (ticket: Ticket, etag: string | null) => void;
+  // The server refused a change: ticket, tags, history and the rights of the session are read again.
+  readonly onRefused: () => void;
   readonly reloadTicket: () => void;
 }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
   const name = useAccountName();
-  const { directory } = useSession();
+  const { directory, refresh } = useSession();
   const text = useProblemText();
   const [base, setBase] = useState<Draft>(() => draftOf(ticket));
   const [draft, setDraft] = useState<Draft>(() => draftOf(ticket));
@@ -101,14 +112,17 @@ function TicketView({ project, ticket, etag, round, onChanged, reloadTicket }: {
       const value = field === 'title' ? draft.title.trim() : draft[field];
       Object.assign(change, { [field]: (field === 'description' || field === 'assignee') && value === '' ? null : value });
     }
+    // What was sent; input typed while the answer is outstanding is not part of it and stays unsaved (finding F2).
+    const sent = draft;
     setBusy(true);
     setNotice(null);
     const result = await updateTicket(api, project.id, ticket.number, etag, change);
     setBusy(false);
     if (result.kind === 'ok') {
+      const fresh = draftOf(result.data.value);
       setConflict(false);
-      setBase(draftOf(result.data.value));
-      setDraft(draftOf(result.data.value));
+      setBase(fresh);
+      setDraft((current) => Object.fromEntries(FIELDS.map((field) => [field, current[field] !== sent[field] ? current[field] : fresh[field]])) as Draft);
       onChanged(result.data.value, result.data.etag);
       return setNotice({ kind: 'success', text: t('ticket.saved') });
     }
@@ -118,7 +132,11 @@ function TicketView({ project, ticket, etag, round, onChanged, reloadTicket }: {
       reloadTicket();
       return;
     }
-    if (result.problem.status === 403) reloadTicket();
+    if (result.problem.status === 403) {
+      onRefused();
+      // The message says the rights are reloaded, so it waits for them.
+      await refresh();
+    }
     setNotice({ kind: 'info', text: text(result.problem, {
       'ticket.transition_not_allowed': 'ticket.error.transition',
       'request.invalid': 'tickets.error.invalid',
@@ -190,8 +208,8 @@ function TicketView({ project, ticket, etag, round, onChanged, reloadTicket }: {
           </form>
         </section>
         <div>
-          <TicketTags project={project} ticket={ticket} round={round} />
-          <History project={project} ticket={ticket} round={round} />
+          <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
+          <History key={`history-${refusals}`} project={project} ticket={ticket} round={round} />
         </div>
       </div>
     </>
@@ -221,6 +239,8 @@ function TicketTags({ project, ticket, round }: { readonly project: Project; rea
       setChoice('');
       return reload();
     }
+    // Without the read rule any more the section disappears on reload; the session reads its rights again on its own.
+    if (result.problem.status === 403) reload();
     setNotice({ kind: 'info', text: text(result.problem, { 'tag.archived': 'tags.error.archived', 'auth.forbidden': 'tags.error.forbidden' }) });
   }
 

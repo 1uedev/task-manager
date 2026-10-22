@@ -99,6 +99,22 @@ describe('login', () => {
     });
   });
 
+  test('signing out before the own password is set still lets another account log in', async () => {
+    await withApp({}, async (page) => {
+      await page.getByLabel(/^Anmeldename/).fill(NORA.username);
+      await page.getByLabel(/^Passwort/).fill(NORA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('h1:has-text("Eigenes Passwort festlegen")');
+      await page.getByRole('button', { name: 'Abmelden' }).click();
+      await page.waitForSelector('h1:has-text("Anmelden")');
+      await page.getByLabel(/^Anmeldename/).fill(ANNA.username);
+      await page.getByLabel(/^Passwort/).fill(ANNA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.shell');
+      assert.equal(await heading(page), 'Willkommen, Anna Admin');
+    });
+  });
+
   test('signing out returns to the login with a note', async () => {
     await withApp({ as: ANNA }, async (page) => {
       await page.getByRole('button', { name: 'Abmelden' }).click();
@@ -270,6 +286,110 @@ describe('changes', () => {
       await anna.context.close();
       await ben.context.close();
     }
+  });
+});
+
+describe('review findings of TASK-030', () => {
+  // F1: a field read right withdrawn while the ticket is open; the version stays the same, the history must follow anyway.
+  test('after a refused save the history no longer shows a field that became hidden', async () => {
+    const backend = createBackend();
+    const reader = backend.group('Lesen');
+    reader.actions.push({ action: 'ticket.edit', projectId: null });
+    for (const operation of ['read', 'write']) reader.fields.push({ resourceType: 'ticket', field: 'description', projectId: null, operation, effect: 'allow' });
+    await withApp({ backend, as: BEN, hash: ticketHash(backend, 1) }, async (page) => {
+      const history = page.getByTestId('history');
+      await history.getByText(/Ablauf mit synthetischen Konten\./).waitFor();
+      await page.getByLabel(/^Beschreibung/).fill('Ben ergänzt die Beschreibung');
+      reader.fields = reader.fields.filter((rule) => rule.field !== 'description');
+      await save(page).click();
+      await page.getByText(/Sie dürfen eines der geänderten Felder nicht mehr ändern\./).waitFor();
+      await page.getByText('Beschreibung: für Sie verborgen').waitFor();
+      await history.waitFor();
+      assert.doesNotMatch(await page.locator('main').innerText(), /Ablauf mit synthetischen Konten/, 'no hidden value is left on the page');
+      assert.equal(backend.state.tickets[0].version, 1, 'the version did not change');
+    });
+  });
+
+  // F2: input typed while the answer to a save is outstanding is not part of it and stays unsaved.
+  test('input typed while a save is running is kept as unsaved', async () => {
+    const backend = createBackend();
+    await withApp({ backend, as: ANNA, hash: ticketHash(backend, 1) }, async (page) => {
+      let arrived;
+      const patchArrived = new Promise((resolve) => { arrived = resolve; });
+      let release;
+      const answer = new Promise((resolve) => { release = resolve; });
+      await page.route('**/api/v1/projects/*/tickets/1', async (route) => {
+        if (route.request().method() === 'PATCH') {
+          arrived();
+          await answer;
+        }
+        await route.fallback();
+      });
+      await page.getByLabel(/^Titel/).fill('Gesendeter Titel');
+      await save(page).click();
+      await patchArrived;
+      await page.getByLabel(/^Beschreibung/).fill('Während des Speicherns getippt');
+      release();
+      await page.getByText('Gespeichert.').waitFor();
+      assert.equal(await page.getByLabel(/^Titel/).inputValue(), 'Gesendeter Titel');
+      assert.equal(await page.getByLabel(/^Beschreibung/).inputValue(), 'Während des Speicherns getippt', 'the later input is kept');
+      assert.equal(await save(page).isEnabled(), true, 'and can still be saved');
+      assert.equal(backend.state.tickets[0].values.description, 'Ablauf mit synthetischen Konten.', 'it was not sent');
+      let asked = null;
+      page.once('dialog', (dialog) => {
+        asked = dialog.message();
+        void dialog.dismiss();
+      });
+      await page.getByRole('link', { name: 'Suche' }).click();
+      await page.waitForTimeout(300);
+      assert.equal(asked, 'Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?', 'it counts as unsaved');
+    });
+  });
+
+  // F3: the forms that create a project, an account or a group ask before their input is left behind.
+  for (const { hash, open, fill, submit, done } of [
+    { hash: '#/projects', open: 'Neues Projekt anlegen', fill: [[/^Projektschlüssel/, 'DRAFT'], [/^Name/, 'Entwurf']], submit: 'Projekt anlegen', done: 'h1:has-text("Entwurf")' },
+    { hash: '#/accounts', open: 'Neues Konto anlegen', fill: [[/^Anmeldename/, 'dora']], submit: 'Konto anlegen', done: '[data-testid=one-time]' },
+    { hash: '#/groups', open: null, fill: [[/^Neue Gruppe/, 'Entwurf']], submit: 'Gruppe anlegen', done: 'h1:has-text("Entwurf")' },
+  ]) {
+    test(`the create form on ${hash} asks before its input is left behind`, async () => {
+      await withApp({ as: ANNA, hash }, async (page) => {
+        if (open) await page.locator('summary', { hasText: open }).click();
+        for (const [label, value] of fill) await page.getByLabel(label).fill(value);
+        const asked = [];
+        page.on('dialog', (dialog) => {
+          asked.push(dialog.message());
+          void dialog.dismiss();
+        });
+        await page.getByRole('link', { name: 'Suche' }).click();
+        await page.waitForTimeout(300);
+        assert.deepEqual(asked, ['Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?']);
+        assert.ok(page.url().endsWith(hash), 'the page stays');
+        assert.equal(await page.getByLabel(fill[0][0]).inputValue(), fill[0][1], 'with the input');
+        await page.getByRole('button', { name: submit }).click();
+        await page.waitForSelector(done);
+        await page.getByRole('link', { name: 'Suche' }).click();
+        await page.waitForSelector('h1:has-text("Suche")');
+        assert.equal(asked.length, 1, 'after a successful creation nothing is asked');
+      });
+    });
+  }
+
+  // F6: a refusal reads the rights of the session again, so the navigation no longer offers what was withdrawn.
+  test('after a refused save the administration links follow the withdrawn rights', async () => {
+    const backend = createBackend();
+    await withApp({ backend, as: ANNA, hash: ticketHash(backend, 1) }, async (page) => {
+      const nav = page.locator('.sidebar');
+      await nav.getByRole('link', { name: 'Gruppen und Rechte' }).waitFor();
+      await page.getByLabel(/^Titel/).fill('Anna ändert den Titel');
+      backend.group('Unternehmensverwaltung').members = [];
+      backend.group('Lesen').members.push(backend.anna.id);
+      await save(page).click();
+      await page.getByText(/Ticket und Rechte sind neu geladen/).waitFor();
+      assert.equal(await nav.getByRole('link', { name: 'Gruppen und Rechte' }).count(), 0);
+      assert.equal(await nav.getByRole('link', { name: 'Konten' }).count(), 0);
+      assert.equal(await page.getByLabel(/^Titel/).count(), 0, 'the ticket is read only now');
+    });
   });
 });
 
