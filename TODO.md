@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -60,7 +60,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | claude-20261021-ui-01 | 2026-10-21 |
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | claude-20261021-demo-01 | 2026-10-22 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 
@@ -496,30 +495,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** Teil 1 (Backend, PR #132) ist auf main. Teil 2 (Oberfläche, DEC-070 Nachtrag 8 bis 13) liegt als Ergebnis PR vor: Anmeldung mit Pflichtwechsel, Konten, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte, Deutsch und Englisch. Nachweise: Unit-Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Offen sind die getrennte KI Prüfung von Teil 1 und Teil 2 und Holgers Abnahme.
 
 **Nächster Schritt:** Getrennte KI Prüfung von Ablauf und sichtbaren Grenzen; danach Abnahme durch Holger.
-
-## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261021-demo-01 · **Aktualisiert:** 2026-10-22
-
-**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** Beauftragt von Holger am 21. Oktober 2026 zusammen mit TASK-030 („Ja mach mit beiden tasks weiter“). Beginnt fachlich nach TASK-030, das Image kann vorher entstehen. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-071. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: ein Image mit Backend und ausgelieferter Oberfläche, Docker Compose mit PostgreSQL und benanntem Volume, Konfiguration nur über Umgebungsvariablen ohne Standardkennwörter, Ersteinrichtung über `bootstrap-admin`, ein Befehl für synthetische Demodaten. Messprofil: der Referenzbestand aus OPERATIONS.md (20 Projekte, 90.000 Tickets, 100 Konten) synthetisch erzeugt, 15 gleichzeitige Benutzer mit dem Suchanteil aus OPERATIONS.md und TAGS_SEARCH.md, Auswertung je Messklasse mit p50 und p95 gegen die vorgeschlagenen Ziele auf der dokumentierten Messmaschine, ohne Zusage für die Referenzhardware. Nachweise zu den zehn geplanten Punkten aus DEVELOPMENT_START.md. Nicht Teil: TLS, Sicherung und Wiederherstellung, Hochverfügbarkeit, Veröffentlichung des Images.
-
-**Umfang:** Reproduzierbares Anwendungsimage mit Oberfläche, PostgreSQL-Anbindung, Startanleitung und synthetischen Demodaten liefern. Durchgängige Funktions-/Rechte-/Konfliktnachweise und begrenzte Suchmessung des tatsächlich vorhandenen Umfangs durchführen.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Container-/Buildintegration, Beispielkonfiguration ohne Geheimnisse, Demonstrations- und Messprotokoll. Runtime-/Secrets-/TLS-/Persistenzgrenzen aus Betriebsvertrag übernehmen. Gemeinsame CI-Änderungen koordiniert integrieren.
-
-**Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
-
-**Ergebnis:** DEC-071. `Dockerfile` baut ein Image mit Backend und Oberfläche, die der Server unter `/` vom selben Ursprung wie die API mit Content Security Policy und Cacheregeln ausliefert (`WebInterfaceHeadersFilter`). `compose.yaml` startet es mit PostgreSQL 18.6 im benannten Volume; Pflichtwerte ohne Standard aus `.env` (Vorlage `.env.example`), Ersteinrichtung mit `bootstrap-admin`. `tools/demo/demo.py` legt über die öffentliche API Demodaten (vier Konten mit unterschiedlichen Rechten, vier Projekte, 43 Tickets) oder den Referenzbestand an, prüft Rechte, Konflikt, Suche und Sitzung (`verify`) und misst mit gleichzeitigen Sitzungen (`measure`). `tools/demo/image-check.sh` prüft das Image als Workflow `Image` in CI. [DEMO.md](docs/DEMO.md) beschreibt Start, Demodaten, den Ablauf zur fachlichen Abnahme, Nachweise zu den zehn Punkten aus DEVELOPMENT_START.md und die Messung. Messung mit 15 Sitzungen auf 90.000 Tickets, 5.000 Tags und rund 450.000 Zuordnungen: alle vorgeschlagenen p95 Ziele eingehalten, keine Fehler; Werte, Laststufen und Grenzen in DEMO.md. Nicht enthalten: TLS, Sicherung, Hochverfügbarkeit, Veröffentlichung, Zweistundenlauf, Browserzeit der Suche, Kommentare, Wiki und Anforderungen im Bestand.
-
-**Eigenprüfung am 2026-10-21:** Image lokal aus vorab gebautem Archiv gebaut (der mehrstufige Build braucht Netzzugriff, der in der Sitzung nicht für Container freigegeben ist; er läuft im Workflow `Image`). `image-check.sh` lokal grün: Ablehnung ohne Einstellungen, erster Start mit Healthcheck, Kopfzeilen, Demodaten, zwölf Prüfungen von `verify`, Neustart mit erhaltenen Daten und gleichem Sitzungsende. Browserlauf gegen das Image ohne CSP Verstoß. Backendtest `WebInterfaceHeadersTest` neu. Repository-Validator, Aufgabenübersicht, Regressionstests und `git diff --check` erfolgreich.
-
-**Nachbesserung am 2026-10-22:** Unabhängige Prüfung in PR #135 (codex-20261022-task031-review-01) mit F1 und F2 (P2) sowie F3 und F4 (P3); alle vier behoben, Nachtrag zu DEC-071. Komplexe Suche in eine Klasse mit Treffern aus sichtbaren Tickets und eine selektive Klasse geteilt, Trefferzahl je Suche erfasst (F1). Keine automatische Wiederholung von Änderungen nach verlorener Antwort, sondern unklarer Ausgang (F2). Sitzungsfrist in UTC (F3). Ticketänderung als Speichern mit Vergleichswert 1 s und als ganze Aktion gemessen (F4). Wortlaut zu 101 Konten und aggregierten Ergebnissen korrigiert. Nebenbefund der Nachmessung behoben: Der Neuaufbau der Suchprojektion scheiterte ab 65.535 Tickets, der Server startete auf dem Referenzbestand nicht neu. Nachmessung mit 15 Sitzungen: alle Ziele eingehalten, komplexe Suche mit Treffern in 113 von 113 Fällen mit Treffer, p95 43 ms. Geprüft: zehn neue Werkzeugtests unter `tests/`, neuer Backendtest mit 70.000 Tickets (ohne Korrektur rot), alle 207 Backendtests, Repository-Validator, Aufgabenübersicht und `git diff --check`.
-
-**Übergabe:** Getrennte KI prüft Image, Compose, Kopfzeilen, Werkzeug und Messverfahren; Holger nimmt mit dem Ablauf aus DEMO.md fachlich ab.
-
-**Nachprüfung am 2026-10-22:** PR #137 (codex-20261022-task031-followup-01): im geprüften Umfang technisch abnahmefähig, F1 bis F4 und Nebenbefund geschlossen, kein P1 oder P2. Der verbleibende P3 Befund N1 (abgeschnittene Antwort und Zeitüberschreitung nach einer Änderung wurden nicht als unklarer Ausgang gemeldet) ist behoben, mit drei weiteren Werkzeugtests.
-
-**Nächster Schritt:** Fachliche Abnahme durch Holger mit dem Ablauf aus DEMO.md.
 
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 
