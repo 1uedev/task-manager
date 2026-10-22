@@ -46,7 +46,8 @@ Identitätsmodul importiert dafür nicht rückwärts `permissions`.
 | `createGroup`, `setMember` | Aktueller interner Kontext, Unternehmensrecht `permissions.manage`; Zielkonto im selben Unternehmen | Gruppen-ID bzw. keine Rückgabe. Unbekannte/fremde Ziele allgemein abgewiesen. Mitgliedschaft betrifft nur Berechtigungsgruppen, nicht Projektmitgliedschaften. |
 | `setAction`, `setField` | Aktueller Kontext, Gruppe und vertrauenswürdig gelieferter Geltungsbereich; Unternehmensverwaltung oder eng begrenzte Projektdelegation | Setzen/Entfernen einer Regel; neue Rechteversion plus Audit in derselben Transaktion. |
 | `groups` | Unternehmensrecht `permissions.manage` | Nur Gruppen dieses Unternehmens. |
-| `audit` | Eigenes Unternehmensrecht `permissions.audit.read`, Limit 1–100 | Neueste Einträge nur dieses Unternehmens. Verwaltungsrecht allein genügt nicht. |
+| `projectGroups` | Unternehmensrecht `permissions.manage` oder internes Konto mit `permissions.manage` im Projekt (TASK-043) | Jede Gruppe mit ihren Regeln genau dieses Projekts; keine Mitglieder, keine Unternehmensregeln, keine anderen Projekte. |
+| `audit` | Eigenes Unternehmensrecht `permissions.audit.read`, Limit 1–100, optional `before` | Neueste Einträge nur dieses Unternehmens, mit `before` nur ältere Rechteversionen; jeder Eintrag nennt den ersetzten Zustand (`previousEffect`). Verwaltungsrecht allein genügt nicht. |
 
 Eine Unternehmensverwaltung hat keinen automatischen Zugriff auf Tickets, andere Fachinhalte
 oder das Audit. Sie kann Rechte bewusst vergeben; diese weitreichende Befugnis ist kein
@@ -161,3 +162,40 @@ einschließlich Flyway-Historie; sie verlangen weiterhin leere Startdaten, ausge
 Clean, ORM validate und unveränderte Migrationshistorie nach Neustart. Der CI-Workflow wird
 weiterverwendet, ohne Tests auszuschalten. Tatsächliche Läufe und Reviewgrenzen stehen in
 TODO.md und im Ergebnis-PR; beschriebene Tests allein sind kein Ausführungsnachweis.
+
+
+## Härtung (TASK-043, DEC-072)
+
+Stand 22. Oktober 2026. Umsetzung der Punkte P2 bis P6 der Prüfung von TASK-025 und der Prüfung beim Commit.
+
+- **Protokoll (P2).** `audit(actor, before, limit)` blättert über die Rechteversion, die nur wächst: Die kleinste Version
+  einer Seite holt als `before` die nächste. `previous_effect` (Migration V0016) hält fest, was eine Änderung ersetzt hat
+  (`ALLOW`, `DENY` oder nichts); Einträge vor V0016 haben keinen Wert. Aufbewahrung und Schutz bleiben bei OPEN-014.
+- **Externe Konten (P3).** `administer` und die Prüfung der Unternehmensverwaltung lehnen externe Konten immer ab, auch
+  wenn eine Gruppe ihnen `permissions.manage` gibt.
+- **Fachfehler und Sperrfehler (P4).** Ein vorhandener Gruppenname, ohne Rücksicht auf Groß- und Kleinschreibung, wirft
+  `GroupNameTaken` (eine `PermissionDenied`); die exklusive Revisionssperre ordnet alle Anlagen, der eindeutige Index bleibt
+  die letzte Sicherung. `inspect` und `require` können unter Last mit einer Sperrzeitüberschreitung (55P03) oder Verklemmung
+  (40P01) enden statt mit einer Ablehnung; die Transaktion ist dann abgebrochen, wiederholt wird die ganze Transaktion. Eine
+  Verwaltungsänderung gehört nicht in eine Transaktion, die schon `inspect` oder `require` ausgeführt hat: die geteilte
+  Sperre lässt sich nicht ohne Verklemmungsgefahr zur exklusiven aufwerten.
+- **Sperrwartezeit (P5).** Fünf Sekunden gelten nur für die Prüfung von Rechten, Identität und Ressource. Danach setzt das
+  Modul den vorherigen Wert der Transaktion wieder ein. Bisher wirkte die Grenze der Prüfung auch auf alle Fachanweisungen
+  danach, und die Fachmodule verließen sich darauf (etwa 503 `ticket.busy`); deshalb ist fünf Sekunden jetzt der Vorgabewert
+  jeder Verbindung (`spring.datasource.hikari.connection-init-sql`), den eine Transaktion mit `SET LOCAL` ändern kann. Endet die Prüfung mit einem Datenbankfehler, ist die Transaktion
+  abgebrochen und es läuft nichts mehr darin.
+- **Änderungen ohne Wirkung (P6).** Dasselbe Mitglied erneut, ein fehlendes Mitglied entfernen, eine vorhandene Aktion
+  erneut gewähren, eine fehlende Regel entfernen: keine neue Rechteversion, kein Protokoll. Dieselbe Feldregel von einer
+  anderen Person oder in einer anderen Rolle ist eine Änderung, weil der Urheber bestimmt, wer ein Verbot zurücknehmen darf.
+  Weiterhin offen aus P6: Jede wirksame Änderung macht alle Kontexte des Unternehmens ungültig (Version je Unternehmen), und
+  `inspect` nimmt eine Zeilensperre; beides ist ungemessen.
+- **Prüfung beim Commit.** Rechte, Identität und Ressource bleiben durch die Sperren bis zum Commit stabil; ein Entzug wartet,
+  bis die geprüfte Änderung festgeschrieben ist. Nicht gesperrt ist die Zeit. `IdentityAccess.currentUntil` liefert deshalb
+  mit der Prüfung das Ende der Sitzung, und `require` vergleicht es unmittelbar vor dem Commit noch einmal mit der Uhr
+  (`TransactionSynchronization.beforeCommit`); mehrere Prüfungen einer Transaktion behalten das früheste Ende. Ist es
+  überschritten, wirft der Commit `PermissionDenied`, die ganze Transaktion rollt zurück, und die HTTP Schicht antwortet 403
+  `auth.forbidden`. Was die eigene Transaktion am eigenen Konto ändert (etwa die Sitzungsdauer kürzen), zählt dabei nicht:
+  maßgeblich ist das Ende, das die Prüfung unter ihren Sperren festgestellt hat. Die Voreinstellung des Ports kennt kein Ende.
+- **Gruppen für Projektverwaltungen.** `projectGroups` gibt jeder Projektverwaltung alle Gruppen des Unternehmens mit ihren
+  Regeln in diesem Projekt, weil sie die Projektregeln jeder Gruppe ändern darf. Lese- und Schreibweg sind deckungsgleich;
+  eine engere Grenze ist Holgers offene Entscheidung zu P7.

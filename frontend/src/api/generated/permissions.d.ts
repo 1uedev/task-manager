@@ -131,10 +131,37 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Letzte Rechteänderungen (Recht permissions.audit.read)
-         * @description Verlangt statt `permissions.manage` das Unternehmensrecht `permissions.audit.read`. Neueste zuerst.
+         * Rechteänderungen seitenweise (Recht permissions.audit.read)
+         * @description Verlangt statt `permissions.manage` das Unternehmensrecht `permissions.audit.read`. Neueste zuerst. Die nächste Seite
+         *     holt `before` mit der kleinsten `rightsVersion` der letzten Seite; eine leere Seite ist das Ende. So ist jeder Eintrag
+         *     erreichbar, auch jenseits von 100.
          */
         get: operations["getPermissionAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/permissions/projects/{projectId}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Gruppen mit ihren Regeln in einem Projekt (TASK-043)
+         * @description Für die Unternehmensverwaltung und für Projektverwaltungen dieses Projekts. Enthält jede Gruppe des Unternehmens, weil
+         *     die Projektverwaltung die Regeln jeder Gruppe in ihrem Projekt ändern darf, aber nur deren Regeln für dieses Projekt:
+         *     keine Mitglieder, keine Unternehmensregeln, keine Regeln anderer Projekte. `actions` und `fields` nennen, was die
+         *     anfragende Person hier vergeben darf.
+         */
+        get: operations["getProjectRights"];
         put?: never;
         post?: never;
         delete?: never;
@@ -213,11 +240,49 @@ export interface components {
             field?: string | null;
             /** @enum {string|null} */
             effect?: "allow" | "deny" | "remove" | null;
+            /**
+             * @description Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Eintrag älter als TASK-043 ist.
+             * @enum {string|null}
+             */
+            previousEffect?: "allow" | "deny" | null;
             rightsVersion: number;
+        };
+        ProjectRights: {
+            /** @description Projektaktionen, die die anfragende Person hier vergeben darf */
+            actions: string[];
+            /** @description Felder je Objektart, für die sie hier Regeln setzen darf */
+            fields: {
+                resourceType: string;
+                fields: string[];
+            }[];
+            groups: components["schemas"]["ProjectGroup"][];
+        };
+        ProjectGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            actions: {
+                action: string;
+                /** Format: uuid */
+                projectId?: string | null;
+            }[];
+            fields: {
+                resourceType: string;
+                field: string;
+                /** Format: uuid */
+                projectId?: string | null;
+                /** @enum {string} */
+                operation: "read" | "write";
+                /** @enum {string} */
+                effect: "allow" | "deny";
+            }[];
         };
     };
     responses: {
-        /** @description Geändert; die anfragende Person hat damit selbst `permissions.manage` verloren und sieht die Gruppe nicht mehr. */
+        /**
+         * @description Geändert; die anfragende Person darf die ganze Gruppe nicht lesen, weil sie damit selbst `permissions.manage` verloren
+         *     hat oder nur ein Projekt verwaltet.
+         */
         RightLost: {
             headers: {
                 [name: string]: unknown;
@@ -236,8 +301,10 @@ export interface components {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.required, auth.forbidden,
          *     auth.password_change_required, permissions.group_not_found, project.not_found, permissions.last_administrator,
+         *     permissions.group_name_taken (409, Name schon vergeben, ohne Rücksicht auf Groß- und Kleinschreibung),
          *     permissions.busy (mit Retry-After). Gründe in `violations`: name.invalid, action.unknown, action.company_only,
-         *     enabled.required, resourceType.unknown, field.unknown, operation.invalid, effect.invalid, limit.out_of_range.
+         *     enabled.required, resourceType.unknown, field.unknown, operation.invalid, effect.invalid, limit.out_of_range,
+         *     before.out_of_range.
          */
         Problem: {
             headers: {
@@ -332,6 +399,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };
@@ -475,6 +543,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Nur Einträge mit kleinerer Rechteversion. */
+                before?: number;
             };
             header?: never;
             path?: never;
@@ -494,6 +564,32 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getProjectRights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rechte im Projekt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRights"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

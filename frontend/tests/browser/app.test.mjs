@@ -441,6 +441,77 @@ describe('administration', () => {
   });
 });
 
+describe('rights core hardening (TASK-043)', () => {
+  const grantAudit = (backend) => backend.group('Unternehmensverwaltung').actions.push({ action: 'permissions.audit.read', projectId: null });
+  const seedAudit = (backend, count) => {
+    for (let version = 1; version <= count; version += 1) {
+      backend.state.audit.push({ id: `00000000-0000-4000-8000-${String(version).padStart(12, '0')}`, actorId: backend.anna.id,
+        occurredAt: '2026-10-22T08:00:00Z', operation: 'action.changed', groupId: backend.group('Lesen').id, subjectId: null, projectId: null,
+        action: 'ticket.read', resourceType: null, field: null, effect: version % 2 ? 'allow' : 'remove', previousEffect: version % 2 ? null : 'allow', rightsVersion: version });
+    }
+  };
+
+  test('the change log pages beyond a hundred entries and shows what a change replaced', async () => {
+    const backend = createBackend();
+    grantAudit(backend);
+    seedAudit(backend, 120);
+    await withApp({ backend, as: ANNA, hash: '#/groups' }, async (page) => {
+      const rows = page.locator('[data-testid=audit-log] tbody tr');
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=audit-log] tbody tr').length === 50);
+      assert.match(await rows.first().innerText(), /Anna.*Lesen.*Tickets lesen entzogen.*Erlaubt/s);
+      for (const expected of [100, 120]) {
+        await page.getByRole('button', { name: 'Ältere Einträge laden' }).click();
+        await page.waitForFunction((count) => document.querySelectorAll('[data-testid=audit-log] tbody tr').length === count, expected);
+      }
+      await page.getByText('Das sind alle Einträge.').waitFor();
+      assert.equal(await rows.last().getAttribute('data-version'), '1');
+      assert.match(await rows.last().innerText(), /Tickets lesen gewährt\s+Nichts/);
+    });
+  });
+
+  test('without the log right the log says which right it needs', async () => {
+    await withApp({ as: ANNA, hash: '#/groups' }, async (page) => {
+      await page.getByText('Das Protokoll sieht nur, wer das Recht „Rechteprotokoll lesen“ hat.').waitFor();
+    });
+  });
+
+  test('a group name that exists already, in any case, is refused with its own message', async () => {
+    await withApp({ as: ANNA, hash: '#/groups' }, async (page, backend) => {
+      await page.getByLabel(/^Neue Gruppe/).fill('lesen');
+      await page.getByRole('button', { name: 'Gruppe anlegen' }).click();
+      await page.getByText('Eine Gruppe mit diesem Namen gibt es schon.').waitFor();
+      assert.equal(backend.state.groups.length, 2);
+    });
+  });
+
+  test('a project administration grants in its project only what it holds itself', async () => {
+    const backend = createBackend();
+    backend.state.groups.push({ id: '11111111-1111-4111-8111-111111111111', name: 'Projektleitung', members: [backend.ben.id],
+      actions: [{ action: 'permissions.manage', projectId: backend.project.id }], fields: [] });
+    await withApp({ backend, as: BEN, hash: `#/projects/${backend.project.id}/rights` }, async (page) => {
+      await page.getByLabel(/^Gruppe/).selectOption({ label: 'Lesen' });
+      await page.locator('[data-testid=project-rights-actions] code').first().waitFor();
+      const offered = await page.locator('[data-testid=project-rights-actions] code').allInnerTexts();
+      assert.deepEqual(offered, ['project.read', 'ticket.read'], 'only the project actions Ben holds');
+      await page.getByText('Keine Feldregeln, die Sie hier vergeben dürfen.').waitFor();
+      await page.getByRole('checkbox', { name: /^Tickets lesen/ }).click();
+      await page.getByText('Gespeichert. Die Änderung gilt sofort.').waitFor();
+      assert.deepEqual(backend.group('Lesen').actions.filter((rule) => rule.projectId === backend.project.id), [{ action: 'ticket.read', projectId: backend.project.id }]);
+      // The tab reloads the rights after the change; the box follows the answer of the server.
+      await page.locator('[data-testid=project-rights-actions] input:checked').waitFor();
+      assert.equal(await page.getByRole('link', { name: 'Gruppen und Rechte' }).count(), 0, 'no company administration');
+    });
+  });
+
+  test('without project administration there is no rights tab', async () => {
+    await withApp({ as: BEN, hash: `#/projects` }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}`);
+      await page.getByRole('link', { name: 'Mitglieder' }).waitFor();
+      assert.equal(await page.locator('nav.tabs a', { hasText: 'Rechte' }).count(), 0);
+    });
+  });
+});
+
 describe('layout', () => {
   const routes = (backend) => ['#/start', '#/projects', `#/projects/${backend.project.id}/tickets`, `#/projects/${backend.project.id}/members`,
     `#/projects/${backend.project.id}/settings`, ticketHash(backend, 1), '#/search', '#/accounts', '#/groups', '#/appearance', '#/board'];
@@ -456,6 +527,30 @@ describe('layout', () => {
           assert.ok(overflow <= 0, `${hash}: overflow ${overflow}px`);
         }
       });
+    });
+  }
+
+  for (const withLogo of [false, true]) {
+    test(`at 320 px the brand ${withLogo ? 'logo' : 'name'} stays clear of the language and theme controls`, async () => {
+      for (const locale of ['de-DE', 'en-US']) {
+        const backend = createBackend();
+        if (withLogo) backend.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
+        await withApp({ backend, as: ANNA, locale, viewport: { width: 320, height: 640 } }, async (page) => {
+          await page.waitForSelector(withLogo ? '.brand-logo' : '.brand-mark');
+          await page.waitForTimeout(150);
+          const overlap = await page.evaluate(() => {
+            const box = (element) => element.getBoundingClientRect();
+            const brand = box(document.querySelector('.brand'));
+            const footer = box(document.querySelector('.sidebar-footer'));
+            // What the brand shows is clipped to the brand box; an element of one pixel is visually hidden.
+            return [...document.querySelectorAll('.brand > *')].map(box).filter((r) => r.width > 1 && r.height > 1)
+              .map((r) => ({ left: Math.max(r.left, brand.left), right: Math.min(r.right, brand.right), top: Math.max(r.top, brand.top), bottom: Math.min(r.bottom, brand.bottom) }))
+              .some((r) => r.left < footer.right && footer.left < r.right && r.top < footer.bottom && footer.top < r.bottom && r.right > r.left);
+          });
+          assert.equal(overlap, false, locale);
+          assert.equal(await page.getByTestId('brand-name').textContent(), 'Task Manager');
+        });
+      }
     });
   }
 

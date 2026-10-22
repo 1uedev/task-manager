@@ -128,7 +128,7 @@ components:
     Problem:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.logo_empty,
-        appearance.logo_type_invalid, appearance.logo_not_found, appearance.version_conflict,
+        appearance.logo_type_invalid, appearance.logo_unreadable (415, beschädigte oder unvollständige Bilddatei, TASK-043), appearance.logo_not_found, appearance.version_conflict,
         appearance.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required.
       headers:

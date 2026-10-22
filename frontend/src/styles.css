@@ -494,3 +494,11 @@ legend { font-weight: 650; margin-bottom: 0.4rem; padding: 0; }
 .login-card h1 + [role='status'] { margin-top: 0.75rem; }
 form.search-form { max-width: none; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.25rem; }
 form.search-form .field:first-child { flex: 2 1 18rem; }
+
+/* TASK-043, finding F3 of the TASK-036 review: at phone width the brand name would run under the language and theme
+   controls. It stays readable for screen readers; a logo shrinks into the space that is left. */
+@media (max-width: 30rem) {
+  .brand { overflow: hidden; }
+  .brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .brand-logo { max-width: 100%; min-width: 0; }
+}

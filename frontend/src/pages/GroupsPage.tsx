@@ -1,13 +1,15 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
-  createGroup, listGroups, listProjects, permissionCatalog, readGroup, setGroupAction, setGroupField, setGroupMember,
-  type GroupDetail, type Result, type TicketField,
+  AUDIT_PAGE, createGroup, listGroups, listProjects, permissionCatalog, readAudit, readGroup, setGroupAction, setGroupField, setGroupMember,
+  type AuditEntry, type Group, type GroupDetail, type ProjectSummary, type Result, type TicketField,
 } from '../api/product.ts';
+import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 
@@ -29,7 +31,7 @@ export function GroupsPage() {
     if (name.trim() === '' || name.trim().length > 80) return setError(t('groups.error.name'));
     const result = await createGroup(api, name.trim());
     if (result.kind === 'ok') return navigate({ name: 'group', id: result.data.value.id });
-    setError(text(result.problem));
+    setError(text(result.problem, { 'permissions.group_name_taken': 'groups.error.nameTaken' }));
   }
 
   return (
@@ -47,11 +49,92 @@ export function GroupsPage() {
           </ul>
         )}
       </LoadedView>
+      <AuditLog groups={groups.state === 'ok' ? groups.value : []} />
     </>
   );
 }
 
-const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
+// The change log of the permissions module, page by page (TASK-043). It needs its own right, permissions.audit.read.
+function AuditLog({ groups }: { readonly groups: readonly Group[] }) {
+  const { t, language } = useI18n();
+  const { api } = useBrand();
+  const name = useAccountName();
+  const text = useProblemText();
+  const [projects] = useLoad(() => listProjects(api), [api]);
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [problem, setProblem] = useState<ProblemInfo | null>(null);
+  const [more, setMore] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load(before: number | null) {
+    setBusy(true);
+    const result = await readAudit(api, before);
+    setBusy(false);
+    if (result.kind !== 'ok') return setProblem(result.problem);
+    setProblem(null);
+    setEntries((current) => (before === null ? result.data.value : [...current, ...result.data.value]));
+    setMore(result.data.value.length === AUDIT_PAGE);
+  }
+  useEffect(() => { void load(null); }, [api]);
+
+  const groupName = (id: string | null | undefined) => groups.find((group) => group.id === id)?.name ?? t('audit.unknownGroup');
+  const projectKey = (id: string) => (projects.state === 'ok' ? projects.value.find((item: ProjectSummary) => item.id === id)?.key : undefined) ?? id.slice(0, 8);
+  const effect = (value: string | null | undefined) => t(value === 'allow' ? 'group.effect.allow' : value === 'deny' ? 'group.effect.deny' : 'audit.effect.remove');
+  const right = (action: string | null | undefined) => t(ACTION_LABEL[action ?? ''] ?? 'right.unknown');
+  const field = (key: string | null | undefined) => t(FIELD_LABEL[key ?? ''] ?? 'field.title');
+  function change(entry: AuditEntry): string {
+    const removed = entry.effect === 'remove';
+    const described = entry.operation === 'group.created' ? t('audit.created')
+      : entry.operation === 'membership.changed' ? t(removed ? 'audit.memberRemoved' : 'audit.memberAdded', { name: name(entry.subjectId ?? '') })
+      : entry.operation === 'action.changed' ? t(removed ? 'audit.revoked' : 'audit.granted', { right: right(entry.action) })
+      : t(entry.operation === 'field.write' ? 'audit.fieldWrite' : 'audit.fieldRead', { field: field(entry.field), effect: effect(entry.effect) });
+    return entry.projectId ? t('audit.inProject', { change: described, project: projectKey(entry.projectId) }) : described;
+  }
+  const before = (entry: AuditEntry) => entry.operation === 'group.created' ? ''
+    : entry.previousEffect ? effect(entry.previousEffect)
+    // A removal always replaced something; without a recorded value it is an entry from before TASK-043.
+    : t(entry.effect === 'remove' ? 'audit.previous.unknown' : 'audit.previous.none');
+
+  return (
+    <section aria-labelledby="audit-heading" className="panel">
+      <h2 id="audit-heading">{t('audit.title')}</h2>
+      <p className="hint">{t('audit.intro')}</p>
+      {problem !== null ? <p className="empty">{problem.status === 403 ? t('audit.forbidden') : text(problem)}</p>
+        : entries.length === 0 ? (busy ? null : <EmptyText text={t('audit.empty')} />) : (
+        <>
+          <div className="table-scroll">
+            <table data-testid="audit-log">
+              <caption className="visually-hidden">{t('audit.title')}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t('audit.when')}</th><th scope="col">{t('audit.who')}</th><th scope="col">{t('audit.group')}</th>
+                  <th scope="col">{t('audit.change')}</th><th scope="col">{t('audit.before')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.id} data-version={entry.rightsVersion}>
+                    <td>{formatDateTime(entry.occurredAt, language)}</td>
+                    <td>{name(entry.actorId)}</td>
+                    <td>{groupName(entry.groupId)}</td>
+                    <td>{change(entry)}</td>
+                    <td>{before(entry)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {more
+            ? <p className="actions"><button type="button" className="secondary" disabled={busy}
+                onClick={() => void load(entries[entries.length - 1]?.rightsVersion ?? null)}>{t('audit.more')}</button></p>
+            : <p className="hint">{t('audit.end')}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'accounts.manage': 'right.accounts.manage',
   'appearance.manage': 'right.appearance.manage',
   'permissions.audit.read': 'right.permissions.audit.read',
@@ -67,7 +150,7 @@ const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'ticket.read': 'right.ticket.read',
 };
 
-const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
+export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags',
 };
 

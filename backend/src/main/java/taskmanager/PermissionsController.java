@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import taskmanager.identity.AccessContexts;
 import taskmanager.identity.AuthenticationLevel;
 import taskmanager.permissions.AccessContext;
+import taskmanager.permissions.GroupNameTaken;
 import taskmanager.permissions.LastAdministration;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionAdministration.Effect;
@@ -44,6 +45,10 @@ import taskmanager.projects.ProjectAccess;
  * entry point because a rule for one project needs the project adapter of the projects module, and the permissions module
  * must not depend on the projects module. Every endpoint needs the company right {@code permissions.manage}; the permissions
  * module decides that with its locks, here only the keys are checked against the catalog the product modules enforce.
+ *
+ * <p>A project administration (an internal account with {@code permissions.manage} for one project) reaches the rules of
+ * that project only: it reads them through {@code /projects/{id}/groups} and changes them through the same endpoints as the
+ * company administration, which then answer 204 because it may not read the whole group (TASK-043).
  *
  * <p>A change runs in one transaction. A rights change by someone else moves the rights version between building the
  * context of the request and taking the rights lock, which the permissions module refuses; such a change is tried once more
@@ -116,12 +121,19 @@ class PermissionsController {
     }
 
     record AuditBody(UUID id, UUID actorId, Instant occurredAt, String operation, UUID groupId, UUID subjectId, UUID projectId,
-            String action, String resourceType, String field, String effect, long rightsVersion) {
+            String action, String resourceType, String field, String effect, String previousEffect, long rightsVersion) {
         static AuditBody of(PermissionAdministration.Audit audit) {
             return new AuditBody(audit.id(), audit.actorId(), audit.occurredAt(), audit.operation(), audit.groupId(),
-                audit.subjectId(), audit.projectId(), audit.action(), audit.resourceType(), audit.field(), audit.effect() == null ? null : audit.effect().toLowerCase(java.util.Locale.ROOT),
-                audit.rightsVersion());
+                audit.subjectId(), audit.projectId(), audit.action(), audit.resourceType(), audit.field(), lower(audit.effect()),
+                lower(audit.previousEffect()), audit.rightsVersion());
         }
+    }
+
+    record ProjectGroupBody(UUID id, String name, List<ActionBody> actions, List<FieldBody> fields) {
+    }
+
+    /** What a project administration may hand out in the project, and every group with its rules there. */
+    record ProjectRights(List<String> actions, List<ResourceFields> fields, List<ProjectGroupBody> groups) {
     }
 
     @GetMapping("/catalog")
@@ -209,11 +221,45 @@ class PermissionsController {
     }
 
     @GetMapping("/audit")
-    List<AuditBody> audit(@RequestParam(defaultValue = "50") int limit) {
+    List<AuditBody> audit(@RequestParam(defaultValue = "50") int limit, @RequestParam(required = false) Long before) {
+        List<String> violations = new ArrayList<>();
         if (limit < 1 || limit > 100) {
-            throw ApiProblemException.withViolations(400, "request.invalid", List.of("limit.out_of_range"));
+            violations.add("limit.out_of_range");
         }
-        return read(actor -> administration.audit(actor, limit).stream().map(AuditBody::of).toList());
+        if (before != null && before < 1) {
+            violations.add("before.out_of_range");
+        }
+        invalid(violations);
+        return read(actor -> administration.audit(actor, before, limit).stream().map(AuditBody::of).toList());
+    }
+
+    /**
+     * The rules of one project for its administration. Offered are the project actions the caller holds there (the company
+     * administration: all of them) and the fields the caller may read and write there, because a delegate can hand out
+     * nothing else.
+     */
+    @GetMapping("/projects/{projectId}/groups")
+    ProjectRights projectGroups(@PathVariable UUID projectId) {
+        return read(actor -> {
+            Supplier<ResourceContext> project = scope(actor, projectId, "project");
+            var groups = administration.projectGroups(actor, project).stream()
+                .map(group -> new ProjectGroupBody(group.group().id(), group.group().name(),
+                    group.actions().stream().map(a -> new ActionBody(a.action(), a.projectId())).toList(),
+                    group.fields().stream().map(f -> new FieldBody(f.resourceType(), f.field(), f.projectId(), lower(f.operation()),
+                        lower(f.effect()))).toList()))
+                .toList();
+            boolean company = manages(actor);
+            List<String> actions = PROJECT_ACTIONS.stream()
+                .filter(action -> company || permissions.inspect(actor, project, action, Set.of()).allowed()).toList();
+            List<ResourceFields> fields = FIELDS.entrySet().stream().map(entry -> {
+                if (company) {
+                    return new ResourceFields(entry.getKey(), entry.getValue());
+                }
+                var decision = permissions.inspect(actor, scope(actor, projectId, entry.getKey()), MANAGE, Set.copyOf(entry.getValue()));
+                return new ResourceFields(entry.getKey(), entry.getValue().stream().filter(decision.writableFields()::contains).toList());
+            }).toList();
+            return new ProjectRights(actions, fields, groups);
+        });
     }
 
     private ResponseEntity<GroupDetailBody> member(UUID group, UUID account, boolean enabled) {
@@ -286,6 +332,8 @@ class PermissionsController {
                 return transaction.execute(status -> work.apply(current));
             } catch (LastAdministration last) {
                 throw ApiProblemException.of(409, "permissions.last_administrator");
+            } catch (GroupNameTaken taken) {
+                throw ApiProblemException.of(409, "permissions.group_name_taken");
             } catch (PermissionDenied denied) {
                 AccessContext fresh = attempt == 1 ? contexts.current().orElse(null) : null;
                 if (fresh == null || fresh.rightsVersion() == actor.rightsVersion()) {
@@ -353,5 +401,9 @@ class PermissionsController {
 
     private static String lower(Enum<?> value) {
         return value.name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String lower(String value) {
+        return value == null ? null : value.toLowerCase(java.util.Locale.ROOT);
     }
 }

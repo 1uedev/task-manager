@@ -202,6 +202,20 @@ describe('company appearance', () => {
     });
   });
 
+  test('an invalid typed color cannot save the last valid one', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Farbwert');
+      const save = page.getByRole('button', { name: 'Für alle speichern' });
+      await field.fill('#7C3AED');
+      assert.equal(await save.isDisabled(), false);
+      await field.fill('#12');
+      assert.equal(await save.isDisabled(), true);
+      await save.click({ force: true }).catch(() => {});
+      assert.equal(server.state.requests.filter((item) => item.method === 'PUT').length, 0);
+    });
+  });
+
   test('a concurrent change is reported and the current state can be loaded', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {

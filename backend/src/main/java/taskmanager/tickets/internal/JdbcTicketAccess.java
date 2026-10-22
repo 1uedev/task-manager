@@ -37,6 +37,12 @@ class JdbcTicketAccess implements TicketAccess {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForTagChange(UUID ticketId) {
+        tickets.lockShared(ticketId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<TicketChanged> searchSources(UUID companyId) {
         return tickets.all(companyId).stream().map(Ticket::changed).toList();
     }
