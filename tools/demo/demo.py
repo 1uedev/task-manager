@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import datetime
 import http.client
 import json
 import math
@@ -43,6 +44,25 @@ class ApiError(Exception):
         self.body = body
 
 
+class UnclearOutcome(Exception):
+    """A change was sent but its answer was lost; the server may or may not have carried it out.
+
+    Such a request is never sent a second time: creating a ticket or a tag twice would change the data set, so the
+    caller has to look at the current state instead of guessing."""
+
+    def __init__(self, method: str, path: str, cause: BaseException):
+        super().__init__(f"{method} {path}: answer lost ({cause.__class__.__name__}); the change may or may not have been saved")
+        self.method = method
+        self.path = path
+
+
+# Only these requests change nothing on the server and may be repeated after a lost answer.
+SAFE_METHODS = ("GET", "HEAD")
+# A kept-alive connection idle for longer is opened anew before a change, so that a connection the server closed in
+# the meantime does not cost an answer. The server keeps idle connections for far longer than this.
+IDLE_RECONNECT_SECONDS = 5.0
+
+
 @dataclass
 class Response:
     status: int
@@ -63,6 +83,7 @@ class Client:
         self.port = parsed.port or (443 if parsed.scheme == "https" else 80)
         self.timeout = timeout
         self.connection: http.client.HTTPConnection | None = None
+        self.last_used = 0.0
         self.cookies: dict[str, str] = {}
         self.csrf: str | None = None
         self.username: str | None = None
@@ -93,6 +114,9 @@ class Client:
             data = json.dumps(body).encode()
             sent["Content-Type"] = "application/json"
         sent.update(headers or {})
+        safe = method in SAFE_METHODS
+        if not safe and self.connection is not None and time.monotonic() - self.last_used > IDLE_RECONNECT_SECONDS:
+            self.close()
         for attempt in (1, 2):
             started = time.perf_counter()
             try:
@@ -101,10 +125,14 @@ class Client:
                 raw = connection.getresponse()
                 payload = raw.read()
                 seconds = time.perf_counter() - started
+                self.last_used = time.monotonic()
                 break
-            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError, http.client.CannotSendRequest):
-                # A kept-alive connection the server already closed; one fresh attempt.
+            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError, http.client.CannotSendRequest) as error:
+                # Usually a kept-alive connection the server already closed. A reading request is tried once more on
+                # a fresh connection; a change is not, because the server may have saved it before the answer was lost.
                 self.close()
+                if not safe:
+                    raise UnclearOutcome(method, path, error) from error
                 if attempt == 2:
                     raise
         received = {k.lower(): v for k, v in raw.getheaders()}
@@ -258,7 +286,7 @@ class Builder:
             for future in concurrent.futures.as_completed(pool.submit(self.ticket, *job) for job in jobs):
                 try:
                     future.result()
-                except ApiError as error:
+                except (ApiError, UnclearOutcome) as error:
                     failures += 1
                     if failures <= 5:
                         print(f"  ticket failed: {error}", file=sys.stderr)
@@ -481,6 +509,34 @@ def seed_reference(args) -> None:
 
 # ---------------------------------------------------------------------- checks of the presentation data set
 
+def parse_instant(text: str) -> datetime.datetime:
+    """Reads an ISO 8601 instant from the API, for example 2026-10-22T06:35:12.123456789Z, as an aware UTC time.
+
+    Python before 3.11 accepts neither the Z nor more than six fraction digits, so both are normalized first. Digits
+    beyond microseconds are cut off; for a duration in hours they do not matter."""
+    head, sep, tail = text.strip().partition(".")
+    zone = ""
+    if sep:
+        digits = ""
+        for position, char in enumerate(tail):
+            if not char.isdigit():
+                zone = tail[position:]
+                break
+            digits += char
+        text = f"{head}.{digits[:6].ljust(6, '0')}{zone}"
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    value = datetime.datetime.fromisoformat(text)
+    if value.tzinfo is None:
+        raise ValueError(f"instant without time zone: {text}")
+    return value.astimezone(datetime.timezone.utc)
+
+
+def hours_left(expires_at: str, now: datetime.datetime) -> float:
+    """Remaining session time in hours, computed entirely in UTC so that the local zone and daylight saving play no role."""
+    return (parse_instant(expires_at) - now).total_seconds() / 3600
+
+
 def verify(args) -> None:
     """Checks the presentation data set the way a person would see it; used by the image check in CI.
 
@@ -501,14 +557,14 @@ def verify(args) -> None:
         anna.cookies, anna.csrf = state["cookies"], state["csrf"]
         session = anna.call("GET", "/session").body
         check(session.get("authenticated") is True, "session of anna is still valid after the restart")
-        same = session.get("expiresAt", "")[:26].rstrip("Z") == state["expiresAt"][:26].rstrip("Z")
+        same = "expiresAt" in session and parse_instant(session["expiresAt"]) == parse_instant(state["expiresAt"])
         check(same, f"fixed end unchanged ({state['expiresAt']} before, {session.get('expiresAt')} after)")
         keys = sorted(p["key"] for p in anna.call("GET", "/projects").body)
         check(keys == ["APP", "HELP", "WEB"], f"data kept, anna sees {keys}")
     else:
         anna = Client(args.url)
         session = anna.login("anna", password)
-        hours = (time.mktime(time.strptime(session["expiresAt"][:19], "%Y-%m-%dT%H:%M:%S")) - time.mktime(time.gmtime())) / 3600
+        hours = hours_left(session["expiresAt"], datetime.datetime.now(datetime.timezone.utc))
         check(23.5 < hours <= 24.01, f"session ends after the default of 24 hours ({hours:.2f} h left)")
         keys = sorted(p["key"] for p in anna.call("GET", "/projects").body)
         check(keys == ["APP", "HELP", "WEB"], f"anna sees her three projects {keys}")
@@ -558,6 +614,9 @@ def verify(args) -> None:
 # ---------------------------------------------------------------------- measurement
 
 # Shares of OPERATIONS.md. Time booking (10) and wiki editing (5) do not exist yet; the remaining 85 are scaled up.
+# The complex search is split: most cases are built from a ticket the person can see, so that text, projects, status,
+# type and tags fit together and at least that ticket matches; the rest combines random filters and mostly finds
+# nothing, which is the cheap selective case and is reported on its own.
 MIX = {
     "Ticketliste": 20.0,
     "Ticketdetail": 25.0,
@@ -569,13 +628,18 @@ MIX = {
     "Suche kurzer Präfix": 2.0,
     "Suche ohne Treffer": 2.0,
     "Suche mit Filtern": 4.0,
-    "Komplexe Suche": 2.0,
+    "Komplexe Suche mit Treffern": 1.5,
+    "Komplexe Suche selektiv": 0.5,
     "Tagvorschlag": 2.0,
 }
+# One ticket change yields two values: the save alone (the PATCH, compared with the 1 s for a regular save in
+# OPERATIONS.md) and the whole action of reading the current version and saving, which has no target of its own.
+# These are proposed comparison values of the reference profile, not promised product limits.
 TARGETS_MS = {
-    "Ticketliste": 500, "Ticketdetail": 500, "Ticketänderung": None, "Suche Kennung": 500, "Suche ein Wort": 500,
-    "Suche zwei Wörter": 500, "Suche häufiger Begriff": 500, "Suche kurzer Präfix": 500, "Suche ohne Treffer": 500,
-    "Suche mit Filtern": 500, "Komplexe Suche": 1000, "Tagvorschlag": 200,
+    "Ticketliste": 500, "Ticketdetail": 500, "Ticketänderung Speichern": 1000, "Ticketänderung gesamt": None,
+    "Suche Kennung": 500, "Suche ein Wort": 500, "Suche zwei Wörter": 500, "Suche häufiger Begriff": 500,
+    "Suche kurzer Präfix": 500, "Suche ohne Treffer": 500, "Suche mit Filtern": 500,
+    "Komplexe Suche mit Treffern": 1000, "Komplexe Suche selektiv": 1000, "Tagvorschlag": 200,
 }
 
 
@@ -583,7 +647,8 @@ TARGETS_MS = {
 class Sample:
     kind: str
     ms: float
-    outcome: str  # ok, rejected (expected business refusal such as a version conflict) or error
+    outcome: str  # ok, rejected (expected business refusal such as a version conflict), unclear or error
+    hits: int | None = None  # total of a search answer
 
 
 @dataclass
@@ -592,6 +657,7 @@ class UserState:
     projects: list[dict] = field(default_factory=list)
     tickets: dict[str, list[int]] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
+    cases: list[dict] = field(default_factory=list)
     can_edit: bool = False
 
 
@@ -605,6 +671,14 @@ def prepare_user(base: str, username: str, password: str) -> UserState:
         state.tickets[project["id"]] = [t["number"] for t in listed] or [1]
         catalog = client.call("GET", f"/projects/{project['id']}/catalog/tags", query={"limit": 50}).body
         state.tags.extend(tag["id"] for tag in catalog)
+        # Visible tickets with tags are the starting points of complex searches that must find something.
+        offset = random.Random(username + project["id"]).randrange(0, 1000)
+        found = client.call("GET", "/search/tickets", query={"project": [project["id"]], "limit": 50, "offset": offset}).body
+        for hit in found["items"]:
+            fields = hit.get("fields", {})
+            if hit.get("tags") and fields.get("title") and fields.get("status") and fields.get("type"):
+                state.cases.append({"project": hit["projectId"], "title": fields["title"], "status": fields["status"],
+                                    "type": fields["type"], "tags": [tag["id"] for tag in hit["tags"]]})
     state.tags.extend(tag["id"] for tag in client.call("GET", "/tags", query={"limit": 50}).body)
     first = state.projects[0]["id"]
     sample = client.call("GET", f"/projects/{first}/tickets/{state.tickets[first][0]}").body
@@ -612,7 +686,40 @@ def prepare_user(base: str, username: str, password: str) -> UserState:
     return state
 
 
-def run_action(state: UserState, kind: str, rng: random.Random) -> Sample:
+def complex_case(state: UserState, rng: random.Random) -> dict:
+    """Search parameters that fit one visible ticket: a word of its title, its project among up to three, its status
+    and type among others, and a part of its own tags. The tags of one ticket come from its project catalog and the
+    company catalog only, so every combination is one that exists in the data."""
+    case = rng.choice(state.cases)
+    others = [p["id"] for p in state.projects if p["id"] != case["project"]]
+    projects = [case["project"]] + rng.sample(others, k=min(rng.randint(0, 2), len(others)))
+    statuses = sorted({case["status"], rng.choice(["new", "in_progress", "done"])})
+    types = sorted({case["type"], rng.choice(["bug", "task"])})
+    tags = rng.sample(case["tags"], k=rng.randint(1, min(10, len(case["tags"]))))
+    word = case["title"].split()[0].lower()
+    return {"q": word, "project": projects, "status": statuses, "type": types, "tag": tags}
+
+
+def selective_case(state: UserState, rng: random.Random) -> dict:
+    """Random projects and up to ten random visible tags; such combinations rarely exist and mostly find nothing."""
+    search: dict = {"q": zipf_word(rng),
+                    "project": [p["id"] for p in rng.sample(state.projects, k=min(3, len(state.projects)))],
+                    "status": ["new", "in_progress"], "type": ["bug", "task"]}
+    if state.tags:
+        search["tag"] = rng.sample(state.tags, k=min(rng.randint(1, 10), len(state.tags)))
+    return search
+
+
+def outcome_of(kind: str, status: int) -> str:
+    if status in (200, 201, 204):
+        return "ok"
+    if status in (409, 412, 428) or (status == 403 and kind.startswith("Ticketänderung")):
+        return "rejected"
+    return "error"
+
+
+def run_action(state: UserState, kind: str, rng: random.Random) -> list[Sample]:
+    """Runs one action of the mix and returns its measured values; a ticket change yields two."""
     client = state.client
     project = rng.choice(state.projects)
     pid = project["id"]
@@ -623,12 +730,17 @@ def run_action(state: UserState, kind: str, rng: random.Random) -> Sample:
     elif kind == "Ticketdetail":
         response = client.call("GET", f"/projects/{pid}/tickets/{number}", expect=None)
     elif kind == "Ticketänderung":
+        started = time.perf_counter()
         current = client.call("GET", f"/projects/{pid}/tickets/{number}", expect=None)
         if current.status != 200:
-            return Sample(kind, current.seconds * 1000, "error")
+            # Nothing was saved; both values of the action count as failed.
+            return [Sample("Ticketänderung Speichern", float("nan"), "error"), Sample("Ticketänderung gesamt", current.seconds * 1000, "error")]
         title = f"{zipf_word(rng).capitalize()} {rng.choice(VERBS)} {rng.choice(QUALIFIERS)}"
-        response = client.call("PATCH", f"/projects/{pid}/tickets/{number}", {"title": title},
-                               headers={"If-Match": current.headers.get("etag", "")}, expect=None)
+        saved = client.call("PATCH", f"/projects/{pid}/tickets/{number}", {"title": title},
+                            headers={"If-Match": current.headers.get("etag", "")}, expect=None)
+        whole = (time.perf_counter() - started) * 1000
+        outcome = outcome_of(kind, saved.status)
+        return [Sample("Ticketänderung Speichern", saved.seconds * 1000, outcome), Sample("Ticketänderung gesamt", whole, outcome)]
     elif kind == "Tagvorschlag":
         response = client.call("GET", "/tags", query={"q": rng.choice(["ber", "bere", "bereich 0", "the"]), "limit": 10}, expect=None)
     else:
@@ -649,21 +761,15 @@ def run_action(state: UserState, kind: str, rng: random.Random) -> Sample:
             search["q"] = zipf_word(rng)
             search["project"] = [pid]
             search["status"] = [rng.choice(["new", "in_progress", "done"])]
-        elif kind == "Komplexe Suche":
-            search["q"] = zipf_word(rng)
-            search["project"] = [p["id"] for p in rng.sample(state.projects, k=min(3, len(state.projects)))]
-            search["status"] = ["new", "in_progress"]
-            search["type"] = ["bug", "task"]
-            if state.tags:
-                search["tag"] = rng.sample(state.tags, k=min(rng.randint(1, 10), len(state.tags)))
+        elif kind == "Komplexe Suche mit Treffern":
+            search.update(complex_case(state, rng))
+        elif kind == "Komplexe Suche selektiv":
+            search.update(selective_case(state, rng))
         response = client.call("GET", "/search/tickets", query=search, expect=None)
-    if response.status in (200, 201, 204):
-        outcome = "ok"
-    elif response.status in (409, 412, 428) or (response.status == 403 and kind == "Ticketänderung"):
-        outcome = "rejected"
-    else:
-        outcome = "error"
-    return Sample(kind, response.seconds * 1000, outcome)
+    hits = None
+    if search is not None and response.status == 200 and isinstance(response.body, dict):
+        hits = response.body.get("total")
+    return [Sample(kind, response.seconds * 1000, outcome_of(kind, response.status), hits)]
 
 
 def percentile(values: list[float], share: float) -> float:
@@ -709,6 +815,7 @@ def measure(args) -> None:
     kinds = list(MIX)
     weights = [MIX[k] for k in kinds]
     samples: list[Sample] = []
+    actions = [0]
     lock = threading.Lock()
     begin = time.monotonic()
     measure_from = begin + args.warmup
@@ -716,8 +823,10 @@ def measure(args) -> None:
 
     def user_loop(index: int, state: UserState) -> None:
         rng = random.Random(1000 + index)
-        # A person without write rights does not try to change tickets; their share goes to the other actions.
-        own = [w if state.can_edit or k != "Ticketänderung" else 0 for k, w in zip(kinds, weights)]
+        # A person without write rights does not try to change tickets, and one who sees no ticket with tags has no
+        # complex search with hits; their shares go to the other actions.
+        own = [0 if (k == "Ticketänderung" and not state.can_edit) or (k == "Komplexe Suche mit Treffern" and not state.cases)
+               else w for k, w in zip(kinds, weights)]
         while True:
             pause = rng.expovariate(1 / args.think) if args.think > 0 else 0
             if time.monotonic() + pause >= stop_at:
@@ -725,13 +834,17 @@ def measure(args) -> None:
             time.sleep(pause)
             kind = rng.choices(kinds, own)[0]
             try:
-                sample = run_action(state, kind, rng)
+                measured = run_action(state, kind, rng)
+            except UnclearOutcome as error:
+                measured = [Sample("Ticketänderung Speichern" if kind == "Ticketänderung" else kind, float("nan"), "unclear")]
+                print(f"  {kind}: {error}", file=sys.stderr)
             except (OSError, http.client.HTTPException) as error:
-                sample = Sample(kind, float("nan"), "error")
+                measured = [Sample("Ticketänderung Speichern" if kind == "Ticketänderung" else kind, float("nan"), "error")]
                 print(f"  {kind}: {error}", file=sys.stderr)
             if time.monotonic() >= measure_from:
                 with lock:
-                    samples.append(sample)
+                    samples.extend(measured)
+                    actions[0] += 1
 
     print(f"warm up {args.warmup} s, measure {args.duration} s, {args.users} users, think time {args.think} s")
     threads = [threading.Thread(target=user_loop, args=(i, s), daemon=True) for i, s in enumerate(states)]
@@ -740,29 +853,16 @@ def measure(args) -> None:
     for thread in threads:
         thread.join()
 
-    rows = []
-    for kind in kinds:
-        chosen = [s for s in samples if s.kind == kind]
-        ok = [s.ms for s in chosen if s.outcome == "ok"]
-        errors = sum(1 for s in chosen if s.outcome == "error")
-        rejected = sum(1 for s in chosen if s.outcome == "rejected")
-        target = TARGETS_MS[kind]
-        p95 = percentile(ok, 0.95)
-        rows.append({
-            "class": kind, "samples": len(chosen), "ok": len(ok), "rejected": rejected, "errors": errors,
-            "p50_ms": round(percentile(ok, 0.50), 1), "p95_ms": round(p95, 1), "p99_ms": round(percentile(ok, 0.99), 1),
-            "max_ms": round(max(ok), 1) if ok else None, "target_p95_ms": target,
-            "met": None if target is None or not ok else p95 <= target,
-        })
-    total = sum(r["samples"] for r in rows)
-    errors = sum(r["errors"] for r in rows)
+    rows = summarize(samples)
+    total = sum(r["samples"] for r in rows if r["class"] != "Ticketänderung gesamt")
+    errors = sum(r["errors"] + r["unclear"] for r in rows if r["class"] != "Ticketänderung gesamt")
     result = {
         "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - args.duration - args.warmup)),
         "users": args.users, "think_seconds": args.think, "warmup_seconds": args.warmup, "duration_seconds": args.duration,
         "stock": {"projects": projects, "tickets": stock, "accounts": accounts},
         "client_machine": machine(), "server": args.url, "samples": total,
         "error_rate": round(errors / total, 5) if total else None,
-        "throughput_per_second": round(total / args.duration, 2), "classes": rows,
+        "actions": actions[0], "throughput_per_second": round(actions[0] / args.duration, 2), "classes": rows,
     }
     os.makedirs(args.out, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
@@ -770,19 +870,53 @@ def measure(args) -> None:
         json.dump(result, out, indent=2, ensure_ascii=False)
     lines = [
         f"Messung {result['started']}: {args.users} Benutzer, Denkzeit {args.think} s, {args.warmup} s Aufwärmen, {args.duration} s Messung",
-        f"Bestand: {projects} Projekte, {stock} Tickets, {accounts} Konten; {total} Messwerte, Fehlerquote {result['error_rate']}",
+        f"Bestand: {projects} Projekte, {stock} Tickets, {accounts} Konten; {actions[0]} Aktionen, Fehlerquote {result['error_rate']}",
         "",
-        "| Messklasse | Messwerte | abgewiesen | Fehler | p50 ms | p95 ms | p99 ms | Ziel p95 ms | erfüllt |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
-    for r in rows:
-        met = "" if r["met"] is None else ("ja" if r["met"] else "nein")
-        lines.append(f"| {r['class']} | {r['samples']} | {r['rejected']} | {r['errors']} | {r['p50_ms']} | {r['p95_ms']} | "
-                     f"{r['p99_ms']} | {r['target_p95_ms'] or ''} | {met} |")
-    report = "\n".join(lines) + "\n"
+    report = "\n".join(lines + report_table(rows)) + "\n"
     with open(os.path.join(args.out, f"measurement-{stamp}.md"), "w") as out:
         out.write(report)
     print(report)
+
+
+def summarize(samples: list[Sample]) -> list[dict]:
+    """One row per measuring class with latency percentiles of the successful requests and, for searches, the hits."""
+    rows = []
+    for kind in TARGETS_MS:
+        chosen = [s for s in samples if s.kind == kind]
+        ok = [s.ms for s in chosen if s.outcome == "ok"]
+        target = TARGETS_MS[kind]
+        p95 = percentile(ok, 0.95)
+        row = {
+            "class": kind, "samples": len(chosen), "ok": len(ok),
+            "rejected": sum(1 for s in chosen if s.outcome == "rejected"),
+            "errors": sum(1 for s in chosen if s.outcome == "error"),
+            "unclear": sum(1 for s in chosen if s.outcome == "unclear"),
+            "p50_ms": round(percentile(ok, 0.50), 1), "p95_ms": round(p95, 1), "p99_ms": round(percentile(ok, 0.99), 1),
+            "max_ms": round(max(ok), 1) if ok else None, "target_p95_ms": target,
+            "met": None if target is None or not ok else p95 <= target,
+        }
+        hits = [s.hits for s in chosen if s.outcome == "ok" and s.hits is not None]
+        if hits:
+            row["hits"] = {"with_hits": sum(1 for h in hits if h > 0), "without_hits": sum(1 for h in hits if h == 0),
+                           "p50": percentile(hits, 0.50), "max": max(hits)}
+        rows.append(row)
+    return rows
+
+
+def report_table(rows: list[dict]) -> list[str]:
+    lines = [
+        "| Messklasse | Messwerte | abgewiesen | Fehler | p50 ms | p95 ms | p99 ms | Ziel p95 ms | erfüllt | mit Treffern | Treffer Median | Treffer max |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
+    ]
+    for r in rows:
+        met = "" if r["met"] is None else ("ja" if r["met"] else "nein")
+        hits = r.get("hits")
+        share = f"{hits['with_hits']} von {hits['with_hits'] + hits['without_hits']}" if hits else ""
+        lines.append(f"| {r['class']} | {r['samples']} | {r['rejected']} | {r['errors'] + r['unclear']} | {r['p50_ms']} | "
+                     f"{r['p95_ms']} | {r['p99_ms']} | {r['target_p95_ms'] or ''} | {met} | {share} | "
+                     f"{hits['p50'] if hits else ''} | {hits['max'] if hits else ''} |")
+    return lines
 
 
 # ---------------------------------------------------------------------- command line
@@ -829,7 +963,7 @@ def main(argv: list[str]) -> None:
 if __name__ == "__main__":
     try:
         main(sys.argv[1:])
-    except ApiError as error:
+    except (ApiError, UnclearOutcome) as error:
         raise SystemExit(f"stopped: {error}")
     except KeyboardInterrupt:
         raise SystemExit("interrupted")
