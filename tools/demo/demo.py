@@ -119,21 +119,31 @@ class Client:
             self.close()
         for attempt in (1, 2):
             started = time.perf_counter()
+            connection = self._connect()
+            if connection.sock is None:
+                # Opening the connection sends nothing; if it fails, the outcome is certain and the error stays as it is.
+                try:
+                    connection.connect()
+                except OSError:
+                    self.close()
+                    raise
             try:
-                connection = self._connect()
                 connection.request(method, target, body=data, headers=sent)
                 raw = connection.getresponse()
                 payload = raw.read()
                 seconds = time.perf_counter() - started
                 self.last_used = time.monotonic()
                 break
-            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError, http.client.CannotSendRequest) as error:
-                # Usually a kept-alive connection the server already closed. A reading request is tried once more on
-                # a fresh connection; a change is not, because the server may have saved it before the answer was lost.
+            except (OSError, http.client.HTTPException) as error:
+                # Usually a kept-alive connection the server already closed, but also a cut off answer or a timeout. A
+                # reading request on a closed connection is tried once more on a fresh one. A change is never sent again:
+                # once it may have left, the server may have saved it, whatever went wrong afterwards.
                 self.close()
                 if not safe:
                     raise UnclearOutcome(method, path, error) from error
-                if attempt == 2:
+                retry = isinstance(error, (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError,
+                                           http.client.CannotSendRequest))
+                if attempt == 2 or not retry:
                     raise
         received = {k.lower(): v for k, v in raw.getheaders()}
         for name, value in raw.getheaders():
