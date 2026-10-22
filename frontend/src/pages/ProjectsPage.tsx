@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { createProject, listProjects } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
-import { useLoad } from '../app/hooks.ts';
+import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate } from '../app/route.ts';
 import { useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, PageHead, TextField, useProblemText } from '../app/ui.tsx';
@@ -55,6 +55,8 @@ function CreateProject() {
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<{ key?: string; name?: string; general?: string }>({});
   const [busy, setBusy] = useState(false);
+  // Leaving with input asks first; after a successful creation navigate() passes without asking.
+  useUnsavedGuard(key !== '' || name !== '' || description !== '');
 
   async function submit(event: FormEvent) {
     event.preventDefault();

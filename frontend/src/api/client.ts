@@ -92,9 +92,20 @@ export function onSessionLost(listener: () => void): () => void {
   return () => sessionLostListeners.delete(listener);
 }
 
+// Listeners told when the server refuses a request with 403: the rights of the session may have changed since they were
+// read, so whatever the interface derives from them (navigation, offered actions) has to be read again (finding F6 of the
+// review of TASK-030).
+const forbiddenListeners = new Set<() => void>();
+
+export function onForbidden(listener: () => void): () => void {
+  forbiddenListeners.add(listener);
+  return () => forbiddenListeners.delete(listener);
+}
+
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-// Every changing request repeats the CSRF token the server set; a 401 outside the session endpoint ends the login.
+// Every changing request repeats the CSRF token the server set; a 401 outside the session endpoint ends the login, a 403
+// there reads the rights of the session again.
 export function withSession(fetcher: typeof fetch): typeof fetch {
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -103,8 +114,12 @@ export function withSession(fetcher: typeof fetch): typeof fetch {
       if (token !== null) request.headers.set('X-CSRF-Token', token);
     }
     const response = await fetcher(request);
-    if (response.status === 401 && !new URL(request.url).pathname.endsWith('/api/v1/session')) {
+    const sessionState = new URL(request.url).pathname.endsWith('/api/v1/session');
+    if (response.status === 401 && !sessionState) {
       for (const listener of sessionLostListeners) listener();
+    }
+    if (response.status === 403 && !sessionState) {
+      for (const listener of forbiddenListeners) listener();
     }
     return response;
   };

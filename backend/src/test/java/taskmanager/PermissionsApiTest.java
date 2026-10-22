@@ -16,6 +16,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -26,6 +31,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
@@ -230,6 +236,40 @@ class PermissionsApiTest {
     }
 
     // ---------------------------------------------------------------- tests
+
+    @Test
+    void aRightsLockNotGrantedInTimeAnswersRetryableBusy() throws Exception {
+        Person admin = person(true);
+        UUID company = companies.find().orElseThrow();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            // Holds the rights revision like a long running change; the driver reports the timeout as SQLSTATE 55P03.
+            Future<?> holder = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.queryForList("select revision from permissions_revision where company_id = ? for update", Long.class, company);
+                locked.countDown();
+                try {
+                    assertTrue(release.await(30, TimeUnit.SECONDS));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            try {
+                assertTrue(locked.await(15, TimeUnit.SECONDS));
+                String name = "Wartet " + COUNTER.incrementAndGet();
+                Response busy = admin.browser().post("/api/v1/permissions/groups", Map.of("name", name));
+                assertEquals(503, busy.status(), busy.body());
+                assertEquals("permissions.busy", busy.code(), busy.body());
+                assertEquals("1", busy.header("Retry-After"));
+                assertEquals(0, jdbc.queryForObject("select count(*) from permissions_group where name = ?", Integer.class, name),
+                    "nothing was created");
+            } finally {
+                release.countDown();
+                holder.get(15, TimeUnit.SECONDS);
+            }
+        }
+        group(admin, "Nach dem Warten " + COUNTER.incrementAndGet());
+    }
 
     @Test
     void onlyTheCompanyAdministrationReachesTheGroupAdministration() {

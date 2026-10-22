@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { createAccount, deactivateAccount, listAccounts, reactivateAccount, resetPassword, type Account, type IssuedAccount } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
-import { useLoad } from '../app/hooks.ts';
+import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { useSession } from '../app/session.tsx';
 import { LoadedView, NoticeView, PageHead, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import { formatDateTime } from '../i18n/format.ts';
@@ -22,6 +22,8 @@ export function AccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [issued, setIssued] = useState<IssuedAccount | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // Leaving with input asks first; a successful creation empties the form and so releases the guard.
+  useUnsavedGuard(username !== '' || displayName !== '');
 
   async function submit(event: FormEvent) {
     event.preventDefault();

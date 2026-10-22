@@ -317,6 +317,16 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const answer = unsafe && headers['x-csrf-token'] !== TOKEN ? problem(403, 'auth.csrf_invalid')
         : anonymousAppearance && url.pathname === '/api/v1/session' ? ok({ authenticated: false })
           : handle(session, request.method(), url.pathname, url.searchParams, headers, json ?? {});
+      // Like the server: logging out removes the CSRF cookie, GET /session issues a new one.
+      if (url.pathname === '/api/v1/session' && request.method() === 'DELETE' && answer.status === 204) {
+        await context.clearCookies({ name: '__Host-tm-csrf' });
+      }
+      if (url.pathname === '/api/v1/session' && request.method() === 'GET') {
+        const cookies = await context.cookies();
+        if (!cookies.some((cookie) => cookie.name === '__Host-tm-csrf')) {
+          await context.addCookies([{ name: '__Host-tm-csrf', value: TOKEN, domain: 'localhost', path: '/', secure: true, sameSite: 'Lax' }]);
+        }
+      }
       if (answer.raw) return route.fulfill({ status: answer.status, contentType: answer.type, body: answer.raw });
       return route.fulfill({
         status: answer.status,

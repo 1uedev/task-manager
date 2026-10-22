@@ -4,7 +4,7 @@ import {
   type GroupDetail, type Result, type TicketField,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
-import { useLoad } from '../app/hooks.ts';
+import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
@@ -21,6 +21,8 @@ export function GroupsPage() {
   const [groups, reload] = useLoad(() => listGroups(api), [api]);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Leaving with input asks first; after a successful creation navigate() passes without asking.
+  useUnsavedGuard(name !== '');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
