@@ -52,6 +52,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     appearance: { version: 3, accent, logo: null },
     // The rights log, newest last; pages are cut by rightsVersion like on the server.
     audit: [],
+    accountAudit: [],
     requests: [],
   };
 
@@ -102,7 +103,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const projectView = (account, item) => ({ ...item, configurationVersion: state.configurations.get(item.id).version, configuration: configurationOf(item.id),
     manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
-  const accountView = ({ password: _password, ...rest }) => rest;
+  // An account as the administration sees it (TASK-045): the state of the one time password and a running waiting time.
+  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ ...rest,
+    oneTimePasswordState: rest.passwordChangeRequired ? 'open' : 'none', oneTimePasswordExpiresAt: rest.passwordChangeRequired ? '2026-10-24T08:00:00Z' : null,
+    loginDelayedUntil: delayedUntil ?? null });
+  const logAccount = (actor, event, target) => state.accountAudit.push({ id: state.accountAudit.length + 1, occurredAt: now(), actor: actor.username, event, accountId: target?.id ?? null, detail: null });
 
   // ------------------------------------------------------------------ http
   const problem = (status, code, extra = {}) => ({ status, body: { code, status, correlationId: '0f8b7c1e-1111-4222-8333-444455556666', ...extra } });
@@ -152,10 +157,27 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (p.startsWith('/accounts')) {
       if (!may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
       if (p === '/accounts' && method === 'GET') return ok(state.accounts.map(accountView));
+      if (p === '/accounts/audit' && method === 'GET') {
+        const before = Number(query.get('before') ?? Infinity);
+        return ok([...state.accountAudit].filter((entry) => entry.id < before).sort((a, b) => b.id - a.id).slice(0, Number(query.get('limit') ?? 50)));
+      }
+      const single = p.match(/^\/accounts\/([^/]+)$/);
+      if (single && method === 'PUT') {
+        const target = state.accounts.find((item) => item.id === single[1]);
+        if (!target) return problem(404, 'account.not_found');
+        const name = typeof body.displayName === 'string' && body.displayName.trim() !== '' ? body.displayName.trim() : null;
+        if (name !== null && name.length > 100) return problem(400, 'request.invalid', { violations: ['displayName.too_long'] });
+        if (name !== target.displayName) {
+          target.displayName = name;
+          logAccount(account, 'account.renamed', target);
+        }
+        return ok(accountView(target));
+      }
       if (p === '/accounts' && method === 'POST') {
         if (state.accounts.some((item) => item.username === body.username)) return problem(409, 'account.username_taken');
         const created = { id: uuid(), username: body.username, displayName: body.displayName ?? null, password: `Einmal${counter}Passwort`, active: true, passwordChangeRequired: true, createdAt: now() };
         state.accounts.push(created);
+        logAccount(account, 'account.created', created);
         return ok({ account: accountView(created), oneTimePassword: created.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
       }
       const [, id, action] = p.match(/^\/accounts\/([^/]+)\/([a-z-]+)$/) ?? [];
@@ -164,11 +186,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (action === 'deactivate') {
         if (target.id === anna.id) return problem(409, 'account.last_administrator');
         target.active = false;
+        logAccount(account, 'account.deactivated', target);
       }
-      if (action === 'reactivate') target.active = true;
+      if (action === 'reactivate') {
+        target.active = true;
+        logAccount(account, 'account.reactivated', target);
+      }
+      if (action === 'clear-login-delay' && target.delayedUntil) {
+        target.delayedUntil = null;
+        logAccount(account, 'account.login_delay_cleared', target);
+      }
       if (action === 'password-reset') {
         target.password = `Einmal${counter}Neu`;
         target.passwordChangeRequired = true;
+        logAccount(account, 'password.reset', target);
         return ok({ account: accountView(target), oneTimePassword: target.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
       }
       return ok(accountView(target));

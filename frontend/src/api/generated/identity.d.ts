@@ -78,6 +78,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Protokoll der Kontenverwaltung (Recht accounts.manage)
+         * @description Neueste Einträge zuerst. Die nächste Seite holt `before` mit der kleinsten `id` der letzten Seite; eine leere Seite ist
+         *     das Ende. Das Protokoll enthält Kurzbezeichnungen und Kennungen, nie ein Passwort oder ein Token. `actor` ist der
+         *     Anmeldename der handelnden Person oder `cli` für den Containerbefehl.
+         */
+        get: operations["listAccountAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anzeigename ändern (Recht accounts.manage)
+         * @description Setzt den Anzeigenamen; ein leerer Wert entfernt ihn. Höchstens 100 Zeichen ohne Steuerzeichen (400 mit
+         *     `displayName.too_long` oder `displayName.invalid`). Bleibt der Name gleich, wird nichts geschrieben. Der
+         *     Anmeldename ändert sich nie.
+         */
+        put: operations["renameAccount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/clear-login-delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wartezeit nach Fehlversuchen aufheben (Recht accounts.manage)
+         * @description Beendet die laufende Wartezeit des Anmeldenamens und vergisst seine Fehlversuche; der nächste Versuch zählt von null.
+         *     Die Zähler der Quelladressen bleiben, damit ein einzelnes Konto sie nicht zurücksetzen kann. Gab es nichts
+         *     aufzuheben, wird nichts protokolliert.
+         */
+        post: operations["clearAccountLoginDelay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{accountId}/deactivate": {
         parameters: {
             query?: never;
@@ -244,8 +314,38 @@ export interface components {
             displayName?: string | null;
             active: boolean;
             passwordChangeRequired: boolean;
+            /**
+             * @description `none`: das Passwort hat die Person selbst gewählt. `open`: ein Einmalpasswort wurde ausgegeben, ist noch nicht
+             *     benutzt und gültig. `expired`: ausgegeben, nicht benutzt, die Gültigkeit ist vorbei; eine Administration muss ein neues
+             *     ausgeben. `used`: für die Anmeldung benutzt, der erzwungene Wechsel steht noch aus; lief die Sitzung dafür ab,
+             *     muss ebenfalls ein neues ausgegeben werden.
+             * @enum {string}
+             */
+            oneTimePasswordState: "none" | "open" | "expired" | "used";
+            /**
+             * Format: date-time
+             * @description Ende der Gültigkeit, solange ein Einmalpasswort ausgegeben und nicht durch einen Wechsel abgelöst ist
+             */
+            oneTimePasswordExpiresAt: string | null;
+            /**
+             * Format: date-time
+             * @description Ende der laufenden Wartezeit nach Fehlversuchen, sonst null
+             */
+            loginDelayedUntil: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        AuditEntry: {
+            id: number;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: string;
+            /** @description Kurzbezeichnung, zum Beispiel account.created, account.renamed, account.login_delay_cleared, password.reset, password.changed */
+            event: string;
+            /** Format: uuid */
+            accountId: string | null;
+            /** @description Feste Kurzangabe, nie ein Geheimnis */
+            detail: string | null;
         };
         DirectoryEntry: {
             /** Format: uuid */
@@ -273,7 +373,8 @@ export interface components {
          *     request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
          *     auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
          *     password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-         *     account.username_taken, account.last_administrator, account.not_administrator.
+         *     account.username_taken, account.last_administrator, account.not_administrator. Gründe in `violations` der Konten: username.invalid,
+         *     username.required, displayName.too_long, displayName.invalid, paging.invalid.
          */
         Problem: {
             headers: {
@@ -451,6 +552,89 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listAccountAudit: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Einträge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    renameAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    displayName?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Geändert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    clearAccountLoginDelay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aufgehoben */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     deactivateAccount: {

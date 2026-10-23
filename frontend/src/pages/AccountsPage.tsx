@@ -1,14 +1,21 @@
-import { useState, type FormEvent } from 'react';
-import { createAccount, deactivateAccount, listAccounts, reactivateAccount, resetPassword, type Account, type IssuedAccount } from '../api/product.ts';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { ProblemInfo } from '../api/problem.ts';
+import {
+  ACCOUNT_AUDIT_PAGE, clearLoginDelay, createAccount, deactivateAccount, listAccounts, reactivateAccount, readAccountAudit, renameAccount, resetPassword,
+  type Account, type AccountAuditEntry, type IssuedAccount,
+} from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { useSession } from '../app/session.tsx';
-import { LoadedView, NoticeView, PageHead, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import { EmptyText, LoadedView, NoticeView, PageHead, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import { de } from '../i18n/de.ts';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
+import type { MessageKey } from '../i18n/index.ts';
 
 export const ACCOUNTS_RIGHT = 'accounts.manage';
 const USERNAME = /^[a-z0-9][a-z0-9._@+-]{2,63}$/;
+const NONE: readonly Account[] = [];
 
 // Local accounts: created by an administrator with a one time password that is shown exactly once.
 export function AccountsPage() {
@@ -22,8 +29,10 @@ export function AccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [issued, setIssued] = useState<IssuedAccount | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // The account whose display name is being changed, with the text typed so far.
+  const [editing, setEditing] = useState<{ readonly id: string; readonly value: string } | null>(null);
   // Leaving with input asks first; a successful creation empties the form and so releases the guard.
-  useUnsavedGuard(username !== '' || displayName !== '');
+  useUnsavedGuard(username !== '' || displayName !== '' || editing !== null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -38,6 +47,37 @@ export function AccountsPage() {
     reloadDirectory();
     reload();
   }
+
+  async function rename(account: Account, value: string, list: readonly Account[]) {
+    setNotice(null);
+    const result = await renameAccount(api, account.id, value.trim() === '' ? null : value.trim());
+    if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, { 'request.invalid': 'accounts.error.displayName' }) });
+    replace({ value: list.map((item) => (item.id === account.id ? result.data.value : item)), etag: null });
+    setEditing(null);
+    reloadDirectory();
+    setNotice({ kind: 'success', text: t('accounts.renamed', { name: account.username }) });
+  }
+
+  async function endDelay(account: Account, list: readonly Account[]) {
+    setNotice(null);
+    const result = await clearLoginDelay(api, account.id);
+    if (result.kind !== 'ok') return setNotice({ kind: 'problem', problem: result.problem });
+    replace({ value: list.map((item) => (item.id === account.id ? result.data.value : item)), etag: null });
+    setNotice({ kind: 'success', text: t('accounts.delayCleared', { name: account.username }) });
+  }
+
+  // What became of the one time password, without ever showing it.
+  const stateText = (account: Account): string => {
+    if (!account.active) return t('accounts.inactive');
+    const parts: string[] = [];
+    const expires = account.oneTimePasswordExpiresAt;
+    if (account.oneTimePasswordState === 'open') parts.push(t('accounts.oneTimeOpen', { date: expires ? formatDateTime(expires, language) : '' }));
+    else if (account.oneTimePasswordState === 'expired') parts.push(t('accounts.oneTimeExpired'));
+    else if (account.oneTimePasswordState === 'used') parts.push(t('accounts.oneTimeUsed'));
+    else parts.push(t('accounts.active'));
+    if (account.loginDelayedUntil) parts.push(t('accounts.delayed', { date: formatDateTime(account.loginDelayedUntil, language) }));
+    return parts.join('. ');
+  };
 
   async function act(account: Account, action: 'deactivate' | 'reactivate' | 'reset', list: readonly Account[]) {
     setNotice(null);
@@ -86,9 +126,29 @@ export function AccountsPage() {
                 {list.map((account) => (
                   <tr key={account.id}>
                     <td>{account.username}</td>
-                    <td>{account.displayName ?? ''}</td>
-                    <td>{t(!account.active ? 'accounts.inactive' : account.passwordChangeRequired ? 'accounts.pending' : 'accounts.active')}</td>
+                    <td>
+                      {editing?.id === account.id ? (
+                        <form className="inline-form" onSubmit={(event) => {
+                          event.preventDefault();
+                          void rename(account, editing.value, list);
+                        }}>
+                          <TextField label={t('accounts.displayNameOf', { name: account.username })} value={editing.value} maxLength={100}
+                            onChange={(value) => setEditing({ id: account.id, value })} />
+                          <button type="submit">{t('settings.save')}</button>
+                          <button type="button" className="secondary" onClick={() => setEditing(null)}>{t('accounts.cancel')}</button>
+                        </form>
+                      ) : account.displayName ?? ''}
+                    </td>
+                    <td>{stateText(account)}</td>
                     <td className="row-actions">
+                      {editing?.id !== account.id && (
+                        <button type="button" className="secondary" onClick={() => setEditing({ id: account.id, value: account.displayName ?? '' })}>
+                          {t('accounts.rename', { name: account.username })}
+                        </button>
+                      )}
+                      {account.loginDelayedUntil && (
+                        <button type="button" className="secondary" onClick={() => void endDelay(account, list)}>{t('accounts.clearDelay', { name: account.username })}</button>
+                      )}
                       {account.active
                         ? <button type="button" className="secondary" onClick={() => void act(account, 'deactivate', list)}>{t('accounts.deactivate', { name: account.username })}</button>
                         : <button type="button" className="secondary" onClick={() => void act(account, 'reactivate', list)}>{t('accounts.reactivate', { name: account.username })}</button>}
@@ -101,6 +161,59 @@ export function AccountsPage() {
           </div>
         )}
       </LoadedView>
+      <AccountAudit accounts={accounts.state === 'ok' ? accounts.value : NONE} />
     </>
+  );
+}
+
+// The audit trail of the account administration, page by page (TASK-045). It reloads whenever the list changed.
+function AccountAudit({ accounts }: { readonly accounts: readonly Account[] }) {
+  const { t, language } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [entries, setEntries] = useState<AccountAuditEntry[]>([]);
+  const [problem, setProblem] = useState<ProblemInfo | null>(null);
+  const [more, setMore] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load(before: number | null) {
+    setBusy(true);
+    const result = await readAccountAudit(api, before);
+    setBusy(false);
+    if (result.kind !== 'ok') return setProblem(result.problem);
+    setProblem(null);
+    setEntries((current) => (before === null ? result.data.value : [...current, ...result.data.value]));
+    setMore(result.data.value.length === ACCOUNT_AUDIT_PAGE);
+  }
+  useEffect(() => { void load(null); }, [api, accounts]);
+
+  const subject = (id: string | null | undefined) => accounts.find((account) => account.id === id)?.username ?? t('accounts.audit.unknown');
+  const described = (entry: AccountAuditEntry): string => {
+    const key = `accounts.audit.event.${entry.event}`;
+    return Object.hasOwn(de, key) ? t(key as MessageKey, { account: subject(entry.accountId) }) : `${entry.event} ${subject(entry.accountId)}`;
+  };
+
+  return (
+    <section aria-labelledby="accounts-audit" className="panel">
+      <h2 id="accounts-audit">{t('accounts.audit.title')}</h2>
+      <p className="hint">{t('accounts.audit.intro')}</p>
+      {problem !== null ? <p className="empty">{text(problem)}</p>
+        : entries.length === 0 ? (busy ? null : <EmptyText text={t('accounts.audit.empty')} />) : (
+        <>
+          <ol className="history" data-testid="accounts-audit">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <p className="hint">{t('accounts.audit.entry', { date: formatDateTime(entry.occurredAt, language), by: entry.actor === 'cli' ? t('accounts.audit.server') : entry.actor })}</p>
+                <p>{described(entry)}</p>
+              </li>
+            ))}
+          </ol>
+          {more
+            ? <p className="actions"><button type="button" className="secondary" disabled={busy}
+                onClick={() => void load(entries[entries.length - 1]?.id ?? null)}>{t('accounts.audit.more')}</button></p>
+            : <p className="hint">{t('accounts.audit.end')}</p>}
+        </>
+      )}
+    </section>
   );
 }

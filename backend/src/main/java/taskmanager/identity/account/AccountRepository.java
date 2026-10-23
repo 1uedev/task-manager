@@ -92,6 +92,23 @@ public class AccountRepository {
         jdbc.sql("update identity_account set active = ?, updated_at = ? where id = ?").params(active, Db.ts(now), id).update();
     }
 
+    public void setDisplayName(UUID id, String displayName, Instant now) {
+        jdbc.sql("update identity_account set display_name = ?, updated_at = ? where id = ?").params(displayName, Db.ts(now), id).update();
+    }
+
+    /** One entry of the audit trail. */
+    public record AuditRecord(long id, Instant occurredAt, String actor, String event, UUID accountId, String detail) {
+    }
+
+    /** The audit trail, newest first, below the entry {@code before} if given. */
+    public List<AuditRecord> audit(Long before, int limit) {
+        return jdbc.sql("select id, occurred_at, actor, event, account_id, detail from identity_audit_event where id < ? order by id desc limit ?")
+            .params(before == null ? Long.MAX_VALUE : before, limit)
+            .query((rs, row) -> new AuditRecord(rs.getLong("id"), Db.instant(rs, "occurred_at"), rs.getString("actor"), rs.getString("event"),
+                rs.getObject("account_id", UUID.class), rs.getString("detail")))
+            .list();
+    }
+
     public void audit(String actor, String event, UUID accountId, String detail, Instant now) {
         jdbc.sql("insert into identity_audit_event (occurred_at, actor, event, account_id, detail) values (?, ?, ?, ?, ?)")
             .params(Db.ts(now), actor, event, accountId, detail).update();

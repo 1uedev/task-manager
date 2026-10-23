@@ -13,6 +13,7 @@ import taskmanager.identity.AccountDeactivationGuard;
 import taskmanager.identity.EmergencyResetPolicy;
 import taskmanager.identity.FirstAdministratorHandler;
 import taskmanager.identity.config.IdentityProperties;
+import taskmanager.identity.session.LoginThrottle;
 import taskmanager.platform.ApiProblemException;
 
 /**
@@ -34,11 +35,12 @@ public class AccountService {
     private final ObjectProvider<AccountDeactivationGuard> deactivationGuard;
     private final ObjectProvider<FirstAdministratorHandler> firstAdministrator;
     private final ObjectProvider<EmergencyResetPolicy> emergencyReset;
+    private final LoginThrottle throttle;
 
     AccountService(AccountRepository accounts, PasswordHasher hasher, OneTimePasswords oneTimePasswords,
             JdbcClient jdbc, Clock clock, IdentityProperties properties,
             ObjectProvider<AccountDeactivationGuard> deactivationGuard, ObjectProvider<FirstAdministratorHandler> firstAdministrator,
-            ObjectProvider<EmergencyResetPolicy> emergencyReset) {
+            ObjectProvider<EmergencyResetPolicy> emergencyReset, LoginThrottle throttle) {
         this.accounts = accounts;
         this.hasher = hasher;
         this.oneTimePasswords = oneTimePasswords;
@@ -48,6 +50,7 @@ public class AccountService {
         this.deactivationGuard = deactivationGuard;
         this.firstAdministrator = firstAdministrator;
         this.emergencyReset = emergencyReset;
+        this.throttle = throttle;
     }
 
     /** An account together with the one time password that was just issued. The password is shown only once. */
@@ -56,6 +59,63 @@ public class AccountService {
 
     public List<AccountRecord> list() {
         return accounts.findAll();
+    }
+
+    /** The end of the running waiting time after failed logins for each account that has one (TASK-045). */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, Instant> loginDelays(List<AccountRecord> list) {
+        java.util.Map<String, Instant> byName = throttle.delays(list.stream().map(AccountRecord::username).toList(), clock.instant());
+        java.util.Map<UUID, Instant> delays = new java.util.HashMap<>();
+        list.forEach(account -> {
+            Instant until = byName.get(account.username());
+            if (until != null) {
+                delays.put(account.id(), until);
+            }
+        });
+        return delays;
+    }
+
+    /** The audit trail of the account administration, newest first (TASK-045). */
+    @Transactional(readOnly = true)
+    public List<AccountRepository.AuditRecord> audit(Long before, int limit) {
+        return accounts.audit(before, limit);
+    }
+
+    /**
+     * Changes the display name; an empty one removes it. {@code authorize} runs after the serialization and before the account
+     * is locked, like for the other changes of an account (TASK-045). A change that keeps the name writes nothing.
+     */
+    @Transactional
+    public AccountRecord rename(String actor, UUID id, String rawDisplayName, Runnable authorize) {
+        String name = rawDisplayName == null || rawDisplayName.isBlank() ? null : rawDisplayName.trim();
+        if (name != null && (name.codePointCount(0, name.length()) > 100 || name.chars().anyMatch(Character::isISOControl))) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of(name.chars().anyMatch(Character::isISOControl)
+                ? "displayName.invalid" : "displayName.too_long"));
+        }
+        accounts.serializeAdministration();
+        authorize.run();
+        AccountRecord account = lock(id);
+        if (!java.util.Objects.equals(account.displayName(), name)) {
+            Instant now = clock.instant();
+            accounts.setDisplayName(id, name, now);
+            accounts.audit(actor, "account.renamed", id, null, now);
+        }
+        return accounts.findById(id).orElseThrow();
+    }
+
+    /**
+     * Ends the waiting time after failed logins of the account and forgets its failures, so the next attempt counts from zero.
+     * The counters of source addresses stay, because one account must not be able to reset them (TASK-045).
+     */
+    @Transactional
+    public AccountRecord clearLoginDelay(String actor, UUID id, Runnable authorize) {
+        accounts.serializeAdministration();
+        authorize.run();
+        AccountRecord account = lock(id);
+        if (throttle.forget(account.username())) {
+            accounts.audit(actor, "account.login_delay_cleared", id, null, clock.instant());
+        }
+        return account;
     }
 
     @Transactional

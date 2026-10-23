@@ -13,6 +13,7 @@ import { readProblem, type ProblemInfo } from './problem.ts';
 export type Account = IdentityTypes['schemas']['Account'];
 export type IssuedAccount = IdentityTypes['schemas']['IssuedAccount'];
 export type DirectoryEntry = IdentityTypes['schemas']['DirectoryEntry'];
+export type AccountAuditEntry = IdentityTypes['schemas']['AuditEntry'];
 export type ProjectSummary = ProjectTypes['schemas']['ProjectSummary'];
 export type Project = ProjectTypes['schemas']['Project'];
 export type Configuration = ProjectTypes['schemas']['Configuration'];
@@ -128,6 +129,15 @@ export const reactivateAccount = (api: ServerApi, id: string) =>
 export const resetPassword = (api: ServerApi, id: string) =>
   run(() => api.identity.POST('/accounts/{accountId}/password-reset', { params: { path: { accountId: id } } }),
     one<IssuedAccount>((v) => record(v) && isAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const renameAccount = (api: ServerApi, id: string, displayName: string | null) =>
+  run(() => api.identity.PUT('/accounts/{accountId}', { params: { path: { accountId: id } }, body: { displayName } }), one<Account>(isAccount));
+export const clearLoginDelay = (api: ServerApi, id: string) =>
+  run(() => api.identity.POST('/accounts/{accountId}/clear-login-delay', { params: { path: { accountId: id } } }), one<Account>(isAccount));
+export const ACCOUNT_AUDIT_PAGE = 50;
+// Newest first; the next page starts below the smallest identifier of the previous one (TASK-045).
+export const readAccountAudit = (api: ServerApi, before: number | null) =>
+  run(() => api.identity.GET('/accounts/audit', { params: { query: { limit: ACCOUNT_AUDIT_PAGE, ...(before === null ? {} : { before }) } } }),
+    listOf<AccountAuditEntry>((v) => hasStrings(v, 'occurredAt', 'actor', 'event') && typeof (v as AccountAuditEntry).id === 'number'));
 export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
 
 // ---------------------------------------------------------------- projects

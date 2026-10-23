@@ -406,7 +406,7 @@ describe('administration', () => {
       assert.equal(await page.locator('[data-testid=one-time] code').innerText(), created.password);
       // The list reloads after the creation; wait for the new row instead of reading the table while it is still the old one.
       await page.locator('table tbody tr', { hasText: 'Dora Demo' }).waitFor();
-      assert.match(await page.locator('table').innerText(), /dora\s+Dora Demo\s+Aktiv, Passwortwechsel offen/);
+      assert.match(await page.locator('table').innerText(), /dora\s+Dora Demo\s+Einmalpasswort offen bis/);
       await page.goto(`${base()}#/start`);
       await page.goto(`${base()}#/accounts`);
       await page.waitForSelector('table');
