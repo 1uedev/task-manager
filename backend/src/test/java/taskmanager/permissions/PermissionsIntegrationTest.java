@@ -536,6 +536,14 @@ class PermissionsIntegrationTest {
         var newest = administration.audit(actor(ADMIN), null, 4);
         assertEquals(List.of("REMOVE", "DENY", "REMOVE", "ALLOW"), newest.stream().map(PermissionAdministration.Audit::effect).toList());
         assertEquals(java.util.Arrays.asList("DENY", "ALLOW", "ALLOW", null), newest.stream().map(PermissionAdministration.Audit::previousEffect).toList());
+        // Finding F4 of the TASK-043 review: a new entry knows its previous state even when nothing was there before; an
+        // entry from before V0016 says that it does not know it, so null cannot be read as "nothing before".
+        assertTrue(newest.stream().allMatch(PermissionAdministration.Audit::previousRecorded));
+        jdbc.update("update permissions_audit set previous_effect = null, previous_recorded = false where company_id = ? and rights_version = ?",
+            COMPANY, latest);
+        var legacy = administration.audit(actor(ADMIN), null, 1).getFirst();
+        assertNull(legacy.previousEffect());
+        assertFalse(legacy.previousRecorded());
         assertThrows(PermissionDenied.class, () -> administration.audit(actor(ADMIN), 0L, 10));
     }
 

@@ -61,7 +61,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
-| [TASK-043](#task-043-rechtekern-härten) | Rechtekern härten | claude-20261022-hardening-01 | 2026-10-22 |
+| [TASK-043](#task-043-rechtekern-härten) | Rechtekern härten | claude-20261022-hardening-01 | 2026-10-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -520,7 +520,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-043 Rechtekern härten
 
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261022-hardening-01 · **Aktualisiert:** 2026-10-22
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261022-hardening-01 · **Aktualisiert:** 2026-10-23
 
 **Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001. **Abhängigkeiten:** TASK-025, TASK-039 bis TASK-042 und TASK-030 (alle abgenommen). **Arbeitsstand:** Holger hat am 22. Oktober 2026 im Projektgespräch mit „ich nehme deinen vorschlag“ die vorgeschlagene Reihenfolge der V1 Pakete ([Vorschlag](https://claude.ai/artifact/PpdVLPknatE17QzZiSmbbc)) gewählt; Paket 1 ist die Härtung des Rechtekerns. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-072, Migrationen ab V0016. Die Reihenfolge der übrigen Pakete wird mit DEC-072 festgehalten; sie startet keines davon.
 
@@ -532,4 +532,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Ergebnis und Übergabe:** Umgesetzt mit DEC-072 im Ergebnis PR #146 (Branch claude/project-thread-r4dri5): alle fünf Punkte P2 bis P6 nach Holgers Wahl „Alle fünf“, die Prüfung beim Commit, der Gruppenlesepfad mit Reiter Rechte im Projekt, das blätterbare Änderungsprotokoll in der Gruppenverwaltung und die Restpunkte F1 bis F3 aus TASK-036 sowie F1 aus TASK-042. Migration V0016. Jede neue Regression wurde gegen einen Stand ohne ihre Korrektur geprüft und schlägt dort fehl. Hinweis zum Abnahmekriterium „ein zwischen Sperre und Commit entzogenes Recht verhindert die Änderung“: Rechte, Identität und Ressource sind bis zum Commit gesperrt, ein Entzug wartet deshalb und kann sich nicht dazwischenschieben (bestehende Nebenläufigkeitstests); ohne Sperre läuft nur das Sitzungsende ab, und genau das prüft `require` jetzt unmittelbar vor dem Commit erneut. Offen bleiben P7 (Delegationsumfang, Holgers Entscheidung), die Messung der Zeilensperre bei `inspect` und die Ungültigkeit aller Kontexte je Unternehmen aus P6 sowie Aufbewahrung und Schutz des Protokolls (OPEN-014).
 
-**Nächster Schritt:** Getrennte KI prüft Rechtegrenzen und Nebenläufigkeit; danach fachliche Abnahme durch Holger.
+**Nachprüfung:** Die getrennte Prüfung (docs/REVIEW_TASK-043_PR-146.md, Codex) fand vier Befunde, behoben im Korrektur PR auf demselben Branch: F1 ein animiertes WebP muss die Animationskopfzeile vor seinen Bildern haben und jedes Bild eigene VP8 oder VP8L Daten, sonst 415 `appearance.logo_unreadable`; F2 die Rechteendpunkte mit Projektbezug beantworten ein Projekt, das die anfragende Person nicht sehen darf, wie ein fehlendes mit 404 `project.not_found`, nach der Sichtbarkeitsregel der Projekt API; F3 mit Logo ist der Markenname nur noch optisch verborgen und das Logo selbst stumm, so dass der Bildschirmleser den Namen statt „Firmenlogo“ liest; F4 jeder Protokolleintrag sagt mit `previousRecorded` (Migration V0017), ob er seinen Vorzustand kennt, und die Oberfläche zeigt bei alten Einträgen „Nicht erfasst“ statt „Nichts“. Vertrag `permissions.openapi.yaml` 0.3.0. Jede neue Regression schlägt ohne ihre Korrektur fehl.
+
+**Nächster Schritt:** Gezielte Nachprüfung der Befunde F1 bis F4 durch die getrennte KI; danach fachliche Abnahme durch Holger.

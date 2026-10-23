@@ -16,7 +16,8 @@ import javax.imageio.stream.ImageInputStream;
  * <p>A recognized start is not enough (TASK-043, finding F2 of the TASK-036 review): PNG and JPEG are decoded completely
  * with the image readers of the JDK, and a reader warning such as a premature end counts as a defect. The JDK has no WebP
  * reader, so a WebP file is checked for its structure instead: the RIFF length matches the file, every chunk lies inside it
- * and an image chunk with a valid header and size is present. A full WebP decode needs a library, which is not chosen.
+ * and an image chunk with a valid header and size is present; in an animation every frame carries such an image chunk.
+ * A full WebP decode needs a library, which is not chosen.
  */
 public final class Logo {
     public static final int MAX_BYTES = 512 * 1024;
@@ -84,6 +85,8 @@ public final class Logo {
             return false;
         }
         boolean image = false;
+        boolean animated = false;
+        boolean animation = false;
         int offset = 12;
         while (offset < content.length) {
             if (offset + 8 > content.length) {
@@ -102,14 +105,62 @@ public final class Logo {
                     if (size < 10 || offset != 12) return false;
                     int width = 1 + le24(content, data + 4), height = 1 + le24(content, data + 7);
                     if (width > MAX_SIDE || height > MAX_SIDE) return false;
+                    animated = (content[data] & 0x02) != 0;
                 }
-                case "ANMF" -> image |= size >= 16;
+                case "ANIM" -> {
+                    if (!animated || size < 6) return false;
+                    animation = true;
+                }
+                // A frame needs the animation header before it and image data of its own after its 16 byte header
+                // (finding F1 of the TASK-043 review); a frame without them cannot be shown.
+                case "ANMF" -> {
+                    if (!animation || size < 16 || !frame(content, data, (int) size)) return false;
+                    image = true;
+                }
                 default -> { }
             }
             // Chunks are padded to an even length.
             offset = data + (int) size + (int) (size & 1);
         }
         return image && offset == content.length;
+    }
+
+    /** The data of one animation frame: its header, an optional alpha chunk and exactly one image chunk. */
+    private static boolean frame(byte[] content, int data, int size) {
+        int width = 1 + le24(content, data + 6), height = 1 + le24(content, data + 9);
+        if (width > MAX_SIDE || height > MAX_SIDE) {
+            return false;
+        }
+        int end = data + size;
+        int offset = data + 16;
+        int images = 0;
+        while (offset < end) {
+            if (offset + 8 > end) {
+                return false;
+            }
+            String chunk = new String(content, offset, 4, java.nio.charset.StandardCharsets.US_ASCII);
+            long length = le32(content, offset + 4);
+            int inner = offset + 8;
+            if (length > end - inner) {
+                return false;
+            }
+            switch (chunk) {
+                case "VP8 " -> {
+                    if (!vp8(content, inner, (int) length)) return false;
+                    images++;
+                }
+                case "VP8L" -> {
+                    if (!vp8l(content, inner, (int) length)) return false;
+                    images++;
+                }
+                case "ALPH" -> {
+                    if (images > 0) return false;
+                }
+                default -> { }
+            }
+            offset = inner + (int) length + (int) (length & 1);
+        }
+        return images == 1 && offset == end;
     }
 
     /** Lossy: a key frame with the start code and a size inside the limits. */

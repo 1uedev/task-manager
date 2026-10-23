@@ -403,6 +403,8 @@ describe('administration', () => {
       await page.getByTestId('one-time').waitFor();
       const created = backend.state.accounts.find((item) => item.username === 'dora');
       assert.equal(await page.locator('[data-testid=one-time] code').innerText(), created.password);
+      // The list reloads after the creation; wait for the new row instead of reading the table while it is still the old one.
+      await page.locator('table tbody tr', { hasText: 'Dora Demo' }).waitFor();
       assert.match(await page.locator('table').innerText(), /dora\s+Dora Demo\s+Aktiv, Passwortwechsel offen/);
       await page.goto(`${base()}#/start`);
       await page.goto(`${base()}#/accounts`);
@@ -447,7 +449,9 @@ describe('rights core hardening (TASK-043)', () => {
     for (let version = 1; version <= count; version += 1) {
       backend.state.audit.push({ id: `00000000-0000-4000-8000-${String(version).padStart(12, '0')}`, actorId: backend.anna.id,
         occurredAt: '2026-10-22T08:00:00Z', operation: 'action.changed', groupId: backend.group('Lesen').id, subjectId: null, projectId: null,
-        action: 'ticket.read', resourceType: null, field: null, effect: version % 2 ? 'allow' : 'remove', previousEffect: version % 2 ? null : 'allow', rightsVersion: version });
+        action: 'ticket.read', resourceType: null, field: null, effect: version % 2 ? 'allow' : 'remove', previousEffect: version % 2 || version < 3 ? null : 'allow',
+        // The two oldest entries stand for entries from before TASK-043, which do not know their previous state.
+        previousRecorded: version >= 3, rightsVersion: version });
     }
   };
 
@@ -465,7 +469,10 @@ describe('rights core hardening (TASK-043)', () => {
       }
       await page.getByText('Das sind alle Einträge.').waitFor();
       assert.equal(await rows.last().getAttribute('data-version'), '1');
-      assert.match(await rows.last().innerText(), /Tickets lesen gewährt\s+Nichts/);
+      assert.match(await page.locator('[data-testid=audit-log] tbody tr[data-version="3"]').innerText(), /Tickets lesen gewährt\s+Nichts/);
+      // Finding F4 of the TASK-043 review: an old entry without its previous state does not claim there was nothing.
+      assert.match(await rows.last().innerText(), /Tickets lesen gewährt\s+Nicht erfasst/);
+      assert.match(await page.locator('[data-testid=audit-log] tbody tr[data-version="2"]').innerText(), /Tickets lesen entzogen\s+Nicht erfasst/);
     });
   });
 
@@ -549,6 +556,8 @@ describe('layout', () => {
           });
           assert.equal(overlap, false, locale);
           assert.equal(await page.getByTestId('brand-name').textContent(), 'Task Manager');
+          // Finding F3 of the TASK-043 review: the name stays in the accessibility tree, with or without a logo.
+          assert.equal(await page.locator('.brand').ariaSnapshot(), '- text: Task Manager', locale);
         });
       }
     });

@@ -18,7 +18,7 @@ public interface PermissionAdministration {
     record Group(UUID id, String name) {}
     record Audit(UUID id, UUID actorId, Instant occurredAt, String operation, UUID groupId,
         UUID subjectId, UUID projectId, String action, String resourceType, String field,
-        String effect, String previousEffect, long rightsVersion) {}
+        String effect, String previousEffect, boolean previousRecorded, long rightsVersion) {}
     record ActionRule(UUID projectId, String action) {}
     record FieldRule(UUID projectId, String resourceType, String field, Operation operation, Effect effect) {}
     /** A group with everything it grants; members, actions and fields are sorted, company scope (no project) first. */

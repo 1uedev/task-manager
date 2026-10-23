@@ -159,7 +159,8 @@ export interface paths {
          * @description Für die Unternehmensverwaltung und für Projektverwaltungen dieses Projekts. Enthält jede Gruppe des Unternehmens, weil
          *     die Projektverwaltung die Regeln jeder Gruppe in ihrem Projekt ändern darf, aber nur deren Regeln für dieses Projekt:
          *     keine Mitglieder, keine Unternehmensregeln, keine Regeln anderer Projekte. `actions` und `fields` nennen, was die
-         *     anfragende Person hier vergeben darf.
+         *     anfragende Person hier vergeben darf. Wer das Projekt sieht, aber nicht verwalten darf, erhält 403; wer es nicht
+         *     sieht, erhält wie bei einem fehlenden Projekt 404 `project.not_found`.
          */
         get: operations["getProjectRights"];
         put?: never;
@@ -241,10 +242,15 @@ export interface components {
             /** @enum {string|null} */
             effect?: "allow" | "deny" | "remove" | null;
             /**
-             * @description Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Eintrag älter als TASK-043 ist.
+             * @description Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Vorzustand nicht erfasst ist.
              * @enum {string|null}
              */
             previousEffect?: "allow" | "deny" | null;
+            /**
+             * @description Ob der Eintrag seinen Vorzustand kennt. false bei Einträgen aus der Zeit vor TASK-043; dort sagt ein fehlendes
+             *     `previousEffect` nichts darüber, ob vorher etwas galt.
+             */
+            previousRecorded: boolean;
             rightsVersion: number;
         };
         ProjectRights: {

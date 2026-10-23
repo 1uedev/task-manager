@@ -91,9 +91,9 @@ function AuditLog({ groups }: { readonly groups: readonly Group[] }) {
     return entry.projectId ? t('audit.inProject', { change: described, project: projectKey(entry.projectId) }) : described;
   }
   const before = (entry: AuditEntry) => entry.operation === 'group.created' ? ''
-    : entry.previousEffect ? effect(entry.previousEffect)
-    // A removal always replaced something; without a recorded value it is an entry from before TASK-043.
-    : t(entry.effect === 'remove' ? 'audit.previous.unknown' : 'audit.previous.none');
+    // Entries from before TASK-043 do not know what they replaced; a missing value there proves nothing (review F4).
+    : !entry.previousRecorded ? t('audit.previous.unknown')
+    : entry.previousEffect ? effect(entry.previousEffect) : t('audit.previous.none');
 
   return (
     <section aria-labelledby="audit-heading" className="panel">

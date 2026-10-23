@@ -293,7 +293,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
                 rs.getTimestamp("occurred_at").toInstant(), rs.getString("operation"), rs.getObject("group_id", UUID.class),
                 rs.getObject("subject_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getString("action_key"),
                 rs.getString("resource_type"), rs.getString("field_key"), rs.getString("effect"), rs.getString("previous_effect"),
-                rs.getLong("rights_version")),
+                rs.getBoolean("previous_recorded"), rs.getLong("rights_version")),
             actor.companyId(), before == null ? Long.MAX_VALUE : before, limit);
     }
 
@@ -431,7 +431,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             String action, String type, String field, String effect, String previous) {
         long version = jdbc.queryForObject("update permissions_revision set revision=revision+1 where company_id=? returning revision",
             Long.class, company);
-        jdbc.update("insert into permissions_audit(company_id, id, actor_id, operation, group_id, subject_id, project_id, action_key, resource_type, field_key, effect, previous_effect, rights_version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        jdbc.update("insert into permissions_audit(company_id, id, actor_id, operation, group_id, subject_id, project_id, action_key, resource_type, field_key, effect, previous_effect, previous_recorded, rights_version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?)",
             company, UUID.randomUUID(), actor, operation, group, subject, project, action, type, field, effect, previous, version);
     }
 

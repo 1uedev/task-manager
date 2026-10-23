@@ -224,6 +224,11 @@ class PermissionsApiTest {
         assertEquals("auth.forbidden", response.code(), response.body());
     }
 
+    private static void assertProjectNotFound(Response response) {
+        assertEquals(404, response.status(), response.body());
+        assertEquals("project.not_found", response.code(), response.body());
+    }
+
     private static void assertInvalid(Response response, String... violations) {
         assertEquals(400, response.status(), response.body());
         assertEquals("request.invalid", response.code(), response.body());
@@ -419,6 +424,29 @@ class PermissionsApiTest {
         assertEquals("permissions.audit.read", newest.get("action").asString());
         assertEquals("allow", newest.get("effect").asString());
         assertEquals(admin.id().toString(), newest.get("actorId").asString());
+    }
+
+    @Test
+    void aProjectTheCallerCannotSeeIsAnsweredLikeAMissingOne() {
+        // Finding F2 of the TASK-043 review: the rights routes of a project must not confirm that a hidden project exists.
+        Person admin = person(true);
+        Person stranger = person();
+        Person member = person();
+        Project project = project(member);
+        UUID group = group(admin, "Leser " + COUNTER.incrementAndGet());
+        ok(admin.browser().put("/api/v1/permissions/groups/" + group + "/members/" + member.id(), null));
+        ok(action(admin, group, "project.read", project.id(), true));
+        for (UUID id : List.of(project.id(), UUID.randomUUID())) {
+            assertProjectNotFound(stranger.browser().get("/api/v1/permissions/projects/" + id + "/groups"));
+            assertProjectNotFound(action(stranger, group, "ticket.read", id, true));
+            assertProjectNotFound(field(stranger, group, "title", id, "write", "deny"));
+        }
+        assertProjectNotFound(stranger.browser().get("/api/v1/projects/" + project.id()));
+        // Whoever sees the project keeps the previous answers: a reader of the project without the right to delegate is refused, the
+        // company administration reads the rules. The delegate itself is covered by the core test of the read path.
+        assertForbidden(member.browser().get("/api/v1/permissions/projects/" + project.id() + "/groups"));
+        assertForbidden(action(member, group, "ticket.read", project.id(), true));
+        ok(admin.browser().get("/api/v1/permissions/projects/" + project.id() + "/groups"));
     }
 
     @Test
