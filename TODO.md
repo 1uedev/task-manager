@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-01 | 2026-10-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -516,3 +518,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-044 Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-projectconfig-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-026, TASK-027, TASK-029, TASK-030 und TASK-043 (alle abgenommen). **Arbeitsstand:** Paket A2 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „mache weiter“ den Start freigegeben. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-073, Migrationen ab V0018.
+
+**Umfang:** Erster Teil von A2, Detailregeln nach den Vorschlägen aus docs/DOMAIN_MODEL.md zu OPEN-007. (1) Tickettypen je Projekt. (2) Status und erlaubte Übergänge je Tickettyp statt des festen Ablaufs Neu, In Arbeit, Erledigt. (3) Eigene Felder je Projekt mit den Typen Kurztext, Langtext, Ganzzahl, Datum, Wahr/Falsch, Einfachauswahl und Benutzerreferenz; Auswahloptionen lassen sich deaktivieren, ohne Bestandswerte zu verlieren. (4) Pflichtfelder bei Anlage und je Übergang. (5) Konfiguration als Entwurf bearbeiten und als neue Version veröffentlichen; verträgliche Änderungen gelten sofort für alle Tickets des Projekts, ein noch verwendeter Status lässt sich nur mit Zuordnung entfernen, ein Feldtyp wird nicht still umgewandelt. (6) Eigene Felder in Ticketrechten, Historie und Suche wie die Standardfelder. (7) Oberfläche zum Bearbeiten der Projektkonfiguration und für eigene Felder im Ticket. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Bestandstickets wechseln bei Veröffentlichung sofort auf die neue Version, keine Bindung einzelner Tickets an alte Versionen. Nicht Teil: Formulare und Portalformulare, Automationen (setzen Hintergrundaufträge aus A8 voraus), Projektvorlagen, Mehrfachauswahl und Dezimalzahl, Verschieben zwischen Projekten, Archivierung.
+
+**Schnittstellen und Arbeitsbereich:** Projektmodul (Konfiguration), Ticketkern (Typ, Status, eigene Feldwerte, Übergangsprüfung), Feldrechte im Berechtigungsmodul, Suchprojektion, Verträge `contracts/projects.openapi.yaml`, `contracts/tickets.openapi.yaml` und betroffene Verträge, Oberfläche für Projektkonfiguration und Ticket, Tests.
+
+**Abnahmekriterien:** Zwei Projekte mit unterschiedlichen Typen, Abläufen und Feldern nach den Beispielen A und B aus docs/DOMAIN_MODEL.md sind einrichtbar und bedienbar; die Prüffälle F-03 bis F-06 sind als Regression abgedeckt; ein nicht erlaubter Übergang und ein fehlendes Pflichtfeld lassen das Ticket unverändert; verborgene eigene Felder bleiben in API, Historie und Suche verborgen; Bestandstickets bleiben nach jeder Veröffentlichung gültig. Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-073 als Ergebnis PR übergeben.
