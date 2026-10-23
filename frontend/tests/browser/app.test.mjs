@@ -256,7 +256,8 @@ describe('changes', () => {
       await page.getByRole('link', { name: 'Suche' }).click();
       await page.waitForTimeout(300);
       assert.equal(asked, 'Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?');
-      assert.match(page.url(), /tickets\/1$/);
+      // Declining puts the ticket address back after the hash change; on a slow machine that can take longer than the pause.
+      await page.waitForURL(/tickets\/1$/, { timeout: 5000 });
       assert.equal(await page.getByLabel(/^Titel/).inputValue(), 'Noch nicht gespeichert');
       page.once('dialog', (dialog) => void dialog.accept());
       await page.getByRole('link', { name: 'Suche' }).click();
