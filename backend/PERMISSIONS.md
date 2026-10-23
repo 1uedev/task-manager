@@ -47,7 +47,7 @@ Identitätsmodul importiert dafür nicht rückwärts `permissions`.
 | `setAction`, `setField` | Aktueller Kontext, Gruppe und vertrauenswürdig gelieferter Geltungsbereich; Unternehmensverwaltung oder eng begrenzte Projektdelegation | Setzen/Entfernen einer Regel; neue Rechteversion plus Audit in derselben Transaktion. |
 | `groups` | Unternehmensrecht `permissions.manage` | Nur Gruppen dieses Unternehmens. |
 | `projectGroups` | Unternehmensrecht `permissions.manage` oder internes Konto mit `permissions.manage` im Projekt (TASK-043) | Jede Gruppe mit ihren Regeln genau dieses Projekts; keine Mitglieder, keine Unternehmensregeln, keine anderen Projekte. |
-| `audit` | Eigenes Unternehmensrecht `permissions.audit.read`, Limit 1–100, optional `before` | Neueste Einträge nur dieses Unternehmens, mit `before` nur ältere Rechteversionen; jeder Eintrag nennt den ersetzten Zustand (`previousEffect`). Verwaltungsrecht allein genügt nicht. |
+| `audit` | Eigenes Unternehmensrecht `permissions.audit.read`, Limit 1–100, optional `before` | Neueste Einträge nur dieses Unternehmens, mit `before` nur ältere Rechteversionen; jeder Eintrag nennt den ersetzten Zustand (`previousEffect`) und ob er ihn kennt (`previousRecorded`). Verwaltungsrecht allein genügt nicht. |
 
 Eine Unternehmensverwaltung hat keinen automatischen Zugriff auf Tickets, andere Fachinhalte
 oder das Audit. Sie kann Rechte bewusst vergeben; diese weitreichende Befugnis ist kein
@@ -170,7 +170,10 @@ Stand 22. Oktober 2026. Umsetzung der Punkte P2 bis P6 der Prüfung von TASK-025
 
 - **Protokoll (P2).** `audit(actor, before, limit)` blättert über die Rechteversion, die nur wächst: Die kleinste Version
   einer Seite holt als `before` die nächste. `previous_effect` (Migration V0016) hält fest, was eine Änderung ersetzt hat
-  (`ALLOW`, `DENY` oder nichts); Einträge vor V0016 haben keinen Wert. Aufbewahrung und Schutz bleiben bei OPEN-014.
+  (`ALLOW`, `DENY` oder nichts). `previous_recorded` (Migration V0017, Befund F4 der Prüfung von TASK-043) sagt, ob der
+  Eintrag seinen Vorzustand kennt: neue Einträge immer, Einträge vor V0016 nie, Einträge zwischen V0016 und V0017 nur mit
+  erfasstem Wert. Ein fehlender Wert gilt also nur bei `previous_recorded` als „vorher nichts“. Aufbewahrung und Schutz
+  bleiben bei OPEN-014.
 - **Externe Konten (P3).** `administer` und die Prüfung der Unternehmensverwaltung lehnen externe Konten immer ab, auch
   wenn eine Gruppe ihnen `permissions.manage` gibt.
 - **Fachfehler und Sperrfehler (P4).** Ein vorhandener Gruppenname, ohne Rücksicht auf Groß- und Kleinschreibung, wirft

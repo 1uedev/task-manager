@@ -37,6 +37,7 @@ import taskmanager.permissions.PermissionContexts;
 import taskmanager.permissions.PermissionDenied;
 import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
+import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 
@@ -121,11 +122,12 @@ class PermissionsController {
     }
 
     record AuditBody(UUID id, UUID actorId, Instant occurredAt, String operation, UUID groupId, UUID subjectId, UUID projectId,
-            String action, String resourceType, String field, String effect, String previousEffect, long rightsVersion) {
+            String action, String resourceType, String field, String effect, String previousEffect, boolean previousRecorded,
+            long rightsVersion) {
         static AuditBody of(PermissionAdministration.Audit audit) {
             return new AuditBody(audit.id(), audit.actorId(), audit.occurredAt(), audit.operation(), audit.groupId(),
                 audit.subjectId(), audit.projectId(), audit.action(), audit.resourceType(), audit.field(), lower(audit.effect()),
-                lower(audit.previousEffect()), audit.rightsVersion());
+                lower(audit.previousEffect()), audit.previousRecorded(), audit.rightsVersion());
         }
     }
 
@@ -298,16 +300,29 @@ class PermissionsController {
 
     /**
      * The company, or one project of it. A project the company does not have is refused before the permissions module runs;
-     * otherwise the project adapter locks the project, as for every other rights check of a project.
+     * otherwise the project adapter locks the project, as for every other rights check of a project. A project the caller
+     * cannot see is answered like a missing one, as the projects API does (finding F2 of the TASK-043 review), so these routes
+     * do not confirm that an unknown identifier exists.
      */
     private Supplier<ResourceContext> scope(AccessContext actor, UUID project, String resourceType) {
         if (project == null) {
             return () -> new ResourceContext(actor.companyId(), null, null, false, resourceType);
         }
-        if (projects.key(project).isEmpty()) {
+        if (projects.key(project).isEmpty() || !visible(actor, project)) {
             throw ApiProblemException.of(404, "project.not_found");
         }
         return projects.resource(actor.companyId(), project, actor.userId(), resourceType, false);
+    }
+
+    /** The visibility rule of the projects module: a company administration or a holder of a right in the project. */
+    private boolean visible(AccessContext actor, UUID project) {
+        if (manages(actor) || permissions.inspect(actor, () -> ResourceContext.company(actor.companyId()),
+            AdministrationRight.PROJECTS_MANAGE.key(), Set.of()).allowed()) {
+            return true;
+        }
+        Supplier<ResourceContext> resource = projects.resource(actor.companyId(), project, actor.userId(), "project", false);
+        return permissions.inspect(actor, resource, "project.read", Set.of()).allowed()
+            || permissions.inspect(actor, resource, "project.manage", Set.of()).allowed();
     }
 
     private <T> T read(Function<AccessContext, T> work) {

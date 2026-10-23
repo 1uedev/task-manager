@@ -67,12 +67,12 @@ function Preferences() {
 }
 
 function BrandMark() {
-  const { t } = useI18n();
   const { brand } = useBrand();
   return (
     <div className="brand">
       {brand.logoUrl !== null
-        ? <img src={brand.logoUrl} alt={t('brand.logo')} className="brand-logo" />
+        // The name beside it is read out, so the logo itself stays silent instead of announcing a generic label.
+        ? <img src={brand.logoUrl} alt="" className="brand-logo" />
         : <span className="brand-mark" aria-hidden="true">{brand.name.slice(0, 1)}</span>}
       <span className="brand-name" data-testid="brand-name">{brand.name}</span>
     </div>

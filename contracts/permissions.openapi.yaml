@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Gruppen und Rechte (TASK-030, TASK-043)
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Verwaltung der Gruppen, ihrer Mitglieder, Aktionen und Feldregeln des Berechtigungsmoduls (TASK-025, DEC-070). Jeder
     Aufruf verlangt eine vollständige Anmeldung und das Unternehmensrecht `permissions.manage`; fehlt es, ist es veraltet
@@ -19,7 +19,9 @@ info:
     `/permissions/projects/{projectId}/groups` und ändern sie über dieselben Endpunkte wie die Unternehmensverwaltung. Sie
     vergeben nur Projektaktionen, die sie dort selbst haben, und nur Feldregeln für Felder, die sie dort lesen und schreiben
     dürfen; `permissions.*` vergeben sie nie. Weil sie die ganze Gruppe nicht lesen dürfen, antwortet eine solche Änderung mit
-    204. Externe Konten verwalten nie Rechte, auch wenn eine Gruppe ihnen `permissions.manage` gibt.
+    204. Externe Konten verwalten nie Rechte, auch wenn eine Gruppe ihnen `permissions.manage` gibt. Ein Projekt, das die
+    anfragende Person nicht sehen darf, beantworten alle Endpunkte mit Projektbezug wie ein fehlendes Projekt mit 404
+    `project.not_found`, so wie die Projekt-API.
 
     Jede wirksame Änderung wird protokolliert und erhöht die Rechteversion; Anfragen, die mit der alten Version begonnen
     haben, werden abgelehnt. Eine Änderung ohne Wirkung (dasselbe Mitglied erneut aufnehmen, eine fehlende Regel entfernen)
@@ -225,7 +227,8 @@ paths:
         Für die Unternehmensverwaltung und für Projektverwaltungen dieses Projekts. Enthält jede Gruppe des Unternehmens, weil
         die Projektverwaltung die Regeln jeder Gruppe in ihrem Projekt ändern darf, aber nur deren Regeln für dieses Projekt:
         keine Mitglieder, keine Unternehmensregeln, keine Regeln anderer Projekte. `actions` und `fields` nennen, was die
-        anfragende Person hier vergeben darf.
+        anfragende Person hier vergeben darf. Wer das Projekt sieht, aber nicht verwalten darf, erhält 403; wer es nicht
+        sieht, erhält wie bei einem fehlenden Projekt 404 `project.not_found`.
       responses:
         '200':
           description: Rechte im Projekt
@@ -343,7 +346,7 @@ components:
               effect: {type: string, enum: [allow, deny]}
     AuditEntry:
       type: object
-      required: [id, actorId, occurredAt, operation, rightsVersion]
+      required: [id, actorId, occurredAt, operation, previousRecorded, rightsVersion]
       properties:
         id: {type: string, format: uuid}
         actorId: {type: string, format: uuid}
@@ -359,7 +362,12 @@ components:
         previousEffect:
           type: [string, 'null']
           enum: [allow, deny, null]
-          description: Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Eintrag älter als TASK-043 ist.
+          description: Was die Änderung ersetzt hat; null, wenn vorher nichts galt oder der Vorzustand nicht erfasst ist.
+        previousRecorded:
+          type: boolean
+          description: |
+            Ob der Eintrag seinen Vorzustand kennt. false bei Einträgen aus der Zeit vor TASK-043; dort sagt ein fehlendes
+            `previousEffect` nichts darüber, ob vorher etwas galt.
         rightsVersion: {type: integer}
     ProjectRights:
       type: object

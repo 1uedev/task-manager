@@ -358,7 +358,8 @@ main.page-board { max-width: none; }
 }
 .theme button, .theme button:not(.secondary) { box-shadow: none !important; }
 .theme button[aria-pressed='true'] { box-shadow: 0 1px 3px rgb(15 20 35 / 0.12) !important; }
-.brand:has(.brand-logo) .brand-name { display: none; }
+/* With a logo the name is hidden from view but not from screen readers (finding F3 of the TASK-043 review). */
+.brand:has(.brand-logo) .brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 48rem) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar, .sidebar nav { min-width: 0; }
