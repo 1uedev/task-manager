@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-045](#task-045-kontoverwaltung-ergänzen-rest-von-paket-a4) | Kontoverwaltung ergänzen (Rest von Paket A4) | claude-20261023-accounts-01 | 2026-10-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -533,3 +535,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten (DEC-040), insbesondere die Veröffentlichung mit Zuordnung unter Last, die Rechte auf eigene Felder in Historie und Suche und die Lesbarkeit älterer Konfigurationsdokumente. Holger nimmt fachlich ab und entscheidet die drei offenen Punkte aus DEC-073 (Löschen nie verwendeter Felder, nachträgliches Erzwingen von Pflichtfeldern bei Bestandstickets, Direktveröffentlichung neben dem Entwurf).
 
 **Ergebnis und Prüfungen:** Lokal grün: 235 Backendtests gegen PostgreSQL 16 (darunter 11 Integrationstests `ProjectConfigurationApiTest` und 6 neue Prüfungen der Konfigurationsregeln), Frontend `npm run verify`, 78 Browsertests (3 neue). Die Fälle F-03 bis F-06 sind als Regression abgedeckt (Tabelle in docs/PROJECT_CONFIGURATION.md). Nicht lokal gelaufen: der Lebenszyklus gegen PostgreSQL 18.6 und der Workflow `Image` (kein Docker in dieser Umgebung); das übernimmt die CI.
+
+## TASK-045 Kontoverwaltung ergänzen (Rest von Paket A4)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-accounts-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-AUTH-001, REQ-PORTAL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-024, TASK-030 und TASK-040 (alle abgenommen). **Arbeitsstand:** Paket A4 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „ja mache weiter“ den Start freigegeben und auf die Rückfrage „Kleine Lücken in A4 schließen“ gewählt. Der Kern des Pakets ist bereits mit DEC-058 umgesetzt (Einmalpasswort 72 Stunden gültig und einmalig, einmalige Anzeige bei der Übergabe, Wiederherstellung durch Zurücksetzen durch eine Administration, Notweg im Container); Selbstbedienung per Mail bleibt nach DEC-058 ausgeschlossen. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-074, voraussichtlich ohne neue Migration oder mit V0021.
+
+**Umfang:** (1) Die Kontenliste zeigt den Zustand des Einmalpassworts: offen mit Ablaufzeit, abgelaufen, oder nicht mehr gültig; die Ablaufzeit kommt als `oneTimePasswordExpiresAt` am Konto, ohne das Passwort preiszugeben. (2) Der Anzeigename eines Kontos lässt sich ändern (Recht `accounts.manage`, Protokoll). (3) Lesezugriff auf das Kontenprotokoll (`identity_audit_event`) seitenweise für `accounts.manage`, mit Anzeige in der Kontenverwaltung. (4) Eine Wartezeit nach Fehlversuchen lässt sich für ein Konto aufheben (Recht `accounts.manage`, Protokoll). Nicht Teil: Selbstbedienung per Mail, Benutzernamen ändern oder löschen, LDAP, Portalkonten, zweiter Faktor, Konten löschen.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Konto, Protokoll, Wartezeit), `contracts/identity.openapi.yaml`, Kontenverwaltung der Oberfläche, Tests.
+
+**Abnahmekriterien:** Der Zustand des Einmalpassworts ist in API und Oberfläche richtig für offen, abgelaufen und verbraucht und verrät nie das Passwort; Anzeigename und Aufheben der Wartezeit verlangen `accounts.manage`, wirken sofort und stehen im Protokoll; das Protokoll lässt sich über Seitengrenzen lesen und enthält keine Geheimnisse; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Protokoll; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-074 als Ergebnis PR übergeben.
