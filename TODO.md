@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -550,3 +552,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft Anmeldung und Protokoll (DEC-040): Rechte und Serialisierung der drei neuen Endpunkte, dass kein Geheimnis in Liste und Protokoll gelangt, und die Wirkung von `clear-login-delay` auf die Zähler der Quelladressen. Holger nimmt fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-074, Vertrag identity.openapi.yaml, Oberfläche der Kontenverwaltung. Lokal grün: Backendtests gegen PostgreSQL 16 (vier neue Integrationstests in `IdentityApiTest`), Frontend `npm run verify`, 83 Browsertests (5 neue in `accounts.test.mjs`). Nicht lokal gelaufen: PostgreSQL 18.6 und der Workflow `Image`; das übernimmt die CI.
+
+## TASK-046 LDAP Anmeldung (Paket A5)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-ldap-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-024, TASK-030, TASK-040 und TASK-045 (alle abgenommen oder gemergt). **Arbeitsstand:** Paket A5 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „ja mache weiter“ die Reihenfolge fortgesetzt und auf Rückfragen zu OPEN-006 gewählt: allgemeines LDAPv3, Anlage des Kontos beim ersten Login, bei Ausfall scheitert die Anmeldung und laufende Sitzungen laufen bis zu ihrem festen Ende weiter. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-075, Migration ab V0021.
+
+**Umfang:** (1) Einstellbare Anbindung eines LDAPv3 Verzeichnisses (Adresse, Verschlüsselung `none`, `starttls` oder `ldaps`, Suchbasis, Suchfilter, Attribute für Kennung, Anzeigename), verwaltet mit dem Recht `accounts.manage` und protokolliert; das Passwort des Suchkontos kommt aus der Umgebung des Betriebs, nicht aus der Datenbank. (2) Verbindungsprüfung mit benannten Gründen ohne Geheimnisse. (3) Anmeldung: Gibt es ein lokales Konto dieses Namens, entscheidet allein das lokale Passwort; sonst sucht der Server den Eintrag, prüft das Passwort durch Bindung als diese Person und ordnet über eine unveränderliche Kennung des Verzeichnisses zu, nie über den Namen. Beim ersten erfolgreichen Login entsteht das Konto ohne Rechte und ohne lokales Passwort. (4) Ein LDAP Konto kann in der Anwendung deaktiviert werden; Passwort zurücksetzen und Passwortwechsel gibt es dafür nicht. (5) Fällt das Verzeichnis aus, scheitert die Anmeldung der LDAP Konten mit 503 `auth.directory_unavailable`; lokale Konten, offene Sitzungen und der Notweg im Container bleiben unberührt. (6) Oberfläche für Anbindung und Prüfung in der Kontenverwaltung. Nicht Teil: Gruppenzuordnung aus dem Verzeichnis, Synchronisation oder Massenimport, Passwortverwaltung im Verzeichnis, Zwischenspeicher für Passwörter, Portalkonten, zweiter Faktor, mehrere Verzeichnisse.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Anmeldung, Konto, Anbindung), Migration, `contracts/identity.openapi.yaml`, Kontenverwaltung der Oberfläche, Tests mit einem im Test gestarteten Verzeichnis (UnboundID im Testumfang), Dokumentation.
+
+**Abnahmekriterien:** Eine konfigurierte Anbindung lässt sich prüfen; ein LDAP Konto entsteht beim ersten Login, wird danach über die Kennung wiedergefunden und hat keine Rechte; eine gleichnamige lokale Identität übernimmt nie ein LDAP Konto und umgekehrt; Eingaben mit Sonderzeichen können weder den Suchfilter noch den Namen einschleusen; bei Ausfall scheitert nur die LDAP Anmeldung mit 503, ohne lokale Konten zu berühren; kein Passwort und kein Bindungsgeheimnis steht in Antworten, Protokoll oder Datenbank; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Zuordnung; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-075 als Ergebnis PR übergeben.
