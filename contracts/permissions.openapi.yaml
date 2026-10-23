@@ -164,6 +164,12 @@ paths:
     put:
       operationId: setGroupField
       summary: Feldregel setzen oder entfernen
+      description: |
+        Neben den festen Feldern eines Tickets lassen sich die eigenen Felder eines Projekts regeln (TASK-044, DEC-073). Ihre
+        Kennung ist `custom.<schlüssel>`; die Regel braucht ein `projectId`, und das Feld muss in der aktuellen Konfiguration
+        des Projekts stehen, sonst antwortet der Server mit 400 und `field.unknown`. Eine Regel ohne Projekt gilt nur für die
+        festen Felder. Die Felder eines Projekts, die eine Projektverwaltung vergeben darf, nennt
+        `GET /permissions/projects/{projectId}/groups` unter `fields`.
       requestBody:
         required: true
         content:
@@ -174,7 +180,7 @@ paths:
               required: [resourceType, field, operation, effect]
               properties:
                 resourceType: {type: string, enum: [ticket]}
-                field: {type: string, enum: [assignee, description, status, tags, title, type]}
+                field: {type: string, pattern: '^(assignee|description|status|tags|title|type|custom\.[a-z][a-z0-9_]{0,39})$'}
                 projectId: {type: [string, 'null'], format: uuid}
                 operation: {type: string, enum: [read, write]}
                 effect: {type: string, enum: [allow, deny, remove]}

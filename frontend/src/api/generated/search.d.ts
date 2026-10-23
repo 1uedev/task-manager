@@ -71,6 +71,13 @@ export interface components {
             fields: {
                 [key: string]: string | null;
             };
+            /**
+             * @description Die lesbaren eigenen Felder mit Wert, nach Schlüssel; jeder Wert in der Textform, in der der Filter `custom` ihn
+             *     erwartet.
+             */
+            customFields: {
+                [key: string]: string;
+            };
             /** @description Zugeordnete Tags nach Namen; null ohne Leseregel für das Feld `tags`. */
             tags: components["schemas"]["TagRef"][] | null;
         };
@@ -87,7 +94,7 @@ export interface components {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
          *     auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, paging.invalid.
+         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
          */
         Problem: {
             headers: {
@@ -130,6 +137,14 @@ export interface operations {
                 assignee?: string[];
                 /** @description Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein. */
                 tag?: components["parameters"]["Tag"];
+                /**
+                 * @description Eigenes Feld in der Form `<schlüssel>=<wert>`, wiederholbar (höchstens 20); das Ticket muss genau diesen Wert
+                 *     tragen, jeder genannte Filter muss zutreffen. Der Wert steht so, wie die Ticketschnittstelle ihn führt:
+                 *     Optionsschlüssel, Kennung des Kontos, `true` oder `false`, Datum `yyyy-MM-dd`, Zahl oder Text. Ungültig ist
+                 *     ein Schlüssel außerhalb von `^[a-z][a-z0-9_]{0,39}$` oder ein leerer oder zu langer Wert (`custom.invalid`).
+                 *     In Projekten ohne dieses lesbare Feld trifft der Filter nichts.
+                 */
+                custom?: string[];
                 limit?: components["parameters"]["Limit"];
                 offset?: components["parameters"]["Offset"];
             };

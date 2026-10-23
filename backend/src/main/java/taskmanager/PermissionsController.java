@@ -60,6 +60,7 @@ import taskmanager.projects.ProjectAccess;
 class PermissionsController {
     private static final Set<String> RETRYABLE_STATES = Set.of("55P03", "40P01", "40001");
     static final String TICKET = "ticket";
+    private static final String CUSTOM_FIELD = "custom\\.[a-z][a-z0-9_]{0,39}";
     /** Company wide only: no project can narrow them. */
     static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "permissions.audit.read",
         "permissions.manage", "projects.manage", "session_duration.manage");
@@ -202,9 +203,11 @@ class PermissionsController {
     ResponseEntity<GroupDetailBody> setField(@PathVariable UUID id, @RequestBody(required = false) FieldRequest body) {
         List<String> violations = new ArrayList<>();
         String type = body == null ? null : body.resourceType();
+        // A custom field of a ticket exists per project (TASK-044): the rule needs a project and a field of its configuration.
+        boolean custom = TICKET.equals(type) && body.field() != null && body.field().matches(CUSTOM_FIELD) && body.projectId() != null;
         if (type == null || !FIELDS.containsKey(type)) {
             violations.add("resourceType.unknown");
-        } else if (body.field() == null || !FIELDS.get(type).contains(body.field())) {
+        } else if (body.field() == null || !(FIELDS.get(type).contains(body.field()) || custom)) {
             violations.add("field.unknown");
         }
         Operation operation = parse(Operation.class, body == null ? null : body.operation());
@@ -217,7 +220,12 @@ class PermissionsController {
         }
         invalid(violations);
         return answer(change(actor -> {
-            administration.setField(actor, id, scope(actor, body.projectId(), type), body.field(), operation, effect);
+            Supplier<ResourceContext> scope = scope(actor, body.projectId(), type);
+            // After the scope: a project the caller cannot see answers 404 before its fields are looked at.
+            if (custom && !hasCustomField(body.projectId(), body.field())) {
+                throw ApiProblemException.withViolations(400, "request.invalid", List.of("field.unknown"));
+            }
+            administration.setField(actor, id, scope, body.field(), operation, effect);
             return changed(actor, id);
         }));
     }
@@ -253,12 +261,16 @@ class PermissionsController {
             boolean company = manages(actor);
             List<String> actions = PROJECT_ACTIONS.stream()
                 .filter(action -> company || permissions.inspect(actor, project, action, Set.of()).allowed()).toList();
+            List<String> customFields = customFieldIds(projectId);
             List<ResourceFields> fields = FIELDS.entrySet().stream().map(entry -> {
+                // The tickets of the project also have its custom fields (TASK-044).
+                List<String> offered = TICKET.equals(entry.getKey())
+                    ? java.util.stream.Stream.concat(entry.getValue().stream(), customFields.stream()).toList() : entry.getValue();
                 if (company) {
-                    return new ResourceFields(entry.getKey(), entry.getValue());
+                    return new ResourceFields(entry.getKey(), offered);
                 }
-                var decision = permissions.inspect(actor, scope(actor, projectId, entry.getKey()), MANAGE, Set.copyOf(entry.getValue()));
-                return new ResourceFields(entry.getKey(), entry.getValue().stream().filter(decision.writableFields()::contains).toList());
+                var decision = permissions.inspect(actor, scope(actor, projectId, entry.getKey()), MANAGE, Set.copyOf(offered));
+                return new ResourceFields(entry.getKey(), offered.stream().filter(decision.writableFields()::contains).toList());
             }).toList();
             return new ProjectRights(actions, fields, groups);
         });
@@ -312,6 +324,16 @@ class PermissionsController {
             throw ApiProblemException.of(404, "project.not_found");
         }
         return projects.resource(actor.companyId(), project, actor.userId(), resourceType, false);
+    }
+
+    private boolean hasCustomField(UUID project, String field) {
+        return customFieldIds(project).contains(field);
+    }
+
+    /** The identifiers {@code custom.<key>} of the custom fields in the current configuration of the project. */
+    private List<String> customFieldIds(UUID project) {
+        return projects.currentConfigurationVersion(project).flatMap(version -> projects.configuration(project, version))
+            .map(taskmanager.projects.ProjectConfiguration::customFieldIds).orElse(List.of());
     }
 
     /** The visibility rule of the projects module: a company administration or a holder of a right in the project. */

@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Projekte (TASK-026)
+  title: Task Manager API, Projekte (TASK-026, TASK-044)
   version: 0.1.0
   description: |
     Projekte des Unternehmens, ihre Mitglieder und Konfigurationsversionen (DEC-065). Alle Aufrufe verlangen eine vollständige
@@ -11,6 +11,12 @@ info:
     ändert es; beide verlangen die Mitgliedschaft und können für das ganze Unternehmen oder für ein Projekt vergeben werden.
     Ein Projekt, das jemand nicht lesen darf, antwortet mit 404 `project.not_found`; ein lesbares, aber nicht änderbares
     Projekt mit 403 `auth.forbidden`.
+
+    Die Konfiguration (TASK-044, DEC-073) kennt Tickettypen, Status mit erlaubten Übergängen, den Ablauf einzelner Tickettypen,
+    Pflichtfelder je Übergang und eigene Felder. Eine Änderung wird als Entwurf bearbeitet und als nächste Version veröffentlicht;
+    sie gilt sofort für alle Tickets des Projekts. Ein Status oder Tickettyp, den Tickets noch verwenden, lässt sich nur mit
+    einer Zuordnung entfernen. Eigene Felder und ihre Auswahloptionen werden nie entfernt und ändern ihren Typ nicht; sie
+    werden deaktiviert.
 
     Der `ETag` ist die Version des Projekts. Sie ändert sich mit jeder Änderung von Projekt, Konfiguration oder Mitgliedern,
     und jede Änderung braucht sie als `If-Match`. Fehlt der Kopf, antwortet der Server mit 428, passt er nicht, mit 412.
@@ -104,12 +110,18 @@ paths:
       - $ref: '#/components/parameters/ProjectId'
     put:
       operationId: changeProjectConfiguration
-      summary: Konfiguration ändern (project.manage oder projects.manage)
+      summary: Konfiguration direkt veröffentlichen (project.manage oder projects.manage)
       description: |
-        Speichert die vollständige Konfiguration als nächste Version; frühere Versionen bleiben unverändert lesbar. Ungültige
-        Konfigurationen antworten mit 400 `request.invalid` und den Gründen in `violations`, etwa `ticketTypes.required`,
-        `statuses.key_duplicate`, `statuses.category_invalid`, `initialStatus.unknown`, `transitions.status_unknown`,
-        `transitions.same_status`, `transitions.duplicate`, `fields.invalid` oder `fields.required_fixed`.
+        Speichert die vollständige Konfiguration als nächste Version, ohne Entwurf; frühere Versionen bleiben unverändert
+        lesbar. Es gelten dieselben Prüfungen wie bei der Veröffentlichung eines Entwurfs, aber ohne Zuordnung: Verwenden
+        Tickets noch einen Status oder Tickettyp, den die neue Version nicht mehr vorsieht, antwortet der Server mit 409
+        `project.configuration_in_use`. Ungültige Konfigurationen antworten mit 400 `request.invalid` und den Gründen in
+        `violations`, etwa `ticketTypes.required`, `statuses.key_duplicate`, `statuses.category_invalid`,
+        `initialStatus.unknown`, `transitions.status_unknown`, `transitions.same_status`, `transitions.duplicate`,
+        `transitions.required_field_unknown`, `workflows.type_unknown`, `workflows.type_duplicate`,
+        `workflows.initialStatus.unknown`, `customFields.key_invalid`, `customFields.key_duplicate`,
+        `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, `fields.invalid`
+        oder `fields.required_fixed`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -129,8 +141,141 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/configuration/draft:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getProjectConfigurationDraft
+      summary: Entwurf der Konfiguration (project.manage oder projects.manage)
+      description: Der `ETag` ist die Revision des Entwurfs. Ohne Entwurf antwortet der Server mit 404 `project.draft_not_found`.
+      responses:
+        '200':
+          description: Entwurf
+          headers:
+            ETag: {schema: {type: string}, description: 'Revision in Anführungszeichen'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Draft'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: saveProjectConfigurationDraft
+      summary: Entwurf anlegen oder ersetzen
+      description: |
+        Ohne `If-Match` legt der Aufruf den Entwurf an, mit der gelesenen Revision als `If-Match` ersetzt er ihn; wer den Kopf
+        bei vorhandenem Entwurf weglässt oder eine alte Revision nennt, erhält 412 `project.draft_conflict`. `baseVersion` ist
+        die veröffentlichte Konfigurationsversion, von der der Entwurf ausgeht. Ist inzwischen eine neuere veröffentlicht,
+        antwortet der Server mit 409 `project.draft_stale`. Der Entwurf muss aufbaubar sein wie eine Konfiguration (400
+        `request.invalid` mit `violations`); ob er veröffentlicht werden darf, prüft erst die Veröffentlichung.
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          description: Revision des zuletzt gelesenen Entwurfs
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DraftRequest'}
+      responses:
+        '200':
+          description: Gespeichert. Neue Revision im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Draft'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: discardProjectConfigurationDraft
+      summary: Entwurf verwerfen
+      description: Verlangt die Revision als `If-Match` (428 ohne, 412 bei anderer Revision).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Verworfen
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/configuration/publish:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: publishProjectConfigurationDraft
+      summary: Entwurf als nächste Version veröffentlichen
+      description: |
+        Der `If-Match` ist die Version des Projekts, `draftRevision` die Revision des Entwurfs, den der Aufrufer gesehen hat
+        (412 `project.draft_conflict` bei anderer Revision). Die Veröffentlichung prüft den Entwurf und verändert nichts, wenn
+        eine Prüfung scheitert:
+
+        * 400 `request.invalid` mit den Gründen der Konfiguration, siehe `Configuration`.
+        * 409 `project.configuration_incompatible`: ein eigenes Feld oder eine Auswahloption fehlt (`customFields.removed`,
+          `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`).
+        * 409 `project.configuration_in_use`: Tickets verwenden noch einen Tickettyp (`type.in_use:<schlüssel>`) oder einen
+          Status (`status.in_use:<schlüssel>`), den die neue Version nicht mehr kennt oder für ihren Tickettyp nicht mehr
+          vorsieht, und die Zuordnung fehlt; `status.mapping_invalid:<schlüssel>` heißt, dass der Zielstatus für den
+          Tickettyp nicht vorgesehen ist.
+        * 409 `project.draft_stale`: seit dem Entwurf wurde eine neuere Version veröffentlicht.
+
+        Mit `typeMapping` und `statusMapping` (alter Schlüssel auf neuen Schlüssel) wandern die betroffenen Tickets in
+        derselben Transaktion; jedes erhält eine neue Version und einen Eintrag in der Historie.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PublishRequest'}
+      responses:
+        '200':
+          description: Veröffentlicht. Neue Version im ETag, neue Konfigurationsversion im Körper.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{id}/configuration/usage:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getProjectConfigurationUsage
+      summary: Welche Tickettypen und Status Tickets verwenden (project.manage oder projects.manage)
+      description: Für die Zuordnung bei einer Veröffentlichung; leere Liste, solange das Projekt keine Tickets hat.
+      responses:
+        '200':
+          description: Anzahl der Tickets je Typ und Status
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Usage'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /projects/{id}/configurations/{version}:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -241,7 +386,9 @@ components:
     Problem:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, project.key_taken,
-        project.configuration_not_found, project.version_conflict, project.precondition_required, auth.required,
+        project.configuration_not_found, project.version_conflict, project.precondition_required, project.draft_not_found,
+        project.draft_conflict, project.draft_stale, project.configuration_incompatible, project.configuration_in_use,
+        project.busy (wiederholbar, mit Retry-After), auth.required,
         auth.forbidden, auth.csrf_invalid, auth.password_change_required.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
@@ -302,6 +449,43 @@ components:
         manageable: {type: boolean}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    Draft:
+      type: object
+      required: [baseVersion, revision, configuration, updatedAt, updatedBy]
+      properties:
+        baseVersion: {type: integer, minimum: 1, description: 'Veröffentlichte Konfigurationsversion, von der der Entwurf ausgeht'}
+        revision: {type: integer, minimum: 1}
+        configuration: {$ref: '#/components/schemas/Configuration'}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    DraftRequest:
+      type: object
+      additionalProperties: false
+      required: [baseVersion, configuration]
+      properties:
+        baseVersion: {type: integer, minimum: 1}
+        configuration: {$ref: '#/components/schemas/Configuration'}
+    PublishRequest:
+      type: object
+      additionalProperties: false
+      required: [draftRevision]
+      properties:
+        draftRevision: {type: integer, minimum: 1}
+        statusMapping:
+          type: object
+          description: 'Alter Statusschlüssel auf neuen Statusschlüssel für Tickets, deren Status wegfällt oder für ihren Tickettyp nicht mehr vorgesehen ist'
+          additionalProperties: {type: string}
+        typeMapping:
+          type: object
+          description: 'Alter Tickettypschlüssel auf neuen Schlüssel für Tickets, deren Typ wegfällt'
+          additionalProperties: {type: string}
+    Usage:
+      type: object
+      required: [type, status, count]
+      properties:
+        type: {type: string}
+        status: {type: string}
+        count: {type: integer, minimum: 1}
     Configuration:
       type: object
       additionalProperties: false
@@ -332,12 +516,31 @@ components:
         transitions:
           type: array
           maxItems: 200
+          description: Ablauf aller Tickettypen, die keinen eigenen Eintrag in `workflows` haben.
+          items: {$ref: '#/components/schemas/Transition'}
+        workflows:
+          type: array
+          maxItems: 20
+          description: |
+            Eigener Ablauf einzelner Tickettypen. Ein Tickettyp mit Eintrag kennt nur dessen ersten Status und die Status
+            seiner Übergänge. Fehlt das Feld, haben alle Tickettypen den Ablauf von oben.
           items:
             type: object
-            required: [from, to]
+            required: [type, initialStatus, transitions]
             properties:
-              from: {type: string}
-              to: {type: string}
+              type: {type: string, description: 'Schlüssel eines Tickettyps'}
+              initialStatus: {type: string, description: 'Status eines neuen Tickets dieses Typs'}
+              transitions:
+                type: array
+                maxItems: 200
+                items: {$ref: '#/components/schemas/Transition'}
+        customFields:
+          type: array
+          maxItems: 30
+          description: |
+            Eigene Felder der Tickets. Ein veröffentlichtes Feld und jede seiner Auswahloptionen bleiben in allen späteren
+            Versionen erhalten und behalten den Typ.
+          items: {$ref: '#/components/schemas/CustomField'}
         fields:
           type: array
           description: Genau die festen Felder in dieser Reihenfolge; title, type und status sind immer Pflicht.
@@ -349,6 +552,43 @@ components:
             properties:
               key: {type: string, enum: [title, description, type, status, assignee]}
               required: {type: boolean}
+    Transition:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string}
+        to: {type: string}
+        requiredFields:
+          type: array
+          maxItems: 10
+          description: |
+            Felder, die das Ticket nach der Änderung mit diesem Übergang gefüllt haben muss: `description`, `assignee` oder
+            `custom.<schlüssel>`. Fehlt eines, wird der Übergang mit 400 `request.invalid` und
+            `<feld>.required_for_transition` abgewiesen.
+          items: {type: string}
+    CustomField:
+      type: object
+      required: [key, name, type]
+      properties:
+        key: {type: string, pattern: '^[a-z][a-z0-9_]{0,39}$', description: 'In Rechten, Historie und Suche als `custom.<schlüssel>`'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        type:
+          type: string
+          enum: [text, longtext, integer, date, boolean, select, user]
+          description: 'Kurztext (200 Zeichen), Langtext (20000), Ganzzahl, Datum, Wahr/Falsch, Einfachauswahl, Benutzerreferenz (Mitglied des Projekts)'
+        required: {type: boolean, default: false, description: 'Pflicht bei der Anlage; ein Pflichtfeld lässt sich nicht leeren'}
+        active: {type: boolean, default: true, description: 'Inaktiv: vorhandene Werte bleiben lesbar, neue werden nicht angenommen'}
+        options:
+          type: array
+          maxItems: 50
+          description: Nur bei `select`, mindestens eine Option.
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key: {type: string, pattern: '^[a-z][a-z0-9_]{0,39}$'}
+              name: {type: string, minLength: 1, maxLength: 80}
+              active: {type: boolean, default: true, description: 'Inaktiv: Bestandswerte bleiben, neu wählbar ist die Option nicht'}
     Member:
       type: object
       required: [accountId, addedAt]

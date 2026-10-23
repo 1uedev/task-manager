@@ -20,7 +20,9 @@ export interface paths {
          * Ticket anlegen (ticket.create)
          * @description Titel und Typ sind immer nötig, dazu Schreibrechte auf alle mitgegebenen Felder. Ist Beschreibung oder Zuständigkeit
          *     in der Konfiguration Pflicht und darf die anfragende Person das Feld nicht schreiben, antwortet der Server mit 409
-         *     `ticket.required_field_inaccessible`, statt sie zu einem Feld zu zwingen, das sie nicht bearbeiten darf.
+         *     `ticket.required_field_inaccessible`, statt sie zu einem Feld zu zwingen, das sie nicht bearbeiten darf. Das gilt auch
+         *     für aktive eigene Pflichtfelder; fehlt ein beschreibbares Pflichtfeld, antwortet der Server mit 400 und
+         *     `custom.<schlüssel>.required`.
          */
         post: operations["createTicket"];
         delete?: never;
@@ -48,10 +50,14 @@ export interface paths {
         head?: never;
         /**
          * Felder ändern (ticket.edit)
-         * @description Ändert genau die Felder im Körper; `null` leert Beschreibung oder Zuständigkeit. Für jedes genannte Feld braucht es
-         *     eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein Statuswechsel muss in der aktuellen
-         *     Konfiguration als Übergang vorgesehen sein (409 `ticket.transition_not_allowed`). Felder, die ihren Wert behalten,
-         *     werden nicht geschrieben; ohne echte Änderung bleibt die Version gleich.
+         * @description Ändert genau die Felder im Körper; `null` leert Beschreibung, Zuständigkeit oder ein eigenes Feld (`customFields`).
+         *     Für jedes genannte Feld braucht es eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein
+         *     Statuswechsel muss im Ablauf des Tickettyps der aktuellen Konfiguration als Übergang vorgesehen sein (409
+         *     `ticket.transition_not_allowed`), und die Felder, die der Übergang verlangt, müssen danach gefüllt sein (400 mit
+         *     `<feld>.required_for_transition`, zum Beispiel `custom.cause.required_for_transition`); bei einem Fehler bleibt das
+         *     Ticket unverändert. Ein Wechsel des Tickettyps verlangt, dass der Status im Ablauf des neuen Typs vorkommt
+         *     (`type.status_unavailable`, `status.unavailable`). Felder, die ihren Wert behalten, werden nicht geschrieben; ohne
+         *     echte Änderung bleibt die Version gleich.
          */
         patch: operations["updateTicket"];
         trace?: never;
@@ -102,6 +108,7 @@ export interface components {
             description?: string | null;
             /** Format: uuid */
             assignee?: string | null;
+            customFields?: components["schemas"]["CustomValues"];
         };
         UpdateRequest: {
             title?: string;
@@ -110,6 +117,14 @@ export interface components {
             status?: string;
             /** Format: uuid */
             assignee?: string | null;
+            customFields?: components["schemas"]["CustomValues"];
+        };
+        /**
+         * @description Werte eigener Felder nach Schlüssel (`^[a-z][a-z0-9_]{0,39}$`): Text, Ganzzahl (bis 2^53 minus 1), Datum als Text,
+         *     boolescher Wert, Optionsschlüssel oder Kennung eines Mitglieds. `null` leert das Feld (bei der Änderung).
+         */
+        CustomValues: {
+            [key: string]: string | number | boolean | null;
         };
         Ticket: {
             /** Format: uuid */
@@ -131,8 +146,18 @@ export interface components {
                 /** Format: uuid */
                 assignee?: string | null;
             };
-            /** @description Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche. */
-            writableFields: ("title" | "description" | "type" | "status" | "assignee")[];
+            /**
+             * @description Die lesbaren eigenen Felder mit Wert, nach Schlüssel und in der Art des Feldes (Text, Zahl, boolescher Wert);
+             *     ein Feld ohne Wert oder ohne Leseregel fehlt.
+             */
+            customFields: {
+                [key: string]: string | number | boolean;
+            };
+            /**
+             * @description Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche. Eigene Felder erscheinen
+             *     als `custom.<schlüssel>`, wenn sie aktiv sind.
+             */
+            writableFields: string[];
             /** Format: date-time */
             createdAt: string;
             /** Format: uuid */
@@ -149,8 +174,7 @@ export interface components {
             /** Format: uuid */
             actor: string;
             changes: {
-                /** @enum {string} */
-                field: "title" | "description" | "type" | "status" | "assignee" | "tags";
+                field: string;
                 from: string | null;
                 to: string | null;
             }[];
@@ -162,8 +186,10 @@ export interface components {
          *     ticket.version_conflict, ticket.precondition_required, ticket.transition_not_allowed,
          *     ticket.required_field_inaccessible, ticket.busy, auth.required, auth.forbidden, auth.csrf_invalid,
          *     auth.password_change_required. Gründe in `violations`: title.invalid, description.required, description.too_long,
-         *     description.invalid, type.unknown, status.unknown, assignee.required, assignee.not_member, fields.required, fields.unknown,
-         *     <feld>.invalid, paging.invalid.
+         *     description.invalid, type.unknown, status.unknown, status.unavailable, type.status_unavailable, assignee.required,
+         *     assignee.not_member, fields.required, fields.unknown, customFields.unknown, <feld>.invalid, <feld>.required_for_transition,
+         *     paging.invalid; für ein eigenes Feld custom.<schlüssel>.invalid, .required, .inactive, .option_inactive und
+         *     .not_member.
          */
         Problem: {
             headers: {

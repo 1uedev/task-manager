@@ -1,8 +1,9 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   addMember, companyTags, createProjectTag, createTicket, listMembers, listTickets, projectTags, readProject, readProjectRights,
   removeMember, updateProject, type Member, type Project, type Ticket,
 } from '../api/product.ts';
+import { CUSTOM_PREFIX, customFieldsOf, sendValue } from '../app/configuration.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate, type ProjectTab } from '../app/route.ts';
@@ -11,6 +12,8 @@ import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, us
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
+import { CUSTOM_ERROR, CustomFieldInput } from './CustomFieldInput.tsx';
+import { ProjectConfigurationEditor } from './ProjectConfigurationEditor.tsx';
 import { ProjectRightsTab } from './ProjectRights.tsx';
 
 const TAB_LABEL: Record<ProjectTab, MessageKey> = {
@@ -50,7 +53,10 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
           {tab === 'settings' && value.manageable && etag !== null && (
             <SettingsTab project={value} etag={etag} onSaved={(next, nextEtag) => replace({ value: next, etag: nextEtag })} />
           )}
-          {tab === 'rights' && rights.state === 'ok' && <ProjectRightsTab projectId={id} rights={rights.value} reload={reloadRights} />}
+          {tab === 'rights' && rights.state === 'ok' && (
+            <ProjectRightsTab projectId={id} rights={rights.value} reload={reloadRights}
+              customNames={Object.fromEntries(customFieldsOf(value.configuration).map((field) => [`${CUSTOM_PREFIX}${field.key}`, field.name]))} />
+          )}
         </>
       )}
     </LoadedView>
@@ -124,14 +130,28 @@ function CreateTicket({ project }: { readonly project: Project }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [custom, setCustom] = useState<Readonly<Record<string, string>>>({});
+  const [customErrors, setCustomErrors] = useState<Readonly<Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const required = (key: string) => config.fields.find((field) => field.key === key)?.required ?? false;
-  useUnsavedGuard(title !== '' || description !== '');
+  const fields = customFieldsOf(config).filter((field) => field.active);
+  const persons = members.state === 'ok' ? members.value.map((member: Member) => ({ id: member.accountId, name: name(member.accountId) })) : [];
+  useUnsavedGuard(title !== '' || description !== '' || Object.values(custom).some((value) => value !== ''));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (title.trim() === '') return setError(t('tickets.error.title'));
+    const values: Record<string, string | number | boolean> = {};
+    const errors: Record<string, string> = {};
+    for (const field of fields) {
+      const value = sendValue(field.type, custom[field.key] ?? '');
+      if (value === undefined) errors[field.key] = t('custom.error.invalid');
+      else if (value !== null) values[field.key] = value;
+      else if (field.required) errors[field.key] = t('custom.error.required');
+    }
+    setCustomErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setBusy(true);
     setError(null);
     const result = await createTicket(api, project.id, {
@@ -139,14 +159,23 @@ function CreateTicket({ project }: { readonly project: Project }) {
       title: title.trim(),
       ...(description.trim() !== '' ? { description: description.trim() } : {}),
       ...(assignee !== '' ? { assignee } : {}),
+      ...(Object.keys(values).length > 0 ? { customFields: values } : {}),
     });
     setBusy(false);
     if (result.kind === 'ok') {
       setTitle('');
       setDescription('');
+      setCustom({});
       return navigate({ name: 'ticket', projectId: project.id, number: result.data.value.number });
     }
-    setError(text(result.problem, { 'ticket.required_field_inaccessible': 'tickets.error.requiredField', 'request.invalid': 'tickets.error.invalid', 'auth.forbidden': 'tickets.error.forbidden' }));
+    const reasons = (result.problem.violations ?? []).map((code) => {
+      const match = /^custom\.([a-z0-9_]+)\.([a-z_]+)$/.exec(code);
+      const key = match === null ? undefined : CUSTOM_ERROR[match[2] ?? ''];
+      const label = fields.find((field) => field.key === match?.[1])?.name;
+      return key === undefined || label === undefined ? null : `${label}: ${t(key)}`;
+    }).filter((reason): reason is string => reason !== null);
+    const base = text(result.problem, { 'ticket.required_field_inaccessible': 'tickets.error.requiredField', 'request.invalid': 'tickets.error.invalid', 'auth.forbidden': 'tickets.error.forbidden' });
+    setError(reasons.length > 0 ? `${base} ${reasons.join(' ')}` : base);
   }
 
   const people = members.state === 'ok' ? members.value : [];
@@ -159,6 +188,10 @@ function CreateTicket({ project }: { readonly project: Project }) {
         <TextField label={t('field.description')} value={description} onChange={setDescription} multiline required={required('description')} maxLength={20000} />
         <SelectField label={t('field.assignee')} value={assignee} onChange={setAssignee}
           options={[{ value: '', label: t('field.nobody') }, ...people.map((member: Member) => ({ value: member.accountId, label: name(member.accountId) }))]} />
+        {fields.map((field) => (
+          <CustomFieldInput key={field.key} field={field} value={custom[field.key] ?? ''} people={persons} error={customErrors[field.key] ?? null}
+            onChange={(value) => setCustom((current) => ({ ...current, [field.key]: value }))} />
+        ))}
         {error !== null && <p role="alert" className="field-error">{error}</p>}
         <button type="submit" disabled={busy}>{t('tickets.createSubmit')}</button>
       </form>
@@ -290,7 +323,6 @@ function SettingsTab({ project, etag, onSaved }: { readonly project: Project; re
   const [notice, setNotice] = useState<Notice | null>(null);
   const dirty = name !== project.name || description !== (project.description ?? '');
   useUnsavedGuard(dirty);
-  const transitions = useMemo(() => project.configuration.transitions.map((item) => `${statusName(project, item.from)} → ${statusName(project, item.to)}`), [project]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -314,18 +346,7 @@ function SettingsTab({ project, etag, onSaved }: { readonly project: Project; re
           <button type="submit" disabled={!dirty}>{t('settings.save')}</button>
         </form>
       </section>
-      <section aria-labelledby="settings-config">
-        <h2 id="settings-config">{t('settings.configuration')}</h2>
-        <p className="hint">{t('settings.configurationHint', { version: project.configurationVersion })}</p>
-        <dl className="facts">
-          <dt>{t('settings.types')}</dt>
-          <dd>{project.configuration.ticketTypes.map((item) => item.name).join(', ')}</dd>
-          <dt>{t('settings.statuses')}</dt>
-          <dd>{project.configuration.statuses.map((item) => item.name).join(', ')}</dd>
-          <dt>{t('settings.transitions')}</dt>
-          <dd>{transitions.join(', ')}</dd>
-        </dl>
-      </section>
+      <ProjectConfigurationEditor project={project} etag={etag} onPublished={onSaved} />
     </>
   );
 }

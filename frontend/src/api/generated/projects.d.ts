@@ -61,13 +61,111 @@ export interface paths {
         };
         get?: never;
         /**
-         * Konfiguration ändern (project.manage oder projects.manage)
-         * @description Speichert die vollständige Konfiguration als nächste Version; frühere Versionen bleiben unverändert lesbar. Ungültige
-         *     Konfigurationen antworten mit 400 `request.invalid` und den Gründen in `violations`, etwa `ticketTypes.required`,
-         *     `statuses.key_duplicate`, `statuses.category_invalid`, `initialStatus.unknown`, `transitions.status_unknown`,
-         *     `transitions.same_status`, `transitions.duplicate`, `fields.invalid` oder `fields.required_fixed`.
+         * Konfiguration direkt veröffentlichen (project.manage oder projects.manage)
+         * @description Speichert die vollständige Konfiguration als nächste Version, ohne Entwurf; frühere Versionen bleiben unverändert
+         *     lesbar. Es gelten dieselben Prüfungen wie bei der Veröffentlichung eines Entwurfs, aber ohne Zuordnung: Verwenden
+         *     Tickets noch einen Status oder Tickettyp, den die neue Version nicht mehr vorsieht, antwortet der Server mit 409
+         *     `project.configuration_in_use`. Ungültige Konfigurationen antworten mit 400 `request.invalid` und den Gründen in
+         *     `violations`, etwa `ticketTypes.required`, `statuses.key_duplicate`, `statuses.category_invalid`,
+         *     `initialStatus.unknown`, `transitions.status_unknown`, `transitions.same_status`, `transitions.duplicate`,
+         *     `transitions.required_field_unknown`, `workflows.type_unknown`, `workflows.type_duplicate`,
+         *     `workflows.initialStatus.unknown`, `customFields.key_invalid`, `customFields.key_duplicate`,
+         *     `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, `fields.invalid`
+         *     oder `fields.required_fixed`.
          */
         put: operations["changeProjectConfiguration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/configuration/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Entwurf der Konfiguration (project.manage oder projects.manage)
+         * @description Der `ETag` ist die Revision des Entwurfs. Ohne Entwurf antwortet der Server mit 404 `project.draft_not_found`.
+         */
+        get: operations["getProjectConfigurationDraft"];
+        /**
+         * Entwurf anlegen oder ersetzen
+         * @description Ohne `If-Match` legt der Aufruf den Entwurf an, mit der gelesenen Revision als `If-Match` ersetzt er ihn; wer den Kopf
+         *     bei vorhandenem Entwurf weglässt oder eine alte Revision nennt, erhält 412 `project.draft_conflict`. `baseVersion` ist
+         *     die veröffentlichte Konfigurationsversion, von der der Entwurf ausgeht. Ist inzwischen eine neuere veröffentlicht,
+         *     antwortet der Server mit 409 `project.draft_stale`. Der Entwurf muss aufbaubar sein wie eine Konfiguration (400
+         *     `request.invalid` mit `violations`); ob er veröffentlicht werden darf, prüft erst die Veröffentlichung.
+         */
+        put: operations["saveProjectConfigurationDraft"];
+        post?: never;
+        /**
+         * Entwurf verwerfen
+         * @description Verlangt die Revision als `If-Match` (428 ohne, 412 bei anderer Revision).
+         */
+        delete: operations["discardProjectConfigurationDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/configuration/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Entwurf als nächste Version veröffentlichen
+         * @description Der `If-Match` ist die Version des Projekts, `draftRevision` die Revision des Entwurfs, den der Aufrufer gesehen hat
+         *     (412 `project.draft_conflict` bei anderer Revision). Die Veröffentlichung prüft den Entwurf und verändert nichts, wenn
+         *     eine Prüfung scheitert:
+         *
+         *     * 400 `request.invalid` mit den Gründen der Konfiguration, siehe `Configuration`.
+         *     * 409 `project.configuration_incompatible`: ein eigenes Feld oder eine Auswahloption fehlt (`customFields.removed`,
+         *       `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`).
+         *     * 409 `project.configuration_in_use`: Tickets verwenden noch einen Tickettyp (`type.in_use:<schlüssel>`) oder einen
+         *       Status (`status.in_use:<schlüssel>`), den die neue Version nicht mehr kennt oder für ihren Tickettyp nicht mehr
+         *       vorsieht, und die Zuordnung fehlt; `status.mapping_invalid:<schlüssel>` heißt, dass der Zielstatus für den
+         *       Tickettyp nicht vorgesehen ist.
+         *     * 409 `project.draft_stale`: seit dem Entwurf wurde eine neuere Version veröffentlicht.
+         *
+         *     Mit `typeMapping` und `statusMapping` (alter Schlüssel auf neuen Schlüssel) wandern die betroffenen Tickets in
+         *     derselben Transaktion; jedes erhält eine neue Version und einen Eintrag in der Historie.
+         */
+        post: operations["publishProjectConfigurationDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/configuration/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Welche Tickettypen und Status Tickets verwenden (project.manage oder projects.manage)
+         * @description Für die Zuordnung bei einer Veröffentlichung; leere Liste, solange das Projekt keine Tickets hat.
+         */
+        get: operations["getProjectConfigurationUsage"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -192,6 +290,36 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Draft: {
+            /** @description Veröffentlichte Konfigurationsversion, von der der Entwurf ausgeht */
+            baseVersion: number;
+            revision: number;
+            configuration: components["schemas"]["Configuration"];
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uuid */
+            updatedBy: string;
+        };
+        DraftRequest: {
+            baseVersion: number;
+            configuration: components["schemas"]["Configuration"];
+        };
+        PublishRequest: {
+            draftRevision: number;
+            /** @description Alter Statusschlüssel auf neuen Statusschlüssel für Tickets, deren Status wegfällt oder für ihren Tickettyp nicht mehr vorgesehen ist */
+            statusMapping?: {
+                [key: string]: string;
+            };
+            /** @description Alter Tickettypschlüssel auf neuen Schlüssel für Tickets, deren Typ wegfällt */
+            typeMapping?: {
+                [key: string]: string;
+            };
+        };
+        Usage: {
+            type: string;
+            status: string;
+            count: number;
+        };
         Configuration: {
             ticketTypes: {
                 key: string;
@@ -205,15 +333,69 @@ export interface components {
             }[];
             /** @description Schlüssel eines Status */
             initialStatus: string;
-            transitions: {
-                from: string;
-                to: string;
+            /** @description Ablauf aller Tickettypen, die keinen eigenen Eintrag in `workflows` haben. */
+            transitions: components["schemas"]["Transition"][];
+            /**
+             * @description Eigener Ablauf einzelner Tickettypen. Ein Tickettyp mit Eintrag kennt nur dessen ersten Status und die Status
+             *     seiner Übergänge. Fehlt das Feld, haben alle Tickettypen den Ablauf von oben.
+             */
+            workflows?: {
+                /** @description Schlüssel eines Tickettyps */
+                type: string;
+                /** @description Status eines neuen Tickets dieses Typs */
+                initialStatus: string;
+                transitions: components["schemas"]["Transition"][];
             }[];
+            /**
+             * @description Eigene Felder der Tickets. Ein veröffentlichtes Feld und jede seiner Auswahloptionen bleiben in allen späteren
+             *     Versionen erhalten und behalten den Typ.
+             */
+            customFields?: components["schemas"]["CustomField"][];
             /** @description Genau die festen Felder in dieser Reihenfolge; title, type und status sind immer Pflicht. */
             fields: {
                 /** @enum {string} */
                 key: "title" | "description" | "type" | "status" | "assignee";
                 required: boolean;
+            }[];
+        };
+        Transition: {
+            from: string;
+            to: string;
+            /**
+             * @description Felder, die das Ticket nach der Änderung mit diesem Übergang gefüllt haben muss: `description`, `assignee` oder
+             *     `custom.<schlüssel>`. Fehlt eines, wird der Übergang mit 400 `request.invalid` und
+             *     `<feld>.required_for_transition` abgewiesen.
+             */
+            requiredFields?: string[];
+        };
+        CustomField: {
+            /** @description In Rechten, Historie und Suche als `custom.<schlüssel>` */
+            key: string;
+            name: string;
+            /**
+             * @description Kurztext (200 Zeichen), Langtext (20000), Ganzzahl, Datum, Wahr/Falsch, Einfachauswahl, Benutzerreferenz (Mitglied des Projekts)
+             * @enum {string}
+             */
+            type: "text" | "longtext" | "integer" | "date" | "boolean" | "select" | "user";
+            /**
+             * @description Pflicht bei der Anlage; ein Pflichtfeld lässt sich nicht leeren
+             * @default false
+             */
+            required: boolean;
+            /**
+             * @description Inaktiv: vorhandene Werte bleiben lesbar, neue werden nicht angenommen
+             * @default true
+             */
+            active: boolean;
+            /** @description Nur bei `select`, mindestens eine Option. */
+            options?: {
+                key: string;
+                name: string;
+                /**
+                 * @description Inaktiv: Bestandswerte bleiben, neu wählbar ist die Option nicht
+                 * @default true
+                 */
+                active: boolean;
             }[];
         };
         Member: {
@@ -226,7 +408,9 @@ export interface components {
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, project.key_taken,
-         *     project.configuration_not_found, project.version_conflict, project.precondition_required, auth.required,
+         *     project.configuration_not_found, project.version_conflict, project.precondition_required, project.draft_not_found,
+         *     project.draft_conflict, project.draft_stale, project.configuration_incompatible, project.configuration_in_use,
+         *     project.busy (wiederholbar, mit Retry-After), auth.required,
          *     auth.forbidden, auth.csrf_invalid, auth.password_change_required.
          */
         Problem: {
@@ -396,8 +580,166 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+        };
+    };
+    getProjectConfigurationDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entwurf */
+            200: {
+                headers: {
+                    /** @description Revision in Anführungszeichen */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    saveProjectConfigurationDraft: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Revision des zuletzt gelesenen Entwurfs */
+                "If-Match"?: string;
+            };
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Gespeichert. Neue Revision im ETag. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    discardProjectConfigurationDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verworfen */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    publishProjectConfigurationDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Veröffentlicht. Neue Version im ETag, neue Konfigurationsversion im Körper. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getProjectConfigurationUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anzahl der Tickets je Typ und Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Usage"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getProjectConfiguration: {

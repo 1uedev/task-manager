@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Tickets (TASK-027)
+  title: Task Manager API, Tickets (TASK-027, TASK-044)
   version: 0.1.0
   description: |
     Tickets eines Projekts mit Historie und Konflikterkennung (DEC-067). Alle Aufrufe verlangen eine vollständige Anmeldung;
@@ -15,7 +15,17 @@ info:
     kein NUL Zeichen enthalten; unbekannte Felder werden bei Anlage und Änderung mit `fields.unknown` abgelehnt.
 
     Typ, Status, Übergänge und Pflichtfelder kommen aus der aktuellen Projektkonfiguration. Ein neues Ticket beginnt im
-    Anfangsstatus. Zuständig kann nur ein aktives Mitglied des Projekts sein.
+    Anfangsstatus seines Tickettyps. Zuständig kann nur ein aktives Mitglied des Projekts sein.
+
+    Eigene Felder (TASK-044, DEC-073) stehen in `customFields` und werden dort nach ihrem Schlüssel geführt: Kurztext und
+    Langtext als Text, Ganzzahl als Zahl, Datum als `yyyy-MM-dd`, Wahr/Falsch als boolescher Wert, Einfachauswahl als Schlüssel
+    der Option und Benutzerreferenz als Kennung eines aktiven Projektmitglieds. Als Regelfeld heißt ein eigenes Feld
+    `custom.<schlüssel>`, in der Historie und in `writableFields` ebenso; es gilt wie ein festes Feld: Ohne Leseregel fehlt es
+    in der Antwort und in der Historie, ohne Schreibregel wird jede Änderung abgewiesen. Ein neuer Wert in einem inaktiven
+    Feld oder eine inaktive Option wird abgelehnt, ein vorhandener Wert bleibt gültig und lesbar. Pflichtfelder gelten bei
+    der Anlage, beim Leeren eines Pflichtfeldes und bei einem Übergang, der sie verlangt; ein Ticket, dem ein später
+    verlangtes Feld fehlt, bleibt gültig, bis jemand das Feld schreibt oder einen Übergang nimmt, der es verlangt.
+    Veröffentlicht die Projektverwaltung eine neue Konfiguration, gilt sie sofort für alle Tickets des Projekts.
 
     Der `ETag` ist die Version des Tickets; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
     Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `ticket.busy` und `Retry-After`; die
@@ -58,7 +68,9 @@ paths:
       description: |
         Titel und Typ sind immer nötig, dazu Schreibrechte auf alle mitgegebenen Felder. Ist Beschreibung oder Zuständigkeit
         in der Konfiguration Pflicht und darf die anfragende Person das Feld nicht schreiben, antwortet der Server mit 409
-        `ticket.required_field_inaccessible`, statt sie zu einem Feld zu zwingen, das sie nicht bearbeiten darf.
+        `ticket.required_field_inaccessible`, statt sie zu einem Feld zu zwingen, das sie nicht bearbeiten darf. Das gilt auch
+        für aktive eigene Pflichtfelder; fehlt ein beschreibbares Pflichtfeld, antwortet der Server mit 400 und
+        `custom.<schlüssel>.required`.
       requestBody:
         required: true
         content:
@@ -101,10 +113,14 @@ paths:
       operationId: updateTicket
       summary: Felder ändern (ticket.edit)
       description: |
-        Ändert genau die Felder im Körper; `null` leert Beschreibung oder Zuständigkeit. Für jedes genannte Feld braucht es
-        eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein Statuswechsel muss in der aktuellen
-        Konfiguration als Übergang vorgesehen sein (409 `ticket.transition_not_allowed`). Felder, die ihren Wert behalten,
-        werden nicht geschrieben; ohne echte Änderung bleibt die Version gleich.
+        Ändert genau die Felder im Körper; `null` leert Beschreibung, Zuständigkeit oder ein eigenes Feld (`customFields`).
+        Für jedes genannte Feld braucht es eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein
+        Statuswechsel muss im Ablauf des Tickettyps der aktuellen Konfiguration als Übergang vorgesehen sein (409
+        `ticket.transition_not_allowed`), und die Felder, die der Übergang verlangt, müssen danach gefüllt sein (400 mit
+        `<feld>.required_for_transition`, zum Beispiel `custom.cause.required_for_transition`); bei einem Fehler bleibt das
+        Ticket unverändert. Ein Wechsel des Tickettyps verlangt, dass der Status im Ablauf des neuen Typs vorkommt
+        (`type.status_unavailable`, `status.unavailable`). Felder, die ihren Wert behalten, werden nicht geschrieben; ohne
+        echte Änderung bleibt die Version gleich.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -178,8 +194,10 @@ components:
         ticket.version_conflict, ticket.precondition_required, ticket.transition_not_allowed,
         ticket.required_field_inaccessible, ticket.busy, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required. Gründe in `violations`: title.invalid, description.required, description.too_long,
-        description.invalid, type.unknown, status.unknown, assignee.required, assignee.not_member, fields.required, fields.unknown,
-        <feld>.invalid, paging.invalid.
+        description.invalid, type.unknown, status.unknown, status.unavailable, type.status_unavailable, assignee.required,
+        assignee.not_member, fields.required, fields.unknown, customFields.unknown, <feld>.invalid, <feld>.required_for_transition,
+        paging.invalid; für ein eigenes Feld custom.<schlüssel>.invalid, .required, .inactive, .option_inactive und
+        .not_member.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -210,6 +228,7 @@ components:
         title: {type: string, minLength: 1, maxLength: 200}
         description: {type: [string, 'null'], maxLength: 20000}
         assignee: {type: [string, 'null'], format: uuid}
+        customFields: {$ref: '#/components/schemas/CustomValues'}
     UpdateRequest:
       type: object
       additionalProperties: false
@@ -220,9 +239,22 @@ components:
         type: {type: string}
         status: {type: string}
         assignee: {type: [string, 'null'], format: uuid}
+        customFields: {$ref: '#/components/schemas/CustomValues'}
+    CustomValues:
+      type: object
+      maxProperties: 30
+      description: |
+        Werte eigener Felder nach Schlüssel (`^[a-z][a-z0-9_]{0,39}$`): Text, Ganzzahl (bis 2^53 minus 1), Datum als Text,
+        boolescher Wert, Optionsschlüssel oder Kennung eines Mitglieds. `null` leert das Feld (bei der Änderung).
+      additionalProperties:
+        oneOf:
+          - {type: string}
+          - {type: integer}
+          - {type: boolean}
+          - {type: 'null'}
     Ticket:
       type: object
-      required: [id, projectId, key, number, version, configurationVersion, fields, writableFields, createdAt, createdBy, updatedAt, updatedBy]
+      required: [id, projectId, key, number, version, configurationVersion, fields, customFields, writableFields, createdAt, createdBy, updatedAt, updatedBy]
       properties:
         id: {type: string, format: uuid}
         projectId: {type: string, format: uuid}
@@ -240,10 +272,22 @@ components:
             type: {type: string}
             status: {type: string}
             assignee: {type: [string, 'null'], format: uuid}
+        customFields:
+          type: object
+          description: |
+            Die lesbaren eigenen Felder mit Wert, nach Schlüssel und in der Art des Feldes (Text, Zahl, boolescher Wert);
+            ein Feld ohne Wert oder ohne Leseregel fehlt.
+          additionalProperties:
+            oneOf:
+              - {type: string}
+              - {type: integer}
+              - {type: boolean}
         writableFields:
           type: array
-          description: Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche.
-          items: {type: string, enum: [title, description, type, status, assignee]}
+          description: |
+            Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche. Eigene Felder erscheinen
+            als `custom.<schlüssel>`, wenn sie aktiv sind.
+          items: {type: string, pattern: '^(title|description|type|status|assignee|custom\.[a-z][a-z0-9_]{0,39})$'}
         createdAt: {type: string, format: date-time}
         createdBy: {type: string, format: uuid}
         updatedAt: {type: string, format: date-time}
@@ -261,6 +305,6 @@ components:
             type: object
             required: [field, from, to]
             properties:
-              field: {type: string, enum: [title, description, type, status, assignee, tags]}
+              field: {type: string, pattern: '^(title|description|type|status|assignee|tags|custom\.[a-z][a-z0-9_]{0,39})$'}
               from: {type: [string, 'null']}
               to: {type: [string, 'null']}

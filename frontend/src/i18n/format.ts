@@ -7,6 +7,14 @@ export function formatDateTime(instant: Date | string, language: string, timeZon
   return new Intl.DateTimeFormat(language, options).format(date);
 }
 
+// A calendar date (yyyy-MM-dd) has no time zone; it is shown as the same day everywhere.
+export function formatDate(date: string, language: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (match === null) return date;
+  const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeZone: 'UTC' }).format(instant);
+}
+
 export function formatNumber(value: number, language: string, maximumFractionDigits = 2): string {
   return new Intl.NumberFormat(language, { maximumFractionDigits }).format(value);
 }

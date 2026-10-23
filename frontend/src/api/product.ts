@@ -17,6 +17,8 @@ export type ProjectSummary = ProjectTypes['schemas']['ProjectSummary'];
 export type Project = ProjectTypes['schemas']['Project'];
 export type Configuration = ProjectTypes['schemas']['Configuration'];
 export type Member = ProjectTypes['schemas']['Member'];
+export type ConfigurationDraft = ProjectTypes['schemas']['Draft'];
+export type ConfigurationUsage = ProjectTypes['schemas']['Usage'];
 export type Ticket = TicketTypes['schemas']['Ticket'];
 export type HistoryEntry = TicketTypes['schemas']['HistoryEntry'];
 export type Tag = TagTypes['schemas']['Tag'];
@@ -62,7 +64,8 @@ export const isProject = (v: unknown) => isProjectSummary(v) && record((v as Pro
   && Array.isArray((v as Project).configuration.statuses) && Array.isArray((v as Project).configuration.ticketTypes);
 export const isMember = (v: unknown) => hasStrings(v, 'accountId');
 export const isTicket = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key') && typeof (v as Ticket).number === 'number'
-  && typeof (v as Ticket).version === 'number' && record((v as Ticket).fields) && Array.isArray((v as Ticket).writableFields);
+  && typeof (v as Ticket).version === 'number' && record((v as Ticket).fields) && record((v as Ticket).customFields)
+  && Array.isArray((v as Ticket).writableFields);
 export const isHistoryEntry = (v: unknown) => record(v) && typeof v.version === 'number' && Array.isArray(v.changes);
 export const isTag = (v: unknown) => hasStrings(v, 'id', 'name', 'catalog') && typeof (v as Tag).archived === 'boolean';
 export const isGroup = (v: unknown) => hasStrings(v, 'id', 'name');
@@ -136,6 +139,26 @@ export const readProject = (api: ServerApi, id: string) =>
   run(() => api.projects.GET('/projects/{id}', { params: { path: { id } } }), one<Project>(isProject));
 export const updateProject = (api: ServerApi, id: string, etag: string, name: string, description: string | null) =>
   run(() => api.projects.PUT('/projects/{id}', { params: { path: { id }, ...ifMatch(etag) }, body: { name, description } }), one<Project>(isProject));
+
+// The configuration is edited as a draft and published as the next version (TASK-044). The draft has a revision of its own,
+// sent back as If-Match; publishing needs the version of the project.
+export const readDraft = (api: ServerApi, id: string) =>
+  run(() => api.projects.GET('/projects/{id}/configuration/draft', { params: { path: { id } } }),
+    one<ConfigurationDraft>((v) => record(v) && typeof v.revision === 'number' && typeof v.baseVersion === 'number' && record(v.configuration)));
+export const saveDraft = (api: ServerApi, id: string, revisionEtag: string | null, baseVersion: number, configuration: Configuration) =>
+  run(() => api.projects.PUT('/projects/{id}/configuration/draft', {
+    params: { path: { id }, ...(revisionEtag === null ? {} : { header: { 'If-Match': revisionEtag } }) }, body: { baseVersion, configuration },
+  }), one<ConfigurationDraft>((v) => record(v) && typeof v.revision === 'number' && record(v.configuration)));
+export const discardDraft = (api: ServerApi, id: string, revisionEtag: string) =>
+  run(() => api.projects.DELETE('/projects/{id}/configuration/draft', { params: { path: { id }, ...ifMatch(revisionEtag) } }), nothing);
+export const publishDraft = (api: ServerApi, id: string, projectEtag: string, draftRevision: number,
+  statusMapping: Readonly<Record<string, string>>, typeMapping: Readonly<Record<string, string>>) =>
+  run(() => api.projects.POST('/projects/{id}/configuration/publish', {
+    params: { path: { id }, ...ifMatch(projectEtag) }, body: { draftRevision, statusMapping: { ...statusMapping }, typeMapping: { ...typeMapping } },
+  }), one<Project>(isProject));
+export const readUsage = (api: ServerApi, id: string) =>
+  run(() => api.projects.GET('/projects/{id}/configuration/usage', { params: { path: { id } } }),
+    listOf<ConfigurationUsage>((v) => hasStrings(v, 'type', 'status') && typeof (v as ConfigurationUsage).count === 'number'));
 export const listMembers = (api: ServerApi, id: string) =>
   run(() => api.projects.GET('/projects/{id}/members', { params: { path: { id } } }), listOf<Member>(isMember));
 export const addMember = (api: ServerApi, id: string, etag: string, accountId: string) =>
@@ -145,14 +168,20 @@ export const removeMember = (api: ServerApi, id: string, etag: string, accountId
 
 // ---------------------------------------------------------------- tickets
 
+export type CustomValue = string | number | boolean;
+export type CustomValues = Readonly<Record<string, CustomValue | null>>;
+
 export interface TicketDraft {
   readonly type: string;
   readonly title: string;
   readonly description?: string | null;
   readonly assignee?: string | null;
+  // Values of custom fields by key; null empties a field in a change.
+  readonly customFields?: CustomValues;
 }
 
-export type TicketChange = Partial<{ title: string; description: string | null; type: string; status: string; assignee: string | null }>;
+export type TicketChange = Partial<{ title: string; description: string | null; type: string; status: string; assignee: string | null;
+  customFields: CustomValues }>;
 
 export const listTickets = (api: ServerApi, projectId: string, before?: number) =>
   run(() => api.tickets.GET('/projects/{projectId}/tickets', { params: { path: { projectId }, query: { limit: 50, ...(before ? { before } : {}) } } }),
@@ -224,7 +253,8 @@ export const setGroupMember = (api: ServerApi, groupId: string, accountId: strin
     : api.permissions.DELETE('/permissions/groups/{groupId}/members/{accountId}', { params: { path: { groupId, accountId } } })), detailOrNothing);
 export const setGroupAction = (api: ServerApi, groupId: string, action: string, projectId: string | null, enabled: boolean) =>
   run(() => api.permissions.PUT('/permissions/groups/{groupId}/actions', { params: { path: { groupId } }, body: { action, projectId, enabled } }), detailOrNothing);
-export type TicketField = 'title' | 'description' | 'type' | 'status' | 'assignee' | 'tags';
+// A fixed field of a ticket, or a custom field of a project as custom.<key>.
+export type TicketField = string;
 
 export const AUDIT_PAGE = 50;
 const isAuditEntry = (v: unknown) => hasStrings(v, 'id', 'actorId', 'occurredAt', 'operation') && typeof (v as AuditEntry).rightsVersion === 'number';

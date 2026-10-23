@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { setGroupAction, setGroupField, type ProjectRights, type Result, type TicketField } from '../api/product.ts';
+import { setGroupAction, setGroupField, type ProjectRights, type Result } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { EmptyText, NoticeView, SelectField, useProblemText, type Notice } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -9,10 +9,12 @@ type Answer = Promise<Result<unknown>>;
 
 // The rights of one project for its administration (TASK-043): every group, but only its rules in this project, and only
 // what the person may hand out here. The server checks every change again.
-export function ProjectRightsTab({ projectId, rights, reload }: {
+export function ProjectRightsTab({ projectId, rights, reload, customNames }: {
   readonly projectId: string;
   readonly rights: ProjectRights;
   readonly reload: () => void;
+  // The names of the custom fields of the project by their identifier custom.<key> (TASK-044).
+  readonly customNames: Readonly<Record<string, string>>;
 }) {
   const { t } = useI18n();
   const { api } = useBrand();
@@ -32,6 +34,7 @@ export function ProjectRightsTab({ projectId, rights, reload }: {
     setNotice(result.kind === 'ok' ? { kind: 'success', text: t('rights.saved') } : { kind: 'info', text: text(result.problem) });
   }
 
+  const label = (field: string) => customNames[field] ?? t(FIELD_LABEL[field] ?? 'field.title');
   const rule = (field: string, operation: 'read' | 'write') =>
     group?.fields.find((item) => item.field === field && item.operation === operation)?.effect ?? '';
 
@@ -68,14 +71,14 @@ export function ProjectRightsTab({ projectId, rights, reload }: {
                     <tbody>
                       {fields.map((field) => (
                         <tr key={field}>
-                          <th scope="row">{t(FIELD_LABEL[field] ?? 'field.title')}</th>
+                          <th scope="row">{label(field)}</th>
                           {(['read', 'write'] as const).map((operation) => (
                             <td key={operation}>
-                              <select aria-label={t(operation === 'read' ? 'group.readOf' : 'group.writeOf', { field: t(FIELD_LABEL[field] ?? 'field.title') })}
+                              <select aria-label={t(operation === 'read' ? 'group.readOf' : 'group.writeOf', { field: label(field) })}
                                 value={rule(field, operation)} disabled={busy}
                                 onChange={(event) => {
                                   const effect = event.target.value === '' ? 'remove' : event.target.value as 'allow' | 'deny';
-                                  void apply(() => setGroupField(api, group.id, field as TicketField, projectId, operation, effect));
+                                  void apply(() => setGroupField(api, group.id, field, projectId, operation, effect));
                                 }}>
                                 <option value="">{t('group.effect.none')}</option>
                                 <option value="allow">{t('group.effect.allow')}</option>

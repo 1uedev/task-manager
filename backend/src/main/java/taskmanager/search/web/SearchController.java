@@ -18,6 +18,7 @@ import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.PermissionContexts;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.search.internal.SearchService;
+import taskmanager.search.internal.SearchService.CustomFilter;
 import taskmanager.search.internal.SearchService.Page;
 import taskmanager.search.internal.SearchService.ProjectHit;
 import taskmanager.search.internal.SearchService.ProjectQuery;
@@ -38,6 +39,7 @@ class SearchController {
     private static final int MAX_OFFSET = 1000;
     private static final int MAX_VALUES = 20;
     private static final int MAX_VALUE_LENGTH = 100;
+    private static final int MAX_CUSTOM_VALUE_LENGTH = 200;
 
     private final SearchService search;
     private final AccessContexts identity;
@@ -49,10 +51,11 @@ class SearchController {
         this.contexts = contexts;
     }
 
-    record TicketHitBody(UUID id, UUID projectId, String key, long number, Map<String, String> fields, List<TagRef> tags) {
+    record TicketHitBody(UUID id, UUID projectId, String key, long number, Map<String, String> fields,
+            Map<String, String> customFields, List<TagRef> tags) {
         static TicketHitBody of(TicketHit hit) {
             return new TicketHitBody(hit.id(), hit.projectId(), hit.projectKey() + "-" + hit.number(), hit.number(), hit.fields(),
-                hit.tags());
+                hit.customFields(), hit.tags());
         }
     }
 
@@ -63,13 +66,13 @@ class SearchController {
     PageBody<TicketHitBody> tickets(@RequestParam(required = false) String q,
             @RequestParam(required = false) List<String> project, @RequestParam(required = false) List<String> status,
             @RequestParam(required = false) List<String> type, @RequestParam(required = false) List<String> assignee,
-            @RequestParam(required = false) List<String> tag, @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) Integer offset) {
+            @RequestParam(required = false) List<String> tag, @RequestParam(required = false) List<String> custom,
+            @RequestParam(required = false) Integer limit, @RequestParam(required = false) Integer offset) {
         AccessContext actor = actor();
         List<String> violations = new ArrayList<>();
         TicketQuery query = new TicketQuery(q, ids(project, "project", violations), texts(status, "status", violations),
             texts(type, "type", violations), ids(assignee, "assignee", violations), ids(tag, "tag", violations),
-            limit(limit, violations), offset(offset, violations));
+            customFilters(custom, violations), limit(limit, violations), offset(offset, violations));
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
@@ -113,6 +116,29 @@ class SearchController {
             }
         }
         return ids;
+    }
+
+    /** {@code custom=<key>=<value>}: the key of a custom field and the canonical text of the value it must hold. */
+    private static List<CustomFilter> customFilters(List<String> raw, List<String> violations) {
+        List<CustomFilter> filters = new ArrayList<>();
+        if (raw == null) {
+            return filters;
+        }
+        if (raw.size() > MAX_VALUES) {
+            violations.add("custom.invalid");
+            return List.of();
+        }
+        for (String entry : raw) {
+            int separator = entry.indexOf('=');
+            String key = separator < 0 ? "" : entry.substring(0, separator).strip();
+            String value = separator < 0 ? "" : entry.substring(separator + 1).strip();
+            if (!key.matches("[a-z][a-z0-9_]{0,39}") || value.isEmpty() || value.length() > MAX_CUSTOM_VALUE_LENGTH || value.indexOf('\u0000') >= 0) {
+                violations.add("custom.invalid");
+                return List.of();
+            }
+            filters.add(new CustomFilter(key, value));
+        }
+        return filters;
     }
 
     private static List<String> texts(List<String> raw, String name, List<String> violations) {
