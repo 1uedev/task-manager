@@ -403,6 +403,8 @@ describe('administration', () => {
       await page.getByTestId('one-time').waitFor();
       const created = backend.state.accounts.find((item) => item.username === 'dora');
       assert.equal(await page.locator('[data-testid=one-time] code').innerText(), created.password);
+      // The list reloads after the creation; wait for the new row instead of reading the table while it is still the old one.
+      await page.locator('table tbody tr', { hasText: 'Dora Demo' }).waitFor();
       assert.match(await page.locator('table').innerText(), /dora\s+Dora Demo\s+Aktiv, Passwortwechsel offen/);
       await page.goto(`${base()}#/start`);
       await page.goto(`${base()}#/accounts`);
