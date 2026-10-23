@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 26 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -65,6 +63,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
 | [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-02 | 2026-10-23 |
 | [TASK-045](#task-045-kontoverwaltung-ergänzen-rest-von-paket-a4) | Kontoverwaltung ergänzen (Rest von Paket A4) | claude-20261023-accounts-01 | 2026-10-23 |
+| [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -555,7 +554,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-046 LDAP Anmeldung (Paket A5)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-ldap-01 · **Aktualisiert:** 2026-10-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-ldap-01 · **Aktualisiert:** 2026-10-23
 
 **Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-024, TASK-030, TASK-040 und TASK-045 (alle abgenommen oder gemergt). **Arbeitsstand:** Paket A5 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „ja mache weiter“ die Reihenfolge fortgesetzt und auf Rückfragen zu OPEN-006 gewählt: allgemeines LDAPv3, Anlage des Kontos beim ersten Login, bei Ausfall scheitert die Anmeldung und laufende Sitzungen laufen bis zu ihrem festen Ende weiter. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-075, Migration ab V0021.
 
@@ -565,4 +564,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Eine konfigurierte Anbindung lässt sich prüfen; ein LDAP Konto entsteht beim ersten Login, wird danach über die Kennung wiedergefunden und hat keine Rechte; eine gleichnamige lokale Identität übernimmt nie ein LDAP Konto und umgekehrt; Eingaben mit Sonderzeichen können weder den Suchfilter noch den Namen einschleusen; bei Ausfall scheitert nur die LDAP Anmeldung mit 503, ohne lokale Konten zu berühren; kein Passwort und kein Bindungsgeheimnis steht in Antworten, Protokoll oder Datenbank; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Zuordnung; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-075 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft Anmeldung und Zuordnung (DEC-040): die Reihenfolge lokale Prüfung vor Verzeichnis, die Zuordnung über die Kennung und nie über den Namen (Umbenennen, Namensübernahme, gleichzeitige Erstanmeldung), das Maskieren des Namens im Suchfilter, dass nie ein leeres Passwort gebunden wird, die Prüfung des Zertifikats gegen den Namen bei LDAPS und StartTLS, dass weder ein Passwort noch das Geheimnis des Suchkontos in Antwort, Protokoll oder Datenbank gelangt, und dass ein Ausfall nur die Verzeichnisanmeldung trifft. Holger nimmt fachlich ab und entscheidet die offenen Punkte aus DEC-075 (Notanmeldung für Verzeichniskonten bei dauerhaftem Ausfall, Zertifikatswechsel ohne Neustart).
+
+**Ergebnis und Prüfungen:** DEC-075, Migration V0021 (`identity_account.auth_kind` und `external_id`, Tabelle `identity_ldap_setting`), Vertrag identity.openapi.yaml (`/settings/ldap`, `/settings/ldap/test`, `authKind`, 503), Verzeichnisclient mit dem JNDI Treiber der Java Laufzeit, Oberfläche in der Kontenverwaltung. Lokal grün: Backendtests gegen PostgreSQL 16, 259 Tests ohne Ausfall, darunter `LdapLoginTest` (16 Fälle mit einem im Test gestarteten Verzeichnis) und `LdapTlsTest` (LDAPS und StartTLS mit selbst signiertem Zertifikat, Zertifikat für anderen Namen wird abgewiesen); `lifecycle-check.sh` gegen eine leere Datenbank mit 20 Migrationen; Frontend `npm run verify` und 90 Browsertests. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnis (OpenLDAP, Active Directory), Verhalten bei sehr großen Verzeichnissen und die Wirkung der Wartezeit bei Massenanmeldungen am Verzeichnis.

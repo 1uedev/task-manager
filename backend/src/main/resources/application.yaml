@@ -45,3 +45,12 @@ management:
 logging:
   pattern:
     level: "%5p [%X{correlationId:-}]"
+
+taskmanager:
+  identity:
+    ldap:
+      # Secrets and the private trust of the directory connection come from the environment only (TASK-046). The connection
+      # itself (address, search base, filter) is an administrator setting in the database.
+      bind-password: ${TASK_MANAGER_LDAP_BIND_PASSWORD:}
+      trust-store: ${TASK_MANAGER_LDAP_TRUST_STORE:}
+      trust-store-password: ${TASK_MANAGER_LDAP_TRUST_STORE_PASSWORD:}

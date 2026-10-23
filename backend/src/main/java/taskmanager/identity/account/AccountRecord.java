@@ -13,7 +13,17 @@ public record AccountRecord(
         Instant oneTimeUsedAt,
         boolean active,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        String authKind,
+        String externalId) {
+
+    public static final String LOCAL = "local";
+    public static final String LDAP = "ldap";
+
+    /** True for an account that the directory authenticates (TASK-046). Its password hash is random and never matches. */
+    public boolean fromDirectory() {
+        return LDAP.equals(authKind);
+    }
 
     /** What the account list says about the one time password (TASK-045). The password itself is never part of it. */
     public enum OneTimeState {

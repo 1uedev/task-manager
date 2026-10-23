@@ -52,14 +52,15 @@ class AccountController {
     /**
      * An account as the administration sees it. {@code oneTimePasswordState} is {@code none}, {@code open}, {@code expired} or
      * {@code used}; {@code oneTimePasswordExpiresAt} is set while a one time password was issued and not replaced.
-     * {@code loginDelayedUntil} is set while a waiting time after failed logins runs (TASK-045).
+     * {@code loginDelayedUntil} is set while a waiting time after failed logins runs (TASK-045). {@code authKind} is {@code local} or
+     * {@code ldap}; the password and the display name of an {@code ldap} account belong to the directory (TASK-046).
      */
     record AccountBody(UUID id, String username, String displayName, boolean active, boolean passwordChangeRequired,
-            String oneTimePasswordState, Instant oneTimePasswordExpiresAt, Instant loginDelayedUntil, Instant createdAt) {
+            String oneTimePasswordState, Instant oneTimePasswordExpiresAt, Instant loginDelayedUntil, Instant createdAt, String authKind) {
         static AccountBody of(AccountRecord account, Instant now, Instant delayedUntil) {
             return new AccountBody(account.id(), account.username(), account.displayName(), account.active(),
                 account.passwordChangeRequired(), account.oneTimeState(now).name().toLowerCase(java.util.Locale.ROOT),
-                account.passwordChangeRequired() ? account.oneTimeExpiresAt() : null, delayedUntil, account.createdAt());
+                account.passwordChangeRequired() ? account.oneTimeExpiresAt() : null, delayedUntil, account.createdAt(), account.authKind());
         }
     }
 

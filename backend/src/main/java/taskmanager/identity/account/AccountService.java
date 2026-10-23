@@ -95,6 +95,7 @@ public class AccountService {
         accounts.serializeAdministration();
         authorize.run();
         AccountRecord account = lock(id);
+        requireLocal(account);
         if (!java.util.Objects.equals(account.displayName(), name)) {
             Instant now = clock.instant();
             accounts.setDisplayName(id, name, now);
@@ -132,7 +133,7 @@ public class AccountService {
         String oneTime = oneTimePasswords.next();
         Instant expires = now.plus(properties.oneTimePasswordValidity());
         AccountRecord account = new AccountRecord(UUID.randomUUID(), username, name, hasher.hash(oneTime), true, expires, null,
-            true, now, now);
+            true, now, now, AccountRecord.LOCAL, null);
         if (accounts.findByUsername(username).isPresent()) {
             throw ApiProblemException.of(409, "account.username_taken");
         }
@@ -208,6 +209,7 @@ public class AccountService {
         accounts.serializeAdministration();
         authorize.run();
         AccountRecord account = lock(id);
+        requireLocal(account);
         return issueNewOneTimePassword(actor, account, "password.reset");
     }
 
@@ -247,6 +249,7 @@ public class AccountService {
         AccountRecord account = accounts.findByUsername(username)
             .flatMap(found -> accounts.findByIdForUpdate(found.id()))
             .orElseThrow(() -> ApiProblemException.of(404, "account.not_found"));
+        requireLocal(account);
         if (!exactlyOne(emergencyReset).mayReset(account.id())) {
             throw ApiProblemException.of(409, "account.not_administrator");
         }
@@ -266,6 +269,13 @@ public class AccountService {
         revokeSessions(account.id(), event, now);
         accounts.audit(actor, event, account.id(), null, now);
         return new Issued(accounts.findById(account.id()).orElseThrow(), oneTime, expires);
+    }
+
+    /** The password and the display name of an account from the directory belong to the directory (TASK-046). */
+    private static void requireLocal(AccountRecord account) {
+        if (account.fromDirectory()) {
+            throw ApiProblemException.of(409, "account.directory_managed");
+        }
     }
 
     private AccountRecord lock(UUID id) {
