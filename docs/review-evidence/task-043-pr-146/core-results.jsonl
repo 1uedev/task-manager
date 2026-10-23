@@ -1,0 +1,4 @@
+{"case":"P5","during":"5s","restored":["0","1234ms","37s"],"poolDefault":"5s"}
+{"case":"P3","externalHasManage":true,"projectGroupReadDenied":true,"actionDenied":true,"fieldDenied":true}
+{"case":"P6","noOpsUnchanged":true,"sameAuthorUnchanged":true,"otherAuthorCounted":true,"roleChangeCounted":true,"previousEffect":"ALLOW"}
+{"case":"commit","expiredRolledBack":true,"nextTransactionSucceeded":true,"earliestDeadlineKept":true}
