@@ -50,6 +50,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         fields: ['title', 'type', 'status', 'assignee', TAG_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
     appearance: { version: 3, accent, logo: null },
+    // The LDAP connection (TASK-046): null until stored; `directoryDown` makes a sign in of an unknown name fail like an outage.
+    ldap: null,
+    ldapBindPasswordSet: true,
+    directoryDown: false,
     // The rights log, newest last; pages are cut by rightsVersion like on the server.
     audit: [],
     accountAudit: [],
@@ -104,7 +108,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
   // An account as the administration sees it (TASK-045): the state of the one time password and a running waiting time.
-  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ ...rest,
+  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', ...rest,
     oneTimePasswordState: rest.passwordChangeRequired ? 'open' : 'none', oneTimePasswordExpiresAt: rest.passwordChangeRequired ? '2026-10-24T08:00:00Z' : null,
     loginDelayedUntil: delayedUntil ?? null });
   const logAccount = (actor, event, target) => state.accountAudit.push({ id: state.accountAudit.length + 1, occurredAt: now(), actor: actor.username, event, accountId: target?.id ?? null, detail: null });
@@ -119,6 +123,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (p === '/session' && method === 'GET') return ok(sessionBody(session));
     if (p === '/session' && method === 'POST') {
       const account = state.accounts.find((item) => item.username === body.username);
+      if (!account && state.ldap?.enabled && state.directoryDown) return problem(503, 'auth.directory_unavailable');
       if (!account || !account.active || account.password !== body.password) return problem(401, 'auth.invalid_credentials');
       session.account = account;
       return ok(sessionBody(session));
@@ -153,6 +158,29 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok(appearanceBody(), `"${state.appearance.version}"`);
     }
 
+    if (p.startsWith('/settings/ldap')) {
+      if (!may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
+      const view = () => (state.ldap === null
+        ? { configured: false, enabled: false, url: null, security: null, bindDn: null, searchBase: null, userFilter: null, idAttribute: null, nameAttribute: null, bindPasswordSet: state.ldapBindPasswordSet, updatedAt: null }
+        : { configured: true, ...state.ldap, bindPasswordSet: state.ldapBindPasswordSet, updatedAt: '2026-10-23T09:00:00Z' });
+      const valid = (value) => typeof value?.url === 'string' && /^ldaps?:\/\/[^/]+$/.test(value.url) && typeof value.searchBase === 'string' && value.searchBase !== ''
+        && typeof value.userFilter === 'string' && value.userFilter.includes('{0}') && typeof value.idAttribute === 'string' && value.idAttribute !== '';
+      if (p === '/settings/ldap' && method === 'GET') return ok(view());
+      if (p === '/settings/ldap' && method === 'PUT') {
+        if (!valid(body) || (body.enabled && body.bindDn && !state.ldapBindPasswordSet)) return problem(400, 'request.invalid', { violations: ['ldap.url.invalid'] });
+        state.ldap = { enabled: body.enabled === true, url: body.url, security: body.security, bindDn: body.bindDn ?? null, searchBase: body.searchBase, userFilter: body.userFilter, idAttribute: body.idAttribute, nameAttribute: body.nameAttribute ?? null };
+        logAccount(account, 'ldap.configured', null);
+        return ok(view());
+      }
+      if (p === '/settings/ldap/test' && method === 'POST') {
+        const values = body.settings ?? state.ldap;
+        if (values === null || values === undefined) return problem(409, 'ldap.not_configured');
+        if (!valid(values)) return problem(400, 'request.invalid', { violations: ['ldap.url.invalid'] });
+        if (values.url.includes('down')) return ok({ ok: false, reason: 'directory.unreachable' });
+        if (body.username === 'ghost') return ok({ ok: false, reason: 'directory.user_not_found' });
+        return ok({ ok: true, reason: null });
+      }
+    }
     if (p === '/directory/accounts') return ok(state.accounts.map(({ id, username, displayName, active }) => ({ id, username, displayName, active })).sort((a, b) => a.username.localeCompare(b.username)));
     if (p.startsWith('/accounts')) {
       if (!may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
@@ -165,6 +193,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (single && method === 'PUT') {
         const target = state.accounts.find((item) => item.id === single[1]);
         if (!target) return problem(404, 'account.not_found');
+        if (target.authKind === 'ldap') return problem(409, 'account.directory_managed');
         const name = typeof body.displayName === 'string' && body.displayName.trim() !== '' ? body.displayName.trim() : null;
         if (name !== null && name.length > 100) return problem(400, 'request.invalid', { violations: ['displayName.too_long'] });
         if (name !== target.displayName) {
@@ -197,6 +226,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         logAccount(account, 'account.login_delay_cleared', target);
       }
       if (action === 'password-reset') {
+        if (target.authKind === 'ldap') return problem(409, 'account.directory_managed');
         target.password = `Einmal${counter}Neu`;
         target.passwordChangeRequired = true;
         logAccount(account, 'password.reset', target);

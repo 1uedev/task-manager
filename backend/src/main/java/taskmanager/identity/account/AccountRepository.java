@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 public class AccountRepository {
     private static final long ADMINISTRATION_LOCK = 7_240_001L;
     private static final String COLUMNS =
-        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at";
+        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at, auth_kind, external_id";
 
     private final JdbcClient jdbc;
 
@@ -30,15 +30,22 @@ public class AccountRepository {
             Db.instant(rs, "one_time_used_at"),
             rs.getBoolean("active"),
             Db.instant(rs, "created_at"),
-            Db.instant(rs, "updated_at"));
+            Db.instant(rs, "updated_at"),
+            rs.getString("auth_kind"),
+            rs.getString("external_id"));
     }
 
     public void insert(AccountRecord account) {
-        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(account.id(), account.username(), account.displayName(), account.passwordHash(),
                 account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), Db.ts(account.oneTimeUsedAt()), account.active(),
-                Db.ts(account.createdAt()), Db.ts(account.updatedAt()))
+                Db.ts(account.createdAt()), Db.ts(account.updatedAt()), account.authKind(), account.externalId())
             .update();
+    }
+
+    public Optional<AccountRecord> findByExternalId(String externalId) {
+        return jdbc.sql("select " + COLUMNS + " from identity_account where external_id = ?")
+            .param(externalId).query(AccountRepository::map).optional();
     }
 
     public Optional<AccountRecord> findByUsername(String normalizedUsername) {

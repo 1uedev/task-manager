@@ -14,6 +14,9 @@ export type Account = IdentityTypes['schemas']['Account'];
 export type IssuedAccount = IdentityTypes['schemas']['IssuedAccount'];
 export type DirectoryEntry = IdentityTypes['schemas']['DirectoryEntry'];
 export type AccountAuditEntry = IdentityTypes['schemas']['AuditEntry'];
+export type LdapSettings = IdentityTypes['schemas']['LdapSettings'];
+export type LdapSettingsRequest = IdentityTypes['schemas']['LdapSettingsRequest'];
+export type LdapTestResult = IdentityTypes['schemas']['LdapTestResult'];
 export type ProjectSummary = ProjectTypes['schemas']['ProjectSummary'];
 export type Project = ProjectTypes['schemas']['Project'];
 export type Configuration = ProjectTypes['schemas']['Configuration'];
@@ -58,7 +61,7 @@ const listOf = <T>(check: (item: unknown) => boolean) => (value: unknown): T[] |
 const one = <T>(check: (item: unknown) => boolean) => (value: unknown): T | null => (check(value) ? (value as T) : null);
 const nothing = (): true => true;
 
-export const isAccount = (v: unknown) => hasStrings(v, 'id', 'username') && typeof (v as Account).active === 'boolean';
+export const isAccount = (v: unknown) => hasStrings(v, 'id', 'username', 'authKind') && typeof (v as Account).active === 'boolean';
 export const isDirectoryEntry = (v: unknown) => hasStrings(v, 'id', 'username') && typeof (v as DirectoryEntry).active === 'boolean';
 export const isProjectSummary = (v: unknown) => hasStrings(v, 'id', 'key', 'name') && typeof (v as ProjectSummary).manageable === 'boolean';
 export const isProject = (v: unknown) => isProjectSummary(v) && record((v as Project).configuration)
@@ -138,6 +141,16 @@ export const ACCOUNT_AUDIT_PAGE = 50;
 export const readAccountAudit = (api: ServerApi, before: number | null) =>
   run(() => api.identity.GET('/accounts/audit', { params: { query: { limit: ACCOUNT_AUDIT_PAGE, ...(before === null ? {} : { before }) } } }),
     listOf<AccountAuditEntry>((v) => hasStrings(v, 'occurredAt', 'actor', 'event') && typeof (v as AccountAuditEntry).id === 'number'));
+
+// The connection to the LDAP directory (TASK-046). The password of the search account is never part of a request or an answer.
+const isLdapSettings = (v: unknown) => record(v) && typeof v.configured === 'boolean' && typeof v.enabled === 'boolean' && typeof v.bindPasswordSet === 'boolean';
+export const readLdapSettings = (api: ServerApi) => run(() => api.identity.GET('/settings/ldap'), one<LdapSettings>(isLdapSettings));
+export const saveLdapSettings = (api: ServerApi, body: LdapSettingsRequest) =>
+  run(() => api.identity.PUT('/settings/ldap', { body }), one<LdapSettings>(isLdapSettings));
+// Checks the given values without storing them, or the stored ones when none are given.
+export const testLdapSettings = (api: ServerApi, settings: LdapSettingsRequest | null, username: string | null) =>
+  run(() => api.identity.POST('/settings/ldap/test', { body: { ...(settings === null ? {} : { settings }), ...(username === null ? {} : { username }) } }),
+    one<LdapTestResult>((v) => record(v) && typeof v.ok === 'boolean'));
 export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
 
 // ---------------------------------------------------------------- projects

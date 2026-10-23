@@ -6,6 +6,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,6 +22,12 @@ import taskmanager.identity.account.PasswordHasher;
 import taskmanager.identity.account.PasswordPolicy;
 import taskmanager.identity.account.UsernameRules;
 import taskmanager.identity.config.IdentityProperties;
+import taskmanager.identity.directory.DirectoryAccounts;
+import taskmanager.identity.directory.DirectoryClient;
+import taskmanager.identity.directory.DirectoryClient.DirectoryUser;
+import taskmanager.identity.directory.DirectoryUnavailableException;
+import taskmanager.identity.directory.LdapSettings;
+import taskmanager.identity.directory.LdapSettingsService;
 import taskmanager.platform.ApiProblemException;
 
 /**
@@ -33,6 +42,7 @@ import taskmanager.platform.ApiProblemException;
  */
 @Service
 public class SessionService {
+    private static final Logger log = LoggerFactory.getLogger(SessionService.class);
     private static final int MAX_NAME_LENGTH = 256;
 
     private final JdbcClient jdbc;
@@ -43,9 +53,13 @@ public class SessionService {
     private final Clock clock;
     private final IdentityProperties properties;
     private final TransactionTemplate transaction;
+    private final LdapSettingsService ldapSettings;
+    private final DirectoryClient directory;
+    private final DirectoryAccounts directoryAccounts;
 
     SessionService(JdbcClient jdbc, AccountRepository accounts, PasswordHasher hasher, LoginThrottle throttle,
-            SessionDuration duration, Clock clock, IdentityProperties properties, PlatformTransactionManager transactions) {
+            SessionDuration duration, Clock clock, IdentityProperties properties, PlatformTransactionManager transactions,
+            LdapSettingsService ldapSettings, DirectoryClient directory, DirectoryAccounts directoryAccounts) {
         this.jdbc = jdbc;
         this.accounts = accounts;
         this.hasher = hasher;
@@ -54,11 +68,14 @@ public class SessionService {
         this.clock = clock;
         this.properties = properties;
         this.transaction = new TransactionTemplate(transactions);
+        this.ldapSettings = ldapSettings;
+        this.directory = directory;
+        this.directoryAccounts = directoryAccounts;
     }
 
     /** A session as it is presented to the client. */
     public record SessionView(UUID accountId, String username, String displayName, AuthenticationLevel level,
-            Instant startedAt, Instant expiresAt, Instant restrictedUntil) {
+            Instant startedAt, Instant expiresAt, Instant restrictedUntil, String authKind) {
     }
 
     /** A freshly issued session together with the two secrets that exist only in the cookies. */
@@ -77,8 +94,17 @@ public class SessionService {
         throttle.requireNotBlocked(List.of(userSubject, sourceSubject), now);
 
         String normalized = attempted.length() > MAX_NAME_LENGTH ? "" : UsernameRules.normalize(attempted);
-        Optional<AccountRecord> found = UsernameRules.isValid(normalized) ? accounts.findByUsername(normalized) : Optional.empty();
+        Optional<AccountRecord> existing = UsernameRules.isValid(normalized) ? accounts.findByUsername(normalized) : Optional.empty();
         String secret = password == null ? "" : password;
+        // A local account of this name decides alone, with its own password. The directory is asked only for names without one;
+        // an account that came from the directory never takes a local password (TASK-046).
+        Optional<AccountRecord> found = existing.filter(a -> !a.fromDirectory());
+        if (found.isEmpty() && UsernameRules.isValid(normalized)) {
+            LdapSettings settings = ldapSettings.find().filter(LdapSettings::enabled).orElse(null);
+            if (settings != null) {
+                return loginWithDirectory(settings, normalized, secret, userSubject, sourceSubject, now);
+            }
+        }
         boolean valid = found.filter(AccountRecord::active).filter(a -> hasher.matches(secret, a.passwordHash())).isPresent();
         if (!valid) {
             if (found.isEmpty() || !found.get().active()) {
@@ -103,6 +129,51 @@ public class SessionService {
         }
         throttle.recordSuccess(userSubject);
         return issued;
+    }
+
+    /**
+     * The login of a person the directory authenticates. The directory is asked outside of any database transaction. A failure of
+     * the directory is a 503 and counts neither for nor against the person; a wrong password counts like a wrong local password.
+     * The account is found by the identifier of the directory entry or created, and its session starts in one transaction.
+     */
+    private Issued loginWithDirectory(LdapSettings settings, String name, String secret, String userSubject, String sourceSubject, Instant now) {
+        Optional<DirectoryUser> person;
+        try {
+            person = directory.authenticate(settings, name, secret);
+        } catch (DirectoryUnavailableException e) {
+            log.warn("The directory did not answer a login: {}", e.reason());
+            throw ApiProblemException.of(503, "auth.directory_unavailable");
+        }
+        if (person.isEmpty()) {
+            throttle.recordFailure(userSubject, sourceSubject, now);
+            throw ApiProblemException.of(401, "auth.invalid_credentials");
+        }
+        Issued issued;
+        try {
+            try {
+                issued = transaction.execute(status -> startDirectorySession(person.get(), name, now));
+            } catch (DuplicateKeyException race) {
+                // The same person logged in for the first time twice at once; the other one has created the account by now.
+                issued = transaction.execute(status -> startDirectorySession(person.get(), name, now));
+            }
+        } catch (DuplicateKeyException conflict) {
+            // The name or the entry is taken by an account that is not the person's.
+            throttle.recordFailure(userSubject, sourceSubject, now);
+            throw ApiProblemException.of(401, "auth.invalid_credentials");
+        } catch (ApiProblemException refused) {
+            if ("auth.invalid_credentials".equals(refused.code())) {
+                throttle.recordFailure(userSubject, sourceSubject, now);
+            }
+            throw refused;
+        }
+        throttle.recordSuccess(userSubject);
+        return issued;
+    }
+
+    private Issued startDirectorySession(DirectoryUser person, String name, Instant now) {
+        // Setting row first, shared, as in every login: see startSession.
+        duration.hoursForShare();
+        return startSession(directoryAccounts.assign(person, name, now), now);
     }
 
     /**
@@ -146,7 +217,7 @@ public class SessionService {
             .update();
         AuthenticationLevel level = restrictedUntil != null ? AuthenticationLevel.PASSWORD_CHANGE_REQUIRED : AuthenticationLevel.FULL;
         return new Issued(token, csrf, new SessionView(account.id(), account.username(), account.displayName(), level,
-            startedAt, expiresAt, restrictedUntil));
+            startedAt, expiresAt, restrictedUntil, account.authKind()));
     }
 
     /** Finds the session behind a token, or nothing when it is unknown, revoked, expired or its account is deactivated. */
@@ -155,7 +226,7 @@ public class SessionService {
         Instant now = clock.instant();
         return jdbc.sql("""
                 select s.id, s.account_id, s.csrf_hash, s.started_at, s.expires_at, s.restricted, s.restricted_expires_at,
-                       a.username, a.display_name, a.active, a.password_change_required,
+                       a.username, a.display_name, a.active, a.password_change_required, a.auth_kind,
                        (select value from identity_setting where name = 'session_duration_hours') as duration_hours
                 from identity_session s join identity_account a on a.id = s.account_id
                 where s.token_hash = ? and s.revoked_at is null
@@ -176,7 +247,7 @@ public class SessionService {
                 }
                 AuthenticationLevel level = restricted ? AuthenticationLevel.PASSWORD_CHANGE_REQUIRED : AuthenticationLevel.FULL;
                 SessionView view = new SessionView(rs.getObject("account_id", UUID.class), rs.getString("username"),
-                    rs.getString("display_name"), level, started, effective, restrictedUntil);
+                    rs.getString("display_name"), level, started, effective, restrictedUntil, rs.getString("auth_kind"));
                 return new Resolved(rs.getObject("id", UUID.class), view, rs.getBytes("csrf_hash"));
             })
             .optional();
@@ -224,6 +295,9 @@ public class SessionService {
         Integer open = jdbc.sql("select count(*) from identity_session where id = ? and revoked_at is null").param(sessionId).query(Integer.class).single();
         if (open == 0 || !account.active()) {
             throw ApiProblemException.of(401, "auth.session_expired");
+        }
+        if (account.fromDirectory()) {
+            throw ApiProblemException.of(409, "account.directory_managed");
         }
         if (!hasher.matches(current, account.passwordHash())) {
             throw ApiProblemException.of(400, "password.current_incorrect");

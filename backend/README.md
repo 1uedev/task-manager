@@ -23,6 +23,8 @@ Der Workflow [backend.yml](../.github/workflows/backend.yml) baut, prüft Modulg
 | `TASK_MANAGER_DB_USER` | ja | Datenbankbenutzer |
 | `TASK_MANAGER_DB_PASSWORD` | ja | Passwort des Datenbankbenutzers |
 | `TASK_MANAGER_HTTP_PORT` | nein | HTTP-Port, Standard 8080 |
+| `TASK_MANAGER_LDAP_BIND_PASSWORD` | nein | Passwort des Suchkontos der LDAP Anbindung (TASK-046). Steht nie in der Datenbank und in keiner Antwort |
+| `TASK_MANAGER_LDAP_TRUST_STORE` | nein | Datei mit den Zertifikaten, auf die die Kette des Verzeichnisses enden muss (private Zertifizierungsstelle); leer gilt das Vertrauen der Java Laufzeit. Dazu `TASK_MANAGER_LDAP_TRUST_STORE_PASSWORD` und `taskmanager.identity.ldap.trust-store-type` (Standard `PKCS12`) |
 
 Fehlt eine Pflichtangabe, bricht der Start ab, bevor Webserver oder Datenbankverbindung entstehen. Die Meldung nennt alle fehlenden Variablen und nie einen gesetzten Wert. Werte gehören in die Umgebung des Betriebs, nicht ins Repository.
 
@@ -94,6 +96,8 @@ Umgesetzt sind lokale Konten, Anmeldung und Abmeldung, Deaktivierung, der Pflich
 | `taskmanager.identity.base-delay` / `max-delay` | 5s / 15m |
 
 **Kontenverwaltung (TASK-045).** Für `accounts.manage` nennt jedes Konto `oneTimePasswordState` (`none`, `open`, `expired`, `used`), `oneTimePasswordExpiresAt` und, solange eine Wartezeit nach Fehlversuchen läuft, `loginDelayedUntil`. `PUT /api/v1/accounts/{id}` ändert den Anzeigenamen, `GET /api/v1/accounts/audit` liest das Protokoll seitenweise (`before`, `limit`), `POST /api/v1/accounts/{id}/clear-login-delay` beendet die Wartezeit eines Anmeldenamens, ohne die Zähler der Quelladressen anzufassen. Alle drei laufen unter der gemeinsamen Serialisierung der Kontenverwaltung und schreiben nur bei echter Änderung ins Protokoll (`account.renamed`, `account.login_delay_cleared`). Siehe DEC-074; keine Migration.
+
+**LDAP Anmeldung (TASK-046).** Für `accounts.manage` liest und speichert `GET` und `PUT /api/v1/settings/ldap` die eine Anbindung (Adresse, Verschlüsselung `none`, `starttls` oder `ldaps`, Suchkonto, Suchbasis, Filter mit `{0}`, Attribute für Kennung und Anzeigename); `POST /api/v1/settings/ldap/test` prüft sie Schritt für Schritt und nennt nur den ersten fehlschlagenden Grund. Ein lokales Konto dieses Namens entscheidet allein; nur Namen ohne lokales Konto fragen das Verzeichnis (Suche, dann Bindung als die gefundene Person), zugeordnet wird über die unveränderliche Kennung des Eintrags. Das Konto entsteht beim ersten Erfolg ohne Rechte, hat kein Passwort der Anwendung und lässt sich nur deaktivieren, nicht zurücksetzen oder umbenennen. Antwortet das Verzeichnis nicht, scheitert diese Anmeldung mit 503 `auth.directory_unavailable`; lokale Konten und offene Sitzungen bleiben unberührt. Einstellungen, Grenzen und offene Punkte stehen in DEC-075; Migration V0021. Die Tests (`LdapLoginTest`, `LdapTlsTest`) starten ein Verzeichnis im Testprozess (UnboundID, nur im Testumfang), auch mit LDAPS und StartTLS gegen ein selbst signiertes Zertifikat.
 
 **Fehlercodes dieses Moduls:** `auth.required`, `auth.session_expired`, `auth.invalid_credentials`, `auth.one_time_password_expired`, `auth.one_time_password_used`, `auth.password_change_required`, `auth.csrf_invalid`, `auth.forbidden`, `auth.too_many_attempts`, `password.current_incorrect`, `password.policy_violation`, `account.not_found`, `account.username_taken`, `account.last_administrator`, `account.not_administrator`, `bootstrap.accounts_exist` und `request.invalid` mit stabilen Gründen unter `violations`.
 

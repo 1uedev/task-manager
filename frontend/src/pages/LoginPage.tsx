@@ -12,6 +12,7 @@ const LOGIN_CODES: Readonly<Record<string, MessageKey>> = {
   'auth.one_time_password_used': 'login.error.oneTimeUsed',
   'auth.one_time_password_expired': 'login.error.oneTimeExpired',
   'auth.too_many_attempts': 'login.error.tooMany',
+  'auth.directory_unavailable': 'login.error.directory',
 };
 
 const PASSWORD_REASONS: Readonly<Record<string, MessageKey>> = {
