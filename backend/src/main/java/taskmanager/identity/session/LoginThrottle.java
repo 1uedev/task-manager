@@ -59,6 +59,29 @@ public class LoginThrottle {
         }
     }
 
+    /**
+     * The end of the waiting time that is running for each of the login names, only for those with one. Read for the account
+     * list of the administration (TASK-045); the counters of source addresses are not part of it.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Instant> delays(List<String> loginNames, Instant now) {
+        java.util.Map<String, Instant> delays = new java.util.HashMap<>();
+        for (String name : loginNames) {
+            Instant until = jdbc.sql("select blocked_until from identity_login_throttle where subject = ?")
+                .param(userSubject(name)).query((rs, row) -> Db.instant(rs, "blocked_until")).optional().orElse(null);
+            if (until != null && until.isAfter(now)) {
+                delays.put(name, until);
+            }
+        }
+        return delays;
+    }
+
+    /** Ends the waiting time and forgets the failures of one login name, in the transaction of the caller (TASK-045). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean forget(String loginName) {
+        return jdbc.sql("delete from identity_login_throttle where subject = ?").param(userSubject(loginName)).update() > 0;
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(String userSubject, String sourceSubject, Instant now) {
         count(userSubject, properties.userFailureThreshold(), now);

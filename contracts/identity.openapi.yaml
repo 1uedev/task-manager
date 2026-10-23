@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Identität (TASK-024, TASK-040)
+  title: Task Manager API, Identität (TASK-024, TASK-040, TASK-045)
   version: 0.1.0
   description: |
     Lokale Konten, Anmeldung, feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
@@ -119,6 +119,80 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
+  /accounts/audit:
+    get:
+      operationId: listAccountAudit
+      summary: Protokoll der Kontenverwaltung (Recht accounts.manage)
+      description: |
+        Neueste Einträge zuerst. Die nächste Seite holt `before` mit der kleinsten `id` der letzten Seite; eine leere Seite ist
+        das Ende. Das Protokoll enthält Kurzbezeichnungen und Kennungen, nie ein Passwort oder ein Token. `actor` ist der
+        Anmeldename der handelnden Person oder `cli` für den Containerbefehl.
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - in: query
+          name: before
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Einträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEntry'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    put:
+      operationId: renameAccount
+      summary: Anzeigename ändern (Recht accounts.manage)
+      description: |
+        Setzt den Anzeigenamen; ein leerer Wert entfernt ihn. Höchstens 100 Zeichen ohne Steuerzeichen (400 mit
+        `displayName.too_long` oder `displayName.invalid`). Bleibt der Name gleich, wird nichts geschrieben. Der
+        Anmeldename ändert sich nie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                displayName: {type: [string, 'null'], maxLength: 100}
+      responses:
+        '200':
+          description: Geändert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/clear-login-delay:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: clearAccountLoginDelay
+      summary: Wartezeit nach Fehlversuchen aufheben (Recht accounts.manage)
+      description: |
+        Beendet die laufende Wartezeit des Anmeldenamens und vergisst seine Fehlversuche; der nächste Versuch zählt von null.
+        Die Zähler der Quelladressen bleiben, damit ein einzelnes Konto sie nicht zurücksetzen kann. Gab es nichts
+        aufzuheben, wird nichts protokolliert.
+      responses:
+        '200':
+          description: Aufgehoben
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
   /accounts/{accountId}/deactivate:
     parameters:
       - {$ref: '#/components/parameters/AccountId'}
@@ -239,7 +313,8 @@ components:
         request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
         auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
         password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-        account.username_taken, account.last_administrator, account.not_administrator.
+        account.username_taken, account.last_administrator, account.not_administrator. Gründe in `violations` der Konten: username.invalid,
+        username.required, displayName.too_long, displayName.invalid, paging.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         WWW-Authenticate:
@@ -324,14 +399,34 @@ components:
         displayName: {type: [string, 'null'], minLength: 1, maxLength: 100}
     Account:
       type: object
-      required: [id, username, active, passwordChangeRequired, createdAt]
+      required: [id, username, active, passwordChangeRequired, oneTimePasswordState, oneTimePasswordExpiresAt, loginDelayedUntil, createdAt]
       properties:
         id: {type: string, format: uuid}
         username: {type: string}
         displayName: {type: [string, 'null']}
         active: {type: boolean}
         passwordChangeRequired: {type: boolean}
+        oneTimePasswordState:
+          type: string
+          enum: [none, open, expired, used]
+          description: |
+            `none`: das Passwort hat die Person selbst gewählt. `open`: ein Einmalpasswort wurde ausgegeben, ist noch nicht
+            benutzt und gültig. `expired`: ausgegeben, nicht benutzt, die Gültigkeit ist vorbei; eine Administration muss ein neues
+            ausgeben. `used`: für die Anmeldung benutzt, der erzwungene Wechsel steht noch aus; lief die Sitzung dafür ab,
+            muss ebenfalls ein neues ausgegeben werden.
+        oneTimePasswordExpiresAt: {type: [string, 'null'], format: date-time, description: 'Ende der Gültigkeit, solange ein Einmalpasswort ausgegeben und nicht durch einen Wechsel abgelöst ist'}
+        loginDelayedUntil: {type: [string, 'null'], format: date-time, description: 'Ende der laufenden Wartezeit nach Fehlversuchen, sonst null'}
         createdAt: {type: string, format: date-time}
+    AuditEntry:
+      type: object
+      required: [id, occurredAt, actor, event, accountId, detail]
+      properties:
+        id: {type: integer, minimum: 1}
+        occurredAt: {type: string, format: date-time}
+        actor: {type: string}
+        event: {type: string, description: 'Kurzbezeichnung, zum Beispiel account.created, account.renamed, account.login_delay_cleared, password.reset, password.changed'}
+        accountId: {type: [string, 'null'], format: uuid}
+        detail: {type: [string, 'null'], description: 'Feste Kurzangabe, nie ein Geheimnis'}
     DirectoryEntry:
       type: object
       required: [id, username, active]
