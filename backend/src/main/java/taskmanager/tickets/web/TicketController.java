@@ -30,6 +30,7 @@ import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.PermissionContexts;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectConfiguration;
+import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.internal.Ticket;
 import taskmanager.tickets.internal.TicketService;
 import taskmanager.tickets.internal.TicketService.Draft;
@@ -49,6 +50,8 @@ class TicketController {
     private static final Set<String> RETRYABLE_STATES = Set.of("55P03", "40P01", "40001");
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
+    private static final int MAX_CUSTOM_VALUES = 30;
+    private static final String KEY = "[a-z][a-z0-9_]{0,39}";
 
     private final TicketService tickets;
     private final AccessContexts identity;
@@ -61,8 +64,8 @@ class TicketController {
     }
 
     record TicketBody(UUID id, UUID projectId, String key, long number, long version, long configurationVersion,
-            Map<String, String> fields, List<String> writableFields, Instant createdAt, UUID createdBy, Instant updatedAt,
-            UUID updatedBy) {
+            Map<String, String> fields, Map<String, Object> customFields, List<String> writableFields, Instant createdAt,
+            UUID createdBy, Instant updatedAt, UUID updatedBy) {
         static TicketBody of(TicketView view) {
             Ticket ticket = view.ticket();
             Map<String, String> fields = new LinkedHashMap<>();
@@ -71,10 +74,30 @@ class TicketController {
                     fields.put(field, value);
                 }
             });
-            List<String> writable = ProjectConfiguration.FIELD_KEYS.stream().filter(view.writable()::contains).toList();
+            // The custom fields the caller may read and that hold a value, typed as their kind says; a field of the
+            // configuration that is writable is offered even without a value, so an interface can show it.
+            Map<String, Object> custom = new LinkedHashMap<>();
+            List<String> writable = new ArrayList<>(ProjectConfiguration.FIELD_KEYS.stream().filter(view.writable()::contains).toList());
+            for (CustomField field : view.configuration().customFields()) {
+                if (view.readable().contains(field.id()) && ticket.custom().containsKey(field.key())) {
+                    custom.put(field.key(), typed(field, ticket.custom().get(field.key())));
+                }
+                if (field.active() && view.writable().contains(field.id())) {
+                    writable.add(field.id());
+                }
+            }
             return new TicketBody(ticket.id(), ticket.projectId(), view.projectKey() + "-" + ticket.number(), ticket.number(),
-                ticket.version(), ticket.configurationVersion(), fields, writable, ticket.createdAt(), ticket.createdBy(),
+                ticket.version(), ticket.configurationVersion(), fields, custom, writable, ticket.createdAt(), ticket.createdBy(),
                 ticket.updatedAt(), ticket.updatedBy());
+        }
+
+        /** The JSON value of a stored canonical text: a whole number and a boolean as such, everything else as text. */
+        private static Object typed(CustomField field, String stored) {
+            return switch (field.type()) {
+                case ProjectConfiguration.INTEGER -> Long.parseLong(stored);
+                case ProjectConfiguration.BOOLEAN -> Boolean.parseBoolean(stored);
+                default -> stored;
+            };
         }
     }
 
@@ -98,8 +121,9 @@ class TicketController {
         if (body == null || !body.isObject()) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("title.invalid", "type.unknown"));
         }
+        Map<String, Object> custom = customFields(body);
         Map<String, String> values = strings(body, CREATE_FIELDS);
-        Draft draft = new Draft(values.get("type"), values.get("title"), values.get("description"), values.get("assignee"));
+        Draft draft = new Draft(values.get("type"), values.get("title"), values.get("description"), values.get("assignee"), custom);
         return ticket(HttpStatus.CREATED, retrying(() -> tickets.create(actor, projectId, draft)));
     }
 
@@ -116,7 +140,8 @@ class TicketController {
         AccessContext actor = actor();
         long expected = expectedVersion(ifMatch);
         Map<String, String> changes = changes(body);
-        return ticket(HttpStatus.OK, retrying(() -> tickets.update(actor, projectId, number, expected, changes)));
+        Map<String, Object> custom = customFields(body);
+        return ticket(HttpStatus.OK, retrying(() -> tickets.update(actor, projectId, number, expected, changes, custom)));
     }
 
     @GetMapping("/{number}/history")
@@ -132,6 +157,43 @@ class TicketController {
         return strings(body, ProjectConfiguration.FIELD_KEYS);
     }
 
+    /**
+     * The values of {@code customFields} by field key: text, a whole number or a boolean as such, {@code null} to empty a
+     * field. Anything else is refused here; whether the key exists and the value fits its field the service decides.
+     */
+    private static Map<String, Object> customFields(JsonNode body) {
+        JsonNode node = body.get("customFields");
+        Map<String, Object> custom = new LinkedHashMap<>();
+        if (node == null) {
+            return custom;
+        }
+        if (!node.isObject() || node.size() > MAX_CUSTOM_VALUES) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("customFields.invalid"));
+        }
+        List<String> violations = new ArrayList<>();
+        for (var entry : node.properties()) {
+            String key = entry.getKey();
+            JsonNode value = entry.getValue();
+            if (!key.matches(KEY)) {
+                violations.add("customFields.unknown");
+            } else if (value.isNull()) {
+                custom.put(key, null);
+            } else if (value.isString()) {
+                custom.put(key, value.asString());
+            } else if (value.isBoolean()) {
+                custom.put(key, value.asBoolean());
+            } else if (value.isIntegralNumber() && value.canConvertToLong()) {
+                custom.put(key, value.asLong());
+            } else {
+                violations.add(ProjectConfiguration.CUSTOM_PREFIX + key + ".invalid");
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
+        }
+        return custom;
+    }
+
     /** The string or {@code null} values of an object body; another key or another kind of value is refused. */
     private static Map<String, String> strings(JsonNode body, List<String> allowed) {
         Map<String, String> changes = new HashMap<>();
@@ -139,6 +201,9 @@ class TicketController {
         for (var entry : body.properties()) {
             String field = entry.getKey();
             JsonNode value = entry.getValue();
+            if ("customFields".equals(field)) {
+                continue;
+            }
             if (!allowed.contains(field)) {
                 violations.add("fields.unknown");
             } else if (value.isNull()) {

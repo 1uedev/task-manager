@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 23 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 24 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-01 | 2026-10-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -63,6 +61,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
+| [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-02 | 2026-10-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -521,9 +520,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-044 Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-projectconfig-01 · **Aktualisiert:** 2026-10-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-projectconfig-02 · **Aktualisiert:** 2026-10-23
 
-**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-026, TASK-027, TASK-029, TASK-030 und TASK-043 (alle abgenommen). **Arbeitsstand:** Paket A2 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „mache weiter“ den Start freigegeben. Branch claude/project-thread-r4dri5 nach dem Merge dieser Reservierung; Ergebnis mit DEC-073, Migrationen ab V0018.
+**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-026, TASK-027, TASK-029, TASK-030 und TASK-043 (alle abgenommen). **Arbeitsstand:** Paket A2 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „mache weiter“ den Start freigegeben. Umgesetzt mit DEC-073 und den Migrationen V0018 bis V0020 im Ergebnis PR dieser Sitzung; Beschreibung in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md). Übernahme: Die Reservierung (Claim PR #150) lautete auf claude-20261023-projectconfig-01 und den Zweig claude/project-thread-r4dri5. Dieser Zweig bestand nicht, und im Konto lief keine weitere Sitzung zu diesem Repository; auf Holgers erneutes „mache weiter mit dem Projekt“ hat claude-20261023-projectconfig-02 die Aufgabe auf dem zugewiesenen Zweig claude/upbeat-goldberg-mwa4c2 fortgeführt. Holger bestätigt die Übernahme mit dem Merge oder widerspricht im Review.
 
 **Umfang:** Erster Teil von A2, Detailregeln nach den Vorschlägen aus docs/DOMAIN_MODEL.md zu OPEN-007. (1) Tickettypen je Projekt. (2) Status und erlaubte Übergänge je Tickettyp statt des festen Ablaufs Neu, In Arbeit, Erledigt. (3) Eigene Felder je Projekt mit den Typen Kurztext, Langtext, Ganzzahl, Datum, Wahr/Falsch, Einfachauswahl und Benutzerreferenz; Auswahloptionen lassen sich deaktivieren, ohne Bestandswerte zu verlieren. (4) Pflichtfelder bei Anlage und je Übergang. (5) Konfiguration als Entwurf bearbeiten und als neue Version veröffentlichen; verträgliche Änderungen gelten sofort für alle Tickets des Projekts, ein noch verwendeter Status lässt sich nur mit Zuordnung entfernen, ein Feldtyp wird nicht still umgewandelt. (6) Eigene Felder in Ticketrechten, Historie und Suche wie die Standardfelder. (7) Oberfläche zum Bearbeiten der Projektkonfiguration und für eigene Felder im Ticket. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Bestandstickets wechseln bei Veröffentlichung sofort auf die neue Version, keine Bindung einzelner Tickets an alte Versionen. Nicht Teil: Formulare und Portalformulare, Automationen (setzen Hintergrundaufträge aus A8 voraus), Projektvorlagen, Mehrfachauswahl und Dezimalzahl, Verschieben zwischen Projekten, Archivierung.
 
@@ -531,4 +530,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Zwei Projekte mit unterschiedlichen Typen, Abläufen und Feldern nach den Beispielen A und B aus docs/DOMAIN_MODEL.md sind einrichtbar und bedienbar; die Prüffälle F-03 bis F-06 sind als Regression abgedeckt; ein nicht erlaubter Übergang und ein fehlendes Pflichtfeld lassen das Ticket unverändert; verborgene eigene Felder bleiben in API, Historie und Suche verborgen; Bestandstickets bleiben nach jeder Veröffentlichung gültig. Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-073 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten (DEC-040), insbesondere die Veröffentlichung mit Zuordnung unter Last, die Rechte auf eigene Felder in Historie und Suche und die Lesbarkeit älterer Konfigurationsdokumente. Holger nimmt fachlich ab und entscheidet die drei offenen Punkte aus DEC-073 (Löschen nie verwendeter Felder, nachträgliches Erzwingen von Pflichtfeldern bei Bestandstickets, Direktveröffentlichung neben dem Entwurf).
+
+**Ergebnis und Prüfungen:** Lokal grün: 235 Backendtests gegen PostgreSQL 16 (darunter 11 Integrationstests `ProjectConfigurationApiTest` und 6 neue Prüfungen der Konfigurationsregeln), Frontend `npm run verify`, 78 Browsertests (3 neue). Die Fälle F-03 bis F-06 sind als Regression abgedeckt (Tabelle in docs/PROJECT_CONFIGURATION.md). Nicht lokal gelaufen: der Lebenszyklus gegen PostgreSQL 18.6 und der Workflow `Image` (kein Docker in dieser Umgebung); das übernimmt die CI.

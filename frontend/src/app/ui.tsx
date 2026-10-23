@@ -25,7 +25,7 @@ export function TextField({ label, value, onChange, error, hint, type = 'text', 
   readonly onChange: (value: string) => void;
   readonly error?: string | null;
   readonly hint?: string;
-  readonly type?: 'text' | 'password';
+  readonly type?: 'text' | 'password' | 'date';
   readonly required?: boolean;
   readonly autoComplete?: string;
   readonly maxLength?: number;

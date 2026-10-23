@@ -22,6 +22,7 @@ import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.projects.ProjectConfiguration;
 import taskmanager.tickets.TicketAccess;
 
 /**
@@ -56,8 +57,16 @@ public class SearchService {
         this.permissions = permissions;
     }
 
+    /** A required custom value: the ticket holds exactly this canonical text in the custom field with this key (TASK-044). */
+    public record CustomFilter(String key, String value) {
+    }
+
     public record TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
-            List<UUID> tags, int limit, int offset) {
+            List<UUID> tags, List<CustomFilter> custom, int limit, int offset) {
+        public TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
+                List<UUID> tags, int limit, int offset) {
+            this(text, projects, statuses, types, assignees, tags, List.of(), limit, offset);
+        }
     }
 
     public record ProjectQuery(String text, List<UUID> tags, int limit, int offset) {
@@ -66,8 +75,12 @@ public class SearchService {
     public record TagRef(UUID id, String name) {
     }
 
-    /** One ticket with the fields the caller may read; {@code tags} is {@code null} without the read rule for tags. */
-    public record TicketHit(UUID id, UUID projectId, String projectKey, long number, Map<String, String> fields, List<TagRef> tags) {
+    /**
+     * One ticket with the fields the caller may read; {@code tags} is {@code null} without the read rule for tags.
+     * {@code customFields} holds the custom values the caller may read, each in its canonical text form (TASK-044).
+     */
+    public record TicketHit(UUID id, UUID projectId, String projectKey, long number, Map<String, String> fields,
+            Map<String, String> customFields, List<TagRef> tags) {
     }
 
     public record ProjectHit(UUID id, String key, String name, String description, List<TagRef> tags) {
@@ -125,26 +138,49 @@ public class SearchService {
         // A filter on a field the caller may not read matches nothing in these projects.
         if ((!query.statuses().isEmpty() && !fields.contains("status")) || (!query.types().isEmpty() && !fields.contains("type"))
                 || (!query.assignees().isEmpty() && !fields.contains("assignee"))
-                || (!query.tags().isEmpty() && !fields.contains(TicketAccess.TAGS_FIELD))) {
+                || (!query.tags().isEmpty() && !fields.contains(TicketAccess.TAGS_FIELD))
+                || query.custom().stream().anyMatch(filter -> !fields.contains(ProjectConfiguration.CUSTOM_PREFIX + filter.key()))) {
             return;
         }
         List<Object> local = new ArrayList<>();
         List<String> vectors = TICKET_FIELDS.stream().filter(TEXT_VECTORS::containsKey).filter(fields::contains)
             .map(TEXT_VECTORS::get).toList();
+        // Custom fields of the kinds text and long text are indexed as terms; the other kinds have none and match no word.
+        List<String> customKeys = fields.stream().filter(field -> field.startsWith(ProjectConfiguration.CUSTOM_PREFIX))
+            .map(field -> field.substring(ProjectConfiguration.CUSTOM_PREFIX.length())).sorted().toList();
         String vector = String.join(" || ", vectors);
         String rank = "0";
         StringBuilder where = new StringBuilder("s.company_id = ? and s.project_id in (" + placeholders(ids.size()) + ")");
         if (text.present()) {
             List<String> matches = new ArrayList<>();
             List<Object> matchParams = new ArrayList<>();
-            if (text.tsquery() != null && !vector.isEmpty()) {
-                rank = "ts_rank(" + vector + ", to_tsquery('simple', ?))";
+            List<Object> rankParams = new ArrayList<>();
+            if (text.tsquery() != null && (!vector.isEmpty() || !customKeys.isEmpty())) {
+                List<String> parts = new ArrayList<>();
+                if (!vector.isEmpty()) {
+                    parts.add("ts_rank(" + vector + ", to_tsquery('simple', ?))");
+                    rankParams.add(text.tsquery());
+                }
+                if (!customKeys.isEmpty()) {
+                    parts.add("coalesce((select max(ts_rank(c.tsv, to_tsquery('simple', ?))) from search_ticket_custom c "
+                        + "where c.ticket_id = s.ticket_id and c.field_key in (" + placeholders(customKeys.size()) + ")), 0)");
+                    rankParams.add(text.tsquery());
+                    rankParams.addAll(customKeys);
+                }
+                rank = String.join(" + ", parts);
                 // Every word in one of the readable fields, each field vector on its own, so the GIN index of each field
                 // serves the match (finding F3); the same result as matching the joined vector.
                 List<String> words = new ArrayList<>();
                 for (String word : text.words()) {
-                    words.add("(" + String.join(" or ", vectors.stream().map(v -> v + " @@ to_tsquery('simple', ?)").toList()) + ")");
+                    List<String> alternatives = new ArrayList<>(vectors.stream().map(v -> v + " @@ to_tsquery('simple', ?)").toList());
                     vectors.forEach(v -> matchParams.add(word));
+                    if (!customKeys.isEmpty()) {
+                        alternatives.add("exists (select 1 from search_ticket_custom c where c.ticket_id = s.ticket_id and c.field_key in ("
+                            + placeholders(customKeys.size()) + ") and c.tsv @@ to_tsquery('simple', ?))");
+                        matchParams.addAll(customKeys);
+                        matchParams.add(word);
+                    }
+                    words.add("(" + String.join(" or ", alternatives) + ")");
                 }
                 matches.add("(" + String.join(" and ", words) + ")");
             }
@@ -164,9 +200,7 @@ public class SearchService {
                 local.add(text.key());
                 local.add(text.number());
             }
-            if (rank.contains("ts_rank")) {
-                local.add(text.tsquery());
-            }
+            local.addAll(rankParams);
             local.add(actor.companyId());
             local.addAll(ids);
             local.addAll(matchParams);
@@ -180,6 +214,11 @@ public class SearchService {
         for (UUID tag : query.tags()) {
             where.append(" and exists (select 1 from search_ticket_tag a where a.ticket_id = s.ticket_id and a.tag_id = ?)");
             local.add(tag);
+        }
+        for (CustomFilter filter : query.custom()) {
+            where.append(" and exists (select 1 from search_ticket_custom c where c.ticket_id = s.ticket_id and c.field_key = ? and c.value = ?)");
+            local.add(filter.key());
+            local.add(filter.value());
         }
         selects.add("select s.ticket_id as id, s.project_id, p.key as project_key, s.number, " + rank + " as rank "
             + "from search_ticket s join search_project p on p.project_id = s.project_id where " + where);
@@ -212,6 +251,13 @@ public class SearchService {
                 row.put("assignee", assignee == null ? null : assignee.toString());
                 values.put(rs.getObject("ticket_id", UUID.class), row);
             });
+        Map<UUID, Map<String, String>> custom = new HashMap<>();
+        jdbc.sql("select ticket_id, field_key, value from search_ticket_custom where ticket_id in (:ids) order by field_key")
+            .param("ids", ids)
+            .query((ResultSet rs) -> {
+                custom.computeIfAbsent(rs.getObject("ticket_id", UUID.class), ticket -> new LinkedHashMap<>())
+                    .put(rs.getString("field_key"), rs.getString("value"));
+            });
         Map<UUID, List<TagRef>> tags = tags("search_ticket_tag", "ticket_id", ids);
         List<TicketHit> result = new ArrayList<>();
         for (Hit hit : hits) {
@@ -223,7 +269,13 @@ public class SearchService {
                 }
             }
             List<TagRef> shownTags = fields.contains(TicketAccess.TAGS_FIELD) ? tags.getOrDefault(hit.id(), List.of()) : null;
-            result.add(new TicketHit(hit.id(), hit.projectId(), hit.key(), hit.number(), shown, shownTags));
+            Map<String, String> shownCustom = new LinkedHashMap<>();
+            custom.getOrDefault(hit.id(), Map.of()).forEach((key, value) -> {
+                if (fields.contains(ProjectConfiguration.CUSTOM_PREFIX + key)) {
+                    shownCustom.put(key, value);
+                }
+            });
+            result.add(new TicketHit(hit.id(), hit.projectId(), hit.key(), hit.number(), shown, shownCustom, shownTags));
         }
         return result;
     }
@@ -233,9 +285,17 @@ public class SearchService {
         Map<UUID, Set<String>> readable = new LinkedHashMap<>();
         Set<String> fields = Set.copyOf(TICKET_FIELDS);
         for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
-            Decision read = permissions.inspect(actor, resource(actor, project, TicketAccess.RESOURCE_TYPE), TICKET_READ, fields);
+            Supplier<ResourceContext> resource = resource(actor, project, TicketAccess.RESOURCE_TYPE);
+            Decision read = permissions.inspect(actor, resource, TICKET_READ, fields);
             if (read.allowed()) {
-                readable.put(project, Set.copyOf(read.readableFields()));
+                Set<String> shown = new HashSet<>(read.readableFields());
+                // The identifiers of the custom fields come from the configuration, which the first check has locked.
+                List<String> custom = projects.currentConfigurationVersion(project)
+                    .flatMap(version -> projects.configuration(project, version)).map(ProjectConfiguration::customFieldIds).orElse(List.of());
+                if (!custom.isEmpty()) {
+                    shown.addAll(permissions.inspect(actor, resource, TICKET_READ, Set.copyOf(custom)).readableFields());
+                }
+                readable.put(project, Set.copyOf(shown));
             }
         }
         return readable;

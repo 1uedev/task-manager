@@ -4,11 +4,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -22,6 +26,7 @@ import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
+import taskmanager.projects.TicketUsage;
 
 /**
  * Projects, their configuration and their members (TASK-026, DEC-065).
@@ -52,15 +57,17 @@ public class ProjectService {
     private final IdentityVerification identity;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final ObjectProvider<TicketUsage> tickets;
 
     ProjectService(ProjectRepository projects, ProjectAccess access, Permissions permissions, IdentityVerification identity,
-            Clock clock, ApplicationEventPublisher events) {
+            Clock clock, ApplicationEventPublisher events, ObjectProvider<TicketUsage> tickets) {
         this.projects = projects;
         this.access = access;
         this.permissions = permissions;
         this.identity = identity;
         this.clock = clock;
         this.events = events;
+        this.tickets = tickets;
     }
 
     /** A project with its current configuration, and whether the caller may change it. */
@@ -144,9 +151,36 @@ public class ProjectService {
         return view;
     }
 
+    /**
+     * Publishes a configuration directly as the next version, without a draft. Statuses and ticket types that tickets still
+     * use cannot go this way, as there is no mapping to move them; the publication of a draft takes one.
+     */
     @Transactional
     public ProjectView changeConfiguration(AccessContext actor, UUID id, long expectedVersion, ProjectConfiguration configuration) {
         Project project = changeable(actor, id, expectedVersion);
+        if (configuration == null) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("configuration.required"));
+        }
+        publish(actor, project, configuration, Map.of(), Map.of());
+        return current(actor, id);
+    }
+
+    /** The draft of the configuration; the configuration of a project is for its administration only. */
+    @Transactional
+    public Optional<ConfigurationDraft> draft(AccessContext actor, UUID id) {
+        access(actor, id, true);
+        return projects.draft(id);
+    }
+
+    /**
+     * Stores the draft. {@code expectedRevision} is {@code null} to create it and the revision read to change it; a draft
+     * that started from an older published version than the current one is refused, since saving it would hide what was
+     * published since.
+     */
+    @Transactional
+    public ConfigurationDraft saveDraft(AccessContext actor, UUID id, Long expectedRevision, long baseVersion,
+            ProjectConfiguration configuration) {
+        Project project = access(actor, id, true).project();
         if (configuration == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("configuration.required"));
         }
@@ -154,12 +188,135 @@ public class ProjectService {
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
+        Optional<ConfigurationDraft> existing = projects.draft(id);
+        if (existing.isPresent() ? expectedRevision == null || existing.get().revision() != expectedRevision : expectedRevision != null) {
+            throw ApiProblemException.of(412, "project.draft_conflict");
+        }
+        if (baseVersion != project.configurationVersion()) {
+            throw ApiProblemException.of(409, "project.draft_stale");
+        }
         Instant now = clock.instant();
-        long next = project.configurationVersion() + 1;
-        projects.insertConfiguration(id, next, configuration.normalized(), now, actor.userId());
-        projects.touch(id, now, actor.userId());
-        projects.audit(id, actor.userId(), "project.configuration_changed", "version " + next, now);
+        long revision = existing.map(draft -> draft.revision() + 1).orElse(1L);
+        projects.saveDraft(id, baseVersion, revision, configuration.normalized(), now, actor.userId());
+        projects.audit(id, actor.userId(), "project.configuration_draft_saved", "revision " + revision, now);
+        return projects.draft(id).orElseThrow();
+    }
+
+    @Transactional
+    public void discardDraft(AccessContext actor, UUID id, long expectedRevision) {
+        access(actor, id, true);
+        ConfigurationDraft draft = projects.draft(id).orElseThrow(() -> ApiProblemException.of(404, "project.draft_not_found"));
+        if (draft.revision() != expectedRevision) {
+            throw ApiProblemException.of(412, "project.draft_conflict");
+        }
+        projects.deleteDraft(id);
+        projects.audit(id, actor.userId(), "project.configuration_draft_discarded", "revision " + draft.revision(), clock.instant());
+    }
+
+    /**
+     * Publishes the draft as the next version. {@code statusMapping} and {@code typeMapping} say where the tickets go that
+     * use a status or ticket type the new version no longer has or no longer allows for their type; without them the
+     * publication is refused and nothing changes (F-05 of DOMAIN_MODEL.md).
+     */
+    @Transactional
+    public ProjectView publishDraft(AccessContext actor, UUID id, long expectedVersion, long draftRevision,
+            Map<String, String> statusMapping, Map<String, String> typeMapping) {
+        Project project = changeable(actor, id, expectedVersion);
+        ConfigurationDraft draft = projects.draft(id).orElseThrow(() -> ApiProblemException.of(404, "project.draft_not_found"));
+        if (draft.revision() != draftRevision) {
+            throw ApiProblemException.of(412, "project.draft_conflict");
+        }
+        if (draft.baseVersion() != project.configurationVersion()) {
+            throw ApiProblemException.of(409, "project.draft_stale");
+        }
+        publish(actor, project, draft.configuration(), statusMapping == null ? Map.of() : statusMapping,
+            typeMapping == null ? Map.of() : typeMapping);
+        projects.deleteDraft(id);
         return current(actor, id);
+    }
+
+    /** How many tickets use which type and status, for the mapping of a publication. */
+    @Transactional
+    public List<TicketUsage.Use> usage(AccessContext actor, UUID id) {
+        access(actor, id, true);
+        return usages(id);
+    }
+
+    private List<TicketUsage.Use> usages(UUID id) {
+        TicketUsage usage = tickets.getIfAvailable();
+        return usage == null ? List.of() : usage.usage(id);
+    }
+
+    private void publish(AccessContext actor, Project project, ProjectConfiguration configuration, Map<String, String> statusMapping,
+            Map<String, String> typeMapping) {
+        List<String> violations = configuration.violations();
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+        }
+        ProjectConfiguration previous = projects.configuration(project.id(), project.configurationVersion()).orElseThrow();
+        List<String> incompatible = configuration.incompatibilities(previous);
+        if (!incompatible.isEmpty()) {
+            throw ApiProblemException.withViolations(409, "project.configuration_incompatible", incompatible);
+        }
+        List<String> mapping = new ArrayList<>();
+        statusMapping.forEach((from, to) -> {
+            if (!previous.hasStatus(from)) {
+                mapping.add("statusMapping.key_unknown");
+            }
+            if (to == null || !configuration.hasStatus(to)) {
+                mapping.add("statusMapping.target_unknown");
+            }
+        });
+        typeMapping.forEach((from, to) -> {
+            if (!previous.hasTicketType(from)) {
+                mapping.add("typeMapping.key_unknown");
+            }
+            if (to == null || !configuration.hasTicketType(to)) {
+                mapping.add("typeMapping.target_unknown");
+            }
+        });
+        if (!mapping.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", mapping.stream().distinct().toList());
+        }
+        List<TicketUsage.Move> moves = new ArrayList<>();
+        Set<String> unmapped = new LinkedHashSet<>();
+        for (TicketUsage.Use use : usages(project.id())) {
+            // A type the new version no longer has needs a mapping; a status needs one when the ticket type does not know it.
+            String type = use.type();
+            if (!configuration.hasTicketType(type)) {
+                String target = typeMapping.get(type);
+                if (target == null) {
+                    unmapped.add("type.in_use:" + type);
+                    continue;
+                }
+                type = target;
+            }
+            String status = use.status();
+            if (!configuration.statusKeysOf(type).contains(status)) {
+                String target = statusMapping.get(status);
+                if (target == null) {
+                    unmapped.add("status.in_use:" + status);
+                    continue;
+                }
+                if (!configuration.statusKeysOf(type).contains(target)) {
+                    unmapped.add("status.mapping_invalid:" + status);
+                    continue;
+                }
+                status = target;
+            }
+            if (!type.equals(use.type()) || !status.equals(use.status())) {
+                moves.add(new TicketUsage.Move(use.type(), use.status(), type, status));
+            }
+        }
+        if (!unmapped.isEmpty()) {
+            throw ApiProblemException.withViolations(409, "project.configuration_in_use", List.copyOf(unmapped));
+        }
+        Instant now = clock.instant();
+        long moved = moves.isEmpty() ? 0 : tickets.getObject().migrate(project.id(), moves, actor.userId(), now);
+        long next = project.configurationVersion() + 1;
+        projects.insertConfiguration(project.id(), next, configuration.normalized(), now, actor.userId());
+        projects.touch(project.id(), now, actor.userId());
+        projects.audit(project.id(), actor.userId(), "project.configuration_changed", "version " + next + (moved > 0 ? ", " + moved + " tickets moved" : ""), now);
     }
 
     @Transactional

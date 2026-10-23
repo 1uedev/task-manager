@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Suche (TASK-029)
+  title: Task Manager API, Suche (TASK-029, TASK-044)
   version: 0.1.0
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
@@ -23,6 +23,11 @@ info:
     zugeordnet sein. Ein Projekt außerhalb der eigenen Suche antwortet mit `project.unknown`, ein unbekannter oder nicht
     sichtbarer Tag mit `tag.unknown`. Sichtbar sind der Unternehmenskatalog und die Kataloge der Projekte, in denen die
     Person Tickets lesen darf; für Projekte gilt nur der Unternehmenskatalog.
+
+    Eigene Felder (TASK-044, DEC-073) gelten wie die festen Felder: Suchwörter treffen die Werte der lesbaren eigenen Felder
+    der Arten Kurztext und Langtext, der Filter `custom` verlangt einen genauen Wert eines lesbaren eigenen Feldes, und
+    `customFields` im Treffer zeigt nur lesbare Werte. Auch hier ändert ein verborgenes Feld weder das Ergebnis noch die
+    Reihenfolge.
 
     Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel). Der Index folgt
     jeder Änderung in derselben Transaktion. Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server
@@ -59,6 +64,16 @@ paths:
           schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
           explode: true
         - $ref: '#/components/parameters/Tag'
+        - name: custom
+          in: query
+          description: |
+            Eigenes Feld in der Form `<schlüssel>=<wert>`, wiederholbar (höchstens 20); das Ticket muss genau diesen Wert
+            tragen, jeder genannte Filter muss zutreffen. Der Wert steht so, wie die Ticketschnittstelle ihn führt:
+            Optionsschlüssel, Kennung des Kontos, `true` oder `false`, Datum `yyyy-MM-dd`, Zahl oder Text. Ungültig ist
+            ein Schlüssel außerhalb von `^[a-z][a-z0-9_]{0,39}$` oder ein leerer oder zu langer Wert (`custom.invalid`).
+            In Projekten ohne dieses lesbare Feld trifft der Filter nichts.
+          schema: {type: array, items: {type: string, minLength: 3, maxLength: 242}, maxItems: 20}
+          explode: true
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -135,7 +150,7 @@ components:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
         auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, paging.invalid.
+        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -165,7 +180,7 @@ components:
         name: {type: string}
     TicketHit:
       type: object
-      required: [id, projectId, key, number, fields, tags]
+      required: [id, projectId, key, number, fields, customFields, tags]
       properties:
         id: {type: string, format: uuid}
         projectId: {type: string, format: uuid}
@@ -175,6 +190,12 @@ components:
           description: Nur die lesbaren Felder unter title, description, type, status und assignee; ein verborgenes Feld fehlt.
           type: object
           additionalProperties: {type: [string, 'null']}
+        customFields:
+          description: |
+            Die lesbaren eigenen Felder mit Wert, nach Schlüssel; jeder Wert in der Textform, in der der Filter `custom` ihn
+            erwartet.
+          type: object
+          additionalProperties: {type: string}
         tags:
           description: Zugeordnete Tags nach Namen; null ohne Leseregel für das Feld `tags`.
           type: [array, 'null']

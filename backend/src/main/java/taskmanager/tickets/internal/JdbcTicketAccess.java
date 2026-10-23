@@ -1,12 +1,16 @@
 package taskmanager.tickets.internal;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.projects.ProjectAccess;
+import taskmanager.projects.ProjectConfiguration;
 import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.TicketChanged;
 
@@ -14,9 +18,11 @@ import taskmanager.tickets.TicketChanged;
 @Service
 class JdbcTicketAccess implements TicketAccess {
     private final TicketRepository tickets;
+    private final ProjectAccess projects;
 
-    JdbcTicketAccess(TicketRepository tickets) {
+    JdbcTicketAccess(TicketRepository tickets, ProjectAccess projects) {
         this.tickets = tickets;
+        this.projects = projects;
     }
 
     @Override
@@ -44,7 +50,10 @@ class JdbcTicketAccess implements TicketAccess {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public List<TicketChanged> searchSources(UUID companyId) {
-        return tickets.all(companyId).stream().map(Ticket::changed).toList();
+        Map<UUID, ProjectConfiguration> configurations = new HashMap<>();
+        return tickets.all(companyId).stream().map(ticket -> ticket.changed(configurations.computeIfAbsent(ticket.projectId(),
+            project -> projects.currentConfigurationVersion(project).flatMap(version -> projects.configuration(project, version)).orElseThrow())))
+            .toList();
     }
 
     private static String text(UUID tag) {

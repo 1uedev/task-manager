@@ -113,4 +113,115 @@ class ProjectConfigurationTest {
         assertEquals("Aufgabe", padded.normalized().ticketTypes().getFirst().name());
         assertEquals("Neu", padded.normalized().statuses().getFirst().name());
     }
+
+    // ---------------------------------------------------------------- TASK-044
+
+    private static ProjectConfiguration withFields(List<ProjectConfiguration.CustomField> fields, List<Transition> transitions,
+            List<ProjectConfiguration.Workflow> workflows) {
+        return new ProjectConfiguration(INITIAL.ticketTypes(), INITIAL.statuses(), "new", transitions, INITIAL.fields(), workflows, fields);
+    }
+
+    private static ProjectConfiguration.CustomField field(String key, String type, ProjectConfiguration.Option... options) {
+        return new ProjectConfiguration.CustomField(key, key, type, false, true, List.of(options));
+    }
+
+    @Test
+    void aConfigurationWithoutTheNewMembersReadsAsOneWithoutThem() throws Exception {
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        String old = "{\"ticketTypes\":[{\"key\":\"task\",\"name\":\"Aufgabe\"}],\"statuses\":[{\"key\":\"new\",\"name\":\"Neu\",\"category\":\"open\"}],"
+            + "\"initialStatus\":\"new\",\"transitions\":[],\"fields\":[{\"key\":\"title\",\"required\":true},{\"key\":\"description\",\"required\":false},"
+            + "{\"key\":\"type\",\"required\":true},{\"key\":\"status\",\"required\":true},{\"key\":\"assignee\",\"required\":false}]}";
+        ProjectConfiguration read = mapper.readValue(old, ProjectConfiguration.class);
+        assertEquals(List.of(), read.violations());
+        assertEquals(List.of(), read.customFields());
+        assertEquals(List.of(), read.workflows());
+        assertEquals("new", read.initialStatusOf("task"));
+    }
+
+    @Test
+    void aTypeWithAWorkflowOfItsOwnKnowsOnlyTheStatusesItNames() {
+        var workflow = new ProjectConfiguration.Workflow("bug", "in_progress", List.of(new Transition("in_progress", "done")));
+        var config = withFields(List.of(), INITIAL.transitions(), List.of(workflow));
+        assertEquals(List.of(), config.violations());
+        assertEquals("in_progress", config.initialStatusOf("bug"));
+        assertEquals("new", config.initialStatusOf("task"));
+        assertEquals(java.util.Set.of("in_progress", "done"), config.statusKeysOf("bug"));
+        assertEquals(java.util.Set.of("new", "in_progress", "done"), config.statusKeysOf("task"));
+        assertTrue(config.allowsTransition("bug", "in_progress", "done"));
+        assertFalse(config.allowsTransition("bug", "new", "in_progress"));
+        assertTrue(config.allowsTransition("task", "new", "in_progress"));
+        assertEquals(List.of("workflows.type_unknown", "workflows.type_duplicate", "workflows.initialStatus.unknown", "workflows.transitions.status_unknown"),
+            withFields(List.of(), INITIAL.transitions(), List.of(new ProjectConfiguration.Workflow("nix", "new", List.of()), workflow, workflow,
+                new ProjectConfiguration.Workflow("task", "nix", List.of(new Transition("new", "nix"))))).violations().stream()
+                .sorted(java.util.Comparator.comparing(v -> List.of("workflows.type_unknown", "workflows.type_duplicate", "workflows.initialStatus.unknown",
+                    "workflows.transitions.status_unknown").indexOf(v))).toList());
+    }
+
+    @Test
+    void transitionsRequireOnlyKnownFieldsOnce() {
+        var cause = field("ursache", "text");
+        var ok = withFields(List.of(cause), List.of(new Transition("new", "in_progress", List.of("description", "assignee", "custom.ursache"))), List.of());
+        assertEquals(List.of(), ok.violations());
+        assertEquals(List.of("transitions.required_field_unknown"), withFields(List.of(cause),
+            List.of(new Transition("new", "in_progress", List.of("title", "custom.fehlt"))), List.of()).violations());
+        assertEquals(List.of("transitions.required_field_duplicate"), withFields(List.of(cause),
+            List.of(new Transition("new", "in_progress", List.of("custom.ursache", "custom.ursache"))), List.of()).violations());
+    }
+
+    @Test
+    void customFieldsNeedValidKeysTypesAndOptions() {
+        var option = new ProjectConfiguration.Option("a", "Alpha", true);
+        assertEquals(List.of(), withFields(List.of(field("prio", "select", option)), INITIAL.transitions(), List.of()).violations());
+        assertEquals(List.of("customFields.options_required"), withFields(List.of(field("prio", "select")), INITIAL.transitions(), List.of()).violations());
+        assertEquals(List.of("customFields.options_unexpected"), withFields(List.of(field("n", "integer", option)), INITIAL.transitions(), List.of()).violations());
+        assertEquals(List.of("customFields.type_invalid"), withFields(List.of(field("n", "decimal")), INITIAL.transitions(), List.of()).violations());
+        assertEquals(List.of("customFields.key_invalid", "customFields.key_duplicate"),
+            withFields(List.of(field("N-1", "text"), field("n", "text"), field("n", "text")), INITIAL.transitions(), List.of()).violations());
+        assertEquals(List.of("customFields.option_key_duplicate", "customFields.option_name_duplicate"),
+            withFields(List.of(field("prio", "select", option, new ProjectConfiguration.Option("a", " alpha", true))), INITIAL.transitions(), List.of()).violations());
+        var many = new ArrayList<ProjectConfiguration.CustomField>();
+        for (int i = 0; i < 31; i++) {
+            many.add(field("f" + i, "text"));
+        }
+        assertEquals(List.of("customFields.too_many"), withFields(many, INITIAL.transitions(), List.of()).violations());
+    }
+
+    @Test
+    void aNewVersionKeepsEveryFieldAndOptionAndTheirTypes() {
+        var a = new ProjectConfiguration.Option("a", "Alpha", true);
+        var b = new ProjectConfiguration.Option("b", "Beta", true);
+        var before = withFields(List.of(field("prio", "select", a, b), field("n", "integer")), INITIAL.transitions(), List.of());
+        var inactive = new ProjectConfiguration.CustomField("prio", "Priorität", "select", false, true,
+            List.of(a, new ProjectConfiguration.Option("b", "Beta (alt)", false)));
+        assertEquals(List.of(), withFields(List.of(inactive, new ProjectConfiguration.CustomField("n", "n", "integer", false, false, List.of())),
+            INITIAL.transitions(), List.of()).incompatibilities(before), "deactivating and renaming are fine");
+        assertEquals(List.of("customFields.removed"), withFields(List.of(field("prio", "select", a, b)), INITIAL.transitions(), List.of()).incompatibilities(before));
+        assertEquals(List.of("customFields.option_removed"),
+            withFields(List.of(field("prio", "select", a), field("n", "integer")), INITIAL.transitions(), List.of()).incompatibilities(before));
+        assertEquals(List.of("customFields.type_changed"),
+            withFields(List.of(field("prio", "select", a, b), field("n", "text")), INITIAL.transitions(), List.of()).incompatibilities(before));
+    }
+
+    @Test
+    void valuesAreCheckedAndStoredInTheirCanonicalForm() {
+        var option = new ProjectConfiguration.Option("a", "Alpha", true);
+        assertEquals("Hallo", ProjectConfiguration.canonical(field("t", "text"), "  Hallo "));
+        assertEquals(null, ProjectConfiguration.canonical(field("t", "text"), "   "));
+        assertEquals(null, ProjectConfiguration.canonical(field("t", "text"), "x".repeat(201)));
+        assertEquals("x".repeat(201), ProjectConfiguration.canonical(field("l", "longtext"), "x".repeat(201)));
+        assertEquals("7", ProjectConfiguration.canonical(field("n", "integer"), 7));
+        assertEquals("-3", ProjectConfiguration.canonical(field("n", "integer"), -3L));
+        assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), "7"));
+        assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), 1.0));
+        assertEquals("2026-11-05", ProjectConfiguration.canonical(field("d", "date"), "2026-11-05"));
+        assertEquals(null, ProjectConfiguration.canonical(field("d", "date"), "2026-13-01"));
+        assertEquals("false", ProjectConfiguration.canonical(field("b", "boolean"), false));
+        assertEquals(null, ProjectConfiguration.canonical(field("b", "boolean"), "false"));
+        assertEquals("a", ProjectConfiguration.canonical(field("s", "select", option), "a"));
+        assertEquals(null, ProjectConfiguration.canonical(field("s", "select", option), "b"));
+        String id = "5d3f9ba6-7a0f-4ef4-8f4f-1d7d6b9c0e11";
+        assertEquals(id, ProjectConfiguration.canonical(field("u", "user"), id.toUpperCase()));
+        assertEquals(null, ProjectConfiguration.canonical(field("u", "user"), "nobody"));
+        assertEquals(null, ProjectConfiguration.canonical(field("t", "text"), null));
+    }
 }

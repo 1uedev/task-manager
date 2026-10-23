@@ -58,6 +58,13 @@ class SearchRepository {
                 """).params(ticket.ticketId(), ticket.companyId(), ticket.projectId(), ticket.number(), ticket.type(), ticket.status(),
                 ticket.assignee(), ticket.title(), ticket.description(), SearchText.terms(ticket.title()),
                 SearchText.terms(ticket.description())).update();
+        // The custom values are written again as a whole: a field that lost its value must lose its row (TASK-044).
+        jdbc.sql("delete from search_ticket_custom where ticket_id = ?").param(ticket.ticketId()).update();
+        for (TicketChanged.CustomValue value : ticket.custom()) {
+            boolean text = "text".equals(value.type()) || "longtext".equals(value.type());
+            jdbc.sql("insert into search_ticket_custom (ticket_id, field_key, value, terms) values (?, ?, ?, ?)")
+                .params(ticket.ticketId(), value.key(), value.value(), text ? SearchText.terms(value.value()) : "").update();
+        }
     }
 
     /** Stores the tag and writes the tag names of every ticket and project that carries it again. */
@@ -123,8 +130,8 @@ class SearchRepository {
      * finishes before the rebuild starts, one that enters later waits for its end.
      */
     void lockForRebuild() {
-        jdbc.sql("lock table search_state, search_project, search_ticket, search_tag, search_ticket_tag, search_project_tag "
-            + "in exclusive mode").update();
+        jdbc.sql("lock table search_state, search_project, search_ticket, search_ticket_custom, search_tag, search_ticket_tag, "
+            + "search_project_tag in exclusive mode").update();
     }
 
     boolean built(UUID companyId) {
@@ -140,6 +147,7 @@ class SearchRepository {
     void deleteCompany(UUID companyId) {
         jdbc.sql("delete from search_ticket_tag a using search_ticket s where s.ticket_id = a.ticket_id and s.company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_project_tag a using search_project s where s.project_id = a.project_id and s.company_id = ?").param(companyId).update();
+        jdbc.sql("delete from search_ticket_custom a using search_ticket s where s.ticket_id = a.ticket_id and s.company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_ticket where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_project where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_tag where company_id = ?").param(companyId).update();

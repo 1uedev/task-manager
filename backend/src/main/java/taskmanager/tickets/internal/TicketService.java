@@ -8,7 +8,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,21 +25,27 @@ import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
+import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.TicketAccess;
 
 /**
- * Tickets of a project with history and conflict detection (TASK-027, DEC-067).
+ * Tickets of a project with history and conflict detection (TASK-027, DEC-067), with the custom fields, the workflows of the
+ * ticket types and the fields a transition requires of the project configuration (TASK-044, DEC-073).
  *
  * <p>Who may do what: the actions {@code ticket.read}, {@code ticket.create} and {@code ticket.edit} of the permissions
- * module in the context of the project, which need the membership. Each of the five fields (title, description, type,
- * status, assignee) is shown only with a read rule for the resource type {@code ticket} and changed only with a write rule;
- * a hidden field is left out of every answer and of the history. Without {@code ticket.read}, {@code ticket.create} and
- * {@code ticket.edit} the project does not exist for the caller (404).
+ * module in the context of the project, which need the membership. Each of the five fixed fields (title, description, type,
+ * status, assignee) and each custom field ({@code custom.<key>}) is shown only with a read rule for the resource type
+ * {@code ticket} and changed only with a write rule; a hidden field is left out of every answer and of the history. Without
+ * {@code ticket.read}, {@code ticket.create} and {@code ticket.edit} the project does not exist for the caller (404).
  *
  * <p>Locks, in this order: rights, identity of the requester, project row ({@code FOR SHARE}, held by the project adapter
  * until the commit, so neither the membership nor the configuration of the project changes meanwhile), then the ticket row
  * ({@code FOR UPDATE}) or the counter of the project, then the account of a new assignee. A change checks with
  * {@code require} for exactly the fields it writes before it reads the ticket.
+ *
+ * <p>The configuration in force is always the current one: a published change counts for every ticket of the project at
+ * once. Required fields bind a creation, a write that would empty them and a transition; a ticket that lacks a field
+ * required later stays valid until someone writes it or takes a transition that requires it.
  */
 @Service
 public class TicketService {
@@ -46,7 +54,7 @@ public class TicketService {
     public static final String EDIT = "ticket.edit";
     static final String RESOURCE = "ticket";
     static final Set<String> FIELDS = Set.copyOf(ProjectConfiguration.FIELD_KEYS);
-    /** The fields of the history: the five fields and the tags the tags module records (TASK-042). */
+    /** The fields of the history besides the custom ones: the five fields and the tags the tags module records (TASK-042). */
     private static final Set<String> HISTORY_FIELDS = with(FIELDS, TicketAccess.TAGS_FIELD);
     private static final int TITLE_MAX = 200;
     private static final int DESCRIPTION_MAX = 20_000;
@@ -68,8 +76,9 @@ public class TicketService {
         this.events = events;
     }
 
-    /** A ticket with the key of its project and the fields the caller may read and write. */
-    public record TicketView(Ticket ticket, String projectKey, Set<String> readable, Set<String> writable) {
+    /** A ticket with the key of its project, the fields the caller may read and write and the configuration they refer to. */
+    public record TicketView(Ticket ticket, String projectKey, Set<String> readable, Set<String> writable,
+            ProjectConfiguration configuration) {
     }
 
     /** One version of the history with the changes of the fields the caller may read. */
@@ -79,37 +88,45 @@ public class TicketService {
     public record FieldChange(String field, String from, String to) {
     }
 
-    /** What a new ticket brings; {@code null} for a field that is not given. */
-    public record Draft(String type, String title, String description, String assignee) {
+    /** What a new ticket brings; {@code null} for a field that is not given. {@code custom} maps keys to JSON values. */
+    public record Draft(String type, String title, String description, String assignee, Map<String, Object> custom) {
+        public Draft {
+            custom = custom == null ? Map.of() : custom;
+        }
     }
 
     @Transactional
     public List<TicketView> list(AccessContext actor, UUID projectId, int limit, Long before) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
-        Decision read = readable(actor, resource);
-        Set<String> writable = writable(actor, resource);
+        Decision read = readable(actor, resource, projectId);
+        Set<String> writable = writable(actor, resource, projectId);
         String key = projects.key(projectId).orElseThrow(TicketService::projectNotFound);
+        ProjectConfiguration configuration = configuration(projectId);
         return tickets.list(actor.companyId(), projectId, limit, before).stream()
-            .map(ticket -> new TicketView(ticket, key, read.readableFields(), writable)).toList();
+            .map(ticket -> new TicketView(ticket, key, read.readableFields(), writable, configuration)).toList();
     }
 
     @Transactional
     public TicketView get(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
-        Decision read = readable(actor, resource);
+        Decision read = readable(actor, resource, projectId);
         Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
-        return view(ticket, read.readableFields(), writable(actor, resource));
+        return view(ticket, read.readableFields(), writable(actor, resource, projectId));
     }
 
     /**
      * The history, oldest first. The changes of the fields of one version form one entry. Each assignment or removal of a
      * tag forms an entry of its own with the field {@code tags} and the version the ticket had then, so several entries can
-     * share a version (TASK-042); they need the read rule for {@code tags}.
+     * share a version (TASK-042); they need the read rule for {@code tags}. A custom field is shown with its read rule.
      */
     @Transactional
     public List<HistoryEntry> history(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
-        Set<String> readable = readable(actor, resource, HISTORY_FIELDS).readableFields();
+        Decision read = inspect(actor, resource, READ, projectId, HISTORY_FIELDS);
+        if (!read.allowed()) {
+            throw projectNotFound();
+        }
+        Set<String> readable = read.readableFields();
         Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
         List<HistoryEntry> entries = new ArrayList<>();
         HistoryEntry fields = null;
@@ -136,7 +153,7 @@ public class TicketService {
     public TicketView create(AccessContext actor, UUID projectId, Draft draft) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
         boolean read = allowed(actor, resource, READ);
-        Decision create = permissions.inspect(actor, resource, CREATE, FIELDS);
+        Decision create = inspect(actor, resource, CREATE, projectId, FIELDS);
         if (!read && !create.allowed() && !allowed(actor, resource, EDIT)) {
             throw projectNotFound();
         }
@@ -151,6 +168,11 @@ public class TicketService {
                 throw ApiProblemException.of(409, "ticket.required_field_inaccessible");
             }
         }
+        for (CustomField field : configuration.customFields()) {
+            if (field.required() && field.active() && !create.writableFields().contains(field.id())) {
+                throw ApiProblemException.of(409, "ticket.required_field_inaccessible");
+            }
+        }
         Map<String, String> values = new LinkedHashMap<>();
         values.put("title", draft.title());
         values.put("description", draft.description());
@@ -160,6 +182,13 @@ public class TicketService {
         values.forEach((field, value) -> {
             if (value != null) {
                 written.add(field);
+            }
+        });
+        Map<String, Object> given = new TreeMap<>();
+        draft.custom().forEach((key, value) -> {
+            if (value != null) {
+                given.put(key, value);
+                written.add(ProjectConfiguration.CUSTOM_PREFIX + key);
             }
         });
         require(actor, resource, CREATE, written);
@@ -172,29 +201,45 @@ public class TicketService {
             violations.add("type.unknown");
         }
         UUID assignee = assignee(projectId, values.get("assignee"), configuration, violations);
+        Map<String, String> custom = new TreeMap<>();
+        for (CustomField field : configuration.customFields()) {
+            if (!given.containsKey(field.key())) {
+                if (field.required() && field.active()) {
+                    violations.add(field.id() + ".required");
+                }
+                continue;
+            }
+            String value = customValue(projectId, field, given.get(field.key()), null, violations);
+            if (value != null) {
+                custom.put(field.key(), value);
+            }
+        }
+        given.keySet().stream().filter(key -> configuration.customField(key).isEmpty())
+            .forEach(key -> violations.add("customFields.unknown"));
         if (!violations.isEmpty()) {
-            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+            throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
         }
         Instant now = clock.instant();
         long number = tickets.nextNumber(projectId);
         Ticket ticket = new Ticket(UUID.randomUUID(), actor.companyId(), projectId, number, title, description, type,
-            configuration.initialStatus(), assignee, configurationVersion, 1, now, actor.userId(), now, actor.userId());
+            configuration.initialStatusOf(type), assignee, custom, configurationVersion, 1, now, actor.userId(), now, actor.userId());
         tickets.insert(ticket);
-        ticket.values().forEach((field, value) -> {
+        ticket.allValues().forEach((field, value) -> {
             if (value != null) {
                 tickets.change(ticket.id(), 1, now, actor.userId(), field, null, value);
             }
         });
-        events.publishEvent(ticket.changed());
-        return view(ticket, readableFields(actor, resource), writable(actor, resource));
+        events.publishEvent(ticket.changed(configuration));
+        return view(ticket, readableFields(actor, resource, projectId), writable(actor, resource, projectId));
     }
 
     /**
-     * Changes the given fields; a {@code null} value empties description or assignee. Fields that keep their value are
-     * not written. Without any real change the ticket and its version stay as they are.
+     * Changes the given fields; a {@code null} value empties description, assignee or a custom field. Fields that keep their
+     * value are not written. Without any real change the ticket and its version stay as they are.
      */
     @Transactional
-    public TicketView update(AccessContext actor, UUID projectId, long number, long expectedVersion, Map<String, String> changes) {
+    public TicketView update(AccessContext actor, UUID projectId, long number, long expectedVersion, Map<String, String> changes,
+            Map<String, Object> customChanges) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
         boolean read = allowed(actor, resource, READ);
         boolean edit = allowed(actor, resource, EDIT);
@@ -204,7 +249,9 @@ public class TicketService {
         if (!edit) {
             throw forbidden();
         }
-        require(actor, resource, EDIT, changes.keySet());
+        Set<String> written = new HashSet<>(changes.keySet());
+        customChanges.keySet().forEach(key -> written.add(ProjectConfiguration.CUSTOM_PREFIX + key));
+        require(actor, resource, EDIT, written);
         Ticket ticket = tickets.lock(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
         if (ticket.version() != expectedVersion) {
             throw ApiProblemException.of(412, "ticket.version_conflict");
@@ -217,10 +264,13 @@ public class TicketService {
         String description = changes.containsKey("description")
             ? description(changes.get("description"), configuration, violations) : ticket.description();
         String type = ticket.type();
+        boolean typeChanged = false;
         if (changes.containsKey("type")) {
             type = changes.get("type");
             if (type == null || !configuration.hasTicketType(type)) {
                 violations.add("type.unknown");
+            } else {
+                typeChanged = !type.equals(ticket.type());
             }
         }
         String status = ticket.status();
@@ -235,28 +285,64 @@ public class TicketService {
         }
         UUID assignee = changes.containsKey("assignee")
             ? assignee(projectId, changes.get("assignee"), configuration, violations) : ticket.assignee();
-        if (!violations.isEmpty()) {
-            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+        Map<String, String> custom = new TreeMap<>(ticket.custom());
+        for (var change : customChanges.entrySet()) {
+            Optional<CustomField> field = configuration.customField(change.getKey());
+            if (field.isEmpty()) {
+                violations.add("customFields.unknown");
+                continue;
+            }
+            String current = ticket.custom().get(change.getKey());
+            if (change.getValue() == null) {
+                if (field.get().required() && field.get().active()) {
+                    violations.add(field.get().id() + ".required");
+                }
+                custom.remove(change.getKey());
+                continue;
+            }
+            String value = customValue(projectId, field.get(), change.getValue(), current, violations);
+            if (value != null) {
+                custom.put(change.getKey(), value);
+            }
         }
-        if (statusChanged && !configuration.allowsTransition(ticket.status(), status)) {
-            throw ApiProblemException.of(409, "ticket.transition_not_allowed");
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
+        }
+        if ((typeChanged || statusChanged) && !configuration.statusKeysOf(type).contains(status)) {
+            // The status the ticket keeps, or is moved to together with its type, does not exist in the workflow of the type.
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of(statusChanged ? "status.unavailable" : "type.status_unavailable"));
+        }
+        if (statusChanged) {
+            var transition = configuration.transition(type, ticket.status(), status)
+                .orElseThrow(() -> ApiProblemException.of(409, "ticket.transition_not_allowed"));
+            List<String> missing = new ArrayList<>();
+            for (String required : transition.requiredFields()) {
+                if (!hasValue(required, description, assignee, custom, configuration)) {
+                    missing.add(required + ".required_for_transition");
+                }
+            }
+            if (!missing.isEmpty()) {
+                throw ApiProblemException.withViolations(400, "request.invalid", missing);
+            }
         }
 
         Instant now = clock.instant();
         Ticket changed = new Ticket(ticket.id(), ticket.companyId(), projectId, number, title, description, type, status, assignee,
-            configurationVersion, ticket.version() + 1, ticket.createdAt(), ticket.createdBy(), now, actor.userId());
-        Map<String, String> before = ticket.values();
-        Map<String, String> after = changed.values();
-        List<String> differing = before.keySet().stream().filter(field -> !Objects.equals(before.get(field), after.get(field))).toList();
+            custom, configurationVersion, ticket.version() + 1, ticket.createdAt(), ticket.createdBy(), now, actor.userId());
+        Map<String, String> before = ticket.allValues();
+        Map<String, String> after = changed.allValues();
+        Set<String> fields = new java.util.TreeSet<>(before.keySet());
+        fields.addAll(after.keySet());
+        List<String> differing = fields.stream().filter(field -> !Objects.equals(before.get(field), after.get(field))).toList();
         if (differing.isEmpty()) {
-            return view(ticket, readableFields(actor, resource), writable(actor, resource));
+            return view(ticket, readableFields(actor, resource, projectId), writable(actor, resource, projectId));
         }
         tickets.update(changed);
         for (String field : differing) {
             tickets.change(ticket.id(), changed.version(), now, actor.userId(), field, before.get(field), after.get(field));
         }
-        events.publishEvent(changed.changed());
-        return view(changed, readableFields(actor, resource), writable(actor, resource));
+        events.publishEvent(changed.changed(configuration));
+        return view(changed, readableFields(actor, resource, projectId), writable(actor, resource, projectId));
     }
 
     // ------------------------------------------------------------------------------------------------ rules
@@ -305,19 +391,77 @@ public class TicketService {
         return account;
     }
 
+    /**
+     * The canonical text of a value for a custom field, or {@code null} with a violation. A value the ticket already holds
+     * is accepted as it is even if the field or option is inactive or the account left the project; only a new value is
+     * checked against that (F-06 of DOMAIN_MODEL.md).
+     */
+    private String customValue(UUID projectId, CustomField field, Object raw, String current, List<String> violations) {
+        String value = ProjectConfiguration.canonical(field, raw);
+        if (value == null) {
+            violations.add(field.id() + ".invalid");
+            return null;
+        }
+        if (value.equals(current)) {
+            return value;
+        }
+        if (!field.active()) {
+            violations.add(field.id() + ".inactive");
+            return null;
+        }
+        if (ProjectConfiguration.SELECT.equals(field.type()) && !field.option(value).orElseThrow().active()) {
+            violations.add(field.id() + ".option_inactive");
+            return null;
+        }
+        if (ProjectConfiguration.USER.equals(field.type()) && (!projects.isMember(projectId, UUID.fromString(value))
+                || !identity.accountIsActive(UUID.fromString(value)))) {
+            violations.add(field.id() + ".not_member");
+            return null;
+        }
+        return value;
+    }
+
+    /** Whether the field a transition requires has a value after the change. A field that is inactive is not required. */
+    private static boolean hasValue(String field, String description, UUID assignee, Map<String, String> custom, ProjectConfiguration configuration) {
+        return switch (field) {
+            case "description" -> description != null;
+            case "assignee" -> assignee != null;
+            default -> {
+                String key = field.substring(ProjectConfiguration.CUSTOM_PREFIX.length());
+                yield configuration.customField(key).map(f -> !f.active() || custom.containsKey(key)).orElse(true);
+            }
+        };
+    }
+
     // ------------------------------------------------------------------------------------------------ access
 
     private Supplier<ResourceContext> resource(AccessContext actor, UUID projectId) {
         return projects.resource(actor.companyId(), projectId, actor.userId(), RESOURCE, false);
     }
 
-    /** The read decision with the readable fields; without {@code ticket.read} the project does not exist for the caller. */
-    private Decision readable(AccessContext actor, Supplier<ResourceContext> resource) {
-        return readable(actor, resource, FIELDS);
+    /**
+     * The decision for the five fixed fields and, once the project is locked, for the custom fields of its configuration.
+     * The custom fields are asked separately because their identifiers are known only from the configuration, which may be
+     * read only after the first check has locked the project.
+     */
+    private Decision inspect(AccessContext actor, Supplier<ResourceContext> resource, String action, UUID projectId,
+            Set<String> fixed) {
+        Decision standard = permissions.inspect(actor, resource, action, fixed);
+        if (!standard.allowed()) {
+            return standard;
+        }
+        List<String> custom = configuration(projectId).customFieldIds();
+        if (custom.isEmpty()) {
+            return standard;
+        }
+        Decision extra = permissions.inspect(actor, resource, action, Set.copyOf(custom));
+        return new Decision(true, union(standard.readableFields(), extra.readableFields()),
+            union(standard.writableFields(), extra.writableFields()));
     }
 
-    private Decision readable(AccessContext actor, Supplier<ResourceContext> resource, Set<String> fields) {
-        Decision read = permissions.inspect(actor, resource, READ, fields);
+    /** The read decision with the readable fields; without {@code ticket.read} the project does not exist for the caller. */
+    private Decision readable(AccessContext actor, Supplier<ResourceContext> resource, UUID projectId) {
+        Decision read = inspect(actor, resource, READ, projectId, FIELDS);
         if (!read.allowed()) {
             throw projectNotFound();
         }
@@ -328,13 +472,13 @@ public class TicketService {
      * The fields the answer of a creation or change shows. Without {@code ticket.read} it shows none, as {@code ticket.create}
      * or {@code ticket.edit} alone may write a ticket they cannot read (review F1 of TASK-027).
      */
-    private Set<String> readableFields(AccessContext actor, Supplier<ResourceContext> resource) {
-        Decision read = permissions.inspect(actor, resource, READ, FIELDS);
+    private Set<String> readableFields(AccessContext actor, Supplier<ResourceContext> resource, UUID projectId) {
+        Decision read = inspect(actor, resource, READ, projectId, FIELDS);
         return read.allowed() ? read.readableFields() : Set.of();
     }
 
-    private Set<String> writable(AccessContext actor, Supplier<ResourceContext> resource) {
-        Decision edit = permissions.inspect(actor, resource, EDIT, FIELDS);
+    private Set<String> writable(AccessContext actor, Supplier<ResourceContext> resource, UUID projectId) {
+        Decision edit = inspect(actor, resource, EDIT, projectId, FIELDS);
         return edit.allowed() ? edit.writableFields() : Set.of();
     }
 
@@ -357,13 +501,19 @@ public class TicketService {
 
     private TicketView view(Ticket ticket, Set<String> readable, Set<String> writable) {
         String key = projects.key(ticket.projectId()).orElseThrow(TicketService::projectNotFound);
-        return new TicketView(ticket, key, readable, writable);
+        return new TicketView(ticket, key, readable, writable, configuration(ticket.projectId()));
     }
 
     private static Set<String> with(Set<String> fields, String field) {
         Set<String> all = new HashSet<>(fields);
         all.add(field);
         return Set.copyOf(all);
+    }
+
+    private static Set<String> union(Set<String> first, Set<String> second) {
+        Set<String> all = new HashSet<>(first);
+        all.addAll(second);
+        return all;
     }
 
     private static ApiProblemException projectNotFound() {

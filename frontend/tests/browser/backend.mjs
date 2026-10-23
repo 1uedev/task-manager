@@ -35,6 +35,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const state = {
     accounts,
     projects: [project],
+    // The published configuration per project, and the draft being edited (TASK-044).
+    configurations: new Map([[project.id, { version: 1, configuration: structuredClone(CONFIGURATION) }]]),
+    drafts: new Map(),
     members: new Map([[project.id, [anna, ben, nora].map((account) => ({ accountId: account.id, addedAt: now() }))]]),
     tickets: [],
     history: [],
@@ -55,7 +58,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const addTicket = (title, description, by) => {
     const number = state.tickets.filter((item) => item.projectId === project.id).length + 1;
     const ticket = { id: uuid(), projectId: project.id, key: `${project.key}-${number}`, number, version: 1, configurationVersion: 1,
-      values: { title, description, type: 'task', status: 'new', assignee: null }, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id };
+      values: { title, description, type: 'task', status: 'new', assignee: null }, custom: {}, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id };
     state.tickets.push(ticket);
     state.history.push({ ticket: ticket.id, version: 1, occurredAt: ticket.createdAt, actor: by.id,
       changes: FIELDS.filter((field) => ticket.values[field] !== null).map((field) => ({ field, from: null, to: ticket.values[field] })) });
@@ -82,13 +85,22 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const writable = (account, projectId) => may(account, 'ticket.edit', projectId) ? FIELDS.filter((name) => field(account, projectId, name, 'read') && field(account, projectId, name, 'write')) : [];
   const projectVisible = (account, item) => may(account, 'projects.manage') || (isMember(account, item.id) && PROJECT_ACTIONS.some((action) => may(account, action, item.id)));
 
+  const configurationOf = (projectId) => state.configurations.get(projectId).configuration;
+  const customFieldsOf = (projectId) => configurationOf(projectId).customFields ?? [];
+  // Custom fields follow the title rule here; the real rules per field are tested against the real backend.
+  const customReadable = (account, projectId) => readable(account, projectId).includes('title');
+  const customWritable = (account, projectId) => writable(account, projectId).includes('title');
   const ticketView = (account, ticket) => {
     const shown = readable(account, ticket.projectId);
-    return { id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, version: ticket.version, configurationVersion: 1,
-      fields: Object.fromEntries(shown.map((name) => [name, ticket.values[name]])), writableFields: writable(account, ticket.projectId),
+    const custom = customFieldsOf(ticket.projectId);
+    return { id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, version: ticket.version, configurationVersion: state.configurations.get(ticket.projectId).version,
+      fields: Object.fromEntries(shown.map((name) => [name, ticket.values[name]])),
+      customFields: customReadable(account, ticket.projectId) ? Object.fromEntries(custom.filter((entry) => ticket.custom[entry.key] !== undefined).map((entry) => [entry.key, ticket.custom[entry.key]])) : {},
+      writableFields: [...writable(account, ticket.projectId), ...(customWritable(account, ticket.projectId) ? custom.filter((entry) => entry.active !== false).map((entry) => `custom.${entry.key}`) : [])],
       createdAt: ticket.createdAt, createdBy: ticket.createdBy, updatedAt: ticket.updatedAt, updatedBy: ticket.updatedBy };
   };
-  const projectView = (account, item) => ({ ...item, configuration: CONFIGURATION, manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
+  const projectView = (account, item) => ({ ...item, configurationVersion: state.configurations.get(item.id).version, configuration: configurationOf(item.id),
+    manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
   const accountView = ({ password: _password, ...rest }) => rest;
 
@@ -168,6 +180,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (state.projects.some((item) => item.key === body.key.toUpperCase())) return problem(409, 'project.key_taken');
       const created = { id: uuid(), key: body.key.toUpperCase(), name: body.name, description: body.description, version: 1, configurationVersion: 1, createdAt: now(), updatedAt: now() };
       state.projects.push(created);
+      state.configurations.set(created.id, { version: 1, configuration: structuredClone(CONFIGURATION) });
       state.members.set(created.id, [{ accountId: account.id, addedAt: now() }]);
       return ok(projectView(account, created), '"1"');
     }
@@ -182,7 +195,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
       const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
         .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
-        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, tags: [] }));
+        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields, tags: [] }));
       return ok({ total: items.length, items });
     }
     if (p === '/search/projects') {
@@ -198,6 +211,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   function projectRoute(account, item, method, rest, query, headers, body) {
     if (rest === '' && method === 'GET') return ok(projectView(account, item), `"${item.version}"`);
     if (rest === '/members' && method === 'GET') return ok(state.members.get(item.id), `"${item.version}"`);
+    if (rest.startsWith('/configuration/')) return configurationRoute(account, item, method, rest, headers, body);
     if (rest === '/catalog/tags' && method === 'GET') return ok(state.tags.filter((tag) => tag.projectId === item.id));
     if (rest === '/catalog/tags' && method === 'POST') {
       if (!may(account, 'tag.create', item.id) && !may(account, 'tags.manage', item.id)) return problem(403, 'auth.forbidden');
@@ -212,7 +226,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (rest === '/tickets' && method === 'POST') {
       if (!may(account, 'ticket.create', item.id)) return problem(403, 'auth.forbidden');
       if (typeof body.title !== 'string' || body.title.trim() === '') return problem(400, 'request.invalid', { violations: ['title.invalid'] });
+      const missing = customFieldsOf(item.id).filter((entry) => entry.required && entry.active !== false && body.customFields?.[entry.key] === undefined)
+        .map((entry) => `custom.${entry.key}.required`);
+      if (missing.length > 0) return problem(400, 'request.invalid', { violations: missing });
       const ticket = addTicket(body.title, body.description ?? null, account);
+      ticket.custom = { ...(body.customFields ?? {}) };
+      for (const [key, value] of Object.entries(ticket.custom)) {
+        state.history.find((entry) => entry.ticket === ticket.id).changes.push({ field: `custom.${key}`, from: null, to: String(value) });
+      }
       return ok(ticketView(account, ticket), '"1"');
     }
     const match = rest.match(/^\/tickets\/(\d+)(\/.*)?$/);
@@ -225,11 +246,37 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!headers['if-match']) return problem(428, 'ticket.precondition_required');
       if (headers['if-match'] !== `"${ticket.version}"`) return problem(412, 'ticket.version_conflict');
       const allowed = writable(account, item.id);
-      const names = Object.keys(body);
+      const { customFields: customChanges = {}, ...standard } = body;
+      const names = Object.keys(standard);
       if (names.some((name) => !allowed.includes(name))) return problem(403, 'auth.forbidden');
-      const changes = names.filter((name) => body[name] !== ticket.values[name]).map((name) => ({ field: name, from: ticket.values[name], to: body[name] }));
+      const known = customFieldsOf(item.id);
+      if (Object.keys(customChanges).some((key) => !customWritable(account, item.id) || !known.some((entry) => entry.key === key && entry.active !== false))) return problem(403, 'auth.forbidden');
+      const merged = { ...ticket.custom };
+      for (const [key, value] of Object.entries(customChanges)) {
+        if (value === null) delete merged[key];
+        else merged[key] = value;
+      }
+      if (standard.status !== undefined && standard.status !== ticket.values.status) {
+        const configuration = configurationOf(item.id);
+        const own = (configuration.workflows ?? []).find((workflow) => workflow.type === (standard.type ?? ticket.values.type));
+        const step = (own?.transitions ?? configuration.transitions).find((entry) => entry.from === ticket.values.status && entry.to === standard.status);
+        if (!step) return problem(409, 'ticket.transition_not_allowed');
+        const after = { ...ticket.values, ...standard };
+        const missing = (step.requiredFields ?? []).filter((id) => (id.startsWith('custom.') ? merged[id.slice(7)] === undefined : after[id] === null || after[id] === undefined || after[id] === ''))
+          .map((id) => `${id}.required_for_transition`);
+        if (missing.length > 0) return problem(400, 'request.invalid', { violations: missing });
+      }
+      const changes = [
+        ...names.filter((name) => standard[name] !== ticket.values[name]).map((name) => ({ field: name, from: ticket.values[name], to: standard[name] })),
+        ...Object.keys(customChanges).filter((key) => (merged[key] ?? null) !== (ticket.custom[key] ?? null))
+          .map((key) => ({ field: `custom.${key}`, from: ticket.custom[key] === undefined ? null : String(ticket.custom[key]), to: merged[key] === undefined ? null : String(merged[key]) })),
+      ];
       if (changes.length > 0) {
-        for (const change of changes) ticket.values[change.field] = change.to;
+        for (const change of changes) {
+          if (change.field.startsWith('custom.')) continue;
+          ticket.values[change.field] = change.to;
+        }
+        ticket.custom = merged;
         ticket.version += 1;
         ticket.updatedAt = now();
         ticket.updatedBy = account.id;
@@ -238,7 +285,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
@@ -262,6 +309,84 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return problem(404, 'resource.not_found');
   }
 
+  // The draft of a configuration and its publication (TASK-044), following contracts/projects.openapi.yaml.
+  function configurationRoute(account, item, method, rest, headers, body) {
+    if (!projectView(account, item).manageable) return problem(403, 'auth.forbidden');
+    const published = state.configurations.get(item.id);
+    const draft = state.drafts.get(item.id);
+    const draftBody = () => ({ baseVersion: draft.baseVersion, revision: draft.revision, configuration: draft.configuration, updatedAt: now(), updatedBy: account.id });
+    const usage = () => {
+      const counts = new Map();
+      for (const ticket of state.tickets.filter((entry) => entry.projectId === item.id)) {
+        const key = `${ticket.values.type}\u0000${ticket.values.status}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      return [...counts].map(([key, count]) => ({ type: key.split('\u0000')[0], status: key.split('\u0000')[1], count }));
+    };
+    if (rest === '/configuration/usage' && method === 'GET') return ok(usage());
+    if (rest === '/configuration/draft') {
+      if (method === 'GET') return draft ? ok(draftBody(), `"${draft.revision}"`) : problem(404, 'project.draft_not_found');
+      if (method === 'PUT') {
+        const match = headers['if-match'];
+        if (draft ? match !== `"${draft.revision}"` : match !== undefined) return problem(412, 'project.draft_conflict');
+        if (body.baseVersion !== published.version) return problem(409, 'project.draft_stale');
+        const saved = { baseVersion: body.baseVersion, revision: (draft?.revision ?? 0) + 1, configuration: body.configuration };
+        state.drafts.set(item.id, saved);
+        return ok({ ...saved, updatedAt: now(), updatedBy: account.id }, `"${saved.revision}"`);
+      }
+      if (method === 'DELETE') {
+        if (!draft) return problem(404, 'project.draft_not_found');
+        if (headers['if-match'] !== `"${draft.revision}"`) return problem(412, 'project.draft_conflict');
+        state.drafts.delete(item.id);
+        return empty();
+      }
+    }
+    if (rest === '/configuration/publish' && method === 'POST') {
+      if (headers['if-match'] !== `"${item.version}"`) return problem(412, 'project.version_conflict');
+      if (!draft || draft.revision !== body.draftRevision) return problem(412, 'project.draft_conflict');
+      const next = draft.configuration;
+      const typeMapping = body.typeMapping ?? {};
+      const statusMapping = body.statusMapping ?? {};
+      const statusKeys = (type) => {
+        const own = (next.workflows ?? []).find((workflow) => workflow.type === type);
+        if (!own) return next.statuses.map((entry) => entry.key);
+        return [...new Set([own.initialStatus, ...own.transitions.flatMap((step) => [step.from, step.to])])];
+      };
+      const open = [];
+      const moves = [];
+      for (const use of usage()) {
+        let type = use.type;
+        if (!next.ticketTypes.some((entry) => entry.key === type)) {
+          if (!typeMapping[type]) { open.push(`type.in_use:${type}`); continue; }
+          type = typeMapping[type];
+        }
+        let status = use.status;
+        if (!statusKeys(type).includes(status)) {
+          if (!statusMapping[status]) { open.push(`status.in_use:${status}`); continue; }
+          status = statusMapping[status];
+        }
+        if (type !== use.type || status !== use.status) moves.push({ from: use, type, status });
+      }
+      if (open.length > 0) return problem(409, 'project.configuration_in_use', { violations: open });
+      for (const move of moves) {
+        for (const ticket of state.tickets.filter((entry) => entry.projectId === item.id && entry.values.type === move.from.type && entry.values.status === move.from.status)) {
+          const changes = [];
+          if (ticket.values.type !== move.type) changes.push({ field: 'type', from: ticket.values.type, to: move.type });
+          if (ticket.values.status !== move.status) changes.push({ field: 'status', from: ticket.values.status, to: move.status });
+          ticket.values.type = move.type;
+          ticket.values.status = move.status;
+          ticket.version += 1;
+          state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes });
+        }
+      }
+      state.configurations.set(item.id, { version: published.version + 1, configuration: next });
+      state.drafts.delete(item.id);
+      item.version += 1;
+      return ok(projectView(account, item), `"${item.version}"`);
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   // A project administration: permissions.manage for this one project, as a member of it (TASK-043).
   const managesProject = (account, projectId) => may(account, 'permissions.manage') || (isMember(account, projectId)
     && groupsOf(account).some((group) => group.actions.some((rule) => rule.action === 'permissions.manage' && rule.projectId === projectId)));
@@ -280,7 +405,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const company = may(account, 'permissions.manage');
       return ok({
         actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
-        fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD].sort().filter((name) => company || field(account, projectId, name, 'write')) }],
+        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) }],
         groups: state.groups.map((group) => ({ id: group.id, name: group.name,
           actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
           fields: group.fields.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })) })),
