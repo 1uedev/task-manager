@@ -131,6 +131,44 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-043 Rechtekern härten
+
+**Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261022-hardening-01. **Abgeschlossen:** 2026-10-23.
+
+**Abnahmekriterien:** Jeder umgesetzte Punkt hat eine Regression, die ohne Korrektur fehlschlägt; ein zwischen Sperre und Commit entzogenes Recht verhindert die Änderung; Projektverwaltungen sehen nur die Gruppen, die sie delegieren dürfen; das Protokoll ist über 100 Einträge hinaus erreichbar. Getrennte KI prüft Rechtegrenzen und Nebenläufigkeit; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-072. Umfang nach Holgers Wahl „Alle fünf“ (PR #146):
+- P2: Das Rechteprotokoll blättert mit `before` über die Rechteversion; jeder Eintrag nennt den ersetzten Zustand (Migration V0016). Die Gruppenverwaltung zeigt das Protokoll seitenweise.
+- P3: Externe Konten verwalten nie Rechte.
+- P4: Ein doppelter Gruppenname, ohne Rücksicht auf Groß- und Kleinschreibung, antwortet mit 409 `permissions.group_name_taken`. Sperrfehler sind als wiederholbar dokumentiert.
+- P5: Die Sperrwartezeit von fünf Sekunden gilt nur für die Rechteprüfung.
+- P6: Wirkungslose Änderungen schreiben weder eine neue Rechteversion noch einen Protokolleintrag.
+- Prüfung beim Commit: `require` vergleicht das Sitzungsende unmittelbar vor dem Commit erneut mit der Uhr.
+- Lesepfad `GET /api/v1/permissions/projects/{projectId}/groups` mit dem Reiter Rechte im Projekt.
+- Restpunkte F1 bis F3 aus TASK-036 und F1 aus TASK-042.
+
+Nachbesserung nach unabhängiger Prüfung (PR #148):
+- F1: Ein animiertes WebP braucht den Animationskopf und eigene Bilddaten je Bild, sonst 415 `appearance.logo_unreadable`.
+- F2: Die Rechteendpunkte mit Projektbezug beantworten ein verborgenes Projekt wie ein fehlendes mit 404 `project.not_found`.
+- F3: Mit Logo bleibt der Markenname für Bildschirmleser erhalten.
+- F4: `previousRecorded` (Migration V0017, Vertrag 0.3.0) unterscheidet „vorher nichts“ von „nicht erfasst“.
+
+**Prüfungen:** CI mit Backend, Frontend, Qualifikation, Repository Prüfungen und Workflow `Image` grün auf PR #146 und #148; die Lebenszyklusprüfung wurde auf V0016 und V0017 nachgeführt. Zuletzt lokal grün: 218 Backendtests gegen PostgreSQL 16, Frontend `npm run verify`, 75 Browsertests und die Lebenszyklusprüfung gegen eine leere Datenbank. Jede neue Regression wurde gegen einen Stand ohne ihre Korrektur ausgeführt und schlägt dort fehl. Ausnahme ist die Backendregression zu F4: Sie setzt die neue Spalte voraus; ihre Browserregression ohne Korrektur ist rot.
+
+**Review:** Unabhängige Prüfung durch Codex (codex-20261022-task043-review-01, Bericht `docs/REVIEW_TASK-043_PR-146.md` in PR #147): F1 (P2), F2 bis F4 (P3). Ohne Befund blieben Rechtegrenzen der Delegation, externe Konten, doppelte Namen, Sperrwartezeit, Prüfung beim Commit, Tagzeitpunkt, wirkungslose Änderungen und Protokollblättern. Eine Nachprüfung der Korrekturen hat Holger ausdrücklich nicht verlangt.
+
+**Abnahme:** Holger, 2026-10-23, im Projektgespräch („keine nachprüfung und ist abgenommen“ nach dem Merge von PR #148); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. P7, also ob eine Projektverwaltung die Projektregeln jeder Gruppe ändern darf, bleibt Holgers Entscheidung.
+2. Die Messung der Zeilensperre bei `inspect` und die unternehmensweite Ungültigkeit aller Kontexte aus P6 stehen aus.
+3. Aufbewahrung und Schutz des Protokolls bleiben bei OPEN-014.
+4. WebP wird nur auf seinen Aufbau geprüft, nicht vollständig dekodiert.
+5. Es gab keinen manuellen Test mit einem Bildschirmleser.
+6. Einträge zwischen V0016 und V0017 ohne erfassten Vorzustand gelten vorsichtig als nicht erfasst.
+
+**Referenz:** Reservierung #145 (d04926b), Ergebnis #146 (a210423), Prüfbericht #147, Nachbesserung #148 (bc15ea8); verknüpft mit TASK-025, TASK-030, TASK-036, TASK-042 und DEC-072.
+
 ## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
 
 **Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001, REQ-ACL-001, REQ-ACL-003. **Verantwortlich:** claude-20261021-ui-01. **Abgeschlossen:** 2026-10-22.
