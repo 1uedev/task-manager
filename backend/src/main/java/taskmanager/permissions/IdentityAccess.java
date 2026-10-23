@@ -36,4 +36,10 @@ public interface IdentityAccess {
      * A known but deactivated account is not active.
      */
     default boolean userActive(UUID companyId, UUID userId) { return false; }
+
+    /**
+     * True only for an active internal account of the company that signs in with a password of this application and not
+     * through a directory (TASK-047). Same locking rule as {@link #userActive}; absent implementation denies.
+     */
+    default boolean userActiveLocal(UUID companyId, UUID userId) { return false; }
 }

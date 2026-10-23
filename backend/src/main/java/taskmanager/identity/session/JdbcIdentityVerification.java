@@ -84,6 +84,13 @@ class JdbcIdentityVerification implements IdentityVerification {
         return accountId != null && lockAccount(accountId).map(AccountState::active).orElse(false);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean accountIsActiveLocal(UUID accountId) {
+        return accountId != null && jdbc.sql("select active and auth_kind = 'local' from identity_account where id = ? for share")
+            .param(accountId).query(Boolean.class).optional().orElse(false);
+    }
+
     private Optional<AccountState> lockAccount(UUID accountId) {
         return jdbc.sql("select active, password_change_required from identity_account where id = ? for share")
             .param(accountId)

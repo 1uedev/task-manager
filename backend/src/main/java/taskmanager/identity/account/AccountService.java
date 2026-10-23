@@ -214,6 +214,24 @@ public class AccountService {
     }
 
     /**
+     * Turns an account of the directory into a local one (TASK-047, DEC-076): the way a local administration helps while the
+     * directory is down. The account keeps its name, rights and history, loses the link to the directory entry, gets a new one
+     * time password with the forced change, and all its sessions end. {@code authorize} runs after the serialization and before
+     * the account is locked.
+     */
+    @Transactional
+    public Issued convertToLocal(String actor, UUID id, Runnable authorize) {
+        accounts.serializeAdministration();
+        authorize.run();
+        AccountRecord account = lock(id);
+        if (!account.fromDirectory()) {
+            throw ApiProblemException.of(409, "account.already_local");
+        }
+        accounts.convertToLocal(id, clock.instant());
+        return issueNewOneTimePassword(actor, account, "account.converted_to_local");
+    }
+
+    /**
      * Creates the very first account. Allowed only while no account exists at all, so the command cannot be
      * used to add administrators to a running installation. The application entry point hooks company and initial
      * rights into the same transaction through {@link FirstAdministratorHandler}.

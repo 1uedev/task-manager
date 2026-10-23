@@ -417,7 +417,7 @@ describe('administration', () => {
   test('the last administration cannot be removed by deactivating its account', async () => {
     await withApp({ as: ANNA, hash: '#/accounts' }, async (page) => {
       await page.getByRole('button', { name: 'anna deaktivieren' }).click();
-      await page.getByText('Das letzte aktive Konto der Verwaltung kann nicht deaktiviert werden.').waitFor();
+      await page.getByText('Das letzte aktive Konto der Verwaltung und das letzte aktive lokale Konto mit den Rechten für Gruppen und Konten können nicht deaktiviert werden.').waitFor();
     });
   });
 

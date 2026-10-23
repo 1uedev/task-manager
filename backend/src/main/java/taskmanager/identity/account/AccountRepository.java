@@ -95,6 +95,11 @@ public class AccountRepository {
         jdbc.sql("update identity_account set one_time_used_at = ?, updated_at = ? where id = ?").params(Db.ts(now), Db.ts(now), id).update();
     }
 
+    /** Turns a directory account into a local one; the caller sets a new credential right after. */
+    public void convertToLocal(UUID id, Instant now) {
+        jdbc.sql("update identity_account set auth_kind = 'local', external_id = null, updated_at = ? where id = ?").params(Db.ts(now), id).update();
+    }
+
     public void setActive(UUID id, boolean active, Instant now) {
         jdbc.sql("update identity_account set active = ?, updated_at = ? where id = ?").params(active, Db.ts(now), id).update();
     }

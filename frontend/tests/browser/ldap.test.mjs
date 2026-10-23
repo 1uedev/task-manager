@@ -150,3 +150,37 @@ describe('directory accounts', () => {
     }, { as: null });
   });
 });
+
+describe('converting a directory account', () => {
+  const directoryAccount = (backend) => {
+    backend.state.accounts.push({ id: '00000000-0000-4000-8000-0000000000bb', username: 'emil', displayName: 'Emil Verzeichnis', password: 'unbekannt', active: true,
+      passwordChangeRequired: false, createdAt: '2026-10-22T08:00:00Z', authKind: 'ldap' });
+  };
+
+  test('the conversion asks first, then shows the one time password once and the account becomes local', async () => {
+    await withApp(directoryAccount, async (page, backend) => {
+      await page.getByRole('button', { name: 'emil auf lokales Konto umstellen' }).click();
+      assert.match(await page.getByRole('group', { name: 'Umstellung von emil bestätigen' }).innerText(), /meldet sich danach nur noch mit einem neuen Einmalpasswort an/);
+      await page.getByRole('button', { name: 'Abbrechen' }).click();
+      assert.equal(backend.state.accounts.find((item) => item.username === 'emil').authKind, 'ldap', 'cancelling changed nothing');
+
+      await page.getByRole('button', { name: 'emil auf lokales Konto umstellen' }).click();
+      await page.getByRole('button', { name: 'Ja, emil umstellen' }).click();
+      const shown = page.getByTestId('one-time');
+      await shown.waitFor();
+      assert.match(await shown.innerText(), /Einmalpasswort für emil/);
+      assert.equal(backend.state.accounts.find((item) => item.username === 'emil').authKind, 'local');
+      const row = page.locator('tr', { hasText: 'emil' });
+      assert.doesNotMatch(await row.innerText(), /Konto aus dem Verzeichnis/);
+      assert.equal(await page.getByRole('button', { name: 'emil auf lokales Konto umstellen' }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Neues Einmalpasswort für emil' }).count(), 1, 'a local account has the reset again');
+      await page.getByTestId('accounts-audit').getByText('Konto emil auf lokal umgestellt, neues Einmalpasswort ausgegeben').waitFor();
+    });
+  });
+
+  test('a local account has no conversion', async () => {
+    await withApp(null, async (page) => {
+      assert.equal(await page.getByRole('button', { name: /auf lokales Konto umstellen/ }).count(), 0);
+    });
+  });
+});

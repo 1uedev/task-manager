@@ -148,6 +148,15 @@ class AccountController {
             () -> administration.require(AdministrationRight.ACCOUNTS_MANAGE)));
     }
 
+    /** Turns a directory account into a local one and issues its one time password (TASK-047). */
+    @PostMapping("/{id}/convert-to-local")
+    IssuedBody convertToLocal(@PathVariable UUID id, HttpServletRequest request) {
+        var actor = AdministrationRequests.actor(request);
+        administration.early(AdministrationRight.ACCOUNTS_MANAGE);
+        return issued(accounts.convertToLocal(actor.view().username(), id,
+            () -> administration.require(AdministrationRight.ACCOUNTS_MANAGE)));
+    }
+
     @PostMapping("/{id}/password-reset")
     IssuedBody resetPassword(@PathVariable UUID id, HttpServletRequest request) {
         var actor = AdministrationRequests.actor(request);

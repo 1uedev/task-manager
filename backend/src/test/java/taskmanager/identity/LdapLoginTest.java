@@ -107,6 +107,7 @@ class LdapLoginTest {
     @Autowired DirectoryClient client;
 
     private ApiClient admin;
+    private UUID adminId;
 
     // ---------------------------------------------------------------- helpers
 
@@ -127,6 +128,7 @@ class LdapLoginTest {
     /** A logged in administrator of the company. */
     private ApiClient administrator() {
         Issued issued = accounts.create("test", name("admin"), null);
+        adminId = issued.account().id();
         AdministrationFixture.grantAdministration(jdbc, companies, transactions, issued.account().id());
         ApiClient browser = browser();
         assertEquals(200, login(browser, issued.account().username(), issued.oneTimePassword()).status());
@@ -506,6 +508,124 @@ class LdapLoginTest {
             pool.shutdownNow();
         }
         assertEquals(1, jdbc.queryForObject("select count(*) from identity_account where username = ?", Integer.class, uid));
+    }
+
+    // ---------------------------------------------------------------- the local administration (TASK-047)
+
+    /** Removes every other holder of the right to manage rights, so the accounts named are the whole administration. */
+    private void isolate(UUID... keep) {
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("""
+                delete from permissions_membership m using permissions_action a
+                where a.company_id = m.company_id and a.group_id = m.group_id and a.project_id is null and a.action_key = 'permissions.manage'
+                  and m.user_id <> all (?)
+                """, (Object) keep);
+            jdbc.update("update permissions_revision set revision = revision + 1");
+        });
+    }
+
+    private UUID groupOf(UUID account, String action) {
+        return jdbc.queryForObject("""
+            select a.group_id from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id
+            where m.user_id = ? and a.project_id is null and a.action_key = ?
+            """, UUID.class, account, action);
+    }
+
+    private Response rightChange(ApiClient by, UUID group, String action, boolean enabled) {
+        Map<String, Object> body = new HashMap<>(Map.of("action", action, "enabled", enabled));
+        body.put("projectId", null);
+        return by.put("/api/v1/permissions/groups/" + group + "/actions", body);
+    }
+
+    @Test
+    void aDirectoryAdministrationCannotLockOutTheLastLocalOne() throws Exception {
+        String uid = person("dirk", "dirk-pass-123", "Dirk Verzeichnis");
+        ApiClient dirk = browser();
+        assertEquals(200, login(dirk, uid, "dirk-pass-123").status());
+        UUID dirkId = UUID.fromString(accountOf(uid).id());
+        AdministrationFixture.grantAdministration(jdbc, companies, transactions, dirkId);
+        isolate(adminId, dirkId);
+
+        // The directory administration holds both rights too, but only the local account counts as the way out.
+        Response deactivation = dirk.post("/api/v1/accounts/" + adminId + "/deactivate", Map.of());
+        assertEquals(409, deactivation.status(), deactivation.body());
+        assertEquals("account.last_administrator", deactivation.code());
+        UUID group = groupOf(adminId, "permissions.manage");
+        Response removal = dirk.delete("/api/v1/permissions/groups/" + group + "/members/" + adminId);
+        assertEquals(409, removal.status(), removal.body());
+        assertEquals("permissions.last_local_administrator", removal.code());
+        for (String right : List.of("accounts.manage", "permissions.manage")) {
+            Response withdrawal = rightChange(dirk, groupOf(adminId, right), right, false);
+            assertEquals(409, withdrawal.status(), right + " " + withdrawal.body());
+        }
+        // The local account still administers, and a change that does not touch its two rights is fine.
+        assertTrue(admin.get("/api/v1/accounts").status() == 200);
+        assertEquals(200, rightChange(dirk, groupOf(adminId, "permissions.manage"), "appearance.manage", false).status());
+        // The directory administration itself may be deactivated: the local one remains.
+        assertEquals(200, admin.post("/api/v1/accounts/" + dirkId + "/deactivate", Map.of()).status());
+    }
+
+    @Test
+    void theLocalAdministrationConvertsADirectoryAccountWhileTheDirectoryIsDown() throws Exception {
+        String uid = person("emil", "emil-pass-123", "Emil Verzeichnis");
+        ApiClient emil = browser();
+        assertEquals(200, login(emil, uid, "emil-pass-123").status());
+        UUID emilId = UUID.fromString(accountOf(uid).id());
+        AdministrationFixture.grant(jdbc, companies, transactions, emilId, AdministrationRight.PROJECTS_MANAGE);
+
+        assertEquals(200, admin.put("/api/v1/settings/ldap", settings("ldap://localhost:" + freePort(), true)).status());
+        assertEquals(503, login(browser(), uid, "emil-pass-123").status());
+
+        Response converted = admin.post("/api/v1/accounts/" + emilId + "/convert-to-local", Map.of());
+        assertEquals(200, converted.status(), converted.body());
+        String oneTime = converted.json().get("oneTimePassword").asString();
+        assertEquals("local", converted.json().get("account").get("authKind").asString());
+        assertEquals("open", converted.json().get("account").get("oneTimePasswordState").asString());
+        assertFalse(converted.body().contains("emil-pass-123"));
+        // The sessions of the account ended, the link to the entry is gone and the rights stay.
+        assertFalse(emil.get("/api/v1/session").json().get("authenticated").asBoolean());
+        assertEquals(0, jdbc.queryForObject("select count(*) from identity_account where id = ? and external_id is not null", Integer.class, emilId));
+        assertEquals(1, jdbc.queryForObject("select count(*) from permissions_membership where user_id = ?", Integer.class, emilId));
+        assertTrue(admin.get("/api/v1/accounts/audit?limit=50").body().contains("account.converted_to_local"));
+
+        // While the directory is down the person signs in with the new one time password and chooses a password.
+        ApiClient again = browser();
+        Response first = login(again, uid, oneTime);
+        assertEquals(200, first.status(), first.body());
+        assertEquals("password_change_required", first.json().get("level").asString());
+        assertEquals(200, again.post("/api/v1/session/password", Map.of("currentPassword", oneTime, "newPassword", STRONG)).status());
+        assertEquals("local", again.get("/api/v1/session").json().get("authKind").asString());
+
+        // Once the directory is back its password no longer opens the account: a local account of the name decides alone.
+        configure(true);
+        assertEquals(401, login(browser(), uid, "emil-pass-123").status());
+        assertEquals(200, login(browser(), uid, STRONG).status());
+
+        Response twice = admin.post("/api/v1/accounts/" + emilId + "/convert-to-local", Map.of());
+        assertEquals(409, twice.status());
+        assertEquals("account.already_local", twice.code());
+    }
+
+    @Test
+    void aConvertedAccountCountsAsLocalAdministrationAndOnlyTheRightHoldersConvert() throws Exception {
+        String uid = person("fred", "fred-pass-123", "Fred Verzeichnis");
+        ApiClient fred = browser();
+        assertEquals(200, login(fred, uid, "fred-pass-123").status());
+        UUID fredId = UUID.fromString(accountOf(uid).id());
+        AdministrationFixture.grantAdministration(jdbc, companies, transactions, fredId);
+        isolate(adminId, fredId);
+        // A person without the right to manage accounts cannot convert.
+        Issued plain = accounts.create("test", name("plain"), null);
+        ApiClient nobody = browser();
+        assertEquals(200, login(nobody, plain.account().username(), plain.oneTimePassword()).status());
+        assertEquals(200, nobody.post("/api/v1/session/password", Map.of("currentPassword", plain.oneTimePassword(), "newPassword", STRONG)).status());
+        assertEquals(403, nobody.post("/api/v1/accounts/" + fredId + "/convert-to-local", Map.of()).status());
+        assertEquals("ldap", accountOf(uid).authKind());
+
+        // The converted account is a second local administration; now the first may be deactivated.
+        assertEquals(409, fred.post("/api/v1/accounts/" + adminId + "/deactivate", Map.of()).status());
+        assertEquals(200, admin.post("/api/v1/accounts/" + fredId + "/convert-to-local", Map.of()).status());
+        assertEquals(200, admin.post("/api/v1/accounts/" + adminId + "/deactivate", Map.of()).status());
     }
 
     // ---------------------------------------------------------------- secrets

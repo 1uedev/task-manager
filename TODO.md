@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 26 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 27 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -66,6 +64,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-02 | 2026-10-23 |
 | [TASK-045](#task-045-kontoverwaltung-ergänzen-rest-von-paket-a4) | Kontoverwaltung ergänzen (Rest von Paket A4) | claude-20261023-accounts-01 | 2026-10-23 |
 | [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
+| [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -572,7 +571,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-047 Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261023-localadmin-01 · **Aktualisiert:** 2026-10-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-localadmin-01 · **Aktualisiert:** 2026-10-23
 
 **Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-046 (gemergt, Prüfung und Abnahme offen). **Arbeitsstand:** Holger hat am 23. Oktober 2026 auf die offene Frage aus DEC-075 entschieden: Es muss immer ein internes Konto mit Verwaltungsrechten vorhanden sein, das bei einem Ausfall des Verzeichnisses helfen kann, indem es lokale Konten einrichtet oder Verzeichniskonten auf lokal umstellt. Ein Zertifikatswechsel der LDAP Anbindung ohne Neustart muss derzeit nicht sein und kommt ins Backlog. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-076.
 
@@ -582,4 +581,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Das letzte aktive lokale Konto mit den beiden Verwaltungsrechten lässt sich weder deaktivieren noch durch eine Rechteänderung entkleiden, auch nicht durch gleichzeitige Änderungen, solange Verzeichniskonten dieselben Rechte halten; ein Verzeichniskonto lässt sich umstellen und meldet sich danach nur noch mit dem neuen Einmalpasswort an, behält seine Rechte und ist im Protokoll vermerkt; bei ausgefallenem Verzeichnis kann die lokale Verwaltung Konten einrichten und umstellen; bestehende Anmelde-, Sperr- und Rechtefälle bleiben grün. Getrennte KI prüft Sperre und Umstellung; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-076 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft Sperre und Umstellung (DEC-040): dass die Sperre der lokalen Verwaltung in allen Wegen greift, die Mitgliedschaft, Recht oder Konto ändern (Deaktivieren, `setMember`, `setAction`), auch bei gleichzeitigen Änderungen und mit der Sperrreihenfolge Rechte, Identität; dass Verzeichniskonten nie als lokale Verwaltung zählen; dass die Umstellung Sitzungen beendet, die Verbindung zum Eintrag löst, die Rechte behält und kein Geheimnis preisgibt; und ob die relative Sperre (greift nur, wenn es vorher eine lokale Verwaltung gab) richtig gewählt ist. Holger nimmt fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-076, `IdentityVerification.accountIsActiveLocal` und `IdentityAccess.userActiveLocal`, `LastLocalAdministration` (409 `permissions.last_local_administrator`), `POST /accounts/{id}/convert-to-local`, Schaltfläche mit Bestätigung in der Kontenverwaltung, Verträge identity und permissions, Backlog Zertifikatswechsel in ROADMAP.md; keine Migration. Lokal grün: Backendtests gegen PostgreSQL 16, 262 Tests ohne Ausfall (drei neue Fälle in `LdapLoginTest`, ein angepasster Fall in `IdentityPermissionsAdapterTest`), Frontend `npm run verify`, 92 Browsertests (zwei neue in `ldap.test.mjs`). Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnis, gleichzeitige Umstellung und Deaktivierung unter Last.

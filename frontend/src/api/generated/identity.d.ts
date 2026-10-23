@@ -169,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Konto deaktivieren (Recht accounts.manage)
-         * @description Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
+         * @description Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) und das letzte aktive lokale Konto mit den Rechten `permissions.manage` und `accounts.manage` kann nicht deaktiviert werden; beides meldet `account.last_administrator`.
          */
         post: operations["deactivateAccount"];
         delete?: never;
@@ -191,6 +191,33 @@ export interface paths {
         put?: never;
         /** Konto wieder aktivieren (Recht accounts.manage) */
         post: operations["reactivateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/convert-to-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Konto aus dem Verzeichnis auf lokal umstellen (Recht accounts.manage)
+         * @description Stellt ein Konto, das beim Anmelden über das LDAP Verzeichnis entstand, auf ein lokales Konto um. Das ist der Weg, wenn das
+         *     Verzeichnis ausfällt: eine lokale Verwaltung richtet damit die Anmeldung der Person wieder ein. Das Konto behält Namen, Rechte und
+         *     Verlauf, löst sich von der Kennung des Verzeichniseintrags und erhält wie beim Zurücksetzen ein Einmalpasswort mit erzwungenem
+         *     Passwortwechsel; alle Sitzungen des Kontos enden, der Vorgang steht im Protokoll (`account.converted_to_local`). Danach entscheidet
+         *     allein das lokale Passwort, das Passwort des Verzeichnisses gilt nicht mehr. Ein bereits lokales Konto wird nicht umgestellt:
+         *     409 `account.already_local`. Der Weg zurück auf das Verzeichnis ist nicht vorgesehen.
+         */
+        post: operations["convertAccountToLocal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -412,7 +439,7 @@ export interface components {
             /** Format: date-time */
             occurredAt: string;
             actor: string;
-            /** @description Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured */
+            /** @description Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.converted_to_local, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured */
             event: string;
             /** Format: uuid */
             accountId: string | null;
@@ -490,7 +517,7 @@ export interface components {
          *     request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
          *     auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
          *     password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-         *     account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, ldap.not_configured,
+         *     account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, account.already_local, ldap.not_configured,
          *     auth.directory_unavailable (503, das Verzeichnis antwortet nicht). Gründe in `violations` der Konten: username.invalid,
          *     username.required, displayName.too_long, displayName.invalid, paging.invalid.
          */
@@ -807,6 +834,32 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    convertAccountToLocal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Umgestellt, mit dem Einmalpasswort (wird nur hier angezeigt) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedAccount"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     resetAccountPassword: {

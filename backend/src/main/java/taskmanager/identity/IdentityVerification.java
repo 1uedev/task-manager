@@ -31,4 +31,11 @@ public interface IdentityVerification {
 
     /** True if the account exists and is active. The row stays locked until the commit. */
     boolean accountIsActive(UUID accountId);
+
+    /**
+     * True if the account exists, is active and signs in with a password of this application, not through the directory
+     * (TASK-047). The row stays locked until the commit; a conversion of a directory account to a local one takes the row
+     * exclusively and therefore waits for it.
+     */
+    boolean accountIsActiveLocal(UUID accountId);
 }

@@ -26,6 +26,7 @@ import taskmanager.permissions.Decision;
 import taskmanager.permissions.GroupNameTaken;
 import taskmanager.permissions.IdentityAccess;
 import taskmanager.permissions.LastAdministration;
+import taskmanager.permissions.LastLocalAdministration;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionDenied;
 import taskmanager.permissions.Permissions;
@@ -36,6 +37,7 @@ import taskmanager.permissions.ResourceContext;
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class JdbcPermissions implements Permissions, PermissionAdministration, CompanyAdministration {
     private static final String MANAGE = "permissions.manage";
+    private static final String ACCOUNTS_MANAGE = "accounts.manage";
     private static final String AUDIT = "permissions.audit.read";
     private static final String COMPANY_GROUP = "Unternehmensverwaltung";
     private static final String LOCK_TIMEOUT = "5s";
@@ -108,6 +110,7 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             if (userId == null || !adapter().userExists(actor.companyId(), userId)) throw new PermissionDenied();
             return null;
         });
+        boolean hadLocal = !enabled && !localAdministrators(actor.companyId()).isEmpty();
         int rows = enabled
             ? jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?) on conflict do nothing",
                 actor.companyId(), groupId, userId)
@@ -115,7 +118,10 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
                 actor.companyId(), groupId, userId);
         // Already so: no new rights version, no audit entry (P6).
         if (rows == 0) return;
-        if (!enabled) companyManagerRemains(actor);
+        if (!enabled) {
+            companyManagerRemains(actor);
+            localAdministrationRemains(actor, hadLocal);
+        }
         changed(actor, "membership.changed", groupId, userId, null, null, null, null, enabled ? "ALLOW" : "REMOVE", enabled ? null : "ALLOW");
     }
 
@@ -136,12 +142,15 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         boolean held = jdbc.queryForObject("select count(*) from permissions_action where company_id = ? and group_id = ? and project_id is not distinct from ? and action_key = ?",
             Integer.class, actor.companyId(), groupId, resource.projectId(), action) > 0;
         if (held == enabled) return;
+        boolean companyRight = resource.projectId() == null && (MANAGE.equals(action) || ACCOUNTS_MANAGE.equals(action));
+        boolean hadLocal = !enabled && companyRight && !localAdministrators(actor.companyId()).isEmpty();
         if (enabled) jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
             actor.companyId(), groupId, resource.projectId(), action);
         else {
             jdbc.update("delete from permissions_action where company_id = ? and group_id = ? and project_id is not distinct from ? and action_key = ?",
                 actor.companyId(), groupId, resource.projectId(), action);
             if (resource.projectId() == null && MANAGE.equals(action)) companyManagerRemains(actor);
+            if (companyRight) localAdministrationRemains(actor, hadLocal);
         }
         changed(actor, "action.changed", groupId, null, resource.projectId(), action, null, null,
             enabled ? "ALLOW" : "REMOVE", enabled ? null : "ALLOW");
@@ -220,6 +229,9 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             if (jdbc.queryForList("select revision from permissions_revision where company_id = ? for update", Long.class, companyId).size() != 1)
                 return false;
             var holders = companyManagers(companyId);
+            var local = localAdministrators(companyId);
+            // An active local administration must remain too, but only if this account is part of it (TASK-047).
+            if (local.contains(userId) && local.stream().noneMatch(holder -> !holder.equals(userId))) return false;
             if (!holders.contains(userId)) return true;
             return holders.stream().filter(holder -> !holder.equals(userId)).anyMatch(holder -> adapter().userActive(companyId, holder));
         });
@@ -413,8 +425,28 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
     }
 
     private List<UUID> companyManagers(UUID companyId) {
+        return companyHolders(companyId, MANAGE);
+    }
+
+    private List<UUID> companyHolders(UUID companyId, String key) {
         return jdbc.queryForList("select distinct m.user_id from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id where a.company_id = ? and a.project_id is null and a.action_key = ? order by m.user_id",
-            UUID.class, companyId, MANAGE);
+            UUID.class, companyId, key);
+    }
+
+    /**
+     * The active local accounts that hold both company rights {@code permissions.manage} and {@code accounts.manage}
+     * (TASK-047, DEC-076). They do not depend on a directory, so they can set up and convert accounts while it is down. Runs under
+     * the exclusive revision lock; the adapter keeps the accounts it names stable until the commit.
+     */
+    private List<UUID> localAdministrators(UUID companyId) {
+        var accountManagers = companyHolders(companyId, ACCOUNTS_MANAGE);
+        return companyManagers(companyId).stream().filter(accountManagers::contains)
+            .filter(user -> adapter().userActiveLocal(companyId, user)).toList();
+    }
+
+    /** Runs after the change under the exclusive revision lock: an administration that existed before must not be gone now. */
+    private void localAdministrationRemains(AccessContext actor, boolean hadLocal) {
+        if (hadLocal && localAdministrators(actor.companyId()).isEmpty()) throw new LastLocalAdministration();
     }
 
     private void requireGroup(AccessContext actor, UUID groupId) {

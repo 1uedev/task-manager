@@ -29,6 +29,7 @@ import taskmanager.identity.AuthenticationLevel;
 import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.GroupNameTaken;
 import taskmanager.permissions.LastAdministration;
+import taskmanager.permissions.LastLocalAdministration;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionAdministration.Effect;
 import taskmanager.permissions.PermissionAdministration.GroupDetail;
@@ -369,6 +370,8 @@ class PermissionsController {
                 return transaction.execute(status -> work.apply(current));
             } catch (LastAdministration last) {
                 throw ApiProblemException.of(409, "permissions.last_administrator");
+            } catch (LastLocalAdministration last) {
+                throw ApiProblemException.of(409, "permissions.last_local_administrator");
             } catch (GroupNameTaken taken) {
                 throw ApiProblemException.of(409, "permissions.group_name_taken");
             } catch (PermissionDenied denied) {
