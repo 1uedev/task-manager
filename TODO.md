@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 27 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
 
 ### Blockiert – BLOCKIERT
 
@@ -584,3 +586,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft Sperre und Umstellung (DEC-040): dass die Sperre der lokalen Verwaltung in allen Wegen greift, die Mitgliedschaft, Recht oder Konto ändern (Deaktivieren, `setMember`, `setAction`), auch bei gleichzeitigen Änderungen und mit der Sperrreihenfolge Rechte, Identität; dass Verzeichniskonten nie als lokale Verwaltung zählen; dass die Umstellung Sitzungen beendet, die Verbindung zum Eintrag löst, die Rechte behält und kein Geheimnis preisgibt; und ob die relative Sperre (greift nur, wenn es vorher eine lokale Verwaltung gab) richtig gewählt ist. Holger nimmt fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-076, `IdentityVerification.accountIsActiveLocal` und `IdentityAccess.userActiveLocal`, `LastLocalAdministration` (409 `permissions.last_local_administrator`), `POST /accounts/{id}/convert-to-local`, Schaltfläche mit Bestätigung in der Kontenverwaltung, Verträge identity und permissions, Backlog Zertifikatswechsel in ROADMAP.md; keine Migration. Lokal grün: Backendtests gegen PostgreSQL 16, 262 Tests ohne Ausfall (drei neue Fälle in `LdapLoginTest`, ein angepasster Fall in `IdentityPermissionsAdapterTest`), Frontend `npm run verify`, 92 Browsertests (zwei neue in `ldap.test.mjs`). Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnis, gleichzeitige Umstellung und Deaktivierung unter Last.
+
+## TASK-048 Befunde F1 bis F4 der Prüfung von TASK-046 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261024-reviewfix-01 · **Aktualisiert:** 2026-10-24
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 (gemergt, Prüfung durchgeführt, Abnahme offen) und TASK-047 (gemergt). **Arbeitsstand:** Die getrennte Prüfung `codex-20261023-task046-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-046-pr-155/docs/REVIEW_TASK-046_PR-155.md) auf dem Branch review/task-046-pr-155) empfiehlt „nicht annehmbar im geprüften Stand“ wegen der Befunde F1 bis F4. Die Behebung ist eigener Umfang und braucht diese Reservierung; Vorbild ist TASK-041 nach der Prüfung von TASK-040. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-077.
+
+**Umfang:** (F1, hoch) Binäre Kennungsattribute wie `objectGUID` fallen heute durch die Textdekodierung von JNDI auf dieselbe Kennung; verschiedene Personen erreichen dasselbe Konto samt Rechten. Das Kennungsattribut wird immer als binär angefordert; druckbarer Text bleibt unverändert (bestehende Zuordnungen über `entryUUID` gelten weiter), alles andere wird eindeutig als Hex mit Präfix gespeichert, Werte mit Ersatzzeichen werden abgewiesen. Eine Migration löst bereits beschädigte Zuordnungen vom Verzeichnis, deaktiviert diese Konten, beendet ihre Sitzungen und protokolliert das. (F2, mittel) Auch beim Wiederfinden über die Kennung wird abgewiesen (401), wenn der Anmeldename einem anderen Konto gehört. (F3, niedrig) Fehlender, leerer oder null Wert für die Verschlüsselung ergibt 400 mit `ldap.security.invalid` statt 500. (F4, niedrig) Ein abgelehntes StartTLS wird als `directory.tls_failed` gemeldet statt als `directory.search_failed`. Dazu Regressionstests für alle vier Befunde. Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, Änderungen an TASK-047, die weiteren Hinweise des Berichts ohne Befund.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Verzeichnisclient, Zuordnung, Einstellungsprüfung), eine Migration, Tests, Dokumentation und DEC-077; keine Änderung der Verträge außer der Beschreibung der Gründe.
+
+**Abnahmekriterien:** Zwei Personen mit verschiedenen binären Kennungen und verschiedenen Rechten erreichen je ihr eigenes Konto; bestehende Zuordnungen über Textkennungen bleiben gültig; ein bekannter Eintrag mit dem Namen eines anderen Kontos wird abgewiesen, die Umbenennung desselben Eintrags funktioniert weiter; die drei leeren Varianten der Verschlüsselung ergeben 400; StartTLS ohne Unterstützung der Gegenstelle ergibt `directory.tls_failed`; beschädigte Alt-Zuordnungen werden von der Migration abgesichert; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-077 als Ergebnis PR übergeben.
