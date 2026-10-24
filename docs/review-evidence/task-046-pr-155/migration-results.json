@@ -1,0 +1,14 @@
+{
+  "existingKind" : "local",
+  "existingExternalIdAbsent" : true,
+  "existingHashUnchanged" : true,
+  "constraints" : {
+    "invalid-kind" : "23514",
+    "ldap-without-id" : "23514",
+    "local-with-id" : "23514",
+    "empty-id" : "23514",
+    "long-id" : "23514"
+  },
+  "duplicateExternalIdSqlState" : "23505",
+  "secondSettingsRowSqlState" : "23514"
+}
