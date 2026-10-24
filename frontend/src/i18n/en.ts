@@ -529,4 +529,7 @@ export const en: Record<MessageKey, Message> = {
   'accounts.error.alreadyLocal': 'This account is already a local account.',
   'accounts.audit.event.account.converted_to_local': 'Account {account} converted to local, new one time password issued',
   'groups.error.lastLocalAdministrator': 'Not possible: afterwards there would be no active local account left that can manage groups and accounts. Such an account stays the way out when the directory fails.',
+  'accounts.convertSelfWarning': 'This is your own account. Afterwards your session ends, you sign in with a new one time password that is shown only once, and the password of the directory no longer applies. Rights and history stay. There is no way back.',
+  'accounts.selfConverted': 'Your session has ended. Note the one time password before you go to the login.',
+  'accounts.toLogin': 'Go to the login',
 };

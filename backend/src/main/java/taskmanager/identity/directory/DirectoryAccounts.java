@@ -41,6 +41,12 @@ public class DirectoryAccounts {
     @Transactional(propagation = Propagation.MANDATORY)
     public AccountRecord assign(DirectoryUser person, String loginName, Instant now) {
         AccountRecord known = accounts.findByExternalId(person.externalId()).flatMap(a -> accounts.findByIdForUpdate(a.id())).orElse(null);
+        // The row is locked now. A conversion to a local account that committed after the lookup left the account without a
+        // directory entry; the authenticated person must not be let into it, and a one time password issued by the conversion
+        // must not be used up by this login (TASK-049).
+        if (known != null && !(known.fromDirectory() && person.externalId().equals(known.externalId()))) {
+            throw ApiProblemException.of(401, "auth.invalid_credentials");
+        }
         if (known != null) {
             // The entry may have been given the login name of another account since; the name belongs to that account (TASK-048).
             if (accounts.findByUsername(loginName).filter(named -> !named.id().equals(known.id())).isPresent()) {

@@ -184,3 +184,25 @@ describe('converting a directory account', () => {
     });
   });
 });
+
+describe('converting the own account', () => {
+  test('the one time password stays visible, nothing is loaded afterwards and the button leads to the login', async () => {
+    await withApp((backend) => { backend.anna.authKind = 'ldap'; }, async (page, backend) => {
+      await page.getByRole('button', { name: 'anna auf lokales Konto umstellen' }).click();
+      assert.match(await page.getByRole('group', { name: 'Umstellung von anna bestätigen' }).innerText(), /Das ist Ihr eigenes Konto\. Danach endet Ihre Sitzung/);
+      await page.getByRole('button', { name: 'Ja, anna umstellen' }).click();
+      const shown = page.getByTestId('one-time');
+      await shown.waitFor();
+      const password = await shown.locator('code').innerText();
+      assert.notEqual(password, '');
+      await shown.getByText('Ihre Sitzung ist beendet').waitFor();
+      const conversion = backend.state.requests.findIndex((item) => item.path.endsWith('/convert-to-local'));
+      await page.waitForTimeout(500);
+      assert.equal(backend.state.requests.length, conversion + 1, 'no request follows the conversion that would end in the login');
+      assert.equal(await shown.locator('code').innerText(), password);
+      await page.getByRole('button', { name: 'Zur Anmeldung' }).click();
+      await page.getByTestId('login-error').waitFor({ state: 'detached' }).catch(() => {});
+      await page.getByLabel(/^Anmeldename/).waitFor();
+    });
+  });
+});

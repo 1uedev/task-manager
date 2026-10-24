@@ -225,22 +225,33 @@ public class DirectoryClient {
 
     /** The bytes as text if they are valid UTF-8 without control characters, blanks only, replacement characters or the binary prefix; else null. */
     private static String printableText(byte[] bytes) {
+        String text = decodeUtf8(bytes);
+        boolean plain = text != null && !text.isBlank() && !text.startsWith(BINARY_PREFIX) && text.indexOf('\uFFFD') < 0
+            && text.chars().noneMatch(Character::isISOControl);
+        return plain ? text : null;
+    }
+
+    /** Strict UTF-8: null for bytes that are not valid text. */
+    private static String decodeUtf8(byte[] bytes) {
         try {
-            String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
-            boolean plain = !text.isBlank() && !text.startsWith(BINARY_PREFIX) && text.indexOf('\uFFFD') < 0
-                && text.chars().noneMatch(Character::isISOControl);
-            return plain ? text : null;
         } catch (CharacterCodingException notText) {
             return null;
         }
     }
 
     private static String displayName(Attribute attribute) throws NamingException {
-        if (attribute == null || attribute.size() == 0 || attribute.get() instanceof byte[]) {
+        if (attribute == null || attribute.size() == 0) {
             return null;
         }
-        String cleaned = String.valueOf(attribute.get()).chars().filter(c -> !Character.isISOControl(c))
+        // The identifier attribute is read as raw bytes; if the name is the same attribute it arrives as bytes too (TASK-049).
+        Object value = attribute.get();
+        String text = value instanceof byte[] bytes ? decodeUtf8(bytes) : String.valueOf(value);
+        if (text == null) {
+            return null;
+        }
+        String cleaned = text.chars().filter(c -> !Character.isISOControl(c))
             .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString().trim();
         if (cleaned.isEmpty()) {
             return null;

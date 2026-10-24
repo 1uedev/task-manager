@@ -529,6 +529,9 @@ export const de = {
   'accounts.error.alreadyLocal': 'Dieses Konto ist schon ein lokales Konto.',
   'accounts.audit.event.account.converted_to_local': 'Konto {account} auf lokal umgestellt, neues Einmalpasswort ausgegeben',
   'groups.error.lastLocalAdministrator': 'Das geht nicht: Danach gäbe es kein aktives lokales Konto mehr mit den Rechten, Gruppen und Konten zu verwalten. Ein solches Konto bleibt der Weg, wenn das Verzeichnis ausfällt.',
+  'accounts.convertSelfWarning': 'Das ist Ihr eigenes Konto. Danach endet Ihre Sitzung, Sie melden sich mit einem neuen Einmalpasswort an, das nur einmal angezeigt wird, und das Passwort des Verzeichnisses gilt nicht mehr. Rechte und Verlauf bleiben. Der Weg zurück ist nicht vorgesehen.',
+  'accounts.selfConverted': 'Ihre Sitzung ist beendet. Notieren Sie das Einmalpasswort, bevor Sie zur Anmeldung gehen.',
+  'accounts.toLogin': 'Zur Anmeldung',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof de;

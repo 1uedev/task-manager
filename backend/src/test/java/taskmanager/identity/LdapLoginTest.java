@@ -768,6 +768,119 @@ class LdapLoginTest {
         return id;
     }
 
+    // ---------------------------------------------------------------- findings of the follow up reviews (TASK-049)
+
+    private String migration(String file) throws Exception {
+        try (var in = LdapLoginTest.class.getResourceAsStream("/db/migration/" + file)) {
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    @Test
+    void theLinkResetDetachesEveryEarlierDirectoryAccountSoNoOldKeyCanMeetAnotherEntry() throws Exception {
+        // An old key that equals the key of another entry in the new form: the text hex:80 and a trimmed text.
+        UUID prefixed = insertDirectoryAccount("legacy-prefix", "hex:80");
+        UUID trimmed = insertDirectoryAccount("legacy-trim", "trim-id");
+        UUID plain = insertDirectoryAccount("legacy-plain", "5d3a7c92-0a41-4c2e-8a55-6b1f3c9e2d70");
+        AdministrationFixture.grant(jdbc, companies, transactions, prefixed, AdministrationRight.ACCOUNTS_MANAGE);
+        AdministrationFixture.grant(jdbc, companies, transactions, trimmed, AdministrationRight.ACCOUNTS_MANAGE);
+        Issued local = accounts.create("test", name("local-stays"), null);
+        jdbc.update("insert into identity_session (id, account_id, token_hash, csrf_hash, started_at, expires_at, restricted, created_at) values (?, ?, ?, ?, now(), now() + interval '1 hour', false, now())",
+            UUID.randomUUID(), prefixed, java.security.MessageDigest.getInstance("SHA-256").digest(UUID.randomUUID().toString().getBytes()), new byte[32]);
+
+        jdbc.execute(migration("V0023__identity_directory_link_reset.sql"));
+
+        for (UUID id : List.of(prefixed, trimmed, plain)) {
+            assertEquals("local", jdbc.queryForObject("select auth_kind from identity_account where id = ?", String.class, id));
+            assertFalse(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, id));
+            assertEquals(null, jdbc.queryForObject("select external_id from identity_account where id = ?", String.class, id));
+            assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ? and event = 'account.directory_link_reset'", Integer.class, id));
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from identity_session where account_id = ? and revoked_at is null", Integer.class, prefixed));
+        assertTrue(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, local.account().id()), "local accounts are not touched");
+        jdbc.execute(migration("V0023__identity_directory_link_reset.sql"));
+        assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ? and event = 'account.directory_link_reset'", Integer.class, prefixed));
+
+        // The entries that now carry the same key in the new form get accounts of their own and none of the rights of the old ones.
+        Map<String, Object> binary = settings(directoryUrl(), true);
+        binary.put("idAttribute", "objectGUID");
+        assertEquals(200, admin.put("/api/v1/settings/ldap", binary).status());
+        String fresh = binaryPerson("prefix-new", "prefix-new-pass-1", new byte[] { (byte) 0x80 });
+        ApiClient other = browser();
+        Response login = login(other, fresh, "prefix-new-pass-1");
+        assertEquals(200, login.status(), login.body());
+        assertEquals(fresh, login.json().get("username").asString());
+        assertEquals(403, other.get("/api/v1/accounts").status());
+        assertEquals("hex:80", jdbc.queryForObject("select external_id from identity_account where username = ?", String.class, fresh));
+
+        Map<String, Object> text = settings(directoryUrl(), true);
+        text.put("idAttribute", "employeeNumber");
+        assertEquals(200, admin.put("/api/v1/settings/ldap", text).status());
+        String padded = name("trim-new");
+        DIRECTORY.add("dn: uid=" + padded + "," + PEOPLE, "objectClass: top", "objectClass: inetOrgPerson", "uid: " + padded, "cn: Trim", "sn: T",
+            "employeeNumber: trim-id", "userPassword: trim-new-pass-1");
+        ApiClient another = browser();
+        assertEquals(200, login(another, padded, "trim-new-pass-1").status());
+        assertEquals(403, another.get("/api/v1/accounts").status());
+    }
+
+    @Test
+    void theDisplayNameArrivesWhenTheNameAttributeIsTheIdentifierAttributeInAnotherSpelling() throws Exception {
+        Map<String, Object> same = settings(directoryUrl(), true);
+        same.put("idAttribute", "uid");
+        same.put("nameAttribute", "UID");
+        assertEquals(200, admin.put("/api/v1/settings/ldap", same).status());
+        String uid = person("same", "same-pass-1234", "Ignored Name");
+        assertEquals(200, login(browser(), uid, "same-pass-1234").status());
+        assertEquals(uid, accountOf(uid).displayName());
+    }
+
+    @Test
+    void aDirectoryLoginThatIsOverhauledByTheConversionIsRefusedAndKeepsTheOneTimePassword() throws Exception {
+        String uid = person("overtaken", "over-pass-1234", "Overtaken");
+        assertEquals(200, login(browser(), uid, "over-pass-1234").status());
+        UUID id = UUID.fromString(accountOf(uid).id());
+
+        // The account row is held by the conversion, which waits for the login to have read the old entry.
+        java.util.concurrent.CountDownLatch locked = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<AccountService.Issued> conversion = pool.submit(() -> new org.springframework.transaction.support.TransactionTemplate(transactions).execute(status -> {
+                jdbc.queryForList("select id from identity_account where id = ? for update", id);
+                locked.countDown();
+                try {
+                    release.await(20, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+                return accounts.convertToLocal("test", id, () -> { });
+            }));
+            assertTrue(locked.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            Future<Response> overtaken = pool.submit(() -> login(browser(), uid, "over-pass-1234"));
+            // The login has authenticated against the directory and now waits for the account row.
+            long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+            while (jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query like '%identity_account%for update%'", Integer.class) == 0) {
+                assertTrue(System.nanoTime() < until, "the login did not wait for the account row");
+                Thread.sleep(50);
+            }
+            release.countDown();
+            AccountService.Issued issued = conversion.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            Response refused = overtaken.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(401, refused.status(), refused.body());
+            assertEquals("auth.invalid_credentials", refused.code());
+            assertEquals(0, jdbc.queryForObject("select count(*) from identity_session where account_id = ? and revoked_at is null", Integer.class, id));
+            // The one time password is still unused: the person it was issued to can sign in with it.
+            assertEquals(null, jdbc.queryForObject("select one_time_used_at from identity_account where id = ?", java.time.OffsetDateTime.class, id));
+            Response first = login(browser(), uid, issued.oneTimePassword());
+            assertEquals(200, first.status(), first.body());
+            assertEquals("password_change_required", first.json().get("level").asString());
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
     // ---------------------------------------------------------------- secrets
 
     @Test

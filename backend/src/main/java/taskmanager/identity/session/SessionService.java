@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -186,7 +187,8 @@ public class SessionService {
         // Setting row first, shared: a concurrent shortening of the period waits and then also shortens this session.
         int hours = duration.hoursForShare();
         AccountRecord account = accounts.findByIdForUpdate(verified.id()).orElse(null);
-        if (account == null || !account.active() || !account.passwordHash().equals(verified.passwordHash())) {
+        if (account == null || !account.active() || !account.passwordHash().equals(verified.passwordHash())
+                || !Objects.equals(account.authKind(), verified.authKind()) || !Objects.equals(account.externalId(), verified.externalId())) {
             throw ApiProblemException.of(401, "auth.invalid_credentials");
         }
         if (account.passwordChangeRequired()) {

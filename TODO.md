@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 28 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 29 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -68,6 +66,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
 | [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
 | [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
+| [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -606,7 +605,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-049 Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261024-reviewfix-02 · **Aktualisiert:** 2026-10-24
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261024-reviewfix-02 · **Aktualisiert:** 2026-10-24
 
 **Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 und TASK-048 (gemergt, Abnahme offen). **Arbeitsstand:** Auch die getrennte Prüfung von TASK-047 (Sitzung `codex-20261024-task047-review-01`, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-047/docs/REVIEW_TASK-047.md) auf dem Branch review/task-047) empfiehlt „nicht annehmbar im geprüften Stand“ wegen der Befunde F1 (hoch) und F2 (mittel); beide werden mit dieser Reservierung behoben, damit die Zuordnung im Verzeichnis nur einmal geändert wird. Die getrennte Nachprüfung `codex-20261024-task048-047-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-048-nachpruefung/docs/REVIEW_TASK-048_NACHPRUEFUNG.md) auf dem Branch review/task-048-nachpruefung) bestätigt F2 bis F4 als behoben, F1 nur als teilweise behoben und empfiehlt „nicht annehmbar im geprüften Stand“ wegen N1 (hoch) und N2 (niedrig). Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-078.
 
@@ -616,4 +615,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Die beiden Gegenbeispiele aus dem Bericht (Altschlüssel `hex:80` und `trim-id` auf einer befüllten V0022-Datenbank, danach Anmeldung eines anderen Eintrags mit kollidierendem Wert) führen nicht mehr zum Konto der anderen Person und ohne Rechte zu einem eigenen Konto oder zur Abweisung; das Altkonto selbst bleibt über sein Verzeichnis erreichbar oder ist sichtbar gesperrt, je nach der gewählten Lösung; der Anzeigename kommt auch bei gleichem Kennungs und Namensattribut an; eine laufende Verzeichnisanmeldung, die von einer Umstellung überholt wird, ergibt 401 ohne Sitzung und ohne verbrauchtes Einmalpasswort; bei der Selbstumstellung bleibt das Einmalpasswort sichtbar; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-078 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): die Migration V0023 und ihre Wirkung auf Konten mit Altschlüsseln, die Zuordnung nach der Behebung mit beiden Gegenbeispielen des Berichts zu TASK-048, beide Zeitpläne der Umstellung gegen eine laufende Verzeichnisanmeldung, die Selbstumstellung in der Oberfläche und die Betriebshinweise zur relativen Sperre. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-049 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-078, Migration V0023 (löst alle beim Einspielen vorhandenen Verzeichniskonten vom Verzeichnis, deaktiviert sie und beendet ihre Sitzungen), Prüfung von Kontotyp und Kennung nach der Kontosperre in `DirectoryAccounts.assign` und `SessionService.startSession`, Anzeigename aus Rohbytes in `DirectoryClient`, Selbstumstellung in `AccountsPage`. Die neuen Tests scheitern gegen den alten Code mit den berichteten Symptomen (die überholte Verzeichnisanmeldung ergibt 200 mit lokalem Konto und verbrauchtem Einmalpasswort, der Anzeigename ist null, die Seite lädt nach der Selbstumstellung nach und verliert das Passwort). Lokal grün: Backendtests gegen PostgreSQL 16, 275 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 22 Migrationen; Frontend `npm run verify` (75 Tests) und 93 Browsertests. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.
