@@ -79,7 +79,7 @@ public class LdapSettingsService {
         List<String> violations = new ArrayList<>();
         URI uri = uri(blank(input.url()), violations);
         String security = blank(input.security());
-        if (!List.of(LdapSettings.NONE, LdapSettings.STARTTLS, LdapSettings.LDAPS).contains(security)) {
+        if (security == null || !List.of(LdapSettings.NONE, LdapSettings.STARTTLS, LdapSettings.LDAPS).contains(security)) {
             violations.add("ldap.security.invalid");
         } else if (uri != null && LdapSettings.LDAPS.equals(security) != "ldaps".equals(uri.getScheme())) {
             violations.add("ldap.security.mismatch");

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 27 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 28 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -67,6 +65,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-045](#task-045-kontoverwaltung-ergänzen-rest-von-paket-a4) | Kontoverwaltung ergänzen (Rest von Paket A4) | claude-20261023-accounts-01 | 2026-10-23 |
 | [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
 | [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
+| [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -589,7 +588,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-048 Befunde F1 bis F4 der Prüfung von TASK-046 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261024-reviewfix-01 · **Aktualisiert:** 2026-10-24
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261024-reviewfix-01 · **Aktualisiert:** 2026-10-24
 
 **Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 (gemergt, Prüfung durchgeführt, Abnahme offen) und TASK-047 (gemergt). **Arbeitsstand:** Die getrennte Prüfung `codex-20261023-task046-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-046-pr-155/docs/REVIEW_TASK-046_PR-155.md) auf dem Branch review/task-046-pr-155) empfiehlt „nicht annehmbar im geprüften Stand“ wegen der Befunde F1 bis F4. Die Behebung ist eigener Umfang und braucht diese Reservierung; Vorbild ist TASK-041 nach der Prüfung von TASK-040. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-077.
 
@@ -599,4 +598,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Zwei Personen mit verschiedenen binären Kennungen und verschiedenen Rechten erreichen je ihr eigenes Konto; bestehende Zuordnungen über Textkennungen bleiben gültig; ein bekannter Eintrag mit dem Namen eines anderen Kontos wird abgewiesen, die Umbenennung desselben Eintrags funktioniert weiter; die drei leeren Varianten der Verschlüsselung ergeben 400; StartTLS ohne Unterstützung der Gegenstelle ergibt `directory.tls_failed`; beschädigte Alt-Zuordnungen werden von der Migration abgesichert; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-077 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040), besonders F1 mit zwei binären Kennungen und getrennten Rechten sowie die Migration V0022 und ihre Wirkung auf Konten mit Altschlüssel; danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 und TASK-048 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-077, Zuordnungsschlüssel in `DirectoryClient.identifier`, Prüfung des Namens in `DirectoryAccounts.assign`, `LdapSettingsService.validate`, Migration V0022. Die vier neuen Regressionstests in `LdapLoginTest` scheitern gegen den alten Code mit genau den berichteten Symptomen (die zweite Person meldet sich als `bin-a` an, 200 statt 401, 500 statt 400, `search_failed` statt `tls_failed`). Neu außerdem `DirectoryIdentifierTest` und ein Test der Migration auf eingefügten Alt-Konten. Lokal grün: Backendtests gegen PostgreSQL 16, 272 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 21 Migrationen; Frontend `npm run verify` (75 Tests), keine Änderung der Oberfläche. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.

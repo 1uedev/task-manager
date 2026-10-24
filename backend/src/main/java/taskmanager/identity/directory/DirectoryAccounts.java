@@ -42,6 +42,10 @@ public class DirectoryAccounts {
     public AccountRecord assign(DirectoryUser person, String loginName, Instant now) {
         AccountRecord known = accounts.findByExternalId(person.externalId()).flatMap(a -> accounts.findByIdForUpdate(a.id())).orElse(null);
         if (known != null) {
+            // The entry may have been given the login name of another account since; the name belongs to that account (TASK-048).
+            if (accounts.findByUsername(loginName).filter(named -> !named.id().equals(known.id())).isPresent()) {
+                throw ApiProblemException.of(401, "auth.invalid_credentials");
+            }
             if (person.displayName() != null && !Objects.equals(person.displayName(), known.displayName())) {
                 accounts.setDisplayName(known.id(), person.displayName(), now);
                 return accounts.findById(known.id()).orElseThrow();
