@@ -231,6 +231,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         target.password = `Einmal${counter}Lokal`;
         target.passwordChangeRequired = true;
         logAccount(account, 'account.converted_to_local', target);
+        // Like the server: all sessions of the account end, the requester's own included.
+        if (target.id === account.id) session.account = null;
         return ok({ account: accountView(target), oneTimePassword: target.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
       }
       if (action === 'password-reset') {

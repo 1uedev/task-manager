@@ -23,7 +23,8 @@ const NONE: readonly Account[] = [];
 export function AccountsPage() {
   const { t, language } = useI18n();
   const { api } = useBrand();
-  const { reloadDirectory } = useSession();
+  const { reloadDirectory, view, refresh } = useSession();
+  const ownName = view.state === 'ready' ? view.session.username : null;
   const text = useProblemText();
   const [accounts, reload, replace] = useLoad(() => listAccounts(api), [api]);
   const [username, setUsername] = useState('');
@@ -37,6 +38,9 @@ export function AccountsPage() {
   const [editing, setEditing] = useState<{ readonly id: string; readonly value: string } | null>(null);
   // The directory account whose conversion to a local account waits for the confirmation.
   const [converting, setConverting] = useState<string | null>(null);
+  // Set when the person converted their own account: the server ended their session, so nothing may be loaded any more and
+  // the one time password stays on the page until they go to the login.
+  const [sessionEnded, setSessionEnded] = useState(false);
   // Leaving with input asks first; a successful creation empties the form and so releases the guard.
   useUnsavedGuard(username !== '' || displayName !== '' || editing !== null);
 
@@ -70,6 +74,11 @@ export function AccountsPage() {
     setConverting(null);
     const result = await convertAccountToLocal(api, account.id);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, { 'account.already_local': 'accounts.error.alreadyLocal' }) });
+    if (account.username === ownName) {
+      setIssued(result.data.value);
+      setSessionEnded(true);
+      return;
+    }
     replace({ value: list.map((item) => (item.id === account.id ? result.data.value.account : item)), etag: null });
     setIssued(result.data.value);
     reloadDirectory();
@@ -127,6 +136,12 @@ export function AccountsPage() {
           <p>{t('accounts.issued', { name: issued.account.username })}</p>
           <p className="secret"><code>{issued.oneTimePassword}</code></p>
           <p className="hint">{t('accounts.issuedHint', { date: formatDateTime(issued.oneTimePasswordExpiresAt, language) })}</p>
+          {sessionEnded && (
+            <>
+              <p className="hint">{t('accounts.selfConverted')}</p>
+              <p className="actions"><button type="button" onClick={() => void refresh()}>{t('accounts.toLogin')}</button></p>
+            </>
+          )}
         </div>
       )}
       <details className="panel">
@@ -184,7 +199,7 @@ export function AccountsPage() {
                       )}
                       {account.authKind === 'ldap' && converting === account.id && (
                         <span role="group" aria-label={t('accounts.convertAsk', { name: account.username })} className="inline-form">
-                          <span className="hint">{t('accounts.convertWarning', { name: account.username })}</span>
+                          <span className="hint">{t(account.username === ownName ? 'accounts.convertSelfWarning' : 'accounts.convertWarning', { name: account.username })}</span>
                           <button type="button" onClick={() => void convert(account, list)}>{t('accounts.convertConfirm', { name: account.username })}</button>
                           <button type="button" className="secondary" onClick={() => setConverting(null)}>{t('accounts.cancel')}</button>
                         </span>
