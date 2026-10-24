@@ -1,0 +1,81 @@
+[ {
+  "case" : "wire-attribute",
+  "idAttribute" : "objectGUID",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "hex:8081"
+  }
+}, {
+  "case" : "wire-attribute",
+  "idAttribute" : "OBJECTGUID",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "hex:8081"
+  }
+}, {
+  "case" : "wire-attribute",
+  "idAttribute" : "objectguid",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "hex:8081"
+  }
+}, {
+  "case" : "wire-attribute",
+  "idAttribute" : "oBjEcTgUiD",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "hex:8081"
+  }
+}, {
+  "case" : "wire-attribute",
+  "idAttribute" : "entryUUID",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "e09666ff-8cb8-4958-99b8-0720a366e3ec"
+  }
+}, {
+  "case" : "wire-attribute",
+  "idAttribute" : "uid",
+  "result" : {
+    "display" : "Display Case",
+    "key" : "case-user"
+  }
+}, {
+  "case" : "same-identifier-name",
+  "result" : {
+    "display" : "<null>",
+    "key" : "case-user"
+  }
+}, {
+  "case" : "missing-attribute",
+  "result" : "directory.id_attribute_missing"
+}, {
+  "case" : "multiple-values",
+  "result" : "directory.id_attribute_missing"
+}, {
+  "case" : "attribute-options",
+  "idAttribute" : "objectGUID;binary",
+  "status" : 400,
+  "code" : "request.invalid"
+}, {
+  "case" : "attribute-options",
+  "idAttribute" : "entryUUID;lang-en",
+  "status" : 400,
+  "code" : "request.invalid"
+}, {
+  "case" : "attribute-options",
+  "idAttribute" : "1.2.3",
+  "status" : 400,
+  "code" : "request.invalid"
+}, {
+  "case" : "F4-no-starttls",
+  "reason" : "directory.tls_failed",
+  "credentialBinds" : 0,
+  "searches" : 0
+}, {
+  "case" : "unreachable-before-tls",
+  "reason" : "directory.unreachable"
+}, {
+  "case" : "search-bind-rejected",
+  "reason" : "directory.bind_failed"
+} ]
