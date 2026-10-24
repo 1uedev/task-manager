@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 28 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-049](#task-049-befunde-n1-und-n2-der-nachprüfung-von-task-048-beheben) | Befunde N1 und N2 der Nachprüfung von TASK-048 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
 
 ### Blockiert – BLOCKIERT
 
@@ -601,3 +603,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040), besonders F1 mit zwei binären Kennungen und getrennten Rechten sowie die Migration V0022 und ihre Wirkung auf Konten mit Altschlüssel; danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 und TASK-048 fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-077, Zuordnungsschlüssel in `DirectoryClient.identifier`, Prüfung des Namens in `DirectoryAccounts.assign`, `LdapSettingsService.validate`, Migration V0022. Die vier neuen Regressionstests in `LdapLoginTest` scheitern gegen den alten Code mit genau den berichteten Symptomen (die zweite Person meldet sich als `bin-a` an, 200 statt 401, 500 statt 400, `search_failed` statt `tls_failed`). Neu außerdem `DirectoryIdentifierTest` und ein Test der Migration auf eingefügten Alt-Konten. Lokal grün: Backendtests gegen PostgreSQL 16, 272 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 21 Migrationen; Frontend `npm run verify` (75 Tests), keine Änderung der Oberfläche. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.
+
+## TASK-049 Befunde N1 und N2 der Nachprüfung von TASK-048 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261024-reviewfix-02 · **Aktualisiert:** 2026-10-24
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 und TASK-048 (gemergt, Abnahme offen). **Arbeitsstand:** Die getrennte Nachprüfung `codex-20261024-task048-047-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-048-nachpruefung/docs/REVIEW_TASK-048_NACHPRUEFUNG.md) auf dem Branch review/task-048-nachpruefung) bestätigt F2 bis F4 als behoben, F1 nur als teilweise behoben und empfiehlt „nicht annehmbar im geprüften Stand“ wegen N1 (hoch) und N2 (niedrig). Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-078.
+
+**Umfang:** (N1, hoch) Ein vor der Behebung gespeicherter Schlüssel eines Verzeichnisses (Text nach alter Regel, getrimmt, auch mit dem Anfang `hex:`) kann mit dem neuen Schlüssel eines anderen Eintrags übereinstimmen; dann erreicht dieser Eintrag das Konto samt Rechten der anderen Person. Kein Altschlüssel darf künftig allein über seinen Text einem neuen Eintrag zugeordnet werden. Vorschlag der Sitzung: Die Form des Schlüssels wird versioniert (neue Spalte, Eindeutigkeit je Form); ein Altkonto wird beim ersten Wiederfinden nur dann auf die neue Form umgestellt, wenn der alte Schlüssel des Eintrags passt und der Anmeldename dem Konto gehört; sonst wird es nie zugeordnet. Eine strengere Alternative, alle vor der Behebung angelegten Verzeichniskonten vom Verzeichnis zu lösen wie die Migration V0022 es für beschädigte Schlüssel tut, entscheidet Holger vor dem Merge dieser Reservierung oder mit dem Ergebnis. (N2, niedrig) Sind Kennungs und Namensattribut dasselbe Attribut (nur anders geschrieben), geht der Anzeigename verloren, weil Rohbytes verworfen werden; der Name wird aus den Bytes als Text gelesen oder die Kombination wird ausdrücklich begrenzt. Dazu Regressionstests für beide Gegenbeispiele des Berichts (Altschlüssel `hex:80` und `trim-id` mit späterer Anmeldung beider Einträge) und für N2, eine Migration und DEC-078. Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, die Prüfung von TASK-047.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Verzeichnisclient, Zuordnung), eine Migration, Tests, Dokumentation und DEC-078; keine Änderung der Verträge.
+
+**Abnahmekriterien:** Die beiden Gegenbeispiele aus dem Bericht (Altschlüssel `hex:80` und `trim-id` auf einer befüllten V0022-Datenbank, danach Anmeldung eines anderen Eintrags mit kollidierendem Wert) führen nicht mehr zum Konto der anderen Person und ohne Rechte zu einem eigenen Konto oder zur Abweisung; das Altkonto selbst bleibt über sein Verzeichnis erreichbar oder ist sichtbar gesperrt, je nach der gewählten Lösung; der Anzeigename kommt auch bei gleichem Kennungs und Namensattribut an; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-078 als Ergebnis PR übergeben.
