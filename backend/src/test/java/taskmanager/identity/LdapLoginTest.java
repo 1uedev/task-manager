@@ -628,6 +628,146 @@ class LdapLoginTest {
         assertEquals(200, admin.post("/api/v1/accounts/" + adminId + "/deactivate", Map.of()).status());
     }
 
+    // ---------------------------------------------------------------- findings of the review of TASK-046 (TASK-048)
+
+    private String binaryPerson(String prefix, String password, byte[] guid) throws Exception {
+        String uid = name(prefix);
+        DIRECTORY.add(new com.unboundid.ldap.sdk.Entry("uid=" + uid + "," + PEOPLE,
+            new com.unboundid.ldap.sdk.Attribute("objectClass", "top", "inetOrgPerson"), new com.unboundid.ldap.sdk.Attribute("uid", uid),
+            new com.unboundid.ldap.sdk.Attribute("cn", "Binary " + uid), new com.unboundid.ldap.sdk.Attribute("sn", "B"),
+            new com.unboundid.ldap.sdk.Attribute("userPassword", password), new com.unboundid.ldap.sdk.Attribute("objectGUID", guid)));
+        return uid;
+    }
+
+    private static byte[] guid(int fill) {
+        byte[] bytes = new byte[16];
+        java.util.Arrays.fill(bytes, (byte) fill);
+        bytes[6] = 0x40;
+        return bytes;
+    }
+
+    @Test
+    void personsWithDifferentBinaryIdentifiersReachTheirOwnAccounts() throws Exception {
+        Map<String, Object> binary = settings(directoryUrl(), true);
+        binary.put("idAttribute", "objectGUID");
+        assertEquals(200, admin.put("/api/v1/settings/ldap", binary).status());
+        String first = binaryPerson("bin-a", "bin-a-pass-1", guid(0x80));
+        String second = binaryPerson("bin-b", "bin-b-pass-1", guid(0x81));
+
+        assertEquals(200, login(browser(), first, "bin-a-pass-1").status());
+        UUID firstId = UUID.fromString(accountOf(first).id());
+        AdministrationFixture.grant(jdbc, companies, transactions, firstId, AdministrationRight.ACCOUNTS_MANAGE);
+
+        // The second person gets an account of their own, without the rights of the first.
+        ApiClient other = browser();
+        Response login = login(other, second, "bin-b-pass-1");
+        assertEquals(200, login.status(), login.body());
+        assertEquals(second, login.json().get("username").asString());
+        assertEquals(403, other.get("/api/v1/accounts").status());
+        assertEquals(2, jdbc.queryForObject("select count(distinct external_id) from identity_account where username in (?, ?)", Integer.class, first, second));
+        assertEquals("hex:80808080808040808080808080808080",
+            jdbc.queryForObject("select external_id from identity_account where username = ?", String.class, first));
+        // Each person still reaches their own account again, and not with the other one's password.
+        assertEquals(200, login(browser(), first, "bin-a-pass-1").status());
+        assertEquals(401, login(browser(), second, "bin-a-pass-1").status());
+    }
+
+    @Test
+    void aPlainTextIdentifierKeepsItsForm() throws Exception {
+        Map<String, Object> text = settings(directoryUrl(), true);
+        text.put("idAttribute", "employeeNumber");
+        assertEquals(200, admin.put("/api/v1/settings/ldap", text).status());
+        String uid = name("emp");
+        DIRECTORY.add("dn: uid=" + uid + "," + PEOPLE, "objectClass: top", "objectClass: inetOrgPerson", "uid: " + uid, "cn: Emp", "sn: E",
+            "employeeNumber: E-" + uid, "userPassword: emp-pass-123");
+        assertEquals(200, login(browser(), uid, "emp-pass-123").status());
+        assertEquals("E-" + uid, jdbc.queryForObject("select external_id from identity_account where username = ?", String.class, uid));
+    }
+
+    @Test
+    void aKnownEntryThatTookTheNameOfAnotherAccountIsRefused() throws Exception {
+        String a = person("coll-a", "coll-a-pass-1", "Coll A");
+        String b = person("coll-b", "coll-b-pass-1", "Coll B");
+        assertEquals(200, login(browser(), a, "coll-a-pass-1").status());
+        assertEquals(200, login(browser(), b, "coll-b-pass-1").status());
+        String idOfA = accountOf(a).id();
+        DIRECTORY.delete("uid=" + b + "," + PEOPLE);
+        try (com.unboundid.ldap.sdk.LDAPConnection connection = DIRECTORY.getConnection()) {
+            connection.modifyDN("uid=" + a + "," + PEOPLE, "uid=" + b, true);
+        }
+        // The entry of A now carries the login name of the account of B: it must not sign in under that name.
+        Response refused = login(browser(), b, "coll-a-pass-1");
+        assertEquals(401, refused.status(), refused.body());
+        assertEquals("auth.invalid_credentials", refused.code());
+        assertEquals(idOfA, accountOf(a).id());
+    }
+
+    @Test
+    void anIncompleteEncryptionSettingIsRefusedWithoutAnInternalError() {
+        for (String variant : List.of("missing", "null", "blank")) {
+            Map<String, Object> body = settings(directoryUrl(), true);
+            switch (variant) {
+                case "missing" -> body.remove("security");
+                case "null" -> body.put("security", null);
+                default -> body.put("security", " ");
+            }
+            Response saved = admin.put("/api/v1/settings/ldap", body);
+            assertEquals(400, saved.status(), variant + " " + saved.body());
+            assertTrue(saved.body().contains("ldap.security.invalid"), variant + " " + saved.body());
+            Response tested = admin.post("/api/v1/settings/ldap/test", Map.of("settings", body));
+            assertEquals(400, tested.status(), variant + " " + tested.body());
+        }
+    }
+
+    @Test
+    void aServerThatDoesNotTakeStartTlsIsAFailureOfTheEncryption() {
+        Map<String, Object> starttls = settings(directoryUrl(), true);
+        starttls.put("security", "starttls");
+        Response tested = admin.post("/api/v1/settings/ldap/test", Map.of("settings", starttls));
+        assertEquals(200, tested.status(), tested.body());
+        assertFalse(tested.json().get("ok").asBoolean());
+        assertEquals("directory.tls_failed", tested.json().get("reason").asString());
+        // A person cannot sign in through it either, and nothing falls back to a plain connection.
+        assertEquals(200, admin.put("/api/v1/settings/ldap", starttls).status());
+        assertEquals(503, login(browser(), "nobody-here", "whatever-pass-1").status());
+    }
+
+    @Test
+    void theRepairMigrationDetachesUnreliableIdentifiersAndLeavesTheOthers() throws Exception {
+        String sound = "repair-sound";
+        UUID soundId = insertDirectoryAccount(sound, "0b7a6a1e-6f2c-4e0b-9c53-2f9a6a1d3c11");
+        UUID lost = insertDirectoryAccount("repair-lost", "\uFFFD\uFFFD\uFFFD@\uFFFD\uFFFD");
+        UUID control = insertDirectoryAccount("repair-control", "ab\u0001cd");
+        jdbc.update("insert into identity_session (id, account_id, token_hash, csrf_hash, started_at, expires_at, restricted, created_at) values (?, ?, ?, ?, now(), now() + interval '1 hour', false, now())",
+            UUID.randomUUID(), lost, new byte[32], new byte[32]);
+
+        String sql;
+        try (var in = LdapLoginTest.class.getResourceAsStream("/db/migration/V0022__identity_directory_identifier_repair.sql")) {
+            sql = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        jdbc.execute(sql);
+
+        assertEquals("ldap", jdbc.queryForObject("select auth_kind from identity_account where id = ?", String.class, soundId));
+        assertTrue(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, soundId));
+        for (UUID id : List.of(lost, control)) {
+            assertEquals("local", jdbc.queryForObject("select auth_kind from identity_account where id = ?", String.class, id));
+            assertFalse(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, id));
+            assertEquals(null, jdbc.queryForObject("select external_id from identity_account where id = ?", String.class, id));
+            assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ? and event = 'account.directory_identifier_unreliable'", Integer.class, id));
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from identity_session where account_id = ? and revoked_at is null", Integer.class, lost));
+        // Running it again changes nothing.
+        jdbc.execute(sql);
+        assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ? and event = 'account.directory_identifier_unreliable'", Integer.class, lost));
+    }
+
+    private UUID insertDirectoryAccount(String username, String externalId) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("insert into identity_account (id, username, password_hash, password_change_required, active, created_at, updated_at, auth_kind, external_id) values (?, ?, 'x', false, true, now(), now(), 'ldap', ?)",
+            id, username, externalId);
+        return id;
+    }
+
     // ---------------------------------------------------------------- secrets
 
     @Test

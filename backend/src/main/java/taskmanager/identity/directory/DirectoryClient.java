@@ -3,6 +3,10 @@ package taskmanager.identity.directory;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.net.SocketTimeoutException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -190,14 +194,46 @@ public class DirectoryClient {
         }
     }
 
-    /** The identifier as text: a string trimmed, binary values (such as a GUID) as lower case hexadecimal. Null when absent, ambiguous or too long. */
-    private static String identifier(Attribute attribute) throws NamingException {
+    /** Marks an identifier that is stored as the hexadecimal form of its bytes; a text identifier never starts with it. */
+    static final String BINARY_PREFIX = "hex:";
+
+    /**
+     * The identifier of the entry as the key an account is assigned by (TASK-048). The attribute is requested as raw bytes
+     * (see {@link #open}), because JNDI would otherwise decode a binary value such as an {@code objectGUID} as text and turn
+     * different values into the same replacement characters. Bytes that are printable UTF-8 text stay that text, so the
+     * identifiers stored for text attributes such as {@code entryUUID} keep their form; every other value is stored as
+     * {@code hex:} and its bytes in lower case hexadecimal. Both forms are injective, and the two never overlap. Null when the
+     * attribute is absent, has several values, is empty or too long.
+     */
+    static String identifier(Attribute attribute) throws NamingException {
         if (attribute == null || attribute.size() != 1) {
             return null;
         }
         Object value = attribute.get();
-        String text = value instanceof byte[] bytes ? HexFormat.of().formatHex(bytes) : String.valueOf(value).trim();
-        return text.isEmpty() || text.length() > 512 ? null : text;
+        // A text value with replacement characters has already lost the bytes it came from; it must not name anyone.
+        if (value instanceof String lossy && lossy.indexOf('\uFFFD') >= 0) {
+            return null;
+        }
+        byte[] bytes = value instanceof byte[] raw ? raw : String.valueOf(value).getBytes(StandardCharsets.UTF_8);
+        if (bytes.length == 0) {
+            return null;
+        }
+        String text = printableText(bytes);
+        String key = text != null ? text : BINARY_PREFIX + HexFormat.of().formatHex(bytes);
+        return key.length() > 512 ? null : key;
+    }
+
+    /** The bytes as text if they are valid UTF-8 without control characters, blanks only, replacement characters or the binary prefix; else null. */
+    private static String printableText(byte[] bytes) {
+        try {
+            String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+            boolean plain = !text.isBlank() && !text.startsWith(BINARY_PREFIX) && text.indexOf('\uFFFD') < 0
+                && text.chars().noneMatch(Character::isISOControl);
+            return plain ? text : null;
+        } catch (CharacterCodingException notText) {
+            return null;
+        }
     }
 
     private static String displayName(Attribute attribute) throws NamingException {
@@ -232,6 +268,8 @@ public class DirectoryClient {
         env.put(Context.PROVIDER_URL, settings.url());
         env.put(Context.REFERRAL, "ignore");
         env.put("java.naming.ldap.derefAliases", "never");
+        // The identifier is read as raw bytes whatever its syntax, so that no binary value is decoded as text (TASK-048).
+        env.put("java.naming.ldap.attributes.binary", settings.idAttribute());
         env.put("com.sun.jndi.ldap.connect.timeout", Integer.toString(timeoutMillis()));
         env.put("com.sun.jndi.ldap.read.timeout", Integer.toString(timeoutMillis()));
         boolean credentials = dn != null && !password.isEmpty();
@@ -246,7 +284,13 @@ public class DirectoryClient {
         StartTlsResponse layer = null;
         try {
             if (upgrade) {
-                layer = (StartTlsResponse) context.extendedOperation(new StartTlsRequest());
+                try {
+                    layer = (StartTlsResponse) context.extendedOperation(new StartTlsRequest());
+                } catch (NamingException refused) {
+                    // A server that does not take the encryption on is a failure of the encryption and not of a search (TASK-048).
+                    DirectoryUnavailableException reason = unavailable(refused);
+                    throw "directory.search_failed".equals(reason.reason()) ? new DirectoryUnavailableException("directory.tls_failed", refused) : reason;
+                }
                 layer.negotiate(DirectorySocketFactory.verifying(tls));
                 if (credentials) {
                     context.addToEnvironment(Context.SECURITY_AUTHENTICATION, "simple");
