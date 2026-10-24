@@ -225,6 +225,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         target.delayedUntil = null;
         logAccount(account, 'account.login_delay_cleared', target);
       }
+      if (action === 'convert-to-local') {
+        if (target.authKind !== 'ldap') return problem(409, 'account.already_local');
+        target.authKind = 'local';
+        target.password = `Einmal${counter}Lokal`;
+        target.passwordChangeRequired = true;
+        logAccount(account, 'account.converted_to_local', target);
+        return ok({ account: accountView(target), oneTimePassword: target.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
+      }
       if (action === 'password-reset') {
         if (target.authKind === 'ldap') return problem(409, 'account.directory_managed');
         target.password = `Einmal${counter}Neu`;

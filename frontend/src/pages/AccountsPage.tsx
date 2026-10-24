@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  ACCOUNT_AUDIT_PAGE, clearLoginDelay, createAccount, deactivateAccount, listAccounts, reactivateAccount, readAccountAudit, renameAccount, resetPassword,
+  ACCOUNT_AUDIT_PAGE, clearLoginDelay, convertAccountToLocal, createAccount, deactivateAccount, listAccounts, reactivateAccount, readAccountAudit, renameAccount, resetPassword,
   type Account, type AccountAuditEntry, type IssuedAccount,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -35,6 +35,8 @@ export function AccountsPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
   // The account whose display name is being changed, with the text typed so far.
   const [editing, setEditing] = useState<{ readonly id: string; readonly value: string } | null>(null);
+  // The directory account whose conversion to a local account waits for the confirmation.
+  const [converting, setConverting] = useState<string | null>(null);
   // Leaving with input asks first; a successful creation empties the form and so releases the guard.
   useUnsavedGuard(username !== '' || displayName !== '' || editing !== null);
 
@@ -60,6 +62,18 @@ export function AccountsPage() {
     setEditing(null);
     reloadDirectory();
     setNotice({ kind: 'success', text: t('accounts.renamed', { name: account.username }) });
+  }
+
+  async function convert(account: Account, list: readonly Account[]) {
+    setNotice(null);
+    setIssued(null);
+    setConverting(null);
+    const result = await convertAccountToLocal(api, account.id);
+    if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, { 'account.already_local': 'accounts.error.alreadyLocal' }) });
+    replace({ value: list.map((item) => (item.id === account.id ? result.data.value.account : item)), etag: null });
+    setIssued(result.data.value);
+    reloadDirectory();
+    reload();
   }
 
   async function endDelay(account: Account, list: readonly Account[]) {
@@ -164,6 +178,16 @@ export function AccountsPage() {
                         : <button type="button" className="secondary" onClick={() => void act(account, 'reactivate', list)}>{t('accounts.reactivate', { name: account.username })}</button>}
                       {account.authKind !== 'ldap' && (
                         <button type="button" className="secondary" onClick={() => void act(account, 'reset', list)}>{t('accounts.reset', { name: account.username })}</button>
+                      )}
+                      {account.authKind === 'ldap' && converting !== account.id && (
+                        <button type="button" className="secondary" onClick={() => setConverting(account.id)}>{t('accounts.convert', { name: account.username })}</button>
+                      )}
+                      {account.authKind === 'ldap' && converting === account.id && (
+                        <span role="group" aria-label={t('accounts.convertAsk', { name: account.username })} className="inline-form">
+                          <span className="hint">{t('accounts.convertWarning', { name: account.username })}</span>
+                          <button type="button" onClick={() => void convert(account, list)}>{t('accounts.convertConfirm', { name: account.username })}</button>
+                          <button type="button" className="secondary" onClick={() => setConverting(null)}>{t('accounts.cancel')}</button>
+                        </span>
                       )}
                     </td>
                   </tr>

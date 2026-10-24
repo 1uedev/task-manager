@@ -132,6 +132,9 @@ export const reactivateAccount = (api: ServerApi, id: string) =>
 export const resetPassword = (api: ServerApi, id: string) =>
   run(() => api.identity.POST('/accounts/{accountId}/password-reset', { params: { path: { accountId: id } } }),
     one<IssuedAccount>((v) => record(v) && isAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const convertAccountToLocal = (api: ServerApi, id: string) =>
+  run(() => api.identity.POST('/accounts/{accountId}/convert-to-local', { params: { path: { accountId: id } } }),
+    one<IssuedAccount>((v) => record(v) && isAccount(v.account) && typeof v.oneTimePassword === 'string'));
 export const renameAccount = (api: ServerApi, id: string, displayName: string | null) =>
   run(() => api.identity.PUT('/accounts/{accountId}', { params: { path: { accountId: id } }, body: { displayName } }), one<Account>(isAccount));
 export const clearLoginDelay = (api: ServerApi, id: string) =>

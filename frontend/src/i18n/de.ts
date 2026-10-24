@@ -289,7 +289,7 @@ export const de = {
   'accounts.issuedHint': 'Gültig bis {date} für genau eine Anmeldung.',
   'accounts.error.username': 'Bitte einen Anmeldenamen aus 3 bis 64 erlaubten Zeichen eingeben.',
   'accounts.error.taken': 'Diesen Anmeldenamen gibt es schon.',
-  'accounts.error.lastAdministrator': 'Das letzte aktive Konto der Verwaltung kann nicht deaktiviert werden.',
+  'accounts.error.lastAdministrator': 'Das letzte aktive Konto der Verwaltung und das letzte aktive lokale Konto mit den Rechten für Gruppen und Konten können nicht deaktiviert werden.',
   'groups.title': 'Gruppen und Rechte',
   'groups.intro': 'Rechte werden an frei benannte Gruppen vergeben, nicht an feste Rollen. Ein Konto hat die Rechte aller seiner Gruppen.',
   'groups.new': 'Neue Gruppe',
@@ -522,6 +522,13 @@ export const de = {
   'ldap.reason.user_not_found': 'Zu diesem Anmeldenamen wurde kein Eintrag gefunden.',
   'ldap.reason.user_ambiguous': 'Zu diesem Anmeldenamen gibt es mehrere Einträge.',
   'ldap.reason.unknown': 'Der Grund ist unbekannt.',
+  'accounts.convert': '{name} auf lokales Konto umstellen',
+  'accounts.convertAsk': 'Umstellung von {name} bestätigen',
+  'accounts.convertWarning': '{name} meldet sich danach nur noch mit einem neuen Einmalpasswort an, das Passwort des Verzeichnisses gilt nicht mehr, alle Sitzungen enden. Rechte und Verlauf bleiben. Der Weg zurück ist nicht vorgesehen.',
+  'accounts.convertConfirm': 'Ja, {name} umstellen',
+  'accounts.error.alreadyLocal': 'Dieses Konto ist schon ein lokales Konto.',
+  'accounts.audit.event.account.converted_to_local': 'Konto {account} auf lokal umgestellt, neues Einmalpasswort ausgegeben',
+  'groups.error.lastLocalAdministrator': 'Das geht nicht: Danach gäbe es kein aktives lokales Konto mehr mit den Rechten, Gruppen und Konten zu verwalten. Ein solches Konto bleibt der Weg, wenn das Verzeichnis ausfällt.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof de;

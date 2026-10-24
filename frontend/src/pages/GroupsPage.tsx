@@ -184,7 +184,7 @@ export function GroupPage({ id }: { readonly id: string }) {
       replace({ value: result.data.value, etag: null });
       return setNotice({ kind: 'success', text: success });
     }
-    setNotice({ kind: 'info', text: text(result.problem, { 'permissions.last_administrator': 'groups.error.lastAdministrator' }) });
+    setNotice({ kind: 'info', text: text(result.problem, { 'permissions.last_administrator': 'groups.error.lastAdministrator', 'permissions.last_local_administrator': 'groups.error.lastLocalAdministrator' }) });
   }
 
   const projectId = scope === '' ? null : scope;

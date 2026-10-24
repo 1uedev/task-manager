@@ -59,6 +59,12 @@ class IdentityPermissionsAdapter implements IdentityAccess {
         return ofThisCompany(companyId) && identity.accountIsActive(userId);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean userActiveLocal(UUID companyId, UUID userId) {
+        return ofThisCompany(companyId) && identity.accountIsActiveLocal(userId);
+    }
+
     private boolean ofThisCompany(UUID companyId) {
         return companyId != null && company.find().filter(companyId::equals).isPresent();
     }

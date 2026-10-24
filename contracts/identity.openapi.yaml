@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Identität (TASK-024, TASK-040, TASK-045, TASK-046)
+  title: Task Manager API, Identität (TASK-024, TASK-040, TASK-045, TASK-046, TASK-047)
   version: 0.1.0
   description: |
     Lokale Konten, Anmeldung (lokal und über ein LDAP Verzeichnis), feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
@@ -210,7 +210,7 @@ paths:
     post:
       operationId: deactivateAccount
       summary: Konto deaktivieren (Recht accounts.manage)
-      description: Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
+      description: Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) und das letzte aktive lokale Konto mit den Rechten `permissions.manage` und `accounts.manage` kann nicht deaktiviert werden; beides meldet `account.last_administrator`.
       responses:
         '200':
           description: Deaktiviert
@@ -236,6 +236,29 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/convert-to-local:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: convertAccountToLocal
+      summary: Konto aus dem Verzeichnis auf lokal umstellen (Recht accounts.manage)
+      description: |
+        Stellt ein Konto, das beim Anmelden über das LDAP Verzeichnis entstand, auf ein lokales Konto um. Das ist der Weg, wenn das
+        Verzeichnis ausfällt: eine lokale Verwaltung richtet damit die Anmeldung der Person wieder ein. Das Konto behält Namen, Rechte und
+        Verlauf, löst sich von der Kennung des Verzeichniseintrags und erhält wie beim Zurücksetzen ein Einmalpasswort mit erzwungenem
+        Passwortwechsel; alle Sitzungen des Kontos enden, der Vorgang steht im Protokoll (`account.converted_to_local`). Danach entscheidet
+        allein das lokale Passwort, das Passwort des Verzeichnisses gilt nicht mehr. Ein bereits lokales Konto wird nicht umgestellt:
+        409 `account.already_local`. Der Weg zurück auf das Verzeichnis ist nicht vorgesehen.
+      responses:
+        '200':
+          description: Umgestellt, mit dem Einmalpasswort (wird nur hier angezeigt)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedAccount'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
   /accounts/{accountId}/password-reset:
     parameters:
       - {$ref: '#/components/parameters/AccountId'}
@@ -393,7 +416,7 @@ components:
         request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
         auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
         password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-        account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, ldap.not_configured,
+        account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, account.already_local, ldap.not_configured,
         auth.directory_unavailable (503, das Verzeichnis antwortet nicht). Gründe in `violations` der Konten: username.invalid,
         username.required, displayName.too_long, displayName.invalid, paging.invalid.
       headers:
@@ -516,7 +539,7 @@ components:
         id: {type: integer, minimum: 1}
         occurredAt: {type: string, format: date-time}
         actor: {type: string}
-        event: {type: string, description: 'Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured'}
+        event: {type: string, description: 'Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.converted_to_local, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured'}
         accountId: {type: [string, 'null'], format: uuid}
         detail: {type: [string, 'null'], description: 'Feste Kurzangabe, nie ein Geheimnis'}
     DirectoryEntry:
