@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 29 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 30 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -69,6 +67,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
 | [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
 | [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
+| [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -623,7 +622,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-050 Befund R1 der Nachprüfung von TASK-049 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261025-reviewfix-03 · **Aktualisiert:** 2026-10-25
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261025-reviewfix-03 · **Aktualisiert:** 2026-10-25
 
 **Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-UX-001. **Abhängigkeiten:** TASK-047 und TASK-049 (gemergt, Abnahme offen). **Arbeitsstand:** Die getrennte Nachprüfung `codex-20261025-task049-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-049/docs/REVIEW_TASK-049.md) auf dem Branch review/task-049) bestätigt die Behebung von N1, N2 und F1, bestätigt F2 aber nur teilweise und empfiehlt „annehmbar nach Behebung von R1“. Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-079.
 
@@ -633,4 +632,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Abnahmekriterien:** Nach erfolgreicher Selbstumstellung bleibt das Einmalpasswort sichtbar, auch wenn danach eine geschützte Anfrage 401 erhält oder eine Kontenaktion ausgelöst wird; die Seite bietet dann keine geschützten Aktionen mehr an; „Zur Anmeldung“ führt zur Anmeldeseite und entfernt das Passwort aus dem Speicher; die Umstellung eines fremden Kontos und das normale Ende einer Sitzung verhalten sich unverändert; die zweite Reihenfolge der Umstellung gegen die laufende Verzeichnisanmeldung ergibt 401 ohne Sitzung. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-079 als Ergebnis PR übergeben.
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): beide Gegenbeispiele des Berichts zu R1 (verspätete Antwort mit 401, weiterhin angebotene Aktion), die Seite oberhalb aller Seiten (keine geschützten Anfragen, kein Verbleib des Passworts im Speicher nach „Zur Anmeldung“), den Testersatz des Kontospeichers und die zweite Reihenfolge der Umstellung. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-050 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-079, `Handover` im Sitzungskontext (`session.tsx`), eigene Seite in `App.tsx`, Übergabe aus `AccountsPage.tsx`, Testersatz `PausableAccountRepository`. Die neuen Browsertests (drei, darunter die verspätete Antwort mit 401) scheitern gegen die Seiten vor TASK-050, der neue Backendtest gegen den Stand vor TASK-049 mit der vollen lokalen Sitzung des Berichts. Lokal grün: Backendtests gegen PostgreSQL 16, 276 Tests ohne Ausfall; Frontend `npm run verify` (75 Tests) und 95 Browsertests; keine Migration, keine Änderung der Verträge. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt, ein durchgängiger Browserlauf am echten Backend.

@@ -186,23 +186,71 @@ describe('converting a directory account', () => {
 });
 
 describe('converting the own account', () => {
-  test('the one time password stays visible, nothing is loaded afterwards and the button leads to the login', async () => {
+  async function confirm(page) {
+    await page.getByRole('button', { name: 'anna auf lokales Konto umstellen' }).click();
+    assert.match(await page.getByRole('group', { name: 'Umstellung von anna bestätigen' }).innerText(), /Das ist Ihr eigenes Konto\. Danach endet Ihre Sitzung/);
+    await page.getByRole('button', { name: 'Ja, anna umstellen' }).click();
+  }
+
+  test('a screen above all pages keeps the one time password, loads nothing and leads to the login', async () => {
     await withApp((backend) => { backend.anna.authKind = 'ldap'; }, async (page, backend) => {
-      await page.getByRole('button', { name: 'anna auf lokales Konto umstellen' }).click();
-      assert.match(await page.getByRole('group', { name: 'Umstellung von anna bestätigen' }).innerText(), /Das ist Ihr eigenes Konto\. Danach endet Ihre Sitzung/);
-      await page.getByRole('button', { name: 'Ja, anna umstellen' }).click();
+      await confirm(page);
       const shown = page.getByTestId('one-time');
       await shown.waitFor();
+      assert.equal(await page.locator('main h1').innerText(), 'Ihr Konto ist auf lokal umgestellt');
       const password = await shown.locator('code').innerText();
       assert.notEqual(password, '');
       await shown.getByText('Ihre Sitzung ist beendet').waitFor();
       const conversion = backend.state.requests.findIndex((item) => item.path.endsWith('/convert-to-local'));
       await page.waitForTimeout(500);
-      assert.equal(backend.state.requests.length, conversion + 1, 'no request follows the conversion that would end in the login');
+      assert.equal(backend.state.requests.length, conversion + 1, 'no request follows the conversion');
       assert.equal(await shown.locator('code').innerText(), password);
+      assert.equal(await page.getByRole('button', { name: /deaktivieren|Neues Einmalpasswort|Verbindung prüfen/ }).count(), 0, 'no action that needs a session is offered');
+      assert.equal(await page.getByRole('navigation').count(), 0, 'the navigation of the application is gone');
       await page.getByRole('button', { name: 'Zur Anmeldung' }).click();
-      await page.getByTestId('login-error').waitFor({ state: 'detached' }).catch(() => {});
+      await page.getByLabel(/^Anmeldename/).waitFor();
+      assert.equal(await page.getByTestId('one-time').count(), 0, 'the password is gone from the page after the login is shown');
+    });
+  });
+
+  test('a late answer that ends the session does not take the password away', async () => {
+    await withApp((backend) => { backend.anna.authKind = 'ldap'; }, async (page) => {
+      // A request that is under way when the person confirms: the check of the connection, held back until after the conversion.
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      let reached;
+      const arrived = new Promise((resolve) => { reached = resolve; });
+      await page.route('**/api/v1/settings/ldap/test', async (route) => {
+        reached();
+        await held;
+        await route.fallback();
+      });
+      await page.getByTestId('ldap-panel').locator('summary').click();
+      await page.getByLabel('Adresse des Verzeichnisses').fill('ldap://verzeichnis.example');
+      await page.getByLabel('Suchbasis').fill('dc=example,dc=test');
+      await page.getByRole('button', { name: 'Verbindung prüfen' }).click();
+      await arrived;
+      await confirm(page);
+      const shown = page.getByTestId('one-time');
+      await shown.waitFor();
+      const password = await shown.locator('code').innerText();
+      release();
+      await page.waitForTimeout(800);
+      assert.equal(await shown.locator('code').innerText(), password, 'the late 401 does not replace the screen');
+      assert.equal(await page.getByLabel(/^Anmeldename/).count(), 0, 'the login is not shown before the person asks for it');
+      await page.getByRole('button', { name: 'Zur Anmeldung' }).click();
       await page.getByLabel(/^Anmeldename/).waitFor();
     });
+  });
+
+  test('the English text says the same', async () => {
+    await withApp((backend) => { backend.anna.authKind = 'ldap'; }, async (page) => {
+      await page.getByRole('button', { name: 'Convert anna to a local account' }).click();
+      await page.getByRole('button', { name: 'Yes, convert anna' }).click();
+      await page.getByTestId('one-time').waitFor();
+      assert.equal(await page.locator('main h1').innerText(), 'Your account has been converted to local');
+      await page.getByRole('button', { name: 'Go to the login' }).click();
+      await page.getByLabel(/^User name/).waitFor();
+    }, { locale: 'en-US' });
   });
 });
