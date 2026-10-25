@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 30 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
 
 ### Blockiert – BLOCKIERT
 
@@ -635,3 +637,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): beide Gegenbeispiele des Berichts zu R1 (verspätete Antwort mit 401, weiterhin angebotene Aktion), die Seite oberhalb aller Seiten (keine geschützten Anfragen, kein Verbleib des Passworts im Speicher nach „Zur Anmeldung“), den Testersatz des Kontospeichers und die zweite Reihenfolge der Umstellung. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-050 fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-079, `Handover` im Sitzungskontext (`session.tsx`), eigene Seite in `App.tsx`, Übergabe aus `AccountsPage.tsx`, Testersatz `PausableAccountRepository`. Die neuen Browsertests (drei, darunter die verspätete Antwort mit 401) scheitern gegen die Seiten vor TASK-050, der neue Backendtest gegen den Stand vor TASK-049 mit der vollen lokalen Sitzung des Berichts. Lokal grün: Backendtests gegen PostgreSQL 16, 276 Tests ohne Ausfall; Frontend `npm run verify` (75 Tests) und 95 Browsertests; keine Migration, keine Änderung der Verträge. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt, ein durchgängiger Browserlauf am echten Backend.
+
+## TASK-051 Dateien und Anhänge an Tickets (Paket A7)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261025-files-01 · **Aktualisiert:** 2026-10-25
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Abhängigkeiten:** TASK-027 (Ticketkern) und TASK-043 (Rechtekern), beide gemergt. **Arbeitsstand:** Paket A7 der Reihenfolge aus DEC-072, Holgers Freigabe „kannst du derweil mit dem nächsten Thema weitermachen“ vom 25. Oktober 2026. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-080. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung, Holger kann sie vor dem Merge dieser Reservierung ändern.
+
+**Umfang:** Ein neues Modul `files` mit Dateispeicher und Anhängen an Tickets, ohne Kommentare, Portal, Mail und Wiki.
+1. Speicher: Ein Speicherport mit einem Dateisystemadapter auf einem konfigurierbaren, dauerhaften Verzeichnis außerhalb des Containerlebenszyklus (OPERATIONS.md, ARCHITECTURE.md). Inhalte werden nie überschrieben, die Ablage ist inhaltsadressiert über die SHA-256 Prüfsumme, die Metadaten liegen in PostgreSQL (Migration V0024).
+2. Upload: Annahme in einen begrenzten temporären Bereich, Prüfung von Größe (Vorschlag 25 MB dezimal je Datei, konfigurierbar), Dateiname (bereinigt, ohne Pfadanteile und Steuerzeichen) und Sperrliste ausführbarer und aktiver Inhalte (Endungen und erkannte Dateikopfkennungen), Prüfsumme, dauerhaftes Ablegen, erst danach die Zuordnung zum Ticket in einer Transaktion. Abgebrochene und verwaiste Uploads sowie nicht zugeordnete Inhalte werden durch einen Aufräumlauf entfernt (Vorschlag: nach 24 Stunden, Lauf beim Start und stündlich, ohne den Hintergrundauftragsdienst aus A8).
+3. Kein Virenscanner als Pflichtdienst (TECHNICAL_CONTRACTS.md: kein neuer Pflichtdienst still vorausgesetzt). Stattdessen die Sperrliste, Auslieferung ausschließlich als Download mit `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` und einer Content-Security-Policy, die aktive Inhalte verbietet, sowie ein Port für einen späteren Scanner. Die Qualifikation eines Scanners bleibt offen (OPEN-014).
+4. Rechte: Anhänge sind ein Ticketfeld `attachments` im bestehenden Feldrechtemodell (Lesen und Schreiben getrennt), Hochladen und Entfernen verlangen das Schreibrecht, Herunterladen das Leserecht des Felds und des Tickets. Der direkte Dateilink ist kein Rechtenachweis und wird bei jedem Abruf neu geprüft. Verborgene Tickets und Anhänge verraten ihre Existenz nicht (404). Eine Zielgruppe „kundenlesbar“ gibt es nicht, solange kein externer Zugang existiert; alle Anhänge sind intern.
+5. Historie: Hinzufügen und Entfernen eines Anhangs erscheinen in der Tickethistorie (Name, Größe, Prüfsumme) und folgen dem Leserecht des Felds `attachments`. Entfernen blendet den Anhang aus, die Historie behält den Eintrag; der Inhalt wird erst vom Aufräumlauf nach einer Frist entfernt, wenn kein Anhang ihn mehr verwendet.
+6. Suche: Dateinamen werden nicht in die Suche aufgenommen; Dateiinhalte gehören nach V1 (DEC-050).
+7. Oberfläche im Ticket: Liste der Anhänge mit Name, Größe, Person und Zeit, Hochladen (Dateiauswahl und Ablegen mit Tastaturalternative), Herunterladen, Entfernen mit Bestätigung, klare Fehlermeldungen bei Größe, gesperrtem Typ und fehlendem Recht.
+8. Betrieb: Konfiguration des Verzeichnisses, Speicherort im Vorführimage als benanntes Volume, Hinweis im Betriebsteil von backend/README.md auf die Sicherung zusammen mit der Datenbank. Der Nachweis einer konsistenten Sicherung und Wiederherstellung gehört zu A18.
+
+Nicht Teil: Kommentare, interne Notizen und kundenlesbare Anhänge (kommen mit dem Helpdesk), Mailanhänge, Wiki Bilder, Portal Uploads, Vorschaubilder, Dateiversionen und Dokumentverwaltung, Virenscanner, Objektspeicher, Dateisuche, Kontingente je Projekt, Hintergrundauftragsdienst.
+
+**Schnittstellen und Arbeitsbereich:** Backend (neues Modul `files`, Migration V0024, Vertrag `contracts/files.openapi.yaml`, Erweiterung von Rechtekatalog, Ticketfeldern, Tickethistorie und Ticketvertrag), Frontend (Ticketansicht, Katalog de und en, Browsertests mit Testattrappe), Vorführimage (Volume), Dokumentation, DEC-080.
+
+**Abnahmekriterien:** Ein berechtigtes Mitglied lädt eine Datei bis zur Grenze hoch, sieht sie in der Liste und lädt exakt dieselben Bytes herunter; zu große, gesperrte und leere Dateien werden mit stabilem Fehlercode abgelehnt, ohne dass Reste im Speicher oder in der Datenbank bleiben; ein Neustart oder Austausch des Anwendungscontainers mit demselben Volume behält alle Anhänge; ein Abbruch zwischen Ablegen und Zuordnung hinterlässt nur eine Datei, die der Aufräumlauf entfernt; wer das Ticket oder das Feld nicht lesen darf, erhält auch über den direkten Link 404 oder 403 nach der Rechtesemantik des Ticketkerns, ebenso nach Entzug des Rechts; Entfernen und Hinzufügen stehen in der Historie, sichtbar nur mit Leserecht am Feld; Dateiname und Inhalt können weder Pfade verlassen noch beim Download Skripte ausführen lassen; die Rechte gelten in Oberfläche, API und Historie gleich. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-080 als Ergebnis PR übergeben. Offene Entscheidungen für Holger, falls er von den Vorschlägen abweichen will: Dateigrenze, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk, Entfernen als Ausblenden mit Frist.
