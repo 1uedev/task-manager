@@ -19,6 +19,7 @@ import {
 import { readStoredOrder, storeOrder } from './preferences.ts';
 import { hrefFor, section, useRoute, type Route, type RouteName } from './route.ts';
 import { useSession } from './session.tsx';
+import { formatDateTime } from '../i18n/format.ts';
 import { useReorder } from './useReorder.ts';
 
 const NAV_LABEL: Record<RouteName, MessageKey> = {
@@ -83,15 +84,27 @@ function BrandMark() {
 export function App() {
   const { t, language } = useI18n();
   const { brand } = useBrand();
-  const { view, refresh } = useSession();
+  const { view, refresh, handover } = useSession();
   const main = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (view.state === 'ready') return;
-    const title: MessageKey = view.state === 'pending' ? 'password.title' : view.state === 'anonymous' ? 'login.title' : 'app.loadingApp';
+    if (view.state === 'ready' && handover === null) return;
+    const title: MessageKey = handover !== null ? 'handover.title' : view.state === 'pending' ? 'password.title' : view.state === 'anonymous' ? 'login.title' : 'app.loadingApp';
     document.title = `${t(title)} · ${brand.name}`;
-  }, [view.state, language, brand.name, t]);
+  }, [view.state, handover, language, brand.name, t]);
 
+  // The handover stands above everything else: a late answer that ends the session must not take it away (TASK-050).
+  if (handover !== null) {
+    return (
+      <div className="gate">
+        <header className="gate-head">
+          <BrandMark />
+          <Preferences />
+        </header>
+        <main id="main" ref={main} tabIndex={-1}><HandoverPage /></main>
+      </div>
+    );
+  }
   if (view.state === 'ready') return <Shell />;
   return (
     <div className="gate">
@@ -111,6 +124,28 @@ export function App() {
         {view.state === 'pending' && <PasswordPage />}
       </main>
     </div>
+  );
+}
+
+// After a person converted their own account the server has ended the session. The one time password is shown here and
+// nowhere else, without any action that needs a session, until the person goes to the login.
+function HandoverPage() {
+  const { t, language } = useI18n();
+  const { handover, release, refresh } = useSession();
+  if (handover === null) return null;
+  return (
+    <>
+      <h1 tabIndex={-1}>{t('handover.title')}</h1>
+      <div role="status" className="success one-time" data-testid="one-time">
+        <p>{t('accounts.issued', { name: handover.username })}</p>
+        <p className="secret"><code>{handover.oneTimePassword}</code></p>
+        <p className="hint">{t('accounts.issuedHint', { date: formatDateTime(handover.expiresAt, language) })}</p>
+        <p className="hint">{t('accounts.selfConverted')}</p>
+      </div>
+      <p className="actions">
+        <button type="button" onClick={() => { release(); void refresh(); }}>{t('accounts.toLogin')}</button>
+      </p>
+    </>
   );
 }
 

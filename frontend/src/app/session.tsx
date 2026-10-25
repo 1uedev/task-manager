@@ -12,8 +12,19 @@ export type SessionView =
   | { readonly state: 'pending'; readonly session: SessionState }
   | { readonly state: 'ready'; readonly session: SessionState };
 
+// What a person must still take with them after the server ended their session as part of a change to their own account: the
+// one time password of the converted account, shown exactly once. It lives only here, in memory, above every page.
+export interface Handover {
+  readonly username: string;
+  readonly oneTimePassword: string;
+  readonly expiresAt: string;
+}
+
 interface SessionContext {
   readonly view: SessionView;
+  readonly handover: Handover | null;
+  hold(handover: Handover): void;
+  release(): void;
   refresh(): Promise<void>;
   signOut(): Promise<void>;
   // Names of the accounts for showing who is a member, assigned or changed something; empty until loaded.
@@ -29,6 +40,7 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
   const [view, setView] = useState<SessionView>({ state: 'loading' });
   const [directory, setDirectory] = useState<ReadonlyMap<string, DirectoryEntry>>(new Map());
   const [directoryRound, setDirectoryRound] = useState(0);
+  const [handover, setHandover] = useState<Handover | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await readSession(api);
@@ -75,14 +87,20 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
     setView({ state: 'anonymous', reason: 'loggedOut' });
   }, [api]);
 
+  const hold = useCallback((next: Handover) => setHandover(next), []);
+  const release = useCallback(() => setHandover(null), []);
+
   const value = useMemo<SessionContext>(() => ({
     view,
+    handover,
+    hold,
+    release,
     refresh,
     signOut,
     directory,
     reloadDirectory: () => setDirectoryRound((round) => round + 1),
     has: (right) => view.state === 'ready' && view.session.rights.includes(right),
-  }), [view, refresh, signOut, directory]);
+  }), [view, handover, hold, release, refresh, signOut, directory]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 

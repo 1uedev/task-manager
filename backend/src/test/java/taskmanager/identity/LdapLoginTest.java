@@ -52,7 +52,17 @@ import taskmanager.platform.CompanyContext;
     properties = { "taskmanager.identity.source-failure-threshold=100000", "taskmanager.identity.ldap.bind-password=" + LdapLoginTest.SEARCH_SECRET,
         "taskmanager.identity.ldap.timeout=2s" })
 @ExtendWith(OutputCaptureExtension.class)
+@org.springframework.context.annotation.Import(LdapLoginTest.Pausable.class)
 class LdapLoginTest {
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+    static class Pausable {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        taskmanager.identity.account.PausableAccountRepository pausableAccountRepository(org.springframework.jdbc.core.simple.JdbcClient jdbc) {
+            return new taskmanager.identity.account.PausableAccountRepository(jdbc);
+        }
+    }
+
     static final String SEARCH_SECRET = "search-account-secret-7";
     private static final String BASE = "dc=example,dc=test";
     private static final String PEOPLE = "ou=people," + BASE;
@@ -877,6 +887,43 @@ class LdapLoginTest {
             assertEquals("password_change_required", first.json().get("level").asString());
         } finally {
             release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aDirectoryLoginThatIsOverhauledByTheConversionAndTheLocalPasswordChangeIsRefused() throws Exception {
+        String uid = person("overhauled", "over2-pass-1234", "Overhauled");
+        assertEquals(200, login(browser(), uid, "over2-pass-1234").status());
+        String id = accountOf(uid).id();
+
+        // The login has found the account by the identifier of its entry and waits there.
+        var pause = taskmanager.identity.account.PausableAccountRepository.arm();
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<Response> overhauled = pool.submit(() -> login(browser(), uid, "over2-pass-1234"));
+            assertTrue(pause.awaitReached(20), "the login did not reach the lookup");
+
+            // Meanwhile the account is converted, and its person signs in with the one time password and chooses a password.
+            Response converted = admin.post("/api/v1/accounts/" + id + "/convert-to-local", Map.of());
+            assertEquals(200, converted.status(), converted.body());
+            String oneTime = converted.json().get("oneTimePassword").asString();
+            ApiClient owner = browser();
+            assertEquals(200, login(owner, uid, oneTime).status());
+            assertEquals(200, owner.post("/api/v1/session/password", Map.of("currentPassword", oneTime, "newPassword", STRONG)).status());
+            int sessionsBefore = jdbc.queryForObject("select count(*) from identity_session where account_id = ?::uuid", Integer.class, id);
+
+            pause.proceed();
+            Response refused = overhauled.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            // The login that only knew the old password of the directory gets no session of the local account.
+            assertEquals(401, refused.status(), refused.body());
+            assertEquals("auth.invalid_credentials", refused.code());
+            assertEquals(sessionsBefore, jdbc.queryForObject("select count(*) from identity_session where account_id = ?::uuid", Integer.class, id));
+            // A login that begins now with the directory password is refused as well, and the chosen password works.
+            assertEquals(401, login(browser(), uid, "over2-pass-1234").status());
+            assertEquals(200, login(browser(), uid, STRONG).status());
+        } finally {
+            pause.proceed();
             pool.shutdownNow();
         }
     }

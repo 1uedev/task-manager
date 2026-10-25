@@ -532,6 +532,7 @@ export const de = {
   'accounts.convertSelfWarning': 'Das ist Ihr eigenes Konto. Danach endet Ihre Sitzung, Sie melden sich mit einem neuen Einmalpasswort an, das nur einmal angezeigt wird, und das Passwort des Verzeichnisses gilt nicht mehr. Rechte und Verlauf bleiben. Der Weg zurück ist nicht vorgesehen.',
   'accounts.selfConverted': 'Ihre Sitzung ist beendet. Notieren Sie das Einmalpasswort, bevor Sie zur Anmeldung gehen.',
   'accounts.toLogin': 'Zur Anmeldung',
+  'handover.title': 'Ihr Konto ist auf lokal umgestellt',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof de;
