@@ -503,3 +503,7 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
   .brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .brand-logo { max-width: 100%; min-width: 0; }
 }
+/* Attachments of a ticket (TASK-051) */
+.attachments { list-style: none; padding: 0; margin: 0 0 0.5rem; display: grid; gap: 0.5rem; }
+.attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
+.attachments li > a { font-weight: 600; overflow-wrap: anywhere; }

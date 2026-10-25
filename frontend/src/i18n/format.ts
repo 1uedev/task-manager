@@ -15,6 +15,13 @@ export function formatDate(date: string, language: string): string {
   return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeZone: 'UTC' }).format(instant);
 }
 
+// A size in bytes as bytes, kB or MB (decimal, as the limit of the server is counted).
+export function formatBytes(bytes: number, language: string): string {
+  if (bytes < 1000) return `${formatNumber(bytes, language, 0)} B`;
+  if (bytes < 1_000_000) return `${formatNumber(bytes / 1000, language, 1)} kB`;
+  return `${formatNumber(bytes / 1_000_000, language, 1)} MB`;
+}
+
 export function formatNumber(value: number, language: string, maximumFractionDigits = 2): string {
   return new Intl.NumberFormat(language, { maximumFractionDigits }).format(value);
 }

@@ -151,7 +151,7 @@ paths:
     get:
       operationId: getTicketHistory
       summary: Historie eines Tickets
-      description: Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042).
+      description: Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042). Ebenso ist jedes Hinzufügen oder Entfernen eines Anhangs ein eigener Eintrag mit genau einer Änderung des Feldes attachments (to beschreibt den hinzugefügten, from den entfernten Anhang als JSON Text mit id, name, size und sha256); diese Einträge sieht nur, wer die Leseregel für das Feld attachments hat (TASK-051).
       responses:
         '200':
           description: Historie, älteste Version zuerst
@@ -305,6 +305,6 @@ components:
             type: object
             required: [field, from, to]
             properties:
-              field: {type: string, pattern: '^(title|description|type|status|assignee|tags|custom\.[a-z][a-z0-9_]{0,39})$'}
+              field: {type: string, pattern: '^(title|description|type|status|assignee|tags|attachments|custom\.[a-z][a-z0-9_]{0,39})$'}
               from: {type: [string, 'null']}
               to: {type: [string, 'null']}

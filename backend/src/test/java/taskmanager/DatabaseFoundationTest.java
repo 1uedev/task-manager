@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
@@ -42,7 +42,7 @@ class DatabaseFoundationTest {
         List<String> tables = jdbc.queryForList(
             "select table_name from information_schema.tables where table_schema = current_schema() order by table_name",
             String.class);
-        assertEquals(List.of("appearance_audit_event", "appearance_setting", "flyway_schema_history", "identity_account", "identity_audit_event", "identity_ldap_setting", "identity_login_throttle",
+        assertEquals(List.of("appearance_audit_event", "appearance_setting", "file_attachment", "file_audit_event", "flyway_schema_history", "identity_account", "identity_audit_event", "identity_ldap_setting", "identity_login_throttle",
             "identity_session", "identity_setting", "permissions_action", "permissions_audit", "permissions_field",
             "permissions_group", "permissions_membership", "permissions_revision", "platform_company", "project",
             "project_audit_event", "project_configuration", "project_configuration_draft", "project_member", "search_project", "search_project_tag", "search_state", "search_tag", "search_ticket", "search_ticket_custom", "search_ticket_tag", "tag", "tag_audit_event", "tag_project", "tag_ticket", "ticket", "ticket_change", "ticket_counter"), tables);

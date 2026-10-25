@@ -54,3 +54,7 @@ taskmanager:
       bind-password: ${TASK_MANAGER_LDAP_BIND_PASSWORD:}
       trust-store: ${TASK_MANAGER_LDAP_TRUST_STORE:}
       trust-store-password: ${TASK_MANAGER_LDAP_TRUST_STORE_PASSWORD:}
+  files:
+    # The file store of the attachments (TASK-051) must lie on a persistent volume outside the container; the web application
+    # refuses to start without it. Limits and periods have defaults in FilesProperties.
+    directory: ${TASK_MANAGER_FILES_DIR:}

@@ -3,6 +3,7 @@ import { acceptableLogo, isAccentColor } from '../brand/brand.ts';
 import { readCsrfToken } from './csrf.ts';
 import type { components, paths } from './generated/api';
 import type { paths as AppearancePaths } from './generated/appearance';
+import type { paths as FilesPaths } from './generated/files';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as PermissionsPaths } from './generated/permissions';
 import type { paths as ProjectsPaths } from './generated/projects';
@@ -136,6 +137,7 @@ export function createServerApi(fetcher: typeof fetch = (...args) => globalThis.
     tags: createClient<TagsPaths>({ baseUrl, fetch }),
     search: createClient<SearchPaths>({ baseUrl, fetch }),
     permissions: createClient<PermissionsPaths>({ baseUrl, fetch }),
+    files: createClient<FilesPaths>({ baseUrl, fetch }),
   };
 }
 

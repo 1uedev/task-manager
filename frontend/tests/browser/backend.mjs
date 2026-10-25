@@ -6,6 +6,7 @@ export const TOKEN = 'csrf-token-for-browser-tests-0001';
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' + '1f15c4890000000d49444154789c6360f8cfc0f01f0005000201' + 'e2d1b0a50000000049454e44ae426082', 'hex');
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
 const TAG_FIELD = 'tags';
+const ATTACHMENT_FIELD = 'attachments';
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
 const PROJECT_ACTIONS = ['project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
@@ -43,11 +44,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     history: [],
     tags: [],
     ticketTags: [],
+    // The attachments of tickets (TASK-051); `limit` is the largest file the stand in accepts, small so that tests can reach it.
+    attachments: [],
+    attachmentLimit: 1000,
     groups: [
       { id: uuid(), name: 'Unternehmensverwaltung', members: [anna.id], actions: [...ADMIN_RIGHTS, 'project.read', 'ticket.read', 'ticket.create', 'ticket.edit', 'tag.create'].map((action) => ({ action, projectId: null })),
-        fields: [...FIELDS, TAG_FIELD].flatMap((field) => ['read', 'write'].map((operation) => ({ resourceType: 'ticket', field, projectId: null, operation, effect: 'allow' }))) },
+        fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].flatMap((field) => ['read', 'write'].map((operation) => ({ resourceType: 'ticket', field, projectId: null, operation, effect: 'allow' }))) },
       { id: uuid(), name: 'Lesen', members: [ben.id, nora.id], actions: ['project.read', 'ticket.read'].map((action) => ({ action, projectId: null })),
-        fields: ['title', 'type', 'status', 'assignee', TAG_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
+        fields: ['title', 'type', 'status', 'assignee', TAG_FIELD, ATTACHMENT_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
     appearance: { version: 3, accent, logo: null },
     // The LDAP connection (TASK-046): null until stored; `directoryDown` makes a sign in of an unknown name fail like an outage.
@@ -356,10 +360,44 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
+    }
+    if (tail.startsWith('/attachments')) {
+      if (!field(account, item.id, ATTACHMENT_FIELD, 'read')) return problem(403, 'auth.forbidden');
+      const id = tail.split('/')[2];
+      const mine = state.attachments.filter((entry) => entry.ticket === ticket.id);
+      const view = ({ ticket: _ticket, content: _content, removed: _removed, ...entry }) => entry;
+      const described = (entry) => JSON.stringify({ id: entry.id, name: entry.name, size: entry.size, sha256: entry.sha256 });
+      if (method === 'GET' && id === undefined) return ok(mine.filter((entry) => !entry.removed).map(view));
+      if (method === 'GET') {
+        const found = mine.find((entry) => entry.id === id && !entry.removed);
+        return found ? { status: 200, raw: found.content, type: 'application/octet-stream', headers: { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(found.name)}` } } : problem(404, 'attachment.not_found');
+      }
+      if (!may(account, 'ticket.edit', item.id) || !field(account, item.id, ATTACHMENT_FIELD, 'write')) return problem(403, 'auth.forbidden');
+      if (method === 'POST') {
+        const name = query.get('name');
+        const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
+        if (!name || name.replace(/[\\/]/g, '').trim() === '') return problem(400, 'request.invalid', { violations: ['name.invalid'] });
+        if (content.length === 0) return problem(400, 'attachment.empty');
+        if (content.length > state.attachmentLimit) return problem(413, 'attachment.too_large');
+        if (/\.(exe|bat|js|sh|html)$/i.test(name)) return problem(415, 'attachment.type_blocked');
+        const entry = { id: uuid(), ticket: ticket.id, name: name.split(/[\\/]/).pop(), size: content.length, sha256: 'a'.repeat(64), uploadedAt: now(), uploadedBy: account.id, content, removed: false };
+        state.attachments.push(entry);
+        state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: ATTACHMENT_FIELD, from: null, to: described(entry) }] });
+        return { status: 201, body: view(entry) };
+      }
+      if (method === 'DELETE') {
+        const found = mine.find((entry) => entry.id === id);
+        if (!found) return problem(404, 'attachment.not_found');
+        if (!found.removed) {
+          found.removed = true;
+          state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: ATTACHMENT_FIELD, from: described(found), to: null }] });
+        }
+        return empty();
+      }
     }
     if (tail.startsWith('/tags')) {
       if (!field(account, item.id, TAG_FIELD, 'read')) return problem(403, 'auth.forbidden');
@@ -476,7 +514,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const company = may(account, 'permissions.manage');
       return ok({
         actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
-        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) }],
+        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) }],
         groups: state.groups.map((group) => ({ id: group.id, name: group.name,
           actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
           fields: group.fields.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })) })),
@@ -485,7 +523,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     const delegated = method === 'PUT' && /^\/permissions\/groups\/[^/]+\/(actions|fields)$/.test(p) && body?.projectId && managesProject(account, body.projectId);
     if (!may(account, 'permissions.manage') && !delegated) return problem(403, 'auth.forbidden');
     const detail = (group) => ({ id: group.id, name: group.name, members: [...group.members], actions: group.actions.map((rule) => ({ ...rule })), fields: group.fields.map((rule) => ({ ...rule })) });
-    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD].sort() }] });
+    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort() }] });
     if (p === '/permissions/groups' && method === 'GET') return ok(state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
     if (p === '/permissions/groups' && method === 'POST') {
       if (state.groups.some((entry) => entry.name.toLowerCase() === body.name.toLowerCase())) return problem(409, 'permissions.group_name_taken');
@@ -550,7 +588,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           await context.addCookies([{ name: '__Host-tm-csrf', value: TOKEN, domain: 'localhost', path: '/', secure: true, sameSite: 'Lax' }]);
         }
       }
-      if (answer.raw) return route.fulfill({ status: answer.status, contentType: answer.type, body: answer.raw });
+      if (answer.raw) return route.fulfill({ status: answer.status, contentType: answer.type, headers: answer.headers ?? {}, body: answer.raw });
       return route.fulfill({
         status: answer.status,
         contentType: answer.status < 400 ? 'application/json' : 'application/problem+json',

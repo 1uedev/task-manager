@@ -151,7 +151,7 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
 };
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
-  title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags',
+  title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags', attachments: 'field.attachments',
 };
 
 type GroupAnswer = Promise<Result<GroupDetail | 'gone'>>;

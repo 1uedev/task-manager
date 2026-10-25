@@ -1,4 +1,5 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
+import type { components as FileTypes } from './generated/files';
 import type { components as IdentityTypes } from './generated/identity';
 import type { components as PermissionTypes } from './generated/permissions';
 import type { components as ProjectTypes } from './generated/projects';
@@ -26,6 +27,7 @@ export type ConfigurationUsage = ProjectTypes['schemas']['Usage'];
 export type Ticket = TicketTypes['schemas']['Ticket'];
 export type HistoryEntry = TicketTypes['schemas']['HistoryEntry'];
 export type Tag = TagTypes['schemas']['Tag'];
+export type Attachment = FileTypes['schemas']['Attachment'];
 export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
 export type Group = PermissionTypes['schemas']['Group'];
@@ -71,6 +73,7 @@ export const isTicket = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key') 
   && typeof (v as Ticket).version === 'number' && record((v as Ticket).fields) && record((v as Ticket).customFields)
   && Array.isArray((v as Ticket).writableFields);
 export const isHistoryEntry = (v: unknown) => record(v) && typeof v.version === 'number' && Array.isArray(v.changes);
+export const isAttachment = (v: unknown) => hasStrings(v, 'id', 'name', 'sha256', 'uploadedAt', 'uploadedBy') && typeof (v as Attachment).size === 'number';
 export const isTag = (v: unknown) => hasStrings(v, 'id', 'name', 'catalog') && typeof (v as Tag).archived === 'boolean';
 export const isGroup = (v: unknown) => hasStrings(v, 'id', 'name');
 export const isGroupDetail = (v: unknown) => isGroup(v) && Array.isArray((v as GroupDetail).members)
@@ -238,6 +241,24 @@ export const assignTicketTag = (api: ServerApi, projectId: string, number: numbe
     body: { tagId } as { tagId: string; catalog: 'project' } }), nothing);
 export const removeTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
   run(() => api.tags.DELETE('/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
+
+// ---------------------------------------------------------------- attachments (TASK-051)
+
+export const listAttachments = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.files.GET('/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
+    listOf<Attachment>(isAttachment));
+// The file is the raw body of the request; the server cleans the name, so it is sent as it is (encoded by the client library).
+export const uploadAttachment = (api: ServerApi, projectId: string, number: number, file: File) =>
+  run(() => api.files.POST('/projects/{projectId}/tickets/{number}/attachments', {
+    params: { path: { projectId, number }, query: { name: file.name } },
+    body: file as unknown as string,
+    bodySerializer: (body) => body as unknown as BodyInit,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  }), one<Attachment>(isAttachment));
+export const removeAttachment = (api: ServerApi, projectId: string, number: number, id: string) =>
+  run(() => api.files.DELETE('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } } }), nothing);
+// A link, not a request: the browser saves the file itself, with the session cookie and the headers of the download.
+export const attachmentUrl = (projectId: string, number: number, id: string) => `/api/v1/projects/${projectId}/tickets/${number}/attachments/${id}`;
 
 // ---------------------------------------------------------------- search
 

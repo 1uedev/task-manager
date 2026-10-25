@@ -49,6 +49,22 @@ class JdbcTicketAccess implements TicketAccess {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void recordAttachmentChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added) {
+        if ((removed == null) == (added == null)) {
+            throw new IllegalArgumentException("exactly one of removed and added");
+        }
+        long version = tickets.lockShared(ticketId);
+        tickets.change(ticketId, version, occurredAt, actor, ATTACHMENTS_FIELD, removed, added);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForAttachmentChange(UUID ticketId) {
+        tickets.lockShared(ticketId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<TicketChanged> searchSources(UUID companyId) {
         Map<UUID, ProjectConfiguration> configurations = new HashMap<>();
         return tickets.all(companyId).stream().map(ticket -> ticket.changed(configurations.computeIfAbsent(ticket.projectId(),
