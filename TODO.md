@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 29 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
 
 ### Blockiert – BLOCKIERT
 
@@ -618,3 +620,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): die Migration V0023 und ihre Wirkung auf Konten mit Altschlüsseln, die Zuordnung nach der Behebung mit beiden Gegenbeispielen des Berichts zu TASK-048, beide Zeitpläne der Umstellung gegen eine laufende Verzeichnisanmeldung, die Selbstumstellung in der Oberfläche und die Betriebshinweise zur relativen Sperre. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-049 fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-078, Migration V0023 (löst alle beim Einspielen vorhandenen Verzeichniskonten vom Verzeichnis, deaktiviert sie und beendet ihre Sitzungen), Prüfung von Kontotyp und Kennung nach der Kontosperre in `DirectoryAccounts.assign` und `SessionService.startSession`, Anzeigename aus Rohbytes in `DirectoryClient`, Selbstumstellung in `AccountsPage`. Die neuen Tests scheitern gegen den alten Code mit den berichteten Symptomen (die überholte Verzeichnisanmeldung ergibt 200 mit lokalem Konto und verbrauchtem Einmalpasswort, der Anzeigename ist null, die Seite lädt nach der Selbstumstellung nach und verliert das Passwort). Lokal grün: Backendtests gegen PostgreSQL 16, 275 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 22 Migrationen; Frontend `npm run verify` (75 Tests) und 93 Browsertests. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.
+
+## TASK-050 Befund R1 der Nachprüfung von TASK-049 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261025-reviewfix-03 · **Aktualisiert:** 2026-10-25
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-UX-001. **Abhängigkeiten:** TASK-047 und TASK-049 (gemergt, Abnahme offen). **Arbeitsstand:** Die getrennte Nachprüfung `codex-20261025-task049-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-049/docs/REVIEW_TASK-049.md) auf dem Branch review/task-049) bestätigt die Behebung von N1, N2 und F1, bestätigt F2 aber nur teilweise und empfiehlt „annehmbar nach Behebung von R1“. Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-079.
+
+**Umfang:** (R1, mittel) Nach der Selbstumstellung hält nur die Kontenseite das Einmalpasswort. Eine bereits laufende Anfrage, die danach 401 erhält, oder eine weiterhin angebotene Kontenaktion führt über die allgemeine Behandlung der beendeten Sitzung zur Anmeldeseite und entfernt die Anzeige, bevor die Person das Passwort übernommen hat. Der Abschluss der Selbstumstellung wird deshalb ein eigener Zustand der Oberfläche oberhalb der Seiten: Das Einmalpasswort wird nur im Speicher gehalten und auf einer eigenen Seite gezeigt, die keine geschützten Aktionen mehr anbietet; ein späterer 401 entfernt sie nicht; nur die Schaltfläche „Zur Anmeldung“ beendet den Zustand. Außerdem die zweite Reihenfolge der Umstellung gegen eine laufende Verzeichnisanmeldung (Umstellung und lokaler Pflichtwechsel sind schon abgeschlossen, bevor die Anmeldung die Kontosperre erreicht) als dauerhafte Regression, die der Bericht als fehlend nennt. Dazu Browsertests für beide Gegenbeispiele des Berichts (verspätete Leseanfrage und weiterhin angebotene Kontenaktion). Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, Änderungen an der serverseitigen Umstellung.
+
+**Schnittstellen und Arbeitsbereich:** Oberfläche (Sitzungskontext, Kontenverwaltung, Kataloge), Browsertests mit Testattrappe, ein Backendtest in LdapLoginTest, Dokumentation und DEC-079; keine Migration, keine Änderung der Verträge.
+
+**Abnahmekriterien:** Nach erfolgreicher Selbstumstellung bleibt das Einmalpasswort sichtbar, auch wenn danach eine geschützte Anfrage 401 erhält oder eine Kontenaktion ausgelöst wird; die Seite bietet dann keine geschützten Aktionen mehr an; „Zur Anmeldung“ führt zur Anmeldeseite und entfernt das Passwort aus dem Speicher; die Umstellung eines fremden Kontos und das normale Ende einer Sitzung verhalten sich unverändert; die zweite Reihenfolge der Umstellung gegen die laufende Verzeichnisanmeldung ergibt 401 ohne Sitzung. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-079 als Ergebnis PR übergeben.
