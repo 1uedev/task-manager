@@ -11,10 +11,11 @@ import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
-import { formatDateTime } from '../i18n/format.ts';
+import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
+import { TicketAttachments } from './TicketAttachments.tsx';
 import { statusName, typeName } from './ProjectPage.tsx';
 
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'] as const;
@@ -22,8 +23,9 @@ type Field = (typeof FIELDS)[number];
 type Draft = Record<Field, string>;
 // The text of every custom field control by field key.
 type CustomDraft = Readonly<Record<string, string>>;
-const FIELD_LABEL: Record<Field | 'tags', MessageKey> = {
+const FIELD_LABEL: Record<Field | 'tags' | 'attachments', MessageKey> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags',
+  attachments: 'field.attachments',
 };
 
 function customDraftOf(ticket: Ticket, fields: readonly CustomField[]): CustomDraft {
@@ -96,6 +98,8 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
   const [members] = useLoad(() => listMembers(api, project.id), [api, project.id]);
+  // Counts additions and removals of attachments, which change the history but not the version of the ticket (TASK-051).
+  const [attachmentChanges, setAttachmentChanges] = useState(0);
   const readable = new Set(Object.keys(ticket.fields));
   const writable = new Set<string>(ticket.writableFields);
   const changed = FIELDS.filter((field) => writable.has(field) && draft[field] !== base[field]);
@@ -276,7 +280,8 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
         </section>
         <div>
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
-          <History key={`history-${refusals}`} project={project} ticket={ticket} round={round} />
+          <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
+          <History key={`history-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />
         </div>
       </div>
     </>
@@ -348,6 +353,19 @@ function TicketTags({ project, ticket, round }: { readonly project: Project; rea
   );
 }
 
+function parseAttachment(raw: string | null | undefined): { readonly name: string; readonly size: number } | null {
+  if (raw === null || raw === undefined) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value === 'object' && value !== null && 'name' in value && 'size' in value && typeof value.name === 'string' && typeof value.size === 'number') {
+      return { name: value.name, size: value.size };
+    }
+  } catch {
+    // Not a description; the entry is shown without a name.
+  }
+  return null;
+}
+
 function History({ project, ticket, round }: { readonly project: Project; readonly ticket: Ticket; readonly round: number }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
@@ -372,6 +390,13 @@ function History({ project, ticket, round }: { readonly project: Project; readon
     return raw;
   };
 
+  // The attachment as the server describes it in the history: a JSON text with its name and size.
+  const attachmentText = (added: string | null | undefined, removed: string | null | undefined) => {
+    const described = parseAttachment(added ?? removed);
+    if (described === null) return t(added ? 'history.attachmentAdded' : 'history.attachmentRemoved', { name: t('field.empty'), size: '' });
+    return t(added ? 'history.attachmentAdded' : 'history.attachmentRemoved', { name: described.name, size: formatBytes(described.size, language) });
+  };
+
   return (
     <section aria-labelledby="ticket-history" className="panel">
       <h2 id="ticket-history">{t('history.title')}</h2>
@@ -387,6 +412,8 @@ function History({ project, ticket, round }: { readonly project: Project; readon
                     <li key={position}>
                       {change.field === 'tags'
                         ? t(change.to ? 'history.tagAdded' : 'history.tagRemoved', { tag: value('tags', change.to ?? change.from) })
+                        : change.field === 'attachments'
+                        ? attachmentText(change.to, change.from)
                         : t('history.change', { field: change.field.startsWith(CUSTOM_PREFIX)
                           ? custom.find((item) => `${CUSTOM_PREFIX}${item.key}` === change.field)?.name ?? change.field
                           : t(FIELD_LABEL[change.field as Field] ?? 'field.title'), from: value(change.field, change.from), to: value(change.field, change.to) })}

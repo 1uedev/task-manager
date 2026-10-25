@@ -7,7 +7,7 @@ Stand 21. Oktober 2026 · Ergebnis von TASK-031 zur Prüfung (DEC-071). Dieses D
 | Teil | Inhalt |
 |---|---|
 | [Dockerfile](../Dockerfile) | Ein Image mit Backend und gebauter Oberfläche. Drei Stufen: Oberfläche mit Node 24.22.0 bauen, Backend mit Temurin 25 und der gebauten Oberfläche paketieren, Laufzeit auf Temurin 25 JRE. Basisimages mit Tag und Digest festgelegt. Läuft als eigenes Konto ohne Root, ohne Passwort, Schlüssel oder Daten im Image. |
-| [compose.yaml](../compose.yaml) | PostgreSQL 18.6 (gleicher Digest wie Tests und CI) mit dem benannten Volume `db-data`, die Anwendung und auf Wunsch das Werkzeug `demo`. Die Anwendung ist nur auf diesem Rechner erreichbar (`127.0.0.1`). |
+| [compose.yaml](../compose.yaml) | PostgreSQL 18.6 (gleicher Digest wie Tests und CI) mit dem benannten Volume `db-data`, die Anwendung mit dem Volume `files-data` für die Anhänge (TASK-051) und auf Wunsch das Werkzeug `demo`. Die Anwendung ist nur auf diesem Rechner erreichbar (`127.0.0.1`). |
 | `.env.example` | Vorlage für die zwei Pflichtwerte. Ohne sie verweigert Compose den Start; es gibt keine Standardkennwörter. |
 | [tools/demo/demo.py](../tools/demo/demo.py) | Synthetische Demodaten, Referenzbestand, Prüfungen und Suchmessung, ausschließlich über die öffentliche HTTP API. Nur Python Standardbibliothek. |
 | [tools/demo/image-check.sh](../tools/demo/image-check.sh) | Gesamtprüfung des Images, läuft in CI als Workflow `Image`. |
@@ -47,8 +47,8 @@ Weitere Befehle:
 | Befehl | Wirkung |
 |---|---|
 | `docker compose stop` / `docker compose start` | Anhalten und fortsetzen; Daten und Sitzungen bleiben. |
-| `docker compose down` | Container entfernen; das Volume und damit alle Daten bleiben. |
-| `docker compose down -v` | Container **und Daten** entfernen, für einen frischen Start. |
+| `docker compose down` | Container entfernen; die Volumes und damit alle Daten und Anhänge bleiben. |
+| `docker compose down -v` | Container **und Daten samt Anhängen** entfernen, für einen frischen Start. |
 | `docker compose run --rm app reset-admin-password admin` | Neues Einmalpasswort für ein Konto mit Kontenverwaltung, wenn niemand mehr angemeldet ist. |
 | `docker compose run --rm app rebuild-search` | Suchprojektion aus den Fachdaten neu aufbauen. |
 | `docker compose logs app` | Protokoll der Anwendung mit Korrelationskennung je Anfrage. |
@@ -78,8 +78,9 @@ Der erste vorführbare Abschnitt aus DEC-051 lautet: anmelden, Projekt öffnen, 
 5. Im zweiten Fenster als `carla` anmelden. Nur WEB ist sichtbar, Beschreibung und Zuständigkeit fehlen, es gibt keine Bearbeitungsfelder. Die Suche nach „Drucker“ findet nichts, obwohl es im Helpdesk ein solches Ticket gibt.
 6. Konflikt: anna und ben öffnen dasselbe WEB Ticket, beide ändern den Titel. Der zweite Speichervorgang meldet den Konflikt und behält die eigene Eingabe.
 7. Als `admin` unter Gruppen und Rechte der Gruppe „Entwicklung“ das Schreiben des Titels nehmen. ben sieht beim nächsten Speichern die Ablehnung und danach nur noch lesbare Felder.
-8. Unter Konten ein neues Konto anlegen; das Einmalpasswort erscheint einmal. Mit ihm anmelden, der Passwortwechsel ist Pflicht.
-9. `docker compose down` und `docker compose up -d`: Daten und Anmeldungen bleiben, das Sitzungsende ändert sich nicht. Der erste Start nach `bootstrap-admin` baut die Suchprojektion einmal neu auf, weil das Unternehmen erst mit diesem Befehl entsteht; bei den Demodaten dauert das Sekunden, beim Referenzbestand mit 90.000 Tickets etwa zwei Minuten, in denen die Anwendung noch nicht bereit meldet.
+8. Im Ticket unter Anhänge eine Datei auswählen oder auf die Fläche ziehen: sie erscheint mit Größe und Urheberin, lässt sich als Datei herunterladen und taucht in der Historie auf. Eine Datei `programm.exe` wird abgelehnt. Entfernen fragt vorher; die Historie behält den Eintrag. Als `carla` fehlt der Abschnitt ganz, weil ihre Gruppe das Feld nicht lesen darf.
+9. Unter Konten ein neues Konto anlegen; das Einmalpasswort erscheint einmal. Mit ihm anmelden, der Passwortwechsel ist Pflicht.
+10. `docker compose down` und `docker compose up -d`: Daten und Anmeldungen bleiben, das Sitzungsende ändert sich nicht. Der erste Start nach `bootstrap-admin` baut die Suchprojektion einmal neu auf, weil das Unternehmen erst mit diesem Befehl entsteht; bei den Demodaten dauert das Sekunden, beim Referenzbestand mit 90.000 Tickets etwa zwei Minuten, in denen die Anwendung noch nicht bereit meldet.
 
 ## Nachweise zu den zehn Punkten aus DEVELOPMENT_START.md
 

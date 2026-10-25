@@ -30,6 +30,8 @@ FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1
 RUN groupadd --system --gid 10001 taskmanager \
  && useradd --system --uid 10001 --gid taskmanager --home-dir /app --shell /usr/sbin/nologin taskmanager
 WORKDIR /app
+# The file store of the attachments (TASK-051). Mount a volume here; an empty named volume takes over this owner.
+RUN mkdir -p /data/files && chown 10001:10001 /data/files
 COPY --from=backend --chown=root:root --chmod=0444 /build/app.jar /app/app.jar
 USER 10001:10001
 EXPOSE 8080

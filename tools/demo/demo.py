@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import datetime
+import hashlib
 import http.client
 import json
 import math
@@ -100,7 +101,9 @@ class Client:
             self.connection = None
 
     def call(self, method: str, path: str, body: object = None, query: dict | list | None = None,
-             headers: dict[str, str] | None = None, expect: tuple[int, ...] | None = (200, 201, 204)) -> Response:
+             headers: dict[str, str] | None = None, expect: tuple[int, ...] | None = (200, 201, 204),
+             content: bytes | None = None, as_bytes: bool = False) -> Response:
+        """`content` is sent as it is (an upload); `as_bytes` returns the answer as bytes instead of reading it as JSON (a download)."""
         target = API + path
         if query:
             target += "?" + urllib.parse.urlencode(query, doseq=True)
@@ -113,6 +116,8 @@ class Client:
         if body is not None:
             data = json.dumps(body).encode()
             sent["Content-Type"] = "application/json"
+        if content is not None:
+            data = content
         sent.update(headers or {})
         safe = method in SAFE_METHODS
         if not safe and self.connection is not None and time.monotonic() - self.last_used > IDLE_RECONNECT_SECONDS:
@@ -150,7 +155,9 @@ class Client:
             if name.lower() == "set-cookie":
                 self._cookie(value)
         parsed: object = None
-        if payload:
+        if as_bytes:
+            parsed = payload
+        elif payload:
             try:
                 parsed = json.loads(payload)
             except ValueError:
@@ -210,7 +217,7 @@ def admin_client(args) -> Client:
 
 # ---------------------------------------------------------------------- data building blocks
 
-ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags"]
+ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments"]
 PROJECT_ACTIONS_FULL = ["project.read", "project.manage", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_EDIT = ["project.read", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_READ = ["project.read", "ticket.read"]
@@ -385,7 +392,7 @@ def seed_demo(args) -> None:
     print("groups and rights")
     specs = {
         "Projektleitung": GroupSpec("Projektleitung", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS),
-        "Entwicklung": GroupSpec("Entwicklung", PROJECT_ACTIONS_EDIT, ALL_FIELDS, ["title", "description", "status", "assignee", "tags"]),
+        "Entwicklung": GroupSpec("Entwicklung", PROJECT_ACTIONS_EDIT, ALL_FIELDS, ["title", "description", "status", "assignee", "tags", "attachments"]),
         "Lesen ohne Beschreibung": GroupSpec("Lesen ohne Beschreibung", PROJECT_ACTIONS_READ, ["title", "type", "status", "tags"], []),
     }
     builder.group(GroupSpec("Verwaltung Demo", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), [admin_id])
@@ -475,7 +482,7 @@ def seed_reference(args) -> None:
     print("groups and rights")
     builder.group(GroupSpec("Referenz Verwaltung", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), [admin_id])
     builder.group(GroupSpec("Referenz Projektleitung", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), full)
-    builder.group(GroupSpec("Referenz Bearbeitung", PROJECT_ACTIONS_EDIT, ALL_FIELDS, ["title", "description", "status", "assignee", "tags"]), edit)
+    builder.group(GroupSpec("Referenz Bearbeitung", PROJECT_ACTIONS_EDIT, ALL_FIELDS, ["title", "description", "status", "assignee", "tags", "attachments"]), edit)
     builder.group(GroupSpec("Referenz Lesen ohne Beschreibung", PROJECT_ACTIONS_READ, ["title", "type", "status", "tags"], []), read)
 
     print(f"{args.company_tags} company tags")
@@ -571,6 +578,10 @@ def verify(args) -> None:
         check(same, f"fixed end unchanged ({state['expiresAt']} before, {session.get('expiresAt')} after)")
         keys = sorted(p["key"] for p in anna.call("GET", "/projects").body)
         check(keys == ["APP", "HELP", "WEB"], f"data kept, anna sees {keys}")
+        if "attachment" in state:
+            kept = anna.call("GET", state["attachment"]["path"], as_bytes=True, expect=None)
+            check(kept.status == 200 and hashlib.sha256(kept.body).hexdigest() == state["attachment"]["sha256"],
+                  "the attachment is still there after the restart, byte for byte")
     else:
         anna = Client(args.url)
         session = anna.login("anna", password)
@@ -613,9 +624,28 @@ def verify(args) -> None:
         found = ben.call("GET", "/search/tickets", query={"q": "geprüft"}).body
         check(any(h["key"] == current["key"] for h in found["items"]), "the search finds the new title right away")
 
+        # Attachments (TASK-051): the same bytes come back, programs are refused, a reader without the field is refused.
+        content = ("Synthetischer Prüfbericht für die Vorführung.\n" * 50).encode()
+        added = ben.call("POST", f"{path}/attachments", content=content, query={"name": "Prüfbericht.txt"},
+                         headers={"Content-Type": "application/octet-stream"}, expect=None)
+        check(added.status == 201, f"ben attaches a file ({added.status})")
+        attachment = added.body if isinstance(added.body, dict) else {}
+        digest = hashlib.sha256(content).hexdigest()
+        check(attachment.get("sha256") == digest and attachment.get("size") == len(content), "the server names the size and checksum of the file")
+        saved = ben.call("GET", f"{path}/attachments/{attachment.get('id')}", as_bytes=True, expect=None)
+        check(saved.status == 200 and saved.body == content, "the download returns exactly the same bytes")
+        check("attachment" in saved.headers.get("content-disposition", "") and saved.headers.get("x-content-type-options") == "nosniff",
+              "the download is a file to save, never shown by the browser")
+        blocked = ben.call("POST", f"{path}/attachments", content=b"MZ", query={"name": "tool.exe"},
+                           headers={"Content-Type": "application/octet-stream"}, expect=None)
+        check(blocked.status == 415, f"a program is refused ({blocked.status})")
+        unseen = carla.call("GET", f"/projects/{web}/tickets/{ticket['number']}/attachments", expect=None)
+        check(unseen.status == 403, f"carla has no read rule for attachments ({unseen.status})")
+
         if args.save:
             with open(args.save, "w") as out:
-                json.dump({"cookies": anna.cookies, "csrf": anna.csrf, "expiresAt": session["expiresAt"]}, out)
+                json.dump({"cookies": anna.cookies, "csrf": anna.csrf, "expiresAt": session["expiresAt"],
+                           "attachment": {"path": f"{path}/attachments/{attachment.get('id')}", "sha256": digest}}, out)
     if failures:
         raise SystemExit(f"{len(failures)} checks failed")
     print("all checks passed")

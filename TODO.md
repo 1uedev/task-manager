@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 30 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 31 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -70,6 +68,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
 | [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
 | [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
+| [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -640,9 +639,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-051 Dateien und Anhänge an Tickets (Paket A7)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261025-files-01 · **Aktualisiert:** 2026-10-25
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261025-files-01 · **Aktualisiert:** 2026-10-25
 
-**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Abhängigkeiten:** TASK-027 (Ticketkern) und TASK-043 (Rechtekern), beide gemergt. **Arbeitsstand:** Paket A7 der Reihenfolge aus DEC-072, Holgers Freigabe „kannst du derweil mit dem nächsten Thema weitermachen“ vom 25. Oktober 2026. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-080. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung, Holger kann sie vor dem Merge dieser Reservierung ändern.
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Abhängigkeiten:** TASK-027 (Ticketkern) und TASK-043 (Rechtekern), beide gemergt. **Arbeitsstand:** Paket A7 der Reihenfolge aus DEC-072, Holgers Freigabe „kannst du derweil mit dem nächsten Thema weitermachen“ vom 25. Oktober 2026. Branch claude/upbeat-goldberg-mwa4c2; Ergebnis mit DEC-080. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung und stehen mit dem Ergebnis zur Prüfung.
 
 **Umfang:** Ein neues Modul `files` mit Dateispeicher und Anhängen an Tickets, ohne Kommentare, Portal, Mail und Wiki.
 1. Speicher: Ein Speicherport mit einem Dateisystemadapter auf einem konfigurierbaren, dauerhaften Verzeichnis außerhalb des Containerlebenszyklus (OPERATIONS.md, ARCHITECTURE.md). Inhalte werden nie überschrieben, die Ablage ist inhaltsadressiert über die SHA-256 Prüfsumme, die Metadaten liegen in PostgreSQL (Migration V0024).
@@ -660,4 +659,6 @@ Nicht Teil: Kommentare, interne Notizen und kundenlesbare Anhänge (kommen mit d
 
 **Abnahmekriterien:** Ein berechtigtes Mitglied lädt eine Datei bis zur Grenze hoch, sieht sie in der Liste und lädt exakt dieselben Bytes herunter; zu große, gesperrte und leere Dateien werden mit stabilem Fehlercode abgelehnt, ohne dass Reste im Speicher oder in der Datenbank bleiben; ein Neustart oder Austausch des Anwendungscontainers mit demselben Volume behält alle Anhänge; ein Abbruch zwischen Ablegen und Zuordnung hinterlässt nur eine Datei, die der Aufräumlauf entfernt; wer das Ticket oder das Feld nicht lesen darf, erhält auch über den direkten Link 404 oder 403 nach der Rechtesemantik des Ticketkerns, ebenso nach Entzug des Rechts; Entfernen und Hinzufügen stehen in der Historie, sichtbar nur mit Leserecht am Feld; Dateiname und Inhalt können weder Pfade verlassen noch beim Download Skripte ausführen lassen; die Rechte gelten in Oberfläche, API und Historie gleich. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-080 als Ergebnis PR übergeben. Offene Entscheidungen für Holger, falls er von den Vorschlägen abweichen will: Dateigrenze, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk, Entfernen als Ausblenden mit Frist.
+**Ergebnis und Prüfungen:** DEC-080; Modul `files` (Speicherschnittstelle mit Dateisystemadapter, Upload mit Staging und atomarem Ablegen, Regeln für Name, Größe, Endung und Programmanfang, Aufräumlauf mit Quarantäne), Migration V0024, Vertrag `contracts/files.openapi.yaml`, Ticketfeld `attachments` in Feldkatalog, Historie und Vertrag, Oberfläche im Ticket (Liste, Auswahl und Ablegen, Herunterladen, Entfernen mit Rückfrage, Historienzeile), Volume `files-data` im Vorführimage, Erweiterung von Demowerkzeug und Ablaufbeschreibung. Lokal grün: Backend gegen PostgreSQL 16, 303 Tests ohne Ausfall (neu: 27, darunter 8 API Tests gegen echte Datenbank und echtes Verzeichnis, 5 Fehlerfälle von Speicher und Transaktion, 9 Speicher und Regeltests, 1 Vertragsabgleich); `lifecycle-check.sh` gegen eine leere Datenbank mit 23 Migrationen, einschließlich der Ablehnung des Starts ohne Dateispeicher; Frontend `npm run verify` (75 Tests) und 102 Browsertests (7 neue, dazu die Korrektur der Feldbezeichnung in der Gruppenverwaltung); Demowerkzeug: `seed`, `verify` mit Hochladen, Herunterladen, abgelehntem Programm und fehlendem Leserecht gegen das gepackte JAR, nach Neustart mit demselben Verzeichnis `verify --resume` mit unverändertem Anhang (Byte für Byte). Nicht geprüft: PostgreSQL 18.6 und der Docker Lauf `image-check.sh` (laufen in der CI; in dieser Umgebung läuft kein Docker Dienst), ein Dateisystem außer dem lokalen, Uploads über mehrere GB oder viele gleichzeitige große Uploads, ein Virenscanner.
+
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040), besonders: die Reihenfolge Inhalt zuerst und Zeile danach mit ihren Fehlerfällen, den Aufräumlauf samt Quarantäne gegen einen laufenden Upload, Namensbereinigung und Sperrliste gegen Umgehungen (Schreibrichtung, doppelte Endung, Wechseldatenströme), die Auslieferung nur als Datei, die Feldrechte über Oberfläche, API, Historie und direkten Link sowie die Betriebshinweise zur Sicherung. Holger entscheidet die Vorschläge Dateigrenze 25 MB, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk und Entfernen mit Frist von 7 Tagen und nimmt fachlich ab (Ablauf in docs/DEMO.md, Schritt 8).

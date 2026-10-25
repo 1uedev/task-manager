@@ -68,7 +68,7 @@ class PermissionsController {
     /** For one project, or for every project the account is a member of when granted without a project. */
     static final List<String> PROJECT_ACTIONS = List.of("project.manage", "project.read", "tag.create", "tags.manage",
         "ticket.create", "ticket.edit", "ticket.read");
-    static final Map<String, List<String>> FIELDS = Map.of(TICKET, List.of("assignee", "description", "status", "tags", "title", "type"));
+    static final Map<String, List<String>> FIELDS = Map.of(TICKET, List.of("assignee", "attachments", "description", "status", "tags", "title", "type"));
     private static final String MANAGE = "permissions.manage";
     private static final int NAME_MAX = 80;
 
