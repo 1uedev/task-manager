@@ -3,7 +3,13 @@ import { acceptableLogo, isAccentColor } from '../brand/brand.ts';
 import { readCsrfToken } from './csrf.ts';
 import type { components, paths } from './generated/api';
 import type { paths as AppearancePaths } from './generated/appearance';
+import type { paths as FilesPaths } from './generated/files';
 import type { paths as IdentityPaths } from './generated/identity';
+import type { paths as PermissionsPaths } from './generated/permissions';
+import type { paths as ProjectsPaths } from './generated/projects';
+import type { paths as SearchPaths } from './generated/search';
+import type { paths as TagsPaths } from './generated/tags';
+import type { paths as TicketsPaths } from './generated/tickets';
 import { networkProblem, readProblem, type ProblemInfo } from './problem.ts';
 
 export type Probe = components['schemas']['Probe'];
@@ -26,9 +32,9 @@ export function parseProbe(value: unknown): Probe | null {
   return item as unknown as Probe;
 }
 
-const INVALID_RESPONSE: ProblemInfo = { kind: 'unknown', status: null, code: null, correlationId: null };
+export const INVALID_RESPONSE: ProblemInfo = { kind: 'unknown', status: null, code: null, correlationId: null };
 
-async function guarded<T>(call: () => Promise<Outcome<T>>): Promise<Outcome<T>> {
+export async function guarded<T>(call: () => Promise<Outcome<T>>): Promise<Outcome<T>> {
   try {
     return await call();
   } catch (error) {
@@ -78,16 +84,69 @@ export function updateProbe(api: Api, id: string, label: string, etag: string, s
 
 export type ServerApi = ReturnType<typeof createServerApi>;
 
+// Listeners told when the server says the session is gone (401 on anything but the session state itself), so the
+// interface can return to the login and keep what the person typed in the page that is still open.
+const sessionLostListeners = new Set<() => void>();
+
+export function onSessionLost(listener: () => void): () => void {
+  sessionLostListeners.add(listener);
+  return () => sessionLostListeners.delete(listener);
+}
+
+// Listeners told when the server refuses a request with 403: the rights of the session may have changed since they were
+// read, so whatever the interface derives from them (navigation, offered actions) has to be read again (finding F6 of the
+// review of TASK-030).
+const forbiddenListeners = new Set<() => void>();
+
+export function onForbidden(listener: () => void): () => void {
+  forbiddenListeners.add(listener);
+  return () => forbiddenListeners.delete(listener);
+}
+
+const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+// Every changing request repeats the CSRF token the server set; a 401 outside the session endpoint ends the login, a 403
+// there reads the rights of the session again.
+export function withSession(fetcher: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    if (!SAFE.has(request.method) && !request.headers.has('X-CSRF-Token')) {
+      const token = readCsrfToken();
+      if (token !== null) request.headers.set('X-CSRF-Token', token);
+    }
+    const response = await fetcher(request);
+    const sessionState = new URL(request.url).pathname.endsWith('/api/v1/session');
+    if (response.status === 401 && !sessionState) {
+      for (const listener of sessionLostListeners) listener();
+    }
+    if (response.status === 403 && !sessionState) {
+      for (const listener of forbiddenListeners) listener();
+    }
+    return response;
+  };
+}
+
 export function createServerApi(fetcher: typeof fetch = (...args) => globalThis.fetch(...args), origin?: string) {
   const baseUrl = `${origin ?? globalThis.location?.origin ?? 'http://localhost'}/api/v1`;
+  const fetch = withSession(fetcher);
   return {
-    identity: createClient<IdentityPaths>({ baseUrl, fetch: fetcher }),
-    appearance: createClient<AppearancePaths>({ baseUrl, fetch: fetcher }),
+    identity: createClient<IdentityPaths>({ baseUrl, fetch }),
+    appearance: createClient<AppearancePaths>({ baseUrl, fetch }),
+    projects: createClient<ProjectsPaths>({ baseUrl, fetch }),
+    tickets: createClient<TicketsPaths>({ baseUrl, fetch }),
+    tags: createClient<TagsPaths>({ baseUrl, fetch }),
+    search: createClient<SearchPaths>({ baseUrl, fetch }),
+    permissions: createClient<PermissionsPaths>({ baseUrl, fetch }),
+    files: createClient<FilesPaths>({ baseUrl, fetch }),
   };
 }
 
 export interface SessionState {
   readonly authenticated: boolean;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  // End of the restricted session that may only change the one time password.
+  readonly passwordChangeBy: string | null;
   // Only a complete login counts; a login that still has to change its one time password does not.
   readonly full: boolean;
   // Keys of the administrative rights the session holds, as the server lists them. Only a hint for what to show: the server
@@ -103,7 +162,15 @@ export function parseSession(value: unknown): SessionState | null {
   if (typeof item.authenticated !== 'boolean') return null;
   // The list is only sent for a signed in request; anything that is not a list of texts counts as no right.
   const rights = Array.isArray(item.rights) ? item.rights.filter((right): right is string => typeof right === 'string') : [];
-  return { authenticated: item.authenticated, full: item.authenticated && item.level === 'full', rights };
+  const text = (value: unknown) => (typeof value === 'string' ? value : null);
+  return {
+    authenticated: item.authenticated,
+    username: text(item.username),
+    displayName: text(item.displayName),
+    passwordChangeBy: text(item.passwordChangeBy),
+    full: item.authenticated && item.level === 'full',
+    rights,
+  };
 }
 
 export interface AppearanceLogo {

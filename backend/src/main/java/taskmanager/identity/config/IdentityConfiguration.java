@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(IdentityProperties.class)
+@EnableConfigurationProperties({ IdentityProperties.class, LdapProperties.class })
 class IdentityConfiguration {
     /** The only time source for periods and expiry. Tests replace it. */
     @Bean

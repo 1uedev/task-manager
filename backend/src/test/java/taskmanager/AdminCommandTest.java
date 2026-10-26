@@ -46,6 +46,25 @@ class AdminCommandTest {
         }
     }
 
+    private static Result search(String database, String... args) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+        try {
+            int exit = TaskManagerApplication.runSearchCommand(args,
+                "spring.datasource.url=" + database,
+                "spring.datasource.username=" + TestDatabase.username(),
+                "spring.datasource.password=" + TestDatabase.password());
+            return new Result(exit, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+    }
+
     private static List<String> query(String database, String sql) throws SQLException {
         try (Connection connection = DriverManager.getConnection(database, TestDatabase.username(), TestDatabase.password());
              Statement statement = connection.createStatement();
@@ -139,5 +158,20 @@ class AdminCommandTest {
         String database = TestDatabase.createEmptyDatabase();
         assertEquals(2, run(database, "bootstrap-admin").exitCode());
         assertEquals(2, run(database, "reset-admin-password", "a", "b").exitCode());
+    }
+
+    @Test
+    void rebuildSearchRefusesWithoutACompanyAndRebuildsTheProjectionAfterwards() throws Exception {
+        String database = TestDatabase.createEmptyDatabase();
+        assertEquals(2, search(database, "rebuild-search", "extra").exitCode());
+        Result refused = search(database, "rebuild-search");
+        assertEquals(2, refused.exitCode(), refused.out());
+        assertTrue(refused.err().contains("company.missing"), refused.err());
+        assertEquals(0, run(database, "bootstrap-admin", "Chef").exitCode());
+        Result rebuilt = search(database, "rebuild-search");
+        assertEquals(0, rebuilt.exitCode(), rebuilt.err());
+        assertTrue(rebuilt.out().contains("Search projection rebuilt."), rebuilt.out());
+        assertEquals(List.of("0"), query(database, "select count(*) from search_project"));
+        assertEquals(List.of("1"), query(database, "select count(*) from search_state"));
     }
 }

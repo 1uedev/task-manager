@@ -1,5 +1,7 @@
 package taskmanager.identity;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -18,9 +20,22 @@ public interface IdentityVerification {
      */
     boolean isCurrentFullSession(UUID accountId, UUID sessionId);
 
+    /**
+     * The same check as {@link #isCurrentFullSession}, with the end of the session period when it passes: the earlier of the
+     * stored end and the start plus the current session duration. Empty when the check fails (TASK-043).
+     */
+    Optional<Instant> currentFullSessionEnd(UUID accountId, UUID sessionId);
+
     /** True if an account with this identifier exists, active or not. The row stays locked until the commit. */
     boolean accountExists(UUID accountId);
 
     /** True if the account exists and is active. The row stays locked until the commit. */
     boolean accountIsActive(UUID accountId);
+
+    /**
+     * True if the account exists, is active and signs in with a password of this application, not through the directory
+     * (TASK-047). The row stays locked until the commit; a conversion of a directory account to a local one takes the row
+     * exclusively and therefore waits for it.
+     */
+    boolean accountIsActiveLocal(UUID accountId);
 }

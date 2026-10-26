@@ -6,6 +6,11 @@ spring:
     url: ${TASK_MANAGER_DB_URL}
     username: ${TASK_MANAGER_DB_USER}
     password: ${TASK_MANAGER_DB_PASSWORD}
+    hikari:
+      # Every connection waits at most five seconds for a row lock; the modules answer that as retryable (busy). Until
+      # TASK-043 this limit leaked from the rights check into the rest of each transaction; now it is the session default
+      # and the rights check only puts it back after its own lock waits.
+      connection-init-sql: SET lock_timeout = '5s'
   jpa:
     open-in-view: false
     hibernate:
@@ -40,3 +45,16 @@ management:
 logging:
   pattern:
     level: "%5p [%X{correlationId:-}]"
+
+taskmanager:
+  identity:
+    ldap:
+      # Secrets and the private trust of the directory connection come from the environment only (TASK-046). The connection
+      # itself (address, search base, filter) is an administrator setting in the database.
+      bind-password: ${TASK_MANAGER_LDAP_BIND_PASSWORD:}
+      trust-store: ${TASK_MANAGER_LDAP_TRUST_STORE:}
+      trust-store-password: ${TASK_MANAGER_LDAP_TRUST_STORE_PASSWORD:}
+  files:
+    # The file store of the attachments (TASK-051) must lie on a persistent volume outside the container; the web application
+    # refuses to start without it. Limits and periods have defaults in FilesProperties.
+    directory: ${TASK_MANAGER_FILES_DIR:}

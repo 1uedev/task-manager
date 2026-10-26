@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 25 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 31 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,15 +28,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-029](#task-029-berechtigte-suche-für-tickets-und-projekte-implementieren) | Berechtigte Suche für Tickets und Projekte implementieren | — | 2026-10-17 |
-| [TASK-030](#task-030-durchgängige-oberfläche-und-minimale-administration-integrieren) | Durchgängige Oberfläche und minimale Administration integrieren | — | 2026-10-17 |
-| [TASK-031](#task-031-docker-vorführung-und-nachweise-des-ersten-abschnitts-liefern) | Docker-Vorführung und Nachweise des ersten Abschnitts liefern | — | 2026-10-17 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -63,10 +61,16 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-019](#task-019-bestätigte-sitzungs--portal-tag--und-suchauswahl-eintragen) | Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen | codex-20261017-v1-decisions-01 | 2026-10-17 |
 | [TASK-020](#task-020-entscheidungsvorlage-und-aufgabenplan-für-den-entwicklungsstart) | Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart | codex-20261017-start-plan-01 | 2026-10-17 |
 | [TASK-021](#task-021-werkzeugbasis-und-gemeinsame-verträge-qualifizieren) | Werkzeugbasis und gemeinsame Verträge qualifizieren | codex-20261017-qualification-01 | 2026-10-17 |
-| [TASK-028](#task-028-tag-kern-für-tickets-und-projekte-implementieren) | Tag-Kern für Tickets und Projekte implementieren | claude-20261020-tags-01 | 2026-10-20 |
 | [TASK-032](#task-032-bestätigten-startumfang-sitzungsstandard-und-kontoanlage-eintragen) | Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen | codex-20261017-start-decisions-01 | 2026-10-17 |
 | [TASK-033](#task-033-bearbeitbare-und-reservierte-aufgaben-übersichtlich-anzeigen) | Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen | codex-20261018-task-board-01 | 2026-10-18 |
-| [TASK-042](#task-042-tagänderungen-in-der-tickethistorie-zeigen) | Tagänderungen in der Tickethistorie zeigen | claude-20261020-taghistory-01 | 2026-10-20 |
+| [TASK-044](#task-044-projektkonfiguration-mit-tickettypen-abläufen-und-eigenen-feldern) | Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern | claude-20261023-projectconfig-02 | 2026-10-23 |
+| [TASK-045](#task-045-kontoverwaltung-ergänzen-rest-von-paket-a4) | Kontoverwaltung ergänzen (Rest von Paket A4) | claude-20261023-accounts-01 | 2026-10-23 |
+| [TASK-046](#task-046-ldap-anmeldung-paket-a5) | LDAP Anmeldung (Paket A5) | claude-20261023-ldap-01 | 2026-10-23 |
+| [TASK-047](#task-047-interne-verwaltung-bleibt-erhalten-und-umstellung-von-verzeichniskonten-nachtrag-zu-dec-075) | Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075) | claude-20261023-localadmin-01 | 2026-10-23 |
+| [TASK-048](#task-048-befunde-f1-bis-f4-der-prüfung-von-task-046-beheben) | Befunde F1 bis F4 der Prüfung von TASK-046 beheben | claude-20261024-reviewfix-01 | 2026-10-24 |
+| [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
+| [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
+| [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -485,78 +489,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Nächster Schritt:** Holger prüft die qualifizierte Werkzeugbasis und die gemeinsamen Vertragsregeln. Danach können TASK-022 (Backend-/PostgreSQL-Grundlage) und TASK-023 (React-Grundfläche) mit benannten Grenzen beauftragt werden; benötigte Browser-/Betriebsdetails sind vorher festzuhalten. Sie bleiben bis dahin BLOCKIERT und unbesetzt. TASK-021 bleibt zur Prüfung in TODO.md.
 
-## TASK-028 Tag-Kern für Tickets und Projekte implementieren
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-tags-01 · **Aktualisiert:** 2026-10-20
-
-**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-TKT-004. **Abhängigkeiten:** TASK-027 und TASK-025 (beide abgenommen, DONE.md). Holger hat am 20. Oktober 2026 im Projektgespräch mit „kannst du weitermachen“ das nächste Paket beauftragt und auf die Frage „Welchen Tag Katalog soll der Tag Kern (TASK-028) zuerst bekommen?“ die Variante „Beides“ gewählt: ein Unternehmenskatalog für gemeinsame Begriffe und Tags an Projekten, dazu je Projekt ein eigener Katalog, nur für Mitglieder sichtbar. Vorgeschlagene Vergaberegeln aus derselben Frage: eigenes Recht zum Anlegen neuer Tags, Zuordnen zu einem Ticket braucht das Änderungsrecht am Ticket, Zuordnen zu einem Projekt das Projektverwaltungsrecht, Umbenennen und Archivieren ein eigenes Unternehmensrecht, Namen ohne Groß und Kleinschreibung eindeutig im jeweiligen Katalog, Portalnutzer später mit dem Portal. TASK-029 bis TASK-031 bleiben blockiert und werden hier nicht freigegeben. Eine getrennte KI prüft das Ergebnis danach nach DEC-040. **Arbeitsstand:** Ergebnis auf Branch claude/project-thread-r4dri5 mit DEC-068, Migration V0013, Vertrag `contracts/tags.openapi.yaml` und Abschnitt „Tags (TASK-028)“ in backend/README.md; AGENTS.md, CLAUDE.md und README.md nennen den Umfang. Übergabe: Unternehmens- und Projektkatalog mit Anlegen, Umbenennen, Archivieren und Wiederherstellen; Zuordnung zu Tickets (Feld `tags`) und Projekten, auch kombiniert mit Anlage über den Namen in einer Transaktion; Recht `tags.manage`, Aktion `tag.create`, Port `TicketAccess`. `TagsApiTest` prüft Mehrfachzuordnung, Wiederholbarkeit, unberechtigtes Erstellen und Zuordnen, verborgene Projektkataloge, gleichzeitige Anlage und die Sperrfolge beim Archivieren. Offen für V1: Beschreibung und Farbe, Zusammenführen, Massenänderung, Filter, Autovervollständigung über Objekte, Suche (TASK-029), Oberfläche (TASK-030) und Portaltags.
-
-**Umfang:** Katalog, Erstell-/Zuordnungsrechte, Tag-Erstellung und Zuordnung zu Tickets sowie Projekten für den internen Ablauf umsetzen. Vertrag für weitere V1-Verwaltungsfunktionen und berechtigte externe Ersteller erhalten.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Tag-Modul, Tag-Zuordnungen und eigene Migrationen. Objektkontext kommt über öffentliche Projekt-/Ticketverträge. Katalog-/Objektsicht und Eindeutigkeit folgen TAGS_SEARCH.md nach Auswahl; keine Rechteausweitung durch Tag-Erstellung.
-
-**Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
-
-**Nächster Schritt:** Die unabhängige Claude Prüfung (docs/REVIEW_TASK-028_PR-119.md, PR #120) hat F1 bis F3 als P3 gemeldet; sie sind auf Holgers Auftrag behoben (Unicode Leerraum, Faltung von `ß`, keine Sperre auf Tags fremder Kataloge), dazu H3 bis H5, siehe DEC-068 Nachtrag (9). H1 hat Holger mit „In Tickethistorie“ entschieden, umgesetzt als TASK-042 (DEC-068 Nachtrag (10)). Nächster Schritt ist die Abnahme durch Holger.
-
-## TASK-042 Tagänderungen in der Tickethistorie zeigen
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261020-taghistory-01 · **Aktualisiert:** 2026-10-20
-
-**Bezug:** REQ-TKT-005, REQ-TAG-001, REQ-ACL-003. **Abhängigkeiten:** TASK-028 (auf main, BEREIT ZUR PRÜFUNG) und TASK-027 (abgenommen). Holger hat am 20. Oktober 2026 auf die Frage zum Hinweis H1 der unabhängigen Prüfung von TASK-028 (docs/REVIEW_TASK-028_PR-119.md, PR #120) die Option „In Tickethistorie“ gewählt: „Ein kleiner Folgeauftrag zeigt Zuordnen und Entfernen in der Tickethistorie, nur für Personen mit Leserecht auf das Feld tags.“ TASK-029 bis TASK-031 bleiben blockiert. Eine getrennte KI prüft das Ergebnis nach DEC-040. **Arbeitsstand:** Branch claude/project-thread-r4dri5 nach dem Merge dieses Claim PRs; Ergebnis mit einem Nachtrag zu DEC-068 und, falls nötig, der nächsten freien Migration.
-
-**Umfang:** Zuordnen und Entfernen von Tags an einem Ticket erscheinen in `GET …/tickets/{n}/history` mit Zeitpunkt, Konto und Tag, sichtbar nur mit der Leseregel für das Feld `tags`. Das Ticketmodul bleibt Besitzer seiner Historie und erhält dafür einen öffentlichen Port; das Tagmodul schreibt über diesen Port in derselben Transaktion. Projekttags, Oberfläche und Suche gehören nicht dazu.
-
-**Schnittstellen und Arbeitsbereich:** Ticketmodul (Historie, Port), Tagmodul (Aufruf), Vertrag `contracts/tickets.openapi.yaml`, Tests.
-
-**Abnahmekriterien:** Zuordnen und Entfernen stehen in der Historie, mehrfaches Zuordnen erzeugt keinen doppelten Eintrag; ohne Leserecht auf `tags` fehlen die Einträge ganz; die Ticketversion bleibt unverändert, wie in DEC-068 festgelegt. Getrennte KI prüft Sichtbarkeit und Transaktion.
-
-**Übergabe:** Umgesetzt auf claude/project-thread-r4dri5 ohne Migration. Port `TicketAccess.recordTagChange` (Ticketzeile geteilt gesperrt, Version unverändert), Aufruf aus `TagService.assignTicket` und `unassignTicket` nur bei tatsächlicher Änderung, Historie zeigt jeden Tageintrag für sich und nur mit der Leseregel für `tags`. Vertrag `contracts/tickets.openapi.yaml` (Feld `tags`), Nachtrag (10) zu DEC-068, backend/README.md. Test `assignmentsAndRemovalsAppearInTheTicketHistoryOnlyForReadersOfTheTags`.
-
-**Nächster Schritt:** Getrennte KI prüft Sichtbarkeit und Transaktion; danach Abnahme durch Holger.
-
-## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
-
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
-
-**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Abhängigkeiten:** TASK-028; Projektions-/Sichtbarkeitsvertrag und Messziele für den Abschnitt entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
-
-**Umfang:** Text-/Projekt-/Status-/Tag-Suche für Tickets und Projekte, PostgreSQL-Indizes, Rechtefilterung und konsistente Aktualisierung implementieren. Erweiterungsverträge für Wiki und Anforderungen erhalten; diese bleiben notwendige V1-Folgearbeit.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Suchmodul mit eigenen Projektionstabellen und Indizes. Quellen liefern berechtigungstrennbare Segmente über Verträge; Such-SQL liest keine fremden internen Tabellen. Rechteprüfung vor Ranking, Zählung und Seitenauswahl.
-
-**Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
-
-**Nächster Schritt:** Suchfelder/-filter und messbaren Abschnittsumfang annehmen; nach Beauftragung reservieren.
-
-## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
-
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
-
-**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001. **Abhängigkeiten:** TASK-023 und TASK-029 einschließlich der angenommenen vorgelagerten API-Verträge. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
-
-**Umfang:** Administrative lokale Kontoanlage, Anmeldung mit Pflichtwechsel, Projekte, Ticketanlage/-bearbeitung, Tags und Suche durchgängig verbinden. Minimale Gruppen-/Mitgliedschafts-/Rechte-/Projektkonfiguration für die Vorführung bedienbar machen. Fachregeln bleiben serverseitig.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Frontend-Fachansichten und Browserprüfungen. Backendänderungsbedarf als koordinierte Vertragskorrektur übergeben; keine unabhängigen API-Sonderwege. Keine echten Kundendaten in Beispielen.
-
-**Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
-
-**Nächster Schritt:** Passende Backend-/UI-Ergebnisse und Demoablauf annehmen; nach Beauftragung reservieren.
-
-## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
-
-**Status:** BLOCKIERT · **Verantwortlich:** unbesetzt · **Aktualisiert:** 2026-10-17
-
-**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Abhängigkeiten:** TASK-030 und angenommene Backendgrundlage; Betriebs-/Messprofil und Implementierungsumfang entschieden. **Arbeitsstand:** nur vorgemerkt; kein Branch reserviert, keine Anwendung erstellt.
-
-**Umfang:** Reproduzierbares Anwendungsimage mit Oberfläche, PostgreSQL-Anbindung, Startanleitung und synthetischen Demodaten liefern. Durchgängige Funktions-/Rechte-/Konfliktnachweise und begrenzte Suchmessung des tatsächlich vorhandenen Umfangs durchführen.
-
-**Schnittstellen und Arbeitsbereich:** Geplante Zuständigkeit: Container-/Buildintegration, Beispielkonfiguration ohne Geheimnisse, Demonstrations- und Messprotokoll. Runtime-/Secrets-/TLS-/Persistenzgrenzen aus Betriebsvertrag übernehmen. Gemeinsame CI-Änderungen koordiniert integrieren.
-
-**Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
-
-**Nächster Schritt:** Betriebs-/Messprofil und Vorführung freigeben; nach Beauftragung reservieren. Spätere V1-Aufgaben erst anschließend mit unverändertem bestätigtem Umfang konkretisieren.
-
 ## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
 
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** codex-20261017-start-decisions-01 · **Aktualisiert:** 2026-10-17
@@ -594,3 +526,162 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
 
 **Nächster Schritt:** Holger prüft die Übersicht. Weitere KI-Sitzungen lesen den aktuellen Stand auf main und reservieren ausschließlich freie, beauftragte Aufgaben über das dokumentierte Verfahren. TASK-022 bis TASK-031 bleiben BLOCKIERT; fachliche Abnahmen und weitere Aufträge werden gesondert eingetragen.
+
+## TASK-044 Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-projectconfig-02 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-026, TASK-027, TASK-029, TASK-030 und TASK-043 (alle abgenommen). **Arbeitsstand:** Paket A2 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „mache weiter“ den Start freigegeben. Umgesetzt mit DEC-073 und den Migrationen V0018 bis V0020 im Ergebnis PR dieser Sitzung; Beschreibung in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md). Übernahme: Die Reservierung (Claim PR #150) lautete auf claude-20261023-projectconfig-01 und den Zweig claude/project-thread-r4dri5. Dieser Zweig bestand nicht, und im Konto lief keine weitere Sitzung zu diesem Repository; auf Holgers erneutes „mache weiter mit dem Projekt“ hat claude-20261023-projectconfig-02 die Aufgabe auf dem zugewiesenen Zweig claude/upbeat-goldberg-mwa4c2 fortgeführt. Holger bestätigt die Übernahme mit dem Merge oder widerspricht im Review.
+
+**Umfang:** Erster Teil von A2, Detailregeln nach den Vorschlägen aus docs/DOMAIN_MODEL.md zu OPEN-007. (1) Tickettypen je Projekt. (2) Status und erlaubte Übergänge je Tickettyp statt des festen Ablaufs Neu, In Arbeit, Erledigt. (3) Eigene Felder je Projekt mit den Typen Kurztext, Langtext, Ganzzahl, Datum, Wahr/Falsch, Einfachauswahl und Benutzerreferenz; Auswahloptionen lassen sich deaktivieren, ohne Bestandswerte zu verlieren. (4) Pflichtfelder bei Anlage und je Übergang. (5) Konfiguration als Entwurf bearbeiten und als neue Version veröffentlichen; verträgliche Änderungen gelten sofort für alle Tickets des Projekts, ein noch verwendeter Status lässt sich nur mit Zuordnung entfernen, ein Feldtyp wird nicht still umgewandelt. (6) Eigene Felder in Ticketrechten, Historie und Suche wie die Standardfelder. (7) Oberfläche zum Bearbeiten der Projektkonfiguration und für eigene Felder im Ticket. Vorgesehene Standardwahl, mit dem Ergebnis zur Prüfung: Bestandstickets wechseln bei Veröffentlichung sofort auf die neue Version, keine Bindung einzelner Tickets an alte Versionen. Nicht Teil: Formulare und Portalformulare, Automationen (setzen Hintergrundaufträge aus A8 voraus), Projektvorlagen, Mehrfachauswahl und Dezimalzahl, Verschieben zwischen Projekten, Archivierung.
+
+**Schnittstellen und Arbeitsbereich:** Projektmodul (Konfiguration), Ticketkern (Typ, Status, eigene Feldwerte, Übergangsprüfung), Feldrechte im Berechtigungsmodul, Suchprojektion, Verträge `contracts/projects.openapi.yaml`, `contracts/tickets.openapi.yaml` und betroffene Verträge, Oberfläche für Projektkonfiguration und Ticket, Tests.
+
+**Abnahmekriterien:** Zwei Projekte mit unterschiedlichen Typen, Abläufen und Feldern nach den Beispielen A und B aus docs/DOMAIN_MODEL.md sind einrichtbar und bedienbar; die Prüffälle F-03 bis F-06 sind als Regression abgedeckt; ein nicht erlaubter Übergang und ein fehlendes Pflichtfeld lassen das Ticket unverändert; verborgene eigene Felder bleiben in API, Historie und Suche verborgen; Bestandstickets bleiben nach jeder Veröffentlichung gültig. Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten (DEC-040), insbesondere die Veröffentlichung mit Zuordnung unter Last, die Rechte auf eigene Felder in Historie und Suche und die Lesbarkeit älterer Konfigurationsdokumente. Holger nimmt fachlich ab und entscheidet die drei offenen Punkte aus DEC-073 (Löschen nie verwendeter Felder, nachträgliches Erzwingen von Pflichtfeldern bei Bestandstickets, Direktveröffentlichung neben dem Entwurf).
+
+**Ergebnis und Prüfungen:** Lokal grün: 235 Backendtests gegen PostgreSQL 16 (darunter 11 Integrationstests `ProjectConfigurationApiTest` und 6 neue Prüfungen der Konfigurationsregeln), Frontend `npm run verify`, 78 Browsertests (3 neue). Die Fälle F-03 bis F-06 sind als Regression abgedeckt (Tabelle in docs/PROJECT_CONFIGURATION.md). Nicht lokal gelaufen: der Lebenszyklus gegen PostgreSQL 18.6 und der Workflow `Image` (kein Docker in dieser Umgebung); das übernimmt die CI.
+
+## TASK-045 Kontoverwaltung ergänzen (Rest von Paket A4)
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-accounts-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-AUTH-001, REQ-PORTAL-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-024, TASK-030 und TASK-040 (alle abgenommen). **Arbeitsstand:** Paket A4 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „ja mache weiter“ den Start freigegeben und auf die Rückfrage „Kleine Lücken in A4 schließen“ gewählt. Der Kern des Pakets ist bereits mit DEC-058 umgesetzt (Einmalpasswort 72 Stunden gültig und einmalig, einmalige Anzeige bei der Übergabe, Wiederherstellung durch Zurücksetzen durch eine Administration, Notweg im Container); Selbstbedienung per Mail bleibt nach DEC-058 ausgeschlossen. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-074, voraussichtlich ohne neue Migration oder mit V0021.
+
+**Umfang:** (1) Die Kontenliste zeigt den Zustand des Einmalpassworts: offen mit Ablaufzeit, abgelaufen, oder nicht mehr gültig; die Ablaufzeit kommt als `oneTimePasswordExpiresAt` am Konto, ohne das Passwort preiszugeben. (2) Der Anzeigename eines Kontos lässt sich ändern (Recht `accounts.manage`, Protokoll). (3) Lesezugriff auf das Kontenprotokoll (`identity_audit_event`) seitenweise für `accounts.manage`, mit Anzeige in der Kontenverwaltung. (4) Eine Wartezeit nach Fehlversuchen lässt sich für ein Konto aufheben (Recht `accounts.manage`, Protokoll). Nicht Teil: Selbstbedienung per Mail, Benutzernamen ändern oder löschen, LDAP, Portalkonten, zweiter Faktor, Konten löschen.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Konto, Protokoll, Wartezeit), `contracts/identity.openapi.yaml`, Kontenverwaltung der Oberfläche, Tests.
+
+**Abnahmekriterien:** Der Zustand des Einmalpassworts ist in API und Oberfläche richtig für offen, abgelaufen und verbraucht und verrät nie das Passwort; Anzeigename und Aufheben der Wartezeit verlangen `accounts.manage`, wirken sofort und stehen im Protokoll; das Protokoll lässt sich über Seitengrenzen lesen und enthält keine Geheimnisse; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Protokoll; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft Anmeldung und Protokoll (DEC-040): Rechte und Serialisierung der drei neuen Endpunkte, dass kein Geheimnis in Liste und Protokoll gelangt, und die Wirkung von `clear-login-delay` auf die Zähler der Quelladressen. Holger nimmt fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-074, Vertrag identity.openapi.yaml, Oberfläche der Kontenverwaltung. Lokal grün: Backendtests gegen PostgreSQL 16 (vier neue Integrationstests in `IdentityApiTest`), Frontend `npm run verify`, 83 Browsertests (5 neue in `accounts.test.mjs`). Nicht lokal gelaufen: PostgreSQL 18.6 und der Workflow `Image`; das übernimmt die CI.
+
+## TASK-046 LDAP Anmeldung (Paket A5)
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-ldap-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-024, TASK-030, TASK-040 und TASK-045 (alle abgenommen oder gemergt). **Arbeitsstand:** Paket A5 der mit DEC-072 festgehaltenen Reihenfolge; Holger hat am 23. Oktober 2026 im Projektgespräch mit „ja mache weiter“ die Reihenfolge fortgesetzt und auf Rückfragen zu OPEN-006 gewählt: allgemeines LDAPv3, Anlage des Kontos beim ersten Login, bei Ausfall scheitert die Anmeldung und laufende Sitzungen laufen bis zu ihrem festen Ende weiter. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-075, Migration ab V0021.
+
+**Umfang:** (1) Einstellbare Anbindung eines LDAPv3 Verzeichnisses (Adresse, Verschlüsselung `none`, `starttls` oder `ldaps`, Suchbasis, Suchfilter, Attribute für Kennung, Anzeigename), verwaltet mit dem Recht `accounts.manage` und protokolliert; das Passwort des Suchkontos kommt aus der Umgebung des Betriebs, nicht aus der Datenbank. (2) Verbindungsprüfung mit benannten Gründen ohne Geheimnisse. (3) Anmeldung: Gibt es ein lokales Konto dieses Namens, entscheidet allein das lokale Passwort; sonst sucht der Server den Eintrag, prüft das Passwort durch Bindung als diese Person und ordnet über eine unveränderliche Kennung des Verzeichnisses zu, nie über den Namen. Beim ersten erfolgreichen Login entsteht das Konto ohne Rechte und ohne lokales Passwort. (4) Ein LDAP Konto kann in der Anwendung deaktiviert werden; Passwort zurücksetzen und Passwortwechsel gibt es dafür nicht. (5) Fällt das Verzeichnis aus, scheitert die Anmeldung der LDAP Konten mit 503 `auth.directory_unavailable`; lokale Konten, offene Sitzungen und der Notweg im Container bleiben unberührt. (6) Oberfläche für Anbindung und Prüfung in der Kontenverwaltung. Nicht Teil: Gruppenzuordnung aus dem Verzeichnis, Synchronisation oder Massenimport, Passwortverwaltung im Verzeichnis, Zwischenspeicher für Passwörter, Portalkonten, zweiter Faktor, mehrere Verzeichnisse.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Anmeldung, Konto, Anbindung), Migration, `contracts/identity.openapi.yaml`, Kontenverwaltung der Oberfläche, Tests mit einem im Test gestarteten Verzeichnis (UnboundID im Testumfang), Dokumentation.
+
+**Abnahmekriterien:** Eine konfigurierte Anbindung lässt sich prüfen; ein LDAP Konto entsteht beim ersten Login, wird danach über die Kennung wiedergefunden und hat keine Rechte; eine gleichnamige lokale Identität übernimmt nie ein LDAP Konto und umgekehrt; Eingaben mit Sonderzeichen können weder den Suchfilter noch den Namen einschleusen; bei Ausfall scheitert nur die LDAP Anmeldung mit 503, ohne lokale Konten zu berühren; kein Passwort und kein Bindungsgeheimnis steht in Antworten, Protokoll oder Datenbank; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Zuordnung; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft Anmeldung und Zuordnung (DEC-040): die Reihenfolge lokale Prüfung vor Verzeichnis, die Zuordnung über die Kennung und nie über den Namen (Umbenennen, Namensübernahme, gleichzeitige Erstanmeldung), das Maskieren des Namens im Suchfilter, dass nie ein leeres Passwort gebunden wird, die Prüfung des Zertifikats gegen den Namen bei LDAPS und StartTLS, dass weder ein Passwort noch das Geheimnis des Suchkontos in Antwort, Protokoll oder Datenbank gelangt, und dass ein Ausfall nur die Verzeichnisanmeldung trifft. Holger nimmt fachlich ab und entscheidet die offenen Punkte aus DEC-075 (Notanmeldung für Verzeichniskonten bei dauerhaftem Ausfall, Zertifikatswechsel ohne Neustart).
+
+**Ergebnis und Prüfungen:** DEC-075, Migration V0021 (`identity_account.auth_kind` und `external_id`, Tabelle `identity_ldap_setting`), Vertrag identity.openapi.yaml (`/settings/ldap`, `/settings/ldap/test`, `authKind`, 503), Verzeichnisclient mit dem JNDI Treiber der Java Laufzeit, Oberfläche in der Kontenverwaltung. Lokal grün: Backendtests gegen PostgreSQL 16, 259 Tests ohne Ausfall, darunter `LdapLoginTest` (16 Fälle mit einem im Test gestarteten Verzeichnis) und `LdapTlsTest` (LDAPS und StartTLS mit selbst signiertem Zertifikat, Zertifikat für anderen Namen wird abgewiesen); `lifecycle-check.sh` gegen eine leere Datenbank mit 20 Migrationen; Frontend `npm run verify` und 90 Browsertests. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnis (OpenLDAP, Active Directory), Verhalten bei sehr großen Verzeichnissen und die Wirkung der Wartezeit bei Massenanmeldungen am Verzeichnis.
+
+## TASK-047 Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075)
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261023-localadmin-01 · **Aktualisiert:** 2026-10-23
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005, REQ-API-001, REQ-UX-001. **Abhängigkeiten:** TASK-046 (gemergt, Prüfung und Abnahme offen). **Arbeitsstand:** Holger hat am 23. Oktober 2026 auf die offene Frage aus DEC-075 entschieden: Es muss immer ein internes Konto mit Verwaltungsrechten vorhanden sein, das bei einem Ausfall des Verzeichnisses helfen kann, indem es lokale Konten einrichtet oder Verzeichniskonten auf lokal umstellt. Ein Zertifikatswechsel der LDAP Anbindung ohne Neustart muss derzeit nicht sein und kommt ins Backlog. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-076.
+
+**Umfang:** (1) Unverzichtbare lokale Verwaltung: Es gibt jederzeit mindestens ein aktives lokales Konto, das die Rechte `accounts.manage` und `permissions.manage` hält. Jede Änderung, die das aufheben würde, wird in ihrer Transaktion mit 409 abgewiesen: Deaktivieren des Kontos, Umstellen auf das Verzeichnis, Entzug des Rechts oder der Gruppenmitgliedschaft, Ändern oder Löschen der Gruppe. Ob und wie die bestehende Sperre für die letzte Verwaltung (TASK-039) dafür erweitert wird, entscheidet die Umsetzung nach Lesen des Adapters. (2) Umstellen: Eine Verwaltung mit `accounts.manage` stellt ein Verzeichniskonto auf lokal um. Das Konto behält Name, Rechte und Verlauf, löst sich von der Kennung des Verzeichnisses, erhält ein Einmalpasswort mit erzwungenem Wechsel, alle Sitzungen enden, der Vorgang steht im Protokoll. Danach entscheidet allein das lokale Passwort (Notweg im Container, Zurücksetzen und Wartezeit gelten wie bei jedem lokalen Konto). (3) Oberfläche in der Kontenverwaltung, Vertrag, Tests. (4) Backlog: Zertifikatswechsel der LDAP Anbindung ohne Neustart, mit Eintrag in ROADMAP.md. Nicht Teil: Umstellen eines lokalen Kontos auf das Verzeichnis, automatisches Umstellen bei Ausfall, Gruppenzuordnung aus dem Verzeichnis, zweiter Faktor.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Konto, Umstellung), Adapter zwischen Identität und Berechtigungen und die Sperre der letzten Verwaltung, gegebenenfalls die Rechteänderungen im Berechtigungsmodul, `contracts/identity.openapi.yaml`, Kontenverwaltung der Oberfläche, Tests, Dokumentation.
+
+**Abnahmekriterien:** Das letzte aktive lokale Konto mit den beiden Verwaltungsrechten lässt sich weder deaktivieren noch durch eine Rechteänderung entkleiden, auch nicht durch gleichzeitige Änderungen, solange Verzeichniskonten dieselben Rechte halten; ein Verzeichniskonto lässt sich umstellen und meldet sich danach nur noch mit dem neuen Einmalpasswort an, behält seine Rechte und ist im Protokoll vermerkt; bei ausgefallenem Verzeichnis kann die lokale Verwaltung Konten einrichten und umstellen; bestehende Anmelde-, Sperr- und Rechtefälle bleiben grün. Getrennte KI prüft Sperre und Umstellung; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft Sperre und Umstellung (DEC-040): dass die Sperre der lokalen Verwaltung in allen Wegen greift, die Mitgliedschaft, Recht oder Konto ändern (Deaktivieren, `setMember`, `setAction`), auch bei gleichzeitigen Änderungen und mit der Sperrreihenfolge Rechte, Identität; dass Verzeichniskonten nie als lokale Verwaltung zählen; dass die Umstellung Sitzungen beendet, die Verbindung zum Eintrag löst, die Rechte behält und kein Geheimnis preisgibt; und ob die relative Sperre (greift nur, wenn es vorher eine lokale Verwaltung gab) richtig gewählt ist. Holger nimmt fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-076, `IdentityVerification.accountIsActiveLocal` und `IdentityAccess.userActiveLocal`, `LastLocalAdministration` (409 `permissions.last_local_administrator`), `POST /accounts/{id}/convert-to-local`, Schaltfläche mit Bestätigung in der Kontenverwaltung, Verträge identity und permissions, Backlog Zertifikatswechsel in ROADMAP.md; keine Migration. Lokal grün: Backendtests gegen PostgreSQL 16, 262 Tests ohne Ausfall (drei neue Fälle in `LdapLoginTest`, ein angepasster Fall in `IdentityPermissionsAdapterTest`), Frontend `npm run verify`, 92 Browsertests (zwei neue in `ldap.test.mjs`). Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnis, gleichzeitige Umstellung und Deaktivierung unter Last.
+
+## TASK-048 Befunde F1 bis F4 der Prüfung von TASK-046 beheben
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261024-reviewfix-01 · **Aktualisiert:** 2026-10-24
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 (gemergt, Prüfung durchgeführt, Abnahme offen) und TASK-047 (gemergt). **Arbeitsstand:** Die getrennte Prüfung `codex-20261023-task046-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-046-pr-155/docs/REVIEW_TASK-046_PR-155.md) auf dem Branch review/task-046-pr-155) empfiehlt „nicht annehmbar im geprüften Stand“ wegen der Befunde F1 bis F4. Die Behebung ist eigener Umfang und braucht diese Reservierung; Vorbild ist TASK-041 nach der Prüfung von TASK-040. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-077.
+
+**Umfang:** (F1, hoch) Binäre Kennungsattribute wie `objectGUID` fallen heute durch die Textdekodierung von JNDI auf dieselbe Kennung; verschiedene Personen erreichen dasselbe Konto samt Rechten. Das Kennungsattribut wird immer als binär angefordert; druckbarer Text bleibt unverändert (bestehende Zuordnungen über `entryUUID` gelten weiter), alles andere wird eindeutig als Hex mit Präfix gespeichert, Werte mit Ersatzzeichen werden abgewiesen. Eine Migration löst bereits beschädigte Zuordnungen vom Verzeichnis, deaktiviert diese Konten, beendet ihre Sitzungen und protokolliert das. (F2, mittel) Auch beim Wiederfinden über die Kennung wird abgewiesen (401), wenn der Anmeldename einem anderen Konto gehört. (F3, niedrig) Fehlender, leerer oder null Wert für die Verschlüsselung ergibt 400 mit `ldap.security.invalid` statt 500. (F4, niedrig) Ein abgelehntes StartTLS wird als `directory.tls_failed` gemeldet statt als `directory.search_failed`. Dazu Regressionstests für alle vier Befunde. Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, Änderungen an TASK-047, die weiteren Hinweise des Berichts ohne Befund.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Verzeichnisclient, Zuordnung, Einstellungsprüfung), eine Migration, Tests, Dokumentation und DEC-077; keine Änderung der Verträge außer der Beschreibung der Gründe.
+
+**Abnahmekriterien:** Zwei Personen mit verschiedenen binären Kennungen und verschiedenen Rechten erreichen je ihr eigenes Konto; bestehende Zuordnungen über Textkennungen bleiben gültig; ein bekannter Eintrag mit dem Namen eines anderen Kontos wird abgewiesen, die Umbenennung desselben Eintrags funktioniert weiter; die drei leeren Varianten der Verschlüsselung ergeben 400; StartTLS ohne Unterstützung der Gegenstelle ergibt `directory.tls_failed`; beschädigte Alt-Zuordnungen werden von der Migration abgesichert; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040), besonders F1 mit zwei binären Kennungen und getrennten Rechten sowie die Migration V0022 und ihre Wirkung auf Konten mit Altschlüssel; danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 und TASK-048 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-077, Zuordnungsschlüssel in `DirectoryClient.identifier`, Prüfung des Namens in `DirectoryAccounts.assign`, `LdapSettingsService.validate`, Migration V0022. Die vier neuen Regressionstests in `LdapLoginTest` scheitern gegen den alten Code mit genau den berichteten Symptomen (die zweite Person meldet sich als `bin-a` an, 200 statt 401, 500 statt 400, `search_failed` statt `tls_failed`). Neu außerdem `DirectoryIdentifierTest` und ein Test der Migration auf eingefügten Alt-Konten. Lokal grün: Backendtests gegen PostgreSQL 16, 272 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 21 Migrationen; Frontend `npm run verify` (75 Tests), keine Änderung der Oberfläche. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.
+
+## TASK-049 Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261024-reviewfix-02 · **Aktualisiert:** 2026-10-24
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Abhängigkeiten:** TASK-046 und TASK-048 (gemergt, Abnahme offen). **Arbeitsstand:** Auch die getrennte Prüfung von TASK-047 (Sitzung `codex-20261024-task047-review-01`, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-047/docs/REVIEW_TASK-047.md) auf dem Branch review/task-047) empfiehlt „nicht annehmbar im geprüften Stand“ wegen der Befunde F1 (hoch) und F2 (mittel); beide werden mit dieser Reservierung behoben, damit die Zuordnung im Verzeichnis nur einmal geändert wird. Die getrennte Nachprüfung `codex-20261024-task048-047-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-048-nachpruefung/docs/REVIEW_TASK-048_NACHPRUEFUNG.md) auf dem Branch review/task-048-nachpruefung) bestätigt F2 bis F4 als behoben, F1 nur als teilweise behoben und empfiehlt „nicht annehmbar im geprüften Stand“ wegen N1 (hoch) und N2 (niedrig). Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-078.
+
+**Umfang:** (N1, hoch) Ein vor der Behebung gespeicherter Schlüssel eines Verzeichnisses (Text nach alter Regel, getrimmt, auch mit dem Anfang `hex:`) kann mit dem neuen Schlüssel eines anderen Eintrags übereinstimmen; dann erreicht dieser Eintrag das Konto samt Rechten der anderen Person. Kein Altschlüssel darf künftig allein über seinen Text einem neuen Eintrag zugeordnet werden. Vorschlag der Sitzung: Die Form des Schlüssels wird versioniert (neue Spalte, Eindeutigkeit je Form); ein Altkonto wird beim ersten Wiederfinden nur dann auf die neue Form umgestellt, wenn der alte Schlüssel des Eintrags passt und der Anmeldename dem Konto gehört; sonst wird es nie zugeordnet. Eine strengere Alternative, alle vor der Behebung angelegten Verzeichniskonten vom Verzeichnis zu lösen wie die Migration V0022 es für beschädigte Schlüssel tut, entscheidet Holger vor dem Merge dieser Reservierung oder mit dem Ergebnis. (N2, niedrig) Sind Kennungs und Namensattribut dasselbe Attribut (nur anders geschrieben), geht der Anzeigename verloren, weil Rohbytes verworfen werden; der Name wird aus den Bytes als Text gelesen oder die Kombination wird ausdrücklich begrenzt. Dazu Regressionstests für beide Gegenbeispiele des Berichts zu TASK-048 (Altschlüssel `hex:80` und `trim-id` mit späterer Anmeldung beider Einträge), für N2, für beide Zeitpläne der Umstellung gegen eine laufende Anmeldung und für die Selbstumstellung in der Oberfläche, eine Migration und DEC-078. (F1 der Prüfung von TASK-047, hoch) Eine bereits laufende Anmeldung über das Verzeichnis überlebt die Umstellung auf lokal: Nach der Kontosperre wird auch das inzwischen lokale Konto akzeptiert, und die Sitzung entsteht, ohne dass das lokale Passwort geprüft wurde, oder das neue Einmalpasswort wird verbraucht. Nach der Kontosperre werden Kontotyp und Kennung gegen die authentifizierte Verzeichnisidentität geprüft; stimmen sie nicht mehr, wird die Anmeldung mit 401 verweigert, ohne ein Einmalpasswort zu verbrauchen. Der Sitzungsbeginn prüft zusätzlich, dass der Weg der Anmeldung zum Kontotyp passt. (F2 der Prüfung von TASK-047, mittel) Bei der Umstellung des eigenen Kontos beendet der Server die Sitzung und die Oberfläche verliert das Einmalpasswort, weil sie danach neu lädt. Die Selbstumstellung bleibt erlaubt; die Oberfläche lädt dann nichts mehr nach, zeigt das Einmalpasswort samt Hinweis auf die beendete Sitzung und führt auf Wunsch zur Anmeldung. Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, die Prüfung von TASK-047.
+
+**Schnittstellen und Arbeitsbereich:** Identitätsmodul (Verzeichnisclient, Zuordnung), eine Migration, Tests, Dokumentation und DEC-078; keine Änderung der Verträge.
+
+**Abnahmekriterien:** Die beiden Gegenbeispiele aus dem Bericht (Altschlüssel `hex:80` und `trim-id` auf einer befüllten V0022-Datenbank, danach Anmeldung eines anderen Eintrags mit kollidierendem Wert) führen nicht mehr zum Konto der anderen Person und ohne Rechte zu einem eigenen Konto oder zur Abweisung; das Altkonto selbst bleibt über sein Verzeichnis erreichbar oder ist sichtbar gesperrt, je nach der gewählten Lösung; der Anzeigename kommt auch bei gleichem Kennungs und Namensattribut an; eine laufende Verzeichnisanmeldung, die von einer Umstellung überholt wird, ergibt 401 ohne Sitzung und ohne verbrauchtes Einmalpasswort; bei der Selbstumstellung bleibt das Einmalpasswort sichtbar; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): die Migration V0023 und ihre Wirkung auf Konten mit Altschlüsseln, die Zuordnung nach der Behebung mit beiden Gegenbeispielen des Berichts zu TASK-048, beide Zeitpläne der Umstellung gegen eine laufende Verzeichnisanmeldung, die Selbstumstellung in der Oberfläche und die Betriebshinweise zur relativen Sperre. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-049 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-078, Migration V0023 (löst alle beim Einspielen vorhandenen Verzeichniskonten vom Verzeichnis, deaktiviert sie und beendet ihre Sitzungen), Prüfung von Kontotyp und Kennung nach der Kontosperre in `DirectoryAccounts.assign` und `SessionService.startSession`, Anzeigename aus Rohbytes in `DirectoryClient`, Selbstumstellung in `AccountsPage`. Die neuen Tests scheitern gegen den alten Code mit den berichteten Symptomen (die überholte Verzeichnisanmeldung ergibt 200 mit lokalem Konto und verbrauchtem Einmalpasswort, der Anzeigename ist null, die Seite lädt nach der Selbstumstellung nach und verliert das Passwort). Lokal grün: Backendtests gegen PostgreSQL 16, 275 Tests ohne Ausfall; `lifecycle-check.sh` gegen eine leere Datenbank mit 22 Migrationen; Frontend `npm run verify` (75 Tests) und 93 Browsertests. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt.
+
+## TASK-050 Befund R1 der Nachprüfung von TASK-049 beheben
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261025-reviewfix-03 · **Aktualisiert:** 2026-10-25
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-UX-001. **Abhängigkeiten:** TASK-047 und TASK-049 (gemergt, Abnahme offen). **Arbeitsstand:** Die getrennte Nachprüfung `codex-20261025-task049-review-01` ([Bericht](https://github.com/1uedev/task-manager/blob/review/task-049/docs/REVIEW_TASK-049.md) auf dem Branch review/task-049) bestätigt die Behebung von N1, N2 und F1, bestätigt F2 aber nur teilweise und empfiehlt „annehmbar nach Behebung von R1“. Die Behebung ist eigener Umfang und braucht diese Reservierung. Branch claude/upbeat-goldberg-mwa4c2 nach dem Merge dieser Reservierung; Ergebnis mit DEC-079.
+
+**Umfang:** (R1, mittel) Nach der Selbstumstellung hält nur die Kontenseite das Einmalpasswort. Eine bereits laufende Anfrage, die danach 401 erhält, oder eine weiterhin angebotene Kontenaktion führt über die allgemeine Behandlung der beendeten Sitzung zur Anmeldeseite und entfernt die Anzeige, bevor die Person das Passwort übernommen hat. Der Abschluss der Selbstumstellung wird deshalb ein eigener Zustand der Oberfläche oberhalb der Seiten: Das Einmalpasswort wird nur im Speicher gehalten und auf einer eigenen Seite gezeigt, die keine geschützten Aktionen mehr anbietet; ein späterer 401 entfernt sie nicht; nur die Schaltfläche „Zur Anmeldung“ beendet den Zustand. Außerdem die zweite Reihenfolge der Umstellung gegen eine laufende Verzeichnisanmeldung (Umstellung und lokaler Pflichtwechsel sind schon abgeschlossen, bevor die Anmeldung die Kontosperre erreicht) als dauerhafte Regression, die der Bericht als fehlend nennt. Dazu Browsertests für beide Gegenbeispiele des Berichts (verspätete Leseanfrage und weiterhin angebotene Kontenaktion). Nicht Teil: die Qualifikation mit einem echten Verzeichnisprodukt, Zertifikatswechsel ohne Neustart, Änderungen an der serverseitigen Umstellung.
+
+**Schnittstellen und Arbeitsbereich:** Oberfläche (Sitzungskontext, Kontenverwaltung, Kataloge), Browsertests mit Testattrappe, ein Backendtest in LdapLoginTest, Dokumentation und DEC-079; keine Migration, keine Änderung der Verträge.
+
+**Abnahmekriterien:** Nach erfolgreicher Selbstumstellung bleibt das Einmalpasswort sichtbar, auch wenn danach eine geschützte Anfrage 401 erhält oder eine Kontenaktion ausgelöst wird; die Seite bietet dann keine geschützten Aktionen mehr an; „Zur Anmeldung“ führt zur Anmeldeseite und entfernt das Passwort aus dem Speicher; die Umstellung eines fremden Kontos und das normale Ende einer Sitzung verhalten sich unverändert; die zweite Reihenfolge der Umstellung gegen die laufende Verzeichnisanmeldung ergibt 401 ohne Sitzung. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Getrennte KI prüft die Behebung gezielt nach (DEC-040): beide Gegenbeispiele des Berichts zu R1 (verspätete Antwort mit 401, weiterhin angebotene Aktion), die Seite oberhalb aller Seiten (keine geschützten Anfragen, kein Verbleib des Passworts im Speicher nach „Zur Anmeldung“), den Testersatz des Kontospeichers und die zweite Reihenfolge der Umstellung. Danach die Qualifikation mit dem vorgesehenen Verzeichnisprodukt (eigene Aufgabe, braucht Holgers Auftrag). Holger nimmt TASK-046 bis TASK-050 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-079, `Handover` im Sitzungskontext (`session.tsx`), eigene Seite in `App.tsx`, Übergabe aus `AccountsPage.tsx`, Testersatz `PausableAccountRepository`. Die neuen Browsertests (drei, darunter die verspätete Antwort mit 401) scheitern gegen die Seiten vor TASK-050, der neue Backendtest gegen den Stand vor TASK-049 mit der vollen lokalen Sitzung des Berichts. Lokal grün: Backendtests gegen PostgreSQL 16, 276 Tests ohne Ausfall; Frontend `npm run verify` (75 Tests) und 95 Browsertests; keine Migration, keine Änderung der Verträge. Nicht geprüft: PostgreSQL 18.6 (läuft in der CI), ein echtes Verzeichnisprodukt, ein durchgängiger Browserlauf am echten Backend.
+
+## TASK-051 Dateien und Anhänge an Tickets (Paket A7)
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261025-files-01 · **Aktualisiert:** 2026-10-25
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Abhängigkeiten:** TASK-027 (Ticketkern) und TASK-043 (Rechtekern), beide gemergt. **Arbeitsstand:** Paket A7 der Reihenfolge aus DEC-072, Holgers Freigabe „kannst du derweil mit dem nächsten Thema weitermachen“ vom 25. Oktober 2026. Branch claude/upbeat-goldberg-mwa4c2; Ergebnis mit DEC-080. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung und stehen mit dem Ergebnis zur Prüfung.
+
+**Umfang:** Ein neues Modul `files` mit Dateispeicher und Anhängen an Tickets, ohne Kommentare, Portal, Mail und Wiki.
+1. Speicher: Ein Speicherport mit einem Dateisystemadapter auf einem konfigurierbaren, dauerhaften Verzeichnis außerhalb des Containerlebenszyklus (OPERATIONS.md, ARCHITECTURE.md). Inhalte werden nie überschrieben, die Ablage ist inhaltsadressiert über die SHA-256 Prüfsumme, die Metadaten liegen in PostgreSQL (Migration V0024).
+2. Upload: Annahme in einen begrenzten temporären Bereich, Prüfung von Größe (Vorschlag 25 MB dezimal je Datei, konfigurierbar), Dateiname (bereinigt, ohne Pfadanteile und Steuerzeichen) und Sperrliste ausführbarer und aktiver Inhalte (Endungen und erkannte Dateikopfkennungen), Prüfsumme, dauerhaftes Ablegen, erst danach die Zuordnung zum Ticket in einer Transaktion. Abgebrochene und verwaiste Uploads sowie nicht zugeordnete Inhalte werden durch einen Aufräumlauf entfernt (Vorschlag: nach 24 Stunden, Lauf beim Start und stündlich, ohne den Hintergrundauftragsdienst aus A8).
+3. Kein Virenscanner als Pflichtdienst (TECHNICAL_CONTRACTS.md: kein neuer Pflichtdienst still vorausgesetzt). Stattdessen die Sperrliste, Auslieferung ausschließlich als Download mit `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` und einer Content-Security-Policy, die aktive Inhalte verbietet, sowie ein Port für einen späteren Scanner. Die Qualifikation eines Scanners bleibt offen (OPEN-014).
+4. Rechte: Anhänge sind ein Ticketfeld `attachments` im bestehenden Feldrechtemodell (Lesen und Schreiben getrennt), Hochladen und Entfernen verlangen das Schreibrecht, Herunterladen das Leserecht des Felds und des Tickets. Der direkte Dateilink ist kein Rechtenachweis und wird bei jedem Abruf neu geprüft. Verborgene Tickets und Anhänge verraten ihre Existenz nicht (404). Eine Zielgruppe „kundenlesbar“ gibt es nicht, solange kein externer Zugang existiert; alle Anhänge sind intern.
+5. Historie: Hinzufügen und Entfernen eines Anhangs erscheinen in der Tickethistorie (Name, Größe, Prüfsumme) und folgen dem Leserecht des Felds `attachments`. Entfernen blendet den Anhang aus, die Historie behält den Eintrag; der Inhalt wird erst vom Aufräumlauf nach einer Frist entfernt, wenn kein Anhang ihn mehr verwendet.
+6. Suche: Dateinamen werden nicht in die Suche aufgenommen; Dateiinhalte gehören nach V1 (DEC-050).
+7. Oberfläche im Ticket: Liste der Anhänge mit Name, Größe, Person und Zeit, Hochladen (Dateiauswahl und Ablegen mit Tastaturalternative), Herunterladen, Entfernen mit Bestätigung, klare Fehlermeldungen bei Größe, gesperrtem Typ und fehlendem Recht.
+8. Betrieb: Konfiguration des Verzeichnisses, Speicherort im Vorführimage als benanntes Volume, Hinweis im Betriebsteil von backend/README.md auf die Sicherung zusammen mit der Datenbank. Der Nachweis einer konsistenten Sicherung und Wiederherstellung gehört zu A18.
+
+Nicht Teil: Kommentare, interne Notizen und kundenlesbare Anhänge (kommen mit dem Helpdesk), Mailanhänge, Wiki Bilder, Portal Uploads, Vorschaubilder, Dateiversionen und Dokumentverwaltung, Virenscanner, Objektspeicher, Dateisuche, Kontingente je Projekt, Hintergrundauftragsdienst.
+
+**Schnittstellen und Arbeitsbereich:** Backend (neues Modul `files`, Migration V0024, Vertrag `contracts/files.openapi.yaml`, Erweiterung von Rechtekatalog, Ticketfeldern, Tickethistorie und Ticketvertrag), Frontend (Ticketansicht, Katalog de und en, Browsertests mit Testattrappe), Vorführimage (Volume), Dokumentation, DEC-080.
+
+**Abnahmekriterien:** Ein berechtigtes Mitglied lädt eine Datei bis zur Grenze hoch, sieht sie in der Liste und lädt exakt dieselben Bytes herunter; zu große, gesperrte und leere Dateien werden mit stabilem Fehlercode abgelehnt, ohne dass Reste im Speicher oder in der Datenbank bleiben; ein Neustart oder Austausch des Anwendungscontainers mit demselben Volume behält alle Anhänge; ein Abbruch zwischen Ablegen und Zuordnung hinterlässt nur eine Datei, die der Aufräumlauf entfernt; wer das Ticket oder das Feld nicht lesen darf, erhält auch über den direkten Link 404 oder 403 nach der Rechtesemantik des Ticketkerns, ebenso nach Entzug des Rechts; Entfernen und Hinzufügen stehen in der Historie, sichtbar nur mit Leserecht am Feld; Dateiname und Inhalt können weder Pfade verlassen noch beim Download Skripte ausführen lassen; die Rechte gelten in Oberfläche, API und Historie gleich. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-080; Modul `files` (Speicherschnittstelle mit Dateisystemadapter, Upload mit Staging und atomarem Ablegen, Regeln für Name, Größe, Endung und Programmanfang, Aufräumlauf mit Quarantäne), Migration V0024, Vertrag `contracts/files.openapi.yaml`, Ticketfeld `attachments` in Feldkatalog, Historie und Vertrag, Oberfläche im Ticket (Liste, Auswahl und Ablegen, Herunterladen, Entfernen mit Rückfrage, Historienzeile), Volume `files-data` im Vorführimage, Erweiterung von Demowerkzeug und Ablaufbeschreibung. Lokal grün: Backend gegen PostgreSQL 16, 303 Tests ohne Ausfall (neu: 27, darunter 8 API Tests gegen echte Datenbank und echtes Verzeichnis, 5 Fehlerfälle von Speicher und Transaktion, 9 Speicher und Regeltests, 1 Vertragsabgleich); `lifecycle-check.sh` gegen eine leere Datenbank mit 23 Migrationen, einschließlich der Ablehnung des Starts ohne Dateispeicher; Frontend `npm run verify` (75 Tests) und 102 Browsertests (7 neue, dazu die Korrektur der Feldbezeichnung in der Gruppenverwaltung); Demowerkzeug: `seed`, `verify` mit Hochladen, Herunterladen, abgelehntem Programm und fehlendem Leserecht gegen das gepackte JAR, nach Neustart mit demselben Verzeichnis `verify --resume` mit unverändertem Anhang (Byte für Byte). Nicht geprüft: PostgreSQL 18.6 und der Docker Lauf `image-check.sh` (laufen in der CI; in dieser Umgebung läuft kein Docker Dienst), ein Dateisystem außer dem lokalen, Uploads über mehrere GB oder viele gleichzeitige große Uploads, ein Virenscanner.
+
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040), besonders: die Reihenfolge Inhalt zuerst und Zeile danach mit ihren Fehlerfällen, den Aufräumlauf samt Quarantäne gegen einen laufenden Upload, Namensbereinigung und Sperrliste gegen Umgehungen (Schreibrichtung, doppelte Endung, Wechseldatenströme), die Auslieferung nur als Datei, die Feldrechte über Oberfläche, API, Historie und direkten Link sowie die Betriebshinweise zur Sicherung. Holger hat die Vorschläge Dateigrenze 25 MB, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk und Entfernen mit Frist von 7 Tagen am 26. Oktober 2026 angenommen (Nachtrag zu DEC-080) und nimmt fachlich ab (Ablauf in docs/DEMO.md, Schritt 8).
+
+## TASK-052 Befunde F1 bis F5 der Prüfung von TASK-044 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261026-configfix-01 · **Aktualisiert:** 2026-10-26
+
+**Bezug:** REQ-ORG-003, REQ-TKT-001, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-044 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-044_PR-151.md](docs/REVIEW_TASK-044_PR-151.md). **Arbeitsstand:** Holger hat am 26. Oktober 2026 im Projektgespräch den Empfehlungen zu F1 und F3 zugestimmt („ja ich stimme zu“) und die Behebung von F1 bis F5 als Folgeaufgabe freigegeben. Branch claude/project-thread-kqr6e8 nach dem Merge dieser Reservierung; Ergebnis mit DEC-081, keine Migration vorgesehen.
+
+**Umfang:** Nur die fünf Befunde des Berichts.
+1. F1: Verlangt ein Übergang ein Feld, das die anfragende Person nicht lesen oder nicht schreiben darf, lehnt der Server den Statuswechsel immer mit 409 `ticket.required_field_inaccessible` ab, unabhängig vom Wert des Felds (dieselbe Regel wie bei der Anlage). Die Oberfläche zeigt dafür eine verständliche Meldung.
+2. F2: Ganzzahlfelder weisen Werte unterhalb von −(2^53 − 1) ab, auch −2^63.
+3. F3: Ein Typwechsel behält den Status, wenn der neue Typ ihn kennt; sonst kommt das Ticket in den ersten Status des neuen Typs, mit Typ und Status in der Historie. Ein frei gewählter Zielstatus beim Typwechsel bleibt ausgeschlossen, damit Pflichtfelder eines Übergangs nicht umgangen werden.
+4. F4: Die Statuszuordnung einer Veröffentlichung kann zusätzlich je Paar aus Tickettyp und Status angegeben werden; der Zuordnungsdialog der Oberfläche bietet das an, wenn ein Status in mehreren Typen verwendet wird.
+5. F5: Ein unbekannter Schlüssel in `customFields` antwortet mit 400 `customFields.unknown` statt 403.
+
+Nicht Teil: weitere Änderungen an Projektkonfiguration, Rechten oder Suche; die offenen Entscheidungen aus DEC-073 und die Hinweise des Berichts ohne Befund.
+
+**Schnittstellen und Arbeitsbereich:** Ticketkern (`TicketService`, `TicketController`), Projektkonfiguration (`ProjectConfiguration`, `ProjectService`), Verträge `contracts/tickets.openapi.yaml` und `contracts/projects.openapi.yaml`, Ticketseite und Konfigurationseditor der Oberfläche, Tests.
+
+**Abnahmekriterien:** Die Prüftests E1 bis E5 aus docs/review-evidence/task-044 laufen in angepasster Form als Regression grün; E6 bleibt grün; bestehende Tests zu F-03 bis F-06 bleiben grün; F1 verrät in keiner Antwort, ob ein verborgenes Feld gefüllt ist; ein Typwechsel umgeht kein Pflichtfeld eines Übergangs. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-081 als Ergebnis zur Prüfung stellen.

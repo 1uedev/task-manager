@@ -50,19 +50,20 @@ class SessionController {
      * @param level {@code full} or {@code password_change_required}; null when anonymous
      * @param rights keys of the administrative rights the session holds, sorted; only in the answer to the state of an
      *        authenticated request, empty while the login is incomplete. A hint for what an interface shows, never a permission
+     * @param authKind {@code local} or {@code ldap}: whether the password is the application's own or the directory's; null when anonymous
      * @param csrfToken only present when the server just issued a token (anonymous visit, login, password change)
      */
     record SessionBody(boolean authenticated, String username, String displayName, String level,
             @JsonInclude(JsonInclude.Include.NON_NULL) List<String> rights,
-            Instant expiresAt, Instant passwordChangeBy, String csrfToken) {
+            Instant expiresAt, Instant passwordChangeBy, String authKind, String csrfToken) {
         static SessionBody anonymous(String csrfToken) {
-            return new SessionBody(false, null, null, null, null, null, null, csrfToken);
+            return new SessionBody(false, null, null, null, null, null, null, null, csrfToken);
         }
 
         static SessionBody of(SessionView view, List<String> rights, String csrfToken) {
             String level = view.level() == AuthenticationLevel.FULL ? "full" : "password_change_required";
             return new SessionBody(true, view.username(), view.displayName(), level, rights, view.expiresAt(),
-                view.restrictedUntil(), csrfToken);
+                view.restrictedUntil(), view.authKind(), csrfToken);
         }
     }
 

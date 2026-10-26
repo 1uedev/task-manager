@@ -18,7 +18,8 @@ import taskmanager.identity.account.Db;
  * decide are in the WHERE clause of the locking statement and are checked again on the row that is returned, so a
  * revocation that committed while this check waited for the lock is seen (READ COMMITTED re-evaluates the row).
  * The time of the check is the moment after the locks are held; a session that ends later, while the caller works on, is not
- * stopped by any lock, because the end of a period is a point in time and not a write.
+ * stopped by any lock, because the end of a period is a point in time and not a write. That is why the end is handed out
+ * too: the caller compares it with the clock again before its commit (TASK-043).
  * The setting row is deliberately not locked: a shortening writes the lowered end into the session rows, which the
  * shared session lock covers, and locking the setting row after the session row would invert the order of that path.
  */
@@ -38,12 +39,18 @@ class JdbcIdentityVerification implements IdentityVerification {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean isCurrentFullSession(UUID accountId, UUID sessionId) {
+        return currentFullSessionEnd(accountId, sessionId).isPresent();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Instant> currentFullSessionEnd(UUID accountId, UUID sessionId) {
         if (accountId == null || sessionId == null) {
-            return false;
+            return Optional.empty();
         }
         AccountState account = lockAccount(accountId).orElse(null);
         if (account == null || !account.active() || account.passwordChangeRequired()) {
-            return false;
+            return Optional.empty();
         }
         return jdbc.sql("""
                 select s.started_at, s.expires_at,
@@ -57,11 +64,12 @@ class JdbcIdentityVerification implements IdentityVerification {
                 Instant started = Db.instant(rs, "started_at");
                 Instant stored = Db.instant(rs, "expires_at");
                 Instant current = started.plus(Duration.ofHours(Long.parseLong(rs.getString("duration_hours"))));
-                // The clock is read only now, after the lock wait: the lock keeps the row stable, not the time, and a
-                // wait for an uncommitted shortening can pass the end of the session.
-                return clock.instant().isBefore(stored.isBefore(current) ? stored : current);
+                return stored.isBefore(current) ? stored : current;
             })
-            .optional().orElse(false);
+            .optional()
+            // The clock is read only now, after the lock wait: the lock keeps the row stable, not the time, and a
+            // wait for an uncommitted shortening can pass the end of the session.
+            .filter(end -> clock.instant().isBefore(end));
     }
 
     @Override
@@ -74,6 +82,13 @@ class JdbcIdentityVerification implements IdentityVerification {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean accountIsActive(UUID accountId) {
         return accountId != null && lockAccount(accountId).map(AccountState::active).orElse(false);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean accountIsActiveLocal(UUID accountId) {
+        return accountId != null && jdbc.sql("select active and auth_kind = 'local' from identity_account where id = ? for share")
+            .param(accountId).query(Boolean.class).optional().orElse(false);
     }
 
     private Optional<AccountState> lockAccount(UUID accountId) {

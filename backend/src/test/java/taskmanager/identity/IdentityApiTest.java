@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -613,6 +614,171 @@ class IdentityApiTest {
         assertEquals(0, jdbc.queryForObject("select count(*) from identity_audit_event where detail like ?", Integer.class, "%" + secret + "%"));
     }
 
+    // ---------------------------------------------------------------- TASK-045: account administration
+
+    private static JsonNode listed(Response accountList, String username) {
+        for (var node : accountList.json()) {
+            if (username.equals(node.get("username").asString())) {
+                return node;
+            }
+        }
+        throw new AssertionError("account not listed: " + username);
+    }
+
+    @Test
+    void theAccountListSaysWhatBecameOfTheOneTimePasswordWithoutShowingIt() {
+        Person admin = person(true);
+        Response created = admin.browser().post("/api/v1/accounts", Map.of("username", name("state")));
+        assertEquals(201, created.status(), created.body());
+        String username = created.json().get("account").get("username").asString();
+        String id = created.json().get("account").get("id").asString();
+        String secret = created.json().get("oneTimePassword").asString();
+        assertEquals("open", created.json().get("account").get("oneTimePasswordState").asString());
+        assertEquals(created.json().get("oneTimePasswordExpiresAt").asString(), created.json().get("account").get("oneTimePasswordExpiresAt").asString());
+
+        Response list = admin.browser().get("/api/v1/accounts");
+        assertEquals("open", listed(list, username).get("oneTimePasswordState").asString());
+        assertTrue(listed(list, username).get("passwordChangeRequired").asBoolean());
+        assertTrue(listed(list, username).get("loginDelayedUntil").isNull());
+        assertEquals("none", listed(list, admin.username()).get("oneTimePasswordState").asString());
+        assertTrue(listed(list, admin.username()).get("oneTimePasswordExpiresAt").isNull());
+
+        // Its validity ends without anyone using it.
+        jdbc.update("update identity_account set one_time_expires_at = ? where id = ?::uuid", java.sql.Timestamp.from(CLOCK.instant().minusSeconds(60)), id);
+        assertEquals("expired", listed(admin.browser().get("/api/v1/accounts"), username).get("oneTimePasswordState").asString());
+
+        // A new one makes it open again; the first login uses it up while the forced change is still pending.
+        Response reset = admin.browser().post("/api/v1/accounts/" + id + "/password-reset", Map.of());
+        assertEquals("open", reset.json().get("account").get("oneTimePasswordState").asString());
+        secret = reset.json().get("oneTimePassword").asString();
+        ApiClient owner = browser();
+        assertEquals(200, login(owner, username, secret).status());
+        assertEquals("used", listed(admin.browser().get("/api/v1/accounts"), username).get("oneTimePasswordState").asString());
+
+        // The change ends it: no state, no expiry.
+        assertEquals(200, owner.post("/api/v1/session/password", Map.of("currentPassword", secret, "newPassword", STRONG)).status());
+        JsonNode done = listed(admin.browser().get("/api/v1/accounts"), username);
+        assertEquals("none", done.get("oneTimePasswordState").asString());
+        assertTrue(done.get("oneTimePasswordExpiresAt").isNull());
+
+        // Nothing the administration reads contains the password.
+        assertFalse(admin.browser().get("/api/v1/accounts").body().contains(secret));
+        assertFalse(admin.browser().get("/api/v1/accounts/audit").body().contains(secret));
+        assertProblem(person(false).browser().get("/api/v1/accounts"), 403, "auth.forbidden");
+    }
+
+    @Test
+    void theDisplayNameCanBeChangedAndEmptiedByWhoMayManageAccounts() {
+        Person admin = person(true);
+        Issued issued = accounts.create("test", name("rename"), "Alt");
+        String id = issued.account().id().toString();
+
+        Response renamed = admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "  Neuer Name "));
+        assertEquals(200, renamed.status(), renamed.body());
+        assertEquals("Neuer Name", renamed.json().get("displayName").asString());
+        Response directory = admin.browser().get("/api/v1/directory/accounts");
+        assertTrue(directory.body().contains("Neuer Name"), "the directory follows");
+
+        // The same name again writes nothing.
+        long before = jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ?::uuid and event = 'account.renamed'", Long.class, id);
+        assertEquals(200, admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "Neuer Name")).status());
+        assertEquals(before, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ?::uuid and event = 'account.renamed'", Long.class, id));
+        assertEquals(1, before);
+
+        Response emptied = admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "   "));
+        assertTrue(emptied.json().get("displayName").isNull());
+        Response tooLong = admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "x".repeat(101)));
+        assertProblem(tooLong, 400, "request.invalid");
+        assertEquals("displayName.too_long", tooLong.json().get("violations").get(0).asString());
+        Response control = admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "a\u0007b"));
+        assertEquals("displayName.invalid", control.json().get("violations").get(0).asString());
+        assertProblem(admin.browser().put("/api/v1/accounts/" + java.util.UUID.randomUUID(), Map.of("displayName", "Wer")), 404, "account.not_found");
+        assertTrue(admin.browser().get("/api/v1/accounts/audit").body().contains("account.renamed"));
+
+        Person other = person(false);
+        assertProblem(other.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "Fremd")), 403, "auth.forbidden");
+        assertProblem(browser().put("/api/v1/accounts/" + id, Map.of("displayName", "Anonym")), 401, "auth.required");
+    }
+
+    @Test
+    void theAuditTrailPagesWithoutGapsOrDuplicatesAndKeepsSecretsOut() {
+        Person admin = person(true);
+        String marker = name("audit");
+        Issued issued = accounts.create("test", marker, null);
+        String id = issued.account().id().toString();
+        for (int i = 0; i < 5; i++) {
+            admin.browser().put("/api/v1/accounts/" + id, Map.of("displayName", "Name " + i));
+        }
+        admin.browser().post("/api/v1/accounts/" + id + "/password-reset", Map.of());
+        admin.browser().post("/api/v1/accounts/" + id + "/deactivate", Map.of());
+        long total = jdbc.queryForObject("select count(*) from identity_audit_event", Long.class);
+
+        List<Long> seen = new ArrayList<>();
+        Long before = null;
+        for (int page = 0; page < 200; page++) {
+            Response response = admin.browser().get("/api/v1/accounts/audit?limit=3" + (before == null ? "" : "&before=" + before));
+            assertEquals(200, response.status(), response.body());
+            assertTrue(response.json().size() <= 3);
+            if (response.json().isEmpty()) {
+                break;
+            }
+            for (var entry : response.json()) {
+                seen.add(entry.get("id").asLong());
+                assertNotNull(entry.get("event").asString());
+                assertNotNull(entry.get("actor").asString());
+            }
+            before = seen.getLast();
+        }
+        assertEquals(total, seen.size(), "every entry is reachable");
+        assertEquals(seen.stream().distinct().count(), seen.size(), "no duplicates");
+        assertEquals(seen.stream().sorted(java.util.Comparator.reverseOrder()).toList(), seen, "newest first");
+        Response newest = admin.browser().get("/api/v1/accounts/audit?limit=1");
+        assertEquals("account.deactivated", newest.json().get(0).get("event").asString());
+        assertEquals(id, newest.json().get(0).get("accountId").asString());
+
+        assertProblem(admin.browser().get("/api/v1/accounts/audit?limit=0"), 400, "request.invalid");
+        assertProblem(admin.browser().get("/api/v1/accounts/audit?limit=101"), 400, "request.invalid");
+        assertProblem(admin.browser().get("/api/v1/accounts/audit?before=0"), 400, "request.invalid");
+        assertProblem(person(false).browser().get("/api/v1/accounts/audit"), 403, "auth.forbidden");
+    }
+
+    @Test
+    void anAdministrationEndsTheWaitingTimeOfOneAccountAndTheNextLoginCountsFromZero() {
+        Person admin = person(true);
+        Issued issued = accounts.create("test", name("delay"), null);
+        String username = issued.account().username();
+        String id = issued.account().id().toString();
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            assertProblem(login(browser(), username, "wrong-" + attempt), 401, "auth.invalid_credentials");
+        }
+        assertProblem(login(browser(), username, issued.oneTimePassword()), 429, "auth.too_many_attempts");
+        JsonNode waiting = listed(admin.browser().get("/api/v1/accounts"), username);
+        assertFalse(waiting.get("loginDelayedUntil").isNull(), "the list says a waiting time runs");
+
+        Response cleared = admin.browser().post("/api/v1/accounts/" + id + "/clear-login-delay", Map.of());
+        assertEquals(200, cleared.status(), cleared.body());
+        assertTrue(cleared.json().get("loginDelayedUntil").isNull());
+        assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ?::uuid and event = 'account.login_delay_cleared'", Long.class, id));
+        // Counting starts from zero: four more failures do not wait yet.
+        for (int attempt = 1; attempt <= 4; attempt++) {
+            assertProblem(login(browser(), username, "again-" + attempt), 401, "auth.invalid_credentials");
+        }
+        assertEquals(200, login(browser(), username, issued.oneTimePassword()).status());
+
+        // Nothing to clear: nothing is written. Another account is untouched.
+        Issued other = accounts.create("test", name("delay-other"), null);
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            login(browser(), other.account().username(), "wrong-" + attempt);
+        }
+        admin.browser().post("/api/v1/accounts/" + id + "/clear-login-delay", Map.of());
+        assertEquals(1, jdbc.queryForObject("select count(*) from identity_audit_event where account_id = ?::uuid and event = 'account.login_delay_cleared'", Long.class, id),
+            "a second call finds nothing to clear");
+        assertProblem(login(browser(), other.account().username(), other.oneTimePassword()), 429, "auth.too_many_attempts");
+
+        assertProblem(admin.browser().post("/api/v1/accounts/" + java.util.UUID.randomUUID() + "/clear-login-delay", Map.of()), 404, "account.not_found");
+        assertProblem(person(false).browser().post("/api/v1/accounts/" + id + "/clear-login-delay", Map.of()), 403, "auth.forbidden");
+    }
+
     // ---------------------------------------------------------------- the contract for other modules
 
     @Test
@@ -620,7 +786,7 @@ class IdentityApiTest {
         Person admin = person(true);
         Response state = admin.browser().get("/api/v1/session");
         assertEquals(admin.username(), state.json().get("username").asString());
-        assertEquals(List.of("accounts.manage", "appearance.manage", "projects.manage", "session_duration.manage", "tags.manage"),
+        assertEquals(List.of("accounts.manage", "appearance.manage", "permissions.manage", "projects.manage", "session_duration.manage", "tags.manage"),
             java.util.stream.StreamSupport.stream(state.json().get("rights").spliterator(), false).map(node -> node.asString()).toList());
         assertNull(state.json().get("csrfToken").isNull() ? null : state.json().get("csrfToken"));
     }

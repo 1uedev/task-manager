@@ -632,6 +632,8 @@ class IdentityPermissionsAdapterTest {
         UUID company = companyGroup();
         UUID extra = inTransaction(() -> administration.createGroup(ctx(admins.chef()), "Zweite Verwaltung")).id();
         inTransaction(() -> administration.setAction(ctx(admins.chef()), extra, companyScope(), "permissions.manage", true));
+        // The second group also holds the right to manage accounts, so the second account is a local administration of its own (TASK-047).
+        inTransaction(() -> administration.setAction(ctx(admins.chef()), extra, companyScope(), "accounts.manage", true));
         inTransaction(() -> administration.setMember(ctx(admins.chef()), extra, admins.second().id(), true));
         inTransaction(() -> administration.setMember(ctx(admins.chef()), company, admins.second().id(), false));
 

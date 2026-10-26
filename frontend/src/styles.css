@@ -358,7 +358,8 @@ main.page-board { max-width: none; }
 }
 .theme button, .theme button:not(.secondary) { box-shadow: none !important; }
 .theme button[aria-pressed='true'] { box-shadow: 0 1px 3px rgb(15 20 35 / 0.12) !important; }
-.brand:has(.brand-logo) .brand-name { display: none; }
+/* With a logo the name is hidden from view but not from screen readers (finding F3 of the TASK-043 review). */
+.brand:has(.brand-logo) .brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 48rem) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar, .sidebar nav { min-width: 0; }
@@ -373,3 +374,136 @@ p.success, p.state-problem { margin: 0; }
 .dropzone-logo { max-width: 12rem; object-fit: contain; }
 .ticket:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .page-board + footer { max-width: none; }
+
+/* Product pages (TASK-030) */
+textarea {
+  font: inherit; width: 100%; margin-top: 0.45rem; resize: vertical;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem;
+  background: var(--surface); color: var(--brand-text);
+}
+textarea:focus-visible { outline: none; border-color: var(--link); box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 40%, transparent); }
+textarea[aria-invalid='true'] { border-color: var(--error); }
+.field select { width: 100%; margin-top: 0.45rem; }
+.panel, main > details {
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1.2rem 1.5rem; margin: 0 0 1.25rem;
+}
+main > section { margin: 0 0 1.25rem; }
+details.panel > summary { cursor: pointer; font-weight: 650; }
+details.panel[open] > summary { margin-bottom: 0.5rem; }
+.panel form, .panel .inline-form, .login-card form, main > section form, main > section .inline-form {
+  max-width: none; background: none; border: 0; box-shadow: none; padding: 0;
+}
+.panel .inline-form, main > section .inline-form { margin-top: 1rem; align-items: end; }
+.inline-form .field { margin: 0; flex: 1 1 14rem; }
+.inline-form > form, main > .inline-form { margin: 0 0 1.25rem; align-items: end; }
+
+.page-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.5rem; }
+.page-head h1 { margin-bottom: 0.3rem; overflow-wrap: anywhere; }
+.page-head .hint { font-size: 1rem; max-width: 44rem; margin: 0; }
+.page-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.breadcrumb { margin: 0 0 0.4rem; font-size: 0.9rem; }
+.breadcrumb a { color: var(--muted); }
+
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--hairline); margin: 0 0 1.5rem; overflow-x: auto; }
+.tabs a { padding: 0.6rem 0.9rem; color: var(--muted); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs a:hover { color: var(--brand-text); }
+.tabs a[aria-current='page'] { color: var(--brand-text); border-bottom-color: var(--brand-primary); }
+
+.item-list, .plain-list { list-style: none; margin: 0; padding: 0; }
+.item-list > li { padding: 0.75rem 0; border-bottom: 1px solid var(--hairline); }
+.item-list > li:last-child { border-bottom: 0; }
+.item-list a { display: inline-flex; gap: 0.6rem; align-items: baseline; text-decoration: none; color: var(--brand-text); font-weight: 600; }
+.item-list a:hover .item-title { text-decoration: underline 2px var(--brand-primary); text-underline-offset: 4px; }
+.item-key, .ticket-key { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.item-title { overflow-wrap: anywhere; }
+.item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.item-row .item-title { font-weight: 600; flex: 1 1 10rem; }
+.plain-list li { padding: 0.35rem 0; }
+.empty { color: var(--muted); margin: 0.5rem 0; }
+
+.table-scroll { overflow-x: auto; margin: 0.5rem 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+caption { text-align: left; font-weight: 650; padding: 0.5rem 0; }
+th, td { text-align: left; padding: 0.6rem 0.75rem 0.6rem 0; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+thead th { color: var(--muted); font-size: 0.82rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; }
+td select { min-height: 2.25rem; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.row-actions button { min-height: 2.25rem; padding: 0.25rem 0.75rem; font-size: 0.88rem; }
+.hidden-field { color: var(--muted); font-style: italic; }
+
+.chips li { display: inline-flex; align-items: center; gap: 0.3rem; }
+.chips li.archived { opacity: 0.6; text-decoration: line-through; }
+.chip-remove { min-height: 0; width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; background: none; color: var(--muted); border: 0; box-shadow: none !important; line-height: 1; font-size: 1rem; }
+.chip-remove:hover:not(:disabled) { background: var(--hairline); color: var(--brand-text); }
+
+.ticket-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 1fr); gap: 1.25rem; align-items: start; }
+.ticket-layout > * { margin: 0; }
+.ticket-side { display: grid; gap: 1.25rem; }
+.readonly p { margin: 0.2rem 0 0; }
+.readonly .label-small { margin-top: 0; }
+.prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.history { list-style: none; margin: 0; padding: 0; }
+.history > li { padding: 0.65rem 0 0.65rem 1rem; border-left: 2px solid var(--hairline); position: relative; }
+.history > li::before { content: ''; position: absolute; left: -5px; top: 1rem; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-primary); }
+.history ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+.facts { grid-template-columns: max-content 1fr; }
+
+fieldset { border: 0; padding: 0; margin: 1rem 0; display: grid; gap: 0.35rem; }
+legend { font-weight: 650; margin-bottom: 0.4rem; padding: 0; }
+.check { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.3rem 0; }
+.check input { min-height: 0; width: 1.15rem; height: 1.15rem; accent-color: var(--brand-primary); }
+.check code { font-size: 0.8rem; }
+
+.one-time { display: grid; gap: 0.35rem; }
+.secret code { font-size: 1.3rem; letter-spacing: 0.08em; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); background: var(--surface); border: 1px dashed var(--border); user-select: all; overflow-wrap: anywhere; }
+
+.search-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem; margin: 0 0 1.5rem; max-width: none; }
+.search-form .field { margin: 0; flex: 1 1 14rem; }
+
+.gate { min-height: 100vh; display: flex; flex-direction: column; }
+.gate-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem clamp(1rem, 4vw, 2.5rem); }
+.gate-head .preferences { display: flex; gap: 0.75rem; align-items: center; }
+.gate main { max-width: 30rem; }
+.login-card {
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 1.6rem 1.75rem;
+}
+.login-card form button[type='submit'] { width: 100%; margin-top: 0.5rem; }
+.login-card .actions button[type='submit'] { width: auto; }
+.login-card .hint { margin-top: 1rem; }
+.preferences { display: grid; gap: 0.6rem; }
+.who { margin: 0; padding: 0 0.5rem; font-weight: 600; overflow-wrap: anywhere; }
+.logout { display: inline-flex; align-items: center; gap: 0.5rem; justify-self: start; margin: 0 0.5rem; text-decoration: none; color: var(--muted); }
+.logout:hover:not(:disabled) { color: var(--brand-text); }
+
+@media (max-width: 64rem) { .ticket-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 48rem) {
+  .sidebar-footer { margin-top: 0; }
+  .sidebar-footer .preferences { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .inline-form select { min-width: 0; width: 100%; }
+  .panel, main > section, main > details { padding: 1rem; }
+}
+.gate-head .theme { width: 7.5rem; }
+.login-card h1 { font-size: clamp(1.6rem, 3vw, 2rem); }
+@media (max-width: 48rem) {
+  .who { display: none; }
+  .sidebar-footer { flex-wrap: wrap; justify-content: flex-end; }
+  .logout { margin: 0; }
+}
+.login-card h1 + [role='status'] { margin-top: 0.75rem; }
+form.search-form { max-width: none; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.25rem; }
+form.search-form .field:first-child { flex: 2 1 18rem; }
+
+/* TASK-043, finding F3 of the TASK-036 review: at phone width the brand name would run under the language and theme
+   controls. It stays readable for screen readers; a logo shrinks into the space that is left. */
+@media (max-width: 30rem) {
+  .brand { overflow: hidden; }
+  .brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .brand-logo { max-width: 100%; min-width: 0; }
+}
+/* Attachments of a ticket (TASK-051) */
+.attachments { list-style: none; padding: 0; margin: 0 0 0.5rem; display: grid; gap: 0.5rem; }
+.attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
+.attachments li > a { font-weight: 600; overflow-wrap: anywhere; }

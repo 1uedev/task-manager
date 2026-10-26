@@ -43,6 +43,12 @@ class ProjectRepository {
             .param(companyId).query(ProjectRepository::map).list();
     }
 
+    /** The projects of the company without locks, for a rebuild of the search projection. */
+    List<Project> all(UUID companyId) {
+        return jdbc.sql("select " + COLUMNS + " from project where company_id = ? order by id").param(companyId)
+            .query(ProjectRepository::map).list();
+    }
+
     /** The identifiers of the projects the account is a member of, without locks. */
     List<UUID> memberships(UUID companyId, UUID accountId) {
         return jdbc.sql("""
@@ -100,6 +106,29 @@ class ProjectRepository {
 
     Optional<Long> configurationVersion(UUID projectId) {
         return jdbc.sql("select configuration_version from project where id = ?").param(projectId).query(Long.class).optional();
+    }
+
+    Optional<ConfigurationDraft> draft(UUID projectId) {
+        return jdbc.sql("select base_version, revision, document::text, updated_at, updated_by from project_configuration_draft where project_id = ?")
+            .param(projectId)
+            .query((rs, row) -> new ConfigurationDraft(projectId, rs.getLong("base_version"), rs.getLong("revision"),
+                JSON.readValue(rs.getString("document"), ProjectConfiguration.class), rs.getTimestamp("updated_at").toInstant(),
+                rs.getObject("updated_by", UUID.class)))
+            .optional();
+    }
+
+    /** Stores the draft with the given revision; the caller holds the project row exclusively. */
+    void saveDraft(UUID projectId, long baseVersion, long revision, ProjectConfiguration configuration, Instant now, UUID actor) {
+        jdbc.sql("""
+                insert into project_configuration_draft (project_id, base_version, revision, document, updated_at, updated_by)
+                values (?, ?, ?, cast(? as jsonb), ?, ?)
+                on conflict (project_id) do update set base_version = excluded.base_version, revision = excluded.revision,
+                    document = excluded.document, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+                """).params(projectId, baseVersion, revision, JSON.writeValueAsString(configuration), ts(now), actor).update();
+    }
+
+    void deleteDraft(UUID projectId) {
+        jdbc.sql("delete from project_configuration_draft where project_id = ?").param(projectId).update();
     }
 
     List<Member> members(UUID projectId) {

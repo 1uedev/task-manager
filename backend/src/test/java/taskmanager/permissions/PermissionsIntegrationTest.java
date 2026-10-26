@@ -3,6 +3,12 @@ package taskmanager.permissions;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.sql.SQLException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -22,6 +28,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.TestDatabase;
+import taskmanager.identity.MutableClock;
 
 // The fixture takes the bean name of the production adapter (taskmanager.IdentityPermissionsAdapter) and replaces it, so
 // the application still sees exactly one IdentityAccess. Only this test class does that; production never registers it.
@@ -50,9 +57,17 @@ class PermissionsIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class IdentityFixture {
+        static final MutableClock CLOCK = new MutableClock();
         volatile boolean current = true;
+        /** The end of the synthetic session; null is a session without end (the default of the port). */
+        volatile Instant until;
+        @Bean(name = "clock") java.time.Clock testClock() { return CLOCK; }
         @Bean(name = "identityPermissionsAdapter") IdentityAccess syntheticIdentity(JdbcTemplate jdbc) {
             return new IdentityAccess() {
+                public Optional<Instant> currentUntil(AccessContext context) {
+                    if (!isCurrent(context)) return Optional.empty();
+                    return Optional.of(until == null ? Instant.MAX : until);
+                }
                 public boolean isCurrent(AccessContext context) {
                     if (!current || !context.companyId().equals(COMPANY) || !context.sessionId().equals(SESSION)) return false;
                     var states = jdbc.queryForList("select active from test_identity_state where user_id=? for share", Boolean.class, context.userId());
@@ -71,6 +86,7 @@ class PermissionsIntegrationTest {
     @BeforeEach
     void seedOnlySyntheticPolicy() {
         identity.current = true;
+        identity.until = null;
         for (String table : new String[] {"audit", "field", "action", "membership", "group", "revision"})
             jdbc.update("delete from permissions_" + table);
         jdbc.execute("create table if not exists test_business_effect (id uuid primary key)");
@@ -109,7 +125,7 @@ class PermissionsIntegrationTest {
     @Test
     void absentOrAmbiguousIdentityAdapterDeniesWithoutTestFallback() {
         var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
-        var isolated = new taskmanager.permissions.internal.JdbcPermissions(jdbc, beans.getBeanProvider(IdentityAccess.class));
+        var isolated = new taskmanager.permissions.internal.JdbcPermissions(jdbc, beans.getBeanProvider(IdentityAccess.class), java.time.Clock.systemUTC());
         assertFalse(inTransaction(() -> isolated.inspect(actor(USER), scope(), "ticket.read", Set.of())).allowed());
         beans.registerSingleton("one", (IdentityAccess) actor -> true);
         beans.registerSingleton("two", (IdentityAccess) actor -> true);
@@ -167,18 +183,18 @@ class PermissionsIntegrationTest {
         mutate(() -> administration.setAction(actor(ADMIN), group, scope(), "ticket.comment", true));
         mutate(() -> administration.setField(actor(ADMIN), group, scope(), "comment", PermissionAdministration.Operation.READ, PermissionAdministration.Effect.ALLOW));
         assertTrue(permissions.inspect(actor(USER), scope(), "ticket.comment", Set.of("comment")).readableFields().contains("comment"));
-        var audit = administration.audit(actor(ADMIN), 100);
+        var audit = administration.audit(actor(ADMIN), null, 100);
         assertEquals(4, audit.size());
         assertEquals(4, audit.getFirst().rightsVersion());
         assertTrue(audit.stream().allMatch(row -> row.actorId().equals(ADMIN)));
-        assertThrows(PermissionDenied.class, () -> administration.audit(actor(USER), 100));
-        assertThrows(PermissionDenied.class, () -> administration.audit(actor(ADMIN), 101));
+        assertThrows(PermissionDenied.class, () -> administration.audit(actor(USER), null, 100));
+        assertThrows(PermissionDenied.class, () -> administration.audit(actor(ADMIN), null, 101));
         assertThrows(IllegalStateException.class, () -> mutate(() -> {
             administration.createGroup(actor(ADMIN), "Rolled back name");
             throw new IllegalStateException("synthetic rollback");
         }));
         assertEquals(4, permissions.currentVersion(COMPANY));
-        assertEquals(4, administration.audit(actor(ADMIN), 100).size());
+        assertEquals(4, administration.audit(actor(ADMIN), null, 100).size());
         assertFalse(administration.groups(actor(ADMIN)).stream().anyMatch(row -> row.name().equals("Rolled back name")));
     }
 
@@ -196,7 +212,7 @@ class PermissionsIntegrationTest {
         mutate(() -> administration.setField(actor(DELEGATE), READERS, scope(), "title",
             PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.DENY));
         assertFalse(permissions.inspect(actor(USER), scope(), "ticket.edit", Set.of("title")).writableFields().contains("title"));
-        assertThrows(PermissionDenied.class, () -> administration.audit(actor(DELEGATE), 100));
+        assertThrows(PermissionDenied.class, () -> administration.audit(actor(DELEGATE), null, 100));
         assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setMember(actor(ADMIN), UUID.randomUUID(), USER, true)));
         assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setMember(actor(ADMIN), READERS, UUID.randomUUID(), true)));
         assertEquals(2, permissions.currentVersion(COMPANY));
@@ -493,6 +509,140 @@ class PermissionsIntegrationTest {
             jdbc.update("update test_resource_state set member=true where project_id=?", PROJECT);
         }
         assertEquals(2, effects());
+    }
+
+
+    // ------------------------------------------------------------------------------------------------ TASK-043
+
+    @Test
+    void theAuditPagesBeyondAHundredEntriesAndNamesWhatAChangeReplaced() {
+        for (int round = 0; round < 60; round++) {
+            mutate(() -> administration.setMember(actor(ADMIN), DELEGATES, USER, true));
+            mutate(() -> administration.setMember(actor(ADMIN), DELEGATES, USER, false));
+        }
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.DENY));
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.REMOVE));
+        long latest = permissions.currentVersion(COMPANY);
+        assertEquals(122, latest);
+        List<Long> seen = new ArrayList<>();
+        Long before = null;
+        for (int pages = 0; pages < 5; pages++) {
+            var page = administration.audit(actor(ADMIN), before, 100);
+            if (page.isEmpty()) break;
+            page.forEach(entry -> seen.add(entry.rightsVersion()));
+            before = page.getLast().rightsVersion();
+        }
+        assertEquals(java.util.stream.LongStream.rangeClosed(1, latest).boxed().sorted(java.util.Comparator.reverseOrder()).toList(), seen);
+        var newest = administration.audit(actor(ADMIN), null, 4);
+        assertEquals(List.of("REMOVE", "DENY", "REMOVE", "ALLOW"), newest.stream().map(PermissionAdministration.Audit::effect).toList());
+        assertEquals(java.util.Arrays.asList("DENY", "ALLOW", "ALLOW", null), newest.stream().map(PermissionAdministration.Audit::previousEffect).toList());
+        // Finding F4 of the TASK-043 review: a new entry knows its previous state even when nothing was there before; an
+        // entry from before V0016 says that it does not know it, so null cannot be read as "nothing before".
+        assertTrue(newest.stream().allMatch(PermissionAdministration.Audit::previousRecorded));
+        jdbc.update("update permissions_audit set previous_effect = null, previous_recorded = false where company_id = ? and rights_version = ?",
+            COMPANY, latest);
+        var legacy = administration.audit(actor(ADMIN), null, 1).getFirst();
+        assertNull(legacy.previousEffect());
+        assertFalse(legacy.previousRecorded());
+        assertThrows(PermissionDenied.class, () -> administration.audit(actor(ADMIN), 0L, 10));
+    }
+
+    @Test
+    void externalAccountsNeverAdministerEvenWithAGrantedRight() {
+        AccessContext external = new AccessContext(COMPANY, DELEGATE, SESSION, permissions.currentVersion(COMPANY), false, true, ORG);
+        assertTrue(permissions.inspect(external, scope(), "permissions.manage", Set.of()).allowed());
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setAction(external, RESTRICTED, scope(), "ticket.read", true)));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.setField(external, READERS, scope(), "title",
+            PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.DENY)));
+        assertThrows(PermissionDenied.class, () -> administration.projectGroups(external, scope()));
+        assertEquals(0, permissions.currentVersion(COMPANY));
+    }
+
+    @Test
+    void aDuplicateGroupNameIsItsOwnRefusalWhateverTheCase() {
+        mutate(() -> administration.createGroup(actor(ADMIN), "Entwicklung"));
+        long version = permissions.currentVersion(COMPANY);
+        assertThrows(GroupNameTaken.class, () -> mutate(() -> administration.createGroup(actor(ADMIN), "  ENTWICKLUNG ")));
+        assertEquals(version, permissions.currentVersion(COMPANY));
+        assertThrows(PermissionDenied.class, () -> mutate(() -> administration.createGroup(actor(DELEGATE), "Entwicklung")));
+    }
+
+    @Test
+    void theCheckPutsBackTheLockTimeoutOfTheTransaction() {
+        for (String start : new String[] {"0", "2s"}) {
+            assertEquals(start.equals("0") ? "0" : "2s", inTransaction(() -> {
+                jdbc.execute("set local lock_timeout = '" + start + "'");
+                permissions.require(actor(USER), scope(), "ticket.edit", Set.of(), Set.of("title"));
+                return jdbc.queryForObject("show lock_timeout", String.class);
+            }));
+            assertEquals(start.equals("0") ? "0" : "2s", inTransaction(() -> {
+                jdbc.execute("set local lock_timeout = '" + start + "'");
+                assertFalse(permissions.inspect(actor(USER), scope(), "ticket.unknown", Set.of()).allowed());
+                administration.groups(actor(ADMIN));
+                return jdbc.queryForObject("show lock_timeout", String.class);
+            }));
+        }
+    }
+
+    @Test
+    void aChangeThatChangesNothingKeepsTheVersionAndWritesNoAudit() {
+        mutate(() -> administration.setMember(actor(ADMIN), READERS, USER, true));
+        mutate(() -> administration.setMember(actor(ADMIN), READERS, DELEGATE, false));
+        mutate(() -> administration.setAction(actor(ADMIN), READERS, scope(), "ticket.read", true));
+        mutate(() -> administration.setAction(actor(ADMIN), READERS, scope(), "ticket.create", false));
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "absent", PermissionAdministration.Operation.READ, PermissionAdministration.Effect.REMOVE));
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.DENY));
+        mutate(() -> administration.setField(actor(ADMIN), READERS, scope(), "title", PermissionAdministration.Operation.WRITE, PermissionAdministration.Effect.DENY));
+        assertEquals(1, permissions.currentVersion(COMPANY));
+        assertEquals(1, administration.audit(actor(ADMIN), null, 100).size());
+        // The same rule from another author counts, because the author decides who may withdraw a deny later; set again by
+        // that author it is nothing new.
+        for (int round = 0; round < 2; round++)
+            mutate(() -> administration.setField(actor(DELEGATE), DELEGATES, scope(), "title", PermissionAdministration.Operation.READ, PermissionAdministration.Effect.ALLOW));
+        assertEquals(2, permissions.currentVersion(COMPANY));
+    }
+
+    @Test
+    void aSessionThatEndsBetweenTheCheckAndTheCommitRollsTheChangeBack() {
+        identity.until = IdentityFixture.CLOCK.instant().plusSeconds(60);
+        mutate(() -> {
+            permissions.require(actor(USER), scope(), "ticket.edit", Set.of(), Set.of("title"));
+            jdbc.update("insert into test_business_effect values (?)", UUID.randomUUID());
+        });
+        assertEquals(1, effects());
+        assertThrows(PermissionDenied.class, () -> mutate(() -> {
+            permissions.require(actor(USER), scope(), "ticket.edit", Set.of(), Set.of("title"));
+            jdbc.update("insert into test_business_effect values (?)", UUID.randomUUID());
+            IdentityFixture.CLOCK.advance(Duration.ofSeconds(61));
+        }));
+        assertEquals(1, effects());
+        // A second check in the same transaction with a later end does not lift the earlier one.
+        identity.until = IdentityFixture.CLOCK.instant().plusSeconds(60);
+        assertThrows(PermissionDenied.class, () -> mutate(() -> {
+            permissions.require(actor(USER), scope(), "ticket.edit", Set.of(), Set.of("title"));
+            identity.until = IdentityFixture.CLOCK.instant().plusSeconds(600);
+            permissions.require(actor(USER), scope(), "ticket.read", Set.of(), Set.of());
+            jdbc.update("insert into test_business_effect values (?)", UUID.randomUUID());
+            IdentityFixture.CLOCK.advance(Duration.ofSeconds(61));
+        }));
+        assertEquals(1, effects());
+    }
+
+    @Test
+    void aProjectAdministrationSeesEveryGroupWithTheRulesOfItsProjectOnly() {
+        var groups = administration.projectGroups(actor(DELEGATE), scope());
+        assertEquals(Set.of(ADMINS, READERS, RESTRICTED, DELEGATES), new HashSet<>(groups.stream().map(group -> group.group().id()).toList()));
+        var readers = groups.stream().filter(group -> group.group().id().equals(READERS)).findFirst().orElseThrow();
+        assertEquals(List.of("ticket.edit", "ticket.read"), readers.actions().stream().map(PermissionAdministration.ActionRule::action).toList());
+        // The company wide read rule of the readers is not part of the project view.
+        assertTrue(readers.fields().stream().allMatch(rule -> PROJECT.equals(rule.projectId())));
+        assertEquals(3, readers.fields().size());
+        assertTrue(groups.stream().filter(group -> group.group().id().equals(ADMINS)).findFirst().orElseThrow().actions().isEmpty());
+        assertEquals(4, administration.projectGroups(actor(ADMIN), scope()).size());
+        assertThrows(PermissionDenied.class, () -> administration.projectGroups(actor(USER), scope()));
+        assertThrows(PermissionDenied.class, () -> administration.projectGroups(actor(DELEGATE), () -> ResourceContext.company(COMPANY)));
+        jdbc.update("update test_resource_state set member=false where project_id=?", PROJECT);
+        assertThrows(PermissionDenied.class, () -> administration.projectGroups(actor(DELEGATE), scope()));
     }
 
     private static void await(CountDownLatch latch) {

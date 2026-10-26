@@ -1,0 +1,313 @@
+diff --git a/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java b/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
+index 4204e0f..41c31c8 100644
+--- a/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
++++ b/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
+@@ -560,0 +561,308 @@ class TicketsApiTest {
++
++    // Independent review probes. Only test fixtures; production code remains unchanged.
++    @Autowired taskmanager.tickets.internal.TicketService reviewTickets;
++
++    private List<Integer> reviewWaiters(int holder, String query) {
++        return jdbc.queryForList("""
++            select pid from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
++            and ?=any(pg_blocking_pids(pid)) and query ilike ?
++            """, Integer.class, holder, "%" + query + "%");
++    }
++
++    private List<Integer> reviewAwait(int holder, String query, int count) throws InterruptedException {
++        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(4);
++        List<Integer> pids=List.of();
++        while(System.nanoTime()<deadline) {
++            pids=reviewWaiters(holder, query);
++            if(pids.size()>=count) return pids;
++            Thread.sleep(10);
++        }
++        throw new AssertionError("Missing exact blocking relationship: holder="+holder+", waiters="+pids);
++    }
++
++    private List<Response> reviewFence(String sql, UUID id, String query, Runnable revoke,
++            List<java.util.concurrent.Callable<Response>> requests) throws Exception {
++        CountDownLatch locked=new CountDownLatch(1), release=new CountDownLatch(1);
++        AtomicInteger holderPid=new AtomicInteger();
++        Future<?> holder=POOL.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++            jdbc.queryForList(sql, id);
++            holderPid.set(jdbc.queryForObject("select pg_backend_pid()", Integer.class));
++            locked.countDown();
++            try { assertTrue(release.await(25, TimeUnit.SECONDS)); }
++            catch(InterruptedException e) { throw new IllegalStateException(e); }
++            revoke.run();
++        }));
++        try {
++            assertTrue(locked.await(10, TimeUnit.SECONDS));
++            List<Future<Response>> calls=new ArrayList<>();
++            for(var request:requests) calls.add(POOL.submit(request));
++            List<Integer> waiters=reviewAwait(holderPid.get(), query, requests.size());
++            System.out.println("[review027] exact "+query+" holder="+holderPid+", waiters="+waiters);
++            release.countDown();
++            holder.get(10, TimeUnit.SECONDS);
++            List<Response> results=new ArrayList<>();
++            for(var call:calls) results.add(call.get(15, TimeUnit.SECONDS));
++            return results;
++        } finally {
++            release.countDown();
++            holder.get(15, TimeUnit.SECONDS);
++        }
++    }
++
++    @Test
++    void reviewCreateAndEditAreIndependentOfTheReadAction() {
++        Person owner=person(), creator=person(), editor=person();
++        Project project=project(owner, creator, editor);
++        grant(owner.id(), project.id(), FULL);
++        grant(creator.id(), project.id(), "ticket.create", "READ:*", "WRITE:*");
++        grant(editor.id(), project.id(), "ticket.edit", "READ:*", "WRITE:*");
++        assertEquals(201, create(owner, project, "Original").status());
++        Response created=create(creator, project, "Creator");
++        Response edited=patch(editor, project, 1, map("title", "Editor"), "\"1\"");
++        System.out.println("[review027] standalone create/edit statuses="+List.of(created.status(),edited.status()));
++        System.out.println("[review027] standalone rollback: tickets="+jdbc.queryForObject(
++            "select count(*) from ticket where project_id=?", Integer.class, project.id())
++            +", title="+jdbc.queryForObject("select title from ticket where project_id=? and number=1", String.class, project.id()));
++        grant(creator.id(),project.id(),"ticket.read");
++        grant(editor.id(),project.id(),"ticket.read");
++        Response createdWithRead=create(creator,project,"Creator with read");
++        Response editedWithRead=patch(editor,project,1,map("title","Editor with read"),"\"1\"");
++        assertEquals(List.of(201,200),List.of(createdWithRead.status(),editedWithRead.status()));
++        System.out.println("[review027] after adding only ticket.read: create/edit="+List.of(createdWithRead.status(),editedWithRead.status()));
++        assertEquals(List.of(201,200), List.of(created.status(),edited.status()),
++            "An allowed create/edit with readable fields must not secretly need ticket.read");
++    }
++
++    @Test
++    void reviewEveryForeignRouteAndScopeRequiresMembership() {
++        Person worker=person(), outsider=person();
++        Project a=project(worker), b=project(worker);
++        grant(worker.id(), a.id(), FULL);
++        grant(outsider.id(), null, FULL);
++        assertEquals(201, create(worker,a,"Scoped").status());
++        for(Person actor:List.of(outsider,a.manager())) {
++            for(String suffix:List.of("", "/1", "/1/history", "/999/history"))
++                assertProblem(actor.get(tickets(a)+suffix),404,"project.not_found");
++            assertProblem(create(actor,a,"Forbidden"),404,"project.not_found");
++            assertProblem(patch(actor,a,1,map("title","Forbidden"),"\"1\""),404,"project.not_found");
++        }
++        for(String suffix:List.of("", "/1", "/1/history"))
++            assertProblem(worker.get(tickets(b)+suffix),404,"project.not_found");
++        assertProblem(create(worker,b,"Wrong scope"),404,"project.not_found");
++        assertProblem(patch(worker,b,1,map("title","Wrong scope"),"\"1\""),404,"project.not_found");
++        System.out.println("[review027] list/detail/history/create/update: no membership and wrong project scope ->404");
++    }
++
++    @Test
++    void reviewEveryFieldDenyFiltersListDetailAndHistory() {
++        Person writer=person(), assignee=person();
++        List<Person> restricted=new ArrayList<>();
++        for(String field:ALL_FIELDS) restricted.add(person());
++        List<Person> members=new ArrayList<>(List.of(writer,assignee)); members.addAll(restricted);
++        Project project=project(members.toArray(Person[]::new));
++        grant(writer.id(),project.id(),FULL);
++        assertEquals(201,create(writer,project,map("type","bug","title","Private title",
++            "description","Private description","assignee",assignee.id().toString())).status());
++        for(int i=0;i<ALL_FIELDS.size();i++) {
++            String field=ALL_FIELDS.get(i); Person actor=restricted.get(i);
++            grant(actor.id(),project.id(),FULL);
++            grant(actor.id(),project.id(),"DENY-READ:"+field);
++            Response detail=actor.get(tickets(project)+"/1");
++            assertEquals(200,detail.status(),detail.body());
++            assertFalse(names(detail.fields()).contains(field));
++            assertFalse(strings(detail.json().get("writableFields")).contains(field));
++            Response list=actor.get(tickets(project));
++            assertEquals(200,list.status(),list.body());
++            assertFalse(names(list.json().get(0).get("fields")).contains(field));
++            Response history=actor.get(tickets(project)+"/1/history");
++            assertEquals(200,history.status(),history.body());
++            for(JsonNode entry:history.json())
++                for(JsonNode change:entry.get("changes")) assertFalse(change.get("field").asString().equals(field));
++            String value=field.equals("status")?"in_progress":field.equals("type")?"task":
++                field.equals("assignee")?writer.id().toString():"Changed";
++            assertProblem(patch(actor,project,1,map(field,value),"\"1\""),403,"auth.forbidden");
++        }
++        assertEquals(1L,jdbc.queryForObject("select version from ticket where project_id=?",Long.class,project.id()));
++        System.out.println("[review027] all five field denies filter list/detail/history and reject writes atomically");
++    }
++
++    @Test
++    void reviewRightsAndFieldRevocationsFenceWaitingWrites() throws Exception {
++        for(boolean fieldOnly:List.of(false,true)) {
++            Person worker=person(); Project project=project(worker);
++            grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++            UUID company=companies.find().orElseThrow();
++            List<Response> results=reviewFence("select revision from permissions_revision where company_id=? for update",
++                company,"permissions_revision",()->{
++                    if(fieldOnly) jdbc.update("""
++                        update permissions_field set effect='DENY' where company_id=? and field_key='title' and operation='WRITE'
++                        and group_id in(select group_id from permissions_membership where company_id=? and user_id=?)
++                        """,company,company,worker.id());
++                    else jdbc.update("""
++                        delete from permissions_action where company_id=? and action_key='ticket.edit'
++                        and group_id in(select group_id from permissions_membership where company_id=? and user_id=?)
++                        """,company,company,worker.id());
++                    jdbc.update("update permissions_revision set revision=revision+1 where company_id=?",company);
++                },List.of(()->patch(worker,project,1,map("title","Forbidden"),"\"1\"")));
++            assertProblem(results.getFirst(),404,"project.not_found");
++            assertEquals(200,worker.get(tickets(project)+"/1").status());
++            assertProblem(patch(worker,project,1,map("title","Forbidden"),"\"1\""),403,"auth.forbidden");
++            assertEquals("Original",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++            assertEquals(1L,jdbc.queryForObject("select max(c.version) from ticket_change c join ticket t on t.id=c.ticket_id where t.project_id=?",Long.class,project.id()));
++            System.out.println("[review027] fieldOnly="+fieldOnly+" queued=404, fresh read=200/write=403, no ticket/history change");
++        }
++    }
++
++    @Test
++    void reviewMembershipRemovalFencesWaitingReadAndWrite() throws Exception {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        List<Response> results=reviewFence("select id from project where id=? for update",project.id(),"from project",()->{
++            jdbc.update("delete from project_member where project_id=? and account_id=?",project.id(),worker.id());
++            jdbc.update("update project set version=version+1 where id=?",project.id());
++        },List.of(()->worker.get(tickets(project)+"/1/history"),
++                  ()->patch(worker,project,1,map("title","Forbidden"),"\"1\"")));
++        for(Response result:results) assertProblem(result,404,"project.not_found");
++        assertProblem(worker.get(tickets(project)),404,"project.not_found");
++        assertEquals("Original",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++        System.out.println("[review027] membership removal: waiting history/write and fresh list ->404, unchanged");
++    }
++
++    @Test
++    void reviewSessionRevocationFencesWaitingWrite() throws Exception {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        List<Response> results=reviewFence("select id from identity_session where account_id=? and revoked_at is null for update",
++            worker.id(),"identity_session",()->jdbc.update(
++                "update identity_session set revoked_at=now(), revoke_reason='review' where account_id=? and revoked_at is null",worker.id()),
++            List.of(()->patch(worker,project,1,map("title","Forbidden"),"\"1\"")));
++        assertProblem(results.getFirst(),404,"project.not_found");
++        assertProblem(worker.get(tickets(project)+"/1"),401,"auth.session_expired");
++        assertEquals("Original",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++        System.out.println("[review027] session withdrawal: waiting write=404, fresh read=401, unchanged");
++    }
++
++    @Test
++    void reviewConcurrentETagsProduceOneVersionAndOneHistoryChange() throws Exception {
++        Person a=person(), b=person(); Project project=project(a,b);
++        grant(a.id(),project.id(),FULL); grant(b.id(),project.id(),FULL);
++        assertEquals(201,create(a,project,"Original").status());
++        CountDownLatch start=new CountDownLatch(1);
++        Future<Response> first=POOL.submit(()->{start.await();return patch(a,project,1,map("title","First"),"\"1\"");});
++        Future<Response> second=POOL.submit(()->{start.await();return patch(b,project,1,map("title","Second"),"\"1\"");});
++        start.countDown();
++        List<Integer> statuses=List.of(first.get(20,TimeUnit.SECONDS).status(),second.get(20,TimeUnit.SECONDS).status()).stream().sorted().toList();
++        assertEquals(List.of(200,412),statuses);
++        assertEquals(2L,jdbc.queryForObject("select version from ticket where project_id=?",Long.class,project.id()));
++        assertEquals(1,jdbc.queryForObject("select count(*) from ticket_change c join ticket t on t.id=c.ticket_id where t.project_id=? and c.version=2",Integer.class,project.id()));
++        System.out.println("[review027] same ETag ->"+statuses+", version=2, one history change");
++    }
++
++    @Test
++    void reviewHistoryFailureRollsBackTicketCounterAndUpdate() {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        jdbc.execute("""
++            create function review_reject_history() returns trigger language plpgsql as $$
++            begin if new.new_value='review-reject' then raise exception 'synthetic review rejection'; end if; return new; end $$
++            """);
++        jdbc.execute("create trigger review_history before insert on ticket_change for each row execute function review_reject_history()");
++        try {
++            Response failedCreate=create(worker,project,"review-reject");
++            Response failedUpdate=patch(worker,project,1,map("title","review-reject"),"\"1\"");
++            assertEquals(List.of(500,500),List.of(failedCreate.status(),failedUpdate.status()));
++            assertFalse(failedCreate.body().contains("synthetic review rejection"));
++            assertFalse(failedUpdate.body().contains("synthetic review rejection"));
++            assertEquals(1,jdbc.queryForObject("select count(*) from ticket where project_id=?",Integer.class,project.id()));
++            assertEquals(1L,jdbc.queryForObject("select last_number from ticket_counter where project_id=?",Long.class,project.id()));
++            assertEquals("Original",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++            assertEquals(1L,jdbc.queryForObject("select max(c.version) from ticket_change c join ticket t on t.id=c.ticket_id where t.project_id=?",Long.class,project.id()));
++            System.out.println("[review027] forced late history failure: create/update=500, ticket/counter/history fully rolled back, sanitized errors");
++        } finally {
++            jdbc.execute("drop trigger review_history on ticket_change");
++            jdbc.execute("drop function review_reject_history()");
++        }
++        assertEquals(2L,create(worker,project,"Retry").json().get("number").asLong());
++    }
++
++    @Test
++    void reviewConfigurationCommitIsSeenByAWaitingTransition() throws Exception {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        var initial=ProjectConfiguration.initial();
++        var changed=new ProjectConfiguration(initial.ticketTypes(),initial.statuses(),initial.initialStatus(),
++            List.of(new ProjectConfiguration.Transition("in_progress","done")),initial.fields());
++        List<Response> result=reviewFence("select id from project where id=? for update",project.id(),"from project",()->{
++            jdbc.update("""
++                insert into project_configuration(project_id,version,document,created_at,created_by)
++                values(?,2,?::jsonb,now(),?)
++                """,project.id(),JSON.writeValueAsString(changed),project.manager().id());
++            jdbc.update("update project set configuration_version=2, version=version+1 where id=?",project.id());
++        },List.of(()->patch(worker,project,1,map("status","in_progress"),"\"1\"")));
++        assertProblem(result.getFirst(),409,"ticket.transition_not_allowed");
++        assertEquals("new",jdbc.queryForObject("select status from ticket where project_id=?",String.class,project.id()));
++        assertEquals(1L,jdbc.queryForObject("select version from ticket where project_id=?",Long.class,project.id()));
++        System.out.println("[review027] waiting transition sees committed configuration ->409, unchanged");
++    }
++
++    @Test
++    void reviewActualDatabaseDeadlockReturns503AndRollsBack() throws Exception {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        CountDownLatch locked=new CountDownLatch(1), closeCycle=new CountDownLatch(1);
++        AtomicInteger holderPid=new AtomicInteger();
++        Future<?> holder=POOL.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++            jdbc.execute("set local deadlock_timeout='20s'");
++            jdbc.queryForList("select id from ticket where project_id=? for update",project.id());
++            holderPid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class));
++            locked.countDown();
++            try { assertTrue(closeCycle.await(20,TimeUnit.SECONDS)); }
++            catch(InterruptedException e) { throw new IllegalStateException(e); }
++            jdbc.queryForList("select revision from permissions_revision where company_id=? for update",companies.find().orElseThrow());
++        }));
++        try {
++            assertTrue(locked.await(10,TimeUnit.SECONDS));
++            Future<Response> call=POOL.submit(()->patch(worker,project,1,map("title","Must rollback"),"\"1\""));
++            int httpPid=reviewAwait(holderPid.get(),"from ticket",1).getFirst();
++            closeCycle.countDown();
++            assertTrue(reviewAwait(httpPid,"permissions_revision",1).contains(holderPid.get()));
++            Response result=call.get(12,TimeUnit.SECONDS);
++            assertProblem(result,503,"ticket.busy"); assertEquals("1",result.header("Retry-After"));
++            assertFalse(result.body().contains("deadlock")); assertFalse(result.body().contains("Must rollback"));
++            holder.get(10,TimeUnit.SECONDS);
++            assertEquals(1L,jdbc.queryForObject("select version from ticket where project_id=?",Long.class,project.id()));
++            assertEquals("Original",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++            System.out.println("[review027] actual cycle HTTP "+httpPid+" -> holder "+holderPid+" -> HTTP: 503 ticket.busy, Retry-After=1, unchanged");
++        } finally { closeCycle.countDown(); holder.get(15,TimeUnit.SECONDS); }
++        assertEquals(200,patch(worker,project,1,map("title","Retry"),"\"1\"").status());
++    }
++
++    @Test
++    void reviewAuthorizedWriteCommitsBeforeWaitingMembershipRemoval() throws Exception {
++        Person worker=person(); Project project=project(worker);
++        grant(worker.id(),project.id(),FULL); assertEquals(201,create(worker,project,"Original").status());
++        UUID company=companies.find().orElseThrow();
++        UUID session=jdbc.queryForObject("select id from identity_session where account_id=? and revoked_at is null",UUID.class,worker.id());
++        long revision=jdbc.queryForObject("select revision from permissions_revision where company_id=?",Long.class,company);
++        var context=new taskmanager.permissions.AccessContext(company,worker.id(),session,revision,false,false,null);
++        CountDownLatch wrote=new CountDownLatch(1), release=new CountDownLatch(1);
++        AtomicInteger holderPid=new AtomicInteger();
++        Future<?> write=POOL.submit(()->new TransactionTemplate(transactions).executeWithoutResult(status->{
++            reviewTickets.update(context,project.id(),1,1,Map.of("title","Committed first"));
++            holderPid.set(jdbc.queryForObject("select pg_backend_pid()",Integer.class)); wrote.countDown();
++            try { assertTrue(release.await(20,TimeUnit.SECONDS)); }
++            catch(InterruptedException e) { throw new IllegalStateException(e); }
++        }));
++        try {
++            assertTrue(wrote.await(10,TimeUnit.SECONDS));
++            String etag=project.manager().get("/api/v1/projects/"+project.id()).header("ETag");
++            Future<Response> remove=POOL.submit(()->project.manager().browser().send("DELETE",
++                "/api/v1/projects/"+project.id()+"/members/"+worker.id(),null,etag));
++            System.out.println("[review027] removal "+reviewAwait(holderPid.get(),"from project",1)+" waits on authorized write "+holderPid);
++            release.countDown(); write.get(10,TimeUnit.SECONDS);
++            assertEquals(200,remove.get(15,TimeUnit.SECONDS).status());
++            assertProblem(worker.get(tickets(project)+"/1"),404,"project.not_found");
++            assertEquals("Committed first",jdbc.queryForObject("select title from ticket where project_id=?",String.class,project.id()));
++        } finally { release.countDown(); write.get(15,TimeUnit.SECONDS); }
++    }
++

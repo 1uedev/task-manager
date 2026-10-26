@@ -1,5 +1,6 @@
 package taskmanager.projects.internal;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.projects.ProjectChanged;
 import taskmanager.projects.ProjectConfiguration;
 
 /** The project adapter of the permissions contract; see {@link ProjectAccess} for the locks. */
@@ -56,5 +58,17 @@ class JdbcProjectAccess implements ProjectAccess {
     @Transactional(readOnly = true)
     public Optional<String> key(UUID projectId) {
         return projects.key(projectId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> memberships(UUID companyId, UUID accountId) {
+        return projects.memberships(companyId, accountId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ProjectChanged> searchSources(UUID companyId) {
+        return projects.all(companyId).stream().map(Project::changed).toList();
     }
 }

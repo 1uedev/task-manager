@@ -76,6 +76,10 @@ public class AppearanceService {
         if (declaredType == null || !type.equals(declaredType.toLowerCase(Locale.ROOT).split(";")[0].trim())) {
             throw ApiProblemException.of(415, "appearance.logo_type_invalid");
         }
+        // The right start of a file is not yet an image anyone can see (TASK-043).
+        if (Logo.validType(content).isEmpty()) {
+            throw ApiProblemException.of(415, "appearance.logo_unreadable");
+        }
         locked(expectedVersion);
         jdbc.sql("update appearance_setting set logo = ?, logo_type = ?, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(content, type, ts(), actor.accountId()).update();

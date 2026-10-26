@@ -11,6 +11,9 @@ port=${TASK_MANAGER_HTTP_PORT:-18080}
 export TASK_MANAGER_HTTP_PORT=$port
 logs=target/lifecycle
 mkdir -p "$logs"
+# The file store of the attachments (TASK-051) is a setting of the web application; it lies in a directory of its own.
+export TASK_MANAGER_FILES_DIR=$PWD/$logs/files
+rm -rf "$TASK_MANAGER_FILES_DIR"
 
 pid=
 phase=setup
@@ -83,16 +86,16 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 12 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 23 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,flyway_schema_history,identity_account,identity_audit_event,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_member,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,file_attachment,file_audit_event,flyway_schema_history,identity_account,identity_audit_event,identity_ldap_setting,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_configuration_draft,project_member,search_project,search_project_tag,search_state,search_tag,search_ticket,search_ticket_custom,search_ticket_tag,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter' ] \
   || fail "unexpected schema objects"
 [ "$(sql "select (select count(*) from platform_company) + (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
@@ -127,8 +130,28 @@ grep -q 'bootstrap.accounts_exist' "$logs/bootstrap-second.err" || fail "second 
 [ "$(sql "select count(*) from identity_account")" = 1 ] || fail "second bootstrap-admin created an account"
 [ "$(sql "select count(*) from platform_company")" = 1 ] || fail "second bootstrap-admin created a company"
 
+phase=rebuild-search
+set +e
+java -jar "$jar" rebuild-search > "$logs/rebuild-search.out" 2> "$logs/rebuild-search.err"
+code=$?
+set -e
+[ "$code" -eq 0 ] || { cat "$logs/rebuild-search.out" "$logs/rebuild-search.err"; fail "rebuild-search exited with $code"; }
+grep -q '^Search projection rebuilt.$' "$logs/rebuild-search.out" || fail "rebuild-search did not report the rebuild"
+[ "$(sql "select count(*) from search_state")" = 1 ] || fail "rebuild-search did not record the built projection"
+
 phase=started-with-admin
 echo "== Start with an existing account"
 run with-account
+[ -d "$TASK_MANAGER_FILES_DIR/staging" ] && [ -d "$TASK_MANAGER_FILES_DIR/content" ] || fail "the web application did not prepare the file store"
+
+phase=missing-files-dir
+echo "== Refusal without a file store"
+set +e
+env -u TASK_MANAGER_FILES_DIR timeout 60 java -jar "$jar" > "$logs/missing-files-dir.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && [ "$code" -ne 124 ] || fail "start without a file store ended with $code"
+grep -q "required settings are missing: TASK_MANAGER_FILES_DIR (taskmanager.files.directory)" "$logs/missing-files-dir.log" \
+  || fail "refusal does not name the missing file store"
 
 echo "Lifecycle check passed"

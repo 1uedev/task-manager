@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,9 @@ import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.tags.ProjectTagChanged;
+import taskmanager.tags.TagChanged;
+import taskmanager.tags.TicketTagChanged;
 import taskmanager.tickets.TicketAccess;
 
 /**
@@ -61,13 +65,16 @@ public class TagService {
     private final TicketAccess tickets;
     private final Permissions permissions;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    TagService(TagRepository tags, ProjectAccess projects, TicketAccess tickets, Permissions permissions, Clock clock) {
+    TagService(TagRepository tags, ProjectAccess projects, TicketAccess tickets, Permissions permissions, Clock clock,
+            ApplicationEventPublisher events) {
         this.tags = tags;
         this.projects = projects;
         this.tickets = tickets;
         this.permissions = permissions;
         this.clock = clock;
+        this.events = events;
     }
 
     /** The catalog a tag is taken from when it is named instead of identified. */
@@ -150,6 +157,7 @@ public class TagService {
         Tag tag = resolve(actor, projectId, new Target(target.tagId(), target.name(), Catalog.COMPANY), true);
         if (tags.assignProject(projectId, tag.id(), clock.instant(), actor.userId())) {
             tags.audit(actor.companyId(), tag.id(), "tag.assigned", PROJECT_RESOURCE, projectId, null, actor.userId(), clock.instant());
+            events.publishEvent(new ProjectTagChanged(projectId, tag.id(), true));
         }
     }
 
@@ -158,6 +166,7 @@ public class TagService {
         projectAccess(actor, projectId, true);
         if (tags.unassignProject(projectId, tagId)) {
             tags.audit(actor.companyId(), tagId, "tag.unassigned", PROJECT_RESOURCE, projectId, null, actor.userId(), clock.instant());
+            events.publishEvent(new ProjectTagChanged(projectId, tagId, false));
         }
     }
 
@@ -186,10 +195,13 @@ public class TagService {
     public void assignTicket(AccessContext actor, UUID projectId, long number, Target target) {
         UUID ticket = changeableTicket(actor, projectId, number);
         Tag tag = resolve(actor, projectId, target, false);
+        // Ticket after tag, as DEC-068 orders the locks; the time is read only once the ticket row is held (TASK-043).
+        tickets.lockForTagChange(ticket);
         Instant now = clock.instant();
         if (tags.assignTicket(ticket, tag.id(), projectId, now, actor.userId())) {
             tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), now);
             tickets.recordTagChange(ticket, now, actor.userId(), null, tag.id());
+            events.publishEvent(new TicketTagChanged(ticket, tag.id(), true));
         }
     }
 
@@ -197,9 +209,11 @@ public class TagService {
     public void unassignTicket(AccessContext actor, UUID projectId, long number, UUID tagId) {
         UUID ticket = changeableTicket(actor, projectId, number);
         if (tags.unassignTicket(ticket, tagId)) {
+            tickets.lockForTagChange(ticket);
             Instant now = clock.instant();
             tags.audit(actor.companyId(), tagId, "tag.unassigned", "ticket", ticket, null, actor.userId(), now);
             tickets.recordTagChange(ticket, now, actor.userId(), tagId, null);
+            events.publishEvent(new TicketTagChanged(ticket, tagId, false));
         }
     }
 
@@ -211,6 +225,7 @@ public class TagService {
             throw ApiProblemException.of(409, "tag.name_taken");
         }
         tags.audit(actor.companyId(), tag.id(), "tag.created", catalogTarget(projectId), projectId, tag.name(), actor.userId(), tag.createdAt());
+        events.publishEvent(changed(tag));
         return tag;
     }
 
@@ -259,6 +274,7 @@ public class TagService {
         if (archived != tag.archived()) {
             tags.audit(actor.companyId(), id, archived ? "tag.archived" : "tag.restored", catalogTarget(projectId), projectId, null, actor.userId(), now);
         }
+        events.publishEvent(changed(changed));
         return changed;
     }
 
@@ -296,6 +312,7 @@ public class TagService {
             return assignable(tags.lockByName(actor.companyId(), catalog, tag.normalized()).orElseThrow(TagService::tagNotFound));
         }
         tags.audit(actor.companyId(), tag.id(), "tag.created", catalogTarget(catalog), catalog, tag.name(), actor.userId(), tag.createdAt());
+        events.publishEvent(changed(tag));
         return tag;
     }
 
@@ -305,6 +322,10 @@ public class TagService {
      */
     private static String catalogTarget(UUID projectId) {
         return projectId == null ? null : PROJECT_RESOURCE;
+    }
+
+    static TagChanged changed(Tag tag) {
+        return new TagChanged(tag.id(), tag.companyId(), tag.projectId(), tag.name());
     }
 
     private static Tag assignable(Tag tag) {

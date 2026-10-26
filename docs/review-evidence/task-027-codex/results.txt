@@ -1,0 +1,74 @@
+TASK-027 independent review, 2026-10-20
+Session: codex-20261020-tickets-review-01
+Reviewed main: 9a6a20048189e89cb5d23afdafef0fd0a2826305
+PR #112 head: 1eec61c80fb2d1de96dc88995cfe8fb17df86c63
+Runtime: Java 25.0.4.1+1, native PostgreSQL 18.6, own synthetic test instance
+
+OWN EXECUTION: unchanged backend clean verify (corrected test configuration)
+Tests run: 165, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-20T13:30:27+02:00
+
+OWN EXECUTION: final added probes, selected output lines
+[review027] exact identity_session holder=24732, waiters=[26596]
+[review027] session withdrawal: waiting write=404, fresh read=401, unchanged
+[review027] all five field denies filter list/detail/history and reject writes atomically
+[review027] standalone create/edit statuses=[404, 404]
+[review027] standalone rollback: tickets=1, title=Original
+[review027] after adding only ticket.read: create/edit=[201, 200]
+[review027] exact from project holder=24732, waiters=[26596, 13528]
+[review027] membership removal: waiting history/write and fresh list ->404, unchanged
+[review027] exact permissions_revision holder=24732, waiters=[26596]
+[review027] fieldOnly=false queued=404, fresh read=200/write=403, no ticket/history change
+[review027] exact permissions_revision holder=24732, waiters=[26596]
+[review027] fieldOnly=true queued=404, fresh read=200/write=403, no ticket/history change
+[review027] removal [26596] waits on authorized write 24732
+[review027] forced late history failure: create/update=500, ticket/counter/history fully rolled back, sanitized errors
+[review027] actual cycle HTTP 26596 -> holder 24732 -> HTTP: 503 ticket.busy, Retry-After=1, unchanged
+[review027] same ETag ->[200, 412], version=2, one history change
+[review027] list/detail/history/create/update: no membership and wrong project scope ->404
+[review027] exact from project holder=24732, waiters=[13528]
+[review027] waiting transition sees committed configuration ->409, unchanged
+Tests run: 11, Failures: 1, Errors: 0, Skipped: 0
+Assertion failure: reviewCreateAndEditAreIndependentOfTheReadAction
+  Expected [201, 200], actual [404, 404]. Controls with ticket.read passed.
+
+OWN DATABASE LOG: actual deadlock in the final probe run
+2026-10-20 13:34:56.510 CEST [26596] ERROR: deadlock detected
+Process 26596 waits for ShareLock on transaction 3916; blocked by process 24732.
+Process 24732 waits for ShareLock on transaction 3917; blocked by process 26596.
+Process 26596: select ... from ticket ... for update
+Process 24732: select revision from permissions_revision where company_id=$1 for update
+The opponent intentionally takes the reverse order; this proves error mapping, not a regular product deadlock path.
+
+OWN EXECUTION: after byte-identical restoration of TicketsApiTest.java
+clean test: TicketsApiTest,TicketsContractTest
+Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-20T13:36:20+02:00
+Patch applicability checked with git apply --check --unidiff-zero.
+Own PostgreSQL instance stopped after PID and executable-path verification.
+
+SETUP ATTEMPTS (not counted as product failures)
+Initial baseline: empty synthetic password supplied by reviewer; required configuration rejected startup.
+Initial probe compilation: reviewer used a nonexistent CompanyContext.require method; corrected to find().orElseThrow().
+First executable probe run: fresh revoked session correctly returned auth.session_expired, while reviewer expected auth.required.
+Final probe run above corrects these setup/expectation errors and has only the F1 assertion failure.
+
+READ CI EVIDENCE (not an own Docker/Linux lifecycle execution)
+Backend run: https://github.com/1uedev/task-manager/actions/runs/39410043140
+Backend job: 118585282804
+2026-10-20T10:46:03.1828173Z Tests run: 165, Failures: 0, Errors: 0, Skipped: 0
+2026-10-20T10:46:11.8928522Z PostgreSQL 18.6
+2026-10-20T10:46:44.7258671Z Lifecycle check passed
+
+Scope: selected excerpts; H-C1 is a static source/contract discrepancy.
+No complete raw log, exhaustive proof of interleavings or functional acceptance is claimed.
+
+PUBLICATION STATUS, 2026-10-21
+Base: b85abdddce048fb7a76a44222e61a969cc6417e6
+F1 has been fixed by PR #114; TASK-027 accepted by Holger and recorded through PR #118.
+Current source/documentation was inspected; no new backend execution of this expanded main is claimed.
+This evidence supplements, and does not replace, the separate Claude report in PR #115.
+Publication documentation checks: repository validator OK, task board current,
+25 Python regression tests passed, git diff --cached --check clean.

@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 sind die ersten Einträge unten. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027 und die Serialisierung der Verwaltung als TASK-041; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Fachfunktionen sind noch nicht implementiert.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 sind die ersten Einträge unten. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Fachfunktionen sind noch nicht implementiert.
 
 ## Angaben für spätere Einträge
 
@@ -130,6 +130,134 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-043 Rechtekern härten
+
+**Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261022-hardening-01. **Abgeschlossen:** 2026-10-23.
+
+**Abnahmekriterien:** Jeder umgesetzte Punkt hat eine Regression, die ohne Korrektur fehlschlägt; ein zwischen Sperre und Commit entzogenes Recht verhindert die Änderung; Projektverwaltungen sehen nur die Gruppen, die sie delegieren dürfen; das Protokoll ist über 100 Einträge hinaus erreichbar. Getrennte KI prüft Rechtegrenzen und Nebenläufigkeit; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-072. Umfang nach Holgers Wahl „Alle fünf“ (PR #146):
+- P2: Das Rechteprotokoll blättert mit `before` über die Rechteversion; jeder Eintrag nennt den ersetzten Zustand (Migration V0016). Die Gruppenverwaltung zeigt das Protokoll seitenweise.
+- P3: Externe Konten verwalten nie Rechte.
+- P4: Ein doppelter Gruppenname, ohne Rücksicht auf Groß- und Kleinschreibung, antwortet mit 409 `permissions.group_name_taken`. Sperrfehler sind als wiederholbar dokumentiert.
+- P5: Die Sperrwartezeit von fünf Sekunden gilt nur für die Rechteprüfung.
+- P6: Wirkungslose Änderungen schreiben weder eine neue Rechteversion noch einen Protokolleintrag.
+- Prüfung beim Commit: `require` vergleicht das Sitzungsende unmittelbar vor dem Commit erneut mit der Uhr.
+- Lesepfad `GET /api/v1/permissions/projects/{projectId}/groups` mit dem Reiter Rechte im Projekt.
+- Restpunkte F1 bis F3 aus TASK-036 und F1 aus TASK-042.
+
+Nachbesserung nach unabhängiger Prüfung (PR #148):
+- F1: Ein animiertes WebP braucht den Animationskopf und eigene Bilddaten je Bild, sonst 415 `appearance.logo_unreadable`.
+- F2: Die Rechteendpunkte mit Projektbezug beantworten ein verborgenes Projekt wie ein fehlendes mit 404 `project.not_found`.
+- F3: Mit Logo bleibt der Markenname für Bildschirmleser erhalten.
+- F4: `previousRecorded` (Migration V0017, Vertrag 0.3.0) unterscheidet „vorher nichts“ von „nicht erfasst“.
+
+**Prüfungen:** CI mit Backend, Frontend, Qualifikation, Repository Prüfungen und Workflow `Image` grün auf PR #146 und #148; die Lebenszyklusprüfung wurde auf V0016 und V0017 nachgeführt. Zuletzt lokal grün: 218 Backendtests gegen PostgreSQL 16, Frontend `npm run verify`, 75 Browsertests und die Lebenszyklusprüfung gegen eine leere Datenbank. Jede neue Regression wurde gegen einen Stand ohne ihre Korrektur ausgeführt und schlägt dort fehl. Ausnahme ist die Backendregression zu F4: Sie setzt die neue Spalte voraus; ihre Browserregression ohne Korrektur ist rot.
+
+**Review:** Unabhängige Prüfung durch Codex (codex-20261022-task043-review-01, Bericht `docs/REVIEW_TASK-043_PR-146.md` in PR #147): F1 (P2), F2 bis F4 (P3). Ohne Befund blieben Rechtegrenzen der Delegation, externe Konten, doppelte Namen, Sperrwartezeit, Prüfung beim Commit, Tagzeitpunkt, wirkungslose Änderungen und Protokollblättern. Eine Nachprüfung der Korrekturen hat Holger ausdrücklich nicht verlangt.
+
+**Abnahme:** Holger, 2026-10-23, im Projektgespräch („keine nachprüfung und ist abgenommen“ nach dem Merge von PR #148); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. P7, also ob eine Projektverwaltung die Projektregeln jeder Gruppe ändern darf, bleibt Holgers Entscheidung.
+2. Die Messung der Zeilensperre bei `inspect` und die unternehmensweite Ungültigkeit aller Kontexte aus P6 stehen aus.
+3. Aufbewahrung und Schutz des Protokolls bleiben bei OPEN-014.
+4. WebP wird nur auf seinen Aufbau geprüft, nicht vollständig dekodiert.
+5. Es gab keinen manuellen Test mit einem Bildschirmleser.
+6. Einträge zwischen V0016 und V0017 ohne erfassten Vorzustand gelten vorsichtig als nicht erfasst.
+
+**Referenz:** Reservierung #145 (d04926b), Ergebnis #146 (a210423), Prüfbericht #147, Nachbesserung #148 (bc15ea8); verknüpft mit TASK-025, TASK-030, TASK-036, TASK-042 und DEC-072.
+
+## TASK-030 Durchgängige Oberfläche und minimale Administration integrieren
+
+**Bezug:** REQ-PROD-002, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-UX-001, REQ-ACL-001, REQ-ACL-003. **Verantwortlich:** claude-20261021-ui-01. **Abgeschlossen:** 2026-10-22.
+
+**Abnahmekriterien:** Administrative Kontoanlage und verpflichtender Erstwechsel sind bedienbar; direkter Fachzugriff vor dem Wechsel wird auch serverseitig abgewiesen. Zwei unterschiedlich berechtigte Benutzer durchlaufen den Ablauf in DE/EN. Ablaufende, verlorene Rechte, Konflikte und ungespeicherte Eingaben entsprechen dem ausgewählten UX-Vertrag. Direkte API-Negativfälle bleiben geschützt. Getrennte KI prüft Ablauf und sichtbare Grenzen; echte Browserprüfung dokumentiert.
+
+**Ergebnis:** DEC-070. Teil 1 im Backend (PR #132): Gruppen, Mitglieder, Aktionen je Unternehmen oder Projekt und Feldregeln werden über `/api/v1/permissions` mit dem Recht `permissions.manage` verwaltet, das Protokoll mit `permissions.audit.read`; Schutz der letzten Verwaltung (409 `permissions.last_administrator`), Kontoverzeichnis `GET /api/v1/directory/accounts`, Verträge `contracts/permissions.openapi.yaml` und Ergänzungen in `contracts/identity.openapi.yaml`, keine Migration. Teil 2 in der Oberfläche (PR #133, DEC-070 Nachtrag 8 bis 13): Anmeldung mit Pflichtwechsel des Einmalpassworts, Konten mit Einmalpasswort, Projekte mit Mitgliedern, Tags und Einstellungen, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche, Gruppen und Rechte sowie Erscheinungsbild, in Deutsch und Englisch; Schutz ungespeicherter Eingaben und Rückkehr zur Anmeldung bei Sitzungsende. Nachbesserung nach unabhängiger Prüfung (PR #141, DEC-070 Nachtrag 14): Historie und Tags laden nach einer Ablehnung beim Speichern neu (F1), Eingaben während einer Speicherung bleiben erhalten (F2), Anlegeformulare fragen vor dem Verlassen (F3), nach der Abmeldung wird das CSRF Cookie neu ausgestellt (F4), Sperrfehler der Rechteverwaltung antworten mit 503 `permissions.busy` (F5), jede 403 Antwort liest die Rechte der Sitzung neu (F6). Der Test des Demowerkzeugs zu Verbindungsfehlern läuft seit PR #143 systemunabhängig (H1 der Nachprüfung).
+
+**Prüfungen:** Eigenprüfung: Unit Tests, 60 Browsertests gegen ein vertragstreues Testbackend und eine echte Browserprüfung gegen Backend und PostgreSQL mit zwei unterschiedlich berechtigten Konten ([Protokoll und Screenshots](docs/screenshots/task-030/README.md)). Nach der Nachbesserung lokal 208 Backendtests gegen PostgreSQL 16, 68 Unit Tests und 67 Browsertests, davon sieben neue Regressionen, die ohne Korrektur rot waren; Backendtest `aRightsLockNotGrantedInTimeAnswersRetryableBusy` mit echter Sperre. CI mit Backend, Frontend, Qualifikation, Repository Prüfungen und Workflow `Image` grün auf PR #132, #133, #141 und #143.
+
+**Review:** Unabhängige Prüfung durch Codex (Bericht `docs/REVIEW_TASK-030_PR-133.md` in PR #140): F1 bis F5 (P2) und F6 (P3), Rechteendpunkte, Verzeichnis, letzte Verwaltung, verborgene Felder und Versionskonflikt ohne Befund. Nachprüfung durch Codex (codex-20261022-task030-followup-01, Bericht `docs/REVIEW_TASK-030_PR-141.md` in PR #142): F1 bis F6 im nachgespielten Umfang mit elf Gegenproben am echten Backend behoben, technisch abnahmefähig, kein neuer P1 oder P2; der Hinweis H1 (P3, Demotest unter Windows) ist mit PR #143 behoben, ohne weitere Nachprüfung.
+
+**Abnahme:** Holger, 2026-10-22, im Projektgespräch („030 ist abgenommen“ nach dem Merge von PR #142 und #143); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Projektkonfiguration nur lesend; Gruppen lassen sich nicht umbenennen oder löschen; kein Bildschirm für das Rechteprotokoll. (2) Die Ticketanlage wird angeboten, weil die Projektantwort keine Projektaktionen nennt; der Server lehnt ohne Recht ab. (3) Suche ohne zusätzliche Fachfilter in der Oberfläche; Board bleibt Vorschau mit Beispieldaten. (4) Jede 403 Antwort löst eine zusätzliche Sitzungsabfrage aus, auch erwartete. (5) Kein Kanban, Portal, LDAP, Wiki und keine Anforderungen.
+
+**Referenz:** Reservierung #131, Teil 1 #132 (4cbb0c9), Teil 2 #133 (58ffc87), Prüfbericht #140, Nachbesserung #141 (a8489bc), Nachprüfung #142, Korrektur H1 #143 (97633a9); verknüpft mit TASK-029, TASK-031, DEC-070.
+
+## TASK-031 Docker-Vorführung und Nachweise des ersten Abschnitts liefern
+
+**Bezug:** REQ-OPS-001, REQ-OPS-005, REQ-OPS-006, REQ-PERF-001, REQ-PERF-003, REQ-DEV-004. **Verantwortlich:** claude-20261021-demo-01. **Abgeschlossen:** 2026-10-22.
+
+**Abnahmekriterien:** Frischer Start und Neustart erhalten Daten und feste Sitzungsfristen; keine Standardkennwörter im Image. Reproduzierbare Nachweise zu den zehn Start-Szenarien und dokumentierte 15-Nutzer-Suchmessung, mit gewähltem Profil und verbleibenden Grenzen. Getrennte KI prüft Ergebnis; Holger nimmt fachlich ab. Keine verkaufbare V1, RPO/RTO-Erfüllung oder Überlegenheit gegenüber Wettbewerbern ohne eigenen Nachweis behaupten.
+
+**Ergebnis:** DEC-071. `Dockerfile` baut ein Image mit Backend und Oberfläche, die der Server unter `/` vom selben Ursprung wie die API mit Content Security Policy und Cacheregeln ausliefert (`WebInterfaceHeadersFilter`). `compose.yaml` startet es mit PostgreSQL 18.6 im benannten Volume; Pflichtwerte ohne Standard aus `.env` (Vorlage `.env.example`), Ersteinrichtung mit `bootstrap-admin`. `tools/demo/demo.py` legt über die öffentliche API Demodaten (vier Konten mit unterschiedlichen Rechten, vier Projekte, 43 Tickets) oder den Referenzbestand an, prüft Rechte, Konflikt, Suche und Sitzung (`verify`) und misst mit gleichzeitigen Sitzungen (`measure`). `tools/demo/image-check.sh` prüft das Image als Workflow `Image` in CI. [DEMO.md](docs/DEMO.md) beschreibt Start, Demodaten, den Ablauf zur fachlichen Abnahme, Nachweise zu den zehn Punkten aus DEVELOPMENT_START.md und die Messung. Messung mit 15 Sitzungen auf 90.000 Tickets, 5.000 Tags und rund 450.000 Zuordnungen: alle vorgeschlagenen p95 Ziele eingehalten, keine Fehler; Werte, Laststufen und Grenzen in DEMO.md. Nicht enthalten: TLS, Sicherung, Hochverfügbarkeit, Veröffentlichung, Zweistundenlauf, Browserzeit der Suche, Kommentare, Wiki und Anforderungen im Bestand. Nachbesserung nach unabhängiger Prüfung (PR #136 und #138, Nachtrag zu DEC-071): komplexe Suche in eine Klasse mit Treffern aus sichtbaren Tickets und eine selektive Klasse geteilt, Trefferzahl je Suche erfasst (F1); eine Änderung wird nach verlorener, abgeschnittener oder verspäteter Antwort nicht erneut gesendet, sondern als unklarer Ausgang gemeldet (F2, N1); Sitzungsfrist in UTC (F3); Ticketänderung als Speichern mit Vergleichswert 1 s und als ganze Aktion gemessen (F4). Nebenbefund behoben: Der Neuaufbau der Suchprojektion scheiterte ab 65.535 Tickets, der Server startete auf dem Referenzbestand nicht neu. Nachmessung am 2026-10-22 mit 15 Sitzungen auf 90.000 Tickets: 5.385 Aktionen, keine Fehler, alle vorgeschlagenen p95 Ziele eingehalten, komplexe Suche mit Treffern in 113 von 113 Fällen mit Treffer bei p95 43 ms, Speichern p95 16,7 ms.
+
+**Prüfungen:** Eigenprüfung am 2026-10-21: `image-check.sh` lokal grün, Browserlauf gegen das Image ohne CSP Verstoß, `WebInterfaceHeadersTest`. Nach den Korrekturen: 13 Werkzeugtests unter `tests/test_demo_tool.py`, Backendtest mit 70.000 Tickets (ohne Korrektur rot), alle 207 Backendtests lokal, `image-check.sh` lokal. CI mit Backend, Frontend, Qualifikation, Repository Prüfungen und Workflow `Image` grün auf PR #134, #136 und #138.
+
+**Review:** Unabhängige Prüfung durch Codex (codex-20261022-task031-review-01, Bericht `docs/REVIEW_TASK-031_PR-134.md` in PR #135): F1 und F2 (P2), F3 und F4 (P3). Nachprüfung durch Codex (codex-20261022-task031-followup-01, Bericht `docs/REVIEW_TASK-031_PR-136.md` in PR #137): im geprüften Umfang technisch abnahmefähig, F1 bis F4 und Nebenbefund geschlossen, kein P1 oder P2; der verbleibende P3 Befund N1 ist mit PR #138 behoben, ohne weitere Nachprüfung.
+
+**Abnahme:** Holger, 2026-10-22, im Projektgespräch („ist abgenommen“ nach dem Merge von PR #138); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Kein TLS; die Anmeldung funktioniert nur im Browser auf derselben Maschine über localhost. (2) Keine Sicherung und Wiederherstellung, keine Hochverfügbarkeit, kein veröffentlichtes Image. (3) Kein zweistündiger Dauerlauf, keine Hintergrundlast, keine Browserzeit der Suche gemessen; Kommentare, Wiki und Anforderungen fehlen im Bestand. (4) Die komplexe Suche mit Treffern bleibt sehr selektiv (Median 1 Treffer); große Treffermengen mit vielen Filtern sind ungemessen. (5) Der erste Start nach `bootstrap-admin` baut die Suchprojektion einmal neu auf. (6) Messwerte gelten für die dokumentierte Maschine, keine Zusage für die Referenzhardware.
+
+**Referenz:** Reservierung #131, Ergebnis #134 (28becad), Prüfbericht #135, Nachbesserung #136 (124d2d8), Nachprüfung #137, Korrektur N1 #138 (02a96a0); verknüpft mit TASK-029, TASK-030 und DEC-071.
+
+## TASK-029 Berechtigte Suche für Tickets und Projekte implementieren
+
+**Bezug:** REQ-SRCH-001, REQ-TKT-004, REQ-TAG-001, REQ-PERF-003. **Verantwortlich:** claude-20261021-search-01. **Abgeschlossen:** 2026-10-21.
+
+**Abnahmekriterien:** Verborgene Inhalte beeinflussen weder Treffer noch Rang/Anzahl/Vorschläge. Neuanlage, Änderung, Rechteentzug, Rückabwicklung und Projektionserneuerung geprüft; veraltete Projektionen geben nichts unzulässig frei. Getrennte KI prüft insbesondere Negativfälle und Datenhoheit. Messung erst in TASK-031.
+
+**Ergebnis:** Suchmodul nach DEC-069 mit eigener Projektion von Projekten, Tickets, Tags und Zuordnungen (Migrationen V0014 und V0015). Projekte, Tickets und Tags veröffentlichen jede Änderung als Ereignis in ihrer Transaktion; die Projektion folgt synchron und rollt mit zurück. `GET /api/v1/search/tickets` findet Tickets nach Kennung, Titel, Beschreibung und Tagnamen und filtert nach Projekt, Status, Typ, Zuständigkeit und Tags; `GET /api/v1/search/projects` findet Projekte nach Schlüssel, Name, Beschreibung und Tags des Unternehmenskatalogs. Rechte und lesbare Felder werden vor Vergleich, Rang und Zählung geprüft. PostgreSQL Volltext `simple` mit Präfixsuche und GIN Index je Feld, Suchwörter nach derselben Regel wie der Suchtext. Containerbefehl `rebuild-search` und einmaliger Aufbau beim ersten Start. Vertrag `contracts/search.openapi.yaml`, backend/README.md Abschnitt „Suche (TASK-029)“. Korrektur nach unabhängiger Prüfung (PR #130, Nachtrag (8) zu DEC-069, auf Holgers Wahl „Alle drei“): F1 gleiche Zerlegung von Anfrage und Index, F2 gemeinsame Sperrordnung für Neuaufbau und Projektion, F3 indexfähiger Vergleich je Feld.
+
+**Prüfungen:** Backend `verify` gegen lokale PostgreSQL 16 mit 196 Tests ohne Fehler nach PR #130, darunter `SearchApiTest` (12 Fälle, davon drei Regressionstests zu F1 bis F3), `SearchContractTest` und `AdminCommandTest` für `rebuild-search`; Lifecycle Prüfung mit dem gepackten Programm einschließlich `rebuild-search` lokal bestanden. CI auf PostgreSQL 18.6 grün auf PR #128 und PR #130 sowie auf main nach dem Merge von PR #128.
+
+**Review:** Unabhängige Prüfung durch Codex (codex-20261021-search-review-01, Bericht `docs/REVIEW_TASK-029_PR-128.md` in PR #129): Projekt und Feldgrenzen, Rang und Seitenstabilität bei verborgenen Änderungen, wartender Rechte, Feld und Mitgliedschaftsentzug sowie Rückabwicklung von Quelle, Historie und Projektion halten; keine Rechteumgehung. Befunde F1 (P2, unterschiedliche Textaufbereitung), F2 (P2, Verklemmung zwischen Neuaufbau und Tagumbenennung) und F3 (P3, Feldindizes für den Mehrfeldvergleich ungenutzt) sind mit PR #130 behoben, jeweils mit Regressionstest. Eine Nachprüfung der Korrekturen durch eine getrennte KI hat nicht stattgefunden und war nicht Voraussetzung der Abnahme.
+
+**Abnahme:** Holger, 2026-10-21, im Projektgespräch („Ich nehme ab“ nach dem Merge von PR #130); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Wiki, Anforderungen, Kommentare, Anhänge und Dateinamen sind noch nicht durchsuchbar, ebenso fehlen Vorschläge und Autovervollständigung; das bleibt bestätigter V1 Umfang. (2) Portalkonten suchen nicht, bis das Portal entschieden ist. (3) Antwortzeiten sind nicht gemessen (TASK-031); Zählung aller erlaubten Treffer und Rechteprüfung je Mitgliedsprojekt können bei großen Datenmengen teuer werden. (4) Die Rechteprüfung gilt zum Sperrzeitpunkt der Suche. (5) Nach V0015 findet die Textsuche bis zum Ende des Aufbaus beim nächsten Start nichts. (6) Eine Suchoberfläche folgt mit TASK-030.
+
+**Referenz:** Reservierung #127, Ergebnis #128 (90f43be), Prüfbericht #129 (2da06c1), Korrektur #130 (f662b6a); verknüpft mit TASK-026, TASK-027, TASK-028, TASK-042 und DEC-069.
+
+## TASK-042 Tagänderungen in der Tickethistorie zeigen
+
+**Bezug:** REQ-TKT-005, REQ-TAG-001, REQ-ACL-003. **Verantwortlich:** claude-20261020-taghistory-01. **Abgeschlossen:** 2026-10-21.
+
+**Abnahmekriterien:** Zuordnen und Entfernen stehen in der Historie, mehrfaches Zuordnen erzeugt keinen doppelten Eintrag; ohne Leserecht auf `tags` fehlen die Einträge ganz; die Ticketversion bleibt unverändert, wie in DEC-068 festgelegt. Getrennte KI prüft Sichtbarkeit und Transaktion.
+
+**Ergebnis:** Nachtrag (10) zu DEC-068, auf Holgers Wahl „In Tickethistorie“ zum Hinweis H1 der Prüfung von TASK-028. Jedes tatsächliche Zuordnen oder Entfernen eines Tags an einem Ticket schreibt in derselben Transaktion über den neuen Port `TicketAccess.recordTagChange` einen eigenen Eintrag in die Historie des Ticketmoduls: Feld `tags`, Kennung des Tags in `to` oder `from`, Zeitpunkt, Konto und die Version, die das Ticket dabei hat. Die Ticketversion ändert sich nicht; mehrere Einträge können dieselbe Version tragen. Wiederholtes Zuordnen und das Entfernen eines nicht zugeordneten Tags schreiben nichts. Sichtbar nur mit `ticket.read` und der Leseregel für `tags`. Der Port sperrt die Ticketzeile geteilt als letzte Sperre nach der Tagzeile. Keine Migration. Vertrag `contracts/tickets.openapi.yaml` (Feld `tags`), backend/README.md Abschnitte „Tickets“ und „Tags“.
+
+**Prüfungen:** Backend `verify` gegen lokale PostgreSQL 16.15 mit 182 Tests ohne Fehler, darunter `assignmentsAndRemovalsAppearInTheTicketHistoryOnlyForReadersOfTheTags` und `TicketsContractTest`; Repository Validator, Übersichtsprüfung, Python Tests und git diff --check erfolgreich. CI auf PostgreSQL 18.6 grün auf PR #123 und auf main nach dem Merge (b85abdd). Lifecycle Prüfung nicht ausgeführt, da keine Migration.
+
+**Review:** Unabhängige Prüfung durch eine getrennte Claude Sitzung (claude-20261020-taghistory-review-01), von Holger gewählt (Bericht `docs/REVIEW_TASK-042_PR-123.md` in PR #124): Sichtbarkeit, Projektgrenzen, Rechteentzug, Rückabwicklung und Sperrreihenfolge halten, unter gleichzeitigen Feld und Tagänderungen keine Verklemmung; `clean verify` mit 182 Tests und sieben eigene Proben. Kein Befund P1 oder P2. Befund F1 (P3): Eine Zuordnung, die auf eine laufende Feldänderung wartet, trägt einen Zeitpunkt vor dieser Änderung, obwohl sie danach in der Historie steht; Version und Reihenfolge stimmen. Holger hat die Behebung nicht beauftragt. Hinweise H1 bis H3 (nur Kennung statt Name, mehrere Einträge je Version, Port ohne eigene Prüfung) ohne Handlungsdruck.
+
+**Abnahme:** Holger, 2026-10-21, im Projektgespräch („abgenommen 029“ auf die Frage nach der Abnahme von TASK-028 und TASK-042); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) F1 der Prüfung bleibt bestehen: der Zeitpunkt einer wartenden Zuordnung kann bis zur Sperrwartezeit vor der vorangehenden Feldänderung liegen. (2) Der Eintrag nennt die Kennung, nicht den Namen des Tags; für die Oberfläche (TASK-030) zu entscheiden. (3) Zuordnungen an Projekten erscheinen in keiner Historie. (4) Ein späterer zweiter Aufrufer des Ports muss Rechte, Ticket und Tag selbst prüfen.
+
+**Referenz:** Reservierung #122, Ergebnis #123 (b85abdd), Prüfbericht #124; verknüpft mit TASK-028, TASK-027 und DEC-068.
+
+## TASK-028 Tag-Kern für Tickets und Projekte implementieren
+
+**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-TKT-004. **Verantwortlich:** claude-20261020-tags-01. **Abgeschlossen:** 2026-10-21.
+
+**Abnahmekriterien:** Mehrfachzuordnung, unberechtigtes Erstellen/Zuordnen und versteckte Katalognamen geprüft; kombinierte Erstellung/Zuordnung bleibt bei Fehlern atomar. Getrennte KI prüft Entdeckungsgrenzen und Modultransaktionen. Das Ergebnis erklärt den noch offenen umfangreichen V1-Tag-Anteil.
+
+**Ergebnis:** Tagmodul nach DEC-068, auf Holgers Wahl „Beides“: ein Unternehmenskatalog für jede interne Anmeldung und je Projekt ein eigener Katalog nur für Mitglieder mit einer Projekt oder Ticketleseaktion. Migration V0013 (Tags, Ticket- und Projektzuordnungen, Audit), Aktion `tag.create`, Unternehmensrecht `tags.manage` bei der Ersteinrichtung, Anlegen, Umbenennen, Archivieren und Wiederherstellen mit Tagversion als ETag, Zuordnung zu Tickets über das Feld `tags` des Ressourcentyps `ticket` und zu Projekten mit den Projektrechten, Zuordnung über Kennung oder Namen mit Anlage in derselben Transaktion, Namen nach NFKC eindeutig je Katalog ohne Unterschied der Groß und Kleinschreibung, 503 `tag.busy` bei Sperrproblemen, Port `TicketAccess` im Ticketmodul. Vertrag `contracts/tags.openapi.yaml`, Identitätsvertrag mit `tags.manage`, backend/README.md Abschnitt „Tags (TASK-028)“ mit dem offenen V1 Anteil. Korrektur nach unabhängiger Prüfung (PR #121, Nachtrag (9) zu DEC-068, auf Holgers Auftrag „ja beheben“): F1 innerer Unicode Leerraum zählt als ein Leerzeichen, F2 der Vergleichsschlüssel faltet über Groß und danach Kleinschreibung (`STRASSE` gleich `Straße`), F3 Tags fremder Kataloge werden weder gesperrt noch abgewartet und antworten sofort 404; dazu H3 bis H5. H1 (Tags in der Tickethistorie) hat Holger mit „In Tickethistorie“ entschieden und als TASK-042 umsetzen lassen.
+
+**Prüfungen:** Backend `verify` gegen lokale PostgreSQL 16.15 mit 181 Tests ohne Fehler nach PR #121, darunter `TagsApiTest` (Kataloge und Rechte, Namensprüfung, gleichzeitige Anlage, verborgene Projektkataloge, Ticket und Projektzuordnung mit Feldregeln, Unicode und Faltung, Archivieren gegen wartende Zuordnung, gesperrter fremder Tag ohne Warten) und `TagsContractTest`; Lifecycle Prüfung lokal bestanden. CI auf PostgreSQL 18.6 grün auf PR #119, PR #121 und auf main nach beiden Merges.
+
+**Review:** Unabhängige Prüfung durch eine getrennte Claude Sitzung (claude-20261020-tags-review-01), von Holger gewählt (Bericht `docs/REVIEW_TASK-028_PR-119.md` in PR #120): Projektgrenzen, Rechteentzug, Feldregel `tags`, Archivieren und kombinierte Anlage mit Zuordnung halten; kein Befund P1 oder P2, drei Befunde P3 (F1 bis F3) und fünf Hinweise. F1 bis F3 sind mit PR #121 behoben, jeweils mit Regressionstest; H2 bleibt so und ist dokumentiert, H1 folgt als TASK-042. Eine Nachprüfung der Korrekturen durch eine getrennte KI hat nicht stattgefunden und war nicht Voraussetzung der Abnahme.
+
+**Abnahme:** Holger, 2026-10-21, im Projektgespräch („abgenommen 029“ auf die Frage nach der Abnahme von TASK-028 und TASK-042); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** (1) Beschreibung und Farbe, Zusammenführen, Massenänderung, Filter, Autovervollständigung über Objekte, Suche (TASK-029), Oberfläche (TASK-030) und Portaltags (DEC-049) fehlen. (2) Projekte nehmen nur Tags des Unternehmenskatalogs. (3) `tag.create` und die Feldregeln für `tags` lassen sich bis TASK-030 nur direkt in den Tabellen vergeben. (4) Keine Obergrenze je Objekt, kein Trigrammindex für die Katalogsuche. (5) Wer nur `ticket.edit` mit den Feldregeln hat, ordnet Projekttags nur über eine bekannte Kennung zu (H2). (6) Entwicklungsdatenbanken aus dem Stand vor TASK-028 oder mit Tags aus PR #119 werden neu angelegt. (7) Prüfung zum Sperrzeitpunkt, nicht beim Commit.
+
+**Referenz:** Reservierung #117, Ergebnis #119 (6ba4175), Prüfbericht #120, Korrektur #121 (d4eaf40), Folgeaufgabe TASK-042 (#122, #123); verknüpft mit TASK-027 und DEC-068.
 
 ## TASK-027 Ticketkern mit Historie und Konflikterkennung implementieren
 

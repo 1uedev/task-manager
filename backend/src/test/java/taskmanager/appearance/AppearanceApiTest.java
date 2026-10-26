@@ -12,6 +12,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,10 +45,30 @@ class AppearanceApiTest {
     private static final String STRONG = "Correct-Horse-Battery-9";
     private static final AtomicInteger COUNTER = new AtomicInteger();
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0x0d, 'I', 'H', 'D', 'R'};
-    private static final byte[] JPEG = {(byte) 0xff, (byte) 0xd8, (byte) 0xff, (byte) 0xe0, 0, 0x10, 'J', 'F', 'I', 'F'};
-    private static final byte[] WEBP = {'R', 'I', 'F', 'F', 0x24, 0, 0, 0, 'W', 'E', 'B', 'P', 'V', 'P', '8', ' '};
+    // Real, complete images (TASK-043): a 3 x 2 PNG and JPEG drawn here, a 1 x 1 lossless and a 2 x 2 lossy WebP and a
+    // 2 x 2 animated WebP with two lossless frames.
+    private static final byte[] PNG = image("png");
+    private static final byte[] JPEG = image("jpeg");
+    private static final byte[] WEBP = HexFormat.of().parseHex("524946461a000000574542505650384c0d0000002f00000010071011118888fe0700");
+    private static final byte[] WEBP_LOSSY = HexFormat.of().parseHex(
+        "524946463c0000005745425056503820300000003002009d012a0200020001402625a00274ba01f801f80004a10000fee246bff6b40706abfd3b3ffb68675425fed00000");
+    private static final byte[] WEBP_ANIMATED = HexFormat.of().parseHex(
+        "524946468600000057454250565038580a00000002000000010000010000414e494d06000000000000000000414e4d462a0000000000000000"
+            + "00010000010000640000025650384c110000002f0140000007d0b9e6d7a2ff8188e87f0000414e4d4628000000000000000000010000010000"
+            + "640000005650384c0f0000002f014000000710d1fffe0722a2ff0100");
     private static final byte[] SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>".getBytes(StandardCharsets.UTF_8);
+
+    private static byte[] image(String format) {
+        var picture = new java.awt.image.BufferedImage(3, 2, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        picture.setRGB(0, 0, 0xf97316);
+        var out = new java.io.ByteArrayOutputStream();
+        try {
+            if (!javax.imageio.ImageIO.write(picture, format, out)) throw new IllegalStateException(format);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return out.toByteArray();
+    }
 
     private static String freshDatabase() {
         try {
@@ -306,6 +328,44 @@ class AppearanceApiTest {
         assertEquals("image/webp", jdbc.queryForObject("select logo_type from appearance_setting", String.class));
         assertEquals(List.of("appearance.logo_replaced", "appearance.logo_replaced", "appearance.logo_replaced"),
             jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
+    }
+
+    @Test
+    void aRecognizedStartIsNotEnoughTheWholeImageMustBeUsable() {
+        Browser admin = person(true);
+        assertEquals(200, admin.logo("image/webp", WEBP_ANIMATED, "\"1\"").status());
+        assertEquals(200, admin.logo("image/webp", WEBP_LOSSY, "\"2\"").status());
+        // Signature only, cut short, a damaged length, a huge declared size and a JPEG without its end.
+        byte[] signature = Arrays.copyOf(PNG, 8);
+        byte[] truncatedPng = Arrays.copyOf(PNG, PNG.length - 12);
+        byte[] truncatedJpeg = Arrays.copyOf(JPEG, JPEG.length / 2);
+        byte[] truncatedWebp = Arrays.copyOf(WEBP_LOSSY, WEBP_LOSSY.length - 10);
+        byte[] wrongLength = WEBP.clone();
+        wrongLength[4] = 0x30;
+        byte[] noImageChunk = HexFormat.of().parseHex("524946460c00000057454250414c504800000000");
+        noImageChunk[4] = (byte) (noImageChunk.length - 8);
+        byte[] hugeWebp = WEBP_LOSSY.clone();
+        hugeWebp[26] = (byte) 0xff;
+        hugeWebp[27] = 0x3f;
+        // Animation frames that hold only their 16 byte header (finding F1 of the TASK-043 review), once without and
+        // once with the animation header, and a frame without the animation header before it.
+        byte[] emptyFrame = HexFormat.of().parseHex("524946461c00000057454250414e4d461000000000000000000000000000000000000000");
+        byte[] emptyAnimatedFrame = HexFormat.of().parseHex(
+            "524946463c00000057454250565038580a00000002000000010000010000414e494d06000000000000000000414e4d4610000000000000"
+                + "00000000000000000000000000");
+        byte[] frameWithoutAnimation = WEBP_ANIMATED.clone();
+        frameWithoutAnimation[30] = 'X';
+        for (var broken : List.of(java.util.Map.entry("image/png", signature), java.util.Map.entry("image/png", truncatedPng),
+                java.util.Map.entry("image/jpeg", truncatedJpeg), java.util.Map.entry("image/webp", truncatedWebp),
+                java.util.Map.entry("image/webp", wrongLength), java.util.Map.entry("image/webp", noImageChunk),
+                java.util.Map.entry("image/webp", hugeWebp), java.util.Map.entry("image/webp", emptyFrame),
+                java.util.Map.entry("image/webp", emptyAnimatedFrame), java.util.Map.entry("image/webp", frameWithoutAnimation))) {
+            assertProblem(admin.logo(broken.getKey(), broken.getValue(), "\"3\""), 415, "appearance.logo_unreadable");
+        }
+        // Nothing of it reached the logo, the version or the log.
+        assertArrayEquals(WEBP_LOSSY, admin.get("/api/v1/appearance/logo?v=3").raw());
+        assertEquals(3L, jdbc.queryForObject("select version from appearance_setting", Long.class));
+        assertEquals(2, jdbc.queryForObject("select count(*) from appearance_audit_event where event = 'appearance.logo_replaced'", Integer.class));
     }
 
     @Test

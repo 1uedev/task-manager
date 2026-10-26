@@ -29,7 +29,8 @@ public interface CompanyAdministration {
     /**
      * Whether an active company administration would remain if the account no longer counted. Takes the exclusive
      * revision lock of the company, like every rights change, so it must run before the identity locks of the caller.
-     * True for an account that is not part of the administration. False for an unknown company.
+     * True for an account that is not part of the administration. False for an unknown company. Also false if the account is
+     * the last active local account with both company rights {@code permissions.manage} and {@code accounts.manage} (TASK-047).
      */
     boolean remainsWithout(UUID companyId, UUID userId);
 }

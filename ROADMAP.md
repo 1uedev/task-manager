@@ -68,6 +68,7 @@ Redmine als erste Importquelle ist bestätigt; Easy Redmine/Easy8 und Jira werde
 | Vorlagenbasierte PDF-Ausgabe | Gebrandete Dokumente erzeugen | Ein freigegebener Dokumenttyp lässt sich in der gewünschten Sprache mit geprüftem Layout erzeugen. REQ-BRAND-002 |
 | Formale Anforderungsstände | Freigegebene Mengen und Änderungen verbindlich nachvollziehen | Ein eingefrorener Stand bleibt unverändert; spätere Änderungen besitzen einen Genehmigungsweg. REQ-REQ-004 |
 | Suche in Dateiinhalten | Inhalte von Anhängen und Dokumentdateien erst nach V1 durchsuchbar machen; Zeitpunkt und Formatumfang offen | Eigene Rechte-, Extraktions-, Ressourcen- und Aktualisierungsprüfung; DEC-050, REQ-SRCH-001 |
+| Zertifikatswechsel der LDAP Anbindung im laufenden Betrieb | Vertrauensspeicher und Zertifikat des Verzeichnisses werden heute beim Start gelesen; ein Wechsel braucht einen Neustart. Holger hat am 23. Oktober 2026 entschieden, dass das derzeit nicht sein muss (DEC-076) | Ein neues Zertifikat oder ein geänderter Vertrauensspeicher wirkt ohne Neustart; laufende Anmeldungen werden nicht unterbrochen. REQ-AUTH-003 |
 | Weitere Datenbanken | Option für MariaDB, SQL Server oder Oracle | Bisher nur Vorbereitung beauftragt; jede tatsächliche Unterstützung braucht gesonderte Entscheidung, Migration und Prüfnachweise. REQ-DATA-002 |
 
 ## Prioritäten weiterer Module

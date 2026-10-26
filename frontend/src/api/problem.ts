@@ -21,6 +21,8 @@ export interface ProblemInfo {
   readonly status: number | null;
   readonly code: string | null;
   readonly correlationId: string | null;
+  // The stable reasons of a refused input, such as `custom.cause.required_for_transition`; present only when the server named some.
+  readonly violations?: readonly string[];
 }
 
 export const networkProblem: ProblemInfo = { kind: 'network', status: null, code: null, correlationId: null };
@@ -56,13 +58,21 @@ function text(value: unknown, pattern: RegExp): string | null {
   return typeof value === 'string' && value.length <= 100 && pattern.test(value) ? value : null;
 }
 
+// A reason is a code, optionally followed by the key of what it names (`status.in_use:review`).
+const VIOLATION = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*(:[a-z][a-z0-9_]*)?$/;
+const MAX_VIOLATIONS = 50;
+
 export function readProblem(status: number, body: unknown, headerCorrelationId?: string | null): ProblemInfo {
   const item = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const violations = Array.isArray(item.violations)
+    ? item.violations.slice(0, MAX_VIOLATIONS).map((value) => text(value, VIOLATION)).filter((value): value is string => value !== null)
+    : [];
   return {
     kind: classifyStatus(status),
     status,
     code: text(item.code, CODE),
     correlationId: text(item.correlationId, CORRELATION) ?? text(headerCorrelationId, CORRELATION),
+    ...(violations.length > 0 ? { violations } : {}),
   };
 }
 

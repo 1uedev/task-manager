@@ -1,0 +1,60 @@
+# Demonstration setup of the task manager (TASK-031, DEC-071): application image and PostgreSQL with a named volume.
+# Required settings come from the environment or from a .env file next to this file (see .env.example); there are
+# no default passwords. Details and the walk through are in docs/DEMO.md.
+name: task-manager
+
+services:
+  db:
+    # Official postgres:18.6 manifest, the same digest as the backend tests and CI.
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    environment:
+      POSTGRES_DB: taskmanager
+      POSTGRES_USER: taskmanager
+      POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD, see .env.example}
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: task-manager:demo
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD, see .env.example}
+      # The attachments of tickets live on their own volume, outside the container (TASK-051).
+      TASK_MANAGER_FILES_DIR: /data/files
+    volumes:
+      - files-data:/data/files
+    # Only reachable from this computer: without TLS, browsers keep the secure session cookie only for localhost.
+    ports:
+      - "127.0.0.1:${TASK_MANAGER_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  # Synthetic demo data and the search measurement; started only on request (docker compose --profile tools ...).
+  demo:
+    profiles: [tools]
+    image: python:3.13.16-slim@sha256:cf50a4f6ac4f026458b08d5222023d700ac806410dff5e9ca8728fa44f2b850f
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_URL: http://app:8080
+      TASK_MANAGER_DEMO_PASSWORD: ${TASK_MANAGER_DEMO_PASSWORD:?set TASK_MANAGER_DEMO_PASSWORD, see .env.example}
+      TASK_MANAGER_RESULTS: /results
+    volumes:
+      - ./tools/demo:/demo:ro
+      - ./demo-results:/results
+    entrypoint: ["python", "-I", "-u", "/demo/demo.py"]
+
+volumes:
+  db-data:
+  files-data:

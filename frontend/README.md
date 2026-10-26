@@ -1,6 +1,6 @@
-# React Oberfläche (TASK-023, TASK-036)
+# React Oberfläche (TASK-023, TASK-036, TASK-030)
 
-Oberfläche des Task Managers mit React und TypeScript. Dieser Stand enthält Rahmen, Navigation, Sprachumschaltung Deutsch und Englisch, Unternehmensauftritt, einen aus dem Vertrag erzeugten API Client und die gemeinsamen Zustände für Laden, leere Daten, Fehler, fehlende Rechte und Konflikte. TASK-036 ergänzt die moderne Gestaltung mit Seitenleiste, Hell und Dunkel, Drag and Drop und die Verwaltungsseite Erscheinungsbild, die als einzige Seite echte Backenddaten liest und schreibt. Es gibt **keine Fachfunktion**: keine Anmeldeseite, keine Projekte, Tickets, Tags oder Suche. Alle übrigen Daten auf den Seiten sind synthetisch. Versionen stammen aus [TECHNICAL_BASELINE.md](../docs/TECHNICAL_BASELINE.md).
+Oberfläche des Task Managers mit React und TypeScript. TASK-023 legte Rahmen, Navigation, Sprachumschaltung, erzeugten API Client und gemeinsame Zustände an, TASK-036 die Gestaltung mit Seitenleiste, Hell und Dunkel, Drag and Drop und dem Erscheinungsbild. TASK-030 macht daraus die durchgängige Oberfläche: Anmeldung mit Pflichtwechsel, Konten, Projekte mit Mitgliedern und Tags, Tickets mit Feldrechten, Historie und Konfliktbehandlung, Suche sowie Gruppen und Rechte, alles gegen die echten Endpunkte. Nur das Board ist weiterhin eine Vorschau mit Beispieldaten (Kanban folgt nach V1, DEC-041). Versionen stammen aus [TECHNICAL_BASELINE.md](../docs/TECHNICAL_BASELINE.md).
 
 ## Voraussetzungen und Befehle
 
@@ -24,13 +24,13 @@ Als Browserziel gelten aktuelle Chromium basierte Browser (Entscheidung DEC-056)
 
 | Pfad | Inhalt |
 |---|---|
-| `src/app` | Rahmen mit Sprunglink, Seitenleiste, Navigation, Hauptbereich; Seitenwahl über den URL-Anker; Symbole; `useReorder` für Drag and Drop mit Tastatur; `preferences.ts` als einziger Browserspeicher |
+| `src/app` | Rahmen mit Sprunglink, Seitenleiste, Navigation, Hauptbereich; Anmeldezustand (`session.tsx`); Seitenwahl über den URL-Anker mit Schutz ungespeicherter Eingaben (`route.ts`, `hooks.ts`); kleine Bausteine (`ui.tsx`); Symbole; `useReorder` für Drag and Drop mit Tastatur; `preferences.ts` als einziger Browserspeicher |
 | `src/i18n` | Übersetzungskern, Kataloge `de.ts` und `en.ts`, Formatierung |
 | `src/brand` | Unternehmensauftritt: Akzentfarbe, Schrift auf dem Akzent, abgeleitete Farben, Hell und Dunkel, Laden vom Server |
-| `src/api` | Erzeugte Typen (Qualifikation, Identität, Erscheinungsbild), Client, CSRF-Token, Fehlerabbildung, synthetische Antworten |
+| `src/api` | Erzeugte Typen aller Verträge, Client mit CSRF-Token und Sitzungsende, Fachaufrufe mit Laufzeitprüfung (`product.ts`), Fehlerabbildung, synthetische Antworten für Unit-Tests |
 | `src/states` | Gemeinsame Zustandsansichten (Laden, leer, Fehler, Erfolg) |
-| `src/pages` | Startseite mit verschiebbaren Karten, Board-Vorschau, Zustandsbeispiele, Beispielformular, Erscheinungsbild |
-| `tests` | Unit-Tests (`node --test`), `tests/browser` für die Browserprüfung |
+| `src/pages` | Anmeldung und Passwortwechsel, Start, Projekte, Projekt, Ticket, Suche, Konten, Gruppen und Rechte, Erscheinungsbild, Board-Vorschau |
+| `tests` | Unit-Tests (`node --test`), `tests/browser` für die Browserprüfung mit einem Testbackend nach den Verträgen (`backend.mjs`) |
 
 Es gibt bewusst nur drei Laufzeitabhängigkeiten: React, React DOM und openapi-fetch. Eine Routing-, Übersetzungs- oder Komponentenbibliothek ist nicht gewählt; das bleibt eine spätere Entscheidung (TECHNICAL_CONTRACTS.md).
 
@@ -50,7 +50,7 @@ Es gibt bewusst nur drei Laufzeitabhängigkeiten: React, React DOM und openapi-f
 
 **Akzentfarbe.** Standard ist ein sattes Orange `#F97316`. Die Schrift auf dem Akzent wählt `textOn` (warmes Dunkel oder Weiß, notfalls Schwarz), damit sie immer mindestens 4,5 erreicht; Weiß auf dem Orange käme nur auf 2,8. Verweise und Akzenttexte nutzen eine aus dem Akzent abgeleitete Farbe, die gegen die Seitenfläche 4,5 erreicht. Ein Test prüft das für 4096 Farben in Hell und Dunkel, ein Browsertest misst jeden sichtbaren Text auf allen Seiten in beiden Darstellungen.
 
-**Erscheinungsbild.** Beim Start fragt die Oberfläche `GET /api/v1/session` und mit vollständiger Anmeldung `GET /api/v1/appearance` ([Vertrag](../contracts/appearance.openapi.yaml)). Antworten werden zur Laufzeit geprüft; das Logo muss ein Pfad auf dem eigenen Server sein. Auf der Seite Erscheinungsbild zeigt die ganze Oberfläche die gewählte Farbe schon vor dem Speichern; beim Verlassen gilt wieder die gespeicherte. Speichern sendet `If-Match` mit der zuletzt gelesenen Version und das CSRF-Token aus dem Cookie `__Host-tm-csrf` (das einzige Cookie, das die Oberfläche liest, `src/api/csrf.ts`). Ein Logo wird per Ablegen oder Dateiauswahl als PNG, JPEG oder WebP bis 512 KiB sofort hochgeladen. Wer das Recht `appearance.manage` nicht hält (die Liste `rights` aus `GET /api/v1/session`), bekommt eine Vorschau mit Hinweis, und nichts wird gesendet; die eigentliche Prüfung macht der Server. Eine Anmeldeseite gibt es erst mit TASK-030; bis dahin meldet man sich über die API an.
+**Erscheinungsbild.** Beim Start fragt die Oberfläche `GET /api/v1/session` und mit vollständiger Anmeldung `GET /api/v1/appearance` ([Vertrag](../contracts/appearance.openapi.yaml)). Antworten werden zur Laufzeit geprüft; das Logo muss ein Pfad auf dem eigenen Server sein. Auf der Seite Erscheinungsbild zeigt die ganze Oberfläche die gewählte Farbe schon vor dem Speichern; beim Verlassen gilt wieder die gespeicherte. Speichern sendet `If-Match` mit der zuletzt gelesenen Version und das CSRF-Token aus dem Cookie `__Host-tm-csrf` (das einzige Cookie, das die Oberfläche liest, `src/api/csrf.ts`). Ein Logo wird per Ablegen oder Dateiauswahl als PNG, JPEG oder WebP bis 512 KiB sofort hochgeladen. Wer das Recht `appearance.manage` nicht hält (die Liste `rights` aus `GET /api/v1/session`), bekommt eine Vorschau mit Hinweis, und nichts wird gesendet; die eigentliche Prüfung macht der Server. Angemeldet wird über die Anmeldeseite (TASK-030).
 
 **Drag and Drop.** Navigation (ohne Verwaltungsbereich), Startkarten, Logoablage und die Board-Vorschau. Jede Verschiebung geht auch mit der Tastatur: Alt und Pfeiltasten auf dem Eintrag, bei Startkarten auf dem Griff, im Board auf der Karte (links und rechts wechseln die Spalte). Der Fokus bleibt auf dem verschobenen Element, und eine Live-Region sagt die neue Position an. Die Board-Vorschau ist als Beispieldaten gekennzeichnet und speichert nichts; Kanban selbst ist nach V1 geplant (DEC-041).
 
@@ -58,7 +58,7 @@ Es gibt bewusst nur drei Laufzeitabhängigkeiten: React, React DOM und openapi-f
 
 ## API Client und Fehler
 
-Die Typen werden mit `npm run generate` aus [qualification.openapi.yaml](../contracts/qualification.openapi.yaml) (synthetischer Vertrag aus TASK-021 für die Zustandsbeispiele), [identity.openapi.yaml](../contracts/identity.openapi.yaml) und [appearance.openapi.yaml](../contracts/appearance.openapi.yaml) erzeugt und nie von Hand geändert; CI weist Abweichungen und fehlende Dateien ab.
+Die Typen werden mit `npm run generate` aus [qualification.openapi.yaml](../contracts/qualification.openapi.yaml) (synthetischer Vertrag aus TASK-021, nur noch für Unit-Tests des Clients), [identity](../contracts/identity.openapi.yaml), [appearance](../contracts/appearance.openapi.yaml), [projects](../contracts/projects.openapi.yaml), [tickets](../contracts/tickets.openapi.yaml), [tags](../contracts/tags.openapi.yaml), [search](../contracts/search.openapi.yaml) und [permissions](../contracts/permissions.openapi.yaml) erzeugt und nie von Hand geändert; CI weist Abweichungen und fehlende Dateien ab.
 
 - Antworten werden zur Laufzeit zusätzlich geprüft; erzeugte Typen sind nur Übersetzungszeitprüfung.
 - `ETag` (Darstellungsversion, wird als `If-Match` gesendet) und `version` (Fachversion) bleiben getrennt.
@@ -71,3 +71,19 @@ Die Typen werden mit `npm run generate` aus [qualification.openapi.yaml](../cont
 Umgesetzt und im Browser geprüft: Sprunglink als erster Tabulatorstopp, Landmarken (Seitenleiste als Kopfbereich, Navigation, Hauptbereich, Fußbereich), Drag and Drop mit Tastatur und Ansage, Kontrast aller sichtbaren Texte in Hell und Dunkel, aktuelle Seite per `aria-current`, Fokus auf die Seitenüberschrift nach einem Seitenwechsel, sichtbarer Fokusrahmen, Seitentitel je Seite und Sprache, Dokumentsprache, Beschriftungen mit Pflichtangabe, Hinweise und Fehler per `aria-describedby`, Fehlerzusammenfassung mit Fokus und Sprungverweisen, Fehler nie nur durch Farbe (Symbol, Wort „Fehler“, Rahmen), Statusmeldungen als Live-Regionen, reduzierte Bewegung und erzwungene Farben berücksichtigt.
 
 **Grenzen:** Es gibt keine automatische Barrierefreiheitsprüfung (kein axe oder Lighthouse) und keine Prüfung mit einem Screenreader. Der verbindliche Standard, unterstützte Browser außerhalb von Chromium und mobile Mindestansichten sind laut REQ-UX-001 noch festzulegen. Die Kontrastmessung im Browser nimmt die Hintergrundfarbe der Vorfahren; Verläufe und Bilder misst sie nicht.
+
+## Fachseiten (TASK-030)
+
+**Anmeldung.** Vor der vollständigen Anmeldung zeigt die Oberfläche nur die Anmeldung, den Pflichtwechsel des Passworts oder den Hinweis, dass der Server nicht erreichbar ist. Fehlercodes der Identität werden übersetzt, die Wartezeit nach zu vielen Versuchen genannt. Jede 401 Antwort außerhalb der Sitzungsabfrage, etwa nach Deaktivierung oder Ablauf, führt zurück zur Anmeldung mit Hinweis. Abmelden beendet die Sitzung am Server.
+
+**Rechte.** Welche Bereiche erscheinen, folgt der Rechteliste der Sitzung (`accounts.manage`, `permissions.manage`, `projects.manage`, `appearance.manage`) und bei Tickets `writableFields`. Das ist nur Bedienhilfe; jede Prüfung macht der Server. Projektaktionen nennt die Projektantwort nicht, deshalb wird die Ticketanlage angeboten und eine Ablehnung verständlich gemeldet.
+
+**Tickets.** Lesbare Felder werden gezeigt, schreibbare als Eingabe, verborgene als „für Sie verborgen“. Gesendet werden nur geänderte Felder mit `If-Match`. Bei einem Versionskonflikt lädt die Seite den aktuellen Stand und behält die eigenen Änderungen; bei einer Ablehnung (zum Beispiel weil ein Recht inzwischen entzogen wurde) lädt sie Ticket und Rechte neu. Statuswechsel bietet sie nur entlang der Übergänge an. Historie mit Namen, Werten in der Sprache der Konfiguration und Tagänderungen.
+
+**Ungespeicherte Eingaben.** Ein Seitenwechsel über Navigation oder Adresse fragt nach, Ablehnen lässt Seite und Eingabe stehen; das Schließen des Fensters fragt über den Browser. Nach erfolgreichem Speichern wird nicht gefragt.
+
+**Verwaltung.** Konten anlegen, deaktivieren, wieder aktivieren und neues Einmalpasswort ausstellen; das Einmalpasswort erscheint nur einmal. Gruppen anlegen, Mitglieder, Aktionen je Unternehmen oder Projekt und Feldregeln Lesen und Schreiben setzen; jede Änderung gilt sofort. Wer sich selbst das Recht zur Gruppenverwaltung nimmt, landet auf der Startseite.
+
+**Prüfung.** `tests/browser/app.test.mjs` prüft die Abläufe mit zwei unterschiedlich berechtigten Konten in mehreren Browserkontexten auf einem gemeinsamen Testbackend, `design.test.mjs` Kontrast aller Seiten in Hell und Dunkel, Erscheinungsbild und Drag and Drop. Die echte Browserprüfung gegen Backend und PostgreSQL ist in [docs/screenshots/task-030](../docs/screenshots/task-030/README.md) beschrieben.
+
+**Grenzen.** Typen, Status und Übergänge sind fest und nur lesbar; Gruppen lassen sich nicht umbenennen oder löschen; kein Rechteprotokoll in der Oberfläche; keine Kommentare, Anhänge, Filter nach Status oder Tag in der Suchoberfläche und keine Projektarchivierung. Ein Screenreader und andere Browser als Chromium sind nicht geprüft.

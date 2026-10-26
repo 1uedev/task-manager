@@ -1,9 +1,9 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Identität (TASK-024, TASK-040)
+  title: Task Manager API, Identität (TASK-024, TASK-040, TASK-045, TASK-046, TASK-047)
   version: 0.1.0
   description: |
-    Lokale Konten, Anmeldung, feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
+    Lokale Konten, Anmeldung (lokal und über ein LDAP Verzeichnis), feste Sitzungsdauer und Passwortwechsel. Dies ist der erste Teil der Produkt API unter /api/v1;
     weitere Fachbereiche erhalten eigene Verträge. Die Sitzung läuft über Cookies (`__Host-tm-session`, HttpOnly,
     und `__Host-tm-csrf`, lesbar, beide Secure und SameSite=Lax). Jede Anfrage mit einer Methode außer GET, HEAD und OPTIONS
     muss den Wert des CSRF Cookies im Header `X-CSRF-Token` senden; der Origin Header, falls vorhanden, muss zum Host passen.
@@ -39,6 +39,13 @@ paths:
         mit dieser ersten erfolgreichen Anmeldung verbraucht; jede weitere Anmeldung damit, auch nach Ablauf der eingeschränkten
         Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Konto mit dem Recht `accounts.manage` ein neues ausgibt. Fehlgeschlagene
         Versuche führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
+
+        Ist die Anbindung eines LDAP Verzeichnisses eingeschaltet (`/settings/ldap`), gilt für einen Namen ohne lokales Konto das
+        Verzeichnis: der Server sucht den Eintrag, prüft das Passwort durch die Bindung als diese Person und ordnet über die
+        unveränderliche Kennung des Eintrags zu, nie über den Namen. Das Konto entsteht bei der ersten erfolgreichen Anmeldung
+        ohne Rechte (`authKind` = `ldap`). Gibt es ein lokales Konto dieses Namens, entscheidet allein dessen Passwort; ein
+        Konto aus dem Verzeichnis nimmt nie ein lokales Passwort an. Antwortet das Verzeichnis nicht, scheitert diese Anmeldung mit
+        503 `auth.directory_unavailable`; das zählt nicht als Fehlversuch. Lokale Konten und offene Sitzungen sind davon nicht betroffen.
       security: []
       requestBody:
         required: true
@@ -55,6 +62,7 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '429': {$ref: '#/components/responses/TooManyAttempts'}
+        '503': {$ref: '#/components/responses/Problem'}
     delete:
       operationId: logout
       summary: Abmelden
@@ -70,7 +78,8 @@ paths:
       summary: Eigenes Passwort ändern
       description: |
         Erlaubt auch in der eingeschränkten Sitzung. Danach endet jede andere Sitzung des Kontos; die aktuelle Sitzung erhält
-        eine neue Kennung, behält aber Beginn und Ablauf. Ein falsches aktuelles Passwort zählt für die Wartezeit mit.
+        eine neue Kennung, behält aber Beginn und Ablauf. Ein falsches aktuelles Passwort zählt für die Wartezeit mit. Das Passwort eines
+        Kontos aus dem Verzeichnis gehört dem Verzeichnis: 409 `account.directory_managed`.
       requestBody:
         required: true
         content:
@@ -85,6 +94,7 @@ paths:
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         '429': {$ref: '#/components/responses/TooManyAttempts'}
   /accounts:
     get:
@@ -119,13 +129,88 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
+  /accounts/audit:
+    get:
+      operationId: listAccountAudit
+      summary: Protokoll der Kontenverwaltung (Recht accounts.manage)
+      description: |
+        Neueste Einträge zuerst. Die nächste Seite holt `before` mit der kleinsten `id` der letzten Seite; eine leere Seite ist
+        das Ende. Das Protokoll enthält Kurzbezeichnungen und Kennungen, nie ein Passwort oder ein Token. `actor` ist der
+        Anmeldename der handelnden Person oder `cli` für den Containerbefehl.
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - in: query
+          name: before
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Einträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEntry'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    put:
+      operationId: renameAccount
+      summary: Anzeigename ändern (Recht accounts.manage)
+      description: |
+        Setzt den Anzeigenamen; ein leerer Wert entfernt ihn. Höchstens 100 Zeichen ohne Steuerzeichen (400 mit
+        `displayName.too_long` oder `displayName.invalid`). Bleibt der Name gleich, wird nichts geschrieben. Der
+        Anmeldename ändert sich nie. Der Anzeigename eines Kontos aus dem Verzeichnis kommt aus dem Verzeichnis: 409 `account.directory_managed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                displayName: {type: [string, 'null'], maxLength: 100}
+      responses:
+        '200':
+          description: Geändert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/clear-login-delay:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: clearAccountLoginDelay
+      summary: Wartezeit nach Fehlversuchen aufheben (Recht accounts.manage)
+      description: |
+        Beendet die laufende Wartezeit des Anmeldenamens und vergisst seine Fehlversuche; der nächste Versuch zählt von null.
+        Die Zähler der Quelladressen bleiben, damit ein einzelnes Konto sie nicht zurücksetzen kann. Gab es nichts
+        aufzuheben, wird nichts protokolliert.
+      responses:
+        '200':
+          description: Aufgehoben
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Account'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
   /accounts/{accountId}/deactivate:
     parameters:
       - {$ref: '#/components/parameters/AccountId'}
     post:
       operationId: deactivateAccount
       summary: Konto deaktivieren (Recht accounts.manage)
-      description: Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
+      description: Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) und das letzte aktive lokale Konto mit den Rechten `permissions.manage` und `accounts.manage` kann nicht deaktiviert werden; beides meldet `account.last_administrator`.
       responses:
         '200':
           description: Deaktiviert
@@ -151,13 +236,38 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+  /accounts/{accountId}/convert-to-local:
+    parameters:
+      - {$ref: '#/components/parameters/AccountId'}
+    post:
+      operationId: convertAccountToLocal
+      summary: Konto aus dem Verzeichnis auf lokal umstellen (Recht accounts.manage)
+      description: |
+        Stellt ein Konto, das beim Anmelden über das LDAP Verzeichnis entstand, auf ein lokales Konto um. Das ist der Weg, wenn das
+        Verzeichnis ausfällt: eine lokale Verwaltung richtet damit die Anmeldung der Person wieder ein. Das Konto behält Namen, Rechte und
+        Verlauf, löst sich von der Kennung des Verzeichniseintrags und erhält wie beim Zurücksetzen ein Einmalpasswort mit erzwungenem
+        Passwortwechsel; alle Sitzungen des Kontos enden, der Vorgang steht im Protokoll (`account.converted_to_local`). Danach entscheidet
+        allein das lokale Passwort, das Passwort des Verzeichnisses gilt nicht mehr. Ein bereits lokales Konto wird nicht umgestellt:
+        409 `account.already_local`. Der Weg zurück auf das Verzeichnis ist nicht vorgesehen.
+      responses:
+        '200':
+          description: Umgestellt, mit dem Einmalpasswort (wird nur hier angezeigt)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedAccount'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
   /accounts/{accountId}/password-reset:
     parameters:
       - {$ref: '#/components/parameters/AccountId'}
     post:
       operationId: resetAccountPassword
       summary: Passwort zurücksetzen (Recht accounts.manage)
-      description: Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
+      description: |
+        Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
+        Ein Konto aus dem Verzeichnis hat kein Passwort der Anwendung: 409 `account.directory_managed`.
       responses:
         '200':
           description: Zurückgesetzt
@@ -167,6 +277,25 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /directory/accounts:
+    get:
+      operationId: listDirectory
+      summary: Namen der Konten (jede vollständige Anmeldung)
+      description: |
+        Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
+        sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
+        Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+      responses:
+        '200':
+          description: Verzeichnis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DirectoryEntry'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
   /settings/session-duration:
     get:
       operationId: getSessionDuration
@@ -202,6 +331,72 @@ paths:
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
+  /settings/ldap:
+    get:
+      operationId: getLdapSettings
+      summary: Anbindung des LDAP Verzeichnisses lesen (Recht accounts.manage)
+      description: |
+        Die gespeicherte Anbindung. Das Passwort des Suchkontos steht weder hier noch irgendwo in der Datenbank; es kommt aus der
+        Umgebung des Betriebs (`TASK_MANAGER_LDAP_BIND_PASSWORD`). `bindPasswordSet` sagt nur, ob der Betrieb es bereitstellt.
+      responses:
+        '200':
+          description: Anbindung, oder `configured` = false, solange keine gespeichert wurde
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LdapSettings'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: setLdapSettings
+      summary: Anbindung des LDAP Verzeichnisses speichern (Recht accounts.manage)
+      description: |
+        Ersetzt die Anbindung und schreibt `ldap.configured` ins Protokoll der Kontenverwaltung (ohne Geheimnis). `enabled` = true
+        schaltet die Anmeldung über das Verzeichnis ein; mit einem Suchkonto verlangt das, dass der Betrieb dessen Passwort bereitstellt.
+        Gründe in `violations` (400): ldap.url.invalid, ldap.security.invalid, ldap.security.mismatch, ldap.bindDn.invalid,
+        ldap.searchBase.invalid, ldap.userFilter.invalid, ldap.idAttribute.invalid, ldap.nameAttribute.invalid, ldap.bindPassword.missing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LdapSettingsRequest'}
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LdapSettings'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /settings/ldap/test:
+    post:
+      operationId: testLdapSettings
+      summary: Verbindung zum Verzeichnis prüfen (Recht accounts.manage)
+      description: |
+        Prüft nacheinander Verbindung, Verschlüsselung, Bindung des Suchkontos und Suchbasis, mit einem Anmeldenamen auch, dass genau
+        ein Eintrag mit Kennung gefunden wird. Ohne Werte im Körper gilt die gespeicherte Anbindung (409 `ldap.not_configured`, wenn
+        keine gespeichert ist); mit Werten werden diese geprüft und nichts gespeichert. Das Ergebnis steht im Körper, der Status
+        ist 200; es enthält nie ein Geheimnis und nie eine Meldung des Verzeichnisses.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                settings: {$ref: '#/components/schemas/LdapSettingsRequest'}
+                username: {type: string, description: 'Anmeldename, dessen Eintrag gesucht wird'}
+      responses:
+        '200':
+          description: Ergebnis der Prüfung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LdapTestResult'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -221,7 +416,9 @@ components:
         request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
         auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
         password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-        account.username_taken, account.last_administrator, account.not_administrator.
+        account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, account.already_local, ldap.not_configured,
+        auth.directory_unavailable (503, das Verzeichnis antwortet nicht). Gründe in `violations` der Konten: username.invalid,
+        username.required, displayName.too_long, displayName.invalid, paging.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         WWW-Authenticate:
@@ -270,11 +467,15 @@ components:
           type: array
           items:
             type: string
-            enum: [accounts.manage, appearance.manage, projects.manage, session_duration.manage, tags.manage]
+            enum: [accounts.manage, appearance.manage, permissions.manage, projects.manage, session_duration.manage, tags.manage]
           description: |
             Die Verwaltungsrechte, die diese Sitzung gerade hält, sortiert. Nur in der Antwort auf den Zustand einer angemeldeten
             Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
             Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
+        authKind:
+          type: [string, 'null']
+          enum: [local, ldap, null]
+          description: '`ldap`: das Passwort gehört dem Verzeichnis, die Oberfläche bietet keinen Passwortwechsel an.'
         expiresAt: {type: [string, 'null'], format: date-time}
         passwordChangeBy:
           type: [string, 'null']
@@ -306,14 +507,49 @@ components:
         displayName: {type: [string, 'null'], minLength: 1, maxLength: 100}
     Account:
       type: object
-      required: [id, username, active, passwordChangeRequired, createdAt]
+      required: [id, username, active, passwordChangeRequired, oneTimePasswordState, oneTimePasswordExpiresAt, loginDelayedUntil, createdAt, authKind]
       properties:
         id: {type: string, format: uuid}
         username: {type: string}
         displayName: {type: [string, 'null']}
         active: {type: boolean}
         passwordChangeRequired: {type: boolean}
+        oneTimePasswordState:
+          type: string
+          enum: [none, open, expired, used]
+          description: |
+            `none`: das Passwort hat die Person selbst gewählt. `open`: ein Einmalpasswort wurde ausgegeben, ist noch nicht
+            benutzt und gültig. `expired`: ausgegeben, nicht benutzt, die Gültigkeit ist vorbei; eine Administration muss ein neues
+            ausgeben. `used`: für die Anmeldung benutzt, der erzwungene Wechsel steht noch aus; lief die Sitzung dafür ab,
+            muss ebenfalls ein neues ausgegeben werden.
+        oneTimePasswordExpiresAt: {type: [string, 'null'], format: date-time, description: 'Ende der Gültigkeit, solange ein Einmalpasswort ausgegeben und nicht durch einen Wechsel abgelöst ist'}
+        loginDelayedUntil: {type: [string, 'null'], format: date-time, description: 'Ende der laufenden Wartezeit nach Fehlversuchen, sonst null'}
         createdAt: {type: string, format: date-time}
+        authKind:
+          type: string
+          enum: [local, ldap]
+          description: |
+            `local`: das Passwort der Anwendung entscheidet. `ldap`: das Konto entstand bei der ersten Anmeldung über das Verzeichnis, wird
+            über dessen unveränderliche Kennung zugeordnet und hat kein Passwort der Anwendung; Zurücksetzen und Umbenennen gibt es dafür nicht,
+            Deaktivieren schon.
+    AuditEntry:
+      type: object
+      required: [id, occurredAt, actor, event, accountId, detail]
+      properties:
+        id: {type: integer, minimum: 1}
+        occurredAt: {type: string, format: date-time}
+        actor: {type: string}
+        event: {type: string, description: 'Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.converted_to_local, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured'}
+        accountId: {type: [string, 'null'], format: uuid}
+        detail: {type: [string, 'null'], description: 'Feste Kurzangabe, nie ein Geheimnis'}
+    DirectoryEntry:
+      type: object
+      required: [id, username, active]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        displayName: {type: [string, 'null']}
+        active: {type: boolean}
     IssuedAccount:
       type: object
       required: [account, oneTimePassword, oneTimePasswordExpiresAt]
@@ -324,6 +560,44 @@ components:
           readOnly: true
           description: Wird einmal angezeigt, taucht in keinem Protokoll auf und ist nicht erneut abrufbar.
         oneTimePasswordExpiresAt: {type: string, format: date-time}
+    LdapSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [url, security, searchBase, userFilter, idAttribute]
+      properties:
+        enabled: {type: boolean, description: 'Ob Personen ohne lokales Konto sich über das Verzeichnis anmelden dürfen'}
+        url: {type: string, maxLength: 300, description: 'ldap://Rechner[:Port] oder ldaps://Rechner[:Port], ohne Pfad und ohne Zugangsdaten'}
+        security: {type: string, enum: [none, starttls, ldaps], description: '`ldaps` gehört zu ldaps://, die anderen zu ldap://. Ohne Verschlüsselung läuft das Passwort im Klartext zum Verzeichnis.'}
+        bindDn: {type: [string, 'null'], maxLength: 500, description: 'Suchkonto; leer für eine anonyme Suche'}
+        searchBase: {type: string, maxLength: 500, description: 'Wurzel der Suche, ein Distinguished Name'}
+        userFilter: {type: string, maxLength: 500, description: 'Suchfilter mit {0} für den Anmeldenamen, zum Beispiel (uid={0}); {0} ist ein Wert, nie Teil der Filtersyntax'}
+        idAttribute: {type: string, maxLength: 100, description: 'Attribut mit der unveränderlichen Kennung des Eintrags, zum Beispiel entryUUID'}
+        nameAttribute: {type: [string, 'null'], maxLength: 100, description: 'Attribut des Anzeigenamens, zum Beispiel cn'}
+    LdapSettings:
+      type: object
+      required: [configured, enabled, bindPasswordSet]
+      properties:
+        configured: {type: boolean}
+        enabled: {type: boolean}
+        url: {type: [string, 'null']}
+        security: {type: [string, 'null'], enum: [none, starttls, ldaps, null]}
+        bindDn: {type: [string, 'null']}
+        searchBase: {type: [string, 'null']}
+        userFilter: {type: [string, 'null']}
+        idAttribute: {type: [string, 'null']}
+        nameAttribute: {type: [string, 'null']}
+        bindPasswordSet: {type: boolean, description: 'Ob der Betrieb das Passwort des Suchkontos bereitstellt; das Passwort selbst ist nie Teil einer Antwort'}
+        updatedAt: {type: [string, 'null'], format: date-time}
+    LdapTestResult:
+      type: object
+      required: [ok, reason]
+      properties:
+        ok: {type: boolean}
+        reason:
+          type: [string, 'null']
+          enum: [directory.unreachable, directory.tls_failed, directory.bind_failed, directory.bind_password_missing, directory.search_failed,
+            directory.id_attribute_missing, directory.user_not_found, directory.user_ambiguous, null]
+          description: Der erste Schritt, der scheitert; null bei Erfolg.
     SessionDuration:
       type: object
       required: [hours, minimumHours, maximumHours]

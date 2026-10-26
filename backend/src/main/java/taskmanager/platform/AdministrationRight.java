@@ -7,6 +7,12 @@ package taskmanager.platform;
  * that grants it agree on the same spelling without depending on each other.
  */
 public enum AdministrationRight {
+    /**
+     * Manage groups, their members, actions and field rules (TASK-025, TASK-030). The company administration of the
+     * permissions module: the start of an installation always grants it, and the permissions module refuses a change that
+     * would leave no active account holding it.
+     */
+    PERMISSIONS_MANAGE("permissions.manage"),
     /** Create, deactivate and reactivate accounts, reset their passwords and list them. */
     ACCOUNTS_MANAGE("accounts.manage"),
     /** Read and change the fixed session duration. */

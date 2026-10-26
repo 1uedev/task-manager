@@ -24,6 +24,13 @@ export interface paths {
          *     mit dieser ersten erfolgreichen Anmeldung verbraucht; jede weitere Anmeldung damit, auch nach Ablauf der eingeschränkten
          *     Sitzung, wird mit `auth.one_time_password_used` abgelehnt, bis ein Konto mit dem Recht `accounts.manage` ein neues ausgibt. Fehlgeschlagene
          *     Versuche führen nach fünf Fehlern zu einer wachsenden Wartezeit je Name und je Quelladresse.
+         *
+         *     Ist die Anbindung eines LDAP Verzeichnisses eingeschaltet (`/settings/ldap`), gilt für einen Namen ohne lokales Konto das
+         *     Verzeichnis: der Server sucht den Eintrag, prüft das Passwort durch die Bindung als diese Person und ordnet über die
+         *     unveränderliche Kennung des Eintrags zu, nie über den Namen. Das Konto entsteht bei der ersten erfolgreichen Anmeldung
+         *     ohne Rechte (`authKind` = `ldap`). Gibt es ein lokales Konto dieses Namens, entscheidet allein dessen Passwort; ein
+         *     Konto aus dem Verzeichnis nimmt nie ein lokales Passwort an. Antwortet das Verzeichnis nicht, scheitert diese Anmeldung mit
+         *     503 `auth.directory_unavailable`; das zählt nicht als Fehlversuch. Lokale Konten und offene Sitzungen sind davon nicht betroffen.
          */
         post: operations["login"];
         /**
@@ -48,7 +55,8 @@ export interface paths {
         /**
          * Eigenes Passwort ändern
          * @description Erlaubt auch in der eingeschränkten Sitzung. Danach endet jede andere Sitzung des Kontos; die aktuelle Sitzung erhält
-         *     eine neue Kennung, behält aber Beginn und Ablauf. Ein falsches aktuelles Passwort zählt für die Wartezeit mit.
+         *     eine neue Kennung, behält aber Beginn und Ablauf. Ein falsches aktuelles Passwort zählt für die Wartezeit mit. Das Passwort eines
+         *     Kontos aus dem Verzeichnis gehört dem Verzeichnis: 409 `account.directory_managed`.
          */
         post: operations["changeOwnPassword"];
         delete?: never;
@@ -78,6 +86,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Protokoll der Kontenverwaltung (Recht accounts.manage)
+         * @description Neueste Einträge zuerst. Die nächste Seite holt `before` mit der kleinsten `id` der letzten Seite; eine leere Seite ist
+         *     das Ende. Das Protokoll enthält Kurzbezeichnungen und Kennungen, nie ein Passwort oder ein Token. `actor` ist der
+         *     Anmeldename der handelnden Person oder `cli` für den Containerbefehl.
+         */
+        get: operations["listAccountAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anzeigename ändern (Recht accounts.manage)
+         * @description Setzt den Anzeigenamen; ein leerer Wert entfernt ihn. Höchstens 100 Zeichen ohne Steuerzeichen (400 mit
+         *     `displayName.too_long` oder `displayName.invalid`). Bleibt der Name gleich, wird nichts geschrieben. Der
+         *     Anmeldename ändert sich nie. Der Anzeigename eines Kontos aus dem Verzeichnis kommt aus dem Verzeichnis: 409 `account.directory_managed`.
+         */
+        put: operations["renameAccount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/clear-login-delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wartezeit nach Fehlversuchen aufheben (Recht accounts.manage)
+         * @description Beendet die laufende Wartezeit des Anmeldenamens und vergisst seine Fehlversuche; der nächste Versuch zählt von null.
+         *     Die Zähler der Quelladressen bleiben, damit ein einzelnes Konto sie nicht zurücksetzen kann. Gab es nichts
+         *     aufzuheben, wird nichts protokolliert.
+         */
+        post: operations["clearAccountLoginDelay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{accountId}/deactivate": {
         parameters: {
             query?: never;
@@ -91,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Konto deaktivieren (Recht accounts.manage)
-         * @description Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) kann nicht deaktiviert werden; das meldet `account.last_administrator`.
+         * @description Beendet alle Sitzungen des Kontos sofort. Das letzte aktive Konto der Unternehmensverwaltung (Recht `permissions.manage`) und das letzte aktive lokale Konto mit den Rechten `permissions.manage` und `accounts.manage` kann nicht deaktiviert werden; beides meldet `account.last_administrator`.
          */
         post: operations["deactivateAccount"];
         delete?: never;
@@ -119,6 +197,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountId}/convert-to-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Konto aus dem Verzeichnis auf lokal umstellen (Recht accounts.manage)
+         * @description Stellt ein Konto, das beim Anmelden über das LDAP Verzeichnis entstand, auf ein lokales Konto um. Das ist der Weg, wenn das
+         *     Verzeichnis ausfällt: eine lokale Verwaltung richtet damit die Anmeldung der Person wieder ein. Das Konto behält Namen, Rechte und
+         *     Verlauf, löst sich von der Kennung des Verzeichniseintrags und erhält wie beim Zurücksetzen ein Einmalpasswort mit erzwungenem
+         *     Passwortwechsel; alle Sitzungen des Kontos enden, der Vorgang steht im Protokoll (`account.converted_to_local`). Danach entscheidet
+         *     allein das lokale Passwort, das Passwort des Verzeichnisses gilt nicht mehr. Ein bereits lokales Konto wird nicht umgestellt:
+         *     409 `account.already_local`. Der Weg zurück auf das Verzeichnis ist nicht vorgesehen.
+         */
+        post: operations["convertAccountToLocal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{accountId}/password-reset": {
         parameters: {
             query?: never;
@@ -133,8 +238,31 @@ export interface paths {
         /**
          * Passwort zurücksetzen (Recht accounts.manage)
          * @description Stellt ein neues Einmalpasswort aus, erzwingt den Wechsel und beendet alle Sitzungen des Kontos. Ein älteres Einmalpasswort wird ungültig.
+         *     Ein Konto aus dem Verzeichnis hat kein Passwort der Anwendung: 409 `account.directory_managed`.
          */
         post: operations["resetAccountPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/directory/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Namen der Konten (jede vollständige Anmeldung)
+         * @description Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
+         *     sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
+         *     Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+         */
+        get: operations["listDirectory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -156,6 +284,57 @@ export interface paths {
          */
         put: operations["setSessionDuration"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/ldap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Anbindung des LDAP Verzeichnisses lesen (Recht accounts.manage)
+         * @description Die gespeicherte Anbindung. Das Passwort des Suchkontos steht weder hier noch irgendwo in der Datenbank; es kommt aus der
+         *     Umgebung des Betriebs (`TASK_MANAGER_LDAP_BIND_PASSWORD`). `bindPasswordSet` sagt nur, ob der Betrieb es bereitstellt.
+         */
+        get: operations["getLdapSettings"];
+        /**
+         * Anbindung des LDAP Verzeichnisses speichern (Recht accounts.manage)
+         * @description Ersetzt die Anbindung und schreibt `ldap.configured` ins Protokoll der Kontenverwaltung (ohne Geheimnis). `enabled` = true
+         *     schaltet die Anmeldung über das Verzeichnis ein; mit einem Suchkonto verlangt das, dass der Betrieb dessen Passwort bereitstellt.
+         *     Gründe in `violations` (400): ldap.url.invalid, ldap.security.invalid, ldap.security.mismatch, ldap.bindDn.invalid,
+         *     ldap.searchBase.invalid, ldap.userFilter.invalid, ldap.idAttribute.invalid, ldap.nameAttribute.invalid, ldap.bindPassword.missing.
+         */
+        put: operations["setLdapSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/ldap/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verbindung zum Verzeichnis prüfen (Recht accounts.manage)
+         * @description Prüft nacheinander Verbindung, Verschlüsselung, Bindung des Suchkontos und Suchbasis, mit einem Anmeldenamen auch, dass genau
+         *     ein Eintrag mit Kennung gefunden wird. Ohne Werte im Körper gilt die gespeicherte Anbindung (409 `ldap.not_configured`, wenn
+         *     keine gespeichert ist); mit Werten werden diese geprüft und nichts gespeichert. Das Ergebnis steht im Körper, der Status
+         *     ist 200; es enthält nie ein Geheimnis und nie eine Meldung des Verzeichnisses.
+         */
+        post: operations["testLdapSettings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -191,7 +370,12 @@ export interface components {
              *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
              *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
              */
-            rights?: ("accounts.manage" | "appearance.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
+            rights?: ("accounts.manage" | "appearance.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
+            /**
+             * @description `ldap`: das Passwort gehört dem Verzeichnis, die Oberfläche bietet keinen Passwortwechsel an.
+             * @enum {string|null}
+             */
+            authKind?: "local" | "ldap" | null;
             /** Format: date-time */
             expiresAt?: string | null;
             /**
@@ -222,8 +406,52 @@ export interface components {
             displayName?: string | null;
             active: boolean;
             passwordChangeRequired: boolean;
+            /**
+             * @description `none`: das Passwort hat die Person selbst gewählt. `open`: ein Einmalpasswort wurde ausgegeben, ist noch nicht
+             *     benutzt und gültig. `expired`: ausgegeben, nicht benutzt, die Gültigkeit ist vorbei; eine Administration muss ein neues
+             *     ausgeben. `used`: für die Anmeldung benutzt, der erzwungene Wechsel steht noch aus; lief die Sitzung dafür ab,
+             *     muss ebenfalls ein neues ausgegeben werden.
+             * @enum {string}
+             */
+            oneTimePasswordState: "none" | "open" | "expired" | "used";
+            /**
+             * Format: date-time
+             * @description Ende der Gültigkeit, solange ein Einmalpasswort ausgegeben und nicht durch einen Wechsel abgelöst ist
+             */
+            oneTimePasswordExpiresAt: string | null;
+            /**
+             * Format: date-time
+             * @description Ende der laufenden Wartezeit nach Fehlversuchen, sonst null
+             */
+            loginDelayedUntil: string | null;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * @description `local`: das Passwort der Anwendung entscheidet. `ldap`: das Konto entstand bei der ersten Anmeldung über das Verzeichnis, wird
+             *     über dessen unveränderliche Kennung zugeordnet und hat kein Passwort der Anwendung; Zurücksetzen und Umbenennen gibt es dafür nicht,
+             *     Deaktivieren schon.
+             * @enum {string}
+             */
+            authKind: "local" | "ldap";
+        };
+        AuditEntry: {
+            id: number;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: string;
+            /** @description Kurzbezeichnung, zum Beispiel account.created, account.directory_created, account.converted_to_local, account.renamed, account.login_delay_cleared, password.reset, password.changed, ldap.configured */
+            event: string;
+            /** Format: uuid */
+            accountId: string | null;
+            /** @description Feste Kurzangabe, nie ein Geheimnis */
+            detail: string | null;
+        };
+        DirectoryEntry: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            displayName?: string | null;
+            active: boolean;
         };
         IssuedAccount: {
             account: components["schemas"]["Account"];
@@ -231,6 +459,51 @@ export interface components {
             readonly oneTimePassword: string;
             /** Format: date-time */
             oneTimePasswordExpiresAt: string;
+        };
+        LdapSettingsRequest: {
+            /** @description Ob Personen ohne lokales Konto sich über das Verzeichnis anmelden dürfen */
+            enabled?: boolean;
+            /** @description ldap://Rechner[:Port] oder ldaps://Rechner[:Port], ohne Pfad und ohne Zugangsdaten */
+            url: string;
+            /**
+             * @description `ldaps` gehört zu ldaps://, die anderen zu ldap://. Ohne Verschlüsselung läuft das Passwort im Klartext zum Verzeichnis.
+             * @enum {string}
+             */
+            security: "none" | "starttls" | "ldaps";
+            /** @description Suchkonto; leer für eine anonyme Suche */
+            bindDn?: string | null;
+            /** @description Wurzel der Suche, ein Distinguished Name */
+            searchBase: string;
+            /** @description Suchfilter mit {0} für den Anmeldenamen, zum Beispiel (uid={0}); {0} ist ein Wert, nie Teil der Filtersyntax */
+            userFilter: string;
+            /** @description Attribut mit der unveränderlichen Kennung des Eintrags, zum Beispiel entryUUID */
+            idAttribute: string;
+            /** @description Attribut des Anzeigenamens, zum Beispiel cn */
+            nameAttribute?: string | null;
+        };
+        LdapSettings: {
+            configured: boolean;
+            enabled: boolean;
+            url?: string | null;
+            /** @enum {string|null} */
+            security?: "none" | "starttls" | "ldaps" | null;
+            bindDn?: string | null;
+            searchBase?: string | null;
+            userFilter?: string | null;
+            idAttribute?: string | null;
+            nameAttribute?: string | null;
+            /** @description Ob der Betrieb das Passwort des Suchkontos bereitstellt; das Passwort selbst ist nie Teil einer Antwort */
+            bindPasswordSet: boolean;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        LdapTestResult: {
+            ok: boolean;
+            /**
+             * @description Der erste Schritt, der scheitert; null bei Erfolg.
+             * @enum {string|null}
+             */
+            reason: "directory.unreachable" | "directory.tls_failed" | "directory.bind_failed" | "directory.bind_password_missing" | "directory.search_failed" | "directory.id_attribute_missing" | "directory.user_not_found" | "directory.user_ambiguous" | null;
         };
         SessionDuration: {
             hours: number;
@@ -244,7 +517,9 @@ export interface components {
          *     request.invalid (mit violations), auth.required, auth.session_expired, auth.invalid_credentials,
          *     auth.one_time_password_expired, auth.one_time_password_used, auth.password_change_required, auth.csrf_invalid, auth.forbidden,
          *     password.current_incorrect, password.policy_violation (mit violations), account.not_found,
-         *     account.username_taken, account.last_administrator, account.not_administrator.
+         *     account.username_taken, account.last_administrator, account.not_administrator, account.directory_managed, account.already_local, ldap.not_configured,
+         *     auth.directory_unavailable (503, das Verzeichnis antwortet nicht). Gründe in `violations` der Konten: username.invalid,
+         *     username.required, displayName.too_long, displayName.invalid, paging.invalid.
          */
         Problem: {
             headers: {
@@ -325,6 +600,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             429: components["responses"]["TooManyAttempts"];
+            503: components["responses"]["Problem"];
         };
     };
     logout: {
@@ -371,6 +647,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             429: components["responses"]["TooManyAttempts"];
         };
     };
@@ -424,6 +701,90 @@ export interface operations {
             409: components["responses"]["Problem"];
         };
     };
+    listAccountAudit: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Einträge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    renameAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    displayName?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Geändert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    clearAccountLoginDelay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aufgehoben */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     deactivateAccount: {
         parameters: {
             query?: never;
@@ -475,6 +836,32 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    convertAccountToLocal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Umgestellt, mit dem Einmalpasswort (wird nur hier angezeigt) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedAccount"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     resetAccountPassword: {
         parameters: {
             query?: never;
@@ -498,6 +885,29 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verzeichnis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getSessionDuration: {
@@ -549,6 +959,87 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anbindung, oder `configured` = false, solange keine gespeichert wurde */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LdapSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LdapSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Gespeichert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LdapSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    testLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    settings?: components["schemas"]["LdapSettingsRequest"];
+                    /** @description Anmeldename, dessen Eintrag gesucht wird */
+                    username?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Ergebnis der Prüfung */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LdapTestResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
 }

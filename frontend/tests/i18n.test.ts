@@ -37,15 +37,15 @@ test('selected language is used', () => {
 });
 
 test('plural forms follow the selected language', () => {
-  assert.equal(translate(registry, 'de', 'start.format.items', { count: 1 }), '1 Eintrag');
-  assert.equal(translate(registry, 'de', 'start.format.items', { count: 3 }), '3 Einträge');
-  assert.equal(translate(registry, 'en', 'start.format.items', { count: 1 }), '1 item');
-  assert.equal(translate(registry, 'en', 'start.format.items', { count: 0 }), '0 items');
+  assert.equal(translate(registry, 'de', 'search.tickets', { count: 1 }), '1 Ticket');
+  assert.equal(translate(registry, 'de', 'search.tickets', { count: 3 }), '3 Tickets');
+  assert.equal(translate(registry, 'en', 'search.tickets', { count: 1 }), '1 ticket');
+  assert.equal(translate(registry, 'en', 'search.tickets', { count: 0 }), '0 tickets');
 });
 
 test('numbers in texts are presented in the notation of the language', () => {
-  assert.equal(translate(registry, 'de', 'start.format.items', { count: 1234 }), '1.234 Einträge');
-  assert.equal(translate(registry, 'en', 'start.format.items', { count: 1234 }), '1,234 items');
+  assert.equal(translate(registry, 'de', 'search.tickets', { count: 1234 }), '1.234 Tickets');
+  assert.equal(translate(registry, 'en', 'search.tickets', { count: 1234 }), '1,234 tickets');
 });
 
 // REQ-I18N-002: an additional language is added through the catalog only, no change in components or logic.
@@ -54,12 +54,12 @@ test('an additional test language works through the registry and falls back to E
     ...registry,
     pl: {
       'nav.start': 'Start',
-      'start.format.items': { one: '{count} pozycja', few: '{count} pozycje', many: '{count} pozycji', other: '{count} pozycji' },
+      'search.tickets': { one: '{count} pozycja', few: '{count} pozycje', many: '{count} pozycji', other: '{count} pozycji' },
     },
   };
-  assert.equal(translate(test, 'pl', 'start.format.items', { count: 1 }), '1 pozycja');
-  assert.equal(translate(test, 'pl', 'start.format.items', { count: 3 }), '3 pozycje');
-  assert.equal(translate(test, 'pl', 'start.format.items', { count: 5 }), '5 pozycji');
+  assert.equal(translate(test, 'pl', 'search.tickets', { count: 1 }), '1 pozycja');
+  assert.equal(translate(test, 'pl', 'search.tickets', { count: 3 }), '3 pozycje');
+  assert.equal(translate(test, 'pl', 'search.tickets', { count: 5 }), '5 pozycji');
   const missing: string[] = [];
   assert.equal(translate(test, 'pl', 'nav.label', {}, (language, key) => missing.push(`${language}:${key}`)), 'Main navigation');
   assert.deepEqual(missing, ['pl:nav.label']);

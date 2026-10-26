@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 public class AccountRepository {
     private static final long ADMINISTRATION_LOCK = 7_240_001L;
     private static final String COLUMNS =
-        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at";
+        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at, auth_kind, external_id";
 
     private final JdbcClient jdbc;
 
@@ -30,15 +30,22 @@ public class AccountRepository {
             Db.instant(rs, "one_time_used_at"),
             rs.getBoolean("active"),
             Db.instant(rs, "created_at"),
-            Db.instant(rs, "updated_at"));
+            Db.instant(rs, "updated_at"),
+            rs.getString("auth_kind"),
+            rs.getString("external_id"));
     }
 
     public void insert(AccountRecord account) {
-        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(account.id(), account.username(), account.displayName(), account.passwordHash(),
                 account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), Db.ts(account.oneTimeUsedAt()), account.active(),
-                Db.ts(account.createdAt()), Db.ts(account.updatedAt()))
+                Db.ts(account.createdAt()), Db.ts(account.updatedAt()), account.authKind(), account.externalId())
             .update();
+    }
+
+    public Optional<AccountRecord> findByExternalId(String externalId) {
+        return jdbc.sql("select " + COLUMNS + " from identity_account where external_id = ?")
+            .param(externalId).query(AccountRepository::map).optional();
     }
 
     public Optional<AccountRecord> findByUsername(String normalizedUsername) {
@@ -88,8 +95,30 @@ public class AccountRepository {
         jdbc.sql("update identity_account set one_time_used_at = ?, updated_at = ? where id = ?").params(Db.ts(now), Db.ts(now), id).update();
     }
 
+    /** Turns a directory account into a local one; the caller sets a new credential right after. */
+    public void convertToLocal(UUID id, Instant now) {
+        jdbc.sql("update identity_account set auth_kind = 'local', external_id = null, updated_at = ? where id = ?").params(Db.ts(now), id).update();
+    }
+
     public void setActive(UUID id, boolean active, Instant now) {
         jdbc.sql("update identity_account set active = ?, updated_at = ? where id = ?").params(active, Db.ts(now), id).update();
+    }
+
+    public void setDisplayName(UUID id, String displayName, Instant now) {
+        jdbc.sql("update identity_account set display_name = ?, updated_at = ? where id = ?").params(displayName, Db.ts(now), id).update();
+    }
+
+    /** One entry of the audit trail. */
+    public record AuditRecord(long id, Instant occurredAt, String actor, String event, UUID accountId, String detail) {
+    }
+
+    /** The audit trail, newest first, below the entry {@code before} if given. */
+    public List<AuditRecord> audit(Long before, int limit) {
+        return jdbc.sql("select id, occurred_at, actor, event, account_id, detail from identity_audit_event where id < ? order by id desc limit ?")
+            .params(before == null ? Long.MAX_VALUE : before, limit)
+            .query((rs, row) -> new AuditRecord(rs.getLong("id"), Db.instant(rs, "occurred_at"), rs.getString("actor"), rs.getString("event"),
+                rs.getObject("account_id", UUID.class), rs.getString("detail")))
+            .list();
     }
 
     public void audit(String actor, String event, UUID accountId, String detail, Instant now) {

@@ -1,5 +1,7 @@
 package taskmanager;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,10 +31,19 @@ class IdentityPermissionsAdapter implements IdentityAccess {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean isCurrent(AccessContext context) {
+        return currentUntil(context).isPresent();
+    }
+
+    /** The end of the session period, which the permissions module checks again right before the commit (TASK-043). */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Instant> currentUntil(AccessContext context) {
         // No portal accounts exist yet, so a context that claims to be external or to belong to an organization is not ours.
-        return context != null && ofThisCompany(context.companyId())
-            && !context.passwordChangeRequired() && !context.external() && context.organizationId() == null
-            && identity.isCurrentFullSession(context.userId(), context.sessionId());
+        if (context == null || !ofThisCompany(context.companyId())
+                || context.passwordChangeRequired() || context.external() || context.organizationId() != null) {
+            return Optional.empty();
+        }
+        return identity.currentFullSessionEnd(context.userId(), context.sessionId());
     }
 
     @Override
@@ -46,6 +57,12 @@ class IdentityPermissionsAdapter implements IdentityAccess {
     public boolean userActive(UUID companyId, UUID userId) {
         // Every account is an internal one until portal accounts exist.
         return ofThisCompany(companyId) && identity.accountIsActive(userId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean userActiveLocal(UUID companyId, UUID userId) {
+        return ofThisCompany(companyId) && identity.accountIsActiveLocal(userId);
     }
 
     private boolean ofThisCompany(UUID companyId) {

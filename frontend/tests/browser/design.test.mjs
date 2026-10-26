@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { auditContrast } from './audit.mjs';
+import { ANNA, BEN, TOKEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-036: light and dark surfaces, the company accent from the server, and drag and drop with its keyboard
@@ -17,49 +18,27 @@ after(async () => {
   await server?.close();
 });
 
-const TOKEN = 'csrf-token-for-browser-tests-0001';
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' + '1f15c4890000000d49444154789c6360f8cfc0f01f0005000201' + 'e2d1b0a50000000049454e44ae426082', 'hex');
-const ROUTES = ['start', 'board', 'states', 'form', 'appearance'];
+// Every page of the interface, with ids of the synthetic backend where a page needs one.
+const ROUTES = (backend) => ({
+  start: '#/start', projects: '#/projects', tickets: `#/projects/${backend.project.id}`, members: `#/projects/${backend.project.id}/members`,
+  tags: `#/projects/${backend.project.id}/tags`, settings: `#/projects/${backend.project.id}/settings`, ticket: `#/projects/${backend.project.id}/tickets/1`,
+  search: '#/search', accounts: '#/accounts', groups: '#/groups', group: `#/groups/${backend.group('Lesen').id}`, board: '#/board', appearance: '#/appearance',
+});
 
-function appearance(version, accentColor, logo = null) {
-  return { accentColor, defaultAccentColor: '#f97316', logo, version, updatedAt: '2026-10-19T06:00:00Z' };
-}
-
-// A small stand in for the backend: one appearance row with a version, like the real endpoint.
-function backend({ authenticated = true, mayChange = true, accent = '#2563eb' } = {}) {
-  const state = { version: 3, accent, logo: null, requests: [] };
-  const json = (route, status, body, headers = {}) => route.fulfill({
-    status,
-    contentType: status < 400 ? 'application/json' : 'application/problem+json',
-    headers: { ETag: `"${state.version}"`, ...headers },
-    body: JSON.stringify(body),
-  });
-  const current = () => appearance(state.version, state.accent, state.logo);
-  const install = async (context, page) => {
-    await context.addCookies([{ name: '__Host-tm-csrf', value: TOKEN, domain: 'localhost', path: '/', secure: true, sameSite: 'Lax' }]);
-    await page.route('**/api/v1/**', async (route) => {
-      const request = route.request();
-      const path = new URL(request.url()).pathname;
-      state.requests.push({ method: request.method(), path, ifMatch: request.headers()['if-match'] ?? null, csrf: request.headers()['x-csrf-token'] ?? null, type: request.headers()['content-type'] ?? null, body: request.postDataBuffer() });
-      if (path === '/api/v1/session') return json(route, 200, { authenticated, level: authenticated ? 'full' : null, ...(authenticated ? { rights: mayChange ? ['accounts.manage', 'appearance.manage'] : ['accounts.manage'] } : {}) });
-      if (!authenticated) return json(route, 401, { code: 'auth.required', status: 401 });
-      if (path === '/api/v1/appearance/logo' && request.method() === 'GET') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
-      if (request.method() === 'GET') return json(route, 200, current());
-      if (request.headers()['if-match'] !== `"${state.version}"`) return json(route, 412, { code: 'appearance.version_conflict', status: 412, correlationId: '0f8b7c1e-1111-4222-8333-444455556666' });
-      state.version += 1;
-      if (path === '/api/v1/appearance') state.accent = JSON.parse(request.postData()).accentColor;
-      else if (request.method() === 'PUT') state.logo = { contentType: 'image/png', size: request.postDataBuffer().length, url: `/api/v1/appearance/logo?v=${state.version}` };
-      else state.logo = null;
-      return json(route, 200, current());
-    });
-  };
-  return { state, install, writes: () => state.requests.filter((item) => item.method !== 'GET') };
-}
+// The company color of these tests is blue, so that a page still showing the default orange stands out.
+const fake = (options = {}) => createBackend({ accent: '#2563eb', ...options });
 
 async function withPage(options, body) {
+  const backend = options.backend === undefined ? fake() : options.backend;
+  const as = options.as === undefined ? ANNA : options.as;
   // localhost instead of 127.0.0.1, so that the browser accepts the __Host- cookie on plain HTTP.
-  const session = await open(browser, `${server.url.replace('127.0.0.1', 'localhost')}${options.hash ?? ''}`, options);
+  const session = await open(browser, `${base()}${options.hash ?? ''}`, {
+    ...options,
+    ...(backend ? { setup: (context, page) => backend.install(context, page, { as }) } : {}),
+  });
   try {
+    if (backend && as) await session.page.waitForSelector('.shell main h1');
     await body(session.page, session.context);
     assert.deepEqual(session.problems.filter((text) => !/Failed to load resource/.test(text)), [], 'no console warnings, errors or page errors');
   } finally {
@@ -67,6 +46,7 @@ async function withPage(options, body) {
   }
 }
 
+const base = () => server.url.replace('127.0.0.1', 'localhost');
 const accent = (page) => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim());
 // The accent follows a choice after React committed the next render; wait for it instead of reading at once.
 async function accentBecomes(page, expected, message) {
@@ -93,24 +73,34 @@ describe('light and dark', () => {
   });
 
   for (const colorScheme of ['light', 'dark']) {
-    for (const route of ROUTES) {
+    for (const route of Object.keys(ROUTES(fake()))) {
       test(`every visible text on ${route} reaches its contrast in ${colorScheme}`, async () => {
-        await withPage({ colorScheme, hash: `#/${route}` }, async (page) => {
-          await page.waitForTimeout(300); // let color transitions finish
+        const backend = fake();
+        await withPage({ colorScheme, backend, hash: ROUTES(backend)[route] }, async (page) => {
+          await page.waitForTimeout(300); // let loading and color transitions finish
           const { checked, failures } = await auditContrast(page);
           assert.ok(checked > 10, `only ${checked} texts`);
           assert.deepEqual(failures, []);
         });
       });
     }
+    test(`every visible text on the login reaches its contrast in ${colorScheme}`, async () => {
+      await withPage({ colorScheme, as: null }, async (page) => {
+        await page.getByRole('button', { name: 'Anmelden' }).click();
+        await page.waitForTimeout(300);
+        const { checked, failures } = await auditContrast(page);
+        assert.ok(checked > 5, `only ${checked} texts`);
+        assert.deepEqual(failures, []);
+      });
+    });
   }
 
   test('in dark mode hints, errors, borders and focus stay readable', async () => {
-    await withPage({ colorScheme: 'dark', hash: '#/form' }, async (page) => {
-      await page.getByRole('button', { name: 'Prüfen und übernehmen' }).click();
-      await page.getByTestId('error-summary').waitFor();
+    const backend = fake();
+    await withPage({ colorScheme: 'dark', backend, hash: ROUTES(backend).ticket }, async (page) => {
+      await page.waitForSelector('[data-testid=history]');
       await page.keyboard.press('Shift'); // keyboard modality, so that :focus-visible applies
-      await page.locator('input[name="label"]').focus();
+      await page.getByLabel(/^Titel/).focus();
       const measured = await page.evaluate(() => {
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = 1;
@@ -121,8 +111,8 @@ describe('light and dark', () => {
           return 0.2126 * r + 0.7152 * g + 0.0722 * b;
         };
         const ratio = (a, b) => { const x = light(a); const y = light(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-        const input = document.querySelector('input[name="label"]');
-        const surface = getComputedStyle(input.closest('form')).backgroundColor;
+        const input = document.querySelector('.panel input');
+        const surface = getComputedStyle(input.closest('.panel')).backgroundColor;
         const header = document.querySelector('header');
         const language = document.querySelector('#language');
         language.focus();
@@ -144,41 +134,46 @@ describe('light and dark', () => {
 });
 
 describe('company appearance', () => {
-  test('without a server the default orange is used and the page explains that nothing is saved', async () => {
-    await withPage({ hash: '#/appearance' }, async (page) => {
+  test('without a server the default orange is used and the interface says the server is not reachable', async () => {
+    await withPage({ backend: null, hash: '#/appearance' }, async (page) => {
+      await page.waitForSelector('h1:has-text("Server nicht erreichbar")');
       assert.equal(await accent(page), '#f97316');
-      await page.getByTestId('appearance-mode').waitFor();
-      assert.match(await page.getByTestId('appearance-mode').innerText(), /nicht erreichbar/);
-      assert.equal(await page.getByRole('button', { name: 'Für alle speichern' }).isDisabled(), true);
+    });
+  });
+
+  test('before the login the default orange is used and nothing of the company is read', async () => {
+    const backend = fake();
+    await withPage({ backend, as: null }, async (page) => {
+      assert.equal(await accent(page), '#f97316');
+      assert.deepEqual([...new Set(backend.state.requests.map((item) => item.path))], ['/api/v1/session']);
     });
   });
 
   test('the saved company color applies to everyone at start', async () => {
-    const server = backend({ mayChange: false });
-    await withPage({ setup: server.install }, async (page) => {
+    await withPage({ as: BEN }, async (page) => {
       await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() === '#2563eb');
       assert.match(await page.getByTestId('brand-current').innerText(), /#2563EB/);
     });
   });
 
   test('a person without the right to change the appearance gets a preview that is never sent', async () => {
-    const server = backend({ mayChange: false });
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, as: BEN, hash: '#/appearance' }, async (page) => {
       await page.getByTestId('appearance-mode').waitFor();
       assert.match(await page.getByTestId('appearance-mode').innerText(), /Nur Konten mit dem Recht dazu/);
       await page.getByRole('button', { name: 'Grün' }).click();
       await accentBecomes(page, '#16a34a', 'the preview shows everywhere');
       assert.equal(await page.getByRole('button', { name: 'Für alle speichern' }).isDisabled(), true);
       await page.getByRole('link', { name: 'Start' }).click();
-      await page.waitForSelector('h1:has-text("Willkommen")');
+      await page.waitForSelector('h1:has-text("Willkommen, Ben Leser")');
       await accentBecomes(page, '#2563eb', 'leaving the page shows the saved color again');
       assert.deepEqual(server.writes(), []);
     });
   });
 
   test('a holder of the right saves a color with the version and the CSRF token', async () => {
-    const server = backend();
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
       await page.getByRole('button', { name: 'Grün' }).click();
       assert.equal(await page.getByRole('button', { name: 'Grün' }).getAttribute('aria-pressed'), 'true');
@@ -194,8 +189,8 @@ describe('company appearance', () => {
   });
 
   test('a typed color is checked before it is shown', async () => {
-    const server = backend();
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       const field = page.getByLabel('Farbwert');
       await field.fill('#12');
       assert.equal(await field.getAttribute('aria-invalid'), 'true');
@@ -207,12 +202,26 @@ describe('company appearance', () => {
     });
   });
 
+  test('an invalid typed color cannot save the last valid one', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Farbwert');
+      const save = page.getByRole('button', { name: 'Für alle speichern' });
+      await field.fill('#7C3AED');
+      assert.equal(await save.isDisabled(), false);
+      await field.fill('#12');
+      assert.equal(await save.isDisabled(), true);
+      await save.click({ force: true }).catch(() => {});
+      assert.equal(server.state.requests.filter((item) => item.method === 'PUT').length, 0);
+    });
+  });
+
   test('a concurrent change is reported and the current state can be loaded', async () => {
-    const server = backend();
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
-      server.state.version = 9; // someone else saved meanwhile
-      server.state.accent = '#e11d48';
+      server.state.appearance.version = 9; // someone else saved meanwhile
+      server.state.appearance.accent = '#e11d48';
       await page.getByRole('button', { name: 'Grün' }).click();
       await page.getByRole('button', { name: 'Für alle speichern' }).click();
       await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
@@ -222,8 +231,8 @@ describe('company appearance', () => {
   });
 
   test('a logo dropped on the area is uploaded as image bytes and shown in the sidebar', async () => {
-    const server = backend();
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
       await page.getByTestId('logo-dropzone').evaluate((zone, bytes) => {
         const transfer = new DataTransfer();
@@ -243,8 +252,8 @@ describe('company appearance', () => {
   });
 
   test('a file that is not PNG, JPEG or WebP is refused before anything is sent', async () => {
-    const server = backend();
-    await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
       await page.getByTestId('logo-file').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') });
       await page.getByText('Diese Datei ist kein PNG, JPEG oder WebP.').waitFor();
@@ -256,23 +265,23 @@ describe('company appearance', () => {
 describe('drag and drop', () => {
   test('navigation entries move with Alt and arrow keys, are announced, keep focus and are remembered', async () => {
     await withPage({}, async (page) => {
-      await page.getByRole('link', { name: 'Formular' }).focus();
+      await page.getByRole('link', { name: 'Board' }).focus();
       await page.keyboard.press('Alt+ArrowUp');
       await page.keyboard.press('Alt+ArrowUp');
       const order = () => page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route));
-      assert.deepEqual(await order(), ['start', 'form', 'board', 'states']);
-      assert.match(await live(page), /Formular steht jetzt an Position 2 von 4/);
-      assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Formular');
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search']);
+      assert.match(await live(page), /Board steht jetzt an Position 2 von 4/);
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Board');
       await page.reload();
-      await page.waitForSelector('main h1');
-      assert.deepEqual(await order(), ['start', 'form', 'board', 'states']);
+      await page.waitForSelector('.shell main h1');
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search']);
     });
   });
 
   test('navigation entries can be dragged with the mouse', async () => {
     await withPage({}, async (page) => {
-      await page.dragAndDrop('.nav-main li[data-route="states"]', '.nav-main li[data-route="start"]');
-      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['states', 'start', 'board', 'form']);
+      await page.dragAndDrop('.nav-main li[data-route="search"]', '.nav-main li[data-route="start"]');
+      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'board']);
     });
   });
 
@@ -280,8 +289,8 @@ describe('drag and drop', () => {
     await withPage({}, async (page) => {
       await page.getByRole('button', { name: 'Unternehmensauftritt verschieben' }).focus();
       await page.keyboard.press('Alt+ArrowLeft');
-      assert.deepEqual(await page.locator('.card-grid > section').evaluateAll((items) => items.map((item) => item.dataset.card)), ['brand', 'format']);
-      assert.match(await live(page), /Unternehmensauftritt steht jetzt an Position 1 von 2/);
+      assert.deepEqual(await page.locator('.card-grid > section').evaluateAll((items) => items.map((item) => item.dataset.card)), ['projects', 'brand', 'search']);
+      assert.match(await live(page), /Unternehmensauftritt steht jetzt an Position 2 von 3/);
     });
   });
 
