@@ -117,10 +117,14 @@ paths:
         Für jedes genannte Feld braucht es eine Schreibregel, sonst wird die ganze Änderung mit 403 abgewiesen. Ein
         Statuswechsel muss im Ablauf des Tickettyps der aktuellen Konfiguration als Übergang vorgesehen sein (409
         `ticket.transition_not_allowed`), und die Felder, die der Übergang verlangt, müssen danach gefüllt sein (400 mit
-        `<feld>.required_for_transition`, zum Beispiel `custom.cause.required_for_transition`); bei einem Fehler bleibt das
-        Ticket unverändert. Ein Wechsel des Tickettyps verlangt, dass der Status im Ablauf des neuen Typs vorkommt
-        (`type.status_unavailable`, `status.unavailable`). Felder, die ihren Wert behalten, werden nicht geschrieben; ohne
-        echte Änderung bleibt die Version gleich.
+        `<feld>.required_for_transition`, zum Beispiel `custom.cause.required_for_transition`). Verlangt der Übergang ein
+        Feld, das die anfragende Person nicht lesen oder nicht schreiben darf, antwortet der Server unabhängig vom Inhalt des
+        Feldes mit 409 `ticket.required_field_inaccessible`. Bei einem Fehler bleibt das Ticket unverändert. Wechselt nur der
+        Tickettyp und kennt der Ablauf des neuen Typs den Status nicht, kommt das Ticket in den ersten Status des neuen Typs;
+        dafür braucht es die Schreibregel für `status` (sonst 400 `type.status_unavailable`). Wird der Status mitgegeben, muss
+        er im Ablauf des neuen Typs vorkommen (`status.unavailable`) und als Übergang vom bisherigen Status vorgesehen sein.
+        Ein Schlüssel in `customFields`, den die Konfiguration nicht kennt, antwortet mit 400 `customFields.unknown`. Felder,
+        die ihren Wert behalten, werden nicht geschrieben; ohne echte Änderung bleibt die Version gleich.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:

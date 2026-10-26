@@ -3,7 +3,7 @@ import {
   discardDraft, publishDraft, readDraft, readUsage, saveDraft, type Configuration, type ConfigurationUsage, type Project,
 } from '../api/product.ts';
 import {
-  CUSTOM_PREFIX, FIELD_KINDS, customFieldsOf, keyFromName, optionsOf, workflowOf, workflowsOf, type CustomField, type CustomOption,
+  CUSTOM_PREFIX, FIELD_KINDS, customFieldsOf, keyFromName, mappingRows, optionsOf, workflowOf, workflowsOf, type CustomField, type CustomOption,
   type FieldKind, type Transition, type Workflow,
 } from '../app/configuration.ts';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
@@ -480,10 +480,11 @@ function MappingPanel({ project, reasons, config, typeNames, statusNames, busy, 
   const [statusMapping, setStatusMapping] = useState<Record<string, string>>({});
   const [typeMapping, setTypeMapping] = useState<Record<string, string>>({});
   const oldNames = useOldNames(project);
+  const rows = useMemo(() => mappingRows(statuses, usage.state === 'ok' ? usage.value : [], config), [reasons, usage, config]);
   useEffect(() => {
-    setStatusMapping((current) => Object.fromEntries(statuses.map((key) => [key, current[key] ?? config.statuses[0]?.key ?? ''])));
+    setStatusMapping((current) => Object.fromEntries(rows.map((row) => [row.key, current[row.key] ?? row.targets[0] ?? ''])));
     setTypeMapping((current) => Object.fromEntries(types.map((key) => [key, current[key] ?? config.ticketTypes[0]?.key ?? ''])));
-  }, [reasons]);
+  }, [rows]);
   const count = (predicate: (use: ConfigurationUsage) => boolean) => usage.state === 'ok' ? usage.value.filter(predicate).reduce((sum, use) => sum + use.count, 0) : 0;
   return (
     <div role="group" aria-labelledby="mapping-title" className="panel" data-testid="mapping-panel">
@@ -494,11 +495,18 @@ function MappingPanel({ project, reasons, config, typeNames, statusNames, busy, 
           value={typeMapping[key] ?? ''} onChange={(value) => setTypeMapping((current) => ({ ...current, [key]: value }))}
           options={config.ticketTypes.map((item) => ({ value: item.key, label: item.name }))} />
       ))}
-      {statuses.map((key) => (
-        <SelectField key={`status-${key}`} label={t('config.mapStatus', { name: oldNames.statuses[key] ?? statusNames[key] ?? key, count: count((use) => use.status === key) })}
-          value={statusMapping[key] ?? ''} onChange={(value) => setStatusMapping((current) => ({ ...current, [key]: value }))}
-          options={config.statuses.map((item) => ({ value: item.key, label: item.name }))} />
-      ))}
+      {rows.map((row) => {
+        const name = oldNames.statuses[row.status] ?? statusNames[row.status] ?? row.status;
+        const label = row.type === null
+          ? t('config.mapStatus', { name, count: count((use) => use.status === row.status) })
+          : t('config.mapStatusOfType', { name, type: oldNames.types[row.type] ?? typeNames[row.type] ?? row.type,
+            count: count((use) => use.status === row.status && use.type === row.type) });
+        return (
+          <SelectField key={`status-${row.key}`} label={label}
+            value={statusMapping[row.key] ?? ''} onChange={(value) => setStatusMapping((current) => ({ ...current, [row.key]: value }))}
+            options={config.statuses.filter((item) => row.targets.includes(item.key)).map((item) => ({ value: item.key, label: item.name }))} />
+        );
+      })}
       <p className="actions">
         <button type="button" disabled={busy} onClick={() => onConfirm(statusMapping, typeMapping)}>{t('config.mappingConfirm')}</button>
         <button type="button" className="secondary" onClick={onCancel}>{t('config.mappingCancel')}</button>

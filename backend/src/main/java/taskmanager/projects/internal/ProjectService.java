@@ -216,7 +216,8 @@ public class ProjectService {
     /**
      * Publishes the draft as the next version. {@code statusMapping} and {@code typeMapping} say where the tickets go that
      * use a status or ticket type the new version no longer has or no longer allows for their type; without them the
-     * publication is refused and nothing changes (F-05 of DOMAIN_MODEL.md).
+     * publication is refused and nothing changes (F-05 of DOMAIN_MODEL.md). A key of {@code statusMapping} is a status, or
+     * {@code <type>:<status>} for the tickets of one type, which wins over the status alone.
      */
     @Transactional
     public ProjectView publishDraft(AccessContext actor, UUID id, long expectedVersion, long draftRevision,
@@ -260,7 +261,10 @@ public class ProjectService {
         }
         List<String> mapping = new ArrayList<>();
         statusMapping.forEach((from, to) -> {
-            if (!previous.hasStatus(from)) {
+            // A key is a status, or a ticket type and a status as <type>:<status> for the tickets of that type alone.
+            int colon = from.indexOf(':');
+            if (colon >= 0 ? !previous.hasTicketType(from.substring(0, colon)) || !previous.hasStatus(from.substring(colon + 1))
+                    : !previous.hasStatus(from)) {
                 mapping.add("statusMapping.key_unknown");
             }
             if (to == null || !configuration.hasStatus(to)) {
@@ -293,7 +297,8 @@ public class ProjectService {
             }
             String status = use.status();
             if (!configuration.statusKeysOf(type).contains(status)) {
-                String target = statusMapping.get(status);
+                // The mapping of the type and status wins over the one of the status alone (review F4 of TASK-044).
+                String target = statusMapping.getOrDefault(use.type() + ":" + status, statusMapping.get(status));
                 if (target == null) {
                     unmapped.add("status.in_use:" + status);
                     continue;

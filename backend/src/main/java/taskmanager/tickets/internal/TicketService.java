@@ -8,7 +8,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -188,6 +187,7 @@ public class TicketService {
                 written.add(field);
             }
         });
+        unknownCustomFields(configuration, draft.custom().keySet());
         Map<String, Object> given = new TreeMap<>();
         draft.custom().forEach((key, value) -> {
             if (value != null) {
@@ -218,8 +218,6 @@ public class TicketService {
                 custom.put(field.key(), value);
             }
         }
-        given.keySet().stream().filter(key -> configuration.customField(key).isEmpty())
-            .forEach(key -> violations.add("customFields.unknown"));
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
         }
@@ -253,6 +251,9 @@ public class TicketService {
         if (!edit) {
             throw forbidden();
         }
+        // The check of edit has locked the project, so its configuration is fixed until the commit.
+        ProjectConfiguration configuration = configuration(projectId);
+        unknownCustomFields(configuration, customChanges.keySet());
         Set<String> written = new HashSet<>(changes.keySet());
         customChanges.keySet().forEach(key -> written.add(ProjectConfiguration.CUSTOM_PREFIX + key));
         require(actor, resource, EDIT, written);
@@ -260,7 +261,6 @@ public class TicketService {
         if (ticket.version() != expectedVersion) {
             throw ApiProblemException.of(412, "ticket.version_conflict");
         }
-        ProjectConfiguration configuration = configuration(projectId);
         long configurationVersion = projects.currentConfigurationVersion(projectId).orElseThrow(TicketService::projectNotFound);
 
         List<String> violations = new ArrayList<>();
@@ -291,20 +291,16 @@ public class TicketService {
             ? assignee(projectId, changes.get("assignee"), configuration, violations) : ticket.assignee();
         Map<String, String> custom = new TreeMap<>(ticket.custom());
         for (var change : customChanges.entrySet()) {
-            Optional<CustomField> field = configuration.customField(change.getKey());
-            if (field.isEmpty()) {
-                violations.add("customFields.unknown");
-                continue;
-            }
+            CustomField field = configuration.customField(change.getKey()).orElseThrow();
             String current = ticket.custom().get(change.getKey());
             if (change.getValue() == null) {
-                if (field.get().required() && field.get().active()) {
-                    violations.add(field.get().id() + ".required");
+                if (field.required() && field.active()) {
+                    violations.add(field.id() + ".required");
                 }
                 custom.remove(change.getKey());
                 continue;
             }
-            String value = customValue(projectId, field.get(), change.getValue(), current, violations);
+            String value = customValue(projectId, field, change.getValue(), current, violations);
             if (value != null) {
                 custom.put(change.getKey(), value);
             }
@@ -312,13 +308,29 @@ public class TicketService {
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
         }
-        if ((typeChanged || statusChanged) && !configuration.statusKeysOf(type).contains(status)) {
-            // The status the ticket keeps, or is moved to together with its type, does not exist in the workflow of the type.
-            throw ApiProblemException.withViolations(400, "request.invalid", List.of(statusChanged ? "status.unavailable" : "type.status_unavailable"));
+        if (statusChanged && !configuration.statusKeysOf(type).contains(status)) {
+            // The status the ticket is moved to, alone or together with its type, does not exist in the workflow of the type.
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("status.unavailable"));
         }
-        if (statusChanged) {
+        if (typeChanged && !statusChanged && !configuration.statusKeysOf(type).contains(status)) {
+            // A type whose workflow does not know the status starts the ticket over in its first status (review F3 of
+            // TASK-044). That is no transition, so no field it requires can be skipped, but the status is written.
+            if (!writable(actor, resource, projectId).contains("status")) {
+                throw ApiProblemException.withViolations(400, "request.invalid", List.of("type.status_unavailable"));
+            }
+            status = configuration.initialStatusOf(type);
+        } else if (statusChanged) {
             var transition = configuration.transition(type, ticket.status(), status)
                 .orElseThrow(() -> ApiProblemException.of(409, "ticket.transition_not_allowed"));
+            // A field the caller may not read or write is a conflict of the configuration and the rights, whatever it holds,
+            // so the answer never tells whether a hidden field has a value (review F1 of TASK-044).
+            Set<String> readable = readableFields(actor, resource, projectId);
+            Set<String> writable = writable(actor, resource, projectId);
+            for (String required : transition.requiredFields()) {
+                if (requires(required, configuration) && !(readable.contains(required) && writable.contains(required))) {
+                    throw ApiProblemException.of(409, "ticket.required_field_inaccessible");
+                }
+            }
             List<String> missing = new ArrayList<>();
             for (String required : transition.requiredFields()) {
                 if (!hasValue(required, description, assignee, custom, configuration)) {
@@ -423,6 +435,21 @@ public class TicketService {
             return null;
         }
         return value;
+    }
+
+    /** Whether a field a transition names is required at all: an inactive custom field requires nothing. */
+    private static boolean requires(String field, ProjectConfiguration configuration) {
+        if (!field.startsWith(ProjectConfiguration.CUSTOM_PREFIX)) {
+            return true;
+        }
+        return configuration.customField(field.substring(ProjectConfiguration.CUSTOM_PREFIX.length())).map(CustomField::active).orElse(false);
+    }
+
+    /** A key in {@code customFields} the configuration does not know is a wrong request, not a missing right (review F5 of TASK-044). */
+    private static void unknownCustomFields(ProjectConfiguration configuration, Set<String> keys) {
+        if (keys.stream().anyMatch(key -> configuration.customField(key).isEmpty())) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("customFields.unknown"));
+        }
     }
 
     /** Whether the field a transition requires has a value after the change. A field that is inactive is not required. */

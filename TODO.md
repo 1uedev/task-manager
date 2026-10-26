@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 31 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 32 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -71,6 +69,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-049](#task-049-befunde-der-nachprüfung-von-task-048-und-der-prüfung-von-task-047-beheben) | Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben | claude-20261024-reviewfix-02 | 2026-10-24 |
 | [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
 | [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
+| [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -667,7 +666,7 @@ Nicht Teil: Kommentare, interne Notizen und kundenlesbare Anhänge (kommen mit d
 
 ## TASK-052 Befunde F1 bis F5 der Prüfung von TASK-044 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261026-configfix-01 · **Aktualisiert:** 2026-10-26
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261026-configfix-01 · **Aktualisiert:** 2026-10-26
 
 **Bezug:** REQ-ORG-003, REQ-TKT-001, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-044 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-044_PR-151.md](docs/REVIEW_TASK-044_PR-151.md). **Arbeitsstand:** Holger hat am 26. Oktober 2026 im Projektgespräch den Empfehlungen zu F1 und F3 zugestimmt („ja ich stimme zu“) und die Behebung von F1 bis F5 als Folgeaufgabe freigegeben. Branch claude/project-thread-kqr6e8 nach dem Merge dieser Reservierung; Ergebnis mit DEC-081, keine Migration vorgesehen.
 
@@ -684,4 +683,6 @@ Nicht Teil: weitere Änderungen an Projektkonfiguration, Rechten oder Suche; die
 
 **Abnahmekriterien:** Die Prüftests E1 bis E5 aus docs/review-evidence/task-044 laufen in angepasster Form als Regression grün; E6 bleibt grün; bestehende Tests zu F-03 bis F-06 bleiben grün; F1 verrät in keiner Antwort, ob ein verborgenes Feld gefüllt ist; ein Typwechsel umgeht kein Pflichtfeld eines Übergangs. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-081 als Ergebnis zur Prüfung stellen.
+**Nächster Schritt:** Getrennte KI prüft die Behebung nach (DEC-040), besonders: dass keine Antwort eines Übergangs verrät, ob ein verborgenes Feld gefüllt ist, dass der Typwechsel kein Pflichtfeld umgeht und die Schreibregel für `status` beachtet, und die Zuordnung je Typ und Status mit ihrem Vorrang. Holger nimmt TASK-044 und TASK-052 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-081, Änderungen in `TicketService`, `ProjectConfiguration` und `ProjectService`, Verträge `tickets.openapi.yaml` und `projects.openapi.yaml`, Zuordnungsdialog (`mappingRows` in `configuration.ts`) und Meldung der Ticketseite, Beschreibung in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md). Die Prüftests E1 bis E5 sind als fünf Regressionstests in `ProjectConfigurationApiTest` übernommen, dazu die Grenzen in `ProjectConfigurationTest` und ein Frontendtest für die Zuordnung je Typ. Zwei bestehende Erwartungen sind mit DEC-081 angepasst (Typwechsel in den ersten Status statt 400, unbekanntes eigenes Feld 400 statt 403). Lokal grün: Backend `verify` gegen PostgreSQL 16 mit Java 21, 308 Tests ohne Ausfall; Frontend `npm run verify` (76 Tests); 102 Browsertests (ein einzelner Lauf parallel zum Backendlauf hatte einen Ausfall im Test „changes“, zwei Wiederholungen ohne Last waren grün). Keine Migration. Nicht geprüft: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI).
