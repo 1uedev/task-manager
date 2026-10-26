@@ -413,7 +413,8 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
                     return null;
                 }
                 long value = ((Number) raw).longValue();
-                return Math.abs(value) > INTEGER_MAX ? null : Long.toString(value);
+                // Without Math.abs, whose result for the smallest long is negative (review F2 of TASK-044).
+                return value > INTEGER_MAX || value < -INTEGER_MAX ? null : Long.toString(value);
             }
             case DATE -> {
                 if (!(raw instanceof String text)) {

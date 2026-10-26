@@ -457,8 +457,9 @@ class ProjectConfigurationApiTest {
         Response same = patch(worker, project, 1, map("customFields", map("restdauer", 8)), "\"2\"");
         assertEquals("2", same.header("ETag").replace("\"", ""), "no real change keeps the version");
 
-        // A field that does not exist is refused; so is a field without a rule, like any hidden field.
-        assertProblem(patch(worker, project, 1, map("customFields", map("gibt_es_nicht", "x")), "\"2\""), 403, "auth.forbidden");
+        // A field that does not exist is named as unknown (review F5 of TASK-044); a field without a rule is refused like any
+        // hidden field.
+        assertProblem(patch(worker, project, 1, map("customFields", map("gibt_es_nicht", "x")), "\"2\""), 400, "request.invalid");
         Person partial = person();
         Project limited = project(SERVICE, partial);
         grant(partial.id(), limited.id(), full("prioritaet"));
@@ -590,11 +591,13 @@ class ProjectConfigurationApiTest {
         assertEquals(List.of("status.mapping_invalid:neu"), badTarget.violations());
         assertEquals(200, publish(project, revision, "\"statusMapping\":{\"neu\":\"geloest\"}").status());
         assertEquals("geloest", worker.get(project.tickets() + "/1").fields().get("status").asString());
-        // A type that was only changed on the ticket must fit the new workflow.
+        // A type whose workflow does not know the status starts the ticket over in its first status (review F3 of TASK-044).
         Response fault = create(worker, project, map("type", "stoerung", "title", "Fehler"));
         assertEquals("neu", fault.fields().get("status").asString());
         Response toQuestion = patch(worker, project, 2, map("type", "frage"), "\"1\"");
-        assertEquals(List.of("type.status_unavailable"), toQuestion.violations());
+        assertEquals(200, toQuestion.status(), toQuestion.body());
+        assertEquals("geloest", toQuestion.fields().get("status").asString());
+        assertEquals(List.of("status", "type"), changedFields(worker.get(project.tickets() + "/2/history"), 1).stream().sorted().toList());
     }
 
     @Test
@@ -819,5 +822,137 @@ class ProjectConfigurationApiTest {
         assertEquals(201, ticket.status(), ticket.body());
         assertEquals(0, ticket.custom().size());
         assertEquals(200, patch(worker, project, 1, map("status", "in_progress"), "\"1\"").status());
+    }
+
+    // ---------------------------------------------------------------- review findings of TASK-044 (TASK-052)
+
+    /** F1: a step that requires a field the caller may not read or write is refused the same way, whatever the field holds. */
+    @Test
+    void aStepThatRequiresAFieldTheCallerCannotSeeIsRefusedWithoutTellingWhetherItIsFilled() {
+        Person customer = person();
+        Person support = person();
+        Project service = project(SERVICE, customer, support);
+        grant(customer.id(), service.id(), full("prioritaet"));
+        grant(support.id(), service.id(), full("prioritaet", "interne_ursache"));
+        for (int i = 1; i <= 2; i++) {
+            assertEquals(201, create(customer, service, map("type", "stoerung", "title", "T" + i, "customFields", map("prioritaet", "hoch"))).status());
+            assertEquals(200, patch(support, service, i, map("status", "in_bearbeitung", "assignee", support.id().toString()), "\"1\"").status());
+        }
+        assertEquals(200, patch(support, service, 2, map("customFields", map("interne_ursache", "geheim")), "\"2\"").status());
+        Response empty = patch(customer, service, 1, map("status", "geloest"), "\"2\"");
+        Response filled = patch(customer, service, 2, map("status", "geloest"), "\"3\"");
+        assertProblem(empty, 409, "ticket.required_field_inaccessible");
+        assertProblem(filled, 409, "ticket.required_field_inaccessible");
+        assertEquals(empty.json().get("violations"), filled.json().get("violations"));
+        assertFalse(empty.body().contains("interne_ursache"), "the answer does not name the hidden field");
+        assertEquals("in_bearbeitung", support.get(service.tickets() + "/2").fields().get("status").asString());
+
+        // Reading alone is not enough either: the caller could not fill the field.
+        Person reader = person();
+        Project other = project(SERVICE, reader, support);
+        grant(reader.id(), other.id(), full("prioritaet"));
+        grant(reader.id(), other.id(), "READ:custom.interne_ursache");
+        grant(support.id(), other.id(), full("prioritaet", "interne_ursache"));
+        assertEquals(201, create(reader, other, map("type", "stoerung", "title", "R", "customFields", map("prioritaet", "hoch"))).status());
+        assertEquals(200, patch(support, other, 1, map("status", "in_bearbeitung", "assignee", support.id().toString(),
+            "customFields", map("interne_ursache", "bekannt")), "\"1\"").status());
+        assertProblem(patch(reader, other, 1, map("status", "geloest"), "\"2\""), 409, "ticket.required_field_inaccessible");
+
+        // Support with both rules still gets the usual answer for an empty field, and takes the step with it.
+        assertEquals(List.of("custom.interne_ursache.required_for_transition"), patch(support, service, 1, map("status", "geloest"), "\"2\"").violations());
+        assertEquals(200, patch(support, service, 2, map("status", "geloest"), "\"3\"").status());
+    }
+
+    /** F2: the bound of whole numbers holds for the smallest long as well. */
+    @Test
+    void wholeNumbersBeyondTheBoundAreRefusedOnBothSides() {
+        Person worker = person();
+        Project project = project(SERVICE, worker);
+        grant(worker.id(), project.id(), full("restdauer"));
+        for (String value : List.of("9007199254740992", "-9007199254740992", "-9223372036854775808")) {
+            Response refused = worker.send("POST", project.tickets(),
+                "{\"type\":\"stoerung\",\"title\":\"A\",\"customFields\":{\"restdauer\":" + value + "}}", null);
+            assertProblem(refused, 400, "request.invalid");
+            assertEquals(List.of("custom.restdauer.invalid"), refused.violations(), value);
+        }
+        Response smallest = worker.send("POST", project.tickets(),
+            "{\"type\":\"stoerung\",\"title\":\"B\",\"customFields\":{\"restdauer\":-9007199254740991}}", null);
+        assertEquals(201, smallest.status(), smallest.body());
+        assertEquals(-9_007_199_254_740_991L, smallest.custom().get("restdauer").asLong());
+    }
+
+    private static final String SEPARATE_WORKFLOWS = """
+        {"ticketTypes":[{"key":"a","name":"A"},{"key":"b","name":"B"}],
+         "statuses":[{"key":"x","name":"X","category":"open"},{"key":"a1","name":"A1","category":"in_progress"},
+           {"key":"a2","name":"A2","category":"done"},{"key":"b1","name":"B1","category":"in_progress"},
+           {"key":"b2","name":"B2","category":"done"}],
+         "initialStatus":"x","transitions":[],
+         "workflows":[{"type":"a","initialStatus":"a1","transitions":[{"from":"a1","to":"a2","requiredFields":["description"]}]},
+           {"type":"b","initialStatus":"b1","transitions":[{"from":"b1","to":"b2","requiredFields":["description"]}]}],
+         "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+           {"key":"status","required":true},{"key":"assignee","required":false}]}
+        """;
+
+    /** F3: between types whose workflows share no status, a change of the type starts over, and never skips a requirement. */
+    @Test
+    void aTicketChangesBetweenTypesWithSeparateWorkflowsIntoTheFirstStatusOfTheNewType() {
+        Person worker = person();
+        Person typist = person();
+        Project project = project(SEPARATE_WORKFLOWS, worker, typist);
+        grant(worker.id(), project.id(), full());
+        assertEquals(201, create(worker, project, map("type", "a", "title", "Falsch eingeordnet")).status());
+        Response moved = patch(worker, project, 1, map("type", "b"), "\"1\"");
+        assertEquals(200, moved.status(), moved.body());
+        assertEquals("b", moved.fields().get("type").asString());
+        assertEquals("b1", moved.fields().get("status").asString());
+        // A status chosen together with the type is still a step of the new workflow: "b2" needs its description.
+        assertEquals(201, create(worker, project, map("type", "a", "title", "Zweites")).status());
+        assertProblem(patch(worker, project, 2, map("type", "b", "status", "b2"), "\"1\""), 409, "ticket.transition_not_allowed");
+        assertEquals("a1", worker.get(project.tickets() + "/2").fields().get("status").asString());
+        // Whoever may change the type but not the status cannot let the server move it.
+        grant(typist.id(), project.id(), "ticket.read", "ticket.edit", "READ:*", "WRITE:type");
+        assertProblem(patch(typist, project, 2, map("type", "b"), "\"1\""), 400, "request.invalid");
+        assertEquals("a", worker.get(project.tickets() + "/2").fields().get("type").asString());
+    }
+
+    /** F4: a status that tickets of two types use can go to a different status for each type. */
+    @Test
+    void aStatusUsedByTwoTypesIsMappedPerType() {
+        String before = SEPARATE_WORKFLOWS.replace("\"initialStatus\":\"a1\",\"transitions\":[", "\"initialStatus\":\"x\",\"transitions\":[{\"from\":\"x\",\"to\":\"a1\"},")
+            .replace("\"initialStatus\":\"b1\",\"transitions\":[", "\"initialStatus\":\"x\",\"transitions\":[{\"from\":\"x\",\"to\":\"b1\"},");
+        String after = SEPARATE_WORKFLOWS.replace("{\"key\":\"x\",\"name\":\"X\",\"category\":\"open\"},", "").replace("\"initialStatus\":\"x\"", "\"initialStatus\":\"a1\"");
+        Person worker = person();
+        Project project = project(before, worker);
+        grant(worker.id(), project.id(), full());
+        assertEquals(201, create(worker, project, map("type", "a", "title", "A")).status());
+        assertEquals(201, create(worker, project, map("type", "b", "title", "B")).status());
+        Response draft = saveDraft(project, null, configurationVersion(project), after);
+        assertEquals(200, draft.status(), draft.body());
+        long revision = draft.json().get("revision").asLong();
+        // One target for both types fits neither, and nothing changes.
+        assertEquals(List.of("status.mapping_invalid:x"), publish(project, revision, "\"statusMapping\":{\"x\":\"a1\"}").violations());
+        assertProblem(publish(project, revision, "\"statusMapping\":{\"z:x\":\"a1\"}"), 400, "request.invalid");
+        // The mapping of a type and status wins over the one of the status alone.
+        Response published = publish(project, revision, "\"statusMapping\":{\"x\":\"a1\",\"b:x\":\"b1\"}");
+        assertEquals(200, published.status(), published.body());
+        assertEquals("a1", worker.get(project.tickets() + "/1").fields().get("status").asString());
+        assertEquals("b1", worker.get(project.tickets() + "/2").fields().get("status").asString());
+    }
+
+    /** F5: a custom field the configuration does not know is named as unknown, not answered as a missing right. */
+    @Test
+    void anUnknownCustomFieldIsNamedAsUnknown() {
+        Person worker = person();
+        Project project = project(SERVICE, worker);
+        grant(worker.id(), project.id(), full("prioritaet"));
+        Response created = create(worker, project, map("type", "stoerung", "title", "U", "customFields", map("gibt_es_nicht", "x")));
+        assertProblem(created, 400, "request.invalid");
+        assertEquals(List.of("customFields.unknown"), created.violations());
+        assertEquals(201, create(worker, project, map("type", "stoerung", "title", "U")).status());
+        Response changed = patch(worker, project, 1, map("customFields", map("gibt_es_nicht", "x")), "\"1\"");
+        assertProblem(changed, 400, "request.invalid");
+        assertEquals(List.of("customFields.unknown"), changed.violations());
+        // A known field without a write rule is still a missing right.
+        assertProblem(patch(worker, project, 1, map("customFields", map("notiz", "x")), "\"1\""), 403, "auth.forbidden");
     }
 }

@@ -211,6 +211,12 @@ class ProjectConfigurationTest {
         assertEquals("x".repeat(201), ProjectConfiguration.canonical(field("l", "longtext"), "x".repeat(201)));
         assertEquals("7", ProjectConfiguration.canonical(field("n", "integer"), 7));
         assertEquals("-3", ProjectConfiguration.canonical(field("n", "integer"), -3L));
+        // The bound holds on both sides, also for the smallest long, whose absolute value overflows (review F2 of TASK-044).
+        assertEquals("9007199254740991", ProjectConfiguration.canonical(field("n", "integer"), ProjectConfiguration.INTEGER_MAX));
+        assertEquals("-9007199254740991", ProjectConfiguration.canonical(field("n", "integer"), -ProjectConfiguration.INTEGER_MAX));
+        assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), ProjectConfiguration.INTEGER_MAX + 1));
+        assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), -ProjectConfiguration.INTEGER_MAX - 1));
+        assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), Long.MIN_VALUE));
         assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), "7"));
         assertEquals(null, ProjectConfiguration.canonical(field("n", "integer"), 1.0));
         assertEquals("2026-11-05", ProjectConfiguration.canonical(field("d", "date"), "2026-11-05"));

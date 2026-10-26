@@ -142,7 +142,9 @@ export interface paths {
          *     * 409 `project.draft_stale`: seit dem Entwurf wurde eine neuere Version veröffentlicht.
          *
          *     Mit `typeMapping` und `statusMapping` (alter Schlüssel auf neuen Schlüssel) wandern die betroffenen Tickets in
-         *     derselben Transaktion; jedes erhält eine neue Version und einen Eintrag in der Historie.
+         *     derselben Transaktion; jedes erhält eine neue Version und einen Eintrag in der Historie. Ein Schlüssel von
+         *     `statusMapping` ist ein Status oder `<tickettyp>:<status>` für die Tickets dieses (bisherigen) Typs allein; dieser
+         *     Schlüssel hat Vorrang vor dem Status allein.
          */
         post: operations["publishProjectConfigurationDraft"];
         delete?: never;
@@ -306,7 +308,7 @@ export interface components {
         };
         PublishRequest: {
             draftRevision: number;
-            /** @description Alter Statusschlüssel auf neuen Statusschlüssel für Tickets, deren Status wegfällt oder für ihren Tickettyp nicht mehr vorgesehen ist */
+            /** @description Alter Statusschlüssel, oder Tickettyp und Status als <typ>:<status>, auf neuen Statusschlüssel für Tickets, deren Status wegfällt oder für ihren Tickettyp nicht mehr vorgesehen ist */
             statusMapping?: {
                 [key: string]: string;
             };

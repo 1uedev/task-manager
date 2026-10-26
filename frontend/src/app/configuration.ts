@@ -97,3 +97,27 @@ export function parseViolation(code: string): { readonly field: string; readonly
   const match = /^(custom\.[a-z][a-z0-9_]*|[a-z][A-Za-z]*)\.([a-z_]+)$/.exec(head ?? '');
   return match === null ? null : { field: match[1] ?? '', reason: match[2] ?? '', subject: subject ?? null };
 }
+
+/** One choice of the mapping: a status for all its tickets, or for the tickets of one type as `<type>:<status>`. */
+export interface MappingRow {
+  readonly key: string;
+  readonly status: string;
+  readonly type: string | null;
+  readonly targets: readonly string[];
+}
+
+/**
+ * The choices for the statuses a publication named (review F4 of TASK-044). A status that tickets of several types still
+ * use and that their new workflows no longer know gets one choice per type, since one target may not exist for every type.
+ */
+export function mappingRows(statuses: readonly string[], usage: readonly { readonly type: string; readonly status: string }[], config: Configuration): MappingRow[] {
+  const all = config.statuses.map((item) => item.key);
+  return statuses.flatMap((status): MappingRow[] => {
+    const types = [...new Set(usage.filter((use) => use.status === status && config.ticketTypes.some((item) => item.key === use.type)
+      && !statusKeysOf(config, use.type).includes(status)).map((use) => use.type))];
+    if (types.length <= 1) {
+      return [{ key: status, status, type: null, targets: types.length === 1 ? statusKeysOf(config, types[0]!) : all }];
+    }
+    return types.map((type) => ({ key: `${type}:${status}`, status, type, targets: statusKeysOf(config, type) }));
+  });
+}

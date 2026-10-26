@@ -182,6 +182,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
     const reasons = (result.problem.violations ?? []).map((code) => violationText(code)).filter((reason): reason is string => reason !== null);
     const base = text(result.problem, {
       'ticket.transition_not_allowed': 'ticket.error.transition',
+      'ticket.required_field_inaccessible': 'ticket.error.requiredFieldInaccessible',
       'request.invalid': 'tickets.error.invalid',
       'auth.forbidden': 'ticket.error.forbidden',
     });

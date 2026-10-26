@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Configuration } from '../src/api/product.ts';
-import { keyFromName, nextStatuses, parseViolation, requiredFor, sendValue, statusKeysOf, workflowOf } from '../src/app/configuration.ts';
+import { keyFromName, mappingRows, nextStatuses, parseViolation, requiredFor, sendValue, statusKeysOf, workflowOf } from '../src/app/configuration.ts';
 import { formatDate } from '../src/i18n/format.ts';
 import { readProblem } from '../src/api/problem.ts';
 
@@ -75,4 +75,22 @@ test('a calendar date has no time zone', () => {
   assert.equal(formatDate('2026-11-05', 'de'), '05.11.2026');
   assert.equal(formatDate('2026-11-05', 'en').includes('Nov'), true);
   assert.equal(formatDate('kaputt', 'de'), 'kaputt');
+});
+
+test('a status that tickets of several types use is mapped once per type, with the targets of each type', () => {
+  const config: Configuration = {
+    ...CONFIG,
+    statuses: [{ key: 'a1', name: 'A1', category: 'open' }, { key: 'b1', name: 'B1', category: 'open' }],
+    initialStatus: 'a1',
+    transitions: [],
+    workflows: [{ type: 'bug', initialStatus: 'a1', transitions: [] }, { type: 'question', initialStatus: 'b1', transitions: [] }],
+  };
+  const usage = [{ type: 'bug', status: 'x' }, { type: 'question', status: 'x' }, { type: 'bug', status: 'y' }];
+  assert.deepEqual(mappingRows(['x', 'y'], usage, config), [
+    { key: 'bug:x', status: 'x', type: 'bug', targets: ['a1'] },
+    { key: 'question:x', status: 'x', type: 'question', targets: ['b1'] },
+    { key: 'y', status: 'y', type: null, targets: ['a1'] },
+  ]);
+  // Without the usage, one choice per status with every status as target.
+  assert.deepEqual(mappingRows(['x'], [], config), [{ key: 'x', status: 'x', type: null, targets: ['a1', 'b1'] }]);
 });

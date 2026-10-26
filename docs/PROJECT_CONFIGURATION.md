@@ -20,7 +20,7 @@ Eine Konfigurationsversion ist ein unveränderliches JSON Dokument je Projekt. Z
 |---|---|---|
 | `text` | Text | 1 bis 200 Zeichen, ohne NUL |
 | `longtext` | Text | 1 bis 20000 Zeichen |
-| `integer` | Zahl | ganze Zahl bis 2^53 minus 1 |
+| `integer` | Zahl | ganze Zahl zwischen −(2^53 minus 1) und 2^53 minus 1 |
 | `date` | Text `yyyy-MM-dd` | gültiger Kalendertag |
 | `boolean` | `true` oder `false` | |
 | `select` | Schlüssel einer Option | höchstens 50 Optionen, Namen verschieden |
@@ -37,8 +37,11 @@ Ein Projekt hat höchstens 30 eigene Felder. Ein Wert ist leer, wenn er fehlt; `
 ## Abläufe und Pflichtfelder
 
 - Ein neues Ticket beginnt im ersten Status seines Typs.
-- Ein Statuswechsel muss im Ablauf des Typs stehen (409 `ticket.transition_not_allowed`). Wechselt gleichzeitig der Typ, gilt der Ablauf des neuen Typs. Wechselt nur der Typ, muss der Status im Ablauf des neuen Typs vorkommen (400 `type.status_unavailable`).
+- Ein Statuswechsel muss im Ablauf des Typs stehen (409 `ticket.transition_not_allowed`). Wechselt gleichzeitig der Typ, gilt der Ablauf des neuen Typs.
+- Wechselt nur der Typ und kennt der Ablauf des neuen Typs den Status nicht, kommt das Ticket in den ersten Status des neuen Typs (TASK-052, DEC-081). Das ist kein Übergang und umgeht deshalb keine Pflichtfelder; es verlangt die Schreibregel für `status` (sonst 400 `type.status_unavailable`). Einen frei gewählten Zielstatus gibt es beim Typwechsel nicht.
+- Verlangt der Übergang ein Feld, das die anfragende Person nicht lesen oder nicht schreiben darf, antwortet der Server immer mit 409 `ticket.required_field_inaccessible`, gleich ob das Feld gefüllt ist (TASK-052). So verrät die Antwort nichts über ein verborgenes Feld.
 - Verlangt der Übergang Felder, die nach der Änderung leer sind, antwortet der Server mit 400 und `<feld>.required_for_transition`. Nichts wird geschrieben, auch die Version bleibt.
+- Ein Schlüssel in `customFields`, den die Konfiguration nicht kennt, antwortet mit 400 `customFields.unknown`.
 - Pflicht bei der Anlage gilt für `fields` (Beschreibung, Zuständigkeit) und für aktive `customFields[].required`. Ein Pflichtfeld lässt sich nicht leeren. Darf die anfragende Person ein Pflichtfeld nicht schreiben, antwortet die Anlage mit 409 `ticket.required_field_inaccessible`.
 - **Bestandstickets bleiben gültig.** Pflichtfelder werden nur geprüft, wenn das Feld geschrieben, geleert oder ein Übergang genommen wird, der es verlangt, und bei der Anlage. Ein Ticket, dem ein später verlangtes Feld fehlt, kann weiter bearbeitet werden.
 
@@ -58,7 +61,7 @@ Ein Projekt hat höchstens einen Entwurf (Migration V0018). Er trägt eine Revis
 Die Veröffentlichung läuft in einer Transaktion unter der Sperre des Projekts:
 
 1. Der Entwurf wird geprüft (400 mit Gründen) und gegen die veröffentlichte Version verglichen (409 `project.configuration_incompatible`).
-2. Die Tickets werden gegen die neue Version geprüft. Ein Status oder Tickettyp, den Tickets noch verwenden und den die neue Version nicht mehr kennt oder für den Typ nicht mehr vorsieht, braucht eine Zuordnung `statusMapping` und `typeMapping`. Fehlt sie, antwortet der Server mit 409 `project.configuration_in_use` und nennt `status.in_use:<schlüssel>` beziehungsweise `type.in_use:<schlüssel>`; nichts ändert sich (F-05). Ein Zielstatus, den der Typ nicht kennt, wird mit `status.mapping_invalid:<schlüssel>` abgewiesen.
+2. Die Tickets werden gegen die neue Version geprüft. Ein Status oder Tickettyp, den Tickets noch verwenden und den die neue Version nicht mehr kennt oder für den Typ nicht mehr vorsieht, braucht eine Zuordnung `statusMapping` und `typeMapping`. Fehlt sie, antwortet der Server mit 409 `project.configuration_in_use` und nennt `status.in_use:<schlüssel>` beziehungsweise `type.in_use:<schlüssel>`; nichts ändert sich (F-05). Ein Zielstatus, den der Typ nicht kennt, wird mit `status.mapping_invalid:<schlüssel>` abgewiesen. Ein Schlüssel von `statusMapping` ist ein Status oder `<typ>:<status>` für die Tickets eines bisherigen Typs; dieser hat Vorrang (TASK-052). So lässt sich ein Status, den mehrere Typen mit verschiedenen Abläufen verwenden, je Typ zuordnen; der Zuordnungsdialog bietet dann je Typ eine Auswahl.
 3. Die zugeordneten Tickets erhalten eine neue Version, einen Historieneintrag des Veröffentlichenden für Typ und Status und ein Ereignis für die Suchprojektion.
 4. Die nächste Version wird geschrieben, der Entwurf entfällt, die Version des Projekts steigt.
 
@@ -80,6 +83,7 @@ Das Projektmodul liest keine Tickettabellen und hängt nicht vom Ticketmodul ab.
 | F-04 Prüfanleitung vor Prüfung | derselbe Test (Beispiel B, Übergang `in_entwicklung` nach `in_pruefung`) |
 | F-05 Verwendeter Status | `aStatusOrTypeThatTicketsStillUseCanOnlyGoWithAMappingAndMovesThemWithHistory`, `aWorkflowThatDropsAStatusOfATypeNeedsAMappingForTheTicketsInIt`, Browsertest `a status that tickets use goes only with an assignment, which moves them` |
 | F-06 Deaktivierte Option | `customFieldsAndOptionsAreDeactivatedNeverRemovedAndKeepTheirValues` |
+| Befunde F1 bis F5 der Prüfung ([Bericht](REVIEW_TASK-044_PR-151.md), TASK-052) | `aStepThatRequiresAFieldTheCallerCannotSeeIsRefusedWithoutTellingWhetherItIsFilled`, `wholeNumbersBeyondTheBoundAreRefusedOnBothSides`, `aTicketChangesBetweenTypesWithSeparateWorkflowsIntoTheFirstStatusOfTheNewType`, `aStatusUsedByTwoTypesIsMappedPerType`, `anUnknownCustomFieldIsNamedAsUnknown` |
 
 Dazu: `draftsAreSavedWithRevisionsAndPublishedOnlyFromTheirBase`, `anInvalidConfigurationNamesItsReasonsAndChangesNothing`, `customValuesAreTypedValidatedAndRecordedInTheHistory`, `requiredCustomFieldsBindCreationAndCannotBeEmptiedButStayOutOfTheWayOfExistingTickets`, `customFieldRulesHideValuesInAnswersHistoryAndSearchLikeStandardFields`, `theGroupAdministrationOffersAndChecksTheCustomFieldsOfAProject` und `theRegisteredConfigurationOfAnOldProjectReadsAsOneWithoutNewFeatures`.
 
