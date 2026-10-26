@@ -80,7 +80,8 @@ class FileSystemStorageTest {
                 throw new IOException("connection lost");
             }
         };
-        assertThrows(IOException.class, () -> storage.stage(broken, 100));
+        // A stream that breaks off is told apart from a failure of the store (review F7 of TASK-051).
+        assertThrows(FileStorage.UploadInterrupted.class, () -> storage.stage(broken, 100));
         assertEquals(0, root.resolve("files/staging").toFile().list().length);
     }
 

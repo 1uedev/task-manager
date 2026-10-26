@@ -96,6 +96,40 @@ describe('configuration editor', () => {
     });
   });
 
+  // Review N2 of TASK-052: a dropped type and a dropped status that another type shares are assigned in the dialog alone.
+  test('tickets of a dropped type get their own status choice from the workflow of their new type', async () => {
+    await withApp(settings, async (page, backend) => {
+      const published = backend.state.configurations.get(backend.project.id).configuration;
+      Object.assign(published, {
+        ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }, { key: 'question', name: 'Frage' }],
+        statuses: [{ key: 'new', name: 'Neu', category: 'open' }, { key: 'a1', name: 'Angenommen', category: 'in_progress' }, { key: 'b1', name: 'Beantwortet', category: 'done' }],
+        initialStatus: 'new',
+        transitions: [{ from: 'new', to: 'a1' }],
+        workflows: [{ type: 'question', initialStatus: 'b1', transitions: [] }],
+      });
+      backend.state.tickets[1].values.type = 'bug';
+      backend.state.drafts.set(backend.project.id, { baseVersion: 1, revision: 1, configuration: {
+        ...structuredClone(published),
+        ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'question', name: 'Frage' }],
+        statuses: [{ key: 'a1', name: 'Angenommen', category: 'in_progress' }, { key: 'b1', name: 'Beantwortet', category: 'done' }],
+        initialStatus: 'a1',
+        transitions: [],
+        workflows: [{ type: 'question', initialStatus: 'b1', transitions: [] }],
+      } });
+      await page.reload();
+      await page.getByRole('button', { name: 'Veröffentlichen' }).click();
+      const panel = page.getByTestId('mapping-panel');
+      await panel.waitFor();
+      await panel.getByLabel('Tickettyp Fehler (1 Tickets) wechselt zu').selectOption({ label: 'Frage' });
+      const own = panel.getByLabel('Status Neu bei Typ Fehler (1 Tickets) wechselt zu');
+      assert.deepEqual(await own.locator('option').allTextContents(), ['Beantwortet'], 'the targets of the workflow of Frage');
+      assert.deepEqual(await panel.getByLabel('Status Neu bei Typ Aufgabe (1 Tickets) wechselt zu').locator('option').allTextContents(), ['Angenommen', 'Beantwortet']);
+      await panel.getByRole('button', { name: 'Zuordnung bestätigen und veröffentlichen' }).click();
+      await page.getByText('Version 2 ist veröffentlicht und gilt jetzt für alle Tickets.').waitFor();
+      assert.deepEqual(backend.state.tickets.map((ticket) => [ticket.values.type, ticket.values.status]), [['task', 'a1'], ['question', 'b1']]);
+    });
+  });
+
   test('a draft that starts from an older version cannot be saved over a newer one', async () => {
     await withApp(settings, async (page, backend) => {
       // Someone else published meanwhile.

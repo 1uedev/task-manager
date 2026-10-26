@@ -80,13 +80,13 @@ export const isGroupDetail = (v: unknown) => isGroup(v) && Array.isArray((v as G
   && Array.isArray((v as GroupDetail).actions) && Array.isArray((v as GroupDetail).fields);
 const isPage = (item: (v: unknown) => boolean) => (v: unknown) => record(v) && typeof v.total === 'number' && Array.isArray(v.items) && v.items.every(item);
 
-async function run<T>(call: () => Promise<Raw>, parse: (value: unknown) => T | null): Promise<Result<T>> {
+async function run<T>(call: () => Promise<Raw>, parse: (value: unknown, headers: Headers) => T | null): Promise<Result<T>> {
   return guarded(async () => {
     const { data, error, response } = await call();
     if (!response.ok) {
       return { kind: 'problem', problem: readProblem(response.status, error, response.headers.get('X-Correlation-Id')) };
     }
-    const value = parse(response.status === 204 ? undefined : data);
+    const value = parse(response.status === 204 ? undefined : data, response.headers);
     if (value === null) return { kind: 'problem', problem: INVALID_RESPONSE };
     return { kind: 'ok', data: { value, etag: response.headers.get('ETag') } };
   });
@@ -244,9 +244,19 @@ export const removeTicketTag = (api: ServerApi, projectId: string, number: numbe
 
 // ---------------------------------------------------------------- attachments (TASK-051)
 
+/** The attachments of a ticket and the largest file the server accepts, or null when it does not say (review F8 of TASK-051). */
+export interface AttachmentList {
+  readonly items: readonly Attachment[];
+  readonly maxBytes: number | null;
+}
+
 export const listAttachments = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.files.GET('/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
-    listOf<Attachment>(isAttachment));
+    (value, headers): AttachmentList | null => {
+      const items = listOf<Attachment>(isAttachment)(value);
+      const limit = Number(headers.get('X-Attachment-Max-Bytes'));
+      return items === null ? null : { items, maxBytes: Number.isSafeInteger(limit) && limit > 0 ? limit : null };
+    });
 // The file is the raw body of the request; the server cleans the name, so it is sent as it is (encoded by the client library).
 export const uploadAttachment = (api: ServerApi, projectId: string, number: number, file: File) =>
   run(() => api.files.POST('/projects/{projectId}/tickets/{number}/attachments', {
@@ -259,6 +269,17 @@ export const removeAttachment = (api: ServerApi, projectId: string, number: numb
   run(() => api.files.DELETE('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } } }), nothing);
 // A link, not a request: the browser saves the file itself, with the session cookie and the headers of the download.
 export const attachmentUrl = (projectId: string, number: number, id: string) => `/api/v1/projects/${projectId}/tickets/${number}/attachments/${id}`;
+
+/**
+ * Asks with HEAD whether a download can succeed, so a missing file, a withdrawn right or an unreachable store is explained
+ * instead of ending in a cancelled download without a word (review F4 of TASK-051). The download itself stays a link.
+ */
+export const checkAttachment = (api: ServerApi, projectId: string, number: number, id: string) =>
+  guarded(async (): Promise<Result<true>> => {
+    const response = await api.head(`/projects/${projectId}/tickets/${number}/attachments/${id}`);
+    return response.ok ? { kind: 'ok', data: { value: true, etag: null } }
+      : { kind: 'problem', problem: readProblem(response.status, null, response.headers.get('X-Correlation-Id')) };
+  });
 
 // ---------------------------------------------------------------- search
 

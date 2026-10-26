@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +49,7 @@ public class AttachmentService {
     private static final String TICKET_READ = "ticket.read";
     private static final String TICKET_EDIT = "ticket.edit";
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final Logger LOG = LoggerFactory.getLogger(AttachmentService.class);
 
     private final AttachmentRepository attachments;
     private final FileStorage storage;
@@ -92,9 +95,10 @@ public class AttachmentService {
         try {
             return new Download(attachment, storage.open(attachment.id()));
         } catch (NoSuchFileException missing) {
+            LOG.warn("The content of attachment {} is missing from the file store", attachment.id());
             throw notFound();
         } catch (IOException unavailable) {
-            throw storageUnavailable();
+            throw storageUnavailable("open the content of attachment " + attachment.id(), unavailable);
         }
     }
 
@@ -116,8 +120,12 @@ public class AttachmentService {
         FileStorage.Staged staged;
         try {
             staged = storage.stage(body, rules.maxBytes());
+        } catch (FileStorage.UploadInterrupted interrupted) {
+            // The client broke the transfer off; nothing is wrong with the store and nothing is left in it.
+            LOG.info("An upload to a ticket of project {} ended before its body was read: {}", projectId, interrupted.getCause().toString());
+            throw ApiProblemException.of(400, "attachment.incomplete");
         } catch (IOException failure) {
-            throw storageUnavailable();
+            throw storageUnavailable("write an upload to the staging area", failure);
         }
         UUID id = UUID.randomUUID();
         try {
@@ -131,7 +139,7 @@ public class AttachmentService {
             try {
                 storage.store(staged, id);
             } catch (IOException failure) {
-                throw storageUnavailable();
+                throw storageUnavailable("put the content of attachment " + id + " in its place", failure);
             }
         } catch (RuntimeException refused) {
             storage.discard(staged);
@@ -250,7 +258,12 @@ public class AttachmentService {
         return ApiProblemException.of(403, "auth.forbidden");
     }
 
-    private static ApiProblemException storageUnavailable() {
+    /**
+     * The file store failed; the cause goes to the log, where the correlation identifier of the request ties it to the 503
+     * the client sees (review F7 of TASK-051). The answer itself names no path.
+     */
+    private static ApiProblemException storageUnavailable(String step, IOException failure) {
+        LOG.warn("The file store could not {}: {}", step, failure.toString());
         return ApiProblemException.retryAfter(503, "attachment.storage_unavailable", 5);
     }
 }

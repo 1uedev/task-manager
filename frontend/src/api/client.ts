@@ -138,6 +138,8 @@ export function createServerApi(fetcher: typeof fetch = (...args) => globalThis.
     search: createClient<SearchPaths>({ baseUrl, fetch }),
     permissions: createClient<PermissionsPaths>({ baseUrl, fetch }),
     files: createClient<FilesPaths>({ baseUrl, fetch }),
+    // A bare HEAD below the API with the session rules above, for a question the contracts answer without a body (review F4 of TASK-051).
+    head: (path: string) => fetch(`${baseUrl}${path}`, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' }),
   };
 }
 

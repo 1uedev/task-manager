@@ -31,6 +31,7 @@ import taskmanager.permissions.PermissionContexts;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
+import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.internal.Ticket;
 import taskmanager.tickets.internal.TicketService;
 import taskmanager.tickets.internal.TicketService.Draft;
@@ -84,6 +85,13 @@ class TicketController {
                 }
                 if (field.active() && view.writable().contains(field.id())) {
                     writable.add(field.id());
+                }
+            }
+            // Tags and attachments are changed through their own endpoints, but follow the same rules; naming them here lets an
+            // interface offer exactly what the server allows (review F1 of TASK-051).
+            for (String field : List.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD)) {
+                if (view.writable().contains(field)) {
+                    writable.add(field);
                 }
             }
             return new TicketBody(ticket.id(), ticket.projectId(), view.projectKey() + "-" + ticket.number(), ticket.number(),

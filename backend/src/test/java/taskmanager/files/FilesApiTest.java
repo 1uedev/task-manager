@@ -397,6 +397,11 @@ class FilesApiTest {
         assertProblem(upload(worker, project, number, "programm.EXE", bytes(100, 1)), 415, "attachment.type_blocked");
         assertProblem(upload(worker, project, number, "Rechnung‮txt.exe", bytes(100, 1)), 415, "attachment.type_blocked");
         assertProblem(upload(worker, project, number, "seite.html", bytes(100, 1)), 415, "attachment.type_blocked");
+        // Review F5: pages a browser opens with scripts after saving, Windows help and link files, disk images and Java Web Start.
+        for (String name : List.of("seite.xht", "seite.shtml", "archiv.mht", "archiv.mhtml", "bild.svgz", "hilfe.chm", "link.url",
+                "abbild.iso", "abbild.img", "platte.vhd", "platte.vhdx", "start.jnlp")) {
+            assertProblem(upload(worker, project, number, name, bytes(100, 1)), 415, "attachment.type_blocked");
+        }
         byte[] program = bytes(100, 1);
         program[0] = 'M';
         program[1] = 'Z';
@@ -455,6 +460,37 @@ class FilesApiTest {
         assertEquals(List.of("attachment.added"), audit(id));
         assertProblem(worker.get(attachments(project, 99)), 404, "ticket.not_found");
         assertProblem(upload(worker, project, 99, "neu.txt", content), 404, "ticket.not_found");
+    }
+
+    @Test
+    void theTicketNamesAttachmentsAsWritableExactlyWhenTheServerAcceptsChanges() throws Exception {
+        // Review F1 of TASK-051: an interface must not derive the right for attachments from the other fields.
+        Person worker = person();
+        Person clerk = person();
+        Person editor = person();
+        Project project = project(worker, clerk, editor);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(clerk.id(), project.id(), "ticket.read", "ticket.edit", "READ:title", "READ:attachments", "WRITE:attachments");
+        grant(editor.id(), project.id(), "ticket.read", "ticket.edit", "READ:*", "WRITE:*", "READ:attachments");
+        long number = ticket(worker, project, "Belege");
+        String ticket = "/api/v1/projects/" + project.id() + "/tickets/" + number;
+        byte[] content = bytes(500, 3);
+
+        assertTrue(writableFields(worker.get(ticket)).contains("attachments"));
+        assertEquals(Long.toString(LIMIT), worker.get(attachments(project, number)).header("X-Attachment-Max-Bytes"),
+            "the list names the limit the server is set to (review F8)");
+        assertEquals(List.of("attachments"), writableFields(clerk.get(ticket)), "only attachments, no other field");
+        UUID id = uploaded(clerk, project, number, "beleg.txt", content);
+        assertEquals(204, delete(clerk, attachments(project, number) + "/" + id).status());
+
+        List<String> editable = writableFields(editor.get(ticket));
+        assertEquals(ALL_FIELDS, editable, "the five fields, but not attachments without their write rule");
+        assertProblem(upload(editor, project, number, "beleg.txt", content), 403, "auth.forbidden");
+    }
+
+    private static List<String> writableFields(Response ticket) {
+        assertEquals(200, ticket.status(), ticket.body());
+        return StreamSupport.stream(ticket.json().get("writableFields").spliterator(), false).map(JsonNode::asString).toList();
     }
 
     @Test

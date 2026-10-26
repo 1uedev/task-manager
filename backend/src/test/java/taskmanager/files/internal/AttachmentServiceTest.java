@@ -70,6 +70,15 @@ class AttachmentServiceTest {
     }
 
     @Test
+    void anUploadTheClientBreaksOffIsNoFailureOfTheStore() throws Exception {
+        when(storage.stage(any(), anyLong())).thenThrow(new FileStorage.UploadInterrupted(new IOException("connection reset")));
+        ApiProblemException refused = assertThrows(ApiProblemException.class, this::upload);
+        assertEquals(400, refused.status());
+        assertEquals("attachment.incomplete", refused.code());
+        verifyNoInteractions(attachments);
+    }
+
+    @Test
     void aStoreThatCannotBeWrittenAnswersRetryableAndTouchesNoRow() throws Exception {
         when(storage.stage(any(), anyLong())).thenThrow(new IOException("disk full"));
         ApiProblemException refused = assertThrows(ApiProblemException.class, this::upload);

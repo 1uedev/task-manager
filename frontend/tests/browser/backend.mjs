@@ -105,7 +105,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return { id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, version: ticket.version, configurationVersion: state.configurations.get(ticket.projectId).version,
       fields: Object.fromEntries(shown.map((name) => [name, ticket.values[name]])),
       customFields: customReadable(account, ticket.projectId) ? Object.fromEntries(custom.filter((entry) => ticket.custom[entry.key] !== undefined).map((entry) => [entry.key, ticket.custom[entry.key]])) : {},
-      writableFields: [...writable(account, ticket.projectId), ...(customWritable(account, ticket.projectId) ? custom.filter((entry) => entry.active !== false).map((entry) => `custom.${entry.key}`) : [])],
+      writableFields: [...writable(account, ticket.projectId), ...(customWritable(account, ticket.projectId) ? custom.filter((entry) => entry.active !== false).map((entry) => `custom.${entry.key}`) : []),
+        // Like the server since review F1 of TASK-051: tags and attachments are named when their own write rule allows it.
+        ...[TAG_FIELD, ATTACHMENT_FIELD].filter((name) => may(account, 'ticket.edit', ticket.projectId) && field(account, ticket.projectId, name, 'read') && field(account, ticket.projectId, name, 'write'))],
       createdAt: ticket.createdAt, createdBy: ticket.createdBy, updatedAt: ticket.updatedAt, updatedBy: ticket.updatedBy };
   };
   const projectView = (account, item) => ({ ...item, configurationVersion: state.configurations.get(item.id).version, configuration: configurationOf(item.id),
@@ -371,9 +373,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const mine = state.attachments.filter((entry) => entry.ticket === ticket.id);
       const view = ({ ticket: _ticket, content: _content, removed: _removed, ...entry }) => entry;
       const described = (entry) => JSON.stringify({ id: entry.id, name: entry.name, size: entry.size, sha256: entry.sha256 });
-      if (method === 'GET' && id === undefined) return ok(mine.filter((entry) => !entry.removed).map(view));
-      if (method === 'GET') {
-        const found = mine.find((entry) => entry.id === id && !entry.removed);
+      if (method === 'GET' && id === undefined) return { ...ok(mine.filter((entry) => !entry.removed).map(view)), headers: { 'X-Attachment-Max-Bytes': String(state.attachmentLimit) } };
+      if (method === 'GET' || method === 'HEAD') {
+        // `content: null` stands for a file the store lost, for example after restoring an older backup.
+        const found = mine.find((entry) => entry.id === id && !entry.removed && entry.content !== null);
         return found ? { status: 200, raw: found.content, type: 'application/octet-stream', headers: { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(found.name)}` } } : problem(404, 'attachment.not_found');
       }
       if (!may(account, 'ticket.edit', item.id) || !field(account, item.id, ATTACHMENT_FIELD, 'write')) return problem(403, 'auth.forbidden');
@@ -471,8 +474,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         }
         let status = use.status;
         if (!statusKeys(type).includes(status)) {
-          if (!statusMapping[status]) { open.push(`status.in_use:${status}`); continue; }
-          status = statusMapping[status];
+          // Like the server since review F4 of TASK-044: `<type>:<status>` with the type the tickets have now wins.
+          const chosen = statusMapping[`${use.type}:${status}`] ?? statusMapping[status];
+          if (!chosen) { open.push(`status.in_use:${status}`); continue; }
+          if (!statusKeys(type).includes(chosen)) { open.push(`status.mapping_invalid:${status}`); continue; }
+          status = chosen;
         }
         if (type !== use.type || status !== use.status) moves.push({ from: use, type, status });
       }
@@ -592,7 +598,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return route.fulfill({
         status: answer.status,
         contentType: answer.status < 400 ? 'application/json' : 'application/problem+json',
-        headers: answer.etag ? { ETag: answer.etag } : {},
+        headers: { ...(answer.headers ?? {}), ...(answer.etag ? { ETag: answer.etag } : {}) },
         body: answer.status === 204 ? '' : JSON.stringify(answer.body),
       });
     });

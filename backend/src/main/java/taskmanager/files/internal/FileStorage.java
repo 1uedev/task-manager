@@ -26,7 +26,22 @@ interface FileStorage {
     /** Creates the directories and proves that they can be written; fails when they cannot. */
     void prepare() throws IOException;
 
-    /** Writes at most {@code limit} + 1 bytes of the stream to the staging area, so a larger stream shows as larger than the limit. */
+    /**
+     * The stream of an upload could not be read to its end, for example because the client broke the transfer off. It is
+     * told apart from a failure of the store itself, which the operation has to look at (review F7 of TASK-051).
+     */
+    final class UploadInterrupted extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        UploadInterrupted(IOException cause) {
+            super("The upload could not be read to its end", cause);
+        }
+    }
+
+    /**
+     * Writes at most {@code limit} + 1 bytes of the stream to the staging area, so a larger stream shows as larger than the
+     * limit. A failure to read the stream ends in {@link UploadInterrupted}, a failure of the store in any other exception.
+     */
     Staged stage(InputStream in, long limit) throws IOException;
 
     /** Puts a staged file in its place under the identifier, atomically. */

@@ -480,9 +480,12 @@ function MappingPanel({ project, reasons, config, typeNames, statusNames, busy, 
   const [statusMapping, setStatusMapping] = useState<Record<string, string>>({});
   const [typeMapping, setTypeMapping] = useState<Record<string, string>>({});
   const oldNames = useOldNames(project);
-  const rows = useMemo(() => mappingRows(statuses, usage.state === 'ok' ? usage.value : [], config), [reasons, usage, config]);
+  // A dropped type follows the type chosen for it, and until then the first one, which is what the selection shows.
+  const chosenTypes = useMemo(() => Object.fromEntries(types.map((key) => [key, typeMapping[key] ?? config.ticketTypes[0]?.key ?? ''])), [reasons, typeMapping, config]);
+  const rows = useMemo(() => mappingRows(statuses, usage.state === 'ok' ? usage.value : [], config, chosenTypes), [reasons, usage, config, chosenTypes]);
   useEffect(() => {
-    setStatusMapping((current) => Object.fromEntries(rows.map((row) => [row.key, current[row.key] ?? row.targets[0] ?? ''])));
+    // A choice stays while it is still a target; another target for a dropped type replaces it (review N2 of TASK-052).
+    setStatusMapping((current) => Object.fromEntries(rows.map((row) => [row.key, row.targets.includes(current[row.key] ?? '') ? current[row.key]! : row.targets[0] ?? ''])));
     setTypeMapping((current) => Object.fromEntries(types.map((key) => [key, current[key] ?? config.ticketTypes[0]?.key ?? ''])));
   }, [rows]);
   const count = (predicate: (use: ConfigurationUsage) => boolean) => usage.state === 'ok' ? usage.value.filter(predicate).reduce((sum, use) => sum + use.count, 0) : 0;
