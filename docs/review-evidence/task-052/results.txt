@@ -1,0 +1,32 @@
+Nachprüfung TASK-052 / PR #172, selbst ausgeführt am 2026-10-26 auf main 2616bb5a74f9dfaa944e49233d075f489a7d7ebf
+Umgebung: OpenJDK 21.0.12 mit -Djava.version=21, PostgreSQL 16.15 (lokal, synthetische Daten), Node 22.22.0, Chromium aus der Umgebung
+
+Backend ./mvnw verify (unveränderter Produkt- und Testcode, -Dtaskmanager.test.server-version=16.15)
+  Tests run: 308, Failures: 0, Errors: 0, Skipped: 0, BUILD SUCCESS
+
+ReviewTask052ExperimentTest (temporär im Testbaum, danach entfernt): Tests run: 12, Failures: 1
+  R1 (F2)  9007199254740992, -9007199254740992, -9223372036854775808, 9223372036854775807 -> je 400 custom.restdauer.invalid,
+           auch bei der Änderung eines Tickets
+  R2 (F1)  verborgenes Pflichtfeld leer und gefüllt -> beide 409 ticket.required_field_inaccessible, gleicher Rumpf ohne Feldnamen
+  R3 (F3)  nur Typ a -> b: 200, Status b1, Historie Version 2 mit status und type
+           Typ b und Status b1 zusammen: 409 ticket.transition_not_allowed (kein frei gewählter Zielstatus)
+  N6       Suche status=b1 findet das Ticket, status=a1 nicht mehr
+  R4 (F4)  statusMapping x -> a1: 409 status.mapping_invalid:x; a:x -> a1 und b:x -> b1: 200, beide Tickets richtig zugeordnet
+  R5 (F5)  unbekanntes eigenes Feld bei Anlage und Änderung: 400 customFields.unknown
+  R6 (E6)  60 gleichzeitige Wechsel und die Veröffentlichung: 53 vorher gewechselt und mit Historie verschoben, 7 danach mit 400
+           abgewiesen; kein Ticket in einem unbekannten Status
+  N1       Typ a -> b mit ausdrücklich mitgegebenem bisherigem Status a1: 200, Status b1   <- FEHLSCHLAG, Vertrag nennt status.unavailable
+  N2       verborgenes Pflichtfeld im Ablauf des neuen Typs bei Typ- und Statuswechsel zusammen: leer und gefüllt je 409
+  N3       DENY-READ auf description, Übergang verlangt description: leer und gefüllt je 409
+  N4       unbekannter und bekannter Schlüssel: ohne Projektzugang 404, nur Leserecht 403, jeweils gleich
+  N5       Typ c entfällt (typeMapping c -> b), Status x von a und c entfällt:
+           x -> a1 allein (was der Zuordnungsdialog anbietet): 409 status.mapping_invalid:x
+           x -> a1 und c:x -> b1: 200, Ticket vom Typ b in b1
+  N7       inaktives verborgenes Pflichtfeld: Wechsel 200
+
+Frontend mappingRows für den Fall N5 (temporärer Test, danach entfernt)
+  [{"key":"x","status":"x","type":null,"targets":["a1"]}]   <- keine Zeile für c:x
+
+Frontend
+  npm run verify: tests 76, pass 76, fail 0; Typprüfung und Build erfolgreich
+  npm run test:browser: tests 102, pass 102, fail 0, skipped 0
