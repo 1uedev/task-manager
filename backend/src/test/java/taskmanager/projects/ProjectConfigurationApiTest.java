@@ -915,6 +915,29 @@ class ProjectConfigurationApiTest {
         assertEquals("a", worker.get(project.tickets() + "/2").fields().get("type").asString());
     }
 
+    /** N1 of the follow up review of TASK-052: a status sent with the new type is asked for, even when it is the current one. */
+    @Test
+    void aStatusSentWithTheNewTypeMustExistInItsWorkflowEvenWhenItIsTheCurrentOne() {
+        Person worker = person();
+        Project project = project(SEPARATE_WORKFLOWS, worker);
+        grant(worker.id(), project.id(), full());
+        assertEquals(201, create(worker, project, map("type", "a", "title", "Ausdrücklich")).status());
+        Response explicit = patch(worker, project, 1, map("type", "b", "status", "a1"), "\"1\"");
+        assertProblem(explicit, 400, "request.invalid");
+        assertEquals(List.of("status.unavailable"), explicit.violations());
+        Response unchanged = worker.get(project.tickets() + "/1");
+        assertEquals("a", unchanged.fields().get("type").asString());
+        assertEquals("a1", unchanged.fields().get("status").asString());
+        // Without the status the server still moves the ticket into the first status of the new type.
+        Response moved = patch(worker, project, 1, map("type", "b"), "\"1\"");
+        assertEquals(200, moved.status(), moved.body());
+        assertEquals("b1", moved.fields().get("status").asString());
+        // The current status sent with a type that knows it keeps it.
+        Response kept = patch(worker, project, 1, map("type", "b", "status", "b1"), "\"2\"");
+        assertEquals(200, kept.status(), kept.body());
+        assertEquals("b1", kept.fields().get("status").asString());
+    }
+
     /** F4: a status that tickets of two types use can go to a different status for each type. */
     @Test
     void aStatusUsedByTwoTypesIsMappedPerType() {

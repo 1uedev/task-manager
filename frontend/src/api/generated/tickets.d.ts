@@ -59,7 +59,8 @@ export interface paths {
          *     Feldes mit 409 `ticket.required_field_inaccessible`. Bei einem Fehler bleibt das Ticket unverändert. Wechselt nur der
          *     Tickettyp und kennt der Ablauf des neuen Typs den Status nicht, kommt das Ticket in den ersten Status des neuen Typs;
          *     dafür braucht es die Schreibregel für `status` (sonst 400 `type.status_unavailable`). Wird der Status mitgegeben, muss
-         *     er im Ablauf des neuen Typs vorkommen (`status.unavailable`) und als Übergang vom bisherigen Status vorgesehen sein.
+         *     er im Ablauf des neuen Typs vorkommen (`status.unavailable`, auch wenn es der bisherige Status ist) und, wenn er sich
+         *     ändert, als Übergang vom bisherigen Status vorgesehen sein.
          *     Ein Schlüssel in `customFields`, den die Konfiguration nicht kennt, antwortet mit 400 `customFields.unknown`. Felder,
          *     die ihren Wert behalten, werden nicht geschrieben; ohne echte Änderung bleibt die Version gleich.
          */
@@ -159,7 +160,8 @@ export interface components {
             };
             /**
              * @description Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche. Eigene Felder erscheinen
-             *     als `custom.<schlüssel>`, wenn sie aktiv sind.
+             *     als `custom.<schlüssel>`, wenn sie aktiv sind. `tags` und `attachments` erscheinen, wenn die Anfrage Tags
+             *     beziehungsweise Anhänge über ihre eigenen Endpunkte ändern darf (Befund F1 der Prüfung von TASK-051).
              */
             writableFields: string[];
             /** Format: date-time */

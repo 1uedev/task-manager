@@ -83,7 +83,12 @@ final class FileSystemStorage implements FileStorage {
             try (var out = Files.newOutputStream(file, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 while (total <= limit) {
                     int wanted = (int) Math.min(buffer.length, limit + 1 - total);
-                    int read = in.read(buffer, 0, wanted);
+                    int read;
+                    try {
+                        read = in.read(buffer, 0, wanted);
+                    } catch (IOException broken) {
+                        throw new UploadInterrupted(broken);
+                    }
                     if (read < 0) {
                         break;
                     }

@@ -136,6 +136,67 @@ describe('attachments of a ticket', () => {
     });
   });
 
+  // Review F1 of TASK-051: the interface offers exactly what the server allows, whatever the other fields say.
+  test('the write rule for attachments alone decides whether files can be added and removed', async () => {
+    const stored = (backend) => backend.state.attachments.push({ id: '10000000-0000-4000-8000-000000000002', ticket: backend.state.tickets[0].id, name: 'Beleg.txt', size: 5,
+      sha256: 'a'.repeat(64), uploadedAt: '2026-10-21T08:00:00Z', uploadedBy: backend.anna.id, content: Buffer.from('Beleg'), removed: false });
+    // Ben may change nothing but the attachments.
+    await withTicket(BEN, async (page) => {
+      const section = page.getByRole('region', { name: 'Anhänge' });
+      await section.getByTestId('attachment-dropzone').waitFor();
+      await section.getByRole('button', { name: 'Anhang Beleg.txt entfernen' }).waitFor();
+      await section.getByTestId('attachment-file').setInputFiles(file('Quittung.txt', 'Quittung'));
+      await section.getByText('Quittung.txt angehängt.').waitFor();
+    }, {
+      prepare: (backend) => {
+        stored(backend);
+        backend.group('Lesen').actions.push({ action: 'ticket.edit', projectId: null });
+        backend.group('Lesen').fields.push({ resourceType: 'ticket', field: 'attachments', projectId: null, operation: 'write', effect: 'allow' });
+      },
+    });
+    // Anna may change every other field, but not the attachments.
+    await withTicket(ANNA, async (page, backend) => {
+      const section = page.getByRole('region', { name: 'Anhänge' });
+      await section.getByRole('link', { name: 'Anhang Beleg.txt herunterladen' }).waitFor();
+      assert.equal(await section.getByTestId('attachment-dropzone').count(), 0, 'no way to add');
+      assert.equal(await section.getByRole('button', { name: /entfernen/ }).count(), 0, 'no way to remove');
+      assert.ok(!backend.writes().some((request) => request.path.includes('/attachments')));
+    }, {
+      prepare: (backend) => {
+        stored(backend);
+        const admin = backend.group('Unternehmensverwaltung');
+        admin.fields = admin.fields.filter((rule) => !(rule.field === 'attachments' && rule.operation === 'write'));
+      },
+    });
+  });
+
+  // Review F3 of TASK-051: every file is tried and the notice names the result of each.
+  test('several files are all tried and summed up', async () => {
+    await withTicket(ANNA, async (page, backend) => {
+      const section = page.getByRole('region', { name: 'Anhänge' });
+      await section.getByTestId('attachment-file').setInputFiles([file('eins.txt', 'eins'), file('zwei.exe', 'zwei'), file('drei.txt', 'drei')]);
+      await section.getByText(/^2 von 3 Dateien angehängt \(eins\.txt, drei\.txt\)\. zwei\.exe: Dieser Dateityp ist nicht erlaubt/).waitFor();
+      assert.deepEqual(backend.state.attachments.map((entry) => entry.name), ['eins.txt', 'drei.txt']);
+      assert.equal(await section.getByTestId('ticket-attachments').getByRole('listitem').count(), 2);
+    });
+  });
+
+  // Review F4 of TASK-051: a download that cannot succeed is explained, not cancelled without a word.
+  test('a download of a lost file is explained and the limit shown is the one of the server', async () => {
+    await withTicket(ANNA, async (page) => {
+      const section = page.getByRole('region', { name: 'Anhänge' });
+      await section.getByText('Höchstens 1 kB je Datei. Programme und Skripte werden abgelehnt.').waitFor();
+      let downloads = 0;
+      page.on('download', () => { downloads += 1; });
+      await section.getByRole('link', { name: 'Anhang Verloren.txt herunterladen' }).click();
+      await section.getByText('Verloren.txt: Dieser Anhang ist nicht mehr vorhanden.').waitFor();
+      assert.equal(downloads, 0);
+    }, {
+      prepare: (backend) => backend.state.attachments.push({ id: '10000000-0000-4000-8000-000000000003', ticket: backend.state.tickets[0].id, name: 'Verloren.txt', size: 5,
+        sha256: 'a'.repeat(64), uploadedAt: '2026-10-21T08:00:00Z', uploadedBy: backend.anna.id, content: null, removed: false }),
+    });
+  });
+
   test('English texts', async () => {
     await withTicket(ANNA, async (page) => {
       const section = page.getByRole('region', { name: 'Attachments' });

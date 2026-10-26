@@ -109,15 +109,25 @@ export interface MappingRow {
 /**
  * The choices for the statuses a publication named (review F4 of TASK-044). A status that tickets of several types still
  * use and that their new workflows no longer know gets one choice per type, since one target may not exist for every type.
+ * A type the new version drops counts with the workflow of the type its tickets go to (`typeMapping`), but keeps its own key,
+ * as the server reads `<type>:<status>` with the type the tickets have now (review N2 of TASK-052).
  */
-export function mappingRows(statuses: readonly string[], usage: readonly { readonly type: string; readonly status: string }[], config: Configuration): MappingRow[] {
+export function mappingRows(statuses: readonly string[], usage: readonly { readonly type: string; readonly status: string }[], config: Configuration,
+  typeMapping: Readonly<Record<string, string>> = {}): MappingRow[] {
   const all = config.statuses.map((item) => item.key);
+  const known = (type: string) => config.ticketTypes.some((item) => item.key === type);
+  // The type whose workflow the tickets of a type follow after the publication, or null when that is not known yet.
+  const target = (type: string) => (known(type) ? type : known(typeMapping[type] ?? '') ? typeMapping[type]! : null);
   return statuses.flatMap((status): MappingRow[] => {
-    const types = [...new Set(usage.filter((use) => use.status === status && config.ticketTypes.some((item) => item.key === use.type)
-      && !statusKeysOf(config, use.type).includes(status)).map((use) => use.type))];
-    if (types.length <= 1) {
-      return [{ key: status, status, type: null, targets: types.length === 1 ? statusKeysOf(config, types[0]!) : all }];
+    const types = [...new Set(usage.filter((use) => {
+      const next = target(use.type);
+      return use.status === status && next !== null && !statusKeysOf(config, next).includes(status);
+    }).map((use) => use.type))];
+    // Types that end up in one workflow can share one choice; otherwise each type gets its own.
+    const workflows = new Set(types.map((type) => target(type)!));
+    if (workflows.size <= 1) {
+      return [{ key: status, status, type: null, targets: types.length > 0 ? statusKeysOf(config, target(types[0]!)!) : all }];
     }
-    return types.map((type) => ({ key: `${type}:${status}`, status, type, targets: statusKeysOf(config, type) }));
+    return types.map((type) => ({ key: `${type}:${status}`, status, type, targets: statusKeysOf(config, target(type)!) }));
   });
 }

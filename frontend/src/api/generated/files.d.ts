@@ -82,7 +82,7 @@ export interface components {
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found,
-         *     attachment.not_found, attachment.empty, attachment.too_large, attachment.type_blocked,
+         *     attachment.not_found, attachment.empty, attachment.incomplete, attachment.too_large, attachment.type_blocked,
          *     attachment.storage_unavailable, attachment.busy, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
          *     auth.password_change_required. Grund in `violations`: name.invalid.
          */
@@ -124,6 +124,8 @@ export interface operations {
             /** @description Die nicht entfernten Anhänge */
             200: {
                 headers: {
+                    /** @description Größte angenommene Datei in Bytes, wie der Server eingestellt ist; die Oberfläche zeigt sie als Hinweis. */
+                    "X-Attachment-Max-Bytes"?: number;
                     [name: string]: unknown;
                 };
                 content: {

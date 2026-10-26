@@ -53,6 +53,20 @@ Weitere Befehle:
 | `docker compose run --rm app rebuild-search` | Suchprojektion aus den Fachdaten neu aufbauen. |
 | `docker compose logs app` | Protokoll der Anwendung mit Korrelationskennung je Anfrage. |
 
+### Sicherung der Vorführumgebung
+
+Die Vorführumgebung ist kein Betrieb und die Sicherung kein Nachweis für A18. Wer Daten und Anhänge einer Vorführung trotzdem aufheben will, sichert Datenbank und Dateispeicher zusammen und **erst die Datenbank, dann die Dateien**; die Gründe stehen in [backend/README.md](../backend/README.md), Abschnitt Dateien und Anhänge, „Betrieb und Sicherung“. Die Befehle sind aus dem Verzeichnis dieser Datei heraus gedacht; Compose nennt das Volume der Anhänge `task-manager_files-data`, `IMAGE` ist das PostgreSQL Abbild aus compose.yaml (es enthält `tar`).
+
+| Schritt | Befehl |
+|---|---|
+| Anwendung anhalten (empfohlen) | `docker compose stop app` |
+| Datenbank sichern | `docker compose exec -T db pg_dump -U taskmanager -Fc taskmanager > taskmanager.dump` |
+| Anhänge sichern | `docker run --rm -v task-manager_files-data:/data/files:ro -v "$PWD":/backup IMAGE tar czf /backup/files-data.tar.gz -C /data files` |
+| Anwendung fortsetzen | `docker compose start app` |
+| Zurückspielen | Anwendung anhalten, `docker compose exec -T db pg_restore -U taskmanager -d taskmanager --clean --if-exists < taskmanager.dump`, dann `docker run --rm -v task-manager_files-data:/data/files -v "$PWD":/backup IMAGE tar xzf /backup/files-data.tar.gz -C /data`, danach `docker compose start app` und im Protokoll den ersten Aufräumlauf prüfen. |
+
+`tar` läuft im Abbild als `root` und behält Besitzer und Rechte; die Dateien gehören danach weiter dem Konto der Anwendung (10001). Wer statt des benannten Volumes ein eigenes Verzeichnis einbindet, gibt es diesem Konto (`chown -R 10001:10001 <verzeichnis>`).
+
 ## Demodaten
 
 `seed --profile demo` legt über die API an:

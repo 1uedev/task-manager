@@ -94,3 +94,24 @@ test('a status that tickets of several types use is mapped once per type, with t
   // Without the usage, one choice per status with every status as target.
   assert.deepEqual(mappingRows(['x'], [], config), [{ key: 'x', status: 'x', type: null, targets: ['a1', 'b1'] }]);
 });
+
+test('a dropped type gets its own choices from the workflow of the type its tickets go to (review N2 of TASK-052)', () => {
+  const config: Configuration = {
+    ...CONFIG,
+    ticketTypes: [{ key: 'a', name: 'A' }, { key: 'b', name: 'B' }],
+    statuses: [{ key: 'a1', name: 'A1', category: 'open' }, { key: 'b1', name: 'B1', category: 'open' }],
+    initialStatus: 'a1',
+    transitions: [],
+    workflows: [{ type: 'a', initialStatus: 'a1', transitions: [] }, { type: 'b', initialStatus: 'b1', transitions: [] }],
+  };
+  // Type a stays, type c goes to b, and both used the status x the new version drops.
+  const usage = [{ type: 'a', status: 'x' }, { type: 'c', status: 'x' }];
+  assert.deepEqual(mappingRows(['x'], usage, config, { c: 'b' }), [
+    { key: 'a:x', status: 'x', type: 'a', targets: ['a1'] },
+    { key: 'c:x', status: 'x', type: 'c', targets: ['b1'] },
+  ]);
+  // Sent to a, both follow the same workflow, and one choice for the status is enough.
+  assert.deepEqual(mappingRows(['x'], usage, config, { c: 'a' }), [{ key: 'x', status: 'x', type: null, targets: ['a1'] }]);
+  // A dropped type alone takes the targets of its new type.
+  assert.deepEqual(mappingRows(['x'], [{ type: 'c', status: 'x' }], config, { c: 'b' }), [{ key: 'x', status: 'x', type: null, targets: ['b1'] }]);
+});

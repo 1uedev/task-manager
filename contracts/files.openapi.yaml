@@ -21,7 +21,9 @@ info:
     (Programme, Skripte und aktive Webinhalte wie exe, bat, js, sh, jar, html, svg) noch den Anfang eines Programms haben
     (415 `attachment.type_blocked`). Ein Virenscanner gehört nicht dazu. Eine abgewiesene Datei hinterlässt weder eine Zeile
     noch eine Datei im Speicher. Kann der Dateispeicher nicht schreiben, antwortet der Server mit 503
-    `attachment.storage_unavailable`.
+    `attachment.storage_unavailable` und schreibt die Ursache mit der Korrelationskennung ins Protokoll. Bricht die
+    Übertragung ab, bevor der Körper ganz gelesen ist, antwortet er mit 400 `attachment.incomplete`; auch dann bleibt nichts
+    im Speicher.
 
     Herunterladen: Der Inhalt kommt immer als Datei zum Speichern: `Content-Type: application/octet-stream`,
     `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` und eine Content-Security-Policy, die nichts erlaubt.
@@ -47,6 +49,10 @@ paths:
       responses:
         '200':
           description: Die nicht entfernten Anhänge
+          headers:
+            X-Attachment-Max-Bytes:
+              description: Größte angenommene Datei in Bytes, wie der Server eingestellt ist; die Oberfläche zeigt sie als Hinweis.
+              schema: {type: integer, minimum: 1}
           content:
             application/json:
               schema:
@@ -142,7 +148,7 @@ components:
     Problem:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found,
-        attachment.not_found, attachment.empty, attachment.too_large, attachment.type_blocked,
+        attachment.not_found, attachment.empty, attachment.incomplete, attachment.too_large, attachment.type_blocked,
         attachment.storage_unavailable, attachment.busy, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required. Grund in `violations`: name.invalid.
       headers:

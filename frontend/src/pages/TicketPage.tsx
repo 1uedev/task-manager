@@ -301,8 +301,8 @@ function TicketTags({ project, ticket, round }: { readonly project: Project; rea
 
   // Without the read rule for tags the section is not shown at all.
   if (assigned.state === 'problem' && (assigned.problem.status === 403 || assigned.problem.status === 404)) return null;
-  // writableFields does not name tags; an empty list means no ticket.edit, so nothing can be changed here. The server decides the rest.
-  const editable = ticket.writableFields.length > 0;
+  // The server names tags among the writable fields exactly when it accepts assigning and removing them (review F1 of TASK-051).
+  const editable = ticket.writableFields.includes('tags');
   const catalog: Tag[] = [...(own.state === 'ok' ? own.value : []), ...(shared.state === 'ok' ? shared.value : [])].filter((tag) => !tag.archived);
 
   async function change(tagId: string, add: boolean) {

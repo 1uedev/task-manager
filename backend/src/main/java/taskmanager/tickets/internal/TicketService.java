@@ -308,11 +308,13 @@ public class TicketService {
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
         }
-        if (statusChanged && !configuration.statusKeysOf(type).contains(status)) {
+        // A status sent together with a new type counts as asked for even when it is the current one (review N1 of TASK-052).
+        boolean statusGiven = statusChanged || (typeChanged && changes.containsKey("status"));
+        if (statusGiven && !configuration.statusKeysOf(type).contains(status)) {
             // The status the ticket is moved to, alone or together with its type, does not exist in the workflow of the type.
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("status.unavailable"));
         }
-        if (typeChanged && !statusChanged && !configuration.statusKeysOf(type).contains(status)) {
+        if (typeChanged && !statusGiven && !configuration.statusKeysOf(type).contains(status)) {
             // A type whose workflow does not know the status starts the ticket over in its first status (review F3 of
             // TASK-044). That is no transition, so no field it requires can be skipped, but the status is written.
             if (!writable(actor, resource, projectId).contains("status")) {
@@ -508,8 +510,9 @@ public class TicketService {
         return read.allowed() ? read.readableFields() : Set.of();
     }
 
+    /** The fields the caller may change, tags and attachments included, so an answer can name them (review F1 of TASK-051). */
     private Set<String> writable(AccessContext actor, Supplier<ResourceContext> resource, UUID projectId) {
-        Decision edit = inspect(actor, resource, EDIT, projectId, FIELDS);
+        Decision edit = inspect(actor, resource, EDIT, projectId, HISTORY_FIELDS);
         return edit.allowed() ? edit.writableFields() : Set.of();
     }
 

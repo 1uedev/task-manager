@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 32 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 33 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-26 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -72,6 +70,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-050](#task-050-befund-r1-der-nachprüfung-von-task-049-beheben) | Befund R1 der Nachprüfung von TASK-049 beheben | claude-20261025-reviewfix-03 | 2026-10-25 |
 | [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
 | [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
+| [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-26 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -647,11 +646,11 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Abhängigkeiten:** TASK-027 (Ticketkern) und TASK-043 (Rechtekern), beide gemergt. **Arbeitsstand:** Paket A7 der Reihenfolge aus DEC-072, Holgers Freigabe „kannst du derweil mit dem nächsten Thema weitermachen“ vom 25. Oktober 2026. Branch claude/upbeat-goldberg-mwa4c2; Ergebnis mit DEC-080. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung und stehen mit dem Ergebnis zur Prüfung.
 
 **Umfang:** Ein neues Modul `files` mit Dateispeicher und Anhängen an Tickets, ohne Kommentare, Portal, Mail und Wiki.
-1. Speicher: Ein Speicherport mit einem Dateisystemadapter auf einem konfigurierbaren, dauerhaften Verzeichnis außerhalb des Containerlebenszyklus (OPERATIONS.md, ARCHITECTURE.md). Inhalte werden nie überschrieben, die Ablage ist inhaltsadressiert über die SHA-256 Prüfsumme, die Metadaten liegen in PostgreSQL (Migration V0024).
+1. Speicher: Ein Speicherport mit einem Dateisystemadapter auf einem konfigurierbaren, dauerhaften Verzeichnis außerhalb des Containerlebenszyklus (OPERATIONS.md, ARCHITECTURE.md). Inhalte werden nie überschrieben und liegen unter der Kennung ihres Anhangs, nie unter etwas, das der Client schickt; die SHA-256 Prüfsumme wird festgehalten, gleiche Inhalte werden nicht gemeinsam abgelegt (DEC-080, angeglichen mit TASK-053); die Metadaten liegen in PostgreSQL (Migration V0024).
 2. Upload: Annahme in einen begrenzten temporären Bereich, Prüfung von Größe (Vorschlag 25 MB dezimal je Datei, konfigurierbar), Dateiname (bereinigt, ohne Pfadanteile und Steuerzeichen) und Sperrliste ausführbarer und aktiver Inhalte (Endungen und erkannte Dateikopfkennungen), Prüfsumme, dauerhaftes Ablegen, erst danach die Zuordnung zum Ticket in einer Transaktion. Abgebrochene und verwaiste Uploads sowie nicht zugeordnete Inhalte werden durch einen Aufräumlauf entfernt (Vorschlag: nach 24 Stunden, Lauf beim Start und stündlich, ohne den Hintergrundauftragsdienst aus A8).
-3. Kein Virenscanner als Pflichtdienst (TECHNICAL_CONTRACTS.md: kein neuer Pflichtdienst still vorausgesetzt). Stattdessen die Sperrliste, Auslieferung ausschließlich als Download mit `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` und einer Content-Security-Policy, die aktive Inhalte verbietet, sowie ein Port für einen späteren Scanner. Die Qualifikation eines Scanners bleibt offen (OPEN-014).
+3. Kein Virenscanner als Pflichtdienst (TECHNICAL_CONTRACTS.md: kein neuer Pflichtdienst still vorausgesetzt). Stattdessen die Sperrliste, Auslieferung ausschließlich als Download mit `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` und einer Content-Security-Policy, die aktive Inhalte verbietet. Ein Scanner und seine Anbindung bleiben offen (OPEN-014); einen Port dafür gibt es noch nicht (angeglichen mit TASK-053).
 4. Rechte: Anhänge sind ein Ticketfeld `attachments` im bestehenden Feldrechtemodell (Lesen und Schreiben getrennt), Hochladen und Entfernen verlangen das Schreibrecht, Herunterladen das Leserecht des Felds und des Tickets. Der direkte Dateilink ist kein Rechtenachweis und wird bei jedem Abruf neu geprüft. Verborgene Tickets und Anhänge verraten ihre Existenz nicht (404). Eine Zielgruppe „kundenlesbar“ gibt es nicht, solange kein externer Zugang existiert; alle Anhänge sind intern.
-5. Historie: Hinzufügen und Entfernen eines Anhangs erscheinen in der Tickethistorie (Name, Größe, Prüfsumme) und folgen dem Leserecht des Felds `attachments`. Entfernen blendet den Anhang aus, die Historie behält den Eintrag; der Inhalt wird erst vom Aufräumlauf nach einer Frist entfernt, wenn kein Anhang ihn mehr verwendet.
+5. Historie: Hinzufügen und Entfernen eines Anhangs erscheinen in der Tickethistorie (Name, Größe, Prüfsumme) und folgen dem Leserecht des Felds `attachments`. Entfernen blendet den Anhang aus, die Historie behält den Eintrag; der Inhalt wird erst vom Aufräumlauf nach einer Frist (7 Tage) entfernt.
 6. Suche: Dateinamen werden nicht in die Suche aufgenommen; Dateiinhalte gehören nach V1 (DEC-050).
 7. Oberfläche im Ticket: Liste der Anhänge mit Name, Größe, Person und Zeit, Hochladen (Dateiauswahl und Ablegen mit Tastaturalternative), Herunterladen, Entfernen mit Bestätigung, klare Fehlermeldungen bei Größe, gesperrtem Typ und fehlendem Recht.
 8. Betrieb: Konfiguration des Verzeichnisses, Speicherort im Vorführimage als benanntes Volume, Hinweis im Betriebsteil von backend/README.md auf die Sicherung zusammen mit der Datenbank. Der Nachweis einer konsistenten Sicherung und Wiederherstellung gehört zu A18.
@@ -691,7 +690,7 @@ Nicht Teil: weitere Änderungen an Projektkonfiguration, Rechten oder Suche; die
 
 ## TASK-053 Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261026-attachfix-01 · **Aktualisiert:** 2026-10-26
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261026-attachfix-01 · **Aktualisiert:** 2026-10-26
 
 **Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001, REQ-ORG-003, REQ-TKT-001, REQ-API-001. **Abhängigkeiten:** TASK-051 und TASK-052 (beide gemergt, BEREIT ZUR PRÜFUNG) und die Prüfberichte [docs/REVIEW_TASK-051_PR-168.md](docs/REVIEW_TASK-051_PR-168.md) und [docs/REVIEW_TASK-052_PR-172.md](docs/REVIEW_TASK-052_PR-172.md). **Arbeitsstand:** Holger hat am 26. Oktober 2026 im Projektgespräch zugestimmt („ja“), die Befunde F1 und F2 der Prüfung von TASK-051 zusammen mit N1 und N2 der Nachprüfung von TASK-052 als eine Korrekturaufgabe zu beheben, die kleinen Befunde F3 bis F8 soweit sie klein sind mit. Branch claude/project-thread-a1ho1t nach dem Merge dieser Reservierung; Ergebnis mit DEC-082, keine Migration vorgesehen.
 
@@ -708,4 +707,6 @@ Nicht Teil: die Hinweise H1 bis H8 des Berichts zu TASK-051 und die Hinweise ohn
 
 **Abnahmekriterien:** Die Rechte für Anhänge gelten in Oberfläche, API und Historie gleich, belegt mit beiden Fällen aus F1 im Browsertest; die Sicherungshinweise beantworten die Punkte aus F2; der Nachweis zu N1 aus docs/review-evidence/task-052 läuft als Regression grün; der Fall aus N2 lässt sich allein über den Dialog veröffentlichen; alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-082 als Ergebnis zur Prüfung stellen.
+**Nächster Schritt:** Getrennte KI prüft die Behebung nach (DEC-040), besonders: dass `writableFields` für `tags` und `attachments` genau den Regeln der eigenen Endpunkte folgt, die Frage mit HEAD vor dem Download samt Sitzungsende, die Trennung von Abbruch und Speicherfehler, die Sicherungshinweise gegen das tatsächliche Verhalten des Aufräumlaufs und die Zuordnung eines wegfallenden Typs im Dialog. Holger entscheidet, ob Makrodokumente gesperrt werden sollen (DEC-082 Punkt 5), und nimmt TASK-044 bis TASK-053 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-082. Server: `writableFields` mit `tags` und `attachments` (`TicketController`, `TicketService`), N1 in `TicketService`, Sperrliste in `FilesProperties`, `FileStorage.UploadInterrupted` mit 400 `attachment.incomplete` und Protokoll der Speicherfehler in `AttachmentService`, Kopf `X-Attachment-Max-Bytes` in `AttachmentController`; Verträge `tickets.openapi.yaml` und `files.openapi.yaml`. Oberfläche: Schreibrecht für Anhänge und Tags aus `writableFields`, Zusammenfassung mehrerer Uploads, Frage mit HEAD vor dem Download (`checkAttachment`, `head` im Serverclient), Grenze vom Server, `mappingRows` mit Zieltyp wegfallender Typen. Dokumentation: Sicherung und Umgebungsvariablen in backend/README.md, Sicherung der Vorführumgebung in docs/DEMO.md, docs/PROJECT_CONFIGURATION.md, Angleichung von TASK-051 in dieser Datei. Neue Tests: Backend 4 (Schreibrecht und Grenze in `FilesApiTest`, Sperrliste im bestehenden Test, Abbruch in `AttachmentServiceTest` und `FileSystemStorageTest`, N1 als Regression in `ProjectConfigurationApiTest`), Frontend ein Test für `mappingRows`, Browser 4 (beide Fälle aus F1, mehrere Dateien, verlorener Inhalt mit Grenze, N2 im Dialog; der Test zu N2 scheitert gegen den Dialog vor TASK-053). Lokal grün: Backend `verify` gegen PostgreSQL 16.15 mit Java 21, 311 Tests ohne Ausfall; Frontend `npm run verify` (77 Tests) und 106 Browsertests. Keine Migration. Nicht geprüft: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI); die Sicherungsbefehle in docs/DEMO.md sind nicht ausgeführt, weil in dieser Umgebung keine Abbilder geladen werden konnten.

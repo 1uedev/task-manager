@@ -63,10 +63,14 @@ class AttachmentController {
         }
     }
 
+    /** The header that names the largest accepted file, so an interface shows the limit the server is set to (review F8 of TASK-051). */
+    static final String MAX_BYTES_HEADER = "X-Attachment-Max-Bytes";
+
     @GetMapping
-    List<AttachmentBody> list(@PathVariable UUID projectId, @PathVariable long number) {
+    ResponseEntity<List<AttachmentBody>> list(@PathVariable UUID projectId, @PathVariable long number) {
         AccessContext actor = actor();
-        return retrying(() -> attachments.list(actor, projectId, number)).stream().map(AttachmentBody::of).toList();
+        List<AttachmentBody> body = retrying(() -> attachments.list(actor, projectId, number)).stream().map(AttachmentBody::of).toList();
+        return ResponseEntity.ok().header(MAX_BYTES_HEADER, Long.toString(attachments.maxBytes())).body(body);
     }
 
     @PostMapping
