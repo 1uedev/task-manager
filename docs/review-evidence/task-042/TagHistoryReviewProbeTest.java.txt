@@ -1,0 +1,589 @@
+package taskmanager.tags;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.StreamSupport;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.AdministrationFixture;
+import taskmanager.TestDatabase;
+import taskmanager.identity.account.AccountService;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.CompanyContext;
+import taskmanager.projects.ProjectConfiguration;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * Review probes for TASK-042 (PR #123): tag changes in the ticket history. Helpers copied from TagsApiTest.
+ * modules and a real PostgreSQL. Business actions and field rules are granted directly in the tables, as no rights endpoint
+ * exists yet (TASK-030).
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class TagHistoryReviewProbeTest {
+    private static final String DATABASE = freshDatabase();
+    private static final String STRONG = "Correct-Horse-Battery-9";
+    private static final AtomicInteger COUNTER = new AtomicInteger();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final ExecutorService POOL = Executors.newCachedThreadPool();
+    private static final List<String> ALL_FIELDS = ProjectConfiguration.FIELD_KEYS;
+    private static final String[] TICKETS = {"ticket.read", "ticket.create", "ticket.edit", "READ:*", "WRITE:*", "READ:tags", "WRITE:tags"};
+
+    private static String freshDatabase() {
+        try {
+            return TestDatabase.createEmptyDatabase();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> DATABASE);
+        registry.add("spring.datasource.username", TestDatabase::username);
+        registry.add("spring.datasource.password", TestDatabase::password);
+    }
+
+    @AfterAll
+    static void stopThreads() {
+        POOL.shutdownNow();
+    }
+
+    @Value("${local.server.port}") int port;
+    @Autowired AccountService accounts;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired CompanyContext companies;
+    @Autowired PlatformTransactionManager transactions;
+
+    // ---------------------------------------------------------------- a minimal browser
+
+    record Response(int status, String body, Map<String, List<String>> headers) {
+        String header(String name) {
+            return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name))
+                .flatMap(e -> e.getValue().stream()).findFirst().orElse(null);
+        }
+
+        JsonNode json() {
+            return JSON.readTree(body);
+        }
+
+        String code() {
+            return json().get("code").asString();
+        }
+
+        List<String> violations() {
+            return StreamSupport.stream(json().get("violations").spliterator(), false).map(JsonNode::asString).toList();
+        }
+
+        JsonNode fields() {
+            return json().get("fields");
+        }
+    }
+
+    final class Browser {
+        private final HttpClient http = HttpClient.newHttpClient();
+        final Map<String, String> cookies = new LinkedHashMap<>();
+
+        Response send(String method, String path, Object body, String ifMatch) {
+            try {
+                HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+                if (body != null) {
+                    request.header("Content-Type", "application/json");
+                    request.method(method, HttpRequest.BodyPublishers.ofString(body instanceof String s ? s : JSON.writeValueAsString(body)));
+                } else {
+                    request.method(method, HttpRequest.BodyPublishers.noBody());
+                }
+                if (ifMatch != null) {
+                    request.header("If-Match", ifMatch);
+                }
+                if (!cookies.isEmpty()) {
+                    List<String> pairs = new ArrayList<>();
+                    cookies.forEach((name, value) -> pairs.add(name + "=" + value));
+                    request.header("Cookie", String.join("; ", pairs));
+                }
+                String csrf = cookies.get("__Host-tm-csrf");
+                if (csrf != null) {
+                    request.header("X-CSRF-Token", csrf);
+                }
+                HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+                for (String cookie : response.headers().allValues("set-cookie")) {
+                    String pair = cookie.substring(0, cookie.indexOf(';') < 0 ? cookie.length() : cookie.indexOf(';'));
+                    String name = pair.substring(0, pair.indexOf('='));
+                    if (cookie.toLowerCase().contains("max-age=0")) {
+                        cookies.remove(name);
+                    } else {
+                        cookies.put(name, pair.substring(pair.indexOf('=') + 1));
+                    }
+                }
+                return new Response(response.statusCode(), response.body(), response.headers().map());
+            } catch (java.io.IOException | InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        Response get(String path) {
+            return send("GET", path, null, null);
+        }
+    }
+
+    /** A person with a complete login. */
+    private record Person(Browser browser, UUID id) {
+        Response get(String path) {
+            return browser.get(path);
+        }
+    }
+
+    private Browser anonymous() {
+        Browser browser = new Browser();
+        assertEquals(200, browser.get("/api/v1/session").status());
+        return browser;
+    }
+
+    private Person person(AdministrationRight... rights) {
+        var issued = accounts.create("test", "tags-" + COUNTER.incrementAndGet(), null);
+        if (rights.length > 0) {
+            AdministrationFixture.grant(jdbc, companies, transactions, issued.account().id(), rights);
+        }
+        Browser browser = anonymous();
+        Response login = browser.send("POST", "/api/v1/session",
+            Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null);
+        assertEquals(200, login.status(), login.body());
+        Response changed = browser.send("POST", "/api/v1/session/password",
+            Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG), null);
+        assertEquals(200, changed.status(), changed.body());
+        return new Person(browser, issued.account().id());
+    }
+
+    /**
+     * Grants rules in a group of their own, for one project or, with {@code null}, for every project of the company: an
+     * action key such as {@code ticket.read}, or a field rule {@code READ:title}, {@code WRITE:title}, {@code DENY-READ:title}
+     * for the resource type {@code ticket}; {@code *} stands for all five fields, and {@code tags} is the field of the tags.
+     */
+    private void grant(UUID account, UUID project, String... rules) {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            UUID companyId = companies.find().orElseGet(companies::create);
+            jdbc.update("insert into permissions_revision(company_id) values (?) on conflict do nothing", companyId);
+            UUID group = UUID.randomUUID();
+            jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, "fixture-" + group);
+            for (String rule : rules) {
+                if (!rule.contains(":")) {
+                    jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
+                        companyId, group, project, rule);
+                    continue;
+                }
+                String[] parts = rule.split(":");
+                boolean deny = parts[0].startsWith("DENY-");
+                String operation = deny ? parts[0].substring(5) : parts[0];
+                for (String field : parts[1].equals("*") ? ALL_FIELDS : List.of(parts[1])) {
+                    jdbc.update("""
+                            insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect)
+                            values (?, ?, ?, 'ticket', ?, ?, ?)
+                            """, companyId, group, project, field, operation, deny ? "DENY" : "ALLOW");
+                }
+            }
+            jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
+            jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
+        });
+    }
+
+    /** A project created by its own manager, with the given people as members. */
+    private record Project(UUID id, String key, Person manager) {
+    }
+
+    private Project project(Person... members) {
+        Person manager = person(AdministrationRight.PROJECTS_MANAGE);
+        String key = "G" + COUNTER.incrementAndGet();
+        Response created = manager.browser().send("POST", "/api/v1/projects", Map.of("key", key, "name", "Tags " + key), null);
+        assertEquals(201, created.status(), created.body());
+        UUID id = UUID.fromString(created.json().get("id").asString());
+        String version = created.header("ETag");
+        for (Person member : members) {
+            Response added = manager.browser().send("PUT", "/api/v1/projects/" + id + "/members/" + member.id(), null, version);
+            assertEquals(200, added.status(), added.body());
+            version = added.header("ETag");
+        }
+        return new Project(id, key, manager);
+    }
+
+    private static String catalog(Project project) {
+        return "/api/v1/projects/" + project.id() + "/catalog/tags";
+    }
+
+    private static String ticketTags(Project project, long number) {
+        return "/api/v1/projects/" + project.id() + "/tickets/" + number + "/tags";
+    }
+
+    private static String projectTags(Project project) {
+        return "/api/v1/projects/" + project.id() + "/tags";
+    }
+
+    private static Response post(Person person, String path, Object body) {
+        return person.browser().send("POST", path, body, null);
+    }
+
+    private static Response patch(Person person, String path, Object body, String ifMatch) {
+        return person.browser().send("PATCH", path, body, ifMatch);
+    }
+
+    private static Response delete(Person person, String path) {
+        return person.browser().send("DELETE", path, null, null);
+    }
+
+    /** Creates a tag and returns its identifier. */
+    private static UUID tag(Person person, String path, String name) {
+        Response created = post(person, path, Map.of("name", name));
+        assertEquals(201, created.status(), created.body());
+        return UUID.fromString(created.json().get("id").asString());
+    }
+
+    private static long ticket(Person person, Project project, String title) {
+        Response created = post(person, "/api/v1/projects/" + project.id() + "/tickets", Map.of("type", "task", "title", title));
+        assertEquals(201, created.status(), created.body());
+        return created.json().get("number").asLong();
+    }
+
+    private static Map<String, Object> map(Object... pairs) {
+        Map<String, Object> map = new HashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            map.put((String) pairs[i], pairs[i + 1]);
+        }
+        return map;
+    }
+
+    private static void assertProblem(Response response, int status, String code) {
+        assertEquals(status, response.status(), response.body());
+        assertEquals(code, response.code(), response.body());
+    }
+
+    private static List<String> tagNames(Response response) {
+        assertEquals(200, response.status(), response.body());
+        return StreamSupport.stream(response.json().spliterator(), false).map(tag -> tag.get("name").asString()).toList();
+    }
+
+    private List<String> audit(UUID tagId) {
+        return jdbc.queryForList("select operation from tag_audit_event where tag_id = ? order by id", String.class, tagId);
+    }
+
+    // ---------------------------------------------------------------- the company catalog
+    /** Runs the statements in a transaction of its own and keeps it open until the returned action releases it. */
+    private Runnable hold(String... statements) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            for (String statement : statements) {
+                jdbc.execute(statement);
+            }
+            locked.countDown();
+            try {
+                assertTrue(release.await(60, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertTrue(locked.await(15, TimeUnit.SECONDS));
+        return () -> {
+            release.countDown();
+            try {
+                holder.get(60, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+    }
+
+    private boolean waitsAt(String statementPart) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists(select 1 from pg_stat_activity
+                    where datname = current_database() and pid <> pg_backend_pid()
+                    and query ilike ? and cardinality(pg_blocking_pids(pid)) > 0)
+                    """, Boolean.class, "%" + statementPart + "%"))) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
+    }
+
+    // ---------------------------------------------------------------- review probes
+
+    private String history(Project project, long number) {
+        return "/api/v1/projects/" + project.id() + "/tickets/" + number + "/history";
+    }
+
+    private UUID ticketId(Project project, long number) {
+        return jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, project.id(), number);
+    }
+
+    /** The history as lines: version, then the field changes, tags as +id or -id. */
+    private static List<String> lines(Response response) {
+        assertEquals(200, response.status(), response.body());
+        List<String> lines = new ArrayList<>();
+        for (JsonNode entry : response.json()) {
+            StringBuilder line = new StringBuilder(String.valueOf(entry.get("version").asLong()));
+            for (JsonNode change : entry.get("changes")) {
+                String field = change.get("field").asString();
+                if (field.equals("tags")) {
+                    line.append(change.get("from").isNull() ? " +" + change.get("to").asString() : " -" + change.get("from").asString());
+                } else {
+                    line.append(' ').append(field);
+                }
+            }
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
+    private void bump() {
+        jdbc.update("update permissions_revision set revision = revision + 1");
+    }
+
+    @Test
+    void reviewSeveralTagChangesShareOneVersionAndArchivedTagsAreRecordedOnRemoval() {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        UUID company = tag(admin, "/api/v1/tags", "Firma " + COUNTER.incrementAndGet());
+        long number = ticket(worker, project, "Viele Tags");
+        UUID a = tag(worker, catalog(project), "A");
+        UUID b = tag(worker, catalog(project), "B");
+
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", a.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", b.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", company.toString())).status());
+        assertEquals(200, patch(admin, "/api/v1/tags/" + company, Map.of("archived", true), "\"1\"").status());
+        assertEquals(204, delete(worker, ticketTags(project, number) + "/" + company).status());
+        assertEquals(204, delete(worker, ticketTags(project, number) + "/" + UUID.randomUUID()).status());
+        List<String> lines = lines(worker.get(history(project, number)));
+        assertEquals(List.of("1 +" + a, "1 +" + b, "1 +" + company, "1 -" + company), lines.subList(1, lines.size()), lines.toString());
+    }
+
+    @Test
+    void reviewProjectBoundariesAndMissingReadActionHideTheHistory() {
+        Person worker = person();
+        Person stranger = person();
+        Person outsider = person();
+        Person editor = person();
+        Project project = project(worker, editor);
+        Project foreign = project(stranger);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(stranger.id(), foreign.id(), TICKETS);
+        grant(outsider.id(), null, TICKETS);
+        grant(editor.id(), project.id(), "ticket.edit", "READ:tags", "WRITE:tags", "READ:*");
+        long number = ticket(worker, project, "Grenzen");
+        UUID tag = tag(person(AdministrationRight.TAGS_MANAGE), "/api/v1/tags", "Grenze " + COUNTER.incrementAndGet());
+        assertEquals(204, post(editor, ticketTags(project, number), Map.of("tagId", tag.toString())).status());
+
+        assertProblem(stranger.get(history(project, number)), 404, "project.not_found");
+        assertProblem(outsider.get(history(project, number)), 404, "project.not_found");
+        assertProblem(editor.get(history(project, number)), 404, "project.not_found");
+        assertTrue(lines(worker.get(history(project, number))).contains("1 +" + tag), "the edit-only change is recorded");
+    }
+
+    @Test
+    void reviewRevokedOrDeniedTagReadRuleHidesTheEntriesAtOnce() {
+        Person worker = person();
+        Person viewer = person();
+        Person denied = person();
+        Project project = project(worker, viewer, denied);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        grant(viewer.id(), project.id(), "ticket.read", "READ:*");
+        grant(viewer.id(), project.id(), "READ:tags");
+        grant(denied.id(), project.id(), "ticket.read", "READ:*", "READ:tags");
+        grant(denied.id(), null, "DENY-READ:tags");
+        long number = ticket(worker, project, "Entzug");
+        UUID tag = tag(worker, catalog(project), "Entzug");
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", tag.toString())).status());
+
+        assertTrue(lines(viewer.get(history(project, number))).contains("1 +" + tag));
+        assertFalse(lines(denied.get(history(project, number))).contains("1 +" + tag), "a deny rule wins");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("""
+                    delete from permissions_membership m using permissions_field f
+                    where m.group_id = f.group_id and m.user_id = ? and f.field_key = 'tags'
+                    """, viewer.id());
+            bump();
+        });
+        assertEquals(1, lines(viewer.get(history(project, number))).size(), "after the revocation only the creation remains");
+    }
+
+    @Test
+    void reviewTagChangesLeaveVersionAndLastChangedByOfTheTicketAsTheyAre() {
+        Person creator = person();
+        Person tagger = person();
+        Person blind = person();
+        Project project = project(creator, tagger, blind);
+        grant(creator.id(), project.id(), TICKETS);
+        grant(tagger.id(), project.id(), TICKETS);
+        grant(tagger.id(), project.id(), "tag.create");
+        grant(blind.id(), project.id(), "ticket.read", "READ:*");
+        long number = ticket(creator, project, "H1");
+        String path = "/api/v1/projects/" + project.id() + "/tickets/" + number;
+        Response before = blind.get(path);
+        UUID tag = tag(tagger, catalog(project), "Unsichtbar");
+        assertEquals(204, post(tagger, ticketTags(project, number), Map.of("tagId", tag.toString())).status());
+        Response after = blind.get(path);
+        assertEquals(before.header("ETag"), after.header("ETag"));
+        assertEquals(before.json().get("updatedBy").asString(), after.json().get("updatedBy").asString());
+        assertEquals(before.json().get("updatedAt").asString(), after.json().get("updatedAt").asString());
+        assertEquals(1, lines(blind.get(history(project, number))).size());
+    }
+
+    @Test
+    void reviewAFailedHistoryWriteRollsTheAssignmentBack() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Zeitüberschreitung");
+        UUID tag = tag(worker, catalog(project), "Warten");
+        UUID ticket = ticketId(project, number);
+        Runnable release = hold("select id from ticket where id = '" + ticket + "' for update");
+        try {
+            Response busy = post(worker, ticketTags(project, number), Map.of("tagId", tag.toString()));
+            assertProblem(busy, 503, "tag.busy");
+            assertEquals("1", busy.header("Retry-After"));
+        } finally {
+            release.run();
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from tag_ticket where ticket_id = ?", Integer.class, ticket));
+        assertEquals(0, jdbc.queryForObject("select count(*) from tag_audit_event where operation = 'tag.assigned' and target_id = ?",
+            Integer.class, ticket));
+        assertEquals(1, lines(worker.get(history(project, number))).size());
+    }
+
+    @Test
+    void reviewAnAssignmentThatWaitsForAFieldChangeTakesTheNewVersionAndALaterTime() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Reihenfolge");
+        UUID tag = tag(worker, catalog(project), "Später");
+        UUID ticket = ticketId(project, number);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> change = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from ticket where id = ? for update", ticket);
+            locked.countDown();
+            try {
+                assertTrue(release.await(30, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            jdbc.update("update ticket set version = version + 1, title = 'Neu' where id = ?", ticket);
+            jdbc.update("""
+                    insert into ticket_change (ticket_id, version, occurred_at, actor_account_id, field, old_value, new_value)
+                    select id, version, clock_timestamp(), ?, 'title', 'Reihenfolge', 'Neu' from ticket where id = ?
+                    """, worker.id(), ticket);
+        }));
+        assertTrue(locked.await(15, TimeUnit.SECONDS));
+        Future<Response> assign = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("tagId", tag.toString())));
+        assertTrue(waitsAt("select version from ticket"), "the assignment waits at the ticket row");
+        Thread.sleep(500);
+        release.countDown();
+        change.get(30, TimeUnit.SECONDS);
+        assertEquals(204, assign.get(30, TimeUnit.SECONDS).status());
+
+        Response seen = worker.get(history(project, number));
+        assertEquals(List.of("1", "2", "2 +" + tag), lines(seen).stream().map(l -> l.startsWith("1 ") ? "1" : l.equals("2 title") ? "2" : l).toList());
+        Instant field = Instant.parse(seen.json().get(1).get("occurredAt").asString());
+        Instant tagged = Instant.parse(seen.json().get(2).get("occurredAt").asString());
+        assertFalse(tagged.isBefore(field), "the later entry must not carry an earlier time: field " + field + ", tag " + tagged);
+    }
+
+    @Test
+    void reviewConcurrentFieldAndTagChangesNeitherDeadlockNorMixUpTheHistory() throws Exception {
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Last");
+        List<UUID> tags = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            tags.add(tag(worker, catalog(project), "Last " + i));
+        }
+        String path = "/api/v1/projects/" + project.id() + "/tickets/" + number;
+        long deadlocksBefore = jdbc.queryForObject("select deadlocks from pg_stat_database where datname = current_database()", Long.class);
+        List<Future<List<Integer>>> work = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            UUID tag = tags.get(i);
+            int index = i;
+            work.add(POOL.submit(() -> {
+                List<Integer> statuses = new ArrayList<>();
+                for (int round = 0; round < 3; round++) {
+                    statuses.add(post(worker, ticketTags(project, number), Map.of("tagId", tag.toString())).status());
+                    statuses.add(delete(worker, ticketTags(project, number) + "/" + tag).status());
+                }
+                return statuses;
+            }));
+            work.add(POOL.submit(() -> {
+                List<Integer> statuses = new ArrayList<>();
+                for (int round = 0; round < 3; round++) {
+                    while (true) {
+                        String etag = worker.get(path).header("ETag");
+                        int status = patch(worker, path, Map.of("title", "T" + index + "-" + round), etag).status();
+                        if (status != 412) {
+                            statuses.add(status);
+                            break;
+                        }
+                    }
+                }
+                return statuses;
+            }));
+        }
+        List<Integer> all = new ArrayList<>();
+        for (Future<List<Integer>> future : work) {
+            all.addAll(future.get(120, TimeUnit.SECONDS));
+        }
+        long deadlocks = jdbc.queryForObject("select deadlocks from pg_stat_database where datname = current_database()", Long.class) - deadlocksBefore;
+        assertEquals(0, deadlocks, "deadlocks");
+        assertTrue(all.stream().allMatch(s -> s == 200 || s == 204), "statuses " + all);
+
+        Response seen = worker.get(path + "/history");
+        long last = 0;
+        int tagEntries = 0;
+        for (JsonNode entry : seen.json()) {
+            long version = entry.get("version").asLong();
+            assertTrue(version >= last, "versions must not go back: " + lines(seen));
+            last = version;
+            if (entry.get("changes").get(0).get("field").asString().equals("tags")) {
+                tagEntries++;
+            }
+        }
+        assertEquals(48, tagEntries, "one entry per actual assignment and removal");
+        assertEquals("\"" + last + "\"", worker.get(path).header("ETag"));
+    }
+}
