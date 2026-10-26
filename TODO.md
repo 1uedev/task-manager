@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 32 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-26 |
 
 ### Blockiert – BLOCKIERT
 
@@ -686,3 +688,24 @@ Nicht Teil: weitere Änderungen an Projektkonfiguration, Rechten oder Suche; die
 **Nächster Schritt:** Getrennte KI prüft die Behebung nach (DEC-040), besonders: dass keine Antwort eines Übergangs verrät, ob ein verborgenes Feld gefüllt ist, dass der Typwechsel kein Pflichtfeld umgeht und die Schreibregel für `status` beachtet, und die Zuordnung je Typ und Status mit ihrem Vorrang. Holger nimmt TASK-044 und TASK-052 fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-081, Änderungen in `TicketService`, `ProjectConfiguration` und `ProjectService`, Verträge `tickets.openapi.yaml` und `projects.openapi.yaml`, Zuordnungsdialog (`mappingRows` in `configuration.ts`) und Meldung der Ticketseite, Beschreibung in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md). Die Prüftests E1 bis E5 sind als fünf Regressionstests in `ProjectConfigurationApiTest` übernommen, dazu die Grenzen in `ProjectConfigurationTest` und ein Frontendtest für die Zuordnung je Typ. Zwei bestehende Erwartungen sind mit DEC-081 angepasst (Typwechsel in den ersten Status statt 400, unbekanntes eigenes Feld 400 statt 403). Lokal grün: Backend `verify` gegen PostgreSQL 16 mit Java 21, 308 Tests ohne Ausfall; Frontend `npm run verify` (76 Tests); 102 Browsertests (ein einzelner Lauf parallel zum Backendlauf hatte einen Ausfall im Test „changes“, zwei Wiederholungen ohne Last waren grün). Keine Migration. Nicht geprüft: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI).
+
+## TASK-053 Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261026-attachfix-01 · **Aktualisiert:** 2026-10-26
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001, REQ-ORG-003, REQ-TKT-001, REQ-API-001. **Abhängigkeiten:** TASK-051 und TASK-052 (beide gemergt, BEREIT ZUR PRÜFUNG) und die Prüfberichte [docs/REVIEW_TASK-051_PR-168.md](docs/REVIEW_TASK-051_PR-168.md) und [docs/REVIEW_TASK-052_PR-172.md](docs/REVIEW_TASK-052_PR-172.md). **Arbeitsstand:** Holger hat am 26. Oktober 2026 im Projektgespräch zugestimmt („ja“), die Befunde F1 und F2 der Prüfung von TASK-051 zusammen mit N1 und N2 der Nachprüfung von TASK-052 als eine Korrekturaufgabe zu beheben, die kleinen Befunde F3 bis F8 soweit sie klein sind mit. Branch claude/project-thread-a1ho1t nach dem Merge dieser Reservierung; Ergebnis mit DEC-082, keine Migration vorgesehen.
+
+**Umfang:** Nur die genannten Befunde der beiden Berichte.
+1. F1 (TASK-051, P2): Die Oberfläche bietet Hochladen und Entfernen von Anhängen genau dann an, wenn der Server sie erlaubt, also nach der Schreibregel des Felds `attachments` und nicht abgeleitet aus anderen Feldern. Die Antwort des Tickets nennt dafür auch `attachments` (und `tags`) in `writableFields`. Beide Fälle des Berichts kommen in den Browsertest.
+2. F2 (TASK-051, P2): Die Hinweise zur Sicherung und Rücksicherung in backend/README.md und docs/DEMO.md werden vollständig: Reihenfolge, Verhalten des Aufräumlaufs nach einer Rücksicherung, Zurückholen aus der Quarantäne, entfernte Anhänge, Sicherung des Volumes in der Vorführumgebung und Besitzer eines eigenen Verzeichnisses.
+3. N1 (TASK-052, P3): Wird beim Typwechsel ein Status ausdrücklich mitgegeben, den der Ablauf des neuen Typs nicht kennt, antwortet der Server mit 400 `status.unavailable`, wie der Vertrag es sagt, auch wenn es der bisherige Status ist.
+4. N2 (TASK-052, P3): Der Zuordnungsdialog bietet für einen wegfallenden Typ eigene Zeilen je Status an und leitet die Ziele aus dem Ablauf des Typs ab, auf den er abgebildet wird.
+5. F3 bis F8 (TASK-051, P3), soweit klein: Zusammenfassung beim Hochladen mehrerer Dateien, verständliche Meldung bei misslungenem Download, Ergänzung der Sperrliste um aktive Webinhalte und Windows Ausführbares, Angleichung von TODO.md an DEC-080, Protokoll der Speicherfehler mit Trennung vom Abbruch durch den Client, Dokumentation der Einstellungen und Grenze der Oberfläche passend zum Server. Was sich als nicht klein erweist, wird im Ergebnis als offen genannt.
+
+Nicht Teil: die Hinweise H1 bis H8 des Berichts zu TASK-051 und die Hinweise ohne Befund des Berichts zu TASK-052, weitere Änderungen an Dateien, Projektkonfiguration, Rechten oder Suche, Virenscanner, Nachweis einer Sicherung (A18).
+
+**Schnittstellen und Arbeitsbereich:** Ticketkern (`TicketController`, `TicketService`), Modul `files`, Verträge `contracts/tickets.openapi.yaml` und gegebenenfalls `contracts/files.openapi.yaml`, Ticketseite, Anhänge und Konfigurationseditor der Oberfläche, Testattrappe und Browsertests, backend/README.md, docs/DEMO.md, Tests.
+
+**Abnahmekriterien:** Die Rechte für Anhänge gelten in Oberfläche, API und Historie gleich, belegt mit beiden Fällen aus F1 im Browsertest; die Sicherungshinweise beantworten die Punkte aus F2; der Nachweis zu N1 aus docs/review-evidence/task-052 läuft als Regression grün; der Fall aus N2 lässt sich allein über den Dialog veröffentlichen; alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-082 als Ergebnis zur Prüfung stellen.
