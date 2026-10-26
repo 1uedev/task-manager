@@ -1,0 +1,491 @@
+package taskmanager.projects;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.StreamSupport;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.AdministrationFixture;
+import taskmanager.TestDatabase;
+import taskmanager.identity.account.AccountService;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.CompanyContext;
+import taskmanager.search.internal.SearchProjection;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * TASK-044: the configuration of a project with ticket types, workflows, required fields and custom fields, through the real
+ * HTTP interface, the real permissions, tickets and search modules and a real PostgreSQL. The examples are the two projects of
+ * docs/DOMAIN_MODEL.md; F-03 to F-06 of its test cases are the regressions at the end of each scenario.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class ReviewTask044ExperimentTest {
+    private static final String DATABASE = freshDatabase();
+    private static final String STRONG = "Correct-Horse-Battery-9";
+    private static final AtomicInteger COUNTER = new AtomicInteger();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final List<String> FIVE = ProjectConfiguration.FIELD_KEYS;
+
+    /** Example A: customer service with a workflow of its own for questions and the fields of the examples. */
+    private static final String SERVICE = """
+        {"ticketTypes":[{"key":"stoerung","name":"Störung"},{"key":"frage","name":"Frage"}],
+         "statuses":[{"key":"neu","name":"Neu","category":"open"},{"key":"in_bearbeitung","name":"In Bearbeitung","category":"in_progress"},
+           {"key":"wartet","name":"Wartet auf Kunde","category":"in_progress"},{"key":"geloest","name":"Gelöst","category":"done"},
+           {"key":"geschlossen","name":"Geschlossen","category":"done"}],
+         "initialStatus":"neu",
+         "transitions":[{"from":"neu","to":"in_bearbeitung","requiredFields":["assignee","custom.prioritaet"]},
+           {"from":"in_bearbeitung","to":"wartet"},{"from":"wartet","to":"in_bearbeitung"},
+           {"from":"in_bearbeitung","to":"geloest","requiredFields":["custom.interne_ursache"]},
+           {"from":"geloest","to":"in_bearbeitung"},{"from":"geloest","to":"geschlossen"}],
+         "workflows":[{"type":"frage","initialStatus":"neu","transitions":[{"from":"neu","to":"geloest"}]}],
+         "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+           {"key":"status","required":true},{"key":"assignee","required":false}],
+         "customFields":[
+           {"key":"prioritaet","name":"Priorität","type":"select","options":[{"key":"niedrig","name":"Niedrig"},{"key":"hoch","name":"Hoch"}]},
+           {"key":"interne_ursache","name":"Interne Ursache","type":"text"},
+           {"key":"notiz","name":"Notiz","type":"longtext"},
+           {"key":"restdauer","name":"Restdauer in Stunden","type":"integer"},
+           {"key":"termin","name":"Termin","type":"date"},
+           {"key":"bestaetigt","name":"Vom Kunden bestätigt","type":"boolean"},
+           {"key":"ansprechpartner","name":"Ansprechpartner","type":"user"}]}
+        """;
+
+    /** Example B: software development, where the step to review needs a test instruction. */
+    private static final String DEVELOPMENT = """
+        {"ticketTypes":[{"key":"fehler","name":"Fehler"},{"key":"aufgabe","name":"Aufgabe"},{"key":"verbesserung","name":"Verbesserung"}],
+         "statuses":[{"key":"eingang","name":"Eingang","category":"open"},{"key":"geplant","name":"Geplant","category":"open"},
+           {"key":"in_entwicklung","name":"In Entwicklung","category":"in_progress"},{"key":"in_pruefung","name":"In Prüfung","category":"in_progress"},
+           {"key":"erledigt","name":"Erledigt","category":"done"}],
+         "initialStatus":"eingang",
+         "transitions":[{"from":"eingang","to":"geplant","requiredFields":["description","custom.prioritaet"]},
+           {"from":"geplant","to":"in_entwicklung","requiredFields":["assignee"]},
+           {"from":"in_entwicklung","to":"in_pruefung","requiredFields":["custom.pruefanleitung"]},
+           {"from":"in_pruefung","to":"erledigt"},{"from":"in_pruefung","to":"in_entwicklung"},{"from":"erledigt","to":"in_entwicklung"}],
+         "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+           {"key":"status","required":true},{"key":"assignee","required":false}],
+         "customFields":[
+           {"key":"prioritaet","name":"Priorität","type":"select","options":[{"key":"p1","name":"P1"},{"key":"p2","name":"P2"}]},
+           {"key":"pruefanleitung","name":"Prüfanleitung","type":"longtext"}]}
+        """;
+
+    private static String freshDatabase() {
+        try {
+            return TestDatabase.createEmptyDatabase();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> DATABASE);
+        registry.add("spring.datasource.username", TestDatabase::username);
+        registry.add("spring.datasource.password", TestDatabase::password);
+    }
+
+    @Value("${local.server.port}") int port;
+    @Autowired AccountService accounts;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired CompanyContext companies;
+    @Autowired PlatformTransactionManager transactions;
+    @Autowired SearchProjection projection;
+
+    // ---------------------------------------------------------------- a minimal browser
+
+    record Response(int status, String body, Map<String, List<String>> headers) {
+        String header(String name) {
+            return headers.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name)).flatMap(e -> e.getValue().stream())
+                .findFirst().orElse(null);
+        }
+
+        JsonNode json() {
+            return JSON.readTree(body);
+        }
+
+        String code() {
+            return json().get("code").asString();
+        }
+
+        List<String> violations() {
+            return strings(json().get("violations"));
+        }
+
+        JsonNode fields() {
+            return json().get("fields");
+        }
+
+        JsonNode custom() {
+            return json().get("customFields");
+        }
+    }
+
+    final class Browser {
+        private final HttpClient http = HttpClient.newHttpClient();
+        final Map<String, String> cookies = new LinkedHashMap<>();
+
+        Response send(String method, String path, Object body, String ifMatch) {
+            try {
+                HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+                if (body != null) {
+                    request.header("Content-Type", "application/json");
+                    request.method(method, HttpRequest.BodyPublishers.ofString(body instanceof String s ? s : JSON.writeValueAsString(body)));
+                } else {
+                    request.method(method, HttpRequest.BodyPublishers.noBody());
+                }
+                if (ifMatch != null) {
+                    request.header("If-Match", ifMatch);
+                }
+                if (!cookies.isEmpty()) {
+                    List<String> pairs = new ArrayList<>();
+                    cookies.forEach((name, value) -> pairs.add(name + "=" + value));
+                    request.header("Cookie", String.join("; ", pairs));
+                }
+                String csrf = cookies.get("__Host-tm-csrf");
+                if (csrf != null) {
+                    request.header("X-CSRF-Token", csrf);
+                }
+                HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+                for (String cookie : response.headers().allValues("set-cookie")) {
+                    String pair = cookie.substring(0, cookie.indexOf(';') < 0 ? cookie.length() : cookie.indexOf(';'));
+                    String name = pair.substring(0, pair.indexOf('='));
+                    if (cookie.toLowerCase().contains("max-age=0")) {
+                        cookies.remove(name);
+                    } else {
+                        cookies.put(name, pair.substring(pair.indexOf('=') + 1));
+                    }
+                }
+                return new Response(response.statusCode(), response.body(), response.headers().map());
+            } catch (java.io.IOException | InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private record Person(Browser browser, UUID id) {
+        Response get(String path) {
+            return browser.send("GET", path, null, null);
+        }
+
+        Response send(String method, String path, Object body, String ifMatch) {
+            return browser.send(method, path, body, ifMatch);
+        }
+    }
+
+    private Person person(AdministrationRight... rights) {
+        var issued = accounts.create("test", "config-" + COUNTER.incrementAndGet(), null);
+        if (rights.length > 0) {
+            AdministrationFixture.grant(jdbc, companies, transactions, issued.account().id(), rights);
+        }
+        Browser browser = new Browser();
+        assertEquals(200, browser.send("GET", "/api/v1/session", null, null).status());
+        assertEquals(200, browser.send("POST", "/api/v1/session",
+            Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null).status());
+        assertEquals(200, browser.send("POST", "/api/v1/session/password",
+            Map.of("currentPassword", issued.oneTimePassword(), "newPassword", STRONG), null).status());
+        return new Person(browser, issued.account().id());
+    }
+
+    /**
+     * Grants rules in a group of their own for one project: an action key such as {@code ticket.read}, or a field rule such as
+     * {@code READ:title}, {@code WRITE:custom.notiz} or {@code DENY-READ:custom.interne_ursache} for tickets. {@code *} stands
+     * for the five fixed fields.
+     */
+    private void grant(UUID account, UUID project, String... rules) {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            UUID companyId = companies.find().orElseGet(companies::create);
+            jdbc.update("insert into permissions_revision(company_id) values (?) on conflict do nothing", companyId);
+            UUID group = UUID.randomUUID();
+            jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, "fixture-" + group);
+            for (String rule : rules) {
+                if (!rule.contains(":")) {
+                    jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
+                        companyId, group, project, rule);
+                    continue;
+                }
+                String[] parts = rule.split(":");
+                boolean deny = parts[0].startsWith("DENY-");
+                String operation = deny ? parts[0].substring(5) : parts[0];
+                for (String field : parts[1].equals("*") ? FIVE : List.of(parts[1])) {
+                    jdbc.update("""
+                            insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect)
+                            values (?, ?, ?, 'ticket', ?, ?, ?)
+                            """, companyId, group, project, field, operation, deny ? "DENY" : "ALLOW");
+                }
+            }
+            jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
+            jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
+        });
+    }
+
+    /** Everything on the five fixed fields and on the given custom fields. */
+    private static String[] full(String... custom) {
+        List<String> rules = new ArrayList<>(List.of("ticket.read", "ticket.create", "ticket.edit", "READ:*", "WRITE:*"));
+        for (String key : custom) {
+            rules.add("READ:custom." + key);
+            rules.add("WRITE:custom." + key);
+        }
+        return rules.toArray(String[]::new);
+    }
+
+    private record Project(UUID id, String key, Person manager) {
+        String path() {
+            return "/api/v1/projects/" + id;
+        }
+
+        String tickets() {
+            return path() + "/tickets";
+        }
+    }
+
+    /** A project of its own manager, with the given configuration published and the people as members. */
+    private Project project(String configuration, Person... members) {
+        Person manager = person(AdministrationRight.PROJECTS_MANAGE);
+        String key = "C" + COUNTER.incrementAndGet();
+        Response created = manager.send("POST", "/api/v1/projects", Map.of("key", key, "name", "Konfiguration " + key), null);
+        assertEquals(201, created.status(), created.body());
+        Project project = new Project(UUID.fromString(created.json().get("id").asString()), key, manager);
+        String version = created.header("ETag");
+        for (Person member : members) {
+            Response added = manager.send("PUT", project.path() + "/members/" + member.id(), null, version);
+            assertEquals(200, added.status(), added.body());
+            version = added.header("ETag");
+        }
+        if (configuration != null) {
+            Response published = manager.send("PUT", project.path() + "/configuration", configuration, version);
+            assertEquals(200, published.status(), published.body());
+        }
+        return project;
+    }
+
+    private String version(Project project) {
+        return project.manager().get(project.path()).header("ETag");
+    }
+
+    private long configurationVersion(Project project) {
+        return project.manager().get(project.path()).json().get("configurationVersion").asLong();
+    }
+
+    private Response saveDraft(Project project, String ifMatch, long base, String configuration) {
+        return project.manager().send("PUT", project.path() + "/configuration/draft",
+            "{\"baseVersion\":" + base + ",\"configuration\":" + configuration + "}", ifMatch);
+    }
+
+    private Response publish(Project project, long revision, String mappings) {
+        String body = "{\"draftRevision\":" + revision + (mappings == null ? "" : "," + mappings) + "}";
+        return project.manager().send("POST", project.path() + "/configuration/publish", body, version(project));
+    }
+
+    private static Response create(Person person, Project project, Map<String, Object> body) {
+        return person.send("POST", project.tickets(), body, null);
+    }
+
+    private static Response patch(Person person, Project project, long number, Object body, String ifMatch) {
+        return person.send("PATCH", project.tickets() + "/" + number, body, ifMatch);
+    }
+
+    private static Map<String, Object> map(Object... pairs) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            map.put((String) pairs[i], pairs[i + 1]);
+        }
+        return map;
+    }
+
+    private static void assertProblem(Response response, int status, String code) {
+        assertEquals(status, response.status(), response.body());
+        assertEquals(code, response.code(), response.body());
+    }
+
+    private static List<String> strings(JsonNode array) {
+        return StreamSupport.stream(array.spliterator(), false).map(JsonNode::asString).toList();
+    }
+
+    private static List<String> names(JsonNode object) {
+        List<String> names = new ArrayList<>();
+        object.properties().forEach(entry -> names.add(entry.getKey()));
+        return names;
+    }
+
+    private static List<String> changedFields(Response history, int index) {
+        return StreamSupport.stream(history.json().get(index).get("changes").spliterator(), false).map(c -> c.get("field").asString()).toList();
+    }
+
+    // ---------------------------------------------------------------- review experiments (TASK-044, PR #151)
+
+    /** E1: the bound 2^53 - 1 of integer fields; the smallest long slips through Math.abs. */
+    @Test
+    void e1SmallestLongIsRefusedLikeEveryValueBeyondTheBound() {
+        Person worker = person();
+        Project project = project(SERVICE, worker);
+        grant(worker.id(), project.id(), full("restdauer"));
+        Response tooLarge = worker.send("POST", project.tickets(),
+            "{\"type\":\"stoerung\",\"title\":\"A\",\"customFields\":{\"restdauer\":9007199254740992}}", null);
+        assertEquals(400, tooLarge.status(), "control: 2^53 is refused " + tooLarge.body());
+        Response smallest = worker.send("POST", project.tickets(),
+            "{\"type\":\"stoerung\",\"title\":\"B\",\"customFields\":{\"restdauer\":-9223372036854775808}}", null);
+        System.out.println("E1 smallest long: " + smallest.status() + " " + smallest.body());
+        assertEquals(400, smallest.status(), "-2^63 lies beyond the documented bound as well");
+    }
+
+    /** E2: a transition that requires a hidden field tells a caller without read rule whether that field holds a value. */
+    @Test
+    void e2HiddenRequiredFieldOfATransitionDoesNotRevealWhetherItIsFilled() {
+        Person customer = person();
+        Person support = person();
+        Project service = project(SERVICE, customer, support);
+        grant(customer.id(), service.id(), full("prioritaet"));
+        grant(support.id(), service.id(), full("prioritaet", "interne_ursache"));
+        for (int i = 1; i <= 2; i++) {
+            assertEquals(201, create(customer, service, map("type", "stoerung", "title", "T" + i, "customFields", map("prioritaet", "hoch"))).status());
+            assertEquals(200, patch(support, service, i, map("status", "in_bearbeitung", "assignee", support.id().toString()), "\"1\"").status());
+        }
+        // Support records the hidden cause on ticket 2 only, without solving it.
+        assertEquals(200, patch(support, service, 2, map("customFields", map("interne_ursache", "geheim")), "\"2\"").status());
+        Response empty = patch(customer, service, 1, map("status", "geloest"), "\"2\"");
+        Response filled = patch(customer, service, 2, map("status", "geloest"), "\"3\"");
+        System.out.println("E2 hidden field empty:  " + empty.status() + " " + empty.body());
+        System.out.println("E2 hidden field filled: " + filled.status() + " " + filled.body());
+        assertEquals(empty.status(), filled.status(), "the answer depends on a field the caller may not read");
+    }
+
+    /** E3: two types with workflows that share no status: a ticket can never change its type. */
+    @Test
+    void e3ATicketCanChangeBetweenTypesWhoseWorkflowsShareNoStatus() {
+        String config = """
+            {"ticketTypes":[{"key":"a","name":"A"},{"key":"b","name":"B"}],
+             "statuses":[{"key":"a1","name":"A1","category":"open"},{"key":"a2","name":"A2","category":"done"},
+               {"key":"b1","name":"B1","category":"open"},{"key":"b2","name":"B2","category":"done"}],
+             "initialStatus":"a1","transitions":[{"from":"a1","to":"a2"}],
+             "workflows":[{"type":"b","initialStatus":"b1","transitions":[{"from":"b1","to":"b2"}]}],
+             "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+               {"key":"status","required":true},{"key":"assignee","required":false}]}
+            """;
+        Person worker = person();
+        Project project = project(config, worker);
+        grant(worker.id(), project.id(), full());
+        assertEquals(201, create(worker, project, map("type", "a", "title", "Falsch eingeordnet")).status());
+        Response typeOnly = patch(worker, project, 1, map("type", "b"), "\"1\"");
+        Response typeAndStatus = patch(worker, project, 1, map("type", "b", "status", "b1"), "\"1\"");
+        System.out.println("E3 type only:       " + typeOnly.status() + " " + typeOnly.body());
+        System.out.println("E3 type and status: " + typeAndStatus.status() + " " + typeAndStatus.body());
+        assertTrue(typeOnly.status() == 200 || typeAndStatus.status() == 200, "some way to change the type should exist");
+    }
+
+    /** E4: one status, used by two types whose workflows lead to different statuses, can never be removed with a mapping. */
+    @Test
+    void e4AStatusUsedByTwoTypesWithDifferentWorkflowsCanBeMapped() {
+        String before = """
+            {"ticketTypes":[{"key":"a","name":"A"},{"key":"b","name":"B"}],
+             "statuses":[{"key":"x","name":"X","category":"open"},{"key":"a1","name":"A1","category":"done"},
+               {"key":"b1","name":"B1","category":"done"}],
+             "initialStatus":"x","transitions":[],
+             "workflows":[{"type":"a","initialStatus":"x","transitions":[{"from":"x","to":"a1"}]},
+               {"type":"b","initialStatus":"x","transitions":[{"from":"x","to":"b1"}]}],
+             "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+               {"key":"status","required":true},{"key":"assignee","required":false}]}
+            """;
+        String after = """
+            {"ticketTypes":[{"key":"a","name":"A"},{"key":"b","name":"B"}],
+             "statuses":[{"key":"a1","name":"A1","category":"done"},{"key":"b1","name":"B1","category":"done"}],
+             "initialStatus":"a1","transitions":[],
+             "workflows":[{"type":"a","initialStatus":"a1","transitions":[]},{"type":"b","initialStatus":"b1","transitions":[]}],
+             "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+               {"key":"status","required":true},{"key":"assignee","required":false}]}
+            """;
+        Person worker = person();
+        Project project = project(before, worker);
+        grant(worker.id(), project.id(), full());
+        assertEquals(201, create(worker, project, map("type", "a", "title", "A")).status());
+        assertEquals(201, create(worker, project, map("type", "b", "title", "B")).status());
+        Response draft = saveDraft(project, null, configurationVersion(project), after);
+        assertEquals(200, draft.status(), draft.body());
+        Response toA = publish(project, 1, "\"statusMapping\":{\"x\":\"a1\"}");
+        Response toB = publish(project, 1, "\"statusMapping\":{\"x\":\"b1\"}");
+        System.out.println("E4 x->a1: " + toA.status() + " " + toA.body());
+        System.out.println("E4 x->b1: " + toB.status() + " " + toB.body());
+        assertTrue(toA.status() == 200 || toB.status() == 200, "no mapping exists that lets the draft go out");
+    }
+
+    /** E5: a custom field the configuration does not know answers as in the contract, not as missing rights. */
+    @Test
+    void e5AnUnknownCustomFieldIsNamedAsUnknown() {
+        Person worker = person();
+        Project project = project(SERVICE, worker);
+        grant(worker.id(), project.id(), full("prioritaet"));
+        Response created = create(worker, project, map("type", "stoerung", "title", "U", "customFields", map("gibt_es_nicht", "x")));
+        System.out.println("E5 unknown custom field: " + created.status() + " " + created.body());
+        assertProblem(created, 400, "request.invalid");
+    }
+
+    /** E6 (control): publications with mapping and concurrent ticket steps into the status that goes leave no ticket behind. */
+    @Test
+    void e6PublicationWithMappingUnderConcurrentTicketChangesLeavesEveryTicketValid() throws Exception {
+        String before = """
+            {"ticketTypes":[{"key":"task","name":"Aufgabe"}],
+             "statuses":[{"key":"new","name":"Neu","category":"open"},{"key":"old","name":"Alt","category":"in_progress"},
+               {"key":"done","name":"Erledigt","category":"done"}],
+             "initialStatus":"new","transitions":[{"from":"new","to":"old"},{"from":"old","to":"done"},{"from":"new","to":"done"}],
+             "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+               {"key":"status","required":true},{"key":"assignee","required":false}]}
+            """;
+        String after = """
+            {"ticketTypes":[{"key":"task","name":"Aufgabe"}],
+             "statuses":[{"key":"new","name":"Neu","category":"open"},{"key":"done","name":"Erledigt","category":"done"}],
+             "initialStatus":"new","transitions":[{"from":"new","to":"done"}],
+             "fields":[{"key":"title","required":true},{"key":"description","required":false},{"key":"type","required":true},
+               {"key":"status","required":true},{"key":"assignee","required":false}]}
+            """;
+        Person worker = person();
+        Project project = project(before, worker);
+        grant(worker.id(), project.id(), full());
+        int tickets = 60;
+        for (int i = 1; i <= tickets; i++) {
+            assertEquals(201, create(worker, project, map("type", "task", "title", "T" + i)).status());
+        }
+        Response draft = saveDraft(project, null, configurationVersion(project), after);
+        assertEquals(200, draft.status(), draft.body());
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        List<java.util.concurrent.Future<Integer>> steps = new ArrayList<>();
+        for (int i = 1; i <= tickets; i++) {
+            int number = i;
+            steps.add(pool.submit(() -> patch(worker, project, number, map("status", "old"), "\"1\"").status()));
+            if (i == 4) {
+                steps.add(pool.submit(() -> publish(project, 1, "\"statusMapping\":{\"old\":\"done\"}").status()));
+            }
+        }
+        List<Integer> answers = new ArrayList<>();
+        for (var step : steps) {
+            answers.add(step.get());
+        }
+        pool.shutdown();
+        System.out.println("E6 answers: " + answers);
+        assertEquals(3, configurationVersion(project), "the draft was published");
+        assertTrue(answers.stream().allMatch(a -> a == 200 || a == 400), "every step either ran before or was refused after");
+        List<String> left = jdbc.queryForList("select status from ticket where project_id = ? and status not in ('new','done')", String.class, project.id());
+        assertEquals(List.of(), left, "no ticket keeps a status the published version does not know");
+        Long history = jdbc.queryForObject("select count(*) from ticket_change c join ticket t on t.id = c.ticket_id "
+            + "where t.project_id = ? and c.field = 'status' and c.old_value = 'old' and c.new_value = 'done'", Long.class, project.id());
+        System.out.println("E6 moved by the publication with history: " + history);
+    }
+}

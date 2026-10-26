@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 31 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
 
 ### Blockiert – BLOCKIERT
 
@@ -662,3 +664,24 @@ Nicht Teil: Kommentare, interne Notizen und kundenlesbare Anhänge (kommen mit d
 **Ergebnis und Prüfungen:** DEC-080; Modul `files` (Speicherschnittstelle mit Dateisystemadapter, Upload mit Staging und atomarem Ablegen, Regeln für Name, Größe, Endung und Programmanfang, Aufräumlauf mit Quarantäne), Migration V0024, Vertrag `contracts/files.openapi.yaml`, Ticketfeld `attachments` in Feldkatalog, Historie und Vertrag, Oberfläche im Ticket (Liste, Auswahl und Ablegen, Herunterladen, Entfernen mit Rückfrage, Historienzeile), Volume `files-data` im Vorführimage, Erweiterung von Demowerkzeug und Ablaufbeschreibung. Lokal grün: Backend gegen PostgreSQL 16, 303 Tests ohne Ausfall (neu: 27, darunter 8 API Tests gegen echte Datenbank und echtes Verzeichnis, 5 Fehlerfälle von Speicher und Transaktion, 9 Speicher und Regeltests, 1 Vertragsabgleich); `lifecycle-check.sh` gegen eine leere Datenbank mit 23 Migrationen, einschließlich der Ablehnung des Starts ohne Dateispeicher; Frontend `npm run verify` (75 Tests) und 102 Browsertests (7 neue, dazu die Korrektur der Feldbezeichnung in der Gruppenverwaltung); Demowerkzeug: `seed`, `verify` mit Hochladen, Herunterladen, abgelehntem Programm und fehlendem Leserecht gegen das gepackte JAR, nach Neustart mit demselben Verzeichnis `verify --resume` mit unverändertem Anhang (Byte für Byte). Nicht geprüft: PostgreSQL 18.6 und der Docker Lauf `image-check.sh` (laufen in der CI; in dieser Umgebung läuft kein Docker Dienst), ein Dateisystem außer dem lokalen, Uploads über mehrere GB oder viele gleichzeitige große Uploads, ein Virenscanner.
 
 **Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040), besonders: die Reihenfolge Inhalt zuerst und Zeile danach mit ihren Fehlerfällen, den Aufräumlauf samt Quarantäne gegen einen laufenden Upload, Namensbereinigung und Sperrliste gegen Umgehungen (Schreibrichtung, doppelte Endung, Wechseldatenströme), die Auslieferung nur als Datei, die Feldrechte über Oberfläche, API, Historie und direkten Link sowie die Betriebshinweise zur Sicherung. Holger hat die Vorschläge Dateigrenze 25 MB, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk und Entfernen mit Frist von 7 Tagen am 26. Oktober 2026 angenommen (Nachtrag zu DEC-080) und nimmt fachlich ab (Ablauf in docs/DEMO.md, Schritt 8).
+
+## TASK-052 Befunde F1 bis F5 der Prüfung von TASK-044 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261026-configfix-01 · **Aktualisiert:** 2026-10-26
+
+**Bezug:** REQ-ORG-003, REQ-TKT-001, REQ-ACL-003, REQ-API-001. **Abhängigkeiten:** TASK-044 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-044_PR-151.md](docs/REVIEW_TASK-044_PR-151.md). **Arbeitsstand:** Holger hat am 26. Oktober 2026 im Projektgespräch den Empfehlungen zu F1 und F3 zugestimmt („ja ich stimme zu“) und die Behebung von F1 bis F5 als Folgeaufgabe freigegeben. Branch claude/project-thread-kqr6e8 nach dem Merge dieser Reservierung; Ergebnis mit DEC-081, keine Migration vorgesehen.
+
+**Umfang:** Nur die fünf Befunde des Berichts.
+1. F1: Verlangt ein Übergang ein Feld, das die anfragende Person nicht lesen oder nicht schreiben darf, lehnt der Server den Statuswechsel immer mit 409 `ticket.required_field_inaccessible` ab, unabhängig vom Wert des Felds (dieselbe Regel wie bei der Anlage). Die Oberfläche zeigt dafür eine verständliche Meldung.
+2. F2: Ganzzahlfelder weisen Werte unterhalb von −(2^53 − 1) ab, auch −2^63.
+3. F3: Ein Typwechsel behält den Status, wenn der neue Typ ihn kennt; sonst kommt das Ticket in den ersten Status des neuen Typs, mit Typ und Status in der Historie. Ein frei gewählter Zielstatus beim Typwechsel bleibt ausgeschlossen, damit Pflichtfelder eines Übergangs nicht umgangen werden.
+4. F4: Die Statuszuordnung einer Veröffentlichung kann zusätzlich je Paar aus Tickettyp und Status angegeben werden; der Zuordnungsdialog der Oberfläche bietet das an, wenn ein Status in mehreren Typen verwendet wird.
+5. F5: Ein unbekannter Schlüssel in `customFields` antwortet mit 400 `customFields.unknown` statt 403.
+
+Nicht Teil: weitere Änderungen an Projektkonfiguration, Rechten oder Suche; die offenen Entscheidungen aus DEC-073 und die Hinweise des Berichts ohne Befund.
+
+**Schnittstellen und Arbeitsbereich:** Ticketkern (`TicketService`, `TicketController`), Projektkonfiguration (`ProjectConfiguration`, `ProjectService`), Verträge `contracts/tickets.openapi.yaml` und `contracts/projects.openapi.yaml`, Ticketseite und Konfigurationseditor der Oberfläche, Tests.
+
+**Abnahmekriterien:** Die Prüftests E1 bis E5 aus docs/review-evidence/task-044 laufen in angepasster Form als Regression grün; E6 bleibt grün; bestehende Tests zu F-03 bis F-06 bleiben grün; F1 verrät in keiner Antwort, ob ein verborgenes Feld gefüllt ist; ein Typwechsel umgeht kein Pflichtfeld eines Übergangs. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-081 als Ergebnis zur Prüfung stellen.

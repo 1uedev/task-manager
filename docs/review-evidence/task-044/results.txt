@@ -1,0 +1,31 @@
+Prüfung TASK-044 / PR #151, selbst ausgeführt am 2026-10-25 auf main 37580d001210d21f1fa30f5726f02ac6227a10ba
+Umgebung: OpenJDK 21.0.12 mit -Djava.version=21, PostgreSQL 16.15 (lokal, synthetische Daten), Node 22.22.0, Chromium aus der Umgebung
+
+Backend ./mvnw verify (unveränderter Produkt- und Testcode)
+  Tests run: 303, Failures: 1, Errors: 0, Skipped: 0
+  Einziger Fehlschlag: DatabaseFoundationTest.runsAgainstThePinnedPostgresqlVersion (16.15 statt 18.6, erwartbar lokal)
+  Nachlauf mit -Dtaskmanager.test.server-version=16.15: DatabaseFoundationTest 4 Tests grün
+
+ProjectConfigurationApiTest: Tests run: 11, Failures: 0
+ProjectConfigurationTest:    Tests run: 13, Failures: 0
+
+ReviewTask044ExperimentTest (temporär im Testbaum, danach entfernt): Tests run: 6, Failures: 5
+  E1 (F2) restdauer = -9223372036854775808  -> 201, Wert gespeichert und zurückgegeben (Kontrolle 2^53 -> 400)
+  E2 (F1) Wechsel nach "geloest" ohne Leseregel für custom.interne_ursache
+          verborgenes Feld leer  -> 400 custom.interne_ursache.required_for_transition
+          verborgenes Feld gefüllt -> 200, Wechsel vollzogen
+  E3 (F3) Typwechsel a -> b bei getrennten Abläufen
+          nur Typ          -> 400 type.status_unavailable
+          Typ und Status b1 -> 409 ticket.transition_not_allowed
+  E4 (F4) Status x von zwei Typen mit eigenen Abläufen entfernen
+          statusMapping x -> a1 -> 409 status.mapping_invalid:x
+          statusMapping x -> b1 -> 409 status.mapping_invalid:x
+  E5 (F5) customFields {"gibt_es_nicht": "x"} bei voller Berechtigung -> 403 auth.forbidden statt 400 customFields.unknown
+  E6 (Gegenprobe, grün) 60 Tickets, 60 gleichzeitige Wechsel nach "old" und die Veröffentlichung ohne "old" mit Zuordnung old -> done
+          Lauf 1: 48 vorher gewechselt und mit Historie verschoben, übrige mit 400 abgewiesen
+          Lauf 2: 55 verschoben
+          danach in beiden Läufen kein Ticket in einem unbekannten Status
+
+Frontend
+  npm run verify: tests 75, pass 75, fail 0; Typprüfung und Build erfolgreich
+  npm run test:browser: tests 102, pass 102, fail 0, skipped 0
