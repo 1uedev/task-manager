@@ -56,9 +56,14 @@ services:
       TASK_MANAGER_FILES_DIR: /data/files
     volumes:
       - files-data:/data/files
-    # The health check of the image asks the web server, which this process does not start.
+    # The health check of the image asks the web server, which this process does not start. This one only asks whether the
+    # Java process is alive; whether the executor works off the queue shows the page of the background jobs.
     healthcheck:
-      disable: true
+      test: ["CMD", "bash", "-c", "kill -0 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     mem_limit: 768m
     restart: unless-stopped
 
