@@ -1,0 +1,12 @@
+JobReviewExperimentTest, main 23adfe3, JDK 21, PostgreSQL 16.15, 27. Oktober 2026
+
+E1 result: next job queued, executor seen as alive
+   Log: Exception in thread "job-worker-1" java.lang.StackOverflowError: review
+E2 stop took 15008 ms
+E2 result: {state=failed, attempts=1, max_attempts=1, error_code=job.interrupted, error_reference=<uuid>, lease_owner=null} for max_attempts 1
+E3 result: [{attempt=1, repeated=false}, {attempt=1, repeated=false}]
+
+Tests run: 3, Failures: 0, Errors: 0
+
+Volle Suite auf demselben Stand: 44 Testklassen, 335 Tests, 0 Fehler (mvnw verify).
+Frontend: npm run verify grün; npm run test:browser 114 von 114 grün (Chromium).
