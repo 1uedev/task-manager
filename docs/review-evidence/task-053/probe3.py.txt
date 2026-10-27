@@ -1,0 +1,16 @@
+import os, sys, subprocess
+sys.path.insert(0, "tools/demo")
+from demo import Client
+PW = os.environ["TASK_MANAGER_DEMO_PASSWORD"]; URL = "http://127.0.0.1:8080"
+ben = Client(URL); ben.login("ben", PW)
+pid = [p for p in ben.call("GET", "/projects").body if p["key"] == "WEB"][0]["id"]
+t = ben.call("GET", f"/projects/{pid}/tickets", query={"limit": 1}).body[0]
+path = f"/projects/{pid}/tickets/{t['number']}"
+up = ben.call("POST", f"{path}/attachments", content=b"z"*20_000_000, query={"name": "zwanzig.bin"}, headers={"Content-Type": "application/octet-stream"})
+aid = up.body["id"]
+def rchar():
+    o = subprocess.run(["docker","exec","task-manager-app-1","sh","-c","grep rchar /proc/1/io"], capture_output=True, text=True).stdout
+    return int(o.split()[1])
+for m in ("HEAD","HEAD","GET"):
+    a = rchar(); r = ben.call(m, f"{path}/attachments/{aid}", as_bytes=True, expect=None); b = rchar()
+    print(m, r.status, "bytes read by server:", b - a)

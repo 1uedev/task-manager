@@ -1,0 +1,32 @@
+import os, sys, json
+sys.path.insert(0, "tools/demo")
+import demo
+from demo import Client, Builder, GroupSpec
+PW = os.environ["TASK_MANAGER_DEMO_PASSWORD"]
+URL = "http://127.0.0.1:8080"
+admin = Client(URL); admin.login("admin", PW)
+b = Builder(admin, 1); b.credentials = ("admin", PW)
+web = [p for p in admin.call("GET", "/projects").body if p["key"] == "WEB"][0]
+pid = web["id"]
+out = {}
+def acct(u, spec):
+    aid = b.account(u, u.capitalize(), PW)
+    b.group(spec, [aid])
+    etag = admin.call("GET", f"/projects/{pid}").headers.get("etag")
+    admin.call("PUT", f"/projects/{pid}/members/{aid}", headers={"If-Match": etag})
+    c = Client(URL); c.login(u, PW); return c
+ALL = demo.ALL_FIELDS
+belege = acct("belege", GroupSpec("Nur Belege", ["project.read","ticket.read","ticket.edit"], ALL, ["attachments"]))
+alt = acct("altgruppe", GroupSpec("Alte Gruppe", ["project.read","ticket.read","ticket.edit"], ALL, ["title","description","status","assignee"]))
+nurtags = acct("nurtags", GroupSpec("Nur Tags", ["project.read","ticket.read","ticket.edit"], ALL, ["tags"]))
+for name, c in (("belege", belege), ("altgruppe", alt), ("nurtags", nurtags)):
+    t = c.call("GET", f"/projects/{pid}/tickets", query={"limit": 1}).body[0]
+    path = f"/projects/{pid}/tickets/{t['number']}"
+    one = c.call("GET", path).body
+    up = c.call("POST", f"{path}/attachments", content=b"Beleg", query={"name": f"{name}.txt"}, headers={"Content-Type": "application/octet-stream"}, expect=None)
+    tags = admin.call("GET", "/tags").body
+    tagid = (tags["items"] if isinstance(tags, dict) else tags)[0]["id"]
+    tg = c.call("POST", f"{path}/tags", {"tagId": tagid}, expect=None)
+    print(name, "list:", t["writableFields"], "single:", one["writableFields"], "upload:", up.status, "tag:", tg.status)
+    if up.status == 201:
+        rm = c.call("DELETE", f"{path}/attachments/{up.body['id']}", expect=None); print("  remove", rm.status)

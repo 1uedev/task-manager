@@ -1,0 +1,11 @@
+import os, sys
+sys.path.insert(0, "tools/demo")
+from demo import Client
+c = Client("http://127.0.0.1:8080"); c.login("ben", os.environ["TASK_MANAGER_DEMO_PASSWORD"])
+pid = [p for p in c.call("GET", "/projects").body if p["key"] == "WEB"][0]["id"]
+t = c.call("GET", f"/projects/{pid}/tickets", query={"limit": 1}).body[0]
+path = f"/projects/{pid}/tickets/{t['number']}"
+print("header", c.call("GET", f"{path}/attachments").headers.get("x-attachment-max-bytes"))
+for name, size in (("a.txt", 1000), ("b.txt", 1001), ("c.docm", 5), ("d.html", 5)):
+    r = c.call("POST", f"{path}/attachments", content=b"q"*size, query={"name": name}, headers={"Content-Type": "application/octet-stream"}, expect=None)
+    print(name, size, r.status)
