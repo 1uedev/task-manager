@@ -264,6 +264,7 @@ export const en: Record<MessageKey, Message> = {
   'attachments.removeHint': 'It can no longer be opened afterwards. The history keeps the entry.',
   'attachments.removeConfirm': 'Remove',
   'attachments.cancel': 'Cancel',
+  'attachments.macroWarning': 'May contain macros. Open it only if you trust the source, and do not enable macros without a reason.',
   'attachments.removed': '{name} removed.',
   'attachments.error.tooLarge': 'The file is too large.',
   'attachments.error.blocked': 'This file type is not allowed. Programs, scripts and active web content are refused.',

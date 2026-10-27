@@ -264,6 +264,7 @@ export const de = {
   'attachments.removeHint': 'Er ist danach nicht mehr abrufbar. Die Historie behält den Eintrag.',
   'attachments.removeConfirm': 'Entfernen',
   'attachments.cancel': 'Abbrechen',
+  'attachments.macroWarning': 'Kann Makros enthalten. Nur öffnen, wenn Sie der Quelle vertrauen, und Makros nicht ohne Grund aktivieren.',
   'attachments.removed': '{name} entfernt.',
   'attachments.error.tooLarge': 'Die Datei ist zu groß.',
   'attachments.error.blocked': 'Dieser Dateityp ist nicht erlaubt. Programme, Skripte und aktive Webinhalte werden abgelehnt.',

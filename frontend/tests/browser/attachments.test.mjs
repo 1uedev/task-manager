@@ -197,6 +197,19 @@ describe('attachments of a ticket', () => {
     });
   });
 
+  // Holger's decision of 27 October 2026: documents with macros stay allowed, with a warning in the list.
+  test('a document that may carry macros is attached with a warning, other files without', async () => {
+    await withTicket(ANNA, async (page) => {
+      const section = page.getByRole('region', { name: 'Anhänge' });
+      await section.getByTestId('attachment-file').setInputFiles([file('Kalkulation.XLSM', 'x'), file('Bericht.txt', 'y')]);
+      await section.getByText(/^2 von 2 Dateien angehängt/).waitFor();
+      const items = section.getByTestId('ticket-attachments').getByRole('listitem');
+      await items.filter({ hasText: 'Kalkulation.XLSM' }).getByText('Kann Makros enthalten. Nur öffnen, wenn Sie der Quelle vertrauen, und Makros nicht ohne Grund aktivieren.').waitFor();
+      assert.equal(await items.filter({ hasText: 'Bericht.txt' }).getByTestId('attachment-macro-warning').count(), 0);
+      assert.equal(await section.getByTestId('attachment-macro-warning').count(), 1);
+    });
+  });
+
   test('English texts', async () => {
     await withTicket(ANNA, async (page) => {
       const section = page.getByRole('region', { name: 'Attachments' });
