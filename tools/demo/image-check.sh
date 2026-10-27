@@ -59,7 +59,7 @@ for _ in $(seq 1 60); do
 done
 [ "$done_jobs" -ge 1 ] || { docker compose logs worker; echo "the worker ran no clean up" >&2; exit 1; }
 [ "$(sql "select count(*) from job_worker")" -eq 1 ] || { echo "not exactly one executor polls" >&2; exit 1; }
-[ -z "$(docker compose port worker 8080 2>/dev/null || true)" ] || { echo "the worker publishes a port" >&2; exit 1; }
+[ -z "$(docker port "$(docker compose ps -q worker)")" ] || { echo "the worker publishes a port" >&2; exit 1; }
 
 step "Setup, demo data and checks"
 otp=$(docker compose run --rm app bootstrap-admin admin | sed -n 's/^One time password (shown only now): //p')
