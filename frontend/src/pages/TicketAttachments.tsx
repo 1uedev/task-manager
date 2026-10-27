@@ -8,6 +8,11 @@ import { EmptyText, LoadedView, NoticeView, useProblemText, type Notice } from '
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
+// Office documents that can carry macros. They stay allowed as common business files, but the list warns before they are
+// opened (Holger's decision of 27 October 2026, addendum to DEC-082).
+const MACRO_EXTENSIONS = new Set(['docm', 'dotm', 'xlsm', 'xltm', 'xlsb', 'xlam', 'pptm', 'potm', 'ppsm', 'ppam', 'sldm']);
+const mayCarryMacros = (fileName: string) => fileName.includes('.') && MACRO_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase());
+
 // The limit of a new installation, shown until the server names its own (review F8 of TASK-051); the server decides.
 const DEFAULT_LIMIT_BYTES = 25_000_000;
 
@@ -131,6 +136,11 @@ export function TicketAttachments({ project, ticket, round, onChanged }: {
                     <a href={attachmentUrl(project.id, ticket.number, item.id)} download={item.name} aria-label={t('attachments.download', { name: item.name })}
                       onClick={(event) => void download(event, item.id, item.name)}>{item.name}</a>
                     <span className="hint">{t('attachments.meta', { size: formatBytes(item.size, language), by: name(item.uploadedBy), date: formatDateTime(item.uploadedAt, language) })}</span>
+                    {mayCarryMacros(item.name) && (
+                      <p className="attachment-warning" data-testid="attachment-macro-warning">
+                        <span aria-hidden="true">⚠</span> {t('attachments.macroWarning')}
+                      </p>
+                    )}
                     {editable && removing !== item.id && (
                       <button type="button" className="secondary" onClick={() => setRemoving(item.id)}>{t('attachments.remove', { name: item.name })}</button>
                     )}

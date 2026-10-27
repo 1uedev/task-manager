@@ -6,6 +6,7 @@
   --brand-background: #ffffff;
   --brand-text: #17140f;
   --error: #8f1d1d;
+  --warning: #8a4b00;
   --link: #b55714;
   --muted: #514f4b;
   --border: #7f7e7b;
@@ -32,6 +33,7 @@
   color-scheme: dark;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -6px rgb(0 0 0 / 0.5);
   --ok: #4ade80;
+  --warning: #fbbf24;
   --page: color-mix(in srgb, #000 30%, var(--brand-background));
 }
 
@@ -507,3 +509,4 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
 .attachments { list-style: none; padding: 0; margin: 0 0 0.5rem; display: grid; gap: 0.5rem; }
 .attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
 .attachments li > a { font-weight: 600; overflow-wrap: anywhere; }
+.attachment-warning { flex-basis: 100%; margin: 0; color: var(--warning); font-size: 0.9rem; }
