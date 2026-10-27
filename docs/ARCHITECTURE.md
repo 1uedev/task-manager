@@ -108,6 +108,8 @@ Nachtrag vom 13. Oktober 2026: Die Präzisierung liegt nun im [Helpdesk- und SLA
 
 SLA-Fristen werden deterministisch aus versionierten Regeln und Servicekalendern berechnet. Jobs erhalten Unternehmenskontext, begrenzte Dienstrechte und eine überprüfbare Zeitquelle. Sommerzeit, Pausen, Wiedereröffnung und Prioritätswechsel benötigen vor Umsetzung Beispiele aus OPEN-008. KI entscheidet keine verbindlichen Fristen.
 
+Nachtrag vom 27. Oktober 2026 (TASK-054, DEC-083, zur Prüfung): Die Grundlage liegt als Modul `jobs` vor. Aufträge stehen in PostgreSQL und werden über den Port `Jobs` in der Transaktion der Fachänderung eingestellt; ein Ausführer im Webprozess oder im getrennten Prozess `worker` aus demselben Image holt sie mit `FOR UPDATE SKIP LOCKED`, hält eine befristete Reservierung, wiederholt Fehler mit wachsendem Abstand bis zu einer Höchstzahl und zeigt endgültig gescheiterte Aufträge mit Fehlerkennung in der Administration (Recht `jobs.manage`). Die Auftragskennung bleibt über alle Versuche gleich; Bearbeiter nutzen sie als Wiederholungsnachweis für C12. Wiederkehrende Aufgaben mit festem Abstand laufen auch mit mehreren Prozessen einmal je Fälligkeit; der Aufräumlauf der Anhänge ist darauf umgestellt. Ein Auftrag trägt sein Unternehmen, aber keinen Rechtekontext: Wer einen Auftrag bearbeitet, prüft Rechte über die Ports der Fachmodule, ein Dienstkonto mit allgemeinem Zugriff gibt es nicht. Mail, SLA und Benachrichtigungen bauen darauf auf und sind nicht Teil. Einzelheiten in [backend/README.md](../backend/README.md), Abschnitt Hintergrundaufträge.
+
 ## Docker, Dateien und Betrieb
 
 ```mermaid

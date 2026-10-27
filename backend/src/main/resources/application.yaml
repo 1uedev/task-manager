@@ -58,3 +58,7 @@ taskmanager:
     # The file store of the attachments (TASK-051) must lie on a persistent volume outside the container; the web application
     # refuses to start without it. Limits and periods have defaults in FilesProperties.
     directory: ${TASK_MANAGER_FILES_DIR:}
+  jobs:
+    # The web process runs background jobs too unless this is false; the separate process "worker" always runs them (TASK-054).
+    # Limits, retries and periods have defaults in JobsProperties.
+    worker-enabled: ${TASK_MANAGER_JOBS_WORKER:true}

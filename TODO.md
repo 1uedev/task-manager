@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 33 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 34 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-054](#task-054-dauerhafte-hintergrundaufträge-paket-a8) | Dauerhafte Hintergrundaufträge (Paket A8) | claude-20261027-jobs-01 | 2026-10-27 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -73,6 +71,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-051](#task-051-dateien-und-anhänge-an-tickets-paket-a7) | Dateien und Anhänge an Tickets (Paket A7) | claude-20261025-files-01 | 2026-10-25 |
 | [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
 | [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-27 |
+| [TASK-054](#task-054-dauerhafte-hintergrundaufträge-paket-a8) | Dauerhafte Hintergrundaufträge (Paket A8) | claude-20261027-jobs-01 | 2026-10-27 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -715,7 +714,7 @@ Nicht Teil: die Hinweise H1 bis H8 des Berichts zu TASK-051 und die Hinweise ohn
 
 ## TASK-054 Dauerhafte Hintergrundaufträge (Paket A8)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261027-jobs-01 · **Aktualisiert:** 2026-10-27
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261027-jobs-01 · **Aktualisiert:** 2026-10-27
 
 **Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-ORG-002 (Unternehmensgrenze der Aufträge), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-022 (Backendgrundlage), TASK-039 (Unternehmen der Installation), TASK-043 (Rechtekern), TASK-051 (Aufräumlauf der Anhänge als erster Verbraucher), alle gemergt. **Arbeitsstand:** Paket A8 der Reihenfolge aus DEC-072, Holgers Auftrag „mache weiter“ vom 27. Oktober 2026. Branch claude/project-thread-tfp34a nach dem Merge dieser Reservierung; Ergebnis mit DEC-083 und Migration V0025. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung zu OPEN-002 (Auftragstechnik) und dem Vorschlag aus ARCHITECTURE.md „Zuverlässige Hintergrundarbeit“; Holger kann sie vor dem Merge dieser Reservierung ändern.
 
@@ -735,4 +734,6 @@ Nicht Teil: Mailabruf und Versand, Benachrichtigungen, SLA, Git, KI, Benutzerauf
 
 **Abnahmekriterien:** Ein in einer zurückgerollten Transaktion eingestellter Auftrag existiert nicht; ein bestätigter Auftrag wird genau einmal erfolgreich ausgeführt, auch mit zwei gleichzeitig laufenden Ausführern; ein Abbruch des Ausführers während der Ausführung führt nach Ablauf der Reservierung zu genau einer weiteren Ausführung, die den Wiederholungsnachweis sieht; ein immer scheiternder Auftrag erreicht nach der Höchstzahl den Zustand „endgültig gescheitert“, wird in Übersicht und Liste mit Fehlerkennung ohne Geheimnisse gezeigt und lässt sich mit `jobs.manage` erneut einstellen; ohne `jobs.manage` gibt es weder Übersicht noch Liste noch Aktion (403); eine wiederkehrende Aufgabe läuft mit zwei Prozessen nur einmal je Fälligkeit; der Aufräumlauf der Anhänge verhält sich wie vorher und seine Tests bleiben grün; Neustart von Webprozess und Ausführer verliert keinen bestätigten Auftrag. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-083 als Ergebnis PR übergeben. Offene Entscheidungen für Holger, falls er von den Vorschlägen abweichen will: getrennter Ausführer in der Vorführumgebung, Aufbewahrungsfristen, Höchstzahl und Abstand der Wiederholungen (Vorschlag 5 Versuche, beginnend bei 30 Sekunden, verdoppelt, höchstens 1 Stunde), Sichtbarkeit nur mit dem neuen Recht `jobs.manage`.
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040), besonders: Abholen mit `FOR UPDATE SKIP LOCKED` und die Bedingungen beim Abschluss eines Versuchs (nur der Besitzer der Reservierung schreibt das Ergebnis), Verlängerung und Ablauf der Reservierung, das Zeitlimit mit Unterbrechung, die Einmaligkeit wiederkehrender Aufgaben bei mehreren Prozessen, die Unternehmensgrenze in Übersicht, Liste und Aktionen, dass weder Nutzdaten noch Fehlermeldungen nach außen gelangen, und das Herunterfahren des Prozesses `worker`. Holger nimmt fachlich ab. Abweichung vom Claim zur Entscheidung: Der Rückstau steht in der Übersicht und als Warnung im Protokoll, nicht in der Bereitschaftsanzeige, weil Spring Boot sonst auch die Gesamtgesundheit und damit den Container als ungesund meldet. Die übrigen Vorschläge (getrennter Ausführer in der Vorführumgebung, 7 und 30 Tage Aufbewahrung, 5 Versuche ab 30 Sekunden verdoppelt bis 1 Stunde, Sichtbarkeit nur mit `jobs.manage`) sind wie im Claim umgesetzt und konfigurierbar.
+
+**Ergebnis und Prüfungen:** DEC-083. Server: Modul `jobs` (Port `Jobs` mit `NewJob`, `JobHandler`, `JobExecution`, `JobFailure`, `RecurringTask`; intern `JobService`, `JobExecutor`, `JobRepository`, `JobsRetention`, `JobAdministration`; `JobController` unter `/api/v1/jobs`), Migration V0025, Recht `jobs.manage` in `AdministrationRight` und im Rechtekatalog, Befehl `worker` in `TaskManagerApplication`, Aufräumlauf als `FilesCleanupTask`; Verträge `contracts/jobs.openapi.yaml` und `identity.openapi.yaml`. Oberfläche: Seite Hintergrundaufträge (`JobsPage`) in der Administration, Katalog de und en. Vorführung: Dienst `worker` in compose.yaml mit eigener Speichergrenze, Prüfschritt in `tools/demo/image-check.sh`, docs/DEMO.md. Doku: backend/README.md Abschnitt Hintergrundaufträge, ARCHITECTURE.md Nachtrag, backend/PERMISSIONS.md. Lokal gelaufen (Java 21 mit `-Djava.version=21`, PostgreSQL 16): alle 44 Testklassen des Backends ohne Fehler, darunter `JobExecutorTest` (Rückrollen, zwei Ausführer mit 150 Aufträgen, Wiederholung bis zum Scheitern, endgültiger Fehler, Zeitlimit, fehlender Bearbeiter, abgebrochener Ausführer mit Wiederholungsnachweis, abgelaufene Reservierung, Verlängerung, wiederkehrende Aufgabe mit zwei Ausführern, Aufräumlauf, Aufbewahrung), `JobsApiTest`, `JobsContractTest` und die angepassten Rechte und Lebenszyklustests; `backend/scripts/lifecycle-check.sh` gegen eine leere Datenbank mit der neuen Phase für den Prozess `worker`; `npm run verify` und alle 114 Browsertests (davon 7 für die neue Seite). Nicht lokal gelaufen: die Imageprüfung, weil Docker Hub die Basisimages mit 429 verweigerte; sie läuft in CI als Workflow `Image`. PostgreSQL 18.6 und Java 25 prüft CI.

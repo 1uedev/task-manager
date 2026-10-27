@@ -63,8 +63,8 @@ class PermissionsController {
     static final String TICKET = "ticket";
     private static final String CUSTOM_FIELD = "custom\\.[a-z][a-z0-9_]{0,39}";
     /** Company wide only: no project can narrow them. */
-    static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "permissions.audit.read",
-        "permissions.manage", "projects.manage", "session_duration.manage");
+    static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "jobs.manage",
+        "permissions.audit.read", "permissions.manage", "projects.manage", "session_duration.manage");
     /** For one project, or for every project the account is a member of when granted without a project. */
     static final List<String> PROJECT_ACTIONS = List.of("project.manage", "project.read", "tag.create", "tags.manage",
         "ticket.create", "ticket.edit", "ticket.read");

@@ -86,16 +86,16 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true,0025:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 23 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 24 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,file_attachment,file_audit_event,flyway_schema_history,identity_account,identity_audit_event,identity_ldap_setting,identity_login_throttle,identity_session,identity_setting,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_configuration_draft,project_member,search_project,search_project_tag,search_state,search_tag,search_ticket,search_ticket_custom,search_ticket_tag,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'appearance_audit_event,appearance_setting,file_attachment,file_audit_event,flyway_schema_history,identity_account,identity_audit_event,identity_ldap_setting,identity_login_throttle,identity_session,identity_setting,job,job_audit_event,job_schedule,job_worker,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_configuration_draft,project_member,search_project,search_project_tag,search_state,search_tag,search_ticket,search_ticket_custom,search_ticket_tag,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter' ] \
   || fail "unexpected schema objects"
 [ "$(sql "select (select count(*) from platform_company) + (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
@@ -116,7 +116,7 @@ secret=$(sed -n 's/^One time password (shown only now): //p' "$logs/bootstrap.ou
   || fail "first account is not stored as expected"
 [ "$(sql "select count(*) from identity_account where password_hash like '%$secret%'")" = 0 ] || fail "one time password stored in clear"
 # TASK-039: the same transaction created the company and the initial rights, and nothing beyond them.
-[ "$(sql "select (select count(*) from platform_company) || ',' || (select count(*) from permissions_group) || ',' || (select count(*) from permissions_action where action_key in ('permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage', 'tags.manage') and project_id is null) || ',' || (select count(*) from permissions_membership m join identity_account a on a.id = m.user_id where a.username = 'lifecycle-admin') || ',' || (select count(*) from permissions_field)")" = '1,1,6,1,0' ] \
+[ "$(sql "select (select count(*) from platform_company) || ',' || (select count(*) from permissions_group) || ',' || (select count(*) from permissions_action where action_key in ('permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage', 'tags.manage', 'jobs.manage') and project_id is null) || ',' || (select count(*) from permissions_membership m join identity_account a on a.id = m.user_id where a.username = 'lifecycle-admin') || ',' || (select count(*) from permissions_field)")" = '1,1,7,1,0' ] \
   || fail "bootstrap-admin did not create the company and the initial administration as expected"
 
 phase=bootstrap-refused
@@ -143,6 +143,37 @@ phase=started-with-admin
 echo "== Start with an existing account"
 run with-account
 [ -d "$TASK_MANAGER_FILES_DIR/staging" ] && [ -d "$TASK_MANAGER_FILES_DIR/content" ] || fail "the web application did not prepare the file store"
+
+phase=worker
+echo "== Separate worker process (TASK-054)"
+# The web runs above executed jobs themselves; the worker starts from a queue without schedules and must create them.
+sql "delete from job; delete from job_schedule; delete from job_worker"
+java -jar "$jar" worker > "$logs/worker.log" 2>&1 &
+pid=$!
+deadline=$((SECONDS + 120))
+until [ "$(sql "select count(*) from job_worker")" = 1 ] \
+    && [ "$(sql "select count(*) from job where kind = 'recurring.files.cleanup' and state = 'succeeded'")" = 1 ]; do
+  alive || { cat "$logs/worker.log"; fail "the worker ended before it ran the clean up"; }
+  [ "$SECONDS" -lt "$deadline" ] || { cat "$logs/worker.log"; fail "the worker did not run the clean up within 120 s"; }
+  sleep 1
+done
+! curl -fsS --connect-timeout 2 --max-time 5 "http://localhost:$port/actuator/health" > /dev/null 2>&1 || fail "the worker serves HTTP"
+kill -TERM "$pid"
+( sleep 60; kill -KILL "$pid" ) 2>/dev/null &
+watchdog=$!
+set +e
+wait "$pid"
+code=$?
+set -e
+pkill -P "$watchdog" 2>/dev/null || true
+kill "$watchdog" 2>/dev/null || true
+wait "$watchdog" 2>/dev/null || true
+pid=
+[ "$code" -ne 137 ] || { cat "$logs/worker.log"; fail "the worker did not exit within 60 s after SIGTERM"; }
+[ "$code" -eq 143 ] || [ "$code" -eq 0 ] || fail "worker: exit code $code after SIGTERM"
+grep -q "Job executor .* stopped." "$logs/worker.log" || fail "worker: the executor did not stop in order"
+! grep -E " ERROR " "$logs/worker.log" || fail "worker: error in log"
+[ "$(sql "select count(*) from job_worker")" = 0 ] || fail "worker: the executor did not sign off"
 
 phase=missing-files-dir
 echo "== Refusal without a file store"

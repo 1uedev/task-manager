@@ -7,7 +7,7 @@ Stand 21. Oktober 2026 · Ergebnis von TASK-031 zur Prüfung (DEC-071). Dieses D
 | Teil | Inhalt |
 |---|---|
 | [Dockerfile](../Dockerfile) | Ein Image mit Backend und gebauter Oberfläche. Drei Stufen: Oberfläche mit Node 24.22.0 bauen, Backend mit Temurin 25 und der gebauten Oberfläche paketieren, Laufzeit auf Temurin 25 JRE. Basisimages mit Tag und Digest festgelegt. Läuft als eigenes Konto ohne Root, ohne Passwort, Schlüssel oder Daten im Image. |
-| [compose.yaml](../compose.yaml) | PostgreSQL 18.6 (gleicher Digest wie Tests und CI) mit dem benannten Volume `db-data`, die Anwendung mit dem Volume `files-data` für die Anhänge (TASK-051) und auf Wunsch das Werkzeug `demo`. Die Anwendung ist nur auf diesem Rechner erreichbar (`127.0.0.1`). |
+| [compose.yaml](../compose.yaml) | PostgreSQL 18.6 (gleicher Digest wie Tests und CI) mit dem benannten Volume `db-data`, die Anwendung mit dem Volume `files-data` für die Anhänge (TASK-051), der getrennte Prozess `worker` aus demselben Image für die Hintergrundaufträge und wiederkehrenden Aufgaben (TASK-054, ohne Webserver und ohne Port) und auf Wunsch das Werkzeug `demo`. Die Anwendung ist nur auf diesem Rechner erreichbar (`127.0.0.1`). |
 | `.env.example` | Vorlage für die zwei Pflichtwerte. Ohne sie verweigert Compose den Start; es gibt keine Standardkennwörter. |
 | [tools/demo/demo.py](../tools/demo/demo.py) | Synthetische Demodaten, Referenzbestand, Prüfungen und Suchmessung, ausschließlich über die öffentliche HTTP API. Nur Python Standardbibliothek. |
 | [tools/demo/image-check.sh](../tools/demo/image-check.sh) | Gesamtprüfung des Images, läuft in CI als Workflow `Image`. |
@@ -52,6 +52,7 @@ Weitere Befehle:
 | `docker compose run --rm app reset-admin-password admin` | Neues Einmalpasswort für ein Konto mit Kontenverwaltung, wenn niemand mehr angemeldet ist. |
 | `docker compose run --rm app rebuild-search` | Suchprojektion aus den Fachdaten neu aufbauen. |
 | `docker compose logs app` | Protokoll der Anwendung mit Korrelationskennung je Anfrage. |
+| `docker compose logs worker` | Protokoll der Hintergrundaufträge; ein Fehler steht dort mit der Referenz, die die Seite Hintergrundaufträge zeigt. |
 
 ### Sicherung der Vorführumgebung
 
@@ -59,11 +60,11 @@ Die Vorführumgebung ist kein Betrieb und die Sicherung kein Nachweis für A18. 
 
 | Schritt | Befehl |
 |---|---|
-| Anwendung anhalten (empfohlen) | `docker compose stop app` |
+| Anwendung anhalten (empfohlen) | `docker compose stop app worker` |
 | Datenbank sichern | `docker compose exec -T db pg_dump -U taskmanager -Fc taskmanager > taskmanager.dump` |
 | Anhänge sichern | `docker run --rm -v task-manager_files-data:/data/files:ro -v "$PWD":/backup IMAGE tar czf /backup/files-data.tar.gz -C /data files` |
-| Anwendung fortsetzen | `docker compose start app` |
-| Zurückspielen | Anwendung anhalten, `docker compose exec -T db pg_restore -U taskmanager -d taskmanager --clean --if-exists < taskmanager.dump`, dann `docker run --rm -v task-manager_files-data:/data/files -v "$PWD":/backup IMAGE tar xzf /backup/files-data.tar.gz -C /data`, danach `docker compose start app` und im Protokoll den ersten Aufräumlauf prüfen. |
+| Anwendung fortsetzen | `docker compose start app worker` |
+| Zurückspielen | Anwendung anhalten, `docker compose exec -T db pg_restore -U taskmanager -d taskmanager --clean --if-exists < taskmanager.dump`, dann `docker run --rm -v task-manager_files-data:/data/files -v "$PWD":/backup IMAGE tar xzf /backup/files-data.tar.gz -C /data`, danach `docker compose start app worker` und im Protokoll des Ausführers (`docker compose logs worker`) oder auf der Seite Hintergrundaufträge den ersten Aufräumlauf prüfen. |
 
 `tar` läuft im Abbild als `root` und behält Besitzer und Rechte; die Dateien gehören danach weiter dem Konto der Anwendung (10001). Wer statt des benannten Volumes ein eigenes Verzeichnis einbindet, gibt es diesem Konto (`chown -R 10001:10001 <verzeichnis>`).
 

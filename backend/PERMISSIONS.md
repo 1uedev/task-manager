@@ -136,7 +136,7 @@ auch Unternehmensregeln ohne Projekt-ID. Keine Fremdschlüssel oder SELECTs auf 
 Modultabellen. Keine Seeds oder Defaultfreigaben in Migrationen. Der Initialisierungspfad ist seit TASK-039
 `CompanyAdministration.initialize`, aufgerufen vom Containerbefehl `bootstrap-admin` in der Transaktion des ersten Kontos:
 Rechteversion, genau eine Gruppe mit `permissions.manage` sowie den Verwaltungsrechten `accounts.manage`, `session_duration.manage` und
-`appearance.manage` (TASK-040) und der Erstadministrator als Mitglied, ohne Fachrechte und ohne Auditrecht. Die Rechte-Tests säen weiterhin synthetische Ausgangspolicies direkt in ihre getrennte Testdatenbank.
+`appearance.manage` (TASK-040), später ergänzt um `projects.manage` (TASK-026), `tags.manage` (TASK-028) und `jobs.manage` (TASK-054), und der Erstadministrator als Mitglied, ohne Fachrechte und ohne Auditrecht. Die Rechte-Tests säen weiterhin synthetische Ausgangspolicies direkt in ihre getrennte Testdatenbank.
 
 Audit enthält Zeitpunkt, Akteur-, Gruppen-, gegebenenfalls betroffene Benutzer-/Projekt-ID,
 Operation, technische Aktions-/Feldkennung, Wirkung und Rechteversion. Keine Namen,

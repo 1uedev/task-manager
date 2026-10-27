@@ -29,7 +29,12 @@ public enum AdministrationRight {
      * company wide by a member, it covers the catalog of that project too; the permissions module then requires the
      * membership.
      */
-    TAGS_MANAGE("tags.manage");
+    TAGS_MANAGE("tags.manage"),
+    /**
+     * See the background jobs of the installation and of the company, run a failed job again and cancel a waiting one
+     * (TASK-054, DEC-083). Gives no access to what a job works on.
+     */
+    JOBS_MANAGE("jobs.manage");
 
     private final String key;
 

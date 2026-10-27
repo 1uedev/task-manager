@@ -26,14 +26,14 @@ class ApplicationLifecycleTest {
         String url = TestDatabase.createEmptyDatabase();
         JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, TestDatabase.username(), TestDatabase.password()));
 
-        ConfigurableApplicationContext first = start(url);
+        ConfigurableApplicationContext first = startPlain(url);
         assertHealthy(first);
         first.close();
         assertFalse(first.isActive());
         List<Timestamp> installedAfterFirstStart = installedOn(jdbc);
-        assertEquals(23, installedAfterFirstStart.size());
+        assertEquals(24, installedAfterFirstStart.size());
 
-        ConfigurableApplicationContext second = start(url);
+        ConfigurableApplicationContext second = startPlain(url);
         assertHealthy(second);
         second.close();
         assertFalse(second.isActive());
@@ -50,7 +50,61 @@ class ApplicationLifecycleTest {
         assertTrue(message.contains("TASK_MANAGER_DB_PASSWORD"), message);
     }
 
-    private static ConfigurableApplicationContext start(String url) {
+    @Test
+    void theWorkerRunsJobsWithoutAWebServerTheWebProcessOnlyWhenAllowedAndCommandsNever() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, TestDatabase.username(), TestDatabase.password()));
+        String[] database = { "--spring.datasource.url=" + url, "--spring.datasource.username=" + TestDatabase.username(),
+            "--spring.datasource.password=" + TestDatabase.password() };
+
+        ConfigurableApplicationContext worker = new SpringApplicationBuilder(TaskManagerApplication.class)
+            .web(org.springframework.boot.WebApplicationType.NONE).properties("taskmanager.process=worker").run(database);
+        try {
+            assertTrue(worker.containsBean("jobExecutor"));
+            assertTrue(worker.containsBean("filesLifecycle"), "the worker prepares the file store for the clean up");
+            assertFalse(worker.getEnvironment().containsProperty("local.server.port"));
+            long deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos();
+            while (jdbc.queryForObject("select count(*) from job where kind = 'recurring.files.cleanup' and state = 'succeeded'", Integer.class) == 0) {
+                assertTrue(System.nanoTime() < deadline, "the worker did not run the clean up");
+                Thread.sleep(100);
+            }
+            assertEquals(1, jdbc.queryForObject("select count(*) from job_worker", Integer.class));
+        } finally {
+            worker.close();
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from job_worker", Integer.class), "the executor signs off when it stops");
+
+        ConfigurableApplicationContext command = new SpringApplicationBuilder(TaskManagerApplication.class)
+            .web(org.springframework.boot.WebApplicationType.NONE).properties("taskmanager.process=command").run(database);
+        try {
+            assertFalse(command.containsBean("jobExecutor"));
+            assertFalse(command.containsBean("filesLifecycle"));
+        } finally {
+            command.close();
+        }
+
+        // The tests turn the executor of the web process off; an installation turns it off with TASK_MANAGER_JOBS_WORKER=false.
+        ConfigurableApplicationContext web = start(url);
+        ConfigurableApplicationContext webWithJobs = start(url, "--taskmanager.jobs.worker-enabled=true");
+        try {
+            assertFalse(web.containsBean("jobExecutor"));
+            assertTrue(webWithJobs.containsBean("jobExecutor"));
+        } finally {
+            web.close();
+            webWithJobs.close();
+        }
+        assertEquals(2, TaskManagerApplication.runWorker(new String[] { "worker", "unexpected" }));
+    }
+
+    private static ConfigurableApplicationContext start(String url, String... more) {
+        String[] base = { "--server.port=0", "--spring.datasource.url=" + url, "--spring.datasource.username=" + TestDatabase.username(),
+            "--spring.datasource.password=" + TestDatabase.password() };
+        String[] all = java.util.Arrays.copyOf(base, base.length + more.length);
+        System.arraycopy(more, 0, all, base.length, more.length);
+        return new SpringApplicationBuilder(TaskManagerApplication.class).run(all);
+    }
+
+    private static ConfigurableApplicationContext startPlain(String url) {
         return new SpringApplicationBuilder(TaskManagerApplication.class).run(
             "--server.port=0",
             "--spring.datasource.url=" + url,

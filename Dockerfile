@@ -38,5 +38,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=6 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
 # Without arguments the web server starts. Commands such as bootstrap-admin, reset-admin-password and
-# rebuild-search are passed as arguments and end after they ran. The heap follows the container memory limit.
+# rebuild-search are passed as arguments and end after they ran; the argument worker starts the process that works off the
+# background jobs without a web server (TASK-054). The heap follows the container memory limit.
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

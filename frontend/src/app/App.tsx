@@ -6,6 +6,7 @@ import { ACCOUNTS_RIGHT, AccountsPage } from '../pages/AccountsPage.tsx';
 import { AppearancePage } from '../pages/AppearancePage.tsx';
 import { BoardPage } from '../pages/BoardPage.tsx';
 import { GroupPage, GroupsPage, PERMISSIONS_RIGHT } from '../pages/GroupsPage.tsx';
+import { JOBS_RIGHT, JobsPage } from '../pages/JobsPage.tsx';
 import { LoginPage, PasswordPage } from '../pages/LoginPage.tsx';
 import { ProjectPage } from '../pages/ProjectPage.tsx';
 import { ProjectsPage } from '../pages/ProjectsPage.tsx';
@@ -14,7 +15,7 @@ import { StartPage } from '../pages/StartPage.tsx';
 import { TicketPage } from '../pages/TicketPage.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import {
-  BoardIcon, BrushIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, UsersIcon,
+  BoardIcon, BrushIcon, ClockIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, UsersIcon,
 } from './Icons.tsx';
 import { readStoredOrder, storeOrder } from './preferences.ts';
 import { hrefFor, section, useRoute, type Route, type RouteName } from './route.ts';
@@ -23,13 +24,13 @@ import { formatDateTime } from '../i18n/format.ts';
 import { useReorder } from './useReorder.ts';
 
 const NAV_LABEL: Record<RouteName, MessageKey> = {
-  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', board: 'nav.board', accounts: 'nav.accounts', groups: 'nav.groups', appearance: 'nav.appearance',
+  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', board: 'nav.board', accounts: 'nav.accounts', groups: 'nav.groups', jobs: 'nav.jobs', appearance: 'nav.appearance',
 };
 const NAV_ICON: Record<RouteName, () => ReactNode> = {
-  start: HomeIcon, projects: FolderIcon, search: SearchIcon, board: BoardIcon, accounts: KeyIcon, groups: UsersIcon, appearance: BrushIcon,
+  start: HomeIcon, projects: FolderIcon, search: SearchIcon, board: BoardIcon, accounts: KeyIcon, groups: UsersIcon, jobs: ClockIcon, appearance: BrushIcon,
 };
 const PAGE_TITLE: Record<RouteName, MessageKey> = {
-  start: 'start.title', projects: 'projects.title', search: 'search.title', board: 'board.title', accounts: 'accounts.title', groups: 'groups.title', appearance: 'appearance.title',
+  start: 'start.title', projects: 'projects.title', search: 'search.title', board: 'board.title', accounts: 'accounts.title', groups: 'groups.title', jobs: 'jobs.title', appearance: 'appearance.title',
 };
 const THEME_LABEL: Record<Theme, MessageKey> = { light: 'theme.light', dark: 'theme.dark', system: 'theme.system' };
 const THEME_ICON: Record<Theme, () => ReactNode> = { light: SunIcon, dark: MoonIcon, system: MonitorIcon };
@@ -204,9 +205,10 @@ function Shell() {
   const admin: RouteName[] = [
     ...(has(ACCOUNTS_RIGHT) ? ['accounts' as const] : []),
     ...(has(PERMISSIONS_RIGHT) ? ['groups' as const] : []),
+    ...(has(JOBS_RIGHT) ? ['jobs' as const] : []),
     'appearance',
   ];
-  const allowed = (name: RouteName) => name !== 'accounts' && name !== 'groups' ? true : admin.includes(name);
+  const allowed = (name: RouteName) => name !== 'accounts' && name !== 'groups' && name !== 'jobs' ? true : admin.includes(name);
 
   return (
     <div className="shell">
@@ -252,6 +254,7 @@ function Shell() {
           {route.name === 'accounts' && allowed('accounts') && <AccountsPage />}
           {route.name === 'groups' && allowed('groups') && <GroupsPage />}
           {route.name === 'group' && allowed('groups') && <GroupPage key={route.id} id={route.id} />}
+          {route.name === 'jobs' && allowed('jobs') && <JobsPage />}
           {route.name === 'appearance' && <AppearancePage />}
         </main>
         <footer>
