@@ -370,7 +370,7 @@ export interface components {
              *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
              *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
              */
-            rights?: ("accounts.manage" | "appearance.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
+            rights?: ("accounts.manage" | "appearance.manage" | "jobs.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
             /**
              * @description `ldap`: das Passwort gehört dem Verzeichnis, die Oberfläche bietet keinen Passwortwechsel an.
              * @enum {string|null}

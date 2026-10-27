@@ -21,3 +21,5 @@ Vor der jeweiligen Fachimplementierung erhält die produktive API einen eigenen 
 [permissions.openapi.yaml](permissions.openapi.yaml) beschreibt die Verwaltung der Gruppen, Mitglieder, Aktionen und Feldregeln (TASK-030, DEC-070). `PermissionsContractTest` gleicht ihn mit den Routen ab. Der Identitätsvertrag nennt seither `permissions.manage` in der Rechteliste der Sitzung und das Kontenverzeichnis `GET /directory/accounts`.
 
 [files.openapi.yaml](files.openapi.yaml) beschreibt die Anhänge von Tickets (TASK-051, DEC-080): Auflisten, Hochladen als roher Körper, Herunterladen nur als Datei zum Speichern und Entfernen. `FilesContractTest` gleicht ihn mit den Routen ab. Der Ticketvertrag nennt seither das Feld `attachments` in der Historie, der Rechtevertrag in den Feldregeln.
+
+[jobs.openapi.yaml](jobs.openapi.yaml) beschreibt die Sicht des Betriebs auf die Hintergrundaufträge (TASK-054, DEC-083): Übersicht der Warteschlange, Liste, erneutes Einstellen und Abbrechen, alles mit dem Unternehmensrecht `jobs.manage`. `JobsContractTest` gleicht ihn mit den Routen ab. Der Identitätsvertrag nennt seither `jobs.manage` in der Rechteliste der Sitzung.

@@ -1,0 +1,177 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Hintergrundaufträge (TASK-054)
+  version: 0.1.0
+  description: |
+    Sicht des Betriebs auf die dauerhaften Hintergrundaufträge (DEC-083, REQ-OPS-006). Jeder Endpunkt verlangt eine
+    vollständige Anmeldung und das Unternehmensrecht `jobs.manage` (sonst 403 `auth.forbidden`, vor dem Passwortwechsel
+    403 `auth.password_change_required`). Sichtbar sind die Aufträge des Unternehmens der Installation und die Aufgaben der
+    Installation selbst, etwa die Aufräumläufe; die Kennung eines anderen Auftrags beantwortet der Server wie eine unbekannte
+    mit 404. Ein Auftrag erscheint ohne seine Nutzdaten, ein Fehler nur mit stabilem Code und der Kennung des Protokolleintrags,
+    nie mit seiner Meldung. Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /jobs/summary:
+    get:
+      operationId: getJobSummary
+      summary: Zustand der Warteschlange (Recht jobs.manage)
+      description: |
+        Anzahl je Zustand, der älteste fällige wartende Auftrag und wie viele Ausführer sich zuletzt gemeldet haben.
+        `backlog` ist wahr, wenn ein fälliger Auftrag älter als die eingestellte Grenze ist (Standard 15 Minuten) oder
+        Aufträge warten und kein Ausführer sich meldet.
+      responses:
+        '200':
+          description: Übersicht
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobSummary'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /jobs:
+    get:
+      operationId: listJobs
+      summary: Aufträge, neueste zuerst (Recht jobs.manage)
+      description: Die nächste Seite beginnt unterhalb der kleinsten `position` der letzten Seite.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/JobState'}
+        - name: before
+          in: query
+          required: false
+          schema: {type: integer, format: int64}
+        - name: limit
+          in: query
+          required: false
+          description: Standard 50, höchstens 100; sonst 400 `job.limit_invalid`.
+          schema: {type: integer, minimum: 1, maximum: 100}
+      responses:
+        '200':
+          description: Eine Seite der Aufträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Job'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /jobs/{id}/retry:
+    post:
+      operationId: retryJob
+      summary: Gescheiterten oder abgebrochenen Auftrag erneut einstellen (Recht jobs.manage)
+      description: |
+        Der Auftrag wartet danach wieder mit allen Versuchen und ist sofort fällig. Nur `failed` und `cancelled`, sonst
+        409 `job.state_conflict`. Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Wartet wieder
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Job'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /jobs/{id}/cancel:
+    post:
+      operationId: cancelJob
+      summary: Wartenden Auftrag abbrechen (Recht jobs.manage)
+      description: Nur `queued`; ein laufender Auftrag lässt sich nicht abbrechen (409 `job.state_conflict`). Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Abgebrochen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Job'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: job.state_invalid, job.limit_invalid, job.not_found,
+        job.state_conflict, auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    JobState:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    Job:
+      type: object
+      required: [id, position, kind, state, attempts, maxAttempts, runAt, createdAt, startedAt, finishedAt, errorCode, errorReference, installation]
+      properties:
+        id: {type: string, format: uuid}
+        position: {type: integer, format: int64, description: Reihenfolge der Liste und Beginn der nächsten Seite.}
+        kind: {type: string, description: 'Art des Auftrags, zum Beispiel recurring.files.cleanup'}
+        state: {$ref: '#/components/schemas/JobState'}
+        attempts: {type: integer, description: Begonnene Versuche.}
+        maxAttempts: {type: integer}
+        runAt: {type: string, format: date-time, description: Frühester Zeitpunkt des nächsten Versuchs.}
+        createdAt: {type: string, format: date-time}
+        startedAt: {type: [string, 'null'], format: date-time}
+        finishedAt: {type: [string, 'null'], format: date-time}
+        errorCode:
+          type: [string, 'null']
+          description: |
+            Stabiler Code des letzten Fehlers, etwa job.failed, job.timeout, job.lease_expired (der Ausführer endete ohne
+            Rückmeldung), job.handler_missing, job.interrupted (Stopp des Prozesses) oder ein Code des Fachmoduls.
+        errorReference: {type: [string, 'null'], format: uuid, description: Kennung des Protokolleintrags mit den Einzelheiten.}
+        installation: {type: boolean, description: Aufgabe der Installation statt eines Auftrags für das Unternehmen.}
+    JobSummary:
+      type: object
+      required: [states, oldestDueAt, oldestDueSeconds, activeWorkers, backlog, checkedAt]
+      properties:
+        states:
+          type: object
+          required: [queued, running, succeeded, failed, cancelled]
+          properties:
+            queued: {type: integer}
+            running: {type: integer}
+            succeeded: {type: integer}
+            failed: {type: integer}
+            cancelled: {type: integer}
+        oldestDueAt: {type: [string, 'null'], format: date-time}
+        oldestDueSeconds: {type: [integer, 'null'], format: int64}
+        activeWorkers: {type: integer}
+        backlog: {type: boolean}
+        checkedAt: {type: string, format: date-time}

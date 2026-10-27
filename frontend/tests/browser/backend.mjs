@@ -7,7 +7,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
 const TAG_FIELD = 'tags';
 const ATTACHMENT_FIELD = 'attachments';
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
 const PROJECT_ACTIONS = ['project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
@@ -61,6 +61,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     // The rights log, newest last; pages are cut by rightsVersion like on the server.
     audit: [],
     accountAudit: [],
+    // The background jobs (TASK-054), newest last, and how many executors report; `jobConflict` makes the next action fail like a concurrent change.
+    jobs: [],
+    activeWorkers: 1,
+    jobConflict: false,
     requests: [],
   };
 
@@ -282,6 +286,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok({ total: items.length, items });
     }
     if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body, query);
+    if (p.startsWith('/jobs')) return jobsRoute(account, method, p, query);
     return problem(404, 'resource.not_found');
   }
 
@@ -558,6 +563,53 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return may(account, 'permissions.manage') ? ok(detail(group)) : empty();
   }
 
+  // The background jobs as the operation sees them (TASK-054): no payload, a failure only with code and reference.
+  function jobsRoute(account, method, p, query) {
+    if (!may(account, 'jobs.manage')) return problem(403, 'auth.forbidden');
+    const view = ({ companyId: _company, ...job }) => job;
+    if (p === '/jobs/summary' && method === 'GET') {
+      const states = Object.fromEntries(['queued', 'running', 'succeeded', 'failed', 'cancelled'].map((name) => [name, state.jobs.filter((job) => job.state === name).length]));
+      const due = state.jobs.filter((job) => job.state === 'queued').map((job) => job.runAt).sort()[0] ?? null;
+      const seconds = due === null ? null : Math.max(0, Math.round((Date.parse('2026-10-27T10:00:00Z') - Date.parse(due)) / 1000));
+      return ok({ states, oldestDueAt: due, oldestDueSeconds: seconds, activeWorkers: state.activeWorkers,
+        backlog: (seconds !== null && seconds > 900) || (state.activeWorkers === 0 && states.queued > 0), checkedAt: '2026-10-27T10:00:00Z' });
+    }
+    if (p === '/jobs' && method === 'GET') {
+      const filter = query.get('state');
+      if (filter !== null && !['queued', 'running', 'succeeded', 'failed', 'cancelled'].includes(filter)) return problem(400, 'job.state_invalid');
+      const before = Number(query.get('before') ?? Infinity);
+      return ok(state.jobs.filter((job) => (filter === null || job.state === filter) && job.position < before)
+        .sort((a, b) => b.position - a.position).slice(0, Number(query.get('limit') ?? 50)).map(view));
+    }
+    const match = p.match(/^\/jobs\/([^/]+)\/(retry|cancel)$/);
+    const job = state.jobs.find((entry) => entry.id === match?.[1]);
+    if (!match || method !== 'POST') return problem(404, 'request.not_found');
+    if (!job) return problem(404, 'job.not_found');
+    if (state.jobConflict) {
+      state.jobConflict = false;
+      job.state = 'running';
+      return problem(409, 'job.state_conflict');
+    }
+    if (match[2] === 'retry') {
+      if (!['failed', 'cancelled'].includes(job.state)) return problem(409, 'job.state_conflict');
+      Object.assign(job, { state: 'queued', attempts: 0, startedAt: null, finishedAt: null, errorCode: null, errorReference: null, runAt: '2026-10-27T10:00:00Z' });
+    } else {
+      if (job.state !== 'queued') return problem(409, 'job.state_conflict');
+      Object.assign(job, { state: 'cancelled', finishedAt: '2026-10-27T10:00:00Z' });
+    }
+    return ok(view(job));
+  }
+
+  const addJob = (kind, jobState, extra = {}) => {
+    const position = state.jobs.length + 1;
+    const job = { id: uuid(), position, companyId: kind.startsWith('recurring.') ? null : 'company', kind, state: jobState, attempts: jobState === 'queued' ? 0 : 1,
+      maxAttempts: kind.startsWith('recurring.') ? 1 : 5, runAt: '2026-10-27T09:58:00Z', createdAt: '2026-10-27T09:58:00Z', startedAt: null,
+      finishedAt: ['succeeded', 'failed', 'cancelled'].includes(jobState) ? '2026-10-27T09:59:00Z' : null, errorCode: null, errorReference: null,
+      installation: kind.startsWith('recurring.'), ...extra };
+    state.jobs.push(job);
+    return job;
+  };
+
   function sessionBody(session) {
     const account = session.account;
     if (!account) return { authenticated: false, username: null, displayName: null, level: null, expiresAt: null, passwordChangeBy: null, csrfToken: TOKEN };
@@ -609,6 +661,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     state, install, anna, ben, nora, project,
     writes: () => state.requests.filter((item) => item.method !== 'GET'),
     group: (name) => state.groups.find((group) => group.name === name),
+    addJob,
     deactivate: (account) => { account.active = false; },
   };
 }

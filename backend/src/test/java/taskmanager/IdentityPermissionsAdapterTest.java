@@ -279,18 +279,18 @@ class IdentityPermissionsAdapterTest {
     void bootstrapCreatesCompanyRightsAndTheSingleAdministrationGroupInOneStepAndRefusesASecondCall() {
         Person chef = bootstrap("chef");
         assertEquals(1, jdbc.queryForObject("select count(*) from platform_company", Integer.class));
-        assertEquals(8L, jdbc.queryForObject("select revision from permissions_revision where company_id = ?", Long.class, company()));
+        assertEquals(9L, jdbc.queryForObject("select revision from permissions_revision where company_id = ?", Long.class, company()));
         assertEquals(List.of("Unternehmensverwaltung"), jdbc.queryForList("select name from permissions_group", String.class));
-        assertEquals(List.of("accounts.manage|", "appearance.manage|", "permissions.manage|", "projects.manage|", "session_duration.manage|", "tags.manage|"), jdbc.queryForList(
+        assertEquals(List.of("accounts.manage|", "appearance.manage|", "jobs.manage|", "permissions.manage|", "projects.manage|", "session_duration.manage|", "tags.manage|"), jdbc.queryForList(
             "select action_key || '|' || coalesce(project_id::text, '') from permissions_action order by action_key", String.class));
         assertEquals(List.of(chef.id()), jdbc.queryForList("select user_id from permissions_membership", UUID.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from permissions_field", Integer.class), "no business rights");
-        assertEquals(List.of("group.created", "action.changed", "action.changed", "action.changed", "action.changed", "action.changed", "action.changed", "membership.changed"),
+        assertEquals(List.of("group.created", "action.changed", "action.changed", "action.changed", "action.changed", "action.changed", "action.changed", "action.changed", "membership.changed"),
             jdbc.queryForList("select operation from permissions_audit order by rights_version", String.class));
-        assertEquals(List.of("permissions.manage", "accounts.manage", "appearance.manage", "projects.manage", "session_duration.manage", "tags.manage"),
+        assertEquals(List.of("permissions.manage", "accounts.manage", "appearance.manage", "jobs.manage", "projects.manage", "session_duration.manage", "tags.manage"),
             jdbc.queryForList("select action_key from permissions_audit where action_key is not null order by rights_version", String.class),
             "the administrative rights are audited in a fixed order");
-        for (String right : List.of("accounts.manage", "session_duration.manage", "appearance.manage", "projects.manage", "tags.manage")) {
+        for (String right : List.of("accounts.manage", "session_duration.manage", "appearance.manage", "projects.manage", "tags.manage", "jobs.manage")) {
             assertTrue(allowed(chef, right), right);
         }
         assertTrue(allowed(chef, "permissions.manage"));

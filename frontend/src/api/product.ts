@@ -1,6 +1,7 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
 import type { components as FileTypes } from './generated/files';
 import type { components as IdentityTypes } from './generated/identity';
+import type { components as JobTypes } from './generated/jobs';
 import type { components as PermissionTypes } from './generated/permissions';
 import type { components as ProjectTypes } from './generated/projects';
 import type { components as SearchTypes } from './generated/search';
@@ -36,6 +37,9 @@ export type Catalog = PermissionTypes['schemas']['Catalog'];
 export type AuditEntry = PermissionTypes['schemas']['AuditEntry'];
 export type ProjectRights = PermissionTypes['schemas']['ProjectRights'];
 export type ProjectGroup = PermissionTypes['schemas']['ProjectGroup'];
+export type Job = JobTypes['schemas']['Job'];
+export type JobState = JobTypes['schemas']['JobState'];
+export type JobSummary = JobTypes['schemas']['JobSummary'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -338,3 +342,19 @@ export const readProjectRights = (api: ServerApi, projectId: string) =>
 export const setGroupField = (api: ServerApi, groupId: string, field: TicketField, projectId: string | null,
   operation: 'read' | 'write', effect: 'allow' | 'deny' | 'remove') =>
   run(() => api.permissions.PUT('/permissions/groups/{groupId}/fields', { params: { path: { groupId } }, body: { resourceType: 'ticket', field, projectId, operation, effect } }), detailOrNothing);
+
+// ---------------------------------------------------------------- background jobs (TASK-054)
+
+export const JOB_STATES: readonly JobState[] = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
+export const JOBS_PAGE = 50;
+const isJob = (v: unknown) => hasStrings(v, 'id', 'kind', 'state', 'runAt', 'createdAt') && typeof (v as Job).position === 'number'
+  && typeof (v as Job).attempts === 'number' && typeof (v as Job).maxAttempts === 'number';
+const isJobSummary = (v: unknown) => record(v) && record(v.states) && JOB_STATES.every((state) => typeof (v.states as Record<string, unknown>)[state] === 'number')
+  && typeof v.activeWorkers === 'number' && typeof v.backlog === 'boolean';
+export const readJobSummary = (api: ServerApi) => run(() => api.jobs.GET('/jobs/summary'), one<JobSummary>(isJobSummary));
+// Newest first; the next page starts below the smallest position of the previous one.
+export const listJobs = (api: ServerApi, state: JobState | null, before: number | null) =>
+  run(() => api.jobs.GET('/jobs', { params: { query: { limit: JOBS_PAGE, ...(state === null ? {} : { state }), ...(before === null ? {} : { before }) } } }),
+    listOf<Job>(isJob));
+export const retryJob = (api: ServerApi, id: string) => run(() => api.jobs.POST('/jobs/{id}/retry', { params: { path: { id } } }), one<Job>(isJob));
+export const cancelJob = (api: ServerApi, id: string) => run(() => api.jobs.POST('/jobs/{id}/cancel', { params: { path: { id } } }), one<Job>(isJob));

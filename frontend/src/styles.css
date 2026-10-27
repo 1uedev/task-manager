@@ -434,6 +434,9 @@ td select { min-height: 2.25rem; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .row-actions button { min-height: 2.25rem; padding: 0.25rem 0.75rem; font-size: 0.88rem; }
 .hidden-field { color: var(--muted); font-style: italic; }
+.job-counts { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; padding: 0; }
+.job-counts li { display: inline-flex; gap: 0.4rem; align-items: baseline; padding: 0.3rem 0.7rem; border-radius: 999px; background: var(--soft); }
+.job-counts li[data-state='failed'] strong { color: var(--error); }
 
 .chips li { display: inline-flex; align-items: center; gap: 0.3rem; }
 .chips li.archived { opacity: 0.6; text-decoration: line-through; }

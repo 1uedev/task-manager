@@ -137,6 +137,7 @@ function AuditLog({ groups }: { readonly groups: readonly Group[] }) {
 export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'accounts.manage': 'right.accounts.manage',
   'appearance.manage': 'right.appearance.manage',
+  'jobs.manage': 'right.jobs.manage',
   'permissions.audit.read': 'right.permissions.audit.read',
   'permissions.manage': 'right.permissions.manage',
   'projects.manage': 'right.projects.manage',

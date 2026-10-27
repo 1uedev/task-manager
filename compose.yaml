@@ -32,11 +32,39 @@ services:
       TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD, see .env.example}
       # The attachments of tickets live on their own volume, outside the container (TASK-051).
       TASK_MANAGER_FILES_DIR: /data/files
+      # The background jobs run in the separate worker service below.
+      TASK_MANAGER_JOBS_WORKER: "false"
     volumes:
       - files-data:/data/files
     # Only reachable from this computer: without TLS, browsers keep the secure session cookie only for localhost.
     ports:
       - "127.0.0.1:${TASK_MANAGER_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  # The separate worker process (TASK-054): it works off the background jobs and the recurring tasks such as the clean up
+  # of the file store, without a web server and without a port. With it, the web process keeps its own executor off.
+  worker:
+    image: task-manager:demo
+    command: ["worker"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD, see .env.example}
+      TASK_MANAGER_FILES_DIR: /data/files
+    volumes:
+      - files-data:/data/files
+    # The health check of the image asks the web server, which this process does not start. This one only asks whether the
+    # Java process is alive; whether the executor works off the queue shows the page of the background jobs.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "kill -0 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    mem_limit: 768m
     restart: unless-stopped
 
   # Synthetic demo data and the search measurement; started only on request (docker compose --profile tools ...).
