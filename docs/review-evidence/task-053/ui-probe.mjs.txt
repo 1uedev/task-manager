@@ -1,0 +1,39 @@
+import { chromium } from 'playwright-core';
+const PW = process.env.TASK_MANAGER_DEMO_PASSWORD;
+const [pid, num] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const context = await browser.newContext({ locale: 'de-DE', acceptDownloads: true });
+const page = await context.newPage();
+const problems = [];
+page.on('console', (m) => { if (['warning', 'error'].includes(m.type())) problems.push(m.text()); });
+const heads = []; page.on('request', (r) => { if (r.method() === 'HEAD') heads.push(r.url()); });
+await page.goto('http://localhost:8080/');
+await page.getByLabel('Anmeldename').fill('ben');
+await page.getByLabel('Passwort').fill(PW);
+await page.getByRole('button', { name: 'Anmelden' }).click();
+await page.waitForSelector('.shell main h1');
+await page.goto(`http://localhost:8080/#/projects/${pid}/tickets/${num}`);
+const section = page.getByRole('region', { name: 'Anhänge' });
+await section.waitFor();
+console.log('hint:', await section.locator('p.hint').textContent());
+const f = (name, text) => ({ name, mimeType: 'application/octet-stream', buffer: Buffer.from(text) });
+await section.getByTestId('attachment-file').setInputFiles([f('eins.txt', 'eins'), f('zwei.txt', 'MZzwei'), f('drei.docm', 'drei')]);
+const notice = section.getByText(/von 3 Dateien angehängt/);
+await notice.waitFor();
+console.log('F3 notice:', await notice.textContent());
+const link = section.getByRole('link', { name: 'Anhang eins.txt herunterladen' });
+const t0 = Date.now();
+const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), link.click()]);
+console.log('F4 download after HEAD:', dl.suggestedFilename(), Date.now() - t0, 'ms, HEAD requests', heads.length);
+// two quick clicks
+let n = 0; page.on('download', () => { n += 1; });
+await link.dblclick(); await page.waitForTimeout(2000);
+console.log('double click downloads:', n);
+// keyboard
+n = 0; await link.focus(); await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
+console.log('Enter downloads:', n);
+console.log('macro warnings:', await section.getByTestId('attachment-macro-warning').count());
+// session ended in another tab, then download
+await context.request.delete('http://localhost:8080/api/v1/session', { headers: { 'X-CSRF-Token': await page.evaluate(() => '') } }).catch(() => {});
+console.log('problems:', problems);
+await browser.close();

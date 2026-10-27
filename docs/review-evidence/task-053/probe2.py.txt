@@ -1,0 +1,39 @@
+import os, sys, json, socket, subprocess, time
+sys.path.insert(0, "tools/demo")
+from demo import Client
+PW = os.environ["TASK_MANAGER_DEMO_PASSWORD"]; URL = "http://127.0.0.1:8080"
+ben = Client(URL); ben.login("ben", PW)
+pid = [p for p in ben.call("GET", "/projects").body if p["key"] == "WEB"][0]["id"]
+t = ben.call("GET", f"/projects/{pid}/tickets", query={"limit": 1}).body[0]
+path = f"/projects/{pid}/tickets/{t['number']}"
+lst = ben.call("GET", f"{path}/attachments")
+print("F8 header:", lst.headers.get("x-attachment-max-bytes"))
+up = ben.call("POST", f"{path}/attachments", content=b"x"*2_000_000, query={"name": "gross.bin"}, headers={"Content-Type": "application/octet-stream"})
+aid = up.body["id"]
+h = ben.call("HEAD", f"{path}/attachments/{aid}", as_bytes=True, expect=None)
+print("HEAD ok:", h.status, len(h.body), h.headers.get("content-length"), h.headers.get("content-disposition"))
+print("F5:")
+for ext in ["xht","shtml","mht","mhtml","svgz","chm","url","iso","img","vhd","vhdx","jnlp","docm","xlsm","xml","appref-ms","settingcontent-ms","library-ms","msix","appx","ps2","wsc","scf","inf","application","gadget","msp","mst","xll","xbap","search-ms","website","hlp","cab"]:
+    r = ben.call("POST", f"{path}/attachments", content=b"abc", query={"name": f"probe.{ext}"}, headers={"Content-Type": "application/octet-stream"}, expect=None)
+    print(f"  {ext}:{r.status}", end="")
+    if r.status == 201: ben.call("DELETE", f"{path}/attachments/{r.body['id']}")
+print()
+# F4 missing content
+subprocess.run(["docker","exec","-u","0","task-manager-app-1","sh","-c",f"mv /data/files/content/{aid[:2]}/{aid} /tmp/{aid}"], check=True)
+h = ben.call("HEAD", f"{path}/attachments/{aid}", as_bytes=True, expect=None); print("HEAD missing:", h.status, h.headers.get("x-correlation-id"))
+subprocess.run(["docker","exec","-u","0","task-manager-app-1","sh","-c",f"mv /tmp/{aid} /data/files/content/{aid[:2]}/{aid}"], check=True)
+# F7 unwritable staging
+subprocess.run(["docker","exec","-u","0","task-manager-app-1","chmod","555","/data/files/staging"], check=True)
+r = ben.call("POST", f"{path}/attachments", content=b"hallo", query={"name": "a.txt"}, headers={"Content-Type": "application/octet-stream"}, expect=None)
+print("F7 unwritable:", r.status, r.body.get("code") if isinstance(r.body, dict) else r.body, "corr", r.headers.get("x-correlation-id"))
+subprocess.run(["docker","exec","-u","0","task-manager-app-1","chmod","755","/data/files/staging"], check=True)
+# F7 client abort
+s = socket.create_connection(("127.0.0.1", 8080))
+cookie = "; ".join(f"{k}={v}" for k, v in ben.cookies.items())
+req = (f"POST /api/v1{path}/attachments?name=abbruch.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nCookie: {cookie}\r\nX-CSRF-Token: {ben.csrf}\r\n"
+       f"Content-Type: application/octet-stream\r\nContent-Length: 5000000\r\nX-Correlation-Id: probe-abort-1\r\n\r\n").encode()
+s.sendall(req + b"y"*200000); time.sleep(1); s.close(); time.sleep(3)
+# session end then HEAD
+ben.call("DELETE", "/session")
+h = ben.call("HEAD", f"{path}/attachments/{aid}", as_bytes=True, expect=None); print("HEAD after logout:", h.status)
+print(subprocess.run(["docker","exec","task-manager-app-1","sh","-c","ls -la /data/files/staging | wc -l"], capture_output=True, text=True).stdout)

@@ -1,0 +1,58 @@
+Nachprüfung TASK-053, Ausgaben der Proben vom 27. Oktober 2026 gegen die Vorführumgebung (compose.yaml, Stand cf08a67).
+Kennungen und Korrelationskennungen sind die des Laufs; das Passwort der Demokonten kam aus TASK_MANAGER_DEMO_PASSWORD.
+
+== probe1 (F1: writableFields gegen die eigenen Endpunkte) ==
+belege list: ['attachments'] single: ['attachments'] upload: 201 tag: 403
+  remove 204
+altgruppe list: ['title', 'description', 'status', 'assignee'] single: ['title', 'description', 'status', 'assignee'] upload: 403 tag: 403
+nurtags list: ['tags'] single: ['tags'] upload: 403 tag: 204
+
+== probe2 (F4, F5, F7, F8) ==
+F8 header: 25000000
+HEAD ok: 200 0 2000000 attachment; filename="gross.bin"; filename*=UTF-8''gross.bin
+F5:
+  xht:415  shtml:415  mht:415  mhtml:415  svgz:415  chm:415  url:415  iso:415  img:415  vhd:415  vhdx:415  jnlp:415  docm:201  xlsm:201  xml:201  appref-ms:201  settingcontent-ms:201  library-ms:201  msix:201  appx:201  ps2:201  wsc:201  scf:201  inf:201  application:201  gadget:201  msp:201  mst:201  xll:201  xbap:201  search-ms:201  website:201  hlp:201  cab:201
+HEAD missing: 404 9c957cc7-c8fc-49b3-835e-d07239cf6a18
+F7 unwritable: 503 attachment.storage_unavailable corr 42460ac0-19db-4690-82af-8ddf57e5fe47
+HEAD after logout: 401
+(staging nach dem abgebrochenen Upload: leer, nur . und ..)
+
+Protokoll der Anwendung (docker logs, gekürzt):
+WARN [9c957cc7-c8fc-49b3-835e-d07239cf6a18] t.files.internal.AttachmentService : The content of attachment c68900f4-eaf4-43b5-8892-f02697aa598b is missing from the file store
+WARN [42460ac0-19db-4690-82af-8ddf57e5fe47] t.files.internal.AttachmentService : The file store could not write an upload to the staging area: java.nio.file.AccessDeniedException: /data/files/staging/upload-814796787330494521.part
+INFO [a7fd14c0-d796-49cb-a944-5ebe65f44e20] t.files.internal.AttachmentService : An upload to a ticket of project 4e82e561-d8c3-44ff-a3e9-fd35f7a56e97 ended before its body was read: org.apache.catalina.connector.ClientAbortException: java.io.EOFException
+
+== probe3 (HEAD liest den ganzen Inhalt, R1) ==
+Gelesene Bytes des Java Prozesses (rchar aus /proc/1/io) je Anfrage auf einen Anhang von 20.000.000 Bytes:
+HEAD 200 bytes read by server: 20005241
+HEAD 200 bytes read by server: 20005241
+GET 200 bytes read by server: 20005272
+
+== ui-probe (Chromium gegen den echten Server, LC_ALL=C.UTF-8) ==
+hint: Höchstens 25 MB je Datei. Programme und Skripte werden abgelehnt.
+F3 notice: 2 von 3 Dateien angehängt (eins.txt, drei.docm). zwei.txt: Dieser Dateityp ist nicht erlaubt. Programme, Skripte und aktive Webinhalte werden abgelehnt.
+F4 download after HEAD: eins.txt 103 ms, HEAD requests 1
+double click downloads: 2
+Enter downloads: 1
+macro warnings: 1
+problems: [ 'Failed to load resource: the server responded with a status of 415 ()' ]
+
+== F2: Sicherung und Rücksicherung genau nach docs/DEMO.md ==
+docker compose stop app; pg_dump -Fc (rc 0); tar czf über das Volume mit dem PostgreSQL Abbild (rc 0); docker compose start app
+probe4 after (nach der Sicherung ein weiterer Anhang):
+added ed8a593c-0ff7-4421-abb0-c992bf612677
+gross.bin 200 True
+zwanzig.bin 200 True
+nachher.txt 200 True
+docker compose stop app; pg_restore --clean --if-exists (rc 0); tar xzf (rc 0); docker compose start app
+probe4 check (nach der Rücksicherung):
+gross.bin 200 True
+zwanzig.bin 200 True
+content/ed/ed8a593c-... liegt weiter im Speicher (Inhalt ohne Zeile, jünger als 24 Stunden, bleibt bis zum Aufräumlauf), Besitzer 10001
+
+== probe5 (F8 Umgebungsvariablen, Neustart mit TASKMANAGER_FILES_MAX_BYTES=1000 und TASKMANAGER_FILES_BLOCKED_EXTENSIONS=exe,docm) ==
+header 1000
+a.txt 1000 201
+b.txt 1001 413
+c.docm 5 415
+d.html 5 201

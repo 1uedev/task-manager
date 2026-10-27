@@ -1,0 +1,15 @@
+import os, sys, hashlib, json
+sys.path.insert(0, "tools/demo")
+from demo import Client
+mode = sys.argv[1]
+c = Client("http://127.0.0.1:8080"); c.login("ben", os.environ["TASK_MANAGER_DEMO_PASSWORD"])
+pid = [p for p in c.call("GET", "/projects").body if p["key"] == "WEB"][0]["id"]
+t = c.call("GET", f"/projects/{pid}/tickets", query={"limit": 1}).body[0]
+path = f"/projects/{pid}/tickets/{t['number']}"
+if mode == "after":
+    r = c.call("POST", f"{path}/attachments", content=b"nach der Sicherung", query={"name": "nachher.txt"}, headers={"Content-Type": "application/octet-stream"})
+    print("added", r.body["id"])
+items = c.call("GET", f"{path}/attachments").body
+for a in items:
+    d = c.call("GET", f"{path}/attachments/{a['id']}", as_bytes=True, expect=None)
+    print(a["name"], d.status, d.status == 200 and hashlib.sha256(d.body).hexdigest() == a["sha256"])
