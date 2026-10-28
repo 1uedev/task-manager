@@ -212,6 +212,209 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #178 (c3d66cd), Ergebnis #179 (dc99440) und #180 (23adfe3), Prüfbericht #181 (700d9d3); Korrekturen TASK-055 und TASK-056; verknüpft mit TASK-051 und DEC-083.
 
+## TASK-053 Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001, REQ-ORG-003, REQ-TKT-001, REQ-API-001. **Verantwortlich:** claude-20261026-attachfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Rechte für Anhänge gelten in Oberfläche, API und Historie gleich, belegt mit beiden Fällen aus F1 im Browsertest; die Sicherungshinweise beantworten die Punkte aus F2; der Nachweis zu N1 aus docs/review-evidence/task-052 läuft als Regression grün; der Fall aus N2 lässt sich allein über den Dialog veröffentlichen; alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-082, keine Migration (PR #175, Warnhinweis für Makrodokumente als Nachtrag in PR #176):
+- F1: `writableFields` nennt `tags` und `attachments`; die Oberfläche bietet Hochladen und Entfernen genau nach der Schreibregel an.
+- F2: Vollständige Sicherungshinweise in backend/README.md und docs/DEMO.md.
+- F3 bis F8: Zusammenfassung mehrerer Uploads, erklärter Download Fehler mit Frage per HEAD, erweiterte Sperrliste, Protokoll der Speicherfehler getrennt vom Abbruch (400 `attachment.incomplete`), Grenze vom Server (`X-Attachment-Max-Bytes`), Angleichung von TASK-051 an DEC-080.
+- N1: Ein ausdrücklich mitgegebener unbekannter Status beim Typwechsel ergibt 400 `status.unavailable`. N2: Eigene Zuordnungszeilen für einen wegfallenden Typ.
+- Makrodokumente bleiben nach Holgers Entscheidung vom 27. Oktober 2026 erlaubt und tragen in der Liste einen Warnhinweis.
+
+**Prüfungen:** CI grün auf PR #175 und #176. Lokal (Java 21, PostgreSQL 16.15): 311 Backendtests ohne Ausfall, `npm run verify` (77 Tests) und 106 Browsertests; der Browsertest zu N2 scheitert gegen den Dialog vor TASK-053. Nicht lokal: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI); die Sicherungsbefehle in docs/DEMO.md wurden nicht ausgeführt.
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261027-review-053-01, Bericht [docs/REVIEW_TASK-053_PR-175.md](docs/REVIEW_TASK-053_PR-175.md) in PR #177): F1 bis F8, N1 und N2 behoben; R1 (P3) und Hinweise H1 bis H5.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. R1: Die Frage mit HEAD liest auf dem Server den ganzen Inhalt; nicht beauftragt.
+2. H1: `tags` in `writableFields` prüft nur der Browsertest gegen die Attrappe.
+3. H2: Weitere seltene ausführbare Endungen werden noch angenommen.
+4. H3 bis H5: Makrohinweis hängt an der Endung, Ortsangabe in docs/DEMO.md, doppelter Download bei Doppelklick.
+
+**Referenz:** Reservierung #174 (ee4f03e), Ergebnis #175 (2bc252a) und #176 (cf08a67), Prüfbericht #177 (9d75046); verknüpft mit TASK-051, TASK-052 und DEC-082.
+
+## TASK-052 Befunde F1 bis F5 der Prüfung von TASK-044 beheben
+
+**Bezug:** REQ-ORG-003, REQ-TKT-001, REQ-ACL-003, REQ-API-001. **Verantwortlich:** claude-20261026-configfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Prüftests E1 bis E5 aus docs/review-evidence/task-044 laufen in angepasster Form als Regression grün; E6 bleibt grün; bestehende Tests zu F-03 bis F-06 bleiben grün; F1 verrät in keiner Antwort, ob ein verborgenes Feld gefüllt ist; ein Typwechsel umgeht kein Pflichtfeld eines Übergangs. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-081, keine Migration (PR #172):
+- F1: Verlangt ein Übergang ein Feld, das die Person nicht lesen oder schreiben darf, antwortet der Server immer mit 409 `ticket.required_field_inaccessible`.
+- F2: Ganzzahlfelder weisen Werte unter −(2^53 − 1) ab.
+- F3: Ein Typwechsel behält den Status, wenn der neue Typ ihn kennt, sonst kommt das Ticket in den ersten Status des neuen Typs.
+- F4: Statuszuordnung je Paar aus Typ und Status, auch im Dialog der Oberfläche.
+- F5: Ein unbekanntes eigenes Feld ergibt 400 `customFields.unknown`.
+
+**Prüfungen:** CI grün auf PR #172. Lokal (Java 21, PostgreSQL 16): 308 Backendtests ohne Ausfall, `npm run verify` (76 Tests), 102 Browsertests. E1 bis E5 als Regressionen in `ProjectConfigurationApiTest`. Nicht lokal: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI).
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261026-review-052-01, Bericht [docs/REVIEW_TASK-052_PR-172.md](docs/REVIEW_TASK-052_PR-172.md) in PR #173): F1 bis F5 behoben; N1 und N2 (P3), behoben mit TASK-053.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; N1 und N2 sind mit TASK-053 erledigt.
+
+**Referenz:** Reservierung in PR #169 (6424595), Ergebnis #172 (2616bb5), Prüfbericht #173 (c7a5fbb); verknüpft mit TASK-044, TASK-053 und DEC-081.
+
+## TASK-051 Dateien und Anhänge an Tickets (Paket A7)
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Verantwortlich:** claude-20261025-files-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Ein berechtigtes Mitglied lädt eine Datei bis zur Grenze hoch, sieht sie in der Liste und lädt exakt dieselben Bytes herunter; zu große, gesperrte und leere Dateien werden mit stabilem Fehlercode abgelehnt, ohne dass Reste im Speicher oder in der Datenbank bleiben; ein Neustart oder Austausch des Anwendungscontainers mit demselben Volume behält alle Anhänge; ein Abbruch zwischen Ablegen und Zuordnung hinterlässt nur eine Datei, die der Aufräumlauf entfernt; wer das Ticket oder das Feld nicht lesen darf, erhält auch über den direkten Link 404 oder 403 nach der Rechtesemantik des Ticketkerns, ebenso nach Entzug des Rechts; Entfernen und Hinzufügen stehen in der Historie, sichtbar nur mit Leserecht am Feld; Dateiname und Inhalt können weder Pfade verlassen noch beim Download Skripte ausführen lassen; die Rechte gelten in Oberfläche, API und Historie gleich. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-080 mit Migration V0024 (PR #168):
+- Modul `files` mit Speicherschnittstelle und Dateisystemadapter auf einem dauerhaften Verzeichnis, Upload mit Staging und atomarem Ablegen, Regeln für Name, Größe, Endung und Programmanfang, Aufräumlauf mit Quarantäne.
+- Ticketfeld `attachments` mit getrennten Lese und Schreibregeln, Einträge in der Historie, Auslieferung nur als Download.
+- Oberfläche im Ticket mit Liste, Auswahl und Ablegen, Herunterladen und Entfernen mit Rückfrage; Volume `files-data` im Vorführimage.
+- Holger hat am 26. Oktober 2026 die Vorschläge angenommen (Nachtrag zu DEC-080, PR #170): 25 MB je Datei, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk, Entfernen mit Frist von 7 Tagen.
+
+**Prüfungen:** CI grün auf PR #168. Lokal: 303 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 23 Migrationen, `npm run verify` (75 Tests), 102 Browsertests und der Demoablauf mit Neustart und unverändertem Anhang. Nicht lokal: PostgreSQL 18.6 und `image-check.sh` (CI), andere Dateisysteme, sehr große oder viele gleichzeitige Uploads, ein Virenscanner.
+
+**Review:** Getrennte Prüfung durch Claude statt Codex (Bericht [docs/REVIEW_TASK-051_PR-168.md](docs/REVIEW_TASK-051_PR-168.md) in PR #171): F1 und F2 (P2), F3 bis F8 (P3), behoben mit TASK-053; Hinweise H1 bis H8.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Hinweise H1 bis H8 sind nicht beauftragt, unter anderem der Fokus nach dem Entfernen (H1), kein Abbruch eines laufenden Uploads (H2), Fehler im Stil einer Information (H3), kein `fsync` des Zielverzeichnisses (H6) und der Rückstrich als Pfadtrenner (H7). Der Nachweis einer konsistenten Sicherung und Wiederherstellung gehört zu A18, ein Virenscanner bleibt bei OPEN-014.
+
+**Referenz:** Reservierung #167 (6eb4db0), Ergebnis #168 (37580d0), Entscheidung #170 (f829fe5), Prüfbericht #171 (01a5df4); Korrekturen TASK-053; verknüpft mit DEC-080.
+
+## TASK-050 Befund R1 der Nachprüfung von TASK-049 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-UX-001. **Verantwortlich:** claude-20261025-reviewfix-03. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Nach erfolgreicher Selbstumstellung bleibt das Einmalpasswort sichtbar, auch wenn danach eine geschützte Anfrage 401 erhält oder eine Kontenaktion ausgelöst wird; die Seite bietet dann keine geschützten Aktionen mehr an; „Zur Anmeldung“ führt zur Anmeldeseite und entfernt das Passwort aus dem Speicher; die Umstellung eines fremden Kontos und das normale Ende einer Sitzung verhalten sich unverändert; die zweite Reihenfolge der Umstellung gegen die laufende Verzeichnisanmeldung ergibt 401 ohne Sitzung. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-079, keine Migration und keine Vertragsänderung (PR #166): eine eigene Seite oberhalb aller Seiten hält das Einmalpasswort nach der Selbstumstellung (`Handover` in `session.tsx`), bietet keine geschützten Aktionen an und entfernt das Passwort bei „Zur Anmeldung“; Regression für die zweite Reihenfolge der Umstellung mit dem Testersatz `PausableAccountRepository`.
+
+**Prüfungen:** CI grün auf PR #166. Lokal: 276 Backendtests gegen PostgreSQL 16, `npm run verify` (75 Tests) und 95 Browsertests; die drei neuen Browsertests scheitern gegen die Seiten vor TASK-050. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt, ein durchgängiger Browserlauf am echten Backend.
+
+**Review:** Keine eigene Nachprüfung von TASK-050; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Qualifikation mit dem vorgesehenen Verzeichnisprodukt bleibt eine eigene Aufgabe und braucht Holgers Auftrag.
+
+**Referenz:** Reservierung #165 (0947847), Ergebnis #166 (6820bd4); Prüfbericht zu TASK-049 auf dem Branch review/task-049; verknüpft mit TASK-047, TASK-049 und DEC-079.
+
+## TASK-049 Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Verantwortlich:** claude-20261024-reviewfix-02. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die beiden Gegenbeispiele aus dem Bericht (Altschlüssel `hex:80` und `trim-id` auf einer befüllten V0022-Datenbank, danach Anmeldung eines anderen Eintrags mit kollidierendem Wert) führen nicht mehr zum Konto der anderen Person und ohne Rechte zu einem eigenen Konto oder zur Abweisung; das Altkonto selbst bleibt über sein Verzeichnis erreichbar oder ist sichtbar gesperrt, je nach der gewählten Lösung; der Anzeigename kommt auch bei gleichem Kennungs und Namensattribut an; eine laufende Verzeichnisanmeldung, die von einer Umstellung überholt wird, ergibt 401 ohne Sitzung und ohne verbrauchtes Einmalpasswort; bei der Selbstumstellung bleibt das Einmalpasswort sichtbar; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-078 mit Migration V0023 (PR #164): Die Migration löst alle vorhandenen Verzeichniskonten vom Verzeichnis, deaktiviert sie und beendet ihre Sitzungen (N1); Prüfung von Kontotyp und Kennung nach der Kontosperre bei der Verzeichnisanmeldung (F1 aus TASK-047); Anzeigename aus den Rohbytes (N2); Selbstumstellung behält das Einmalpasswort (F2 aus TASK-047, vollständig erst mit TASK-050).
+
+**Prüfungen:** CI grün auf PR #164. Lokal: 275 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 22 Migrationen, `npm run verify` (75 Tests) und 93 Browsertests; die neuen Tests scheitern gegen den alten Code mit den berichteten Symptomen. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt.
+
+**Review:** Getrennte Nachprüfung durch Codex (codex-20261025-task049-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-049/docs/REVIEW_TASK-049.md) auf dem Branch review/task-049): N1, N2 und F1 behoben, F2 teilweise; R1 (P2), behoben mit TASK-050. Empfehlung „annehmbar nach Behebung von R1“.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Verzeichniskonten, die vor V0023 bestanden, sind deaktiviert und müssen von der Verwaltung wieder freigegeben werden. Die Qualifikation mit einem echten Verzeichnisprodukt steht aus.
+
+**Referenz:** Reservierung #162 (bc22999), Ergebnis #164 (ad44fdb); verknüpft mit TASK-046 bis TASK-048, TASK-050 und DEC-078.
+
+## TASK-048 Befunde F1 bis F4 der Prüfung von TASK-046 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Verantwortlich:** claude-20261024-reviewfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Zwei Personen mit verschiedenen binären Kennungen und verschiedenen Rechten erreichen je ihr eigenes Konto; bestehende Zuordnungen über Textkennungen bleiben gültig; ein bekannter Eintrag mit dem Namen eines anderen Kontos wird abgewiesen, die Umbenennung desselben Eintrags funktioniert weiter; die drei leeren Varianten der Verschlüsselung ergeben 400; StartTLS ohne Unterstützung der Gegenstelle ergibt `directory.tls_failed`; beschädigte Alt-Zuordnungen werden von der Migration abgesichert; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-077 mit Migration V0022 (PR #160): verlustfreier Zuordnungsschlüssel binärer Kennungen (F1), Abweisung eines bekannten Eintrags mit dem Namen eines anderen Kontos (F2), 400 bei unvollständiger Verschlüsselung (F3), `directory.tls_failed` bei abgelehntem StartTLS (F4).
+
+**Prüfungen:** CI grün auf PR #160. Lokal: 272 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 21 Migrationen, `npm run verify`; die vier Regressionen scheitern gegen den alten Code. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt.
+
+**Review:** Getrennte Nachprüfung durch Codex (codex-20261024-task048-047-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-048-nachpruefung/docs/REVIEW_TASK-048_NACHPRUEFUNG.md), PR #161): F2 bis F4 behoben, F1 teilweise; N1 (hoch) und N2 (niedrig), behoben mit TASK-049.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; N1 und N2 sind mit TASK-049 erledigt.
+
+**Referenz:** Reservierung #159 (f858f56), Ergebnis #160 (1274c31), Prüfbericht PR #161; verknüpft mit TASK-046, TASK-049 und DEC-077.
+
+## TASK-047 Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075)
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-localadmin-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Das letzte aktive lokale Konto mit den beiden Verwaltungsrechten lässt sich weder deaktivieren noch durch eine Rechteänderung entkleiden, auch nicht durch gleichzeitige Änderungen, solange Verzeichniskonten dieselben Rechte halten; ein Verzeichniskonto lässt sich umstellen und meldet sich danach nur noch mit dem neuen Einmalpasswort an, behält seine Rechte und ist im Protokoll vermerkt; bei ausgefallenem Verzeichnis kann die lokale Verwaltung Konten einrichten und umstellen; bestehende Anmelde-, Sperr- und Rechtefälle bleiben grün. Getrennte KI prüft Sperre und Umstellung; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-076, keine Migration (PR #157): Sperre der letzten lokalen Verwaltung mit `permissions.manage` und `accounts.manage` (409 `permissions.last_local_administrator`), `POST /accounts/{id}/convert-to-local` mit neuem Einmalpasswort, Schaltfläche mit Bestätigung in der Kontenverwaltung, Backlog Eintrag für den Zertifikatswechsel ohne Neustart in ROADMAP.md.
+
+**Prüfungen:** CI grün auf PR #157. Lokal: 262 Backendtests gegen PostgreSQL 16, `npm run verify`, 92 Browsertests. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnis, gleichzeitige Umstellung und Deaktivierung unter Last.
+
+**Review:** Getrennte Prüfung durch Codex (codex-20261024-task047-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-047/docs/REVIEW_TASK-047.md), PR #163): die relative Sperre hält; F1 (hoch) und F2 (mittel), behoben mit TASK-049 und TASK-050.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Sperre ist relativ: Sie greift nur, wenn es vorher eine lokale Verwaltung gab. Eine Umstellung lokaler Konten ins Verzeichnis und eine automatische Umstellung sind nicht Teil.
+
+**Referenz:** Reservierung #156 (434592f), Ergebnis #157 (a1426fb), Prüfbericht PR #163; verknüpft mit TASK-046, TASK-049, TASK-050 und DEC-076.
+
+## TASK-046 LDAP Anmeldung (Paket A5)
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-ldap-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Eine konfigurierte Anbindung lässt sich prüfen; ein LDAP Konto entsteht beim ersten Login, wird danach über die Kennung wiedergefunden und hat keine Rechte; eine gleichnamige lokale Identität übernimmt nie ein LDAP Konto und umgekehrt; Eingaben mit Sonderzeichen können weder den Suchfilter noch den Namen einschleusen; bei Ausfall scheitert nur die LDAP Anmeldung mit 503, ohne lokale Konten zu berühren; kein Passwort und kein Bindungsgeheimnis steht in Antworten, Protokoll oder Datenbank; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Zuordnung; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-075 mit Migration V0021 (PR #155): eine LDAPv3 Anbindung mit Prüfung, Anmeldung durch Bindung als Person, Zuordnung über die unveränderliche Kennung, Anlage ohne Rechte beim ersten Login, 503 bei Ausfall, Oberfläche in der Kontenverwaltung.
+
+**Prüfungen:** CI grün auf PR #155. Lokal: 259 Backendtests gegen PostgreSQL 16 mit `LdapLoginTest` und `LdapTlsTest` gegen ein im Test gestartetes Verzeichnis, `lifecycle-check.sh`, `npm run verify` und 90 Browsertests. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt, sehr große Verzeichnisse.
+
+**Review:** Getrennte Prüfung durch Codex (codex-20261023-task046-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-046-pr-155/docs/REVIEW_TASK-046_PR-155.md), PR #158): F1 (hoch), F2 (mittel), F3 und F4 (niedrig), behoben mit TASK-048 und nachgeprüft über TASK-049.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. Die Qualifikation mit einem echten Verzeichnisprodukt (OpenLDAP, Active Directory) steht aus und braucht Holgers Auftrag.
+2. Zertifikatswechsel ohne Neustart ist im Backlog (DEC-076).
+3. Gruppenabbildung, Abgleich, Passwortverwaltung im Verzeichnis und ein zweites Verzeichnis sind nicht Teil.
+
+**Referenz:** Reservierung #154 (a022836), Ergebnis #155 (6e40ebf), Prüfbericht PR #158; Korrekturen TASK-047 bis TASK-050; verknüpft mit DEC-075.
+
+## TASK-045 Kontoverwaltung ergänzen (Rest von Paket A4)
+
+**Bezug:** REQ-AUTH-001, REQ-PORTAL-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-accounts-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Der Zustand des Einmalpassworts ist in API und Oberfläche richtig für offen, abgelaufen und verbraucht und verrät nie das Passwort; Anzeigename und Aufheben der Wartezeit verlangen `accounts.manage`, wirken sofort und stehen im Protokoll; das Protokoll lässt sich über Seitengrenzen lesen und enthält keine Geheimnisse; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Protokoll; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-074 (PR #153): Zustand des Einmalpassworts in der Kontenliste, Ändern des Anzeigenamens, Lesen des Protokolls der Kontenverwaltung und Aufheben der Wartezeit nach Fehlanmeldungen, jeweils mit Oberfläche und Vertrag identity.openapi.yaml.
+
+**Prüfungen:** CI grün auf PR #153. Lokal: Backendtests gegen PostgreSQL 16 mit vier neuen Integrationstests in `IdentityApiTest`, `npm run verify`, 83 Browsertests. Nicht lokal: PostgreSQL 18.6 und der Workflow `Image` (CI).
+
+**Review:** Keine eigene getrennte Prüfung von TASK-045; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Selbstbedienung per Mail, Portalkonten und zweiter Faktor sind nicht Teil (DEC-058).
+
+**Referenz:** Reservierung #152 (4615e60), Ergebnis #153 (f4f62b7); verknüpft mit TASK-024, TASK-040 und DEC-074.
+
+## TASK-044 Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern
+
+**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-projectconfig-02 (Übernahme der Reservierung von claude-20261023-projectconfig-01). **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Zwei Projekte mit unterschiedlichen Typen, Abläufen und Feldern nach den Beispielen A und B aus docs/DOMAIN_MODEL.md sind einrichtbar und bedienbar; die Prüffälle F-03 bis F-06 sind als Regression abgedeckt; ein nicht erlaubter Übergang und ein fehlendes Pflichtfeld lassen das Ticket unverändert; verborgene eigene Felder bleiben in API, Historie und Suche verborgen; Bestandstickets bleiben nach jeder Veröffentlichung gültig. Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-073 mit den Migrationen V0018 bis V0020 (PR #151), beschrieben in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md): Tickettypen, Abläufe je Typ, Pflichtfelder je Übergang, sieben Arten eigener Felder, Entwurf und Veröffentlichung mit Zuordnung von Bestandstickets, eigene Felder in Rechten, Historie und Suche, Oberfläche dazu.
+
+**Prüfungen:** CI grün auf PR #151. Lokal: 235 Backendtests gegen PostgreSQL 16, `npm run verify`, 78 Browsertests; F-03 bis F-06 als Regression. Nicht lokal: PostgreSQL 18.6 und der Workflow `Image` (CI).
+
+**Review:** Getrennte Prüfung durch Claude statt Codex (claude-20261025-review-044-01, Bericht [docs/REVIEW_TASK-044_PR-151.md](docs/REVIEW_TASK-044_PR-151.md) in PR #169): F1 (P2), F2 bis F5 (P3), behoben mit TASK-052 und TASK-053. Die Veröffentlichung mit Zuordnung unter Last blieb ohne Befund.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. Die drei offenen Punkte aus DEC-073 sind nicht entschieden: Löschen nie verwendeter Felder, nachträgliches Erzwingen von Pflichtfeldern bei Bestandstickets, Direktveröffentlichung neben dem Entwurf.
+2. Filter auf eigene Felder in der Suchoberfläche, Mehrfachauswahl, Dezimalzahl, Formulare, Automationen, Projektvorlagen, Verschieben zwischen Projekten und Archivierung sind nicht Teil.
+
+**Referenz:** Reservierung #150 (47eae91), Ergebnis #151 (8b7928d), Prüfbericht #169 (6424595); Korrekturen TASK-052 und TASK-053; verknüpft mit DEC-073.
+
 ## TASK-043 Rechtekern härten
 
 **Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261022-hardening-01. **Abgeschlossen:** 2026-10-23.
