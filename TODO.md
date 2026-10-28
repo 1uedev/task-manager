@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-059](#task-059-befunde-f1-bis-f5-der-prüfung-von-task-057-beheben) | Befunde F1 bis F5 der Prüfung von TASK-057 beheben | claude-20261028-helpdeskfix-01 | 2026-10-28 |
 
 ### Blockiert – BLOCKIERT
 
@@ -89,3 +91,25 @@ Nicht Teil (TASK-058 oder später): Antworten über SMTP, Versandzustände, Zuor
 **Abnahmekriterien:** Werden mit dem Start nach Vorlage des Ergebnisses von TASK-057 festgelegt; mindestens: genau ein interner Versandauftrag je bestätigter Antwort auch nach Neustart, unklarer Versandstatus ohne automatische Wiederholung, Antwort des Kunden landet im richtigen Ticket nur bei bestätigtem Absender, keine Mailschleife mit einem Autoresponder.
 
 **Nächster Schritt:** Nach Ergebnis PR von TASK-057 Blocker aufheben und Umsetzung beginnen.
+
+## TASK-059 Befunde F1 bis F5 der Prüfung von TASK-057 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-helpdeskfix-01 · **Aktualisiert:** 2026-10-28
+
+**Bezug:** REQ-HD-001 (geschützte Zugangsdaten), REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002, Feldrechte nach DEC-067. **Abhängigkeiten:** TASK-057 (Ergebnis PR #189), Prüfbericht docs/REVIEW_TASK-057_PR-189.md (PR #191). **Arbeitsstand:** Holgers Wahl „F1 bis F5 plus H1 und H3“ vom 28. Oktober 2026 im Projektgespräch. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-087 und Korrekturmigration V0027.
+
+**Umfang:** Nur die Befunde und Hinweise aus dem Prüfbericht:
+
+1. F1: Fehler beim IMAP Abruf und bei der Verbindungsprüfung protokollieren nur Postfach und Fehlercode, keinen Text des Servers und keine verschachtelte Ursache.
+2. F2: Der Abgleich über die Message-ID nach einem Wechsel von UIDVALIDITY wird dauerhaft gespeichert und gilt über alle Abrufpakete, Fehler und Neustarts, bis der Ordner vollständig abgeglichen ist.
+3. F3: Die Herkunft einer Nachricht enthält die konkrete Quelle (eine Quellgeneration je Änderung von Server, Port, Konto oder Ordner), Korrekturmigration V0027 für bestehende Herkünfte; ein laufender Abruf schreibt seine Position nur für die noch aktuelle Quelle fort.
+4. F4: Die Kundenauswahl am Ticket liefert Kontakte nur mit Lese und Schreibrecht auf `contact`, Kunden nur mit den Rechten auf `customer`.
+5. F5: Alle Empfängeradressen zählen für die Prüfung auf fremde Kunden; eine Mail über der Verarbeitungsgrenze geht mit eigenem Grund in die Prüfwarteschlange.
+6. H1: Dokumentation der Vertrauensvoraussetzung, dass der eigene Empfangsserver eingeschleuste Authentication-Results Köpfe seiner Kennung entfernt.
+7. H3: Die Browsertests des Helpdesks und die Verbindungszahl der Backendtests werden stabil, beide waren in CI zeitweise rot.
+
+Nicht Teil: H2 und H4 (Entscheidung bei der Abnahme), H5 und H6, TASK-058.
+
+**Abnahmekriterien:** Für jeden Befund ein Regressionstest nach der Nachstellung im Prüfbericht (E2, E3, E4, E6, E7), der vor der Korrektur rot und danach grün ist; kein Passwort im Protokoll bei einem Server, der die Anmeldung spiegelt; keine doppelten Tickets bei mehr wieder aufgetauchten Nachrichten als dem Paketlimit; keine übergangene Nachricht nach Wechsel von Konto oder Ordner; keine Kontaktdaten ohne Leserecht auf `contact`; ein fremder Kunde an beliebiger Empfängerposition führt in die Prüfwarteschlange; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057 und TASK-059 zusammen ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
