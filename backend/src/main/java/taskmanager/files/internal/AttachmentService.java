@@ -1,7 +1,9 @@
 package taskmanager.files.internal;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.NoSuchFileException;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,8 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.files.AttachmentIntake;
 import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.Decision;
 import taskmanager.permissions.PermissionDenied;
@@ -165,6 +169,60 @@ public class AttachmentService {
         attachments.audit(actor.companyId(), id, ticket, "attachment.added", describe(attachment), actor.userId(), now);
         tickets.recordAttachmentChange(ticket, now, actor.userId(), null, describe(attachment));
         return attachment;
+    }
+
+    // ------------------------------------------------------------------------------------------------ mail intake
+
+    /**
+     * Adds a file of a mail to a ticket in the transaction of the caller (TASK-057); see {@link taskmanager.files.AttachmentIntake}.
+     * Runs the checks of an upload and reports a refusal instead of throwing it.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AttachmentIntake.Outcome attachFromMail(UUID companyId, UUID projectId, UUID ticketId, String rawName, byte[] content,
+            UUID actor) {
+        String name;
+        try {
+            name = UploadRules.clean(rawName);
+        } catch (ApiProblemException invalid) {
+            return new AttachmentIntake.Outcome(null, rawName, "attachment.name_invalid");
+        }
+        try {
+            rules.checkName(name);
+        } catch (ApiProblemException blocked) {
+            return new AttachmentIntake.Outcome(null, name, blocked.code());
+        }
+        if (content.length == 0) {
+            return new AttachmentIntake.Outcome(null, name, "attachment.empty");
+        }
+        if (content.length > rules.maxBytes()) {
+            return new AttachmentIntake.Outcome(null, name, "attachment.too_large");
+        }
+        try {
+            UploadRules.checkHead(content);
+        } catch (ApiProblemException blocked) {
+            return new AttachmentIntake.Outcome(null, name, blocked.code());
+        }
+        UUID id = UUID.randomUUID();
+        FileStorage.Staged staged;
+        try {
+            staged = storage.stage(new ByteArrayInputStream(content), rules.maxBytes());
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+        try {
+            storage.store(staged, id);
+        } catch (IOException failure) {
+            storage.discard(staged);
+            LOG.warn("The file store could not put the content of attachment {} from a mail in its place: {}", id, failure.toString());
+            throw new UncheckedIOException(failure);
+        }
+        tickets.lockForAttachmentChange(ticketId);
+        Instant now = clock.instant();
+        Attachment attachment = new Attachment(id, companyId, ticketId, projectId, name, staged.size(), staged.sha256(), now, actor, null, null, null);
+        attachments.insert(attachment);
+        attachments.audit(companyId, id, ticketId, "attachment.added", describe(attachment), actor, now);
+        tickets.recordAttachmentChange(ticketId, now, actor, null, describe(attachment));
+        return new AttachmentIntake.Outcome(id, name, null);
     }
 
     // ------------------------------------------------------------------------------------------------ removing

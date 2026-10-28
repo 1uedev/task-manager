@@ -177,6 +177,8 @@ describe('attachments of a ticket', () => {
       await section.getByTestId('attachment-file').setInputFiles([file('eins.txt', 'eins'), file('zwei.exe', 'zwei'), file('drei.txt', 'drei')]);
       await section.getByText(/^2 von 3 Dateien angehängt \(eins\.txt, drei\.txt\)\. zwei\.exe: Dieser Dateityp ist nicht erlaubt/).waitFor();
       assert.deepEqual(backend.state.attachments.map((entry) => entry.name), ['eins.txt', 'drei.txt']);
+      // The list is read again after the notice; wait for it instead of counting the moment the notice appears.
+      await section.getByTestId('ticket-attachments').getByRole('listitem').nth(1).waitFor();
       assert.equal(await section.getByTestId('ticket-attachments').getByRole('listitem').count(), 2);
     });
   });

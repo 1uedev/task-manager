@@ -34,6 +34,8 @@ services:
       TASK_MANAGER_FILES_DIR: /data/files
       # The background jobs run in the separate worker service below.
       TASK_MANAGER_JOBS_WORKER: "false"
+      # Encrypts the passwords of helpdesk mailboxes (TASK-057); empty leaves the helpdesk without mailboxes.
+      TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:-}
     volumes:
       - files-data:/data/files
     # Only reachable from this computer: without TLS, browsers keep the secure session cookie only for localhost.
@@ -56,6 +58,8 @@ services:
       TASK_MANAGER_DB_USER: taskmanager
       TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD, see .env.example}
       TASK_MANAGER_FILES_DIR: /data/files
+      # The worker fetches the helpdesk mailboxes and needs the same key as the web process (TASK-057).
+      TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:-}
     volumes:
       - files-data:/data/files
     # The health check of the image asks the web server, which this process does not start. This one only asks whether the

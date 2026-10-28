@@ -7,8 +7,11 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
 const TAG_FIELD = 'tags';
 const ATTACHMENT_FIELD = 'attachments';
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
-const PROJECT_ACTIONS = ['project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
+const HELPDESK_FIELDS = ['customer', 'contact', 'mail'];
+// The fixed actor of tickets the mail intake opens (TASK-057).
+export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
+const PROJECT_ACTIONS = ['helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -65,6 +68,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     jobs: [],
     activeWorkers: 1,
     jobConflict: false,
+    // The helpdesk (TASK-057): customers, contacts, mailboxes with their status, mails and the customer of each ticket.
+    helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], ticketCustomers: new Map() },
     requests: [],
   };
 
@@ -287,6 +292,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     }
     if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body, query);
     if (p.startsWith('/jobs')) return jobsRoute(account, method, p, query);
+    if (p.startsWith('/helpdesk/inbox')) return inboxRoute(account, method, p, query, headers, body);
+    if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -366,8 +373,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       }
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
+    if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
@@ -610,6 +618,186 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return job;
   };
 
+
+  // ------------------------------------------------------------------ helpdesk (TASK-057)
+  const hd = state.helpdesk;
+  const versioned = (headers, entry, prefix) => {
+    if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
+    if (headers['if-match'] !== `"${entry.version}"`) return problem(412, `${prefix}.version_conflict`);
+    return null;
+  };
+  const mailboxView = ({ password: _password, ...mailbox }) => ({ ...mailbox, passwordSet: Boolean(_password) });
+
+  function helpdeskRoute(account, method, p, headers, body) {
+    if (!may(account, 'helpdesk.manage')) return problem(403, 'auth.forbidden');
+    if (p === '/helpdesk/status') return ok({ secretKey: hd.secretKey, pollIntervalSeconds: 60, maxBytes: 25000000 });
+    if (p === '/helpdesk/customers' && method === 'GET') return ok([...hd.customers].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/helpdesk/customers' && method === 'POST') {
+      if (!body.name?.trim()) return problem(400, 'request.invalid', { violations: ['name.invalid'] });
+      if (hd.customers.some((entry) => entry.name.toLowerCase() === body.name.trim().toLowerCase())) return problem(409, 'customer.name_taken');
+      const customer = { id: uuid(), name: body.name.trim(), projects: body.projects ?? [], version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      hd.customers.push(customer);
+      return { status: 201, body: customer, etag: '"1"' };
+    }
+    let match = p.match(/^\/helpdesk\/customers\/([^/]+)$/);
+    if (match && method === 'PUT') {
+      const customer = hd.customers.find((entry) => entry.id === match[1]);
+      if (!customer) return problem(404, 'customer.not_found');
+      const refused = versioned(headers, customer, 'customer');
+      if (refused) return refused;
+      Object.assign(customer, { name: body.name.trim(), projects: body.projects ?? [], version: customer.version + 1, updatedAt: now(), updatedBy: account.id });
+      return ok(customer, `"${customer.version}"`);
+    }
+    if (p === '/helpdesk/contacts' && method === 'GET') return ok([...hd.contacts].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/helpdesk/contacts' && method === 'POST') {
+      const addresses = (body.addresses ?? []).map((value) => value.trim().toLowerCase());
+      if (addresses.length === 0 || addresses.some((value) => !/^[^@\s]+@[^@\s]+$/.test(value))) return problem(400, 'request.invalid', { violations: ['addresses.invalid'] });
+      if (hd.contacts.some((entry) => entry.addresses.some((value) => addresses.includes(value)))) return problem(409, 'contact.address_taken');
+      const contact = { id: uuid(), customerId: body.customerId, name: body.name.trim(), addresses, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      hd.contacts.push(contact);
+      return { status: 201, body: contact, etag: '"1"' };
+    }
+    match = p.match(/^\/helpdesk\/contacts\/([^/]+)$/);
+    if (match && method === 'PUT') {
+      const contact = hd.contacts.find((entry) => entry.id === match[1]);
+      if (!contact) return problem(404, 'contact.not_found');
+      const refused = versioned(headers, contact, 'contact');
+      if (refused) return refused;
+      Object.assign(contact, { customerId: body.customerId, name: body.name.trim(), addresses: body.addresses.map((value) => value.trim().toLowerCase()), version: contact.version + 1 });
+      return ok(contact, `"${contact.version}"`);
+    }
+    if (p === '/helpdesk/mailboxes' && method === 'GET') return ok(hd.mailboxes.map(mailboxView));
+    const settings = (mailbox) => {
+      const violations = [];
+      if (!body.name?.trim()) violations.push('name.invalid');
+      if (!body.imapHost?.trim()) violations.push('imapHost.invalid');
+      if (!(body.imapPort >= 1 && body.imapPort <= 65535)) violations.push('imapPort.invalid');
+      if (!body.username?.trim()) violations.push('username.invalid');
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      const password = body.password === undefined || body.password === null ? mailbox?.password ?? null : body.password === '' ? null : body.password;
+      return { name: body.name.trim(), enabled: body.enabled ?? true, projectId: body.projectId, ticketType: body.ticketType, imapHost: body.imapHost.trim(), imapPort: body.imapPort,
+        imapSecurity: body.imapSecurity, username: body.username.trim(), password, folder: body.folder ?? 'INBOX', smtpHost: body.smtpHost ?? null, smtpPort: body.smtpPort ?? null,
+        smtpSecurity: body.smtpSecurity ?? null, address: body.address ?? null, authservId: body.authservId ?? null, maxBytes: body.maxBytes ?? 25000000 };
+    };
+    if (p === '/helpdesk/mailboxes' && method === 'POST') {
+      if (body.password && !hd.secretKey) return problem(409, 'helpdesk.secret_key_missing');
+      const values = settings(null);
+      if (values.status) return values;
+      const mailbox = { id: uuid(), ...values, status: { polledAt: null, succeededAt: null, errorCode: null, errorAt: null, notice: null, noticeAt: null }, version: 1, updatedAt: now(), updatedBy: account.id };
+      hd.mailboxes.push(mailbox);
+      return { status: 201, body: mailboxView(mailbox), etag: '"1"' };
+    }
+    match = p.match(/^\/helpdesk\/mailboxes\/([^/]+)(\/test)?$/);
+    const mailbox = hd.mailboxes.find((entry) => entry.id === match?.[1]);
+    if (match && !mailbox) return problem(404, 'mailbox.not_found');
+    if (match && match[2] && method === 'POST') {
+      return ok(mailbox.password === 'falsch' ? { ok: false, code: 'helpdesk.authentication_failed' } : { ok: true, code: null });
+    }
+    if (match && method === 'PUT') {
+      const refused = versioned(headers, mailbox, 'mailbox');
+      if (refused) return refused;
+      const values = settings(mailbox);
+      if (values.status) return values;
+      Object.assign(mailbox, values, { version: mailbox.version + 1, updatedAt: now(), updatedBy: account.id });
+      return ok(mailboxView(mailbox), `"${mailbox.version}"`);
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  const messageView = (message, withBody) => {
+    const { raw: _raw, companyId: _company, ...rest } = message;
+    const ticket = message.ticketId ? state.tickets.find((entry) => entry.id === message.ticketId) : null;
+    return { ...rest, body: withBody ? message.body : null, ticket: ticket ? { projectId: ticket.projectId, number: ticket.number } : null };
+  };
+
+  function inboxRoute(account, method, p, query, headers, body) {
+    const mine = hd.messages.filter((message) => may(account, 'helpdesk.review', message.projectId));
+    if (p === '/helpdesk/inbox' && method === 'GET') {
+      const wanted = query.get('state') ?? 'review';
+      return ok(mine.filter((message) => message.state === wanted).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map((message) => messageView(message, false)));
+    }
+    if (p === '/helpdesk/inbox/summary') {
+      return ok({ review: mine.filter((message) => message.state === 'review').length, automatic: mine.filter((message) => message.state === 'automatic').length });
+    }
+    const match = p.match(/^\/helpdesk\/inbox\/([^/]+)(\/[a-z]+)?$/);
+    const message = mine.find((entry) => entry.id === match?.[1]);
+    if (!message) return problem(404, 'helpdesk.message_not_found');
+    const tail = match[2] ?? '';
+    if (tail === '' && method === 'GET') return ok(messageView(message, true), `"${message.version}"`);
+    if (tail === '/candidates') {
+      const domain = message.fromAddress?.split('@')[1];
+      return ok(hd.contacts.filter((contact) => contact.addresses.some((value) => value === message.fromAddress || value.endsWith(`@${domain}`)))
+        .map((contact) => {
+          const customer = hd.customers.find((entry) => entry.id === contact.customerId);
+          return { contactId: contact.id, contactName: contact.name, addresses: contact.addresses, customerId: customer.id, customerName: customer.name,
+            sender: contact.addresses.includes(message.fromAddress) };
+        }));
+    }
+    if (method !== 'POST') return problem(404, 'resource.not_found');
+    if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
+    if (!['review', 'automatic'].includes(message.state)) return problem(409, 'helpdesk.message_processed');
+    if (headers['if-match'] !== `"${message.version}"`) return problem(412, 'helpdesk.version_conflict');
+    if (tail === '/discard') {
+      if (!body.reason?.trim()) return problem(400, 'request.invalid', { violations: ['reason.invalid'] });
+      Object.assign(message, { state: 'discarded', discardReason: body.reason.trim(), processedAt: now(), processedBy: account.id, version: message.version + 1 });
+      return ok(messageView(message, true), `"${message.version}"`);
+    }
+    if (tail === '/ticket') {
+      const contact = body.contactId ? hd.contacts.find((entry) => entry.id === body.contactId) : null;
+      const ticket = addTicket(message.subject ?? '(kein Betreff)', message.body, account, message.projectId);
+      if (contact) hd.ticketCustomers.set(ticket.id, { customerId: contact.customerId, contactId: contact.id });
+      state.history.push({ ticket: ticket.id, version: 1, occurredAt: now(), actor: account.id,
+        changes: [{ field: 'mail', from: null, to: JSON.stringify({ id: message.id, from: message.fromAddress, subject: message.subject }) }] });
+      Object.assign(message, { state: 'ticket', ticketId: ticket.id, contactId: contact?.id ?? null, customerId: contact?.customerId ?? null, processedAt: now(), processedBy: account.id, version: message.version + 1 });
+      return ok({ ticketId: ticket.id, projectId: ticket.projectId, number: ticket.number, attachments: message.attachments });
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  function ticketHelpdeskRoute(account, item, ticket, method, tail, body) {
+    const readableHere = HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read'));
+    const writableHere = may(account, 'ticket.edit', item.id) ? ['customer', 'contact'].filter((name) => field(account, item.id, name, 'read') && field(account, item.id, name, 'write')) : [];
+    const view = () => {
+      const link = hd.ticketCustomers.get(ticket.id);
+      const customer = link ? hd.customers.find((entry) => entry.id === link.customerId) : null;
+      const contact = link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
+      return { readable: readableHere, writable: writableHere,
+        customer: readableHere.includes('customer') && customer ? { id: customer.id, name: customer.name } : null,
+        contact: readableHere.includes('contact') && contact ? { id: contact.id, name: contact.name, addresses: contact.addresses } : null,
+        mails: readableHere.includes('mail') ? hd.messages.filter((message) => message.ticketId === ticket.id).map((message) => ({ id: message.id, receivedAt: message.receivedAt,
+          sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments })) : null };
+    };
+    if (tail === '/helpdesk' && method === 'GET') return ok(view());
+    if (tail === '/helpdesk/options' && method === 'GET') {
+      if (!writableHere.includes('customer')) return problem(403, 'auth.forbidden');
+      return ok(hd.customers.filter((customer) => customer.projects.includes(item.id)).map((customer) => ({ id: customer.id, name: customer.name,
+        contacts: hd.contacts.filter((contact) => contact.customerId === customer.id).map((contact) => ({ id: contact.id, name: contact.name, addresses: contact.addresses })) })));
+    }
+    if (tail === '/helpdesk/customer' && method === 'PUT') {
+      if (writableHere.length < 2) return problem(403, 'auth.forbidden');
+      const before = hd.ticketCustomers.get(ticket.id) ?? null;
+      const name = (list, id) => { const found = list.find((entry) => entry.id === id); return found ? JSON.stringify({ id: found.id, name: found.name }) : null; };
+      if (body.customerId) hd.ticketCustomers.set(ticket.id, { customerId: body.customerId, contactId: body.contactId ?? null });
+      else hd.ticketCustomers.delete(ticket.id);
+      const after = hd.ticketCustomers.get(ticket.id) ?? null;
+      const changes = [];
+      if ((before?.customerId ?? null) !== (after?.customerId ?? null)) changes.push({ field: 'customer', from: name(hd.customers, before?.customerId), to: name(hd.customers, after?.customerId) });
+      if ((before?.contactId ?? null) !== (after?.contactId ?? null)) changes.push({ field: 'contact', from: name(hd.contacts, before?.contactId), to: name(hd.contacts, after?.contactId) });
+      if (changes.length > 0) state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes });
+      return ok(view());
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  const addMail = (extra = {}) => {
+    const message = { id: uuid(), mailboxId: hd.mailboxes[0]?.id ?? uuid(), projectId: project.id, receivedAt: now(), sentAt: null, fromAddress: 'max@unbekannt.example',
+      fromName: 'Max Muster', to: 'support@firma.example', cc: null, subject: 'Drucker defekt', body: 'Hallo,\nder Drucker im zweiten Stock druckt nicht.', sizeBytes: 2048,
+      attachments: [], state: 'review', reason: 'sender_unknown', ticketId: null, contactId: null, customerId: null, processedAt: null, processedBy: null, discardReason: null,
+      version: 1, ...extra };
+    hd.messages.push(message);
+    return message;
+  };
+
   function sessionBody(session) {
     const account = session.account;
     if (!account) return { authenticated: false, username: null, displayName: null, level: null, expiresAt: null, passwordChangeBy: null, csrfToken: TOKEN };
@@ -662,6 +850,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     writes: () => state.requests.filter((item) => item.method !== 'GET'),
     group: (name) => state.groups.find((group) => group.name === name),
     addJob,
+    addMail,
+    addTicket,
     deactivate: (account) => { account.active = false; },
   };
 }

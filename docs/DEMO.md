@@ -31,6 +31,7 @@ In `.env` stehen:
 - `TASK_MANAGER_DB_PASSWORD`: Passwort des Datenbankkontos der Anwendung, ein beliebiger langer Zufallswert.
 - `TASK_MANAGER_DEMO_PASSWORD`: Passwort, das das Demowerkzeug dem Administrator und allen synthetischen Konten gibt, mindestens 12 Zeichen. Es wird nirgends gespeichert außer in `.env`.
 - Optional `TASK_MANAGER_PORT`, wenn 8080 belegt ist.
+- Optional `TASK_MANAGER_SECRET_KEY` für den Helpdesk (TASK-057), 32 zufällige Bytes in Base64 (`openssl rand -base64 32`). Ohne ihn startet alles wie bisher, nur lassen sich keine Postfächer mit Passwort anlegen. Webserver und `worker` erhalten denselben Wert.
 
 `bootstrap-admin` legt das erste Konto mit allen Verwaltungsrechten an und zeigt einmalig ein Einmalpasswort. Danach entweder im Browser unter <http://localhost:8080> anmelden und das Passwort selbst wechseln, oder die Demodaten gleich mit dem Einmalpasswort anlegen lassen:
 

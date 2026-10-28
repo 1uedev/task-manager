@@ -58,6 +58,10 @@ taskmanager:
     # The file store of the attachments (TASK-051) must lie on a persistent volume outside the container; the web application
     # refuses to start without it. Limits and periods have defaults in FilesProperties.
     directory: ${TASK_MANAGER_FILES_DIR:}
+  helpdesk:
+    # The key that encrypts the passwords of the mailboxes in the database (TASK-057): 32 random bytes in Base64. Without it
+    # no mailbox with a password can be saved or read. Limits and periods have defaults in HelpdeskProperties.
+    secret-key: ${TASK_MANAGER_SECRET_KEY:}
   jobs:
     # The web process runs background jobs too unless this is false; the separate process "worker" always runs them (TASK-054).
     # Limits, retries and periods have defaults in JobsProperties.

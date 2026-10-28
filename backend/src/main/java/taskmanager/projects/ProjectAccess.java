@@ -45,6 +45,13 @@ public interface ProjectAccess {
      */
     List<UUID> memberships(UUID companyId, UUID accountId);
 
+    /**
+     * Locks the project row {@code FOR SHARE} until the commit without asking for a membership, for work that no person
+     * does, such as a ticket the mail intake creates (TASK-057); the caller decided by other means that the work is allowed.
+     * Returns whether the project exists in the company. Needs a transaction.
+     */
+    boolean lockForIntake(UUID companyId, UUID projectId);
+
     /** Every project of the company with key, name and description, to rebuild a projection (TASK-029). Needs a transaction. */
     List<ProjectChanged> searchSources(UUID companyId);
 }

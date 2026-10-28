@@ -55,9 +55,11 @@ public class TicketService {
     static final Set<String> FIELDS = Set.copyOf(ProjectConfiguration.FIELD_KEYS);
     /**
      * The fields of the history besides the custom ones: the five fields, the tags the tags module records (TASK-042) and the
-     * attachments the files module records (TASK-051).
+     * attachments the files module records (TASK-051), the customer, the contact and the mails the helpdesk records (TASK-057).
      */
-    private static final Set<String> HISTORY_FIELDS = with(with(FIELDS, TicketAccess.TAGS_FIELD), TicketAccess.ATTACHMENTS_FIELD);
+    private static final Set<String> SEPARATE_FIELDS = Set.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD,
+        TicketAccess.CUSTOMER_FIELD, TicketAccess.CONTACT_FIELD, TicketAccess.MAIL_FIELD);
+    private static final Set<String> HISTORY_FIELDS = union(FIELDS, SEPARATE_FIELDS);
     private static final int TITLE_MAX = 200;
     private static final int DESCRIPTION_MAX = 20_000;
 
@@ -120,7 +122,8 @@ public class TicketService {
      * The history, oldest first. The changes of the fields of one version form one entry. Each assignment or removal of a
      * tag forms an entry of its own with the field {@code tags} and the version the ticket had then, so several entries can
      * share a version (TASK-042); they need the read rule for {@code tags}. The same holds for each addition or removal of an
-     * attachment with the field {@code attachments} (TASK-051). A custom field is shown with its read rule.
+     * attachment with the field {@code attachments} (TASK-051), and for each change of customer, contact or a mail of the
+     * helpdesk (TASK-057). A custom field is shown with its read rule.
      */
     @Transactional
     public List<HistoryEntry> history(AccessContext actor, UUID projectId, long number) {
@@ -138,7 +141,7 @@ public class TicketService {
                 continue;
             }
             FieldChange fieldChange = new FieldChange(change.field(), change.oldValue(), change.newValue());
-            if (TicketAccess.TAGS_FIELD.equals(change.field()) || TicketAccess.ATTACHMENTS_FIELD.equals(change.field())) {
+            if (SEPARATE_FIELDS.contains(change.field())) {
                 entries.add(new HistoryEntry(change.version(), change.occurredAt(), change.actor(), List.of(fieldChange)));
                 fields = null;
             } else if (fields != null && fields.version() == change.version()) {
@@ -510,7 +513,10 @@ public class TicketService {
         return read.allowed() ? read.readableFields() : Set.of();
     }
 
-    /** The fields the caller may change, tags and attachments included, so an answer can name them (review F1 of TASK-051). */
+    /**
+     * The fields the caller may change, tags, attachments, customer and contact included, so an answer can name them (review
+     * F1 of TASK-051).
+     */
     private Set<String> writable(AccessContext actor, Supplier<ResourceContext> resource, UUID projectId) {
         Decision edit = inspect(actor, resource, EDIT, projectId, HISTORY_FIELDS);
         return edit.allowed() ? edit.writableFields() : Set.of();
@@ -536,12 +542,6 @@ public class TicketService {
     private TicketView view(Ticket ticket, Set<String> readable, Set<String> writable) {
         String key = projects.key(ticket.projectId()).orElseThrow(TicketService::projectNotFound);
         return new TicketView(ticket, key, readable, writable, configuration(ticket.projectId()));
-    }
-
-    private static Set<String> with(Set<String> fields, String field) {
-        Set<String> all = new HashSet<>(fields);
-        all.add(field);
-        return Set.copyOf(all);
     }
 
     private static Set<String> union(Set<String> first, Set<String> second) {

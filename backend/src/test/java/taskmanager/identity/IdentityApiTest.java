@@ -786,7 +786,7 @@ class IdentityApiTest {
         Person admin = person(true);
         Response state = admin.browser().get("/api/v1/session");
         assertEquals(admin.username(), state.json().get("username").asString());
-        assertEquals(List.of("accounts.manage", "appearance.manage", "jobs.manage", "permissions.manage", "projects.manage", "session_duration.manage",
+        assertEquals(List.of("accounts.manage", "appearance.manage", "helpdesk.manage", "jobs.manage", "permissions.manage", "projects.manage", "session_duration.manage",
                 "tags.manage"),
             java.util.stream.StreamSupport.stream(state.json().get("rights").spliterator(), false).map(node -> node.asString()).toList());
         assertNull(state.json().get("csrfToken").isNull() ? null : state.json().get("csrfToken"));

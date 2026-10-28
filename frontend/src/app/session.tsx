@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { onForbidden, onSessionLost, readSession, type SessionState } from '../api/client.ts';
 import { logout as endSession, readDirectory, type DirectoryEntry } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
+import { useI18n } from '../i18n/I18nProvider.tsx';
 
 // The login of this browser as the server reports it. The interface never decides on its own that someone is logged in:
 // every state comes from GET /session, and a 401 on any other call returns to the login.
@@ -111,11 +112,16 @@ export function useSession(): SessionContext {
 }
 
 // The name to show for an account: the display name, else the login name, else a shortened identifier.
+// The fixed actor of tickets the mail intake opened without a person (TASK-057).
+export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
+
 export function useAccountName(): (id: string | null | undefined) => string {
   const { directory } = useSession();
+  const { t } = useI18n();
   return useCallback((id) => {
     if (!id) return '';
+    if (id === MAIL_INTAKE) return t('helpdesk.intakeActor');
     const entry = directory.get(id);
     return entry ? entry.displayName ?? entry.username : id.slice(0, 8);
-  }, [directory]);
+  }, [directory, t]);
 }

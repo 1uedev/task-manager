@@ -31,6 +31,17 @@ Die Prüfwarteschlange speichert nachvollziehbar Eingang, Grund und Bearbeitungs
 
 Die Architektur sieht Herkunftskennungen je Mailkonto, Ordner, UIDVALIDITY und UID sowie getrennte Wiederholungsprüfungen vor. Ein Wechsel der Kennungen oder dieselbe Nachricht in einem weiteren Ordner braucht einen Abgleich. Message-ID und Inhaltsähnlichkeit helfen bei Verdachtsfällen, rechtfertigen aber kein ungeprüftes Zusammenführen verschiedener legitimer Nachrichten. Die technischen Grundlagen sind im [Architekturentwurf](ARCHITECTURE.md) verlinkt.
 
+### Nachtrag TASK-057 (DEC-086): umgesetzter Eingang
+
+Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem Vorschlag oben gilt:
+
+- Vertrauenssignal des Mailwegs ist der oberste Header `Authentication-Results` des eigenen Empfangsservers, erkannt an der am Postfach hinterlegten authserv-id, mit `dmarc=pass` und `header.from` gleich der Domain der From Adresse. Weiter unten stehende Header derselben Kennung zählen nicht. Ohne authserv-id wird kein Absender bestätigt; jede Mail wartet dann auf Prüfung.
+- Ein Ticket entsteht ohne Prüfung nur bei genau einem Absender, der genau einem Kontakt eines für das Projekt freigegebenen Kunden gehört, und ohne Kontakt eines anderen Kunden in To oder Cc. Gründe für die Prüfwarteschlange: kein, mehrere oder unbekannter Absender, nicht bestätigt, Kunde nicht freigegeben, fremder Kunde unter den Empfängern, zu groß, nicht lesbar, Tickettyp nicht mehr vorhanden.
+- Automatische Mails und Zustellberichte werden als technischer Eingang vermerkt und erhalten kein Ticket; sie lassen sich aus der Prüfwarteschlange trotzdem zum Ticket machen.
+- Wiedererkennung über Postfach, UIDVALIDITY und UID; nach einem Wechsel von UIDVALIDITY über die Message-ID desselben Postfachs, mit sichtbarem Hinweis am Postfach. Mails bleiben auf dem Server und werden nur als gelesen markiert.
+- Die Prüfwarteschlange sieht, wer im Zielprojekt Mitglied ist und die Projektaktion `helpdesk.review` hat. Wer zusätzlich `helpdesk.manage` hat, kann dort den Absender als Kontakt anlegen; Konten und Portalrechte entstehen nie.
+- Nachrichten an archivierte Projekte, Weiterleitungen über die Prüfwarteschlange hinaus und die Aufbewahrung verworfener Eingänge sind nicht umgesetzt. Antworten und ihre Zuordnung folgen mit TASK-058.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

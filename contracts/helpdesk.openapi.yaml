@@ -1,0 +1,793 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Helpdesk Eingang über Mail (TASK-057)
+  version: 0.1.0
+  description: |
+    Erster Teil des Helpdesks über Mail (DEC-086, Paket A9, REQ-HD-001 bis REQ-HD-004): Kundenorganisationen und
+    Kontakte, Postfächer mit IMAP Abruf, die Prüfwarteschlange und Kunde, Kontakt und Mails eines Tickets. Jeder Endpunkt
+    verlangt eine vollständige Anmeldung (sonst 401 `auth.required`, vor dem Passwortwechsel 403
+    `auth.password_change_required`). Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Rechte: Kunden, Kontakte und Postfächer verlangen das Unternehmensrecht `helpdesk.manage` (sonst 403 `auth.forbidden`).
+    Die Prüfwarteschlange zeigt die Mails eines Projekts nur Mitgliedern mit der Projektaktion `helpdesk.review`; für alle
+    anderen gibt es diese Mails nicht (404 `helpdesk.message_not_found`). Kunde, Kontakt und Mails eines Tickets folgen den
+    Feldregeln `customer`, `contact` und `mail` des Tickets und `ticket.read` beziehungsweise `ticket.edit`; ohne Leserecht
+    für das Ticket antwortet der Server mit 404.
+
+    Ein Postfachpasswort wird nur geschrieben: Antworten sagen mit `passwordSet`, ob eines gespeichert ist, nie welches.
+    Gespeichert wird es mit AES-256-GCM und dem Schlüssel `TASK_MANAGER_SECRET_KEY` des Betriebs; ohne diesen Schlüssel
+    lässt sich kein Passwort setzen (409 `helpdesk.secret_key_missing`). Der Abruf läuft als wiederkehrende Aufgabe
+    `helpdesk.fetch` des Auftragsmoduls (TASK-054) im Ausführer, standardmäßig jede Minute; er markiert abgerufene Mails als
+    gelesen und löscht nichts auf dem Server.
+
+    Ein Ticket entsteht ohne Prüfung nur, wenn genau ein Absender einem bekannten Kontakt gehört, dessen Kunde für das
+    Projekt des Postfachs freigegeben ist, keine Adresse eines anderen Kunden in To oder Cc steht und der oberste Header
+    `Authentication-Results` des eigenen Empfangsservers (`authservId`) `dmarc=pass` für die Domain des Absenders meldet.
+    Alles andere wartet in der Prüfwarteschlange; automatische Mails (Abwesenheitsnotizen, Zustellberichte, Listen)
+    erhalten kein Ticket.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /helpdesk/status:
+    get:
+      operationId: getHelpdeskStatus
+      summary: Einstellungen des Betriebs (Recht helpdesk.manage)
+      responses:
+        '200':
+          description: Zustand
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HelpdeskStatus'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /helpdesk/customers:
+    get:
+      operationId: listCustomers
+      summary: Kundenorganisationen nach Namen (Recht helpdesk.manage)
+      responses:
+        '200':
+          description: Alle Kunden des Unternehmens
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Customer'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createCustomer
+      summary: Kunden anlegen (Recht helpdesk.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CustomerRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Customer'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /helpdesk/customers/{id}:
+    put:
+      operationId: updateCustomer
+      summary: Kunden ändern (Recht helpdesk.manage, If-Match)
+      description: Name und freigegebene Projekte. Ein Projekt, das nicht mehr freigegeben ist, nimmt keine Tickets dieses Kunden mehr ohne Prüfung an.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CustomerRequest'}
+      responses:
+        '200':
+          description: Geändert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Customer'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/contacts:
+    get:
+      operationId: listContacts
+      summary: Kontakte, wahlweise eines Kunden (Recht helpdesk.manage)
+      parameters:
+        - name: customer
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Kontakte nach Namen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Contact'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createContact
+      summary: Kontakt anlegen (Recht helpdesk.manage)
+      description: Eine Adresse gehört genau einem Kontakt im Unternehmen (sonst 409 `contact.address_taken`); gespeichert wird sie klein geschrieben.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContactRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Contact'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /helpdesk/contacts/{id}:
+    put:
+      operationId: updateContact
+      summary: Kontakt ändern (Recht helpdesk.manage, If-Match)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContactRequest'}
+      responses:
+        '200':
+          description: Geändert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Contact'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/mailboxes:
+    get:
+      operationId: listMailboxes
+      summary: Postfächer mit dem Zustand des letzten Abrufs (Recht helpdesk.manage)
+      responses:
+        '200':
+          description: Alle Postfächer, ohne Passwort
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Mailbox'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createMailbox
+      summary: Postfach anlegen (Recht helpdesk.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MailboxRequest'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Mailbox'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /helpdesk/mailboxes/{id}:
+    put:
+      operationId: updateMailbox
+      summary: Postfach ändern (Recht helpdesk.manage, If-Match)
+      description: |
+        `password` fehlt oder ist null: das gespeicherte bleibt. Leere Zeichenkette: es wird entfernt. Ändern sich Server,
+        Port, Benutzername oder Ordner, beginnt der Abruf neu bei den ungelesenen Mails des Ordners.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MailboxRequest'}
+      responses:
+        '200':
+          description: Geändert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Mailbox'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/mailboxes/{id}/test:
+    post:
+      operationId: testMailbox
+      summary: Verbindung mit den gespeicherten Einstellungen prüfen (Recht helpdesk.manage)
+      description: Meldet sich an und öffnet den Ordner, ohne Mails zu lesen. Ein Fehler steht als stabiler Code in `code`.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Ergebnis der Prüfung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailboxTest'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox:
+    get:
+      operationId: listInbox
+      summary: Mails der Prüfwarteschlange, neueste zuerst (Projektaktion helpdesk.review)
+      description: Ohne Text; die nächste Seite beginnt unterhalb von `receivedAt` der letzten Mail. Standardzustand `review`.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/MessageState'}
+        - name: project
+          in: query
+          required: false
+          schema: {type: string, format: uuid}
+        - name: before
+          in: query
+          required: false
+          schema: {type: string, format: date-time}
+        - name: limit
+          in: query
+          required: false
+          description: Standard 50, höchstens 100; sonst 400 `helpdesk.limit_invalid`.
+          schema: {type: integer, minimum: 1, maximum: 100}
+      responses:
+        '200':
+          description: Eine Seite
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Message'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/summary:
+    get:
+      operationId: getInboxSummary
+      summary: Anzahl wartender und automatischer Mails in den Projekten mit helpdesk.review
+      responses:
+        '200':
+          description: Zähler
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InboxSummary'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/{id}:
+    get:
+      operationId: getInboxMessage
+      summary: Eine Mail mit Text (Projektaktion helpdesk.review)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Die Mail
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/{id}/candidates:
+    get:
+      operationId: listInboxCandidates
+      summary: Kontakte, die zu dieser Mail passen könnten (Projektaktion helpdesk.review)
+      description: Kontakte der Absender, Empfänger in Kopie und gleicher Domain, deren Kunde für das Projekt freigegeben ist.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Vorschläge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Candidate'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/{id}/ticket:
+    post:
+      operationId: createTicketFromMessage
+      summary: Ticket aus der Mail anlegen (Projektaktion helpdesk.review, If-Match)
+      description: |
+        Nur für Mails im Zustand `review` oder `automatic` (sonst 409 `helpdesk.message_processed`). Ohne `contactId`
+        entsteht das Ticket ohne Kunde; ohne `type` mit dem Tickettyp des Postfachs. Die Person ist Urheber des Tickets.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contactId: {type: [string, 'null'], format: uuid}
+                type: {type: [string, 'null']}
+      responses:
+        '200':
+          description: Angelegt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreatedTicket'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/{id}/discard:
+    post:
+      operationId: discardMessage
+      summary: Mail mit Begründung verwerfen (Projektaktion helpdesk.review, If-Match)
+      description: Der Inhalt der Mail bleibt lesbar, die Rohfassung wird gelöscht. Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, maxLength: 500}
+      responses:
+        '200':
+          description: Verworfen
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk:
+    get:
+      operationId: getTicketHelpdesk
+      summary: Kunde, Kontakt und Mails eines Tickets nach den Feldregeln
+      description: Ein Teil ohne Leseregel ist null; `readable` und `writable` nennen die Felder.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      responses:
+        '200':
+          description: Sicht
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TicketHelpdesk'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/options:
+    get:
+      operationId: listTicketCustomerOptions
+      summary: Für das Projekt freigegebene Kunden mit ihren Kontakten (Schreibregel customer)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      responses:
+        '200':
+          description: Auswahl
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CustomerOption'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/customer:
+    put:
+      operationId: setTicketCustomer
+      summary: Kunde und Kontakt eines Tickets setzen oder entfernen (ticket.edit und Schreibregeln customer, contact)
+      description: Jede Änderung ist ein eigener Eintrag der Tickethistorie. Ohne Kunde entfällt auch der Kontakt.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customerId: {type: [string, 'null'], format: uuid}
+                contactId: {type: [string, 'null'], format: uuid}
+      responses:
+        '200':
+          description: Neue Sicht
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TicketHelpdesk'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, format: int64}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412.
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid (Gründe in `violations`: name.invalid,
+        addresses.invalid, customerId.unknown, customerId.not_released, contactId.not_released, contactId.not_of_customer,
+        projectId.unknown, ticketType.unknown, type.unknown, imapHost.invalid, imapPort.invalid, imapSecurity.invalid,
+        username.invalid, folder.invalid, smtpHost.invalid, smtpPort.invalid, smtpSecurity.invalid, address.invalid,
+        authservId.invalid, maxBytes.invalid, reason.invalid), helpdesk.limit_invalid, helpdesk.state_invalid,
+        customer.not_found, customer.name_taken, customer.version_conflict, contact.not_found, contact.address_taken,
+        contact.version_conflict, mailbox.not_found, mailbox.name_taken, mailbox.version_conflict,
+        helpdesk.secret_key_missing, helpdesk.message_not_found, helpdesk.message_processed, helpdesk.version_conflict,
+        helpdesk.precondition_required, helpdesk.busy (503 mit Retry-After), project.not_found, ticket.not_found,
+        auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    HelpdeskStatus:
+      type: object
+      required: [secretKey, pollIntervalSeconds, maxBytes]
+      properties:
+        secretKey: {type: boolean, description: Ob der Schlüssel TASK_MANAGER_SECRET_KEY gesetzt ist.}
+        pollIntervalSeconds: {type: integer, format: int64}
+        maxBytes: {type: integer, format: int64, description: Obergrenze einer Mail, die abgerufen wird (Standard 25 MB).}
+    Customer:
+      type: object
+      required: [id, name, projects, version, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 120}
+        projects:
+          type: array
+          description: Projekte, in denen Mails dieses Kunden ohne Prüfung Tickets werden.
+          items: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    CustomerRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, maxLength: 120}
+        projects:
+          type: array
+          items: {type: string, format: uuid}
+    Contact:
+      type: object
+      required: [id, customerId, name, addresses, version, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        name: {type: string, maxLength: 120}
+        addresses:
+          type: array
+          items: {type: string, format: email}
+        version: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    ContactRequest:
+      type: object
+      required: [customerId, name, addresses]
+      properties:
+        customerId: {type: string, format: uuid}
+        name: {type: string, maxLength: 120}
+        addresses:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: {type: string}
+    Security:
+      type: string
+      enum: [tls, starttls, none]
+    Mailbox:
+      type: object
+      required: [id, name, enabled, projectId, ticketType, imapHost, imapPort, imapSecurity, username, passwordSet, folder, smtpHost,
+        smtpPort, smtpSecurity, address, authservId, maxBytes, status, version, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        enabled: {type: boolean}
+        projectId: {type: string, format: uuid}
+        ticketType: {type: string}
+        imapHost: {type: string}
+        imapPort: {type: integer}
+        imapSecurity: {$ref: '#/components/schemas/Security'}
+        username: {type: string}
+        passwordSet: {type: boolean}
+        folder: {type: string}
+        smtpHost: {type: [string, 'null'], description: Für die Antworten aus TASK-058; in TASK-057 nur gespeichert.}
+        smtpPort: {type: [integer, 'null']}
+        smtpSecurity:
+          type: [string, 'null']
+          enum: [tls, starttls, none, null]
+        address: {type: [string, 'null'], description: Absenderadresse der späteren Antworten.}
+        authservId: {type: [string, 'null'], description: authserv-id des eigenen Empfangsservers; ohne sie wird kein Absender bestätigt.}
+        maxBytes: {type: integer, format: int64}
+        status: {$ref: '#/components/schemas/MailboxStatus'}
+        version: {type: integer, format: int64}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    MailboxStatus:
+      type: object
+      required: [polledAt, succeededAt, errorCode, errorAt, notice, noticeAt]
+      properties:
+        polledAt: {type: [string, 'null'], format: date-time}
+        succeededAt: {type: [string, 'null'], format: date-time}
+        errorCode:
+          type: [string, 'null']
+          description: |
+            Code des letzten gescheiterten Abrufs, etwa helpdesk.authentication_failed, helpdesk.connection_failed,
+            helpdesk.timeout, helpdesk.tls_failed, helpdesk.starttls_unavailable, helpdesk.folder_missing,
+            helpdesk.protocol_error, helpdesk.imap_unsupported, helpdesk.password_unreadable, helpdesk.secret_key_missing;
+            null nach einem erfolgreichen Abruf.
+        errorAt: {type: [string, 'null'], format: date-time}
+        notice: {type: [string, 'null'], description: 'Hinweis ohne Fehler, etwa helpdesk.uidvalidity_changed'}
+        noticeAt: {type: [string, 'null'], format: date-time}
+    MailboxRequest:
+      type: object
+      required: [name, projectId, ticketType, imapHost, imapPort, imapSecurity, username]
+      properties:
+        name: {type: string, maxLength: 120}
+        enabled: {type: [boolean, 'null'], description: Standard wahr.}
+        projectId: {type: string, format: uuid}
+        ticketType: {type: string}
+        imapHost: {type: string}
+        imapPort: {type: integer, minimum: 1, maximum: 65535}
+        imapSecurity: {$ref: '#/components/schemas/Security'}
+        username: {type: string, maxLength: 254}
+        password: {type: [string, 'null'], writeOnly: true}
+        folder: {type: [string, 'null'], description: Standard INBOX.}
+        smtpHost: {type: [string, 'null']}
+        smtpPort: {type: [integer, 'null'], minimum: 1, maximum: 65535}
+        smtpSecurity:
+          type: [string, 'null']
+          enum: [tls, starttls, none, null]
+        address: {type: [string, 'null']}
+        authservId: {type: [string, 'null']}
+        maxBytes: {type: [integer, 'null'], format: int64, description: Höchstens die Grenze des Betriebs.}
+    MailboxTest:
+      type: object
+      required: [ok, code]
+      properties:
+        ok: {type: boolean}
+        code: {type: [string, 'null']}
+    MessageState:
+      type: string
+      enum: [review, automatic, ticket, discarded]
+    AttachmentNote:
+      type: object
+      required: [name, size, attachmentId, refusal]
+      properties:
+        name: {type: string}
+        size: {type: integer, format: int64}
+        attachmentId: {type: [string, 'null'], format: uuid}
+        refusal:
+          type: [string, 'null']
+          description: Grund, aus dem die Datei kein Anhang wurde, etwa attachment.type_blocked, attachment.too_large, attachment.not_fetched.
+    Message:
+      type: object
+      required: [id, mailboxId, projectId, receivedAt, sentAt, fromAddress, fromName, to, cc, subject, body, sizeBytes, attachments,
+        state, reason, ticket, contactId, customerId, processedAt, processedBy, discardReason, version]
+      properties:
+        id: {type: string, format: uuid}
+        mailboxId: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        receivedAt: {type: string, format: date-time}
+        sentAt: {type: [string, 'null'], format: date-time}
+        fromAddress: {type: [string, 'null']}
+        fromName: {type: [string, 'null']}
+        to: {type: [string, 'null']}
+        cc: {type: [string, 'null']}
+        subject: {type: [string, 'null']}
+        body: {type: [string, 'null'], description: Nur in der Einzelansicht; Klartext, Markup wird nie ausgeliefert.}
+        sizeBytes: {type: integer, format: int64}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/AttachmentNote'}
+        state: {$ref: '#/components/schemas/MessageState'}
+        reason:
+          type: [string, 'null']
+          description: |
+            Warum die Mail geprüft werden muss: sender_missing, sender_ambiguous, sender_unknown, sender_unconfirmed,
+            customer_not_released, foreign_customer, too_large, unreadable, automatic, ticket_type_unavailable.
+        ticket:
+          type: [object, 'null']
+          required: [projectId, number]
+          properties:
+            projectId: {type: string, format: uuid}
+            number: {type: integer, format: int64}
+        contactId: {type: [string, 'null'], format: uuid}
+        customerId: {type: [string, 'null'], format: uuid}
+        processedAt: {type: [string, 'null'], format: date-time}
+        processedBy: {type: [string, 'null'], format: uuid}
+        discardReason: {type: [string, 'null']}
+        version: {type: integer, format: int64}
+    InboxSummary:
+      type: object
+      required: [review, automatic]
+      properties:
+        review: {type: integer, format: int64}
+        automatic: {type: integer, format: int64}
+    Candidate:
+      type: object
+      required: [contactId, contactName, addresses, customerId, customerName, sender]
+      properties:
+        contactId: {type: string, format: uuid}
+        contactName: {type: string}
+        addresses:
+          type: array
+          items: {type: string}
+        customerId: {type: string, format: uuid}
+        customerName: {type: string}
+        sender: {type: boolean, description: Eine Adresse des Kontakts ist ein Absender der Mail.}
+    CreatedTicket:
+      type: object
+      required: [ticketId, projectId, number, attachments]
+      properties:
+        ticketId: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/AttachmentNote'}
+    NamedReference:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+    TicketContact:
+      type: object
+      required: [id, name, addresses]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        addresses:
+          type: array
+          items: {type: string}
+    TicketMail:
+      type: object
+      required: [id, receivedAt, sentAt, fromAddress, fromName, to, cc, subject, body, attachments]
+      properties:
+        id: {type: string, format: uuid}
+        receivedAt: {type: string, format: date-time}
+        sentAt: {type: [string, 'null'], format: date-time}
+        fromAddress: {type: [string, 'null']}
+        fromName: {type: [string, 'null']}
+        to: {type: [string, 'null']}
+        cc: {type: [string, 'null']}
+        subject: {type: [string, 'null']}
+        body: {type: [string, 'null']}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/AttachmentNote'}
+    TicketHelpdesk:
+      type: object
+      required: [readable, writable, customer, contact, mails]
+      properties:
+        readable:
+          type: array
+          items: {type: string, enum: [contact, customer, mail]}
+        writable:
+          type: array
+          items: {type: string, enum: [contact, customer]}
+        customer:
+          oneOf:
+            - {$ref: '#/components/schemas/NamedReference'}
+            - {type: 'null'}
+        contact:
+          oneOf:
+            - {$ref: '#/components/schemas/TicketContact'}
+            - {type: 'null'}
+        mails:
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/TicketMail'}
+    CustomerOption:
+      type: object
+      required: [id, name, contacts]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        contacts:
+          type: array
+          items: {$ref: '#/components/schemas/TicketContact'}

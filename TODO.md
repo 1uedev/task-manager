@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-057](#task-057-helpdesk-eingang-über-imap-mit-prüfwarteschlange-paket-a9-teil-1) | Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1) | claude-20261028-helpdesk-01 | 2026-10-28 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -40,7 +38,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-057](#task-057-helpdesk-eingang-über-imap-mit-prüfwarteschlange-paket-a9-teil-1) | Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1) | claude-20261028-helpdesk-01 | 2026-10-28 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -55,7 +55,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-057 Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-helpdesk-01 · **Aktualisiert:** 2026-10-28
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-helpdesk-01 · **Aktualisiert:** 2026-10-28
 
 **Bezug:** REQ-HD-001 (Eingang, geschützte Zugangsdaten, erkennbare Verbindungsfehler), REQ-HD-002 (Duplikate, unbekannte Absender nach DEC-031, automatische Antworten und Schleifen beim Eingang), REQ-ORG-002 (Unternehmensgrenze), REQ-TKT-003 (nur Mailanhänge über das Modul `files`). **Abhängigkeiten:** TASK-027 (Ticketkern), TASK-044 (Projektkonfiguration), TASK-051 (Dateien), TASK-054 bis TASK-056 (Hintergrundaufträge), alle abgenommen. **Arbeitsstand:** Paket A9 der Reihenfolge aus DEC-072, Holgers Zustimmung „Ja“ vom 28. Oktober 2026 im Projektgespräch. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-086 und Migration V0026. Die folgenden Festlegungen sind Umsetzungsvorschlag der Sitzung zu OPEN-009 und zum Entwurf in docs/HELPDESK_SLA.md; Holger kann sie vor dem Merge dieser Reservierung ändern.
 
@@ -74,7 +74,9 @@ Nicht Teil (TASK-058 oder später): Antworten über SMTP, Versandzustände, Zuor
 
 **Abnahmekriterien:** Eine Nachricht eines bestätigten bekannten Kontakts einer freigegebenen Organisation erzeugt genau ein Ticket mit Kunde, Kontakt, Text und Anhängen, auch nach erneutem Abruf, Neustart oder zwei gleichzeitigen Ausführern; ein unbekannter, nicht bestätigter oder mehrdeutiger Absender landet mit Grund in der Prüfwarteschlange und erzeugt kein Ticket; eine gefälschte From Adresse ohne `dmarc=pass` des eigenen Empfangsservers führt nie direkt zum Ticket; eine automatische Antwort erzeugt kein Ticket; ein Wechsel von UIDVALIDITY erzeugt keine Duplikate; die Prüfwarteschlange ist ohne `helpdesk.review` im Zielprojekt nicht sichtbar (403), eine doppelte Bearbeitung legt nichts doppelt an; Kennwörter erscheinen weder in Antworten noch im Protokoll noch unverschlüsselt in der Datenbank; ein falsches Kennwort oder ein nicht erreichbarer Server ist in der Postfachliste sichtbar; ohne Leserecht auf `mail`, `customer` oder `contact` erscheinen diese Felder weder in Ticket noch Historie noch Suche. Tests gegen GreenMail. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Reservierung integrieren; danach umsetzen und mit DEC-086 als Ergebnis PR übergeben. Offene Entscheidungen für Holger, falls er von den Vorschlägen abweichen will: Aufteilung von A9 in Eingang (TASK-057) und Antworten (TASK-058), Bestätigung des Absenders über `dmarc=pass` des eigenen Empfangsservers, Kundenorganisationen und Kontakte schon in A9 statt erst mit dem Portal, Abrufabstand 60 Sekunden, Größengrenze 25 MB, Rechte `helpdesk.manage` und `helpdesk.review`.
+**Ergebnis:** Umgesetzt im Ergebnis PR vom Branch claude/project-thread-b4u17z, beschrieben in DEC-086, backend/README.md (Helpdesk Eingang), contracts/helpdesk.openapi.yaml und dem Nachtrag in docs/HELPDESK_SLA.md. Modul `helpdesk` mit Migration V0026, Port `AttachmentIntake` im Modul `files`, Ticketfelder `customer`, `contact` und `mail`, Rechte `helpdesk.manage` und `helpdesk.review`, Oberfläche Helpdesk, Prüfwarteschlange und Bereich „Kunde und Mails“ mit E-Mail Verlauf am Ticket. Abweichung vom Abnahmekriterium „nicht sichtbar (403)“: Ohne `helpdesk.review` ist die Liste leer und eine einzelne Mail antwortet mit 404, damit fremde Eingänge nicht einmal als vorhanden erkennbar sind; Holger entscheidet bei der Abnahme. Prüfungen: `HelpdeskApiTest` gegen GreenMail und PostgreSQL (genau ein Ticket auch nach erneutem Abruf, verlorener Position und zwei gleichzeitigen Abrufen; unbekannt, unbestätigt, gefälschter Header und fremder Kunde in die Prüfwarteschlange; automatische und zu große Mails; neue UIDVALIDITY ohne Duplikat; Passwort weder in Antworten noch Audit noch im Klartext in der Datenbank; falsches Passwort und geschlossener Port in der Liste; Rechte und Versionen der Prüfwarteschlange; Feldregeln), `SenderCheckTest`, `ParsedMailTest`, `SecretBoxTest`, `HelpdeskContractTest`, alle Backendtests mit `./mvnw verify`, Frontend Typprüfung, Einheitstests, Build und alle Browsertests einschließlich `helpdesk.test.mjs`, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests -v`, `git diff --check`. Nicht lokal gelaufen: Backend mit Java 25 und PostgreSQL 18 (CI), Docker Image.
+
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab. Danach wird TASK-058 freigegeben.
 
 ## TASK-058 Helpdesk Antworten über SMTP (Paket A9, Teil 2)
 

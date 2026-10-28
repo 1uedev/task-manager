@@ -16,6 +16,7 @@ import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { TicketAttachments } from './TicketAttachments.tsx';
+import { TicketHelpdesk } from './TicketHelpdesk.tsx';
 import { statusName, typeName } from './ProjectPage.tsx';
 
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'] as const;
@@ -23,9 +24,9 @@ type Field = (typeof FIELDS)[number];
 type Draft = Record<Field, string>;
 // The text of every custom field control by field key.
 type CustomDraft = Readonly<Record<string, string>>;
-const FIELD_LABEL: Record<Field | 'tags' | 'attachments', MessageKey> = {
+const FIELD_LABEL: Record<Field | 'tags' | 'attachments' | 'customer' | 'contact' | 'mail', MessageKey> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags',
-  attachments: 'field.attachments',
+  attachments: 'field.attachments', customer: 'field.customer', contact: 'field.contact', mail: 'field.mail',
 };
 
 function customDraftOf(ticket: Ticket, fields: readonly CustomField[]): CustomDraft {
@@ -280,6 +281,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
           </form>
         </section>
         <div>
+          <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
           <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <History key={`history-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />
@@ -354,6 +356,27 @@ function TicketTags({ project, ticket, round }: { readonly project: Project; rea
   );
 }
 
+function parseJson(raw: string | null | undefined): Record<string, unknown> | null {
+  if (raw === null || raw === undefined) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseReference(raw: string | null | undefined): { readonly name: string } | null {
+  const value = parseJson(raw);
+  return value !== null && typeof value.name === 'string' ? { name: value.name } : null;
+}
+
+function parseMail(raw: string | null | undefined): { readonly from: string | null; readonly subject: string | null } | null {
+  const value = parseJson(raw);
+  if (value === null) return null;
+  return { from: typeof value.from === 'string' ? value.from : null, subject: typeof value.subject === 'string' ? value.subject : null };
+}
+
 function parseAttachment(raw: string | null | undefined): { readonly name: string; readonly size: number } | null {
   if (raw === null || raw === undefined) return null;
   try {
@@ -398,6 +421,13 @@ function History({ project, ticket, round }: { readonly project: Project; readon
     return t(added ? 'history.attachmentAdded' : 'history.attachmentRemoved', { name: described.name, size: formatBytes(described.size, language) });
   };
 
+  // Customer and contact as the server keeps them in the history: a JSON text with the name they had then (TASK-057).
+  const referenceText = (raw: string | null | undefined) => parseReference(raw)?.name ?? t('field.empty');
+  const mailText = (raw: string | null | undefined) => {
+    const mail = parseMail(raw);
+    return t('history.mailReceived', { from: mail?.from ?? t('inbox.noSender'), subject: mail?.subject ?? t('inbox.noSubject') });
+  };
+
   return (
     <section aria-labelledby="ticket-history" className="panel">
       <h2 id="ticket-history">{t('history.title')}</h2>
@@ -415,6 +445,10 @@ function History({ project, ticket, round }: { readonly project: Project; readon
                         ? t(change.to ? 'history.tagAdded' : 'history.tagRemoved', { tag: value('tags', change.to ?? change.from) })
                         : change.field === 'attachments'
                         ? attachmentText(change.to, change.from)
+                        : change.field === 'mail'
+                        ? mailText(change.to ?? change.from)
+                        : change.field === 'customer' || change.field === 'contact'
+                        ? t('history.change', { field: t(FIELD_LABEL[change.field]), from: referenceText(change.from), to: referenceText(change.to) })
                         : t('history.change', { field: change.field.startsWith(CUSTOM_PREFIX)
                           ? custom.find((item) => `${CUSTOM_PREFIX}${item.key}` === change.field)?.name ?? change.field
                           : t(FIELD_LABEL[change.field as Field] ?? 'field.title'), from: value(change.field, change.from), to: value(change.field, change.to) })}
