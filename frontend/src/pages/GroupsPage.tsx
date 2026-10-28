@@ -137,6 +137,8 @@ function AuditLog({ groups }: { readonly groups: readonly Group[] }) {
 export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'accounts.manage': 'right.accounts.manage',
   'appearance.manage': 'right.appearance.manage',
+  'helpdesk.manage': 'right.helpdesk.manage',
+  'helpdesk.review': 'right.helpdesk.review',
   'jobs.manage': 'right.jobs.manage',
   'permissions.audit.read': 'right.permissions.audit.read',
   'permissions.manage': 'right.permissions.manage',
@@ -153,6 +155,7 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags', attachments: 'field.attachments',
+  customer: 'field.customer', contact: 'field.contact', mail: 'field.mail',
 };
 
 type GroupAnswer = Promise<Result<GroupDetail | 'gone'>>;

@@ -1,5 +1,6 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
 import type { components as FileTypes } from './generated/files';
+import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
 import type { components as JobTypes } from './generated/jobs';
 import type { components as PermissionTypes } from './generated/permissions';
@@ -40,6 +41,19 @@ export type ProjectGroup = PermissionTypes['schemas']['ProjectGroup'];
 export type Job = JobTypes['schemas']['Job'];
 export type JobState = JobTypes['schemas']['JobState'];
 export type JobSummary = JobTypes['schemas']['JobSummary'];
+export type HelpdeskStatus = HelpdeskTypes['schemas']['HelpdeskStatus'];
+export type Customer = HelpdeskTypes['schemas']['Customer'];
+export type Contact = HelpdeskTypes['schemas']['Contact'];
+export type Mailbox = HelpdeskTypes['schemas']['Mailbox'];
+export type MailboxRequest = HelpdeskTypes['schemas']['MailboxRequest'];
+export type MailboxTest = HelpdeskTypes['schemas']['MailboxTest'];
+export type MailMessage = HelpdeskTypes['schemas']['Message'];
+export type MessageState = HelpdeskTypes['schemas']['MessageState'];
+export type InboxSummary = HelpdeskTypes['schemas']['InboxSummary'];
+export type Candidate = HelpdeskTypes['schemas']['Candidate'];
+export type CreatedFromMail = HelpdeskTypes['schemas']['CreatedTicket'];
+export type TicketHelpdesk = HelpdeskTypes['schemas']['TicketHelpdesk'];
+export type CustomerOption = HelpdeskTypes['schemas']['CustomerOption'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -358,3 +372,64 @@ export const listJobs = (api: ServerApi, state: JobState | null, before: number 
     listOf<Job>(isJob));
 export const retryJob = (api: ServerApi, id: string) => run(() => api.jobs.POST('/jobs/{id}/retry', { params: { path: { id } } }), one<Job>(isJob));
 export const cancelJob = (api: ServerApi, id: string) => run(() => api.jobs.POST('/jobs/{id}/cancel', { params: { path: { id } } }), one<Job>(isJob));
+
+// ---------------------------------------------------------------- helpdesk (TASK-057)
+
+export const HELPDESK_STATES: readonly MessageState[] = ['review', 'automatic', 'ticket', 'discarded'];
+export const INBOX_PAGE = 50;
+const isCustomer = (v: unknown) => hasStrings(v, 'id', 'name') && Array.isArray((v as Customer).projects) && typeof (v as Customer).version === 'number';
+const isContact = (v: unknown) => hasStrings(v, 'id', 'customerId', 'name') && Array.isArray((v as Contact).addresses);
+const isMailbox = (v: unknown) => hasStrings(v, 'id', 'name', 'projectId', 'imapHost', 'username') && typeof (v as Mailbox).passwordSet === 'boolean'
+  && record((v as Mailbox).status);
+const isMessage = (v: unknown) => hasStrings(v, 'id', 'projectId', 'receivedAt', 'state') && typeof (v as MailMessage).version === 'number'
+  && Array.isArray((v as MailMessage).attachments);
+const isTicketHelpdesk = (v: unknown) => record(v) && Array.isArray(v.readable) && Array.isArray(v.writable);
+
+export const readHelpdeskStatus = (api: ServerApi) =>
+  run(() => api.helpdesk.GET('/helpdesk/status'), one<HelpdeskStatus>((v) => record(v) && typeof v.secretKey === 'boolean'));
+export const listCustomers = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/customers'), listOf<Customer>(isCustomer));
+export const createCustomer = (api: ServerApi, name: string, projects: readonly string[]) =>
+  run(() => api.helpdesk.POST('/helpdesk/customers', { body: { name, projects: [...projects] } }), one<Customer>(isCustomer));
+export const updateCustomer = (api: ServerApi, id: string, version: number, name: string, projects: readonly string[]) =>
+  run(() => api.helpdesk.PUT('/helpdesk/customers/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { name, projects: [...projects] } }),
+    one<Customer>(isCustomer));
+export const listContacts = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/contacts'), listOf<Contact>(isContact));
+export const createContact = (api: ServerApi, customerId: string, name: string, addresses: readonly string[]) =>
+  run(() => api.helpdesk.POST('/helpdesk/contacts', { body: { customerId, name, addresses: [...addresses] } }), one<Contact>(isContact));
+export const updateContact = (api: ServerApi, id: string, version: number, customerId: string, name: string, addresses: readonly string[]) =>
+  run(() => api.helpdesk.PUT('/helpdesk/contacts/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { customerId, name, addresses: [...addresses] } }),
+    one<Contact>(isContact));
+export const listMailboxes = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/mailboxes'), listOf<Mailbox>(isMailbox));
+export const createMailbox = (api: ServerApi, body: MailboxRequest) =>
+  run(() => api.helpdesk.POST('/helpdesk/mailboxes', { body }), one<Mailbox>(isMailbox));
+export const updateMailbox = (api: ServerApi, id: string, version: number, body: MailboxRequest) =>
+  run(() => api.helpdesk.PUT('/helpdesk/mailboxes/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<Mailbox>(isMailbox));
+export const testMailbox = (api: ServerApi, id: string) =>
+  run(() => api.helpdesk.POST('/helpdesk/mailboxes/{id}/test', { params: { path: { id } } }), one<MailboxTest>((v) => record(v) && typeof v.ok === 'boolean'));
+
+// Newest first; the next page starts below the receipt time of the last mail.
+export const listInbox = (api: ServerApi, state: MessageState, before: string | null) =>
+  run(() => api.helpdesk.GET('/helpdesk/inbox', { params: { query: { state, limit: INBOX_PAGE, ...(before === null ? {} : { before }) } } }),
+    listOf<MailMessage>(isMessage));
+export const readInboxSummary = (api: ServerApi) =>
+  run(() => api.helpdesk.GET('/helpdesk/inbox/summary'), one<InboxSummary>((v) => record(v) && typeof v.review === 'number' && typeof v.automatic === 'number'));
+export const readInboxMessage = (api: ServerApi, id: string) =>
+  run(() => api.helpdesk.GET('/helpdesk/inbox/{id}', { params: { path: { id } } }), one<MailMessage>(isMessage));
+export const listCandidates = (api: ServerApi, id: string) =>
+  run(() => api.helpdesk.GET('/helpdesk/inbox/{id}/candidates', { params: { path: { id } } }),
+    listOf<Candidate>((v) => hasStrings(v, 'contactId', 'contactName', 'customerId', 'customerName')));
+export const ticketFromMessage = (api: ServerApi, id: string, etag: string, contactId: string | null) =>
+  run(() => api.helpdesk.POST('/helpdesk/inbox/{id}/ticket', { params: { path: { id }, ...ifMatch(etag) }, body: { contactId } }),
+    one<CreatedFromMail>((v) => hasStrings(v, 'ticketId', 'projectId') && typeof (v as CreatedFromMail).number === 'number'));
+export const discardMessage = (api: ServerApi, id: string, etag: string, reason: string) =>
+  run(() => api.helpdesk.POST('/helpdesk/inbox/{id}/discard', { params: { path: { id }, ...ifMatch(etag) }, body: { reason } }), one<MailMessage>(isMessage));
+
+export const readTicketHelpdesk = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk', { params: { path: { projectId, number } } }),
+    one<TicketHelpdesk>(isTicketHelpdesk));
+export const ticketCustomerOptions = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/options', { params: { path: { projectId, number } } }),
+    listOf<CustomerOption>((v) => hasStrings(v, 'id', 'name') && Array.isArray((v as CustomerOption).contacts)));
+export const setTicketCustomer = (api: ServerApi, projectId: string, number: number, customerId: string | null, contactId: string | null) =>
+  run(() => api.helpdesk.PUT('/projects/{projectId}/tickets/{number}/helpdesk/customer', { params: { path: { projectId, number } }, body: { customerId, contactId } }),
+    one<TicketHelpdesk>(isTicketHelpdesk));
