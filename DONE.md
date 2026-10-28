@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 sind die ersten Einträge unten. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Die erste Dokumentfassung ist erstellt und unter TASK-001 zur Prüfung eingetragen. Die fachliche Abnahme durch Holger Gerlach steht aus. TASK-013 dokumentiert die veröffentlichte und technisch geprüfte GitHub-Arbeitsumgebung und bleibt ebenfalls zur Prüfung in TODO.md. Fachfunktionen sind noch nicht implementiert.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -26,6 +26,538 @@ Jeder Eintrag enthält:
 ## Historie erhalten
 
 Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen erzeugen neue, verknüpfte Aufgaben in TODO.md. Sachliche Berichtigungen werden als datierter Nachtrag kenntlich gemacht. Eine erledigte Spezifikationsaufgabe wird nicht als erledigte Produktfunktion bezeichnet.
+
+## TASK-001 Erste zentrale Spezifikation erstellen und prüfen
+
+**GitHub:** [Issue #1](https://github.com/1uedev/task-manager/issues/1)
+
+**Bezug:** REQ-PROD-003, REQ-DEV-001, REQ-DEV-002, REQ-DEV-004. **Abhängigkeiten:** keine. **Arbeitsstand:** Dokumentfassung im Repository; ursprüngliche Erstellung am 2026-10-12. **Verantwortlich:** Codex-Hauptsitzung-2026-10-12. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Gesprächsentscheidungen in Anforderungen, Abnahmekriterien, offene Fragen, Roadmap und gemeinsame Arbeitsregeln überführen.
+
+**Abnahmekriterien:** Bestätigte Vorgaben und Vorschläge sind getrennt. IDs und Verweise sind konsistent. TODO und DONE unterscheiden Entwurf und Abnahme. Es wurde keine Anwendung implementiert. Holger hat die erste Dokumentfassung fachlich geprüft beziehungsweise Änderungswünsche benannt.
+
+**Ergebnis:** README.md, REQUIREMENTS.md, DECISIONS.md, ROADMAP.md, AGENTS.md, CLAUDE.md, TODO.md und DONE.md liegen als erste Fassung vor. Fachliche Abnahme offen.
+
+**Eigenprüfung am 2026-10-12:** 86 eindeutige Anforderungs-IDs mit Status und Abnahmekriterien, 24 Entscheidungs-IDs, 21 offene Fragen und 12 Aufgaben geprüft. Anforderungs-, Aufgaben- und Fragenverweise sowie lokale Dokumentlinks sind auf gültige Ziele geprüft; Pflichtangaben der Aufgaben sind vorhanden. Der Ordner enthält ausschließlich die acht Markdown-Dokumente. Diese Strukturprüfung ist kein unabhängiges Review und kein Nachweis implementierter Produktfunktionen.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-12“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #1](https://github.com/1uedev/task-manager/issues/1); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-002 Umfang und spätere Funktionen vervollständigen
+
+**GitHub:** [Issue #2](https://github.com/1uedev/task-manager/issues/2)
+
+**Bezug:** REQ-PROD-002, REQ-PROD-003, REQ-EXT-001, REQ-TIME-003. **Abhängigkeiten:** Entwurf TASK-001 vorhanden; Priorisierung nach fachlicher Rückmeldung. **Arbeitsstand:** task/task-002-codex-inventory; Funktionsinventar und priorisierte Roadmap als Entwurf vorhanden. **Verantwortlich:** codex-20261016-inventory-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** V1-Vorschläge priorisieren, vollständiges Funktionsinventar der angestrebten Vergleichbarkeit erstellen und spätere Module abgrenzen. OPEN-020 und OPEN-021 einbeziehen.
+
+**Abnahmekriterien:** Jeder Bereich hat Zweck, Mindestumfang, Abhängigkeit, Release-Status und Abnahmebeispiel. Bestätigte V1-Funktionen werden nicht ohne Entscheidung verschoben. Termine und Preise werden ohne Budget- und Kapazitätsbasis nicht zugesagt.
+
+**Ergebnis:** [Funktionsinventar](docs/FUNCTION_INVENTORY.md) mit V1-Kern, Priorisierung aller V-Ergänzungen, späteren Funktionsbereichen, Mindestumfang, Abhängigkeiten, Abnahmebeispielen und KI-Nutzenbewertung. Roadmap verknüpft und konsolidiert. Bestätigte V1-Funktionen und frühe Ergänzungen bleiben erhalten; keine Preis-, Termin- oder Gleichheitszusage.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 86 REQ-IDs sind über Inventar und Bereichsverweise zugeordnet; V-Anforderungen auf Priorisierung geprüft. Herstellerseiten zur Bereichsabdeckung gelesen; eigene Mindestumfänge von Herstellerangaben getrennt. Keine Anwendungstests und keine unabhängige fachliche oder technische Abnahme.
+
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-041 bestätigt die Priorität von Kanban, Gantt und einfachen Dashboards; die frühen Ergänzungen 2FA und Redmine-Import bleiben eingeplant. Übrige Prioritäten und Mindestumfänge bleiben Vorschläge.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #2](https://github.com/1uedev/task-manager/issues/2); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-003 Architekturentscheidungen vorbereiten
+
+**GitHub:** [Issue #3](https://github.com/1uedev/task-manager/issues/3)
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-ORG-002, REQ-DATA-001, REQ-DATA-002, REQ-API-001. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004 und TASK-005. **Arbeitsstand:** task/task-003-codex-architecture, separates Arbeitsverzeichnis; Architekturentwurf vorhanden. **Verantwortlich:** codex-20261013-architecture-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-001, OPEN-002 und OPEN-013 bearbeiten. Go und Java bewerten, Modulgrenzen, Unternehmenskontext und API-Grundvertrag entwerfen.
+
+**Abnahmekriterien:** Ein begründeter Entscheidungsvorschlag benennt Betrieb, Prüfbarkeit, Aufwand und Grenzen. PostgreSQL bleibt alleiniger V1-Datenbankumfang. Kein Technologie-Prototyp oder Anwendungscode ohne zusätzliche Beauftragung.
+
+**Ergebnis:** [Architekturentwurf](docs/ARCHITECTURE.md) mit Go/Java-Vergleich, begründeter Empfehlung, Modul- und Datenhoheit, späteren Unternehmensgrenzen, API-Grundvertrag, Hintergrundaufträgen und Docker-Betriebsbild. PostgreSQL bleibt die einzige unterstützte Datenbank. Vorschläge für Leistung und Hardware sind keine Messergebnisse. Die Backendwahl war im ursprünglichen Entwurf offen; der nachstehende Nachtrag dokumentiert die bestätigte Auswahl. Detailverträge bleiben offen.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Rechte- und Architekturentwurf auf konsistente Organisationsgrenzen, Feldrechte, Zugriffskontext und spätere 2FA geprüft. Quellen, Aufgabenverweise und Trennung von Vorschlag und Entscheidung geprüft. Keine Produkt-, Last- oder Integrationstests; keine unabhängige technische Prüfung.
+
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-039 bestätigt Java mit Spring Boot; Versionen, TypeScript und Modulstruktur bleiben offen. DEC-040 legt zunächst gegenseitige KI-Reviews fest; zusätzliche menschliche Prüfung bleibt offen.
+
+**Nachtrag aus TASK-017 am 2026-10-16:** DEC-042 bis DEC-044 bestätigen React/TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. Die frühere offene Grundauswahl ist damit entschieden; konkrete Modul- und API-Verträge bleiben prüfpflichtig.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-13“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #3](https://github.com/1uedev/task-manager/issues/3); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-004 Identität und Berechtigungen spezifizieren
+
+**GitHub:** [Issue #4](https://github.com/1uedev/task-manager/issues/4)
+
+**Bezug:** REQ-ACL-001 bis REQ-ACL-005, REQ-AUTH-001 bis REQ-AUTH-004, REQ-PORTAL-003. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-004-claude-rights, separates Arbeitsverzeichnis; koordinierte Übergabe an Codex am 2026-10-13. **Verantwortlich:** codex-20261013-rights-fallback-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-004, OPEN-005 und OPEN-006 beantworten. Rechtekonflikte, externe Sicht, Feldrechte, LDAP-Lebenszyklus und 2FA-Termin festlegen.
+
+**Abnahmekriterien:** Eine Rechte-Matrix und positive sowie negative Beispiele decken API, Suche, Exporte, E-Mail, Dateien und KI ab. Authentifizierung und fachliche Berechtigung bleiben getrennt. Fachliche Entscheidungen sind von technischen Vorschlägen unterscheidbar.
+
+**Übergabe:** Die reservierte Claude-Sitzung konnte wegen eines ungültigen OAuth-Zugangs keinen Entwurf erzeugen. Die koordinierende Sitzung weist die Entwurfserstellung ausdrücklich Codex zu. Kein Claude-Review wird behauptet; ein späterer Einsatz erfordert erneute Anmeldung.
+
+**Ergebnis:** [Rechteentwurf](docs/PERMISSIONS.md) mit Gruppenmatrix, Auswertungsregeln, Datenwegen, LDAP-Lebenszyklus und 16 fachlichen Prüfszenarien. Holgers drei Entscheidungen sind als DEC-027 bis DEC-029 in Anforderungen, Entscheidungen und Roadmap übernommen. Die weiteren Umsetzungsvorschläge bleiben offen.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Dokumente auf Widersprüche zur Organisationssicht, Feldverbotsregel und 2FA-Einordnung geprüft. Keine Produkt- oder Sicherheitstests ausgeführt, da keine Anwendung implementiert ist. Keine unabhängige Prüfung und kein Claude-Review.
+
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-040 bestätigt gegenseitige KI-Reviews auch für Rechte und Anmeldung. Zusätzliche menschliche Prüfung bleibt offen; die fachliche Gesamtprüfung ist damit nicht erfolgt.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-13“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #4](https://github.com/1uedev/task-manager/issues/4); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-005 Fachmodell und Projektkonfiguration konkretisieren
+
+**GitHub:** [Issue #5](https://github.com/1uedev/task-manager/issues/5)
+
+**Bezug:** REQ-ORG-003, REQ-TKT-001 bis REQ-TKT-005, REQ-TIME-001, REQ-TIME-002, REQ-REQ-001 bis REQ-REQ-003. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** task/task-005-codex-domain; Fachmodellentwurf vorhanden. **Verantwortlich:** codex-20261013-domain-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-007 und OPEN-021 bearbeiten. Standardfelder, Beziehungen, Status, Regeln, Zeitkorrekturen und Anforderungsfreigaben beschreiben.
+
+**Abnahmekriterien:** Änderungen bestehender Projektregeln sind durchgespielt. Verborgene Pflichtfelder, Archivierung und Änderungen nach Freigabe haben eindeutige Regeln. API und Oberfläche verwenden dieselbe Fachlogik.
+
+**Ergebnis:** [Fachmodellentwurf](docs/DOMAIN_MODEL.md) mit Service- und Entwicklungsprojekt, Standardfeldern, Konfigurationsänderungen, verborgenen Pflichtfeldern, Beziehungen, Archivierung, Zeitkorrekturen und 16 fachlichen Prüffällen. Holgers Freigaberegel für neue Anforderungsrevisionen ist als DEC-030 in Anforderungen und Roadmap übernommen. Weitere Detailregeln bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Objekt- und Rechteabgrenzung, Zeitkorrekturbeispiel und Trennung von neuer Revision und späterer Baseline geprüft. Keine Anwendungstests und kein unabhängiges technisches Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-13“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #5](https://github.com/1uedev/task-manager/issues/5); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-006 Helpdesk Portal und SLA Regeln ausarbeiten
+
+**GitHub:** [Issue #6](https://github.com/1uedev/task-manager/issues/6)
+
+**Bezug:** REQ-HD-001 bis REQ-HD-005, REQ-PORTAL-001 bis REQ-PORTAL-003; Präzisierung des Abnahmevorschlags in REQ-TKT-005. **Abhängigkeiten:** TASK-001; Rechte aus TASK-004. **Arbeitsstand:** task/task-006-codex-helpdesk; Helpdesk- und SLA-Entwurf vorhanden. **Verantwortlich:** codex-20261013-helpdesk-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-008 und OPEN-009 bearbeiten. Nachrichtenwege, Postfächer, Kundenidentität und Servicekalender festlegen.
+
+**Abnahmekriterien:** Wochenenden, Feiertage, Zeitumstellung, Pausen, Wiedereröffnung und Prioritätswechsel sind anhand konkreter Zeitpunkte berechenbar. Doppelte Mails und Eskalationsversuche führen nicht zu unkontrollierten Doppelaktionen.
+
+**Ergebnis:** [Helpdesk- und SLA-Entwurf](docs/HELPDESK_SLA.md) mit Mail-/Portalabläufen, Versandzuständen, Regel- und Kalenderzuordnung, 14 berechenbaren SLA-Fällen und zwölf weiteren Fachprüffällen. DEC-031 und DEC-032 dokumentieren Holgers Auswahl zur Prüfwarteschlange und Kundenpause. Anforderungen und Roadmap sind nachgeführt; andere Details bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-13:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. 17 Termin-/Offsetberechnungen mit separater Python-datetime/zoneinfo-Hilfsrechnung geprüft. Abgleich mit Rechte- und Fachmodellentwurf durchgeführt. Keine implementierte SLA-Engine, keine Mailintegration und keine Anwendungstests; kein unabhängiges Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-13“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #6](https://github.com/1uedev/task-manager/issues/6); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-007 Wiki Sprachen und Unternehmensauftritt spezifizieren
+
+**GitHub:** [Issue #7](https://github.com/1uedev/task-manager/issues/7)
+
+**Bezug:** REQ-DOC-001 bis REQ-DOC-004, REQ-I18N-001 bis REQ-I18N-003, REQ-BRAND-001, REQ-BRAND-002, REQ-UX-001. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-007-codex-wiki, separates Arbeitsverzeichnis; Wiki-, Sprach- und Brandingentwurf vorhanden. **Verantwortlich:** codex-20261015-wiki-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-011 und OPEN-015 bearbeiten. Editor, Dokumentformat, Sprachfassungen, Konfliktbehandlung und Vorlagen entwerfen.
+
+**Abnahmekriterien:** Einsprachige Seiten sind ohne Übersetzungszwang nutzbar. Wiederholte Bearbeitung erhält Inhalte. Sprache, Zeitzone und Formatierung sind abgegrenzt. Anwendung, Portal, Anmeldung und E-Mail sind beim Branding berücksichtigt.
+
+**Ergebnis:** [Wiki-, Sprach- und Brandingentwurf](docs/WIKI_I18N_BRANDING.md) mit bestätigter Entwurfs-/Veröffentlichungstrennung (DEC-033), Sprachfassungen, Konfliktablauf, zwei Editor-Kandidaten, synthetischer Beispielseite, DE/EN-Mailvorlage und 16 fachlichen Prüffällen. Anforderungen, Roadmap und offene Entscheidungen sind nachgeführt. Die weiteren Detailregeln bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Veröffentlichung, Rechte, Sprachrückfall und Vorlagen mit den bestehenden Entwürfen abgeglichen; Editor-Grundlagen anhand zweier Primärquellen geprüft. Keine Editorimplementierung, Browser-, Mailclient- oder Anwendungstests und kein unabhängiges Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-15“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #7](https://github.com/1uedev/task-manager/issues/7); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-008 KI Umfang und Freigabeablauf festlegen
+
+**GitHub:** [Issue #8](https://github.com/1uedev/task-manager/issues/8)
+
+**Bezug:** REQ-AI-001 bis REQ-AI-009, REQ-PERF-004; bestätigte V1-Ergänzung in REQ-PROD-002. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-004. **Arbeitsstand:** task/task-008-codex-ai, separates Arbeitsverzeichnis; KI-Anwendungsfallentwurf vorhanden. **Verantwortlich:** codex-20261015-ai-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-003 und OPEN-019 entscheiden. Skills, Provider-Konfiguration, erste Anwendungsfälle und Datenwege konkretisieren.
+
+**Abnahmekriterien:** Alle Fachbereiche besitzen eine Nutzenbewertung. Nur Administratoren konfigurieren Modelle und Skills. Jeder ändernde Anwendungsfall besitzt eine sichtbare Bestätigung, Konfliktbehandlung und erneute Rechteprüfung. Lokaler Betrieb wechselt nicht still in die Cloud.
+
+**Ergebnis:** [KI-Anwendungsfallentwurf](docs/AI_USE_CASES.md) mit vier bestätigten V1-Funktionen für interne berechtigte Benutzer (DEC-034, DEC-035), Kontext- und Empfängergrenzen, versionierten Markdown-Skills, Providervertrag, Bestätigung, Kosten-/Ausfallvorschlägen und 16 fachlichen Prüffällen. Weitere Fachbereiche erhalten eine Nutzenbewertung. Anforderungen und Roadmap sind nachgeführt.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Datenwege, Bestätigung, Anforderungsrevision, Wiki-Veröffentlichung und SMTP-Grenzen mit den bestehenden Entwürfen abgeglichen. Keine Modellaufrufe, Integrationstests, Qualitätsmessungen oder Produktimplementierung; kein unabhängiges technisches Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-15“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #8](https://github.com/1uedev/task-manager/issues/8); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-009 Git und spätere Migration eingrenzen
+
+**GitHub:** [Issue #9](https://github.com/1uedev/task-manager/issues/9)
+
+**Bezug:** REQ-GIT-001 bis REQ-GIT-003, REQ-MIG-001, REQ-MIG-002, REQ-API-002. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-009-codex-git, separates Arbeitsverzeichnis; Git- und Migrationsentwurf vorhanden. **Verantwortlich:** codex-20261015-git-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-010 und den Migrationsteil von OPEN-016 bearbeiten. Git-Varianten und Objektarten wählen, Importquellen priorisieren.
+
+**Abnahmekriterien:** Zuordnung und Anzeige sind klar von späteren Git-Schreibaktionen getrennt. Quellenzugriff, Metadatenrechte und Aktualisierung sind definiert. Die erste Version verspricht keinen Import; die anschließende Migration besitzt einen begrenzten, überprüfbaren Umfang.
+
+**Ergebnis:** [Git- und Migrationsentwurf](docs/GIT_MIGRATION.md) mit drei vorgeschlagenen Objektarten, Benutzer-/Quellrechten, Aktualisierung und Fehlerfällen sowie begrenztem Redmine-Import, Zuordnung, Probelauf und Umschaltung. Acht Git- und acht Migrationsprüffälle sind beschrieben. DEC-036 und DEC-037 dokumentieren Holgers Auswahl; Anforderungen und Roadmap sind nachgeführt.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Rechte, Wiki-Veröffentlichung und KI-Umfang mit bestehenden Entwürfen abgeglichen; technische Grundlagen anhand offizieller GitHub-, GitLab- und Redmine-Dokumentation geprüft. Keine Anbieteranbindung, Extraktion, Migration oder Anwendungstests ausgeführt; kein unabhängiges Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-15“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #9](https://github.com/1uedev/task-manager/issues/9); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-010 Betrieb Sicherheit und Leistung planen
+
+**GitHub:** [Issue #10](https://github.com/1uedev/task-manager/issues/10)
+
+**Bezug:** REQ-OPS-001 bis REQ-OPS-006, REQ-SEC-001, REQ-PERF-001 bis REQ-PERF-004, REQ-DATA-003, REQ-DATA-004. **Abhängigkeiten:** TASK-001; Abstimmung mit TASK-003. **Arbeitsstand:** task/task-010-codex-ops, separates Arbeitsverzeichnis; Betriebs- und Lastentwurf vorhanden. **Verantwortlich:** codex-20261015-ops-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-012, OPEN-014 und Aufbewahrung aus OPEN-016 bearbeiten. Docker-Betrieb, Persistenz, Internetbedarf, Sicherung, Updates, Risiken und Lastprofil beschreiben.
+
+**Abnahmekriterien:** Ressourcenannahmen sind nachvollziehbar, ohne feste RAM-Grenze. Die SSD-Planung berücksichtigt Anhänge. Wiederanlauf, zulässiger Datenverlust und Leistungsziele sind vor Tests festgelegt. Vorschläge werden nicht als gemessene Systemanforderungen ausgegeben.
+
+**Ergebnis:** [Betriebsentwurf](docs/OPERATIONS.md) mit Docker-Referenzinstallation, Persistenz, Netzwegen, gemeinsamen Sicherungspunkten, Wiederanlauf, Updates, Aufbewahrung, Fünfjahres-Speicherrechnung, Lastprofil und 16 vorgeschlagenen Prüffällen. DEC-038 dokumentiert Holgers RPO-/RTO-Ziele; Anforderungen und Roadmap sind nachgeführt. Hardware, Leistungswerte und Detailverfahren bleiben Vorschläge.
+
+**Eigenprüfung am 2026-10-15:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Speicher-, Durchsatz- und Lastrechnungen separat mit Python geprüft; Docker-/PostgreSQL-Grundlagen anhand offizieller Dokumentation geprüft. Abgleich mit Mailversand, Wiki, Git, KI und Rechteentzug durchgeführt. Keine Containerinstallation, Sicherung, Wiederherstellung, Last- oder Sicherheitstests an einer Anwendung; kein unabhängiges technisches Review.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-15“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #10](https://github.com/1uedev/task-manager/issues/10); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-011 Gemeinsamen Entwicklungs und Review Ablauf beschließen
+
+**GitHub:** [Issue #11](https://github.com/1uedev/task-manager/issues/11)
+
+**Bezug:** REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-001. **Arbeitsstand:** task/task-011-codex-review; Entwicklungs- und Review-Vorschlag vorhanden. **Verantwortlich:** codex-20261016-review-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** OPEN-017 und OPEN-018 entscheiden. Koordination, getrennte Arbeitsstände, Aufgabenreservierung, PRs, technisches Review und fachliche Abnahme definieren.
+
+**Abnahmekriterien:** Zwei gedachte gleichzeitige KI-Sitzungen können Aufgaben eindeutig übernehmen und übergeben. Eine veraltete TODO-Kopie überschreibt keinen aktuellen Stand. Fachliche Freigabe und technische Prüfung haben benannte Verantwortlichkeiten. Die technische GitHub-Einrichtung erfolgt separat in TASK-013. Weitergehende Review-Regeln werden hier geprüft.
+
+**Ergebnis:** [Entwicklungs- und Review-Entwurf](docs/DEVELOPMENT_REVIEW.md) mit Rollen, risikogerechten Nachweisen, Commitbezug, acht Koordinations-/Unterbrechungsszenarien und klarer Trennung von Integration, technischer Prüfung und Fachabnahme. Bestehende AGENTS-Regeln bleiben gültig; zusätzliche Freigabeschwellen bleiben vorgeschlagen; den bestätigten anfänglichen Review-Weg ergänzt der nachstehende Nachtrag.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Acht Ablaufszenarien gedanklich geprüft. Zwei Fälle zusätzlich in isolierten temporären Git-Repositories ausgeführt: konkurrierende Eigentümer derselben Aufgabe erzeugten einen Textkonflikt; unabhängige Aufgaben ließen sich unter Erhalt beider Eigentümer zusammenführen. Das beweist keine atomare Sperre, verhindert kein bewusstes Zurückkopieren veralteter Inhalte und ersetzt weder reale parallele KI-Tests noch unabhängiges technisches Review.
+
+**Nachtrag aus TASK-015 am 2026-10-16:** DEC-040 bestätigt zunächst gegenseitige KI-Reviews; menschliche technische Prüfung bleibt ausdrücklich offen. Die Antwort nimmt weder alle Review-Details noch den Gesamtentwurf ab.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #11](https://github.com/1uedev/task-manager/issues/11); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-012 Planungsstand zur Architekturfreigabe zusammenführen
+
+**GitHub:** [Issue #12](https://github.com/1uedev/task-manager/issues/12)
+
+**Bezug:** REQ-PROD-003, REQ-DEV-004, REQ-DEV-005. **Abhängigkeiten:** TASK-002 bis TASK-011 im für V1 und Architektur erforderlichen Umfang. **Arbeitsstand:** task/task-012-codex-readiness; zentrale Entscheidungsvorlage vorhanden, Architekturfreigabe weiterhin offen. **Verantwortlich:** codex-20261016-readiness-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Entscheidungen, Anforderungskatalog, Abnahmeszenarien und Roadmap konsistent zusammenführen.
+
+**Abnahmekriterien:** Kritische Architekturfragen sind entschieden. Restfragen haben Zuständigkeit und Fälligkeit. Der fachlich freigegebene Umfang ist sichtbar; keine Implementierung wird automatisch ausgelöst.
+
+**Ergebnis:** [Entscheidungsübersicht zur Architekturfreigabe](docs/ARCHITECTURE_READINESS.md) mit bestätigtem Kern, allen 21 offenen Entscheidungsbereichen, Zuständigkeiten/Fälligkeiten, Prüfungspaketen und Nachweisübersicht. Sie verknüpft sämtliche Fachentwürfe. Kritische Entscheidungen und fachliche Abnahme stehen weiterhin aus; die Abnahmekriterien dieser Aufgabe sind daher noch nicht vollständig erfüllt. Keine Programmierung ausgelöst.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Alle 21 OPEN-IDs in der Entscheidungstabelle erfasst; 86 Anforderungen im Inventar zugeordnet, 31 V-Anforderungen dort priorisiert. Bestätigte DEC-001 bis DEC-038 bleiben unverändert. Nur vorhandene Dokument-, Rechen- und Git-Beispielnachweise angeführt; keine Produktmessung oder unabhängige Abnahme behauptet.
+
+**Nachtrag aus TASK-015 am 2026-10-16:** Die drei Antworten sind in der Entscheidungsvorlage und den Fachentwürfen nachgeführt. Weitere Architekturentscheidungen und die fachliche Gesamtabnahme stehen weiterhin aus.
+
+**Nachtrag aus TASK-017 am 2026-10-16:** DEC-042 bis DEC-044 bestätigen die weitere Grundauswahl. REQ-ARCH-002 wechselt von V zu B; der aktuelle Katalog enthält dadurch 56 B- und 30 V-Anforderungen. Die oben dokumentierte frühere Eigenprüfung mit 31 V bleibt als historischer Prüfstand erhalten.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Issue #12](https://github.com/1uedev/task-manager/issues/12); kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-013 GitHub Arbeitsumgebung einrichten
+
+**GitHub:** [Issue #13](https://github.com/1uedev/task-manager/issues/13)
+
+**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene Spezifikation und DEC-025. **Arbeitsstand:** Bootstrap-Commit 9b791e0 auf main; Verknüpfungen und Nachweise im Branch setup/task-013-task-links. **Verantwortlich:** Codex-Hauptsitzung-2026-10-13. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Das vom Auftraggeber angelegte Repository mit den zentralen Dokumenten, gemeinsamen KI-Regeln, Aufgaben-Issues, PR-Vorlage, Strukturprüfung und Schutz des Integrationsbranches einrichten. Die aktuelle Beauftragung umfasst die technische Einrichtung; die fachliche Abnahme der Produktspezifikation bleibt offen.
+
+**Abnahmekriterien:** Dokumente sind auf GitHub erreichbar. Jede bestehende Aufgabe besitzt einen verknüpften Issue-Einstieg. Die lokale Strukturprüfung und GitHub CI laufen erfolgreich. main verlangt Pull Requests und den aktuellen erfolgreichen Prüfstatus; gewaltsames Überschreiben und Löschen sind gesperrt. Eine neue KI-Sitzung findet Start-, Reservierungs- und Übergabeanleitung. Einschränkungen der Review-Regeln sind dokumentiert.
+
+**Ergebnis:** Dokumente, gemeinsame Regeln, Vorlagen und Prüfskripte sind veröffentlicht. Alle 13 Aufgaben haben Issues. main verlangt Pull Requests, einen aktuellen erfolgreichen repository-checks-Lauf von GitHub Actions und aufgelöste Review-Gespräche; Force-Push und Löschen sind auch für Administratoren gesperrt.
+
+**Prüfungen:** Lokale Strukturprüfung und elf Regressionstests bestanden. [Erster GitHub-CI-Lauf](https://github.com/1uedev/task-manager/actions/runs/38366179158) erfolgreich. Repository-Einstellungen und Branchschutz über die GitHub-API zurückgelesen. Kein unabhängiges Review und keine fachliche Produktfreigabe behauptet.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** [Integrierter Ergebnis-PR #14](https://github.com/1uedev/task-manager/pull/14), einschließlich erfolgreicher PR-Prüfung. Abschluss PR #187.
+
+## TASK-014 Regressionstest von freien Aufgaben entkoppeln
+
+**Bezug:** REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** TASK-013; Fehler durch Reservierung von TASK-012 sichtbar. **Arbeitsstand:** task/task-014-codex-contract-fix; korrigierter Regressionstest vorhanden. **Verantwortlich:** codex-20261016-contract-fix-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Vorhandenen Test test_active_task_requires_owner unabhängig vom aktuellen Aufgabenbestand machen. Produktcode und Validatorregeln bleiben außerhalb des Umfangs.
+
+**Abnahmekriterien:** Test prüft eine aktive Aufgabe ohne Besitzer auch dann, wenn keine freie Aufgabe mehr existiert. Alle vorhandenen Tests bestehen; der negative Nachweis bleibt wirksam. Keine Pflichtprüfung wird deaktiviert.
+
+**Ergebnis:** Der Test verwendet eine eigene synthetische Aufgabe und prüft sowohl IN ARBEIT als auch BEREIT ZUR PRÜFUNG auf fehlenden Besitzer. Ein gültiger Besitzer beseitigt den Fehler. Der produktive Validator und seine Regeln bleiben unverändert.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf Regressionstests und git diff --check erfolgreich. Zusätzlich eine temporäre Repository-Kopie ohne irgendeine OFFEN-Aufgabe validiert und alle elf Tests dort erfolgreich ausgeführt. Der vorherige Fehlschlag der TASK-012-Reservierung ist damit lokal reproduzierbar behoben; deren GitHub-Prüfung muss nach Integration erneut laufen.
+
+**Nachtrag am 2026-10-16:** Fix über PR #39 integriert; Reservierung PR #37 auf aktuellen main aktualisiert, alle elf Tests und GitHub-Pflichtprüfung erfolgreich, anschließend regulär integriert. Keine Schutzregel umgangen.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-015 Bestätigte Backend-, Review- und Prioritätsentscheidungen eintragen
+
+**Bezug:** REQ-ARCH-001, REQ-DEV-004, REQ-DEV-005, REQ-PROD-003, REQ-EXT-001. **Abhängigkeiten:** TASK-002, TASK-003, TASK-011, TASK-012 als Entwürfe und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** task/task-015-codex-decisions; bestätigte Auswahl und betroffene Planungsdokumente nachgeführt. **Verantwortlich:** codex-20261016-decisions-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Drei bestätigte Auswahlentscheidungen mit neuen DEC-IDs festhalten und betroffene Anforderungen, Architektur, Review-Regeln, Roadmap und KI-Einstiegsdateien konsistent nachführen. Keine weiteren Detailvorschläge als bestätigt behandeln.
+
+**Abnahmekriterien:** Java/Spring Boot ist als Backend gesetzt; zunächst gegenseitige KI-Reviews bei weiterhin offener menschlicher Prüfung; Kanban, Gantt und einfache Dashboards nach den frühen Ergänzungen 2FA/Redmine-Import priorisiert. Versionen, TypeScript, Modulstruktur und weitere Details bleiben offen. Keine Programmierung oder Gesamtfreigabe abgeleitet.
+
+**Ergebnis:** DEC-039 bis DEC-041 halten die ausdrücklichen Antworten fest. Zentrale Spezifikation, offene Entscheidungen, Architektur, Review-Dokumente, Funktionsinventar, Roadmap, Einstiegsregeln und betroffene Übergaben sind konsistent nachgeführt. TypeScript, Versionen, Modulstruktur, zusätzliche Sprintfunktionen und übrige Detailvorschläge bleiben offen. Keine Anwendung implementiert.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Entscheidungseinträge, Anforderungs-/Fragenverweise und verbliebene Formulierungen zur Backendwahl, menschlichen Prüfung und Roadmap-Priorität auf Widersprüche geprüft. Keine zusätzliche KI-Gegenprüfung oder menschliche technische Prüfung als erfolgt behauptet; reine Dokumentnachführung, keine Anwendungstests.
+
+**Nachtrag aus TASK-017 am 2026-10-16:** Die damals noch offene Auswahl von TypeScript, modularem Monolithen und HTTP/JSON/OpenAPI ist inzwischen durch DEC-042 bis DEC-044 bestätigt. Die früheren Aussagen oben beschreiben den Stand bei Bearbeitung von TASK-015.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Keine getrennte KI-Prüfung vermerkt; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-016 Frontend-, Modul- und API-Verträge konkretisieren
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-API-002, REQ-DEV-004. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-008 und TASK-012 als Entwürfe; DEC-039 und DEC-040. **Arbeitsstand:** task/task-016-codex-contracts; Vertragsentwurf im separaten Arbeitsverzeichnis erstellt. **Verantwortlich:** codex-20261016-contracts-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Prüffähige Vorschläge zu TypeScript, Datenhoheit und Modulabhängigkeiten sowie API-Verträgen mit konkreten Abläufen und Fehlerfällen ausarbeiten. Offene Grundentscheidungen unter OPEN-001, OPEN-002 und OPEN-013 gezielt vorlegen; nur ausdrückliche Antworten als bestätigt eintragen. Keine Produktimplementierung.
+
+**Abnahmekriterien:** Vorschläge enthalten Verantwortlichkeiten, Vertragsänderungen bei paralleler KI-Arbeit, Rechte- und Versionsprüfung, Wiederholbarkeit sowie prüfbare positive und negative Beispiele. Bestehende Fachentscheidungen bleiben erhalten. Ausgeführte Dokumentprüfungen und KI-Gegenprüfung werden von künftigen Anwendungstests getrennt. Offene Details und nicht bestätigte Entscheidungen bleiben sichtbar.
+
+**Ergebnis:** [TECHNICAL_CONTRACTS.md](docs/TECHNICAL_CONTRACTS.md) konkretisiert TypeScript-Datenverträge, Modulordnung, Transaktionen, API-Abläufe, Feldrechte, Konflikte und Wiederholung mit 16 vorgeschlagenen Prüffällen. Entscheidungsübersicht, Architektur und Einstieg verweisen darauf. Die drei Grundentscheidungen wurden Holger vorgelegt; ohne Antwort bleiben sie offen. Keine neuen Entscheidungen, Anwendungsdateien oder zusätzlichen Pflichtdienste angelegt.
+
+**KI-Gegenprüfung am 2026-10-16:** Eine getrennte Codex-Prüfsitzung contracts_review las den Entwurf in Commit 5bba988c15a918363069fab309887c9d75f16c0d gegen die bestehenden Fachverträge. Zwei P2-Befunde: Freigabe benötigte zusätzlich die technische Inhaltsversion; fachliche Einmaligkeit einer KI-Aktionskennung musste vom HTTP-Wiederholungsfenster getrennt werden. Korrektur in 484d85e74cdc5044079c78000346bda10fc77556, einschließlich C14/C15. Dieselbe separate Prüfsitzung bestätigte in gezielter Nachprüfung beide dokumentarischen Korrekturen ohne weiteren konkreten Widerspruch. Kein Claude-Review, Anwendungstest oder Sicherheitsnachweis behauptet.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Technische Primärquellen zu TypeScript, Spring Modulith, OpenAPI und HTTP geprüft. Die 16 Produktfälle sind erst beschrieben, nicht ausgeführt. Holgers fachliche Abnahme bleibt ausstehend.
+
+**Nachtrag aus TASK-017 am 2026-10-16:** Holger hat die drei zuvor vorgelegten Grundentscheidungen bestätigt (DEC-042 bis DEC-044). Der Ergebnis- und Reviewbericht oben bleibt als historischer Stand erhalten. Detailregeln und die 16 Prüffälle sind damit nicht pauschal abgenommen.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-16“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-017 Bestätigte Frontend-, Modul- und API-Auswahl eintragen
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-012, TASK-016 und Holgers ausdrückliche Auswahl vom 16. Oktober 2026. **Arbeitsstand:** task/task-017-codex-architecture-decisions; Entscheidungen im eigenen Arbeitsverzeichnis nachgeführt. **Verantwortlich:** codex-20261016-architecture-decisions-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI als bestätigte Grundentscheidungen erfassen; Anforderungen, Entwürfe, offene Fragen und KI-Einstiegsregeln konsistent nachführen.
+
+**Abnahmekriterien:** Drei neue DEC-IDs erfassen ausschließlich die ausgewählten Grundentscheidungen. Sprach-/Werkzeugversionen, konkrete Modul-/Transaktionsverträge, Authentifizierung, Laufzeiten und weitere Detailregeln bleiben offen. Keine Gesamtfreigabe, Anwendung oder Implementierungsbeauftragung ableiten. Historische Prüfstände erhalten.
+
+**Ergebnis:** DEC-042 bis DEC-044 bestätigen React/TypeScript, modularen Monolithen und HTTP/JSON im REST-Stil mit OpenAPI. Anforderungen sind auf Version 0.11 angehoben; REQ-ARCH-002 ist im Kern B. Offene Fragen, technische Entwürfe, Funktionsinventar, Roadmap, KI-Einstieg und frühere Übergaben sind nachgeführt. Details bleiben Vorschläge; keine Produktimplementierung oder Gesamtfreigabe abgeleitet.
+
+**KI-Gegenprüfung am 2026-10-16:** Eine getrennte Codex-Sitzung architecture_decisions_review prüfte alle zehn geänderten Dokumente in 119d20622483b534f1d9a2a9dead5ab122814a08 gegenüber 3e42d6d2c81254271620b2baaeea562d512cafc7 auf korrekte Übernahme, Überbestätigung und Widersprüche. Keine konkreten Befunde; offene Details und historische Nachträge waren konsistent. Dieser nachträgliche Prüfbericht ist Eigenprotokoll der koordinierenden Sitzung und nicht Teil des genannten Review-Commits. Kein Claude-Review, Produkt- oder Sicherheitsnachweis behauptet.
+
+**Eigenprüfung am 2026-10-16:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: alle 86 REQ-IDs erhalten, nur REQ-ARCH-002 wechselt V zu B; 56 B und 30 V. Alle früheren DEC-Einträge unverändert, genau DEC-042 bis DEC-044 ergänzt; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungstests.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-16“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-16“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-018 Sitzungsfristen, V1-Tags und Suche spezifizieren
+
+**Bezug:** REQ-AUTH-001, REQ-AUTH-005, REQ-ORG-003, REQ-TKT-004, REQ-TAG-001, REQ-SRCH-001, REQ-PERF-002, REQ-PERF-003, REQ-ARCH-002, REQ-API-001. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-016 und Holgers Ergänzungen vom 17. Oktober 2026. **Arbeitsstand:** task/task-018-codex-tags-search; Entwurf im separaten Arbeitsverzeichnis nach Reservierung #47. **Verantwortlich:** codex-20261017-tags-search-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Konfigurierbare automatische Abmeldung und umfangreiches Tag-System für Tickets/Tasks und Projekte sowie performante Suche für V1 in die Anforderungen aufnehmen. Sitzungssemantik, Tag-Verwaltung und Suchumfang gezielt klären. Direkte Modulaufrufe, REST und gRPC für den bestätigten modularen Monolithen einordnen. Keine Produktimplementierung.
+
+**Abnahmekriterien:** Bestätigte Kernvorgaben erhalten stabile REQ-/DEC-IDs; Detailvorschläge und offene Antworten bleiben getrennt. Tags, Suche und Sitzungsablauf berücksichtigen API, Portal, Rechte, Konflikte und messbare spätere Prüffälle. Keine unbelegte Leistungszusage oder Jira-Funktionsgleichheit. Der interne Kommunikationsvorschlag widerspricht nicht DEC-043/DEC-044.
+
+**Ergebnis:** REQ-AUTH-005, REQ-TAG-001 und REQ-SRCH-001 sowie DEC-045 bis DEC-047 erfassen die neuen V1-Kernvorgaben. Anforderungen Version 0.12, Roadmap, Funktionsinventar, Architektur-/Betriebsentwurf und KI-Einstieg sind nachgeführt. PERMISSIONS.md beschreibt konfigurierbare Sitzungsfristen mit acht späteren Prüffällen; TAGS_SEARCH.md beschreibt Katalogpflege, Massenaktionen, Sichtgrenzen, PostgreSQL-Suchvorschlag, Lastprofil und 17 spätere Prüffälle. Direkte Java-Modulaufrufe im selben Prozess sind empfohlen, REST bleibt an Frontend-/Integrationsgrenzen bestätigt; gRPC ist keine neue Pflicht. Detailwerte und zusätzliche Suchbereiche bleiben Vorschläge.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 14 geänderten Dateien in c556ee17db8d5d55fb4080ac428ae108ad427f29 gegenüber c8b7d188562cddab0f202a603f2677d2004cd19a. Zwei Befunde: Namenskonflikte könnten verborgene Tags verraten; der ältere Rechtealgorithmus verlangte auch für angenommene Hintergrundaufträge eine aktive Browsersitzung. Korrektur 422025389caaa5183f1757277325a3ce49534998 bindet Namenseindeutigkeit an die Entdeckungsgrenze und trennt interaktive, Integrations- und Auftragskontexte. Die gezielte Nachprüfung beider Korrekturen fand keine weiteren konkreten Widersprüche. Dieser nachträgliche Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review oder vollständiger Produkt-/Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Gezielter Vergleich: 89 Anforderungen, davon 59 B und 30 V; alle früheren 86 REQ-IDs und deren Status erhalten. Genau drei neue DEC-IDs, alle 44 früheren DEC-Zeilen unverändert; 21 OPEN-IDs und DONE.md unverändert. Keine Anwendungs-, Last- oder Sicherheitstests; die 25 beschriebenen neuen Prüffälle sind nicht ausgeführt.
+
+**Nachtrag aus TASK-019 am 2026-10-17:** Die drei Antworten sind durch DEC-048 bis DEC-050 erfasst: ausschließlich feste Dauer seit Anmeldung, Tag-Erstellung auch durch berechtigte Portalbenutzer und gemeinsame Suche einschließlich Wiki/Anforderungen; Dateiinhalte später. Die oben dokumentierten Prüfstände bleiben historisch erhalten; der frühere Zwei-Fristen-Vorschlag ist ersetzt.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-17“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-17“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-019 Bestätigte Sitzungs-, Portal-Tag- und Suchauswahl eintragen
+
+**Bezug:** REQ-AUTH-005, REQ-TAG-001, REQ-SRCH-001, REQ-DOC-004, REQ-PERF-003. **Abhängigkeiten:** TASK-004, TASK-007, TASK-010, TASK-012, TASK-018 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** task/task-019-codex-v1-decisions; Übernahme im separaten Arbeitsverzeichnis nach Reservierung #49. **Verantwortlich:** codex-20261017-v1-decisions-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Ausschließlich feste Sitzungsdauer seit Anmeldung, Tag-Erstellung auch durch berechtigte externe Portalbenutzer und gemeinsame V1-Suche über Tickets/Tasks, Projekte, Wiki und Anforderungen bestätigen; Dateiinhalte später. Anforderungen, Entwürfe, Roadmap und offene Fragen konsistent nachführen.
+
+**Abnahmekriterien:** Genau diese Auswahl als drei neue Entscheidungen erfassen; frühere Entscheidungen und Prüfberichte erhalten. Keine Inaktivitätsfrist in den V1-Vertrag übernehmen. Externe Tag-Erstellung erweitert nicht automatisch Katalogverwaltung, Fachrechte oder Sichtbarkeit. Dateiinhalte bleiben außerhalb V1; Dateinamen-/Metadatenumfang und übrige Detailvorschläge sind nicht pauschal freigegeben. Keine Umsetzung oder fachliche Gesamtabnahme ableiten.
+
+**Ergebnis:** DEC-048 bis DEC-050 erfassen ausschließlich die drei bestätigten Antworten. REQUIREMENTS.md steht auf Version 0.13. PERMISSIONS.md verwendet feste Dauer seit Anmeldung ohne Inaktivitätsfrist; TAGS_SEARCH.md berücksichtigt berechtigte externe Ersteller und gemeinsame Suche einschließlich Wiki/Anforderungen bei späteren Dateiinhalten. Sitzungsfälle angepasst, drei weitere Tag-/Suchfälle beschrieben. Inventar, Roadmap, Messprofil, Wiki-Vertrag, offene Fragen und KI-Einstieg sind konsistent nachgeführt; übrige Detailvorschläge bleiben offen.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 13 geänderten Planungsdateien in 6d27a003774a93fadc7a48af52b31e132b0ff1ff gegenüber 1d3f7722d19a7c4dce44e04b915284083a5cf574, einschließlich umgebender Sitzungs-, Katalog-, Rechte- und Suchregeln. Keine konkreten Befunde: Auswahl korrekt übertragen, keine weitere Inaktivitätsfrist, keine automatische Rechteausweitung durch externe Tag-Erstellung, Wiki/Anforderungen in Suchumfang und Messprofil enthalten. Dieser anschließend ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review oder Produktnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs samt Status erhalten (59 B/30 V), genau drei DEC-IDs ergänzt; alle 47 vorherigen DEC-Zeilen unverändert. 21 OPEN-IDs und DONE.md unverändert. Acht Sitzungs- und 20 Tag-/Suchfälle sind beschrieben, nicht als Anwendungstests ausgeführt; keine Leistungs- oder Sicherheitsmessungen.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-17“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-17“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-020 Entscheidungsvorlage und Aufgabenplan für den Entwicklungsstart
+
+**Bezug:** REQ-PROD-002, REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-AUTH-001, REQ-AUTH-005, REQ-ACL-001, REQ-ACL-003, REQ-TKT-001, REQ-TAG-001, REQ-SRCH-001, REQ-I18N-001, REQ-DEV-001 bis REQ-DEV-005. **Abhängigkeiten:** TASK-003, TASK-004, TASK-005, TASK-010, TASK-012, TASK-016, TASK-018 und TASK-019. **Arbeitsstand:** task/task-020-codex-start-plan; eigenes Arbeitsverzeichnis nach integrierter Reservierung #51. **Verantwortlich:** codex-20261017-start-plan-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Bestehende Entwürfe zu einer kompakten Entscheidungsvorlage mit technischen Empfehlungen, offenen Fachfragen, erstem durchgängigen Entwicklungsablauf und kleinen KI-Arbeitspaketen mit Schnittstellen, Abhängigkeiten und Prüfungen zusammenführen. Werkzeugempfehlungen aus Primärquellen prüfen. Künftige Aufgaben ausschließlich zentral in TODO.md vormerken.
+
+**Abnahmekriterien:** Erster Abschnitt ist vom vollständigen V1-Umfang getrennt; keine bestätigte V1-Funktion wird gestrichen. Bestätigte Vorgaben, Empfehlungen und unbeantwortete Fragen sind unterscheidbar. Künftige Aufgaben sind bis zum gesonderten Implementierungsauftrag gesperrt, ohne vorgetäuschte Besitzer oder fertiggestellte Funktionen. Kritische Übergaben und Review-Nachweise sind benannt. Kein Anwendungscode, Gerüst, Datenbank oder Container wird erstellt.
+
+**Ergebnis:** [DEVELOPMENT_START.md](docs/DEVELOPMENT_START.md) bündelt einen ersten internen Ablauf, technische Werkzeug-/Vertragsempfehlungen, drei offene Fachfragen, Abhängigkeiten und zehn geplante Nachweise. TASK-021 bis TASK-031 sind zentral als BLOCKIERT und unbesetzt vorgemerkt, mit Arbeitsgrenzen, Übergaben und Review-Kriterien. Einstieg, offene Entscheidungen, Roadmap und KI-Regeln verweisen darauf. Keine bestätigte V1-Funktion verschoben, keine neue Entscheidung vorweggenommen, keine Anwendung erstellt.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle acht geänderten Planungsdateien in 9cf25809fee3869c7f4a7c605ce8834b86d117d5 gegenüber 40e3d8f1eddce9ccf1b94a3bcee36098074daa82 einschließlich Folgeaufgaben und umgebender Fachverträge. Keine konkreten Befunde: V1-Umfang erhalten, Aufgabenabhängigkeiten zyklenfrei, Konten-/SMTP-/Bootstrap-Fragen sowie feste Frist, Rechte, Transaktionen und Suchgeheimhaltung konsistent. Dieser anschließend ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review, Anwendungstest oder Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 Anforderungen samt Status unverändert (59 B/30 V), alle 50 bisherigen DEC-Zeilen unverändert; 21 OPEN-IDs erhalten. TASK-001 bis TASK-019 und DONE.md unverändert; elf Folgeaufgaben blockiert/unbesetzt, ausschließlich acht Markdown-Dateien geändert. Werkzeugempfehlungen anhand offizieller Primärquellen eingeordnet, nicht praktisch qualifiziert. Die zehn Start-Szenarien sind nur geplant.
+
+**Nachtrag aus TASK-032 am 2026-10-17:** Die drei damaligen Auswahlfragen sind durch DEC-051 bis DEC-053 beantwortet: erster interner Ablauf, LDAP/Portal anschließend innerhalb V1; 24 Stunden als Standard neuer Installationen; administrative lokale Kontoanlage mit Einmalpasswort und Pflichtwechsel. Die oben berichteten Ergebnisse/Prüfungen bleiben historisch erhalten. Technische Detailfreigaben und Implementierungsauftrag sind weiterhin offen.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-17“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-17“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-021 Werkzeugbasis und gemeinsame Verträge qualifizieren
+
+**Bezug:** REQ-ARCH-001, REQ-ARCH-002, REQ-API-001, REQ-DATA-001, REQ-DEV-005. **Abhängigkeiten:** TASK-020 sowie ausdrücklich beauftragter Umfang und ausgewählte Kandidaten P1 bis P4. **Arbeitsstand:** task/task-021-codex-qualification, separates Arbeitsverzeichnis nach Reservierung #55. Holgers Fortsetzungsauftrag vom 17. Oktober 2026 beauftragt den angekündigten begrenzten Werkzeug-/Vertragsnachweis. P1 bis P4 werden dafür als zu prüfende Kandidaten verwendet, nicht als pauschal abgenommene Produktarchitektur; keine Fachimplementierung aus TASK-022 bis TASK-031. **Verantwortlich:** codex-20261017-qualification-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Exakte Werkzeug-/Bibliotheksversionen, Komponentenlizenzen, Modulordnung, Datenhoheit, Identitäts-/Rechtekontext und API-/Fehler-/Versionsvertrag für den ersten Abschnitt festlegen. Nach gesonderter Beauftragung einen begrenzten Build-/Generator-/Transaktionsnachweis erstellen; keine Fachmodule vorwegnehmen.
+
+**Schnittstellen und Arbeitsbereich:** [TECHNICAL_BASELINE.md](docs/TECHNICAL_BASELINE.md), synthetische Quellen unter `qualification/`, Vertragsbeispiel unter `contracts/` und eigener CI-Workflow. Produktpfade `backend/` und `frontend/` existieren noch nicht. Die Übergabe liefert die qualifizierten Werkzeugversionen und gemeinsamen Vertragsregeln für TASK-022 und TASK-023; fachliche Typen und produktive API bleiben in deren Folgeaufgaben zu konkretisieren.
+
+**Abnahmekriterien:** Java/Boot/PostgreSQL und React/TypeScript/Buildwerkzeuge gemeinsam qualifiziert; Generator verarbeitet Erfolgs-, Fehler- und Konfliktantworten. Modulprüfung, JPA-/JDBC-Transaktion und Rückabwicklung nachgewiesen. Lizenz-/Wartungsinformationen und verbleibende Lücken dokumentiert; keine ungeprüfte Alternativdatenbankzusage. Getrennte KI prüft Verträge und Nachweise.
+
+**Ergebnis:** Der [Qualifikationsbericht](docs/TECHNICAL_BASELINE.md) hält exakte Versionen, gemeinsame Modul-/Daten-/API-Regeln, Herkunft, direkte Lizenzangaben, Wartungsgrenzen und Fehlerkorrekturen fest. Der [vollständige CI-Lauf 39063473112](https://github.com/1uedev/task-manager/actions/runs/39063473112) auf `79ad5fe18dfbbffeabbd46cd4643cf9bf01459c1` besteht: acht Java-Tests mit echtem PostgreSQL, sechs Clienttests mit den Java-JSON-Fixtures, Typgenerierung ohne Drift, strenge Typprüfung und React-Build. TypeScript 5.9.3 ersetzt im Versuch den mit dem Generator inkompatiblen 6.0.3-Kandidaten; keine erzwungene Peer-Auflösung. Kein Produkt, keine Anmeldung, Fachrechte, Suchmessung oder Restore-Prüfung erstellt.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte `ac27dc2d30434f49f130afca55867fffeb8a1a5d` gegen `970242b8083a5b64de54a7facc922f4d9301a6a9` sowie gezielt die Änderungen bis `94fa49c4f82a6905c902930072e0426cea825b05` und `79ad5fe18dfbbffeabbd46cd4643cf9bf01459c1`. Ein kleiner YAML-Beschreibungsfehler wurde korrigiert und nachgeprüft; danach keine offenen Befunde. Das letzte Nachreview las die heruntergeladenen Berichte und das CI-Protokoll und bestätigte die genannten Testzahlen. Keine eigenen Java-/Docker-Läufe des Reviewers, kein Claude-Review. Die abschließend ergänzte Ergebnisdokumentation und dieser Bericht sind Eigenprotokoll der koordinierenden Sitzung, keine zusätzliche unabhängige Freigabe.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, zwölf Regressionstests und git diff --check erfolgreich. Lokale Typgenerierung, Typprüfung und React-Build erfolgreich; Java-/PostgreSQL-/Client-Gesamtlauf auf dem flüchtigen GitHub-Runner. Frühere fehlgeschlagene Versuche sind im Bericht verlinkt. Die 89 Anforderungen mit Status (60 B/29 V), 53 historischen DEC-Zeilen, TASK-022 bis TASK-031 und DONE.md bleiben unverändert. DEC-054 ergänzt ausschließlich den begrenzten Auftrag. Die technische Prüfung ist keine fachliche Abnahme.
+
+**Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein mittlerer Befund (fehlender Negativtest für die Transaktionspflicht) und mehrere niedrige Befunde und Hinweise zur Übergabe an TASK-022/TASK-023. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-17“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in den Absätzen „KI-Gegenprüfung am 2026-10-17“, „Nachtrag aus TASK-034 am 2026-10-18“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-032 Bestätigten Startumfang, Sitzungsstandard und Kontoanlage eintragen
+
+**Bezug:** REQ-PROD-001, REQ-PROD-002, REQ-AUTH-001, REQ-AUTH-005, REQ-PORTAL-003, REQ-DEV-004. **Abhängigkeiten:** TASK-004, TASK-006, TASK-012, TASK-020 und Holgers ausdrückliche Auswahl vom 17. Oktober 2026. **Arbeitsstand:** task/task-032-codex-start-decisions; separates Arbeitsverzeichnis nach integrierter Reservierung #53. **Verantwortlich:** codex-20261017-start-decisions-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Ersten internen Ablauf mit Anmeldung, Projekten, Tickets, Tags und Suche bei LDAP/Portal anschließend innerhalb V1, 24 Stunden feste Standardsitzungsdauer und administrative Kontoanlage mit Einmalpasswort und Pflichtwechsel bei erster Anmeldung als bestätigte Auswahl erfassen. Betroffene Anforderungen, Entwürfe, offene Fragen und gesperrte Folgeaufgaben konsistent nachführen.
+
+**Abnahmekriterien:** Genau die drei Antworten als neue Entscheidungen aufnehmen; keine technische Umsetzung, Gesamtfreigabe oder weitere Detailentscheidung ableiten. Einmalpasswort und erzwungener Wechsel gelten auch für lokale Portalzugänge; sichere Ausgestaltung und Wiederherstellung bleiben ausdrücklich zur Konkretisierung. Frühere Entscheidungseinträge und Prüfberichte erhalten. TASK-021 bis TASK-031 bleiben blockiert/unbesetzt. Keine Anwendung erstellen.
+
+**Ergebnis:** DEC-051 bis DEC-053 erfassen den ersten internen Abschnitt, 24 Stunden als Standardsitzungsdauer neuer Installationen und administrative lokale Kontoanlage mit Einmalpasswort/Pflichtwechsel. Anforderungen Version 0.14, Startvorlage, Rechte-/Portal-/API-Entwurf, Roadmap, Inventar und Einstieg sind konsistent nachgeführt. REQ-PORTAL-003 besitzt nun bestätigten Zugangskern; technische Detailverfahren bleiben offen. TASK-024/TASK-030 sind angepasst, alle elf Implementierungsaufgaben weiterhin BLOCKIERT/unbesetzt. Neun Sitzungs- und vier Kontoanlagefälle sind im Rechteentwurf beschrieben, nicht ausgeführt.
+
+**KI-Gegenprüfung am 2026-10-17:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte alle 13 geänderten Dokumentdateien in 5245104b5fd519220ce96907d4d56b28f7c1b540 gegenüber 6a9c6fd12091ffbcb48326c09a990aae87d182c9. Keine konkreten Befunde: Auswahl korrekt, Sitzungsstandard von Einmalpasswortgültigkeit und API-Wiederholungsfenster getrennt, Pflichtwechsel für UI/API einschließlich lokaler Portalzugänge berücksichtigt. LDAP, Rechte und 2FA unverändert; sichere Detailverfahren offen. Historische Berichte erhalten. Dieser nachträglich ergänzte Bericht ist Eigenprotokoll der koordinierenden Sitzung; kein Claude-Review, Anwendungstest oder Sicherheitsnachweis.
+
+**Eigenprüfung am 2026-10-17:** Repository-Validator, elf vorhandene Regressionstests und git diff --check erfolgreich. Alle 89 REQ-IDs erhalten, nur REQ-PORTAL-003 wechselt V zu B (60 B/29 V). Genau drei DEC-IDs ergänzt; alle 50 früheren DEC-Zeilen unverändert. 21 OPEN-IDs, TASK-001 bis TASK-019 und DONE.md unverändert; TASK-020 hat einen datierten Nachtrag, TASK-024/TASK-030 die nötige Folgeplanung. Keine Anwendung, Last- oder Sicherheitstests erstellt oder ausgeführt.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-17“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in dem Absatz „KI-Gegenprüfung am 2026-10-17“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
+
+## TASK-033 Bearbeitbare und reservierte Aufgaben übersichtlich anzeigen
+
+**Bezug:** REQ-DEV-001, REQ-DEV-002, REQ-DEV-003, REQ-DEV-005. **Abhängigkeiten:** vorhandene zentrale Aufgabenverwaltung aus TASK-013; ausdrücklicher Auftrag vom 18. Oktober 2026 zur Übersicht bearbeitbarer und durch KI reservierter Aufgaben. **Arbeitsstand:** task/task-033-codex-overview, separates Arbeitsverzeichnis nach integrierter Reservierung #57. **Verantwortlich:** codex-20261018-task-board-01. **Abgeschlossen:** 2026-10-28.
+
+**Umfang:** Kompakte, aus den Aufgabeneinträgen erzeugte Übersicht in TODO.md für bearbeitbare, reservierte, blockierte und zur Prüfung bereite Aufgaben. Zuständigkeit und letzter Aktualisierungsstand sichtbar machen, Aktualisierung und Konsistenzprüfung automatisieren und den Einstieg für neue KI-Sitzungen erklären. Bestehende Produktaufgaben nicht eigenmächtig freigeben.
+
+**Abnahmekriterien:** Jede offene Aufgabe erscheint genau in der passenden Statusgruppe. Reservierte Aufgaben nennen die zuständige Sitzung. Freie und blockierte Arbeit ist eindeutig getrennt; offene Aufgaben mit zugeordnetem Besitzer werden nicht als frei angeboten. Die Übersicht ist eine abgeleitete Ansicht derselben TODO-Datei, keine zweite Statusquelle. Veraltete Übersichten werden von CI erkannt. Bestehende Aufgaben, Entscheidungen und Abnahmen bleiben erhalten. Getrennte KI prüft Verfahren und Nachweise.
+
+**Ergebnis:** Die Aufgabenübersicht oben in TODO.md zeigt alle Einträge nach Verfügbarkeit, Reservierung, Blockade und Prüfbereitschaft mit Aufgabenlink, zuständiger Sitzung und Aktualisierungsdatum. scripts/task_board.py erzeugt sie aus derselben Datei; der verpflichtende repository-checks-Job weist eine veraltete Ansicht zurück. Gemeinsame Arbeitsregeln und Einstieg für Codex/Claude erklären Aktualisierung und Reservierung. Keine automatische Vergabe, Freigabe oder zeitliche Aufhebung einer Reservierung.
+
+**KI-Gegenprüfung am 2026-10-18:** Die getrennte Codex-Sitzung sessions_tags_search_review prüfte zunächst 11fb6d57c295e045f0bb87d2979c2fb22f4bc1b1 gegenüber dem integrierten Claim #57. Die Befunde zu unvollständigen Aufgabenüberschriften und einer vollständig abgearbeiteten TODO-Liste wurden in 37556037ae57ec0539ce47342da26f9c6bf3f8ab korrigiert. Die anschließende Prüfung erkannte noch eingerückte Überschriften; cdbe689fcc3fa891bea9fa34be81e30968c1f101 behebt diesen Fall. Die erneute gezielte Prüfung bestätigte die Korrektur ohne weitere konkrete Befunde. Der Reviewer prüfte Fälle im Speicher sowie Validator, Übersichtsprüfung und Diff; die vollständige Testsuite wurde von der koordinierenden Sitzung ausgeführt. Dieser nachträglich ergänzte Bericht ist Eigenprotokoll, kein Claude-Review oder Nachweis einer fachlichen Abnahme.
+
+**Eigenprüfung am 2026-10-18:** Repository-Validator, Übersichtsprüfung, alle 25 Regressionstests und git diff --check erfolgreich. Tests prüfen unter anderem eindeutige Zuordnung, inkonsistente Besitzer, beschädigte Marker, leere Listen, Erhalt der Aufgaben und schreibfreie Zurückweisung fehlerhafter Überschriften. TASK-001 bis TASK-032 sowie Anforderungen, Entscheidungen, Roadmap und DONE.md bleiben unverändert. Für cdbe689 bestehen auch die GitHub-Läufe [Repository checks](https://github.com/1uedev/task-manager/actions/runs/39112206093) und [Technical qualification](https://github.com/1uedev/task-manager/actions/runs/39112206092); der Ergebnis-PR #58 prüft die abschließende Übergabefassung erneut.
+
+**Nachtrag aus TASK-034 am 2026-10-18:** Die Claude-Sitzung claude-20261018-review-01 hat das Ergebnis gegengeprüft; siehe [Prüfbericht](docs/REVIEW_TASK-021_TASK-033.md). Keine blockierenden Befunde; ein niedriger Befund zu nicht geprüften Ankerlinks und ein Hinweis zum Whitespace-Schritt der CI. Status, Zuständigkeit und Ergebnis bleiben unverändert; keine fachliche Abnahme.
+
+**Prüfungen:** Wie in dem Absatz „Eigenprüfung am 2026-10-18“ festgehalten.
+
+**Review:** Getrennte KI-Prüfung wie in den Absätzen „KI-Gegenprüfung am 2026-10-18“, „Nachtrag aus TASK-034 am 2026-10-18“ festgehalten.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch: „ja dsa gilt auch für die anderen offenen tasks“ und auf der Rückfrage zu TASK-001 bis TASK-033 die Wahl „Ja, alles in PR #187“; bestätigt durch Merge dieses Abschluss PR. Die Abnahme gilt dem Arbeitsstand dieser Aufgabe. Als Vorschlag (V) gekennzeichnete Anforderungen, offene Fragen und nicht bestätigte technische Vorschläge bleiben, was sie sind; DECISIONS.md und REQUIREMENTS.md bleiben maßgeblich.
+
+**Referenz:** kein einzelner Commit Verweis vermerkt, das Ergebnis liegt auf main; Abschluss PR #187.
 
 ## TASK-034 Claude-Gegenprüfung von TASK-021 und TASK-033 durchführen
 
@@ -130,6 +662,290 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-056 Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261028-jobsfix-02. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Experimente des Berichts zu TASK-055 laufen mit umgekehrter Erwartung als Regression grün: nach einem fatalen Error mit dauerhaft scheiterndem Vermerk wird der Ausgang aufgerufen (R1); ein beim Stopp gemeldeter endgültiger Fachfehler endet als `failed` mit seinem Code (R2); ein Bearbeiter, der seine Stoppunterbrechung erst nach der Rückkehr von `stop()` weitergibt, wird ohne Zählung zurückgegeben (R3); alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-085, keine Migration (PR #185):
+- R1: `JobExecutor.execute` versucht den Vermerk eines fatalen Errors bestmöglich und wirft den Error danach in jedem Fall weiter, so dass der Prozess endet.
+- R2: Ein vom Stopp unterbrochener Versuch wird nur zurückgegeben, wenn weder ein Error noch `JobFailure.permanent` gemeldet wurde.
+- R3: Jeder Versuch führt seinen `Watchdog` mit den Merkmalen Zeitlimit und Stopp; die Markierung gilt bis zum tatsächlichen Ende des Versuchs. Die Wartezeit des Stopps ist einstellbar (`stopGrace`, sonst 15 Sekunden).
+- backend/README.md beschreibt die Grenzen des kooperativen Stopps, docs/DEMO.md trennt die 15 Sekunden des Ausführers von den 30 Sekunden von Docker.
+
+**Prüfungen:** CI grün auf PR #185. Lokal (Java 21, PostgreSQL 16): ganze Backend Suite mit 343 Tests ohne Fehler; die drei neuen Regressionen in `JobExecutorTest` scheitern gegen den Stand vor TASK-056. Nicht lokal: Frontend, Browsertests, Imageprüfung und ein echter `docker compose stop`; Imageprüfung, PostgreSQL 18.6 und Java 25 prüft CI.
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261028-review-056-01, Bericht [docs/REVIEW_TASK-056_PR-185.md](docs/REVIEW_TASK-056_PR-185.md) in PR #186): R1 bis R3 behoben, kein neuer Befund, Hinweise H1 bis H3.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. H1: Der bestmögliche Vermerk nach einem fatalen Error ist zeitlich nicht begrenzt; bei erschöpftem Pool oder hängender Verbindung kommt der Ausstieg spät oder gar nicht.
+2. H2: Ein nicht fataler Error beim Stopp verbraucht jetzt den Versuch; so in DEC-085 gewollt.
+3. H3: backend/README.md nennt weiter einen Ausführer im Webserver der Vorführumgebung (H6 aus TASK-054).
+4. Ein Browsertest der Anhänge (`attachments.test.mjs`, Zählung der Liste) war in CI einmal unzuverlässig.
+
+**Referenz:** Reservierung in PR #184 (cd25ff8), Ergebnis #185 (796acf1), Prüfbericht #186 (bf432fa); verknüpft mit TASK-054, TASK-055 und DEC-085.
+
+## TASK-055 Befunde F1 bis F4 der Prüfung von TASK-054 beheben
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261028-jobsfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Experimente E1 bis E3 aus docs/review-evidence/task-054 laufen mit umgekehrter Erwartung als Regression grün: nach einem Error läuft ein weiterer Auftrag, ein Stopp im letzten Versuch lässt den Auftrag wartend mit unverändertem Versuchszähler, nach dem erneuten Einstellen sieht der Bearbeiter `repeated() = true`; compose.yaml setzt eine Stoppfrist über der Gnadenfrist; alle bestehenden Tests und die Imageprüfung bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-084, keine Migration (PR #183), nach Holgers Zustimmung zur Empfehlung des Berichts:
+- F1: Ein Error eines Bearbeiters wird vermerkt und beendet keinen Ausführerfaden mehr; nur `VirtualMachineError` außer `StackOverflowError` beendet nach dem Vermerk den Prozess mit Code 70.
+- F2: Ein durch den Stopp unterbrochener Versuch zählt nicht (`JobRepository.giveBack`, `job.interrupted`, sofort fällig, auch nach dem letzten Versuch). Ein Absturz ohne geordneten Stopp verbraucht weiter einen Versuch.
+- F3: `JobExecution.repeated` ergibt sich aus `attempt > 1` oder einem früheren Start; `started_at` bleibt beim erneuten Einstellen erhalten.
+- F4: `stop_grace_period: 30s` für `app` und `worker` in compose.yaml.
+- Vertrag `contracts/jobs.openapi.yaml`, backend/README.md, docs/DEMO.md und die Testattrappe der Browsertests angeglichen.
+
+**Prüfungen:** CI grün auf PR #183. Lokal (Java 21, PostgreSQL 16): ganze Backend Suite mit 340 Tests ohne Fehler, `npm run verify` und alle 114 Browsertests. Nicht lokal: Imageprüfung und echter `docker compose stop`; Imageprüfung, PostgreSQL 18.6 und Java 25 prüft CI.
+
+**Review:** Unabhängige Nachprüfung durch Codex (codex-20261028-task055-review-01, Bericht [docs/REVIEW_TASK-055_PR-183.md](docs/REVIEW_TASK-055_PR-183.md) in PR #184): F1 bis F4 im Kern behoben; neue Befunde R1 (P2) sowie R2 und R3 (P3), behoben mit TASK-056.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; die Befunde R1 bis R3 sind mit TASK-056 erledigt, die übrigen Grenzen stehen bei TASK-054 und TASK-056.
+
+**Referenz:** Reservierung #182 (2862665), Ergebnis #183 (1666f4c), Prüfbericht #184 (cd25ff8); verknüpft mit TASK-054, TASK-056 und DEC-084.
+
+## TASK-054 Dauerhafte Hintergrundaufträge (Paket A8)
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-ORG-002 (Unternehmensgrenze der Aufträge), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261027-jobs-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Ein in einer zurückgerollten Transaktion eingestellter Auftrag existiert nicht; ein bestätigter Auftrag wird genau einmal erfolgreich ausgeführt, auch mit zwei gleichzeitig laufenden Ausführern; ein Abbruch des Ausführers während der Ausführung führt nach Ablauf der Reservierung zu genau einer weiteren Ausführung, die den Wiederholungsnachweis sieht; ein immer scheiternder Auftrag erreicht nach der Höchstzahl den Zustand „endgültig gescheitert“, wird in Übersicht und Liste mit Fehlerkennung ohne Geheimnisse gezeigt und lässt sich mit `jobs.manage` erneut einstellen; ohne `jobs.manage` gibt es weder Übersicht noch Liste noch Aktion (403); eine wiederkehrende Aufgabe läuft mit zwei Prozessen nur einmal je Fälligkeit; der Aufräumlauf der Anhänge verhält sich wie vorher und seine Tests bleiben grün; Neustart von Webprozess und Ausführer verliert keinen bestätigten Auftrag. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-083 mit Migration V0025 (PR #179, Bestätigung der Rückstauanzeige in PR #180):
+- Modul `jobs` mit dauerhaften Aufträgen in PostgreSQL, eingestellt über den Port `Jobs` in der Transaktion der Fachänderung, optionaler Eindeutigkeitsschlüssel je Unternehmen und Art.
+- Ausführer mit `FOR UPDATE SKIP LOCKED`, befristeter Reservierung, Zeitlimit, Wiederholung mit wachsendem Abstand (5 Versuche ab 30 Sekunden, verdoppelt bis 1 Stunde) und Zustand „endgültig gescheitert“; die Auftragskennung dient als Wiederholungsnachweis.
+- Wiederkehrende Aufgaben mit festem Abstand, einmal je Fälligkeit; der Aufräumlauf der Anhänge läuft darüber (`FilesCleanupTask`).
+- Getrennter Prozess `worker` aus demselben Image; die Vorführumgebung startet ihn als eigenen Dienst mit eigener Speichergrenze.
+- Unternehmensrecht `jobs.manage` mit Übersicht, Liste, erneutem Einstellen und Abbrechen im Audit, Seite Hintergrundaufträge in der Administration, Katalog de und en. Der Rückstau steht nach Holgers Bestätigung in der Übersicht und als Warnung im Protokoll, nicht in der Bereitschaftsanzeige.
+- Aufbewahrung 7 Tage für erledigte, 30 Tage für gescheiterte und abgebrochene Aufträge, konfigurierbar.
+
+**Prüfungen:** CI grün auf PR #179 und #180, darunter der Workflow `Image`. Lokal (Java 21, PostgreSQL 16): alle 44 Testklassen des Backends ohne Fehler, die Lebenszyklusprüfung mit dem Prozess `worker`, `npm run verify` und alle 114 Browsertests. Nicht lokal: die Imageprüfung (Docker Hub verweigerte die Basisimages); sie lief in CI.
+
+**Review:** Getrennte Prüfung durch Claude statt Codex auf Holgers Wunsch (claude-20261027-review-054-01, Bericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md) in PR #181): F1 (P2), F2 bis F4 (P3), behoben mit TASK-055 und nachgeprüft über TASK-056; Hinweise H1 bis H8.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Hinweise H1 bis H8 des Berichts sind nicht beauftragt, unter anderem:
+1. H1: Das Zeitlimit wirkt nur kooperativ; ein Bearbeiter, der die Unterbrechung nicht beachtet, verlängert seine Reservierung unbegrenzt.
+2. H2: Reservierung und Ablauf nutzen die Uhren der Prozesse statt der Datenbank.
+3. H3: Eine verlorene Reservierung wird vom Ausführer nicht bemerkt.
+4. H4: Das erneute Einstellen einer wiederkehrenden Aufgabe prüft nicht auf einen laufenden Lauf derselben Art.
+5. H5: Beim Herunterfahren kann Spring Bearbeiter vor dem Stopp des Ausführers zerstören.
+6. H6: backend/README.md und der Kommentar in V0025 weichen von compose.yaml und dem Code ab.
+7. H7: Der Eindeutigkeitsschlüssel bindet auch fertige Aufträge bis zur Aufbewahrung; vor dem ersten Mailverbraucher in der Javadoc festhalten.
+8. H8: Ohne laufenden Ausführer findet kein Aufräumlauf statt; das gehört als Warnung in die Betriebsbeschreibung.
+
+**Referenz:** Reservierung #178 (c3d66cd), Ergebnis #179 (dc99440) und #180 (23adfe3), Prüfbericht #181 (700d9d3); Korrekturen TASK-055 und TASK-056; verknüpft mit TASK-051 und DEC-083.
+
+## TASK-053 Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001, REQ-ORG-003, REQ-TKT-001, REQ-API-001. **Verantwortlich:** claude-20261026-attachfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Rechte für Anhänge gelten in Oberfläche, API und Historie gleich, belegt mit beiden Fällen aus F1 im Browsertest; die Sicherungshinweise beantworten die Punkte aus F2; der Nachweis zu N1 aus docs/review-evidence/task-052 läuft als Regression grün; der Fall aus N2 lässt sich allein über den Dialog veröffentlichen; alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-082, keine Migration (PR #175, Warnhinweis für Makrodokumente als Nachtrag in PR #176):
+- F1: `writableFields` nennt `tags` und `attachments`; die Oberfläche bietet Hochladen und Entfernen genau nach der Schreibregel an.
+- F2: Vollständige Sicherungshinweise in backend/README.md und docs/DEMO.md.
+- F3 bis F8: Zusammenfassung mehrerer Uploads, erklärter Download Fehler mit Frage per HEAD, erweiterte Sperrliste, Protokoll der Speicherfehler getrennt vom Abbruch (400 `attachment.incomplete`), Grenze vom Server (`X-Attachment-Max-Bytes`), Angleichung von TASK-051 an DEC-080.
+- N1: Ein ausdrücklich mitgegebener unbekannter Status beim Typwechsel ergibt 400 `status.unavailable`. N2: Eigene Zuordnungszeilen für einen wegfallenden Typ.
+- Makrodokumente bleiben nach Holgers Entscheidung vom 27. Oktober 2026 erlaubt und tragen in der Liste einen Warnhinweis.
+
+**Prüfungen:** CI grün auf PR #175 und #176. Lokal (Java 21, PostgreSQL 16.15): 311 Backendtests ohne Ausfall, `npm run verify` (77 Tests) und 106 Browsertests; der Browsertest zu N2 scheitert gegen den Dialog vor TASK-053. Nicht lokal: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI); die Sicherungsbefehle in docs/DEMO.md wurden nicht ausgeführt.
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261027-review-053-01, Bericht [docs/REVIEW_TASK-053_PR-175.md](docs/REVIEW_TASK-053_PR-175.md) in PR #177): F1 bis F8, N1 und N2 behoben; R1 (P3) und Hinweise H1 bis H5.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. R1: Die Frage mit HEAD liest auf dem Server den ganzen Inhalt; nicht beauftragt.
+2. H1: `tags` in `writableFields` prüft nur der Browsertest gegen die Attrappe.
+3. H2: Weitere seltene ausführbare Endungen werden noch angenommen.
+4. H3 bis H5: Makrohinweis hängt an der Endung, Ortsangabe in docs/DEMO.md, doppelter Download bei Doppelklick.
+
+**Referenz:** Reservierung #174 (ee4f03e), Ergebnis #175 (2bc252a) und #176 (cf08a67), Prüfbericht #177 (9d75046); verknüpft mit TASK-051, TASK-052 und DEC-082.
+
+## TASK-052 Befunde F1 bis F5 der Prüfung von TASK-044 beheben
+
+**Bezug:** REQ-ORG-003, REQ-TKT-001, REQ-ACL-003, REQ-API-001. **Verantwortlich:** claude-20261026-configfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Prüftests E1 bis E5 aus docs/review-evidence/task-044 laufen in angepasster Form als Regression grün; E6 bleibt grün; bestehende Tests zu F-03 bis F-06 bleiben grün; F1 verrät in keiner Antwort, ob ein verborgenes Feld gefüllt ist; ein Typwechsel umgeht kein Pflichtfeld eines Übergangs. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-081, keine Migration (PR #172):
+- F1: Verlangt ein Übergang ein Feld, das die Person nicht lesen oder schreiben darf, antwortet der Server immer mit 409 `ticket.required_field_inaccessible`.
+- F2: Ganzzahlfelder weisen Werte unter −(2^53 − 1) ab.
+- F3: Ein Typwechsel behält den Status, wenn der neue Typ ihn kennt, sonst kommt das Ticket in den ersten Status des neuen Typs.
+- F4: Statuszuordnung je Paar aus Typ und Status, auch im Dialog der Oberfläche.
+- F5: Ein unbekanntes eigenes Feld ergibt 400 `customFields.unknown`.
+
+**Prüfungen:** CI grün auf PR #172. Lokal (Java 21, PostgreSQL 16): 308 Backendtests ohne Ausfall, `npm run verify` (76 Tests), 102 Browsertests. E1 bis E5 als Regressionen in `ProjectConfigurationApiTest`. Nicht lokal: PostgreSQL 18.6, Java 25 und der Docker Lauf (CI).
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261026-review-052-01, Bericht [docs/REVIEW_TASK-052_PR-172.md](docs/REVIEW_TASK-052_PR-172.md) in PR #173): F1 bis F5 behoben; N1 und N2 (P3), behoben mit TASK-053.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; N1 und N2 sind mit TASK-053 erledigt.
+
+**Referenz:** Reservierung in PR #169 (6424595), Ergebnis #172 (2616bb5), Prüfbericht #173 (c7a5fbb); verknüpft mit TASK-044, TASK-053 und DEC-081.
+
+## TASK-051 Dateien und Anhänge an Tickets (Paket A7)
+
+**Bezug:** REQ-TKT-003 (nur der Teil Dateien), REQ-DATA-003, REQ-SEC-001. **Verantwortlich:** claude-20261025-files-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Ein berechtigtes Mitglied lädt eine Datei bis zur Grenze hoch, sieht sie in der Liste und lädt exakt dieselben Bytes herunter; zu große, gesperrte und leere Dateien werden mit stabilem Fehlercode abgelehnt, ohne dass Reste im Speicher oder in der Datenbank bleiben; ein Neustart oder Austausch des Anwendungscontainers mit demselben Volume behält alle Anhänge; ein Abbruch zwischen Ablegen und Zuordnung hinterlässt nur eine Datei, die der Aufräumlauf entfernt; wer das Ticket oder das Feld nicht lesen darf, erhält auch über den direkten Link 404 oder 403 nach der Rechtesemantik des Ticketkerns, ebenso nach Entzug des Rechts; Entfernen und Hinzufügen stehen in der Historie, sichtbar nur mit Leserecht am Feld; Dateiname und Inhalt können weder Pfade verlassen noch beim Download Skripte ausführen lassen; die Rechte gelten in Oberfläche, API und Historie gleich. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-080 mit Migration V0024 (PR #168):
+- Modul `files` mit Speicherschnittstelle und Dateisystemadapter auf einem dauerhaften Verzeichnis, Upload mit Staging und atomarem Ablegen, Regeln für Name, Größe, Endung und Programmanfang, Aufräumlauf mit Quarantäne.
+- Ticketfeld `attachments` mit getrennten Lese und Schreibregeln, Einträge in der Historie, Auslieferung nur als Download.
+- Oberfläche im Ticket mit Liste, Auswahl und Ablegen, Herunterladen und Entfernen mit Rückfrage; Volume `files-data` im Vorführimage.
+- Holger hat am 26. Oktober 2026 die Vorschläge angenommen (Nachtrag zu DEC-080, PR #170): 25 MB je Datei, kein Virenscanner in V1, nur interne Anhänge bis zum Helpdesk, Entfernen mit Frist von 7 Tagen.
+
+**Prüfungen:** CI grün auf PR #168. Lokal: 303 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 23 Migrationen, `npm run verify` (75 Tests), 102 Browsertests und der Demoablauf mit Neustart und unverändertem Anhang. Nicht lokal: PostgreSQL 18.6 und `image-check.sh` (CI), andere Dateisysteme, sehr große oder viele gleichzeitige Uploads, ein Virenscanner.
+
+**Review:** Getrennte Prüfung durch Claude statt Codex (Bericht [docs/REVIEW_TASK-051_PR-168.md](docs/REVIEW_TASK-051_PR-168.md) in PR #171): F1 und F2 (P2), F3 bis F8 (P3), behoben mit TASK-053; Hinweise H1 bis H8.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Hinweise H1 bis H8 sind nicht beauftragt, unter anderem der Fokus nach dem Entfernen (H1), kein Abbruch eines laufenden Uploads (H2), Fehler im Stil einer Information (H3), kein `fsync` des Zielverzeichnisses (H6) und der Rückstrich als Pfadtrenner (H7). Der Nachweis einer konsistenten Sicherung und Wiederherstellung gehört zu A18, ein Virenscanner bleibt bei OPEN-014.
+
+**Referenz:** Reservierung #167 (6eb4db0), Ergebnis #168 (37580d0), Entscheidung #170 (f829fe5), Prüfbericht #171 (01a5df4); Korrekturen TASK-053; verknüpft mit DEC-080.
+
+## TASK-050 Befund R1 der Nachprüfung von TASK-049 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-UX-001. **Verantwortlich:** claude-20261025-reviewfix-03. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Nach erfolgreicher Selbstumstellung bleibt das Einmalpasswort sichtbar, auch wenn danach eine geschützte Anfrage 401 erhält oder eine Kontenaktion ausgelöst wird; die Seite bietet dann keine geschützten Aktionen mehr an; „Zur Anmeldung“ führt zur Anmeldeseite und entfernt das Passwort aus dem Speicher; die Umstellung eines fremden Kontos und das normale Ende einer Sitzung verhalten sich unverändert; die zweite Reihenfolge der Umstellung gegen die laufende Verzeichnisanmeldung ergibt 401 ohne Sitzung. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-079, keine Migration und keine Vertragsänderung (PR #166): eine eigene Seite oberhalb aller Seiten hält das Einmalpasswort nach der Selbstumstellung (`Handover` in `session.tsx`), bietet keine geschützten Aktionen an und entfernt das Passwort bei „Zur Anmeldung“; Regression für die zweite Reihenfolge der Umstellung mit dem Testersatz `PausableAccountRepository`.
+
+**Prüfungen:** CI grün auf PR #166. Lokal: 276 Backendtests gegen PostgreSQL 16, `npm run verify` (75 Tests) und 95 Browsertests; die drei neuen Browsertests scheitern gegen die Seiten vor TASK-050. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt, ein durchgängiger Browserlauf am echten Backend.
+
+**Review:** Keine eigene Nachprüfung von TASK-050; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Qualifikation mit dem vorgesehenen Verzeichnisprodukt bleibt eine eigene Aufgabe und braucht Holgers Auftrag.
+
+**Referenz:** Reservierung #165 (0947847), Ergebnis #166 (6820bd4); Prüfbericht zu TASK-049 auf dem Branch review/task-049; verknüpft mit TASK-047, TASK-049 und DEC-079.
+
+## TASK-049 Befunde der Nachprüfung von TASK-048 und der Prüfung von TASK-047 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Verantwortlich:** claude-20261024-reviewfix-02. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die beiden Gegenbeispiele aus dem Bericht (Altschlüssel `hex:80` und `trim-id` auf einer befüllten V0022-Datenbank, danach Anmeldung eines anderen Eintrags mit kollidierendem Wert) führen nicht mehr zum Konto der anderen Person und ohne Rechte zu einem eigenen Konto oder zur Abweisung; das Altkonto selbst bleibt über sein Verzeichnis erreichbar oder ist sichtbar gesperrt, je nach der gewählten Lösung; der Anzeigename kommt auch bei gleichem Kennungs und Namensattribut an; eine laufende Verzeichnisanmeldung, die von einer Umstellung überholt wird, ergibt 401 ohne Sitzung und ohne verbrauchtes Einmalpasswort; bei der Selbstumstellung bleibt das Einmalpasswort sichtbar; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-078 mit Migration V0023 (PR #164): Die Migration löst alle vorhandenen Verzeichniskonten vom Verzeichnis, deaktiviert sie und beendet ihre Sitzungen (N1); Prüfung von Kontotyp und Kennung nach der Kontosperre bei der Verzeichnisanmeldung (F1 aus TASK-047); Anzeigename aus den Rohbytes (N2); Selbstumstellung behält das Einmalpasswort (F2 aus TASK-047, vollständig erst mit TASK-050).
+
+**Prüfungen:** CI grün auf PR #164. Lokal: 275 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 22 Migrationen, `npm run verify` (75 Tests) und 93 Browsertests; die neuen Tests scheitern gegen den alten Code mit den berichteten Symptomen. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt.
+
+**Review:** Getrennte Nachprüfung durch Codex (codex-20261025-task049-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-049/docs/REVIEW_TASK-049.md) auf dem Branch review/task-049): N1, N2 und F1 behoben, F2 teilweise; R1 (P2), behoben mit TASK-050. Empfehlung „annehmbar nach Behebung von R1“.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Verzeichniskonten, die vor V0023 bestanden, sind deaktiviert und müssen von der Verwaltung wieder freigegeben werden. Die Qualifikation mit einem echten Verzeichnisprodukt steht aus.
+
+**Referenz:** Reservierung #162 (bc22999), Ergebnis #164 (ad44fdb); verknüpft mit TASK-046 bis TASK-048, TASK-050 und DEC-078.
+
+## TASK-048 Befunde F1 bis F4 der Prüfung von TASK-046 beheben
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001. **Verantwortlich:** claude-20261024-reviewfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Zwei Personen mit verschiedenen binären Kennungen und verschiedenen Rechten erreichen je ihr eigenes Konto; bestehende Zuordnungen über Textkennungen bleiben gültig; ein bekannter Eintrag mit dem Namen eines anderen Kontos wird abgewiesen, die Umbenennung desselben Eintrags funktioniert weiter; die drei leeren Varianten der Verschlüsselung ergeben 400; StartTLS ohne Unterstützung der Gegenstelle ergibt `directory.tls_failed`; beschädigte Alt-Zuordnungen werden von der Migration abgesichert; bestehende Anmelde-, Umstell- und Sperrfälle bleiben grün. Getrennte KI prüft die Behebung gezielt nach; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-077 mit Migration V0022 (PR #160): verlustfreier Zuordnungsschlüssel binärer Kennungen (F1), Abweisung eines bekannten Eintrags mit dem Namen eines anderen Kontos (F2), 400 bei unvollständiger Verschlüsselung (F3), `directory.tls_failed` bei abgelehntem StartTLS (F4).
+
+**Prüfungen:** CI grün auf PR #160. Lokal: 272 Backendtests gegen PostgreSQL 16, `lifecycle-check.sh` mit 21 Migrationen, `npm run verify`; die vier Regressionen scheitern gegen den alten Code. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt.
+
+**Review:** Getrennte Nachprüfung durch Codex (codex-20261024-task048-047-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-048-nachpruefung/docs/REVIEW_TASK-048_NACHPRUEFUNG.md), PR #161): F2 bis F4 behoben, F1 teilweise; N1 (hoch) und N2 (niedrig), behoben mit TASK-049.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; N1 und N2 sind mit TASK-049 erledigt.
+
+**Referenz:** Reservierung #159 (f858f56), Ergebnis #160 (1274c31), Prüfbericht PR #161; verknüpft mit TASK-046, TASK-049 und DEC-077.
+
+## TASK-047 Interne Verwaltung bleibt erhalten und Umstellung von Verzeichniskonten (Nachtrag zu DEC-075)
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-AUTH-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-localadmin-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Das letzte aktive lokale Konto mit den beiden Verwaltungsrechten lässt sich weder deaktivieren noch durch eine Rechteänderung entkleiden, auch nicht durch gleichzeitige Änderungen, solange Verzeichniskonten dieselben Rechte halten; ein Verzeichniskonto lässt sich umstellen und meldet sich danach nur noch mit dem neuen Einmalpasswort an, behält seine Rechte und ist im Protokoll vermerkt; bei ausgefallenem Verzeichnis kann die lokale Verwaltung Konten einrichten und umstellen; bestehende Anmelde-, Sperr- und Rechtefälle bleiben grün. Getrennte KI prüft Sperre und Umstellung; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-076, keine Migration (PR #157): Sperre der letzten lokalen Verwaltung mit `permissions.manage` und `accounts.manage` (409 `permissions.last_local_administrator`), `POST /accounts/{id}/convert-to-local` mit neuem Einmalpasswort, Schaltfläche mit Bestätigung in der Kontenverwaltung, Backlog Eintrag für den Zertifikatswechsel ohne Neustart in ROADMAP.md.
+
+**Prüfungen:** CI grün auf PR #157. Lokal: 262 Backendtests gegen PostgreSQL 16, `npm run verify`, 92 Browsertests. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnis, gleichzeitige Umstellung und Deaktivierung unter Last.
+
+**Review:** Getrennte Prüfung durch Codex (codex-20261024-task047-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-047/docs/REVIEW_TASK-047.md), PR #163): die relative Sperre hält; F1 (hoch) und F2 (mittel), behoben mit TASK-049 und TASK-050.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Sperre ist relativ: Sie greift nur, wenn es vorher eine lokale Verwaltung gab. Eine Umstellung lokaler Konten ins Verzeichnis und eine automatische Umstellung sind nicht Teil.
+
+**Referenz:** Reservierung #156 (434592f), Ergebnis #157 (a1426fb), Prüfbericht PR #163; verknüpft mit TASK-046, TASK-049, TASK-050 und DEC-076.
+
+## TASK-046 LDAP Anmeldung (Paket A5)
+
+**Bezug:** REQ-AUTH-002, REQ-AUTH-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-ldap-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Eine konfigurierte Anbindung lässt sich prüfen; ein LDAP Konto entsteht beim ersten Login, wird danach über die Kennung wiedergefunden und hat keine Rechte; eine gleichnamige lokale Identität übernimmt nie ein LDAP Konto und umgekehrt; Eingaben mit Sonderzeichen können weder den Suchfilter noch den Namen einschleusen; bei Ausfall scheitert nur die LDAP Anmeldung mit 503, ohne lokale Konten zu berühren; kein Passwort und kein Bindungsgeheimnis steht in Antworten, Protokoll oder Datenbank; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Zuordnung; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-075 mit Migration V0021 (PR #155): eine LDAPv3 Anbindung mit Prüfung, Anmeldung durch Bindung als Person, Zuordnung über die unveränderliche Kennung, Anlage ohne Rechte beim ersten Login, 503 bei Ausfall, Oberfläche in der Kontenverwaltung.
+
+**Prüfungen:** CI grün auf PR #155. Lokal: 259 Backendtests gegen PostgreSQL 16 mit `LdapLoginTest` und `LdapTlsTest` gegen ein im Test gestartetes Verzeichnis, `lifecycle-check.sh`, `npm run verify` und 90 Browsertests. Nicht lokal: PostgreSQL 18.6 (CI), ein echtes Verzeichnisprodukt, sehr große Verzeichnisse.
+
+**Review:** Getrennte Prüfung durch Codex (codex-20261023-task046-review-01, [Bericht](https://github.com/1uedev/task-manager/blob/review/task-046-pr-155/docs/REVIEW_TASK-046_PR-155.md), PR #158): F1 (hoch), F2 (mittel), F3 und F4 (niedrig), behoben mit TASK-048 und nachgeprüft über TASK-049.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. Die Qualifikation mit einem echten Verzeichnisprodukt (OpenLDAP, Active Directory) steht aus und braucht Holgers Auftrag.
+2. Zertifikatswechsel ohne Neustart ist im Backlog (DEC-076).
+3. Gruppenabbildung, Abgleich, Passwortverwaltung im Verzeichnis und ein zweites Verzeichnis sind nicht Teil.
+
+**Referenz:** Reservierung #154 (a022836), Ergebnis #155 (6e40ebf), Prüfbericht PR #158; Korrekturen TASK-047 bis TASK-050; verknüpft mit DEC-075.
+
+## TASK-045 Kontoverwaltung ergänzen (Rest von Paket A4)
+
+**Bezug:** REQ-AUTH-001, REQ-PORTAL-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-accounts-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Der Zustand des Einmalpassworts ist in API und Oberfläche richtig für offen, abgelaufen und verbraucht und verrät nie das Passwort; Anzeigename und Aufheben der Wartezeit verlangen `accounts.manage`, wirken sofort und stehen im Protokoll; das Protokoll lässt sich über Seitengrenzen lesen und enthält keine Geheimnisse; bestehende Anmelde-, Pflichtwechsel- und Zurücksetzenfälle bleiben grün. Getrennte KI prüft Anmeldung und Protokoll; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-074 (PR #153): Zustand des Einmalpassworts in der Kontenliste, Ändern des Anzeigenamens, Lesen des Protokolls der Kontenverwaltung und Aufheben der Wartezeit nach Fehlanmeldungen, jeweils mit Oberfläche und Vertrag identity.openapi.yaml.
+
+**Prüfungen:** CI grün auf PR #153. Lokal: Backendtests gegen PostgreSQL 16 mit vier neuen Integrationstests in `IdentityApiTest`, `npm run verify`, 83 Browsertests. Nicht lokal: PostgreSQL 18.6 und der Workflow `Image` (CI).
+
+**Review:** Keine eigene getrennte Prüfung von TASK-045; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Selbstbedienung per Mail, Portalkonten und zweiter Faktor sind nicht Teil (DEC-058).
+
+**Referenz:** Reservierung #152 (4615e60), Ergebnis #153 (f4f62b7); verknüpft mit TASK-024, TASK-040 und DEC-074.
+
+## TASK-044 Projektkonfiguration mit Tickettypen, Abläufen und eigenen Feldern
+
+**Bezug:** REQ-ORG-003, REQ-ORG-004, REQ-TKT-001, REQ-ACL-003, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261023-projectconfig-02 (Übernahme der Reservierung von claude-20261023-projectconfig-01). **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Zwei Projekte mit unterschiedlichen Typen, Abläufen und Feldern nach den Beispielen A und B aus docs/DOMAIN_MODEL.md sind einrichtbar und bedienbar; die Prüffälle F-03 bis F-06 sind als Regression abgedeckt; ein nicht erlaubter Übergang und ein fehlendes Pflichtfeld lassen das Ticket unverändert; verborgene eigene Felder bleiben in API, Historie und Suche verborgen; Bestandstickets bleiben nach jeder Veröffentlichung gültig. Getrennte KI prüft Konfigurationsänderungen, Rechte und Bestandsdaten; Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-073 mit den Migrationen V0018 bis V0020 (PR #151), beschrieben in [docs/PROJECT_CONFIGURATION.md](docs/PROJECT_CONFIGURATION.md): Tickettypen, Abläufe je Typ, Pflichtfelder je Übergang, sieben Arten eigener Felder, Entwurf und Veröffentlichung mit Zuordnung von Bestandstickets, eigene Felder in Rechten, Historie und Suche, Oberfläche dazu.
+
+**Prüfungen:** CI grün auf PR #151. Lokal: 235 Backendtests gegen PostgreSQL 16, `npm run verify`, 78 Browsertests; F-03 bis F-06 als Regression. Nicht lokal: PostgreSQL 18.6 und der Workflow `Image` (CI).
+
+**Review:** Getrennte Prüfung durch Claude statt Codex (claude-20261025-review-044-01, Bericht [docs/REVIEW_TASK-044_PR-151.md](docs/REVIEW_TASK-044_PR-151.md) in PR #169): F1 (P2), F2 bis F5 (P3), behoben mit TASK-052 und TASK-053. Die Veröffentlichung mit Zuordnung unter Last blieb ohne Befund.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („ja dsa gilt auch für die anderen offenen tasks“ im Anschluss an die Abnahme von TASK-054 bis TASK-056); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. Die drei offenen Punkte aus DEC-073 sind nicht entschieden: Löschen nie verwendeter Felder, nachträgliches Erzwingen von Pflichtfeldern bei Bestandstickets, Direktveröffentlichung neben dem Entwurf.
+2. Filter auf eigene Felder in der Suchoberfläche, Mehrfachauswahl, Dezimalzahl, Formulare, Automationen, Projektvorlagen, Verschieben zwischen Projekten und Archivierung sind nicht Teil.
+
+**Referenz:** Reservierung #150 (47eae91), Ergebnis #151 (8b7928d), Prüfbericht #169 (6424595); Korrekturen TASK-052 und TASK-053; verknüpft mit DEC-073.
 
 ## TASK-043 Rechtekern härten
 
