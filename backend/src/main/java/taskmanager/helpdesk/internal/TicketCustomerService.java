@@ -76,16 +76,27 @@ public class TicketCustomerService {
         return new View(Set.copyOf(readable), Set.copyOf(writable), customer, contact, mails);
     }
 
-    /** The customers released for the project and their contacts; needs the write rule for the customer. */
+    /**
+     * The customers released for the project and their contacts. The customers need the read and write rules for the field
+     * {@code customer}; the contacts are listed only with the read and write rules for {@code contact}, otherwise each
+     * customer comes without contacts (TASK-059, F4).
+     */
     @Transactional
     public List<Option> options(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
         requireEdit(actor, resource, Set.of(TicketAccess.CUSTOMER_FIELD));
+        Decision read = permissions.inspect(actor, resource, READ, FIELDS);
+        if (!read.allowed() || !read.readableFields().contains(TicketAccess.CUSTOMER_FIELD)) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        Decision edit = permissions.inspect(actor, resource, EDIT, FIELDS);
+        boolean contacts = read.readableFields().contains(TicketAccess.CONTACT_FIELD)
+            && edit.allowed() && edit.writableFields().contains(TicketAccess.CONTACT_FIELD);
         ticket(actor, projectId, number);
         List<Option> options = new ArrayList<>();
         for (Customer customer : repository.customers(actor.companyId())) {
             if (customer.projects().contains(projectId)) {
-                options.add(new Option(customer, repository.contacts(actor.companyId(), customer.id())));
+                options.add(new Option(customer, contacts ? repository.contacts(actor.companyId(), customer.id()) : List.of()));
             }
         }
         return options;

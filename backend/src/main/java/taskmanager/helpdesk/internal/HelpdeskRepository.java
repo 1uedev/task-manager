@@ -20,8 +20,8 @@ class HelpdeskRepository {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String MAILBOX_COLUMNS = "id, company_id, name, enabled, project_id, ticket_type, imap_host, imap_port, "
         + "imap_security, username, password_cipher, folder, smtp_host, smtp_port, smtp_security, address, authserv_id, max_bytes, "
-        + "uid_validity, last_uid, polled_at, succeeded_at, error_code, error_at, notice, notice_at, version, created_at, created_by, "
-        + "updated_at, updated_by";
+        + "uid_validity, last_uid, source, compare_until, polled_at, succeeded_at, error_code, error_at, notice, notice_at, version, "
+        + "created_at, created_by, updated_at, updated_by";
     private static final String MESSAGE_COLUMNS = "id, company_id, mailbox_id, project_id, uid_validity, uid, message_id, received_at, "
         + "sent_at, from_address, from_name, to_addresses, cc_addresses, subject, body, size_bytes, attachments::text as attachments, "
         + "raw is not null as has_raw, state, reason, ticket_id, contact_id, customer_id, processed_at, processed_by, discard_reason, version";
@@ -107,6 +107,17 @@ class HelpdeskRepository {
                 select c.* from helpdesk_contact c join helpdesk_contact_address a on a.contact_id = c.id
                 where a.company_id = ? and a.address = ?
                 """).params(companyId, address).query((rs, row) -> contact(rs)).optional();
+    }
+
+    /** Whether one of the addresses belongs to a contact of another customer than {@code customerId}, in one query. */
+    boolean otherCustomerAmong(UUID companyId, UUID customerId, Collection<String> addresses) {
+        if (addresses.isEmpty()) {
+            return false;
+        }
+        return jdbc.sql("""
+                select exists (select 1 from helpdesk_contact_address a join helpdesk_contact c on c.id = a.contact_id
+                where a.company_id = ? and a.address = any(?) and c.customer_id <> ?)
+                """).params(companyId, addresses.toArray(String[]::new), customerId).query(Boolean.class).single();
     }
 
     /** The addresses of the list that belong to another contact than {@code except}. */
@@ -204,8 +215,8 @@ class HelpdeskRepository {
     }
 
     /**
-     * Writes the settings. A change of server, account or folder starts the folder over: the intake forgets where it stood,
-     * and the origin of the mails it has already taken still keeps them from arriving twice.
+     * Writes the settings. A change of server, port, account or folder starts the folder over as a new source: the intake
+     * forgets where it stood, and a mail of the new source is never mistaken for one of the old (TASK-059, F3).
      */
     void updateMailbox(Mailbox m, boolean restart) {
         jdbc.sql("""
@@ -217,7 +228,8 @@ class HelpdeskRepository {
                 m.username(), m.passwordCipher(), m.folder(), m.smtpHost(), m.smtpPort(), m.smtpSecurity(), m.address(), m.authservId(),
                 m.maxBytes(), m.version(), ts(m.updatedAt()), m.updatedBy(), m.id()).update();
         if (restart) {
-            jdbc.sql("update helpdesk_mailbox set uid_validity = null, last_uid = 0 where id = ?").param(m.id()).update();
+            jdbc.sql("update helpdesk_mailbox set uid_validity = null, last_uid = 0, source = source + 1, compare_until = null where id = ?")
+                .param(m.id()).update();
         }
     }
 
@@ -233,15 +245,32 @@ class HelpdeskRepository {
         jdbc.sql("update helpdesk_mailbox set error_code = ?, error_at = ? where id = ?").params(code, ts(now), id).update();
     }
 
-    void position(UUID id, long uidValidity, long lastUid) {
-        jdbc.sql("update helpdesk_mailbox set uid_validity = ?, last_uid = greatest(last_uid, ?) where id = ?")
-            .params(uidValidity, lastUid, id).update();
+    /**
+     * Moves the position on, only while the source is still the one the fetch reads; a fetch that runs while the settings
+     * change writes nothing for the new source. The comparison of Message-IDs ends once the position passed its bound.
+     */
+    void position(UUID id, int source, long uidValidity, long lastUid) {
+        jdbc.sql("""
+                update helpdesk_mailbox set uid_validity = ?, last_uid = greatest(last_uid, ?),
+                    compare_until = case when compare_until <= ? then null else compare_until end
+                where id = ? and source = ?
+                """).params(uidValidity, lastUid, lastUid, id, source).update();
     }
 
-    /** A new UIDVALIDITY: the intake starts the folder over and leaves a notice. */
-    void restartFolder(UUID id, long uidValidity, String notice, Instant now) {
-        jdbc.sql("update helpdesk_mailbox set uid_validity = ?, last_uid = 0, notice = ?, notice_at = ? where id = ?")
-            .params(uidValidity, notice, ts(now), id).update();
+    /**
+     * A new UIDVALIDITY: the intake starts the folder over, leaves a notice and compares Message-IDs up to {@code compareUntil},
+     * across every batch, failure and restart until the position passes it (TASK-059, F2).
+     */
+    void restartFolder(UUID id, int source, long uidValidity, long compareUntil, String notice, Instant now) {
+        jdbc.sql("""
+                update helpdesk_mailbox set uid_validity = ?, last_uid = 0, compare_until = ?, notice = ?, notice_at = ?
+                where id = ? and source = ?
+                """).params(uidValidity, compareUntil, notice, ts(now), id, source).update();
+    }
+
+    /** Locks the mailbox row, so that the comparison of Message-IDs and the insert are one decision per mailbox. */
+    void lockMailbox(UUID id) {
+        jdbc.sql("select id from helpdesk_mailbox where id = ? for update").param(id).query(UUID.class).optional();
     }
 
     void clearNotice(UUID id) {
@@ -254,7 +283,8 @@ class HelpdeskRepository {
             rs.getInt("imap_port"), rs.getString("imap_security"), rs.getString("username"), rs.getBytes("password_cipher"),
             rs.getString("folder"), rs.getString("smtp_host"), (Integer) rs.getObject("smtp_port"), rs.getString("smtp_security"),
             rs.getString("address"), rs.getString("authserv_id"), rs.getLong("max_bytes"), (Long) rs.getObject("uid_validity"),
-            rs.getLong("last_uid"), instant(rs, "polled_at"), instant(rs, "succeeded_at"), rs.getString("error_code"),
+            rs.getLong("last_uid"), rs.getInt("source"), (Long) rs.getObject("compare_until"), instant(rs, "polled_at"),
+            instant(rs, "succeeded_at"), rs.getString("error_code"),
             instant(rs, "error_at"), rs.getString("notice"), instant(rs, "notice_at"), rs.getLong("version"), instant(rs, "created_at"),
             rs.getObject("created_by", UUID.class), instant(rs, "updated_at"), rs.getObject("updated_by", UUID.class));
     }
@@ -262,9 +292,9 @@ class HelpdeskRepository {
     // ------------------------------------------------------------------------------------------------ messages
 
     /** Whether a mail of this origin is already there. */
-    boolean knownOrigin(UUID mailboxId, long uidValidity, long uid) {
-        return jdbc.sql("select count(*) from helpdesk_message where mailbox_id = ? and uid_validity = ? and uid = ?")
-            .params(mailboxId, uidValidity, uid).query(Long.class).single() > 0;
+    boolean knownOrigin(UUID mailboxId, int source, long uidValidity, long uid) {
+        return jdbc.sql("select count(*) from helpdesk_message where mailbox_id = ? and source = ? and uid_validity = ? and uid = ?")
+            .params(mailboxId, source, uidValidity, uid).query(Long.class).single() > 0;
     }
 
     /** Whether the mailbox already holds a mail with this Message-ID, for the comparison after a new UIDVALIDITY. */
@@ -277,14 +307,14 @@ class HelpdeskRepository {
      * Inserts the mail unless a mail of the same origin exists; a concurrent insert of the same origin waits for the other
      * and then inserts nothing. Returns whether the row is new.
      */
-    boolean insertMessage(Message m, byte[] raw) {
+    boolean insertMessage(Message m, int source, byte[] raw) {
         return jdbc.sql("""
-                insert into helpdesk_message (id, company_id, mailbox_id, project_id, uid_validity, uid, message_id, received_at,
+                insert into helpdesk_message (id, company_id, mailbox_id, project_id, source, uid_validity, uid, message_id, received_at,
                     sent_at, from_address, from_name, to_addresses, cc_addresses, subject, body, size_bytes, attachments, raw, state,
                     reason, ticket_id, contact_id, customer_id, processed_at, processed_by, version)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (mailbox_id, uid_validity, uid) do nothing
-                """).params(m.id(), m.companyId(), m.mailboxId(), m.projectId(), m.uidValidity(), m.uid(), m.messageId(),
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (mailbox_id, source, uid_validity, uid) do nothing
+                """).params(m.id(), m.companyId(), m.mailboxId(), m.projectId(), source, m.uidValidity(), m.uid(), m.messageId(),
                 ts(m.receivedAt()), ts(m.sentAt()), m.fromAddress(), m.fromName(), m.to(), m.cc(), m.subject(), m.body(), m.sizeBytes(),
                 JSON.writeValueAsString(m.attachments()), raw, m.state(), m.reason(), m.ticketId(), m.contactId(), m.customerId(),
                 ts(m.processedAt()), m.processedBy(), m.version()).update() == 1;

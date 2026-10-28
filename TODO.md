@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-059](#task-059-befunde-f1-bis-f5-der-prüfung-von-task-057-beheben) | Befunde F1 bis F5 der Prüfung von TASK-057 beheben | claude-20261028-helpdeskfix-01 | 2026-10-28 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -43,6 +41,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-057](#task-057-helpdesk-eingang-über-imap-mit-prüfwarteschlange-paket-a9-teil-1) | Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1) | claude-20261028-helpdesk-01 | 2026-10-28 |
+| [TASK-059](#task-059-befunde-f1-bis-f5-der-prüfung-von-task-057-beheben) | Befunde F1 bis F5 der Prüfung von TASK-057 beheben | claude-20261028-helpdeskfix-01 | 2026-10-28 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -94,7 +93,7 @@ Nicht Teil (TASK-058 oder später): Antworten über SMTP, Versandzustände, Zuor
 
 ## TASK-059 Befunde F1 bis F5 der Prüfung von TASK-057 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-helpdeskfix-01 · **Aktualisiert:** 2026-10-28
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-helpdeskfix-01 · **Aktualisiert:** 2026-10-28
 
 **Bezug:** REQ-HD-001 (geschützte Zugangsdaten), REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002, Feldrechte nach DEC-067. **Abhängigkeiten:** TASK-057 (Ergebnis PR #189), Prüfbericht docs/REVIEW_TASK-057_PR-189.md (PR #191). **Arbeitsstand:** Holgers Wahl „F1 bis F5 plus H1 und H3“ vom 28. Oktober 2026 im Projektgespräch. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-087 und Korrekturmigration V0027.
 
@@ -112,4 +111,6 @@ Nicht Teil: H2 und H4 (Entscheidung bei der Abnahme), H5 und H6, TASK-058.
 
 **Abnahmekriterien:** Für jeden Befund ein Regressionstest nach der Nachstellung im Prüfbericht (E2, E3, E4, E6, E7), der vor der Korrektur rot und danach grün ist; kein Passwort im Protokoll bei einem Server, der die Anmeldung spiegelt; keine doppelten Tickets bei mehr wieder aufgetauchten Nachrichten als dem Paketlimit; keine übergangene Nachricht nach Wechsel von Konto oder Ordner; keine Kontaktdaten ohne Leserecht auf `contact`; ein fremder Kunde an beliebiger Empfängerposition führt in die Prüfwarteschlange; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057 und TASK-059 zusammen ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
+**Ergebnis:** Umgesetzt im Ergebnis PR vom Branch claude/project-thread-b4u17z, beschrieben in DEC-087, backend/README.md (Helpdesk Eingang) und dem Nachtrag TASK-059 in docs/HELPDESK_SLA.md. F1: Protokoll nur mit Postfach, Code und Klassen der Ursachen (`MailClient.kinds`). F2: Grenze `compare_until` am Postfach, Abgleich und Eintrag unter Sperre des Postfachs. F3: Quelle `source` am Postfach und in der Herkunft, Migration V0027, Positionen nur für die aktuelle Quelle. F4: Kundenauswahl mit Lese und Schreibregel für `customer`, Kontakte nur mit beiden Regeln für `contact`. F5: alle Empfänger bis 1000 in einer Abfrage, sonst Grund `recipients_incomplete`. H1: Vertrauensvoraussetzung dokumentiert. H3: Browsertests warten auf den Endzustand; Backendtests mit höchstens acht offenen Spring Kontexten (`src/test/resources/spring.properties`) und zehn Sekunden Leerlauf je Verbindung. Prüfungen: fünf neue Fälle in `HelpdeskApiTest` nach den Nachstellungen E2, E3, E4, E6 und E7 des Berichts, vor der Korrektur rot und danach grün; volle Backendsuite mit `./mvnw clean verify` (JDK 21, PostgreSQL 16.15) 366 Tests grün; `scripts/lifecycle-check.sh` grün; Frontend `npm run verify` und alle 124 Browsertests grün, `helpdesk.test.mjs` dreimal hintereinander grün; `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests -v`, `git diff --check`. Nicht lokal gelaufen: Backend mit Java 25 und PostgreSQL 18 (CI), Docker Image.
+
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057 und TASK-059 zusammen ab und entscheidet dabei H2 und H4.

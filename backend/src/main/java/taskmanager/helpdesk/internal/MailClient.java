@@ -34,6 +34,21 @@ interface MailClient {
         void close();
     }
 
+    /**
+     * The class names along the causes of a failure, for the log. Never the messages: a mail server may repeat the login,
+     * and with it the password, in the text of its answer (TASK-059, F1).
+     */
+    static String kinds(Throwable failure) {
+        StringBuilder kinds = new StringBuilder();
+        for (Throwable current = failure; current != null && kinds.length() < 500; current = current.getCause()) {
+            kinds.append(kinds.length() == 0 ? "" : " < ").append(current.getClass().getName());
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return kinds.length() == 0 ? "no cause" : kinds.toString();
+    }
+
     /** A failure of the mail server or the connection, with its code. */
     final class MailFailure extends Exception {
         private static final long serialVersionUID = 1L;

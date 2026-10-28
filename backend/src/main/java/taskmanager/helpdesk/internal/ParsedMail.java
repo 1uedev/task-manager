@@ -30,11 +30,13 @@ import java.util.regex.Pattern;
  * runs or is shown as markup. Every text is cut to a size the database and the interface can hold.
  */
 record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<String> to, List<String> cc, String subject,
-        String body, List<File> files, boolean automatic, List<String> authenticationResults) {
+        String body, List<File> files, boolean automatic, List<String> authenticationResults, boolean recipientsComplete) {
 
     static final int BODY_MAX = 200_000;
     private static final int SUBJECT_MAX = 1_000;
-    private static final int ADDRESSES_MAX = 50;
+    // Every recipient counts for the check against contacts of other customers (TASK-059, F5). A mail with more recipients,
+    // or with a recipient header that cannot be read, is not complete and waits for a person.
+    static final int ADDRESSES_MAX = 1_000;
     private static final Session SESSION = Session.getInstance(new Properties());
     private static final Pattern BLOCKS = Pattern.compile("(?is)<(script|style|head)[^>]*>.*?</\\1\\s*>");
     private static final Pattern BREAKS = Pattern.compile("(?i)<\\s*(br|/p|/div|/li|/tr|/h[1-6])\\b[^>]*>");
@@ -55,15 +57,19 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
         String[] html = {null};
         walk(message, files, text, html, 0);
         String body = text.length() > 0 ? text.toString() : html[0] == null ? null : htmlToText(html[0]);
-        return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), addresses(message, "To"),
-            addresses(message, "Cc"), subject(message), cut(clean(body), BODY_MAX), List.copyOf(files), automatic(message),
-            headers(message, "Authentication-Results"));
+        Recipients to = addresses(message, "To");
+        Recipients cc = addresses(message, "Cc");
+        return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), to.addresses(), cc.addresses(),
+            subject(message), cut(clean(body), BODY_MAX), List.copyOf(files), automatic(message), headers(message, "Authentication-Results"),
+            to.complete() && cc.complete());
     }
 
     /** Reads only the header of a mail that is too large to fetch; it has no text and no files. */
     static ParsedMail headerOnly(jakarta.mail.Message message) throws MessagingException {
-        return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), addresses(message, "To"),
-            addresses(message, "Cc"), subject(message), null, List.of(), automatic(message), headers(message, "Authentication-Results"));
+        Recipients to = addresses(message, "To");
+        Recipients cc = addresses(message, "Cc");
+        return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), to.addresses(), cc.addresses(),
+            subject(message), null, List.of(), automatic(message), headers(message, "Authentication-Results"), to.complete() && cc.complete());
     }
 
     /** The domain of an address, lower case. */
@@ -229,24 +235,34 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
         return senders;
     }
 
-    private static List<String> addresses(jakarta.mail.Message message, String header) throws MessagingException {
+    /** The addresses of one recipient header and whether all of them could be read. */
+    private record Recipients(List<String> addresses, boolean complete) {
+    }
+
+    private static Recipients addresses(jakarta.mail.Message message, String header) throws MessagingException {
         String[] values = message.getHeader(header);
         List<String> result = new ArrayList<>();
+        boolean complete = true;
         if (values == null) {
-            return result;
+            return new Recipients(result, true);
         }
         for (String value : values) {
             try {
                 for (Address address : InternetAddress.parseHeader(value, false)) {
-                    if (address instanceof InternetAddress internet && internet.getAddress() != null && result.size() < ADDRESSES_MAX) {
+                    if (!(address instanceof InternetAddress internet) || internet.getAddress() == null) {
+                        continue;
+                    }
+                    if (result.size() < ADDRESSES_MAX) {
                         result.add(cut(internet.getAddress().strip().toLowerCase(Locale.ROOT), 254));
+                    } else {
+                        complete = false;
                     }
                 }
             } catch (AddressException invalid) {
-                // Ignored like an unreadable sender.
+                complete = false;
             }
         }
-        return result;
+        return new Recipients(result, complete);
     }
 
     private static String subject(jakarta.mail.Message message) {

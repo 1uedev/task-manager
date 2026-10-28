@@ -121,7 +121,7 @@ public class MailboxService {
         try (MailClient.Connection connection = client.open(mailbox, password)) {
             return new TestResult(true, null, connection.uidValidity());
         } catch (MailClient.MailFailure failure) {
-            LOG.info("The test of mailbox {} failed with {}: {}", id, failure.code(), String.valueOf(failure.getCause()));
+            LOG.info("The test of mailbox {} failed with {} ({})", id, failure.code(), MailClient.kinds(failure.getCause()));
             return new TestResult(false, failure.code(), null);
         }
     }
@@ -211,7 +211,8 @@ public class MailboxService {
         boolean enabled = s.enabled() == null || s.enabled();
         return new Mailbox(id, companyId, name, enabled, s.projectId(), s.ticketType(), host, s.imapPort(), s.imapSecurity(), username,
             cipher, folder, smtpHost, s.smtpPort(), s.smtpSecurity(), address, authservId, maxBytes,
-            current == null ? null : current.uidValidity(), current == null ? 0 : current.lastUid(),
+            current == null ? null : current.uidValidity(), current == null ? 0 : current.lastUid(), current == null ? 1 : current.source(),
+            current == null ? null : current.compareUntil(),
             current == null ? null : current.polledAt(), current == null ? null : current.succeededAt(),
             current == null ? null : current.errorCode(), current == null ? null : current.errorAt(),
             current == null ? null : current.notice(), current == null ? null : current.noticeAt(), version, createdAt, createdBy, now, actor);

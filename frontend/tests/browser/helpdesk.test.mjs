@@ -59,8 +59,9 @@ async function withApp({ prepare = withHelpdeskRight, as = ANNA, locale = 'de-DE
 describe('helpdesk administration', () => {
   test('without helpdesk.manage there is no entry and the page refuses', async () => {
     await withApp({ prepare: null }, async (page, backend) => {
-      assert.equal(await page.getByRole('navigation').getByRole('link', { name: 'Helpdesk' }).count(), 0);
       await page.getByText('Sie haben für diese Aktion keine Berechtigung.').first().waitFor();
+      await page.getByRole('navigation').getByRole('link').first().waitFor();
+      assert.equal(await page.getByRole('navigation').getByRole('link', { name: 'Helpdesk' }).count(), 0);
       assert.equal(backend.state.requests.filter((request) => request.path.startsWith('/api/v1/helpdesk/')
         && !request.path.startsWith('/api/v1/helpdesk/inbox')).length, 0, 'the page asks nothing it may not');
     });
@@ -203,7 +204,8 @@ describe('review queue', () => {
       await item.getByRole('button', { name: 'Endgültig verwerfen' }).click();
       await page.getByText('Die Mail wurde verworfen.').waitFor();
       assert.equal(spam.discardReason, 'Werbung ohne Bezug');
-      assert.equal(await page.locator(`li[data-message="${spam.id}"]`).count(), 0);
+      // The list is read again after the notice; wait for it instead of counting at once.
+      await page.locator(`li[data-message="${spam.id}"]`).waitFor({ state: 'detached' });
 
       const other = page.locator(`li[data-message="${done.id}"]`);
       await other.getByRole('button', { name: 'Schon erledigt' }).click();
@@ -232,6 +234,8 @@ describe('review queue', () => {
       await form.getByText('Kontakt Max Muster wurde angelegt und ist ausgewählt.').waitFor();
       const created = backend.state.helpdesk.contacts.find((contact) => contact.name === 'Max Muster');
       assert.deepEqual(created.addresses, ['max@nordwerk.example']);
+      // The candidates are read again after the notice; the new contact is chosen once it is among them.
+      await item.getByLabel('Kontakt des Tickets').locator(`option[value="${created.id}"]`).waitFor({ state: 'attached' });
       assert.equal(await item.getByLabel('Kontakt des Tickets').inputValue(), created.id);
       await item.getByRole('button', { name: 'Ticket anlegen' }).click();
       await page.getByText('Ticket 3 wurde angelegt.').waitFor();
