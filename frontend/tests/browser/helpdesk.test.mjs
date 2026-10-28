@@ -214,6 +214,31 @@ describe('review queue', () => {
     });
   });
 
+  test('who also manages the helpdesk adds the unknown sender as a contact and uses it for the ticket', async () => {
+    await withApp({ hash: '#/inbox', prepare: (backend) => {
+      withHelpdeskRight(backend);
+      withCustomer(backend);
+      backend.state.groups.push({ id: '00000000-0000-4000-8000-00000000aaaa', name: 'Prüfen', members: [backend.anna.id],
+        actions: [{ action: 'helpdesk.review', projectId: backend.project.id }], fields: [] });
+      backend.addMail({ fromAddress: 'max@nordwerk.example', fromName: 'Max Muster' });
+    } }, async (page, backend) => {
+      const mail = backend.state.helpdesk.messages[0];
+      const item = page.locator(`li[data-message="${mail.id}"]`);
+      await item.getByRole('button', { name: 'Drucker defekt' }).click();
+      await item.getByText('Absender max@nordwerk.example als Kontakt anlegen').click();
+      const form = item.getByTestId('new-contact');
+      assert.equal(await form.getByLabel(/^Name/).inputValue(), 'Max Muster');
+      await form.getByRole('button', { name: 'Kontakt anlegen' }).click();
+      await form.getByText('Kontakt Max Muster wurde angelegt und ist ausgewählt.').waitFor();
+      const created = backend.state.helpdesk.contacts.find((contact) => contact.name === 'Max Muster');
+      assert.deepEqual(created.addresses, ['max@nordwerk.example']);
+      assert.equal(await item.getByLabel('Kontakt des Tickets').inputValue(), created.id);
+      await item.getByRole('button', { name: 'Ticket anlegen' }).click();
+      await page.getByText('Ticket 3 wurde angelegt.').waitFor();
+      assert.equal(mail.contactId, created.id);
+    });
+  });
+
   test('without helpdesk.review the queue stays empty', async () => {
     await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => backend.addMail({ subject: 'Geheim' }) }, async (page) => {
       await page.getByText('Keine Mail wartet auf Prüfung.').waitFor();

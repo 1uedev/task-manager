@@ -770,6 +770,10 @@ export const en: Record<MessageKey, Message> = {
   'inbox.error.changed': 'The mail changed in the meantime. It was loaded again.',
   'inbox.error.gone': 'This mail is no longer visible.',
   'inbox.error.reason': 'Please give a reason of at most 500 characters.',
+  'inbox.newContact': 'Add sender {address} as contact',
+  'inbox.newContactSave': 'Add contact',
+  'inbox.contactCreated': 'Contact {name} was added and is selected.',
+  'inbox.error.contact': 'Name or customer missing.',
   'ticketHelpdesk.title': 'Customer and mails',
   'ticketHelpdesk.noCustomer': 'No customer',
   'ticketHelpdesk.noContact': 'No contact',
@@ -778,6 +782,6 @@ export const en: Record<MessageKey, Message> = {
   'ticketHelpdesk.saved': 'Customer and contact were saved.',
   'ticketHelpdesk.error.invalid': 'Customer or contact do not fit this project.',
   'ticketHelpdesk.error.forbidden': 'You may not change customer and contact of this ticket.',
-  'ticketHelpdesk.mails': 'Received mails',
+  'ticketHelpdesk.mails': 'Email history',
   'ticketHelpdesk.mail': '{subject}, from {from} on {date}',
 };

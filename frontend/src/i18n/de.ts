@@ -770,6 +770,10 @@ export const de = {
   'inbox.error.changed': 'Die Mail wurde inzwischen geändert. Sie wurde neu geladen.',
   'inbox.error.gone': 'Diese Mail ist nicht mehr sichtbar.',
   'inbox.error.reason': 'Bitte geben Sie eine Begründung mit höchstens 500 Zeichen an.',
+  'inbox.newContact': 'Absender {address} als Kontakt anlegen',
+  'inbox.newContactSave': 'Kontakt anlegen',
+  'inbox.contactCreated': 'Kontakt {name} wurde angelegt und ist ausgewählt.',
+  'inbox.error.contact': 'Name oder Kunde fehlen.',
   'ticketHelpdesk.title': 'Kunde und Mails',
   'ticketHelpdesk.noCustomer': 'Kein Kunde',
   'ticketHelpdesk.noContact': 'Kein Kontakt',
@@ -778,7 +782,7 @@ export const de = {
   'ticketHelpdesk.saved': 'Kunde und Kontakt wurden gespeichert.',
   'ticketHelpdesk.error.invalid': 'Kunde oder Kontakt passen nicht zu diesem Projekt.',
   'ticketHelpdesk.error.forbidden': 'Sie dürfen Kunde und Kontakt dieses Tickets nicht ändern.',
-  'ticketHelpdesk.mails': 'Eingegangene Mails',
+  'ticketHelpdesk.mails': 'E-Mail Verlauf',
   'ticketHelpdesk.mail': '{subject}, von {from} am {date}',
 } as const satisfies Record<string, Message>;
 

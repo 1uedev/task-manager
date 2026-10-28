@@ -1,19 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listInbox, listProjects, readInboxMessage, readInboxSummary, ticketFromMessage,
-  type MailMessage, type MessageState,
+  createContact, discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listCustomers, listInbox, listProjects, readInboxMessage, readInboxSummary,
+  ticketFromMessage, type MailMessage, type MessageState,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad } from '../app/hooks.ts';
 import { hrefFor } from '../app/route.ts';
+import { useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import { de } from '../i18n/de.ts';
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
-import { useHelpdeskCode } from './HelpdeskPage.tsx';
+import { HELPDESK_RIGHT, useHelpdeskCode } from './HelpdeskPage.tsx';
 
 const known = (key: string): key is MessageKey => Object.hasOwn(de, key);
 
@@ -107,7 +108,9 @@ function MessageView({ id, onDone }: { readonly id: string; readonly onDone: (no
   const text = useProblemText();
   const code = useHelpdeskCode();
   const [message, reload] = useLoad(() => readInboxMessage(api, id), [api, id]);
-  const [candidates] = useLoad(() => listCandidates(api, id), [api, id]);
+  const { has } = useSession();
+  const [candidateRound, setCandidateRound] = useState(0);
+  const [candidates] = useLoad(() => listCandidates(api, id), [api, id, candidateRound]);
   const [contact, setContact] = useState<string>('');
   const [reason, setReason] = useState('');
   const [discarding, setDiscarding] = useState(false);
@@ -177,6 +180,12 @@ function MessageView({ id, onDone }: { readonly id: string; readonly onDone: (no
                   <button type="button" disabled={busy} onClick={() => void create(etag)}>{t('inbox.createTicket')}</button>
                   {!discarding && <button type="button" className="secondary" onClick={() => setDiscarding(true)}>{t('inbox.discard')}</button>}
                 </p>
+                {has(HELPDESK_RIGHT) && value.fromAddress && (
+                  <NewContact address={value.fromAddress} name={value.fromName ?? ''} onCreated={(created) => {
+                    setCandidateRound((round) => round + 1);
+                    setContact(created);
+                  }} />
+                )}
                 {discarding && (
                   <form onSubmit={(event) => void discard(event, etag)} noValidate>
                     <TextField label={t('inbox.discardReasonLabel')} value={reason} onChange={setReason} required maxLength={500} />
@@ -193,5 +202,46 @@ function MessageView({ id, onDone }: { readonly id: string; readonly onDone: (no
         )}
       </LoadedView>
     </div>
+  );
+}
+
+// Whoever also manages the helpdesk can turn the sender into a contact of a customer right here (TASK-057); the contact is
+// then offered for the ticket. Nobody else creates contacts from mails.
+function NewContact({ address, name, onCreated }: { readonly address: string; readonly name: string; readonly onCreated: (contactId: string) => void }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [customers] = useLoad(() => listCustomers(api), [api]);
+  const [customer, setCustomer] = useState('');
+  const [contactName, setContactName] = useState(name);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [busy, setBusy] = useState(false);
+  const list = customers.state === 'ok' ? customers.value : [];
+  if (list.length === 0) return null;
+  const chosen = customer === '' ? list[0]?.id ?? '' : customer;
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setNotice(null);
+    setBusy(true);
+    const result = await createContact(api, chosen, contactName.trim(), [address]);
+    setBusy(false);
+    if (result.kind !== 'ok') {
+      return setNotice({ kind: 'info', text: text(result.problem, { 'contact.address_taken': 'helpdesk.error.addressTaken', 'request.invalid': 'inbox.error.contact' }) });
+    }
+    setNotice({ kind: 'success', text: t('inbox.contactCreated', { name: result.data.value.name }) });
+    onCreated(result.data.value.id);
+  }
+
+  return (
+    <details>
+      <summary>{t('inbox.newContact', { address })}</summary>
+      <form onSubmit={(event) => void save(event)} noValidate data-testid="new-contact">
+        <SelectField label={t('helpdesk.customer')} value={chosen} onChange={setCustomer} options={list.map((item) => ({ value: item.id, label: item.name }))} />
+        <TextField label={t('helpdesk.name')} value={contactName} onChange={setContactName} required maxLength={120} />
+        <p className="actions"><button type="submit" disabled={busy}>{t('inbox.newContactSave')}</button></p>
+        <NoticeView notice={notice} />
+      </form>
+    </details>
   );
 }
