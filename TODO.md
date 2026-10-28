@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 35 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-056](#task-056-befunde-r1-bis-r3-der-nachprüfung-von-task-055-beheben) | Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben | claude-20261028-jobsfix-02 | 2026-10-28 |
 
 ### Blockiert – BLOCKIERT
 
@@ -760,3 +762,22 @@ Nicht Teil: die Hinweise H1 bis H8 des Berichts, weitere Änderungen am Modul `j
 **Nächster Schritt:** Getrennte KI prüft nach (DEC-040), besonders die Rückgabe eines durch den Stopp unterbrochenen Versuchs (`JobRepository.giveBack`, nur mit Besitzerbedingung), das Abholen über die CTE mit `FOR UPDATE SKIP LOCKED` samt `repeated`, und das bewusste Beenden des Prozesses nach einem `VirtualMachineError`. Holger nimmt TASK-054 und TASK-055 fachlich ab.
 
 **Ergebnis und Prüfungen:** DEC-084. F1: `JobExecutor` vermerkt einen Error eines Bearbeiters und lässt den Faden weiterlaufen; nur `VirtualMachineError` außer `StackOverflowError` beendet nach dem Vermerk den Prozess mit Code 70. F2: Der Stopp merkt sich die Fäden, die er nach der Gnadenfrist unterbricht; deren Versuch gibt `JobRepository.giveBack` ohne Zählung zurück (`job.interrupted`, sofort fällig, auch nach dem letzten Versuch). F3: `JobExecution.repeated` ist ein eigener Wert aus `attempt > 1` oder einem früheren Start (`started_at` bleibt beim erneuten Einstellen erhalten, das Abholen liefert ihn über eine CTE). F4: `stop_grace_period: 30s` für `app` und `worker` in compose.yaml. Vertrag `contracts/jobs.openapi.yaml` (Beschreibungen von `attempts`, `startedAt`, `job.interrupted`), backend/README.md, docs/DEMO.md, Testattrappe der Browsertests (behält `startedAt` beim erneuten Einstellen). Neue Tests in `JobExecutorTest`: drei überlaufende Bearbeiter bei drei Fäden und danach ein erledigter Auftrag (E1 umgekehrt), `OutOfMemoryError` beendet über den ersetzbaren Ausgang, Stopp im letzten Versuch lässt den Auftrag mit 0 Versuchen wartend und der nächste Lauf sieht `repeated() = true` (E2 umgekehrt), erneut eingestellter Auftrag sieht `repeated() = true` (E3 umgekehrt), erster Lauf nicht wiederholt, zweiter Versuch schon. Lokal gelaufen (Java 21 mit `-Djava.version=21`, PostgreSQL 16): `JobExecutorTest` (20), `JobsApiTest`, `JobsContractTest` und die ganze Backend Suite (44 Testklassen, 340 Tests, ohne Fehler), `npm run verify` und alle 114 Browsertests. Nicht lokal gelaufen: Imageprüfung und echter `docker compose stop`; die Imageprüfung läuft in CI. PostgreSQL 18.6 und Java 25 prüft CI.
+
+## TASK-056 Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-jobsfix-02 · **Aktualisiert:** 2026-10-28
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-055 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-055_PR-183.md](docs/REVIEW_TASK-055_PR-183.md). **Arbeitsstand:** Holger hat am 28. Oktober 2026 im Projektgespräch zugestimmt („ja“), R1 bis R3 der Nachprüfung durch Codex zusammen zu beheben. Branch claude/project-thread-t9h650 nach dem Merge dieser Reservierung; Ergebnis mit DEC-085, keine Migration vorgesehen.
+
+**Umfang:** Nur die drei Befunde des Berichts.
+1. R1 (P2): Ein fataler Error (`VirtualMachineError` außer `StackOverflowError`) beendet den Prozess auch dann, wenn der Vermerk des Ergebnisses in der Datenbank scheitert; der Vermerk wird bestmöglich versucht.
+2. R2 (P3): Die Unterbrechung durch den Stopp wird nur noch als solche behandelt, wenn der Versuch tatsächlich an dieser Unterbrechung endet; ein ausdrücklich endgültiger Fachfehler (`JobFailure.permanent`) und ein fataler Error behalten Code und Endgültigkeit.
+3. R3 (P3): Die Markierung der Stoppunterbrechung gilt je Versuch bis zu dessen tatsächlichem Ende und wird nicht mehr nach der Wartezeit des Stopps gelöscht; die Grenzen des kooperativen Stopps stehen in backend/README.md, die Formulierung in docs/DEMO.md wird präzisiert.
+
+Nicht Teil: die übrigen Hinweise der Berichte zu TASK-054 und TASK-055 (unter anderem die Unterbrechung während des Ergebnisvermerks und H1 bis H8), weitere Änderungen am Modul `jobs`.
+
+**Schnittstellen und Arbeitsbereich:** Modul `jobs` (`JobExecutor`), backend/README.md, docs/DEMO.md, Tests.
+
+**Abnahmekriterien:** Die Experimente des Berichts laufen mit umgekehrter Erwartung als Regression grün: nach einem fatalen Error mit dauerhaft scheiterndem Vermerk wird der Ausgang aufgerufen (R1); ein beim Stopp gemeldeter endgültiger Fachfehler endet als `failed` mit seinem Code (R2); ein Bearbeiter, der seine Stoppunterbrechung erst nach der Rückkehr von `stop()` weitergibt, wird ohne Zählung zurückgegeben (R3); alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-085 als Ergebnis zur Prüfung stellen.
