@@ -1,0 +1,318 @@
+package taskmanager.jobs.internal;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.TestDatabase;
+import taskmanager.jobs.JobExecution;
+import taskmanager.jobs.JobFailure;
+import taskmanager.jobs.JobHandler;
+import taskmanager.jobs.Jobs;
+import taskmanager.jobs.NewJob;
+import taskmanager.jobs.RecurringTask;
+
+/**
+ * Experiments of the review of TASK-054 (docs/REVIEW_TASK-054_PR-179.md), built on the setup of JobExecutorTest.
+ * Original note: The executor against a real PostgreSQL (TASK-054). The executor of the application is off in tests; every test starts the
+ * executors it needs, often two at once, the way a web process and a worker process share the table.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
+    "taskmanager.jobs.poll-interval=100ms", "taskmanager.jobs.lease=3s", "taskmanager.jobs.retry-delay=100ms",
+    "taskmanager.jobs.retry-max-delay=400ms", "taskmanager.jobs.worker-threads=1" })
+class JobReviewExperimentTest {
+    private static final String DATABASE = freshDatabase();
+
+    private static String freshDatabase() {
+        try {
+            return TestDatabase.createEmptyDatabase();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> DATABASE);
+        registry.add("spring.datasource.username", TestDatabase::username);
+        registry.add("spring.datasource.password", TestDatabase::password);
+    }
+
+    /** What the test handlers did, per job. */
+    static final Map<UUID, AtomicInteger> RUNS = new ConcurrentHashMap<>();
+    static final Set<UUID> RUNNING = ConcurrentHashMap.newKeySet();
+    static final AtomicInteger OVERLAPS = new AtomicInteger();
+    static final AtomicInteger TICKS = new AtomicInteger();
+    static volatile JdbcTemplate effects;
+
+    @TestConfiguration
+    static class Handlers {
+        @Bean
+        JobHandler countingHandler() {
+            return handler("test.count", Duration.ofMinutes(1), execution -> {
+            });
+        }
+
+        @Bean
+        JobHandler failingHandler() {
+            return handler("test.fail", Duration.ofMinutes(1), execution -> {
+                throw new IllegalStateException("secret value that must not reach the table");
+            });
+        }
+
+        @Bean
+        JobHandler permanentHandler() {
+            return handler("test.permanent", Duration.ofMinutes(1), execution -> {
+                throw JobFailure.permanent("test.refused", "refused", null);
+            });
+        }
+
+        @Bean
+        JobHandler slowHandler() {
+            return handler("test.slow", Duration.ofMillis(300), execution -> Thread.sleep(10_000));
+        }
+
+        @Bean
+        JobHandler longHandler() {
+            // Longer than the lease of three seconds: only the renewal keeps a second executor from taking it.
+            return handler("test.long", Duration.ofMinutes(1), execution -> Thread.sleep(4_500));
+        }
+
+        @Bean
+        JobHandler effectHandler() {
+            // Records its effect under the job identifier, so a repeated attempt finds it and does not add a second one.
+            return handler("test.effect", Duration.ofMinutes(1), execution -> effects.update(
+                "insert into test_job_effect (job_id, attempt) values (?, ?) on conflict (job_id) do nothing", execution.id(), execution.attempt()));
+        }
+
+        @Bean
+        RecurringTask tick() {
+            return new RecurringTask() {
+                public String name() {
+                    return "test.tick";
+                }
+
+                public Duration interval() {
+                    return Duration.ofHours(1);
+                }
+
+                public void run() {
+                    TICKS.incrementAndGet();
+                }
+            };
+        }
+
+        @Bean
+        JobHandler overflowHandler() {
+            // A handler that ends with an Error other than AssertionError, here a StackOverflowError (E1).
+            return handler("review.overflow", Duration.ofMinutes(1), execution -> {
+                throw new StackOverflowError("review");
+            });
+        }
+
+        @Bean
+        JobHandler sleepyHandler() {
+            // Answers the interrupt of the stop like any blocking call (E2).
+            return handler("review.sleepy", Duration.ofMinutes(1), execution -> Thread.sleep(60_000));
+        }
+
+        @Bean
+        JobHandler onceHandler() {
+            // Produces its effect, then fails on the first attempt; records what repeated() says on every attempt (E3).
+            return handler("review.once", Duration.ofMinutes(1), execution -> {
+                effects.update("insert into review_seen (job_id, attempt, repeated) values (?, ?, ?)", execution.id(), execution.attempt(),
+                    execution.repeated());
+                if (effects.queryForObject("select count(*) from review_seen where job_id = ?", Integer.class, execution.id()) == 1) {
+                    throw new IllegalStateException("first attempt fails after its effect");
+                }
+            });
+        }
+
+        interface Body {
+            void run(JobExecution execution) throws Exception;
+        }
+
+        static JobHandler handler(String kind, Duration timeout, Body body) {
+            return new JobHandler() {
+                public String kind() {
+                    return kind;
+                }
+
+                public Duration timeout() {
+                    return timeout;
+                }
+
+                public void handle(JobExecution execution) throws Exception {
+                    if (!RUNNING.add(execution.id())) {
+                        OVERLAPS.incrementAndGet();
+                    }
+                    try {
+                        RUNS.computeIfAbsent(execution.id(), id -> new AtomicInteger()).incrementAndGet();
+                        body.run(execution);
+                    } finally {
+                        RUNNING.remove(execution.id());
+                    }
+                }
+            };
+        }
+    }
+
+    @Autowired Jobs jobs;
+    @Autowired JobRepository repository;
+    @Autowired JobsProperties properties;
+    @Autowired Clock clock;
+    @Autowired PlatformTransactionManager transactions;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired ApplicationContext context;
+
+    private final List<JobExecutor> executors = new ArrayList<>();
+    private TransactionTemplate transaction;
+
+    @BeforeEach
+    void clean() {
+        effects = jdbc;
+        transaction = new TransactionTemplate(transactions);
+        jdbc.execute("create table if not exists test_job_effect (job_id uuid primary key, attempt integer not null)");
+        jdbc.update("delete from test_job_effect");
+        jdbc.update("delete from job");
+        jdbc.update("delete from job_schedule");
+        jdbc.update("delete from job_worker");
+        RUNS.clear();
+        RUNNING.clear();
+        OVERLAPS.set(0);
+        TICKS.set(0);
+    }
+
+    @AfterEach
+    void stop() {
+        executors.forEach(JobExecutor::stop);
+        executors.clear();
+    }
+
+    private JobExecutor executor() {
+        JobExecutor executor = new JobExecutor(repository, properties, clock, transactions, context.getBeanProvider(JobHandler.class),
+            context.getBeanProvider(RecurringTask.class));
+        executors.add(executor);
+        return executor;
+    }
+
+    private JobExecutor started() {
+        JobExecutor executor = executor();
+        executor.start();
+        return executor;
+    }
+
+    private UUID enqueue(NewJob job) {
+        return transaction.execute(status -> jobs.enqueue(job));
+    }
+
+    private Map<String, Object> row(UUID id) {
+        return jdbc.queryForMap("select state, attempts, max_attempts, error_code, error_reference, lease_owner from job where id = ?", id);
+    }
+
+    private static void await(String what, BooleanSupplier condition) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("Timed out waiting until " + what);
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private String state(UUID id) {
+        return jdbc.queryForObject("select state from job where id = ?", String.class, id);
+    }
+
+
+    @Test
+    void e1AnErrorOfAHandlerEndsTheWorkerThreadForGood() {
+        jdbc.execute("create table if not exists review_seen (job_id uuid, attempt integer, repeated boolean)");
+        UUID overflow = enqueue(NewJob.of(null, "review.overflow").withMaxAttempts(1));
+        started();
+        await("the overflowing job is recorded", () -> "failed".equals(state(overflow)));
+        UUID next = enqueue(NewJob.of(null, "test.count"));
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        // With one worker thread nothing runs any more, while the executor still reports as alive.
+        assertEquals("succeeded", state(next));
+        assertEquals(1, jdbc.queryForObject("select count(*) from job_worker where seen_at > now() - interval '2 seconds'", Integer.class));
+        System.out.println("E1 result: next job " + state(next) + ", executor seen as alive");
+    }
+
+    @Test
+    void e2AStopDuringTheLastAttemptFailsTheJobForGood() {
+        UUID id = enqueue(NewJob.of(null, "review.sleepy").withMaxAttempts(1));
+        UUID earlier = enqueue(NewJob.of(null, "review.sleepy").withMaxAttempts(3));
+        JobExecutor executor = started();
+        await("the job runs", () -> RUNS.containsKey(id) || RUNS.containsKey(earlier));
+        long start = System.nanoTime();
+        executor.stop();
+        executors.remove(executor);
+        System.out.println("E2 stop took " + Duration.ofNanos(System.nanoTime() - start).toMillis() + " ms");
+        UUID ran = RUNS.containsKey(id) ? id : earlier;
+        Map<String, Object> row = row(ran);
+        System.out.println("E2 result: " + row + " for max_attempts " + row.get("max_attempts"));
+        if (ran.equals(id)) {
+            assertEquals("queued", row.get("state"));
+            assertEquals("job.interrupted", row.get("error_code"));
+            assertEquals(0, row.get("attempts"));
+        } else {
+            assertEquals("queued", row.get("state"));
+            assertEquals(0, row.get("attempts"));
+        }
+    }
+
+    @Test
+    void e3AfterARetryOfTheAdministrationRepeatedIsFalseAlthoughAnAttemptRan() {
+        jdbc.execute("create table if not exists review_seen (job_id uuid, attempt integer, repeated boolean)");
+        jdbc.update("delete from review_seen");
+        UUID id = enqueue(NewJob.of(null, "review.once").withMaxAttempts(1));
+        started();
+        await("the first attempt failed", () -> "failed".equals(state(id)));
+        // What JobAdministration.retry does in its transaction.
+        transaction.executeWithoutResult(status -> repository.requeue(id, clock.instant()));
+        await("the retried job is done", () -> "succeeded".equals(state(id)));
+        List<Map<String, Object>> seen = jdbc.queryForList("select attempt, repeated from review_seen where job_id = ? order by attempt, repeated", id);
+        System.out.println("E3 result: " + seen);
+        assertEquals(2, seen.size());
+        assertEquals(1, seen.get(0).get("attempt"));
+        assertEquals(1, seen.get(1).get("attempt"));
+        assertEquals(true, seen.get(1).get("repeated"));
+    }
+}

@@ -1,0 +1,37 @@
+TASK-055, main 1666f4c817fcc9fde57cc7cdce343399fa79270f, 2026-10-28
+Ausgewählte Ausgaben; Rechnername, Besitzerkennung und Zufallsreferenzen ausgelassen.
+
+Frontend npm run verify:
+tests 77, pass 77, fail 0; TypeScript, Generierung und Vite-Build erfolgreich.
+Frontend npm run test:browser:
+tests 114, suites 19, pass 114, fail 0, skipped 0.
+
+Repository unittest:
+Ran 38 tests. OK (skipped=1).
+Skip: test_local_time_zone_plays_no_role, time zones can only be switched on Unix.
+
+Direkte Wiederholung E1 bis E3 (Erwartung umgekehrt):
+E1 result: next job succeeded, executor seen as alive
+E2 result: state=queued, attempts=0, max_attempts=1, error_code=job.interrupted
+E3 result: [{attempt=1, repeated=false}, {attempt=1, repeated=true}]
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0.
+
+Eigene Beobachtungen:
+R1 fatal exits=0, original state=running, attempts=1, max_attempts=1, next=succeeded
+R2 permanent result: state=queued, attempts=0, max_attempts=1, error_code=job.interrupted
+R3 late result: state=failed, attempts=1, max_attempts=1, error_code=job.failed
+EXIT actual process returned 70 with shutdown hook
+HOOK row={state=failed, attempts=1, error_code=job.failed}
+
+Externer CI-Nachweis (gelesen, nicht lokal ausgeführt):
+Image-Job 122667521910 / Lauf 40643708546 / PR #183: success
+2026-10-28T06:27:35.4801922Z image check passed
+
+Abschließender Gesamtlauf: mvn verify, JDK 25.0.4.1, PostgreSQL 18.6
+Tests run: 349, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS; 06:49 min
+Davon 340 vorhandene Tests in 44 Klassen und 9 Review-Experimente in 2 Klassen.
+JobExecutorTest: 20/20; JobReview055Test: 6/6; JobReviewExperimentTest: 3/3.
+H outcome interrupted: state=running, attempts=1, max_attempts=1, error_code=null
+Besitzerexperiment: fremder Besitzer false, eigene erste Rückgabe true, zweite Rückgabe false, attempts=0.
+Repository contract: OK; Aufgabenübersicht: aktuell; git diff --check: sauber.

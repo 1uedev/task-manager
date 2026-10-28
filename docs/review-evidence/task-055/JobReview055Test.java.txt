@@ -1,0 +1,406 @@
+package taskmanager.jobs.internal;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.TestDatabase;
+import taskmanager.jobs.JobExecution;
+import taskmanager.jobs.JobFailure;
+import taskmanager.jobs.JobHandler;
+import taskmanager.jobs.Jobs;
+import taskmanager.jobs.NewJob;
+import taskmanager.jobs.RecurringTask;
+
+/**
+ * The executor against a real PostgreSQL (TASK-054). The executor of the application is off in tests; every test starts the
+ * executors it needs, often two at once, the way a web process and a worker process share the table.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
+    "taskmanager.jobs.poll-interval=100ms", "taskmanager.jobs.lease=3s", "taskmanager.jobs.retry-delay=100ms",
+    "taskmanager.jobs.retry-max-delay=400ms", "taskmanager.jobs.worker-threads=3" })
+class JobReview055Test {
+    private static final String DATABASE = Boolean.getBoolean("review.child") ? "" : freshDatabase();
+
+    private static String freshDatabase() {
+        try {
+            return TestDatabase.createEmptyDatabase();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> DATABASE);
+        registry.add("spring.datasource.username", TestDatabase::username);
+        registry.add("spring.datasource.password", TestDatabase::password);
+    }
+
+    /** What the test handlers did, per job. */
+    static final Map<UUID, AtomicInteger> RUNS = new ConcurrentHashMap<>();
+    static final Set<UUID> RUNNING = ConcurrentHashMap.newKeySet();
+    static final AtomicInteger OVERLAPS = new AtomicInteger();
+    static final AtomicInteger TICKS = new AtomicInteger();
+    /** What the handler of {@code test.resume} saw per run: attempt and {@code repeated()}. */
+    static final List<String> SEEN = java.util.Collections.synchronizedList(new ArrayList<>());
+    static volatile JdbcTemplate effects;
+
+    static final CountDownLatch lateRelease = new CountDownLatch(1);
+    @TestConfiguration
+    static class Handlers {
+        @Bean
+        JobHandler stopFailureHandler() {
+            return handler("review.permanent", Duration.ofMinutes(5), e -> {
+                try { Thread.sleep(600000); }
+                catch (InterruptedException x) { throw JobFailure.permanent("review.rejected", "actual permanent failure during cleanup", x); }
+            });
+        }
+        @Bean
+        JobHandler lateHandler() {
+            return handler("review.late", Duration.ofMinutes(5), e -> {
+                try { Thread.sleep(600000); }
+                catch (InterruptedException x) { lateRelease.await(); throw x; }
+            });
+        }
+        @Bean
+        JobHandler countingHandler() {
+            return handler("test.count", Duration.ofMinutes(1), execution -> {
+            });
+        }
+
+        @Bean
+        JobHandler failingHandler() {
+            return handler("test.fail", Duration.ofMinutes(1), execution -> {
+                throw new IllegalStateException("secret value that must not reach the table");
+            });
+        }
+
+        @Bean
+        JobHandler permanentHandler() {
+            return handler("test.permanent", Duration.ofMinutes(1), execution -> {
+                throw JobFailure.permanent("test.refused", "refused", null);
+            });
+        }
+
+        @Bean
+        JobHandler slowHandler() {
+            return handler("test.slow", Duration.ofMillis(300), execution -> Thread.sleep(10_000));
+        }
+
+        @Bean
+        JobHandler longHandler() {
+            // Longer than the lease of three seconds: only the renewal keeps a second executor from taking it.
+            return handler("test.long", Duration.ofMinutes(1), execution -> Thread.sleep(4_500));
+        }
+
+        @Bean
+        JobHandler effectHandler() {
+            // Records its effect under the job identifier, so a repeated attempt finds it and does not add a second one.
+            return handler("test.effect", Duration.ofMinutes(1), execution -> effects.update(
+                "insert into test_job_effect (job_id, attempt) values (?, ?) on conflict (job_id) do nothing", execution.id(), execution.attempt()));
+        }
+
+        @Bean
+        JobHandler overflowHandler() {
+            // A stack overflow is unwound and leaves the virtual machine sound: the worker thread goes on (TASK-055, F1).
+            return handler("test.overflow", Duration.ofMinutes(1), execution -> {
+                throw new StackOverflowError("test");
+            });
+        }
+
+        @Bean
+        JobHandler outOfMemoryHandler() {
+            return handler("test.oom", Duration.ofMinutes(1), execution -> {
+                throw new OutOfMemoryError("test");
+            });
+        }
+
+        @Bean
+        JobHandler resumeHandler() {
+            // The first run waits until the stop interrupts it or fails; every run records what it saw (TASK-055, F2 and F3).
+            return handler("test.resume", Duration.ofMinutes(1), execution -> {
+                SEEN.add(execution.attempt() + "/" + execution.repeated());
+                if (!execution.repeated()) {
+                    if ("fail".equals(execution.payload().get("first"))) {
+                        throw new IllegalStateException("first run fails after its effect");
+                    }
+                    Thread.sleep(60_000);
+                }
+            });
+        }
+
+        @Bean
+        RecurringTask tick() {
+            return new RecurringTask() {
+                public String name() {
+                    return "test.tick";
+                }
+
+                public Duration interval() {
+                    return Duration.ofHours(1);
+                }
+
+                public void run() {
+                    TICKS.incrementAndGet();
+                }
+            };
+        }
+
+        interface Body {
+            void run(JobExecution execution) throws Exception;
+        }
+
+        static JobHandler handler(String kind, Duration timeout, Body body) {
+            return new JobHandler() {
+                public String kind() {
+                    return kind;
+                }
+
+                public Duration timeout() {
+                    return timeout;
+                }
+
+                public void handle(JobExecution execution) throws Exception {
+                    if (!RUNNING.add(execution.id())) {
+                        OVERLAPS.incrementAndGet();
+                    }
+                    try {
+                        RUNS.computeIfAbsent(execution.id(), id -> new AtomicInteger()).incrementAndGet();
+                        body.run(execution);
+                    } finally {
+                        RUNNING.remove(execution.id());
+                    }
+                }
+            };
+        }
+    }
+
+    @Autowired Jobs jobs;
+    @Autowired JobRepository repository;
+    @Autowired JobsProperties properties;
+    @Autowired Clock clock;
+    @Autowired PlatformTransactionManager transactions;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired ApplicationContext context;
+
+    private final List<JobExecutor> executors = new ArrayList<>();
+    private TransactionTemplate transaction;
+
+    @BeforeEach
+    void clean() {
+        effects = jdbc;
+        transaction = new TransactionTemplate(transactions);
+        jdbc.execute("create table if not exists test_job_effect (job_id uuid primary key, attempt integer not null)");
+        jdbc.update("delete from test_job_effect");
+        jdbc.update("delete from job");
+        jdbc.update("delete from job_schedule");
+        jdbc.update("delete from job_worker");
+        RUNS.clear();
+        RUNNING.clear();
+        OVERLAPS.set(0);
+        TICKS.set(0);
+        SEEN.clear();
+    }
+
+    @AfterEach
+    void stop() {
+        executors.forEach(JobExecutor::stop);
+        executors.clear();
+    }
+
+    private JobExecutor executor() {
+        JobExecutor executor = new JobExecutor(repository, properties, clock, transactions, context.getBeanProvider(JobHandler.class),
+            context.getBeanProvider(RecurringTask.class));
+        executors.add(executor);
+        return executor;
+    }
+
+    private JobExecutor started() {
+        JobExecutor executor = executor();
+        executor.start();
+        return executor;
+    }
+
+    private UUID enqueue(NewJob job) {
+        return transaction.execute(status -> jobs.enqueue(job));
+    }
+
+    private Map<String, Object> row(UUID id) {
+        return jdbc.queryForMap("select state, attempts, max_attempts, error_code, error_reference, lease_owner from job where id = ?", id);
+    }
+
+    private static void await(String what, BooleanSupplier condition) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("Timed out waiting until " + what);
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private String state(UUID id) {
+        return jdbc.queryForObject("select state from job where id = ?", String.class, id);
+    }
+
+    @Test
+    void permanentFailureDuringStopIsIncorrectlyRefunded() {
+        UUID id = enqueue(NewJob.of(null, "review.permanent").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await("handler started", () -> RUNS.containsKey(id));
+        executor.stop();
+        executors.remove(executor);
+        System.out.println("R2 permanent result: " + row(id));
+        assertEquals("queued", state(id));
+        assertEquals(0, row(id).get("attempts"));
+        assertEquals("job.interrupted", row(id).get("error_code"));
+    }
+
+    @Test
+    void interruptedHandlerEndingAfterStopLosesItsRefund() {
+        UUID id = enqueue(NewJob.of(null, "review.late").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await("handler started", () -> RUNS.containsKey(id));
+        executor.stop();
+        executors.remove(executor);
+        lateRelease.countDown();
+        await("late result recorded", () -> !"running".equals(state(id)));
+        System.out.println("R3 late result: " + row(id));
+        assertEquals("failed", state(id));
+        assertEquals(1, row(id).get("attempts"));
+        assertEquals("job.failed", row(id).get("error_code"));
+    }
+
+    @Test
+    void databaseFailureSuppressesFatalExit() throws Exception {
+        JobRepository broken = org.mockito.Mockito.spy(new JobRepository(org.springframework.jdbc.core.simple.JdbcClient.create(jdbc)));
+        org.mockito.Mockito.doThrow(new IllegalStateException("synthetic database outage")).when(broken)
+            .fail(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                  org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        JobExecutor executor = new JobExecutor(broken, properties, clock, transactions,
+            context.getBeanProvider(JobHandler.class), context.getBeanProvider(RecurringTask.class));
+        executors.add(executor);
+        AtomicInteger exits = new AtomicInteger();
+        executor.fatal = error -> exits.incrementAndGet();
+        UUID id = enqueue(NewJob.of(null, "test.oom").withMaxAttempts(1));
+        executor.start();
+        await("OOM handler ran", () -> RUNS.containsKey(id));
+        Thread.sleep(1800);
+        UUID next = enqueue(NewJob.of(null, "test.count"));
+        await("worker continues after fatal error", () -> "succeeded".equals(state(next)));
+        System.out.println("R1 fatal exits=" + exits + ", original=" + row(id) + ", next=" + state(next));
+        assertEquals(0, exits.get());
+    }
+
+    @Test
+    void giveBackRejectsForeignOwnerAndCannotRefundTwice() {
+        UUID id = enqueue(NewJob.of(null, "test.count").withMaxAttempts(1));
+        Instant now = clock.instant();
+        transaction.execute(s -> repository.claim("owner", now, now.plusSeconds(60))).orElseThrow();
+        assertFalse(Boolean.TRUE.equals(transaction.execute(s -> repository.giveBack(id, "other", now, "job.interrupted", UUID.randomUUID()))));
+        assertTrue(Boolean.TRUE.equals(transaction.execute(s -> repository.giveBack(id, "owner", now, "job.interrupted", UUID.randomUUID()))));
+        assertFalse(Boolean.TRUE.equals(transaction.execute(s -> repository.giveBack(id, "owner", now, "job.interrupted", UUID.randomUUID()))));
+        assertEquals(0, row(id).get("attempts"));
+    }
+    @Test
+    void realFatalExitWithShutdownHookFinishesWith70() throws Exception {
+        String javaExe = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java.exe").toString();
+        Process process = new ProcessBuilder(javaExe, "-Dreview.child=true", "-cp", System.getProperty("java.class.path"),
+            JobReview055Test.class.getName(), DATABASE)
+            .redirectErrorStream(true).redirectOutput(new java.io.File("target/review055-exit.log")).start();
+        boolean ended = process.waitFor(25, java.util.concurrent.TimeUnit.SECONDS);
+        if (!ended) process.destroyForcibly();
+        assertTrue(ended, "fatal exit must not wait for its own worker");
+        assertEquals(70, process.exitValue());
+        System.out.println("EXIT actual process returned 70 with shutdown hook");
+    }
+
+    @Test
+    void stopCanInterruptTheOutcomeWrite() throws Exception {
+        JobRepository slow = org.mockito.Mockito.spy(new JobRepository(org.springframework.jdbc.core.simple.JdbcClient.create(jdbc)));
+        CountDownLatch writing = new CountDownLatch(1);
+        AtomicInteger interrupts = new AtomicInteger();
+        org.mockito.Mockito.doAnswer(call -> {
+            writing.countDown();
+            try { Thread.sleep(600000); }
+            catch (InterruptedException interrupted) {
+                interrupts.incrementAndGet();
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("synthetic interrupted database write", interrupted);
+            }
+            return call.callRealMethod();
+        }).when(slow).succeed(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        JobExecutor executor = new JobExecutor(slow, properties, clock, transactions,
+            context.getBeanProvider(JobHandler.class), context.getBeanProvider(RecurringTask.class));
+        executors.add(executor);
+        UUID id = enqueue(NewJob.of(null, "test.count").withMaxAttempts(1));
+        executor.start();
+        assertTrue(writing.await(10, java.util.concurrent.TimeUnit.SECONDS));
+        executor.stop();
+        executors.remove(executor);
+        assertTrue(interrupts.get() >= 1);
+        System.out.println("H outcome interrupted: " + row(id));
+        assertEquals("running", state(id));
+        assertEquals(1, row(id).get("attempts"));
+    }
+    public static void main(String[] args) throws Exception {
+        var data = new org.springframework.jdbc.datasource.DriverManagerDataSource(args[0], "reviewer", "");
+        var jdbc = new JdbcTemplate(data);
+        var repository = new JobRepository(org.springframework.jdbc.core.simple.JdbcClient.create(data));
+        var manager = new org.springframework.jdbc.datasource.DataSourceTransactionManager(data);
+        var tx = new TransactionTemplate(manager);
+        var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean("fatal", new JobHandler() {
+            public String kind() { return "review.childfatal"; }
+            public void handle(JobExecution execution) { throw new OutOfMemoryError("synthetic fatal"); }
+        });
+        var properties = new JobsProperties(true, 1, Duration.ofMillis(100), Duration.ofMinutes(2), 5,
+            Duration.ofSeconds(30), Duration.ofHours(1), Duration.ofDays(7), Duration.ofDays(30),
+            Duration.ofMinutes(15), Duration.ofHours(1));
+        var executor = new JobExecutor(repository, properties, Clock.systemUTC(), manager,
+            beans.getBeanProvider(JobHandler.class), beans.getBeanProvider(RecurringTask.class));
+        UUID id = UUID.randomUUID();
+        tx.executeWithoutResult(s -> repository.insert(id, null, "review.childfatal", Map.of(), null, Instant.now(), 1, Instant.now()));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            executor.stop();
+            System.out.println("HOOK row=" + jdbc.queryForMap("select state, attempts, error_code from job where id=?", id));
+        }));
+        executor.start();
+        Thread.sleep(60000);
+    }
+}
