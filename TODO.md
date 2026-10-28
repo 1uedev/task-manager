@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 34 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-055](#task-055-befunde-f1-bis-f4-der-prüfung-von-task-054-beheben) | Befunde F1 bis F4 der Prüfung von TASK-054 beheben | claude-20261028-jobsfix-01 | 2026-10-28 |
 
 ### Blockiert – BLOCKIERT
 
@@ -737,3 +739,23 @@ Nicht Teil: Mailabruf und Versand, Benachrichtigungen, SLA, Git, KI, Benutzerauf
 **Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040), besonders: Abholen mit `FOR UPDATE SKIP LOCKED` und die Bedingungen beim Abschluss eines Versuchs (nur der Besitzer der Reservierung schreibt das Ergebnis), Verlängerung und Ablauf der Reservierung, das Zeitlimit mit Unterbrechung, die Einmaligkeit wiederkehrender Aufgaben bei mehreren Prozessen, die Unternehmensgrenze in Übersicht, Liste und Aktionen, dass weder Nutzdaten noch Fehlermeldungen nach außen gelangen, und das Herunterfahren des Prozesses `worker`. Holger nimmt fachlich ab. Abweichung vom Claim, von Holger am 27. Oktober 2026 bestätigt („passt“): Der Rückstau steht in der Übersicht und als Warnung im Protokoll, nicht in der Bereitschaftsanzeige, weil Spring Boot sonst auch die Gesamtgesundheit und damit den Container als ungesund meldet. Die übrigen Vorschläge (getrennter Ausführer in der Vorführumgebung, 7 und 30 Tage Aufbewahrung, 5 Versuche ab 30 Sekunden verdoppelt bis 1 Stunde, Sichtbarkeit nur mit `jobs.manage`) sind wie im Claim umgesetzt und konfigurierbar.
 
 **Ergebnis und Prüfungen:** DEC-083. Server: Modul `jobs` (Port `Jobs` mit `NewJob`, `JobHandler`, `JobExecution`, `JobFailure`, `RecurringTask`; intern `JobService`, `JobExecutor`, `JobRepository`, `JobsRetention`, `JobAdministration`; `JobController` unter `/api/v1/jobs`), Migration V0025, Recht `jobs.manage` in `AdministrationRight` und im Rechtekatalog, Befehl `worker` in `TaskManagerApplication`, Aufräumlauf als `FilesCleanupTask`; Verträge `contracts/jobs.openapi.yaml` und `identity.openapi.yaml`. Oberfläche: Seite Hintergrundaufträge (`JobsPage`) in der Administration, Katalog de und en. Vorführung: Dienst `worker` in compose.yaml mit eigener Speichergrenze, Prüfschritt in `tools/demo/image-check.sh`, docs/DEMO.md. Doku: backend/README.md Abschnitt Hintergrundaufträge, ARCHITECTURE.md Nachtrag, backend/PERMISSIONS.md. Lokal gelaufen (Java 21 mit `-Djava.version=21`, PostgreSQL 16): alle 44 Testklassen des Backends ohne Fehler, darunter `JobExecutorTest` (Rückrollen, zwei Ausführer mit 150 Aufträgen, Wiederholung bis zum Scheitern, endgültiger Fehler, Zeitlimit, fehlender Bearbeiter, abgebrochener Ausführer mit Wiederholungsnachweis, abgelaufene Reservierung, Verlängerung, wiederkehrende Aufgabe mit zwei Ausführern, Aufräumlauf, Aufbewahrung), `JobsApiTest`, `JobsContractTest` und die angepassten Rechte und Lebenszyklustests; `backend/scripts/lifecycle-check.sh` gegen eine leere Datenbank mit der neuen Phase für den Prozess `worker`; `npm run verify` und alle 114 Browsertests (davon 7 für die neue Seite). Nicht lokal gelaufen: die Imageprüfung, weil Docker Hub die Basisimages mit 429 verweigerte; sie läuft in CI als Workflow `Image`. PostgreSQL 18.6 und Java 25 prüft CI.
+
+## TASK-055 Befunde F1 bis F4 der Prüfung von TASK-054 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-jobsfix-01 · **Aktualisiert:** 2026-10-28
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-054 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md). **Arbeitsstand:** Holger hat am 28. Oktober 2026 der Empfehlung des Berichts zugestimmt („ich gehe mit deiner Empfehlung“): F1 vor dem ersten fachlichen Verbraucher beheben, F2 bis F4 im selben kleinen Korrekturauftrag, und ein geordneter Neustart verbraucht keine Versuche (F2). Branch claude/project-thread-t9h650 nach dem Merge dieser Reservierung; Ergebnis mit DEC-084, keine Migration vorgesehen.
+
+**Umfang:** Nur die vier Befunde des Berichts.
+1. F1 (P2): Ein Error eines Bearbeiters beendet keinen Ausführerfaden mehr. Der Fehlschlag wird wie bisher vermerkt und der Faden arbeitet weiter; ein `VirtualMachineError` wie `OutOfMemoryError` beendet den Prozess bewusst, damit die Umgebung ihn neu startet, statt ihn halb arbeitsfähig weiterlaufen zu lassen.
+2. F2 (P3): Ein durch den Stopp des Ausführers unterbrochener Versuch zählt nicht als Versuch. Der Auftrag wartet danach sofort wieder, auch wenn es sein letzter Versuch war. Ein Absturz ohne geordneten Stopp (abgelaufene Reservierung) bleibt wie bisher ein verbrauchter Versuch.
+3. F3 (P3): `JobExecution.repeated()` sagt auch nach dem erneuten Einstellen durch die Verwaltung richtig, ob schon ein Lauf stattfand; ein erneut eingestellter Auftrag beginnt dabei weiter mit allen Versuchen. Javadoc und backend/README.md werden angeglichen.
+4. F4 (P3): Die Vorführumgebung gibt `app` und `worker` beim Stopp mehr Zeit als die Gnadenfrist des Ausführers (`stop_grace_period`), docs/DEMO.md und backend/README.md nennen das.
+
+Nicht Teil: die Hinweise H1 bis H8 des Berichts, weitere Änderungen am Modul `jobs`, Mail, Benachrichtigungen, SLA.
+
+**Schnittstellen und Arbeitsbereich:** Modul `jobs` (`JobExecutor`, `JobRepository`, `JobExecution`), gegebenenfalls Vertrag `contracts/jobs.openapi.yaml`, compose.yaml, backend/README.md, docs/DEMO.md, Tests.
+
+**Abnahmekriterien:** Die Experimente E1 bis E3 aus docs/review-evidence/task-054 laufen mit umgekehrter Erwartung als Regression grün: nach einem Error läuft ein weiterer Auftrag, ein Stopp im letzten Versuch lässt den Auftrag wartend mit unverändertem Versuchszähler, nach dem erneuten Einstellen sieht der Bearbeiter `repeated() = true`; compose.yaml setzt eine Stoppfrist über der Gnadenfrist; alle bestehenden Tests und die Imageprüfung bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-084 als Ergebnis zur Prüfung stellen.
