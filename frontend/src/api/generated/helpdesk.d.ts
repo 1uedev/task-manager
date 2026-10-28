@@ -298,7 +298,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Für das Projekt freigegebene Kunden mit ihren Kontakten (Schreibregel customer) */
+        /**
+         * Für das Projekt freigegebene Kunden mit ihren Kontakten (Lese und Schreibregel customer)
+         * @description Kontakte werden nur mit Lese und Schreibregel für contact geliefert, sonst ist die Liste je Kunde leer.
+         */
         get: operations["listTicketCustomerOptions"];
         put?: never;
         post?: never;
@@ -519,7 +522,7 @@ export interface components {
             state: components["schemas"]["MessageState"];
             /**
              * @description Warum die Mail geprüft werden muss: sender_missing, sender_ambiguous, sender_unknown, sender_unconfirmed,
-             *     customer_not_released, foreign_customer, too_large, unreadable, automatic, ticket_type_unavailable.
+             *     customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable.
              */
             reason: string | null;
             ticket: {

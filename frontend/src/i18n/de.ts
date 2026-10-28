@@ -744,6 +744,7 @@ export const de = {
   'inbox.reason.sender_unconfirmed': 'Absender nicht vom eigenen Mailserver bestätigt',
   'inbox.reason.customer_not_released': 'Kunde ist für dieses Projekt nicht freigegeben',
   'inbox.reason.foreign_customer': 'Kontakt eines anderen Kunden unter den Empfängern',
+  'inbox.reason.recipients_incomplete': 'Empfänger nicht vollständig lesbar oder zu viele',
   'inbox.reason.too_large': 'Mail zu groß, nur der Kopf wurde gelesen',
   'inbox.reason.unreadable': 'Mail nicht lesbar',
   'inbox.reason.automatic': 'Automatisch versendet',

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -22,12 +21,14 @@ import taskmanager.tickets.TicketAccess;
  *
  * <p>Per mail, in this order: the mail is read without being marked as seen, recorded in one transaction together with
  * its ticket, if it gets one, then marked as seen, and only then the position in the folder moves on. The origin (mailbox,
- * UIDVALIDITY, UID) is unique, so a mail whose outcome was recorded but whose position was lost is recognized at the next
- * fetch and adds nothing. A failure of one mailbox is recorded with its code and does not stop the others.
+ * source, UIDVALIDITY, UID) is unique, so a mail whose outcome was recorded but whose position was lost is recognized at the
+ * next fetch and adds nothing. The source changes with server, port, account or folder, so a mail of a new folder is never
+ * taken for one of the old (TASK-059, F3). A failure of one mailbox is recorded with its code and does not stop the others.
  *
  * <p>Where the intake starts: at the first fetch of a folder, or after the server changed its UIDVALIDITY, at the oldest
- * mail not marked as seen; older mails stay untouched. After a new UIDVALIDITY a mail whose Message-ID the mailbox already
- * holds is skipped, and the mailbox shows a notice.
+ * mail not marked as seen; older mails stay untouched. After a new UIDVALIDITY every mail up to the highest UID the folder
+ * had then is compared by its Message-ID, and one the mailbox already holds is skipped; the bound is stored with the
+ * mailbox, so the comparison lasts across batches, failures and restarts (TASK-059, F2). The mailbox shows a notice.
  */
 @Component
 @ConditionalOnExpression("'${taskmanager.process:web}' != 'command'")
@@ -77,7 +78,8 @@ public class MailIntake implements RecurringTask {
             try {
                 fetch(mailbox);
             } catch (RuntimeException failure) {
-                LOG.warn("The fetch of mailbox {} failed", mailbox, failure);
+                // Only the kinds of the failure: a message may carry text of the mail server, and with it the password (TASK-059, F1).
+                LOG.warn("The fetch of mailbox {} failed with {}", mailbox, MailClient.kinds(failure));
                 record(mailbox, "helpdesk.intake_failed");
             }
         }
@@ -104,32 +106,34 @@ public class MailIntake implements RecurringTask {
         try (MailClient.Connection connection = client.open(mailbox, password)) {
             long validity = connection.uidValidity();
             long lastUid = mailbox.lastUid();
-            boolean compare = false;
+            int source = mailbox.source();
+            Long compareUntil = mailbox.uidValidity() != null && mailbox.uidValidity() == validity ? mailbox.compareUntil() : null;
             if (mailbox.uidValidity() == null || mailbox.uidValidity() != validity) {
                 boolean changed = mailbox.uidValidity() != null;
                 List<Long> unseen = connection.uids(0, true, 1);
-                long start = unseen.isEmpty() ? highest(connection) : unseen.get(0) - 1;
+                long top = highest(connection);
+                long start = unseen.isEmpty() ? top : unseen.get(0) - 1;
                 Instant now = clock.instant();
                 transaction.executeWithoutResult(status -> {
                     if (changed) {
-                        repository.restartFolder(mailboxId, validity, "helpdesk.uidvalidity_changed", now);
+                        repository.restartFolder(mailboxId, source, validity, top, "helpdesk.uidvalidity_changed", now);
                         repository.audit(mailbox.companyId(), "mailbox", mailboxId, "mailbox.uidvalidity_changed",
                             "{\"from\":" + mailbox.uidValidity() + ",\"to\":" + validity + "}", null, now);
                     }
-                    repository.position(mailboxId, validity, start);
+                    repository.position(mailboxId, source, validity, start);
                 });
                 lastUid = start;
-                compare = changed;
+                compareUntil = changed && top > start ? top : null;
             }
             for (long uid : connection.uids(lastUid, false, properties.batch())) {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
-                take(mailbox, connection, validity, uid, compare);
+                take(mailbox, connection, source, validity, uid, compareUntil != null && uid <= compareUntil);
             }
             transaction.executeWithoutResult(status -> repository.fetchSucceeded(mailboxId, clock.instant()));
         } catch (MailClient.MailFailure failure) {
-            LOG.warn("The fetch of mailbox {} failed with {}: {}", mailboxId, failure.code(), String.valueOf(failure.getCause()));
+            LOG.warn("The fetch of mailbox {} failed with {} ({})", mailboxId, failure.code(), MailClient.kinds(failure.getCause()));
             record(mailboxId, failure.code());
         }
     }
@@ -140,9 +144,9 @@ public class MailIntake implements RecurringTask {
         return all.isEmpty() ? 0 : all.get(all.size() - 1);
     }
 
-    private void take(Mailbox mailbox, MailClient.Connection connection, long validity, long uid, boolean compare)
+    private void take(Mailbox mailbox, MailClient.Connection connection, int source, long validity, long uid, boolean compare)
             throws MailClient.MailFailure {
-        if (!transaction.execute(status -> repository.knownOrigin(mailbox.id(), validity, uid))) {
+        if (!transaction.execute(status -> repository.knownOrigin(mailbox.id(), source, validity, uid))) {
             long size = connection.size(uid);
             if (size < 0) {
                 return;
@@ -164,23 +168,29 @@ public class MailIntake implements RecurringTask {
             ParsedMail mail = parsed;
             byte[] content = raw;
             String failure = unreadable;
-            // After a new UIDVALIDITY a mail the mailbox already holds keeps its first outcome.
-            boolean known = compare && mail != null && mail.messageId() != null
-                && Boolean.TRUE.equals(transaction.execute(status -> repository.knownMessageId(mailbox.id(), mail.messageId())));
-            if (!known) {
-                transaction.executeWithoutResult(status -> record(mailbox, validity, uid, size, mail, content, failure));
-            }
+            transaction.executeWithoutResult(status -> {
+                // After a new UIDVALIDITY a mail the mailbox already holds keeps its first outcome. The lock makes the
+                // comparison and the insert one decision, also against a second fetch of the same mailbox.
+                if (compare && mail != null && mail.messageId() != null) {
+                    repository.lockMailbox(mailbox.id());
+                    if (repository.knownMessageId(mailbox.id(), mail.messageId())) {
+                        return;
+                    }
+                }
+                record(mailbox, source, validity, uid, size, mail, content, failure);
+            });
         }
         try {
             connection.markSeen(uid);
         } catch (MailClient.MailFailure failure) {
             LOG.info("Mail {} of mailbox {} could not be marked as seen: {}", uid, mailbox.id(), failure.code());
         }
-        transaction.executeWithoutResult(status -> repository.position(mailbox.id(), validity, uid));
+        transaction.executeWithoutResult(status -> repository.position(mailbox.id(), source, validity, uid));
     }
 
     /** Records one mail and, for a confirmed contact of a released customer, its ticket; runs in one transaction. */
-    private void record(Mailbox mailbox, long validity, long uid, long size, ParsedMail parsed, byte[] raw, String unreadable) {
+    private void record(Mailbox mailbox, int source, long validity, long uid, long size, ParsedMail parsed, byte[] raw,
+            String unreadable) {
         Instant now = clock.instant();
         Decision decision;
         if (unreadable != null) {
@@ -203,7 +213,7 @@ public class MailIntake implements RecurringTask {
             // A mail that gets a ticket waits as review until its ticket is written in this transaction.
             decision.state().equals("ticket") ? "review" : decision.state(), decision.reason(), null, null, null,
             null, null, null, 1);
-        if (!repository.insertMessage(message, raw)) {
+        if (!repository.insertMessage(message, source, raw)) {
             return;
         }
         if (decision.state().equals("ticket")) {
@@ -249,11 +259,11 @@ public class MailIntake implements RecurringTask {
         if (customer.isEmpty() || !customer.get().projects().contains(mailbox.projectId())) {
             return Decision.review("customer_not_released");
         }
-        for (String recipient : concat(parsed.to(), parsed.cc())) {
-            Optional<Contact> other = repository.contactByAddress(mailbox.companyId(), recipient.toLowerCase(Locale.ROOT));
-            if (other.isPresent() && !other.get().customerId().equals(customer.get().id())) {
-                return Decision.review("foreign_customer");
-            }
+        if (!parsed.recipientsComplete()) {
+            return Decision.review("recipients_incomplete");
+        }
+        if (repository.otherCustomerAmong(mailbox.companyId(), customer.get().id(), concat(parsed.to(), parsed.cc()))) {
+            return Decision.review("foreign_customer");
         }
         return new Decision("ticket", null, customer.get(), contact.get());
     }

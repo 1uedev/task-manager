@@ -105,6 +105,8 @@ class HelpdeskApiTest {
         registry.add("taskmanager.files.directory", STORE::toString);
         registry.add("taskmanager.helpdesk.secret-key", () -> KEY);
         registry.add("taskmanager.helpdesk.timeout", () -> "5s");
+        // Small batches, so that the tests see what lasts from one fetch to the next (TASK-059, F2).
+        registry.add("taskmanager.helpdesk.batch", () -> "5");
     }
 
     @AfterAll
@@ -628,6 +630,188 @@ class HelpdeskApiTest {
         assertEquals(400, foreign.status());
         assertNotNull(jdbc.queryForObject("select count(*) from ticket_change where field = 'contact' and old_value is not null and new_value is null",
             Long.class));
+    }
+
+    // ---------------------------------------------------------------- corrections after the review (TASK-059)
+
+    /** F2: the comparison after a new UIDVALIDITY lasts across batches; with batches of five, the sixth mail is compared too. */
+    @Test
+    void theComparisonAfterANewUidValidityLastsAcrossBatches() throws Exception {
+        Setup setup = setup();
+        for (int i = 0; i < 6; i++) {
+            deliver(setup, confirmed("nordwerk.example"), "Mail " + i, "Text");
+        }
+        intake.fetch(setup.mailbox());
+        intake.fetch(setup.mailbox());
+        assertEquals(6, tickets(setup));
+        jdbc.update("update helpdesk_mailbox set uid_validity = uid_validity + 1 where id = ?", setup.mailbox());
+        jdbc.update("update helpdesk_message set uid_validity = uid_validity + 1 where mailbox_id = ?", setup.mailbox());
+        markAllUnseen(setup);
+        intake.fetch(setup.mailbox());
+        assertEquals(6, tickets(setup));
+        // The second batch is still compared, also after a restart of the process in between.
+        intake.fetch(setup.mailbox());
+        assertEquals(6, tickets(setup), "no mail became a ticket twice");
+        deliver(setup, confirmed("nordwerk.example"), "Neu", "Text");
+        intake.fetch(setup.mailbox());
+        assertEquals(7, tickets(setup), "a new mail after the comparison becomes a ticket");
+        assertNull(jdbc.queryForObject("select compare_until from helpdesk_mailbox where id = ?", Long.class, setup.mailbox()));
+    }
+
+    /** F3: after a change of the account, a mail with the same UIDVALIDITY and UID as an old one is still taken. */
+    @Test
+    void aChangedAccountIsANewSourceWhoseMailsAreNotTakenForOldOnes() throws Exception {
+        Setup setup = setup();
+        Setup other = setup();
+        deliver(setup, confirmed("nordwerk.example"), "Altes Konto", "Text");
+        intake.fetch(setup.mailbox());
+        // The new account holds a mail of the contact of the first setup.
+        deliver(other, confirmed("nordwerk.example"), "Neues Konto", "Text");
+        long[] origin = firstOrigin(other);
+        // Two accounts may report the same UIDVALIDITY and UID; the fixture makes it certain.
+        jdbc.update("update helpdesk_message set uid_validity = ?, uid = ? where mailbox_id = ?", origin[0], origin[1], setup.mailbox());
+        Response change = setup.admin().send("PUT", "/api/v1/helpdesk/mailboxes/" + setup.mailbox(), mailboxRequest("Gewechselt "
+            + COUNTER.incrementAndGet(), setup.project(), other.account().getLogin(), MAIL_PASSWORD, MAIL.getImap().getPort(), AUTHSERV), "\"1\"");
+        assertEquals(200, change.status(), change.body());
+        intake.fetch(setup.mailbox());
+        List<Map<String, Object>> messages = messages(setup);
+        assertEquals(2, messages.size(), "the mail of the new account arrived");
+        assertEquals(List.of(1, 2), messages.stream().map(row -> (Integer) row.get("source")).sorted().toList());
+        // The sender of the new mail is a contact of a customer not released for this project; it waits for a person.
+        assertEquals("customer_not_released", messages.stream().filter(row -> row.get("source").equals(2)).findFirst().orElseThrow().get("reason"));
+    }
+
+    /** F1: a mail server that repeats the login in its answer does not bring the password into the log. */
+    @Test
+    void aMailServerThatRepeatsThePasswordDoesNotBringItIntoTheLog() throws Exception {
+        Setup setup = setup();
+        var capture = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        capture.start();
+        var log = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("taskmanager.helpdesk");
+        log.addAppender(capture);
+        try (ServerSocket server = new ServerSocket(0)) {
+            server.setSoTimeout(15_000);
+            Future<Object> peer = POOL.submit((Callable<Object>) () -> {
+                for (int n = 0; n < 2; n++) {
+                    try (var socket = server.accept()) {
+                        socket.setSoTimeout(10_000);
+                        var reader = new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+                        var writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.US_ASCII), true);
+                        writer.print("* OK synthetic IMAP\r\n");
+                        writer.flush();
+                        for (String line; (line = reader.readLine()) != null;) {
+                            String tag = line.split(" ")[0];
+                            if (line.toUpperCase(java.util.Locale.ROOT).contains("CAPABILITY")) {
+                                writer.print("* CAPABILITY IMAP4rev1\r\n" + tag + " OK done\r\n");
+                            } else if (line.toUpperCase(java.util.Locale.ROOT).contains("LOGIN")) {
+                                writer.print(tag + " NO rejected " + line + "\r\n");
+                                writer.flush();
+                                break;
+                            } else {
+                                writer.print(tag + " OK\r\n");
+                            }
+                            writer.flush();
+                        }
+                    }
+                }
+                return null;
+            });
+            jdbc.update("update helpdesk_mailbox set imap_port = ? where id = ?", server.getLocalPort(), setup.mailbox());
+            Response test = setup.admin().send("POST", "/api/v1/helpdesk/mailboxes/" + setup.mailbox() + "/test", null, null);
+            assertEquals("helpdesk.authentication_failed", test.json().get("code").asString(), test.body());
+            intake.fetch(setup.mailbox());
+            peer.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            List<String> lines = capture.list.stream().map(event -> event.getFormattedMessage()
+                + (event.getThrowableProxy() == null ? "" : event.getThrowableProxy().getMessage())).toList();
+            assertTrue(lines.stream().filter(line -> line.contains("helpdesk.authentication_failed")).count() >= 2, lines.toString());
+            assertTrue(lines.stream().noneMatch(line -> line.contains(MAIL_PASSWORD)), lines.toString());
+        } finally {
+            log.detachAppender(capture);
+            capture.stop();
+        }
+    }
+
+    /** F4: the choice of customers carries contacts only for whoever may read and write the contact. */
+    @Test
+    void theChoiceOfCustomersShowsContactsOnlyWithTheirRules() {
+        Setup setup = setup();
+        deliver(setup, confirmed("nordwerk.example"), "Auswahl", "Text");
+        intake.fetch(setup.mailbox());
+        long number = jdbc.queryForObject("select number from ticket where project_id = ?", Long.class, setup.project());
+        String base = "/api/v1/projects/" + setup.project() + "/tickets/" + number + "/helpdesk";
+        Browser limited = member(setup);
+        grant(limited.id, setup.project(), "ticket.read", "ticket.edit", "READ:title", "READ:customer", "WRITE:customer");
+        assertTrue(limited.get(base).json().get("contact").isNull());
+        Response options = limited.get(base + "/options");
+        assertEquals(200, options.status(), options.body());
+        assertFalse(options.body().contains(setup.contactAddress()), options.body());
+        assertEquals(0, options.json().get(0).get("contacts").size());
+        // Reading without writing the contact does not list them either.
+        Browser reader = member(setup);
+        grant(reader.id, setup.project(), "ticket.read", "ticket.edit", "READ:title", "READ:customer", "READ:contact", "WRITE:customer");
+        assertFalse(reader.get(base + "/options").body().contains(setup.contactAddress()));
+        // Writing the customer without reading it is refused.
+        Browser blind = member(setup);
+        grant(blind.id, setup.project(), "ticket.read", "ticket.edit", "READ:title", "WRITE:customer");
+        assertEquals(403, blind.get(base + "/options").status());
+        // With both rules for the contact the contacts are there.
+        Response full = reviewer(setup).get(base + "/options");
+        assertTrue(full.body().contains(setup.contactAddress()), full.body());
+    }
+
+    /** F5: a contact of another customer counts at any position among the recipients, and too many recipients wait for a person. */
+    @Test
+    void everyRecipientCountsForTheCheckOfOtherCustomers() {
+        Setup setup = setup();
+        Setup other = setup();
+        String fifty = java.util.stream.IntStream.range(0, 50).mapToObj(i -> "n" + i + "@unbekannt.example")
+            .collect(java.util.stream.Collectors.joining(", "));
+        deliver(setup, confirmed("nordwerk.example") + "Cc: " + fifty + ", " + other.contactAddress() + "\r\n", "Empfaenger 51", "Text");
+        String thousand = java.util.stream.IntStream.range(0, 1_001).mapToObj(i -> "m" + i + "@unbekannt.example")
+            .collect(java.util.stream.Collectors.joining(", "));
+        deliver(setup, confirmed("nordwerk.example") + "Cc: " + thousand + "\r\n", "Zu viele", "Text");
+        intake.fetch(setup.mailbox());
+        List<Map<String, Object>> messages = messages(setup);
+        assertEquals(List.of("foreign_customer", "recipients_incomplete"), messages.stream().map(row -> row.get("reason")).toList());
+        assertTrue(messages.get(0).get("cc_addresses").toString().contains(other.contactAddress()));
+        assertEquals(0, tickets(setup));
+    }
+
+    private Browser member(Setup setup) {
+        Browser member = person();
+        Response added = setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/members/" + member.id, null,
+            setup.admin().get("/api/v1/projects/" + setup.project()).etag());
+        assertEquals(200, added.status(), added.body());
+        return member;
+    }
+
+    private void markAllUnseen(Setup setup) throws Exception {
+        Store store = Session.getInstance(new Properties()).getStore("imap");
+        store.connect("127.0.0.1", MAIL.getImap().getPort(), setup.account().getLogin(), MAIL_PASSWORD);
+        try {
+            Folder folder = store.getFolder("INBOX");
+            folder.open(Folder.READ_WRITE);
+            folder.setFlags(1, folder.getMessageCount(), new Flags(Flags.Flag.SEEN), false);
+            folder.close(false);
+        } finally {
+            store.close();
+        }
+    }
+
+    /** UIDVALIDITY and UID of the first mail in the folder of the setup. */
+    private long[] firstOrigin(Setup setup) throws Exception {
+        Store store = Session.getInstance(new Properties()).getStore("imap");
+        store.connect("127.0.0.1", MAIL.getImap().getPort(), setup.account().getLogin(), MAIL_PASSWORD);
+        try {
+            Folder folder = store.getFolder("INBOX");
+            folder.open(Folder.READ_ONLY);
+            jakarta.mail.UIDFolder uids = (jakarta.mail.UIDFolder) folder;
+            long[] origin = {uids.getUIDValidity(), uids.getUID(folder.getMessage(1))};
+            folder.close(false);
+            return origin;
+        } finally {
+            store.close();
+        }
     }
 
     // ---------------------------------------------------------------- helpers

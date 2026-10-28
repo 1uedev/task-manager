@@ -744,6 +744,7 @@ export const en: Record<MessageKey, Message> = {
   'inbox.reason.sender_unconfirmed': 'Sender not confirmed by the own mail server',
   'inbox.reason.customer_not_released': 'Customer is not released for this project',
   'inbox.reason.foreign_customer': 'Contact of another customer among the recipients',
+  'inbox.reason.recipients_incomplete': 'Recipients not fully readable or too many',
   'inbox.reason.too_large': 'Mail too large, only the header was read',
   'inbox.reason.unreadable': 'Mail not readable',
   'inbox.reason.automatic': 'Sent automatically',

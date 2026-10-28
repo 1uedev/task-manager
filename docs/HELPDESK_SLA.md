@@ -42,6 +42,12 @@ Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem
 - Die Prüfwarteschlange sieht, wer im Zielprojekt Mitglied ist und die Projektaktion `helpdesk.review` hat. Wer zusätzlich `helpdesk.manage` hat, kann dort den Absender als Kontakt anlegen; Konten und Portalrechte entstehen nie.
 - Nachrichten an archivierte Projekte, Weiterleitungen über die Prüfwarteschlange hinaus und die Aufbewahrung verworfener Eingänge sind nicht umgesetzt. Antworten und ihre Zuordnung folgen mit TASK-058.
 
+### Nachtrag TASK-059 (DEC-087): Korrekturen nach der Prüfung von TASK-057
+
+- Der eigene Empfangsserver muss eingehende Header `Authentication-Results` mit seiner authserv-id entfernen, bevor er sein Ergebnis einfügt (RFC 8601). Nur dann ist der oberste Header dieser Kennung sein eigener; das ist eine Betriebsvoraussetzung, die vor dem Einschalten eines Postfachs mit einer Testmail geprüft wird. DMARC bestätigt die Domain, nicht die Person.
+- Alle Empfänger zählen für die Prüfung auf Kontakte anderer Kunden. Eine Mail mit mehr als 1000 Empfängern oder einer unlesbaren Empfängerzeile wartet mit eigenem Grund auf Prüfung.
+- Die Wiedererkennung enthält zusätzlich die Quelle des Postfachs, die sich mit Server, Port, Konto oder Ordner ändert. Der Abgleich über die Message-ID nach einem Wechsel von UIDVALIDITY ist am Postfach gespeichert und gilt über alle Abrufpakete und Neustarts.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

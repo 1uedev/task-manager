@@ -416,7 +416,9 @@ paths:
   /projects/{projectId}/tickets/{number}/helpdesk/options:
     get:
       operationId: listTicketCustomerOptions
-      summary: Für das Projekt freigegebene Kunden mit ihren Kontakten (Schreibregel customer)
+      summary: Für das Projekt freigegebene Kunden mit ihren Kontakten (Lese und Schreibregel customer)
+      description: >-
+        Kontakte werden nur mit Lese und Schreibregel für contact geliefert, sonst ist die Liste je Kunde leer.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Number'
@@ -689,7 +691,7 @@ components:
           type: [string, 'null']
           description: |
             Warum die Mail geprüft werden muss: sender_missing, sender_ambiguous, sender_unknown, sender_unconfirmed,
-            customer_not_released, foreign_customer, too_large, unreadable, automatic, ticket_type_unavailable.
+            customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable.
         ticket:
           type: [object, 'null']
           required: [projectId, number]
