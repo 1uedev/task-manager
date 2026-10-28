@@ -131,6 +131,87 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-056 Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261028-jobsfix-02. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Experimente des Berichts zu TASK-055 laufen mit umgekehrter Erwartung als Regression grün: nach einem fatalen Error mit dauerhaft scheiterndem Vermerk wird der Ausgang aufgerufen (R1); ein beim Stopp gemeldeter endgültiger Fachfehler endet als `failed` mit seinem Code (R2); ein Bearbeiter, der seine Stoppunterbrechung erst nach der Rückkehr von `stop()` weitergibt, wird ohne Zählung zurückgegeben (R3); alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-085, keine Migration (PR #185):
+- R1: `JobExecutor.execute` versucht den Vermerk eines fatalen Errors bestmöglich und wirft den Error danach in jedem Fall weiter, so dass der Prozess endet.
+- R2: Ein vom Stopp unterbrochener Versuch wird nur zurückgegeben, wenn weder ein Error noch `JobFailure.permanent` gemeldet wurde.
+- R3: Jeder Versuch führt seinen `Watchdog` mit den Merkmalen Zeitlimit und Stopp; die Markierung gilt bis zum tatsächlichen Ende des Versuchs. Die Wartezeit des Stopps ist einstellbar (`stopGrace`, sonst 15 Sekunden).
+- backend/README.md beschreibt die Grenzen des kooperativen Stopps, docs/DEMO.md trennt die 15 Sekunden des Ausführers von den 30 Sekunden von Docker.
+
+**Prüfungen:** CI grün auf PR #185. Lokal (Java 21, PostgreSQL 16): ganze Backend Suite mit 343 Tests ohne Fehler; die drei neuen Regressionen in `JobExecutorTest` scheitern gegen den Stand vor TASK-056. Nicht lokal: Frontend, Browsertests, Imageprüfung und ein echter `docker compose stop`; Imageprüfung, PostgreSQL 18.6 und Java 25 prüft CI.
+
+**Review:** Getrennte Nachprüfung durch Claude (claude-20261028-review-056-01, Bericht [docs/REVIEW_TASK-056_PR-185.md](docs/REVIEW_TASK-056_PR-185.md) in PR #186): R1 bis R3 behoben, kein neuer Befund, Hinweise H1 bis H3.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. H1: Der bestmögliche Vermerk nach einem fatalen Error ist zeitlich nicht begrenzt; bei erschöpftem Pool oder hängender Verbindung kommt der Ausstieg spät oder gar nicht.
+2. H2: Ein nicht fataler Error beim Stopp verbraucht jetzt den Versuch; so in DEC-085 gewollt.
+3. H3: backend/README.md nennt weiter einen Ausführer im Webserver der Vorführumgebung (H6 aus TASK-054).
+4. Ein Browsertest der Anhänge (`attachments.test.mjs`, Zählung der Liste) war in CI einmal unzuverlässig.
+
+**Referenz:** Reservierung in PR #184 (cd25ff8), Ergebnis #185 (796acf1), Prüfbericht #186 (bf432fa); verknüpft mit TASK-054, TASK-055 und DEC-085.
+
+## TASK-055 Befunde F1 bis F4 der Prüfung von TASK-054 beheben
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261028-jobsfix-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Die Experimente E1 bis E3 aus docs/review-evidence/task-054 laufen mit umgekehrter Erwartung als Regression grün: nach einem Error läuft ein weiterer Auftrag, ein Stopp im letzten Versuch lässt den Auftrag wartend mit unverändertem Versuchszähler, nach dem erneuten Einstellen sieht der Bearbeiter `repeated() = true`; compose.yaml setzt eine Stoppfrist über der Gnadenfrist; alle bestehenden Tests und die Imageprüfung bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-084, keine Migration (PR #183), nach Holgers Zustimmung zur Empfehlung des Berichts:
+- F1: Ein Error eines Bearbeiters wird vermerkt und beendet keinen Ausführerfaden mehr; nur `VirtualMachineError` außer `StackOverflowError` beendet nach dem Vermerk den Prozess mit Code 70.
+- F2: Ein durch den Stopp unterbrochener Versuch zählt nicht (`JobRepository.giveBack`, `job.interrupted`, sofort fällig, auch nach dem letzten Versuch). Ein Absturz ohne geordneten Stopp verbraucht weiter einen Versuch.
+- F3: `JobExecution.repeated` ergibt sich aus `attempt > 1` oder einem früheren Start; `started_at` bleibt beim erneuten Einstellen erhalten.
+- F4: `stop_grace_period: 30s` für `app` und `worker` in compose.yaml.
+- Vertrag `contracts/jobs.openapi.yaml`, backend/README.md, docs/DEMO.md und die Testattrappe der Browsertests angeglichen.
+
+**Prüfungen:** CI grün auf PR #183. Lokal (Java 21, PostgreSQL 16): ganze Backend Suite mit 340 Tests ohne Fehler, `npm run verify` und alle 114 Browsertests. Nicht lokal: Imageprüfung und echter `docker compose stop`; Imageprüfung, PostgreSQL 18.6 und Java 25 prüft CI.
+
+**Review:** Unabhängige Nachprüfung durch Codex (codex-20261028-task055-review-01, Bericht [docs/REVIEW_TASK-055_PR-183.md](docs/REVIEW_TASK-055_PR-183.md) in PR #184): F1 bis F4 im Kern behoben; neue Befunde R1 (P2) sowie R2 und R3 (P3), behoben mit TASK-056.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; die Befunde R1 bis R3 sind mit TASK-056 erledigt, die übrigen Grenzen stehen bei TASK-054 und TASK-056.
+
+**Referenz:** Reservierung #182 (2862665), Ergebnis #183 (1666f4c), Prüfbericht #184 (cd25ff8); verknüpft mit TASK-054, TASK-056 und DEC-084.
+
+## TASK-054 Dauerhafte Hintergrundaufträge (Paket A8)
+
+**Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-ORG-002 (Unternehmensgrenze der Aufträge), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261027-jobs-01. **Abgeschlossen:** 2026-10-28.
+
+**Abnahmekriterien:** Ein in einer zurückgerollten Transaktion eingestellter Auftrag existiert nicht; ein bestätigter Auftrag wird genau einmal erfolgreich ausgeführt, auch mit zwei gleichzeitig laufenden Ausführern; ein Abbruch des Ausführers während der Ausführung führt nach Ablauf der Reservierung zu genau einer weiteren Ausführung, die den Wiederholungsnachweis sieht; ein immer scheiternder Auftrag erreicht nach der Höchstzahl den Zustand „endgültig gescheitert“, wird in Übersicht und Liste mit Fehlerkennung ohne Geheimnisse gezeigt und lässt sich mit `jobs.manage` erneut einstellen; ohne `jobs.manage` gibt es weder Übersicht noch Liste noch Aktion (403); eine wiederkehrende Aufgabe läuft mit zwei Prozessen nur einmal je Fälligkeit; der Aufräumlauf der Anhänge verhält sich wie vorher und seine Tests bleiben grün; Neustart von Webprozess und Ausführer verliert keinen bestätigten Auftrag. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-083 mit Migration V0025 (PR #179, Bestätigung der Rückstauanzeige in PR #180):
+- Modul `jobs` mit dauerhaften Aufträgen in PostgreSQL, eingestellt über den Port `Jobs` in der Transaktion der Fachänderung, optionaler Eindeutigkeitsschlüssel je Unternehmen und Art.
+- Ausführer mit `FOR UPDATE SKIP LOCKED`, befristeter Reservierung, Zeitlimit, Wiederholung mit wachsendem Abstand (5 Versuche ab 30 Sekunden, verdoppelt bis 1 Stunde) und Zustand „endgültig gescheitert“; die Auftragskennung dient als Wiederholungsnachweis.
+- Wiederkehrende Aufgaben mit festem Abstand, einmal je Fälligkeit; der Aufräumlauf der Anhänge läuft darüber (`FilesCleanupTask`).
+- Getrennter Prozess `worker` aus demselben Image; die Vorführumgebung startet ihn als eigenen Dienst mit eigener Speichergrenze.
+- Unternehmensrecht `jobs.manage` mit Übersicht, Liste, erneutem Einstellen und Abbrechen im Audit, Seite Hintergrundaufträge in der Administration, Katalog de und en. Der Rückstau steht nach Holgers Bestätigung in der Übersicht und als Warnung im Protokoll, nicht in der Bereitschaftsanzeige.
+- Aufbewahrung 7 Tage für erledigte, 30 Tage für gescheiterte und abgebrochene Aufträge, konfigurierbar.
+
+**Prüfungen:** CI grün auf PR #179 und #180, darunter der Workflow `Image`. Lokal (Java 21, PostgreSQL 16): alle 44 Testklassen des Backends ohne Fehler, die Lebenszyklusprüfung mit dem Prozess `worker`, `npm run verify` und alle 114 Browsertests. Nicht lokal: die Imageprüfung (Docker Hub verweigerte die Basisimages); sie lief in CI.
+
+**Review:** Getrennte Prüfung durch Claude statt Codex auf Holgers Wunsch (claude-20261027-review-054-01, Bericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md) in PR #181): F1 (P2), F2 bis F4 (P3), behoben mit TASK-055 und nachgeprüft über TASK-056; Hinweise H1 bis H8.
+
+**Abnahme:** Holger, 2026-10-28, im Projektgespräch („dann sind die abgenommen“ nach dem Merge von PR #186); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Die Hinweise H1 bis H8 des Berichts sind nicht beauftragt, unter anderem:
+1. H1: Das Zeitlimit wirkt nur kooperativ; ein Bearbeiter, der die Unterbrechung nicht beachtet, verlängert seine Reservierung unbegrenzt.
+2. H2: Reservierung und Ablauf nutzen die Uhren der Prozesse statt der Datenbank.
+3. H3: Eine verlorene Reservierung wird vom Ausführer nicht bemerkt.
+4. H4: Das erneute Einstellen einer wiederkehrenden Aufgabe prüft nicht auf einen laufenden Lauf derselben Art.
+5. H5: Beim Herunterfahren kann Spring Bearbeiter vor dem Stopp des Ausführers zerstören.
+6. H6: backend/README.md und der Kommentar in V0025 weichen von compose.yaml und dem Code ab.
+7. H7: Der Eindeutigkeitsschlüssel bindet auch fertige Aufträge bis zur Aufbewahrung; vor dem ersten Mailverbraucher in der Javadoc festhalten.
+8. H8: Ohne laufenden Ausführer findet kein Aufräumlauf statt; das gehört als Warnung in die Betriebsbeschreibung.
+
+**Referenz:** Reservierung #178 (c3d66cd), Ergebnis #179 (dc99440) und #180 (23adfe3), Prüfbericht #181 (700d9d3); Korrekturen TASK-055 und TASK-056; verknüpft mit TASK-051 und DEC-083.
+
 ## TASK-043 Rechtekern härten
 
 **Bezug:** REQ-ACL-001, REQ-ACL-002, REQ-ACL-003, REQ-ACL-004, REQ-ACL-005, REQ-API-001, REQ-UX-001. **Verantwortlich:** claude-20261022-hardening-01. **Abgeschlossen:** 2026-10-23.
