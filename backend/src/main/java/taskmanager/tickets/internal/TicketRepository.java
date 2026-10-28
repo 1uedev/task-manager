@@ -59,6 +59,10 @@ class TicketRepository {
             .params(companyId, projectId, number).query(TicketRepository::map).optional();
     }
 
+    Optional<Ticket> byId(UUID id) {
+        return jdbc.sql("select " + SELECT + " from ticket where id = ?").param(id).query(TicketRepository::map).optional();
+    }
+
     /** Reads and locks the ticket row until the end of the transaction. */
     Optional<Ticket> lock(UUID companyId, UUID projectId, long number) {
         return jdbc.sql("select " + SELECT + " from ticket where company_id = ? and project_id = ? and number = ? for update")

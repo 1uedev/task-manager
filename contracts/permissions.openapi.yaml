@@ -181,7 +181,7 @@ paths:
               required: [resourceType, field, operation, effect]
               properties:
                 resourceType: {type: string, enum: [ticket]}
-                field: {type: string, pattern: '^(assignee|attachments|description|status|tags|title|type|custom\.[a-z][a-z0-9_]{0,39})$'}
+                field: {type: string, pattern: '^(assignee|attachments|contact|customer|description|mail|status|tags|title|type|custom\.[a-z][a-z0-9_]{0,39})$'}
                 projectId: {type: [string, 'null'], format: uuid}
                 operation: {type: string, enum: [read, write]}
                 effect: {type: string, enum: [allow, deny, remove]}

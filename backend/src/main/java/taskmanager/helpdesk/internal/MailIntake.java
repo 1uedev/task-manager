@@ -1,0 +1,268 @@
+package taskmanager.helpdesk.internal;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.jobs.RecurringTask;
+import taskmanager.tickets.TicketAccess;
+
+/**
+ * The fetch of new mails as a recurring task of the job executor (TASK-057, DEC-086): once per interval, however many
+ * processes run, every active mailbox is read in turn.
+ *
+ * <p>Per mail, in this order: the mail is read without being marked as seen, recorded in one transaction together with
+ * its ticket, if it gets one, then marked as seen, and only then the position in the folder moves on. The origin (mailbox,
+ * UIDVALIDITY, UID) is unique, so a mail whose outcome was recorded but whose position was lost is recognized at the next
+ * fetch and adds nothing. A failure of one mailbox is recorded with its code and does not stop the others.
+ *
+ * <p>Where the intake starts: at the first fetch of a folder, or after the server changed its UIDVALIDITY, at the oldest
+ * mail not marked as seen; older mails stay untouched. After a new UIDVALIDITY a mail whose Message-ID the mailbox already
+ * holds is skipped, and the mailbox shows a notice.
+ */
+@Component
+@ConditionalOnExpression("'${taskmanager.process:web}' != 'command'")
+public class MailIntake implements RecurringTask {
+    private static final Logger LOG = LoggerFactory.getLogger(MailIntake.class);
+
+    private final HelpdeskRepository repository;
+    private final MailClient client;
+    private final SecretBox secrets;
+    private final TicketOpener opener;
+    private final HelpdeskProperties properties;
+    private final Clock clock;
+    private final TransactionTemplate transaction;
+
+    MailIntake(HelpdeskRepository repository, MailClient client, SecretBox secrets, TicketOpener opener, HelpdeskProperties properties,
+            Clock clock, PlatformTransactionManager transactions) {
+        this.repository = repository;
+        this.client = client;
+        this.secrets = secrets;
+        this.opener = opener;
+        this.properties = properties;
+        this.clock = clock;
+        this.transaction = new TransactionTemplate(transactions);
+    }
+
+    @Override
+    public String name() {
+        return "helpdesk.fetch";
+    }
+
+    @Override
+    public Duration interval() {
+        return properties.pollInterval().toSeconds() < 1 ? Duration.ofSeconds(1) : properties.pollInterval();
+    }
+
+    @Override
+    public Duration timeout() {
+        return Duration.ofMinutes(10);
+    }
+
+    @Override
+    public void run() {
+        for (UUID mailbox : transaction.execute(status -> repository.enabledMailboxes())) {
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+            try {
+                fetch(mailbox);
+            } catch (RuntimeException failure) {
+                LOG.warn("The fetch of mailbox {} failed", mailbox, failure);
+                record(mailbox, "helpdesk.intake_failed");
+            }
+        }
+    }
+
+    /** Reads the new mails of one mailbox. Public for the tests, which run a fetch without the executor. */
+    public void fetch(UUID mailboxId) {
+        Optional<Mailbox> found = transaction.execute(status -> repository.mailbox(mailboxId));
+        if (found.isEmpty() || !found.get().enabled()) {
+            return;
+        }
+        Mailbox mailbox = found.get();
+        transaction.executeWithoutResult(status -> repository.fetchStarted(mailboxId, clock.instant()));
+        String password;
+        try {
+            password = mailbox.passwordCipher() == null ? "" : secrets.open(mailbox.id(), mailbox.passwordCipher());
+        } catch (SecretBox.KeyMissing missing) {
+            record(mailboxId, "helpdesk.secret_key_missing");
+            return;
+        } catch (SecretBox.Unreadable unreadable) {
+            record(mailboxId, "helpdesk.password_unreadable");
+            return;
+        }
+        try (MailClient.Connection connection = client.open(mailbox, password)) {
+            long validity = connection.uidValidity();
+            long lastUid = mailbox.lastUid();
+            boolean compare = false;
+            if (mailbox.uidValidity() == null || mailbox.uidValidity() != validity) {
+                boolean changed = mailbox.uidValidity() != null;
+                List<Long> unseen = connection.uids(0, true, 1);
+                long start = unseen.isEmpty() ? highest(connection) : unseen.get(0) - 1;
+                Instant now = clock.instant();
+                transaction.executeWithoutResult(status -> {
+                    if (changed) {
+                        repository.restartFolder(mailboxId, validity, "helpdesk.uidvalidity_changed", now);
+                        repository.audit(mailbox.companyId(), "mailbox", mailboxId, "mailbox.uidvalidity_changed",
+                            "{\"from\":" + mailbox.uidValidity() + ",\"to\":" + validity + "}", null, now);
+                    }
+                    repository.position(mailboxId, validity, start);
+                });
+                lastUid = start;
+                compare = changed;
+            }
+            for (long uid : connection.uids(lastUid, false, properties.batch())) {
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+                take(mailbox, connection, validity, uid, compare);
+            }
+            transaction.executeWithoutResult(status -> repository.fetchSucceeded(mailboxId, clock.instant()));
+        } catch (MailClient.MailFailure failure) {
+            LOG.warn("The fetch of mailbox {} failed with {}: {}", mailboxId, failure.code(), String.valueOf(failure.getCause()));
+            record(mailboxId, failure.code());
+        }
+    }
+
+    /** The highest UID of the folder, or 0 for an empty one. */
+    private static long highest(MailClient.Connection connection) throws MailClient.MailFailure {
+        List<Long> all = connection.uids(0, false, Integer.MAX_VALUE);
+        return all.isEmpty() ? 0 : all.get(all.size() - 1);
+    }
+
+    private void take(Mailbox mailbox, MailClient.Connection connection, long validity, long uid, boolean compare)
+            throws MailClient.MailFailure {
+        if (!transaction.execute(status -> repository.knownOrigin(mailbox.id(), validity, uid))) {
+            long size = connection.size(uid);
+            if (size < 0) {
+                return;
+            }
+            byte[] raw = null;
+            ParsedMail parsed = null;
+            String unreadable = null;
+            if (size > mailbox.maxBytes()) {
+                parsed = connection.header(uid);
+            } else {
+                raw = connection.fetch(uid);
+                try {
+                    parsed = ParsedMail.parse(raw);
+                } catch (Exception failure) {
+                    LOG.info("Mail {} of mailbox {} could not be read: {}", uid, mailbox.id(), failure.toString());
+                    unreadable = "unreadable";
+                }
+            }
+            ParsedMail mail = parsed;
+            byte[] content = raw;
+            String failure = unreadable;
+            // After a new UIDVALIDITY a mail the mailbox already holds keeps its first outcome.
+            boolean known = compare && mail != null && mail.messageId() != null
+                && Boolean.TRUE.equals(transaction.execute(status -> repository.knownMessageId(mailbox.id(), mail.messageId())));
+            if (!known) {
+                transaction.executeWithoutResult(status -> record(mailbox, validity, uid, size, mail, content, failure));
+            }
+        }
+        try {
+            connection.markSeen(uid);
+        } catch (MailClient.MailFailure failure) {
+            LOG.info("Mail {} of mailbox {} could not be marked as seen: {}", uid, mailbox.id(), failure.code());
+        }
+        transaction.executeWithoutResult(status -> repository.position(mailbox.id(), validity, uid));
+    }
+
+    /** Records one mail and, for a confirmed contact of a released customer, its ticket; runs in one transaction. */
+    private void record(Mailbox mailbox, long validity, long uid, long size, ParsedMail parsed, byte[] raw, String unreadable) {
+        Instant now = clock.instant();
+        Decision decision;
+        if (unreadable != null) {
+            decision = Decision.review(unreadable);
+        } else if (parsed.automatic()) {
+            decision = Decision.automatic();
+        } else if (size > mailbox.maxBytes()) {
+            decision = Decision.review("too_large");
+        } else {
+            decision = classify(mailbox, parsed);
+        }
+        ParsedMail.Sender sender = parsed == null || parsed.from().isEmpty() ? null : parsed.from().get(0);
+        List<Message.AttachmentNote> files = parsed == null ? List.of()
+            : parsed.files().stream().map(file -> new Message.AttachmentNote(file.name(), file.content().length, null, null)).toList();
+        Message message = new Message(UUID.randomUUID(), mailbox.companyId(), mailbox.id(), mailbox.projectId(), validity, uid,
+            parsed == null ? null : parsed.messageId(), now, parsed == null ? null : parsed.sentAt(), sender == null ? null : sender.address(),
+            sender == null ? null : sender.name(), parsed == null ? null : String.join(", ", parsed.to()),
+            parsed == null ? null : String.join(", ", parsed.cc()), parsed == null ? null : parsed.subject(),
+            parsed == null ? null : parsed.body(), size, files, raw != null,
+            // A mail that gets a ticket waits as review until its ticket is written in this transaction.
+            decision.state().equals("ticket") ? "review" : decision.state(), decision.reason(), null, null, null,
+            null, null, null, 1);
+        if (!repository.insertMessage(message, raw)) {
+            return;
+        }
+        if (decision.state().equals("ticket")) {
+            Optional<TicketOpener.Opened> opened = opener.open(message, parsed, mailbox.ticketType(), decision.customer(), decision.contact(),
+                TicketAccess.MAIL_INTAKE, now);
+            if (opened.isEmpty()) {
+                repository.reviewInstead(message.id(), "ticket_type_unavailable");
+            }
+        }
+    }
+
+    /** What the intake does with a mail it could read. */
+    record Decision(String state, String reason, Customer customer, Contact contact) {
+        static Decision review(String reason) {
+            return new Decision("review", reason, null, null);
+        }
+
+        static Decision automatic() {
+            return new Decision("automatic", "automatic", null, null);
+        }
+    }
+
+    /**
+     * A ticket only for one sender who is a known contact, confirmed by the own receiving server, of a customer released
+     * for the project, with no contact of another customer among the recipients; everything else waits for a person.
+     */
+    private Decision classify(Mailbox mailbox, ParsedMail parsed) {
+        if (parsed.from().isEmpty()) {
+            return Decision.review("sender_missing");
+        }
+        if (parsed.from().size() > 1) {
+            return Decision.review("sender_ambiguous");
+        }
+        String address = parsed.from().get(0).address();
+        Optional<Contact> contact = repository.contactByAddress(mailbox.companyId(), address);
+        if (contact.isEmpty()) {
+            return Decision.review("sender_unknown");
+        }
+        if (!SenderCheck.confirmed(mailbox.authservId(), parsed.authenticationResults(), address)) {
+            return Decision.review("sender_unconfirmed");
+        }
+        Optional<Customer> customer = repository.customer(mailbox.companyId(), contact.get().customerId());
+        if (customer.isEmpty() || !customer.get().projects().contains(mailbox.projectId())) {
+            return Decision.review("customer_not_released");
+        }
+        for (String recipient : concat(parsed.to(), parsed.cc())) {
+            Optional<Contact> other = repository.contactByAddress(mailbox.companyId(), recipient.toLowerCase(Locale.ROOT));
+            if (other.isPresent() && !other.get().customerId().equals(customer.get().id())) {
+                return Decision.review("foreign_customer");
+            }
+        }
+        return new Decision("ticket", null, customer.get(), contact.get());
+    }
+
+    private static List<String> concat(List<String> first, List<String> second) {
+        return java.util.stream.Stream.concat(first.stream(), second.stream()).toList();
+    }
+
+    private void record(UUID mailboxId, String code) {
+        transaction.executeWithoutResult(status -> repository.fetchFailed(mailboxId, code, clock.instant()));
+    }
+}

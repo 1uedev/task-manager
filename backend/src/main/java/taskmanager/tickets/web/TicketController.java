@@ -87,9 +87,10 @@ class TicketController {
                     writable.add(field.id());
                 }
             }
-            // Tags and attachments are changed through their own endpoints, but follow the same rules; naming them here lets an
+            // Tags, attachments, customer and contact are changed through their own endpoints, but follow the same rules; naming them here lets an
             // interface offer exactly what the server allows (review F1 of TASK-051).
-            for (String field : List.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD)) {
+            for (String field : List.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD, TicketAccess.CUSTOMER_FIELD,
+                    TicketAccess.CONTACT_FIELD)) {
                 if (view.writable().contains(field)) {
                     writable.add(field);
                 }

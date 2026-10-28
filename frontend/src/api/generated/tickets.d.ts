@@ -79,7 +79,7 @@ export interface paths {
         };
         /**
          * Historie eines Tickets
-         * @description Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042). Ebenso ist jedes Hinzufügen oder Entfernen eines Anhangs ein eigener Eintrag mit genau einer Änderung des Feldes attachments (to beschreibt den hinzugefügten, from den entfernten Anhang als JSON Text mit id, name, size und sha256); diese Einträge sieht nur, wer die Leseregel für das Feld attachments hat (TASK-051).
+         * @description Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042). Ebenso ist jedes Hinzufügen oder Entfernen eines Anhangs ein eigener Eintrag mit genau einer Änderung des Feldes attachments (to beschreibt den hinzugefügten, from den entfernten Anhang als JSON Text mit id, name, size und sha256); diese Einträge sieht nur, wer die Leseregel für das Feld attachments hat (TASK-051). Kunde, Kontakt und eingegangene Mail eines Helpdesktickets sind ebenso eigene Einträge der Felder customer, contact und mail (to und from als JSON Text mit id und name, bei mail mit id, from und subject); sie sieht nur, wer die Leseregel des jeweiligen Feldes hat (TASK-057). Ein Ticket aus dem Mail Eingang trägt als Konto die feste Kennung 00000000-0000-0000-0000-00004d41494c.
          */
         get: operations["getTicketHistory"];
         put?: never;
@@ -161,7 +161,8 @@ export interface components {
             /**
              * @description Felder, die die Anfrage mit ticket.edit ändern darf; nur ein Hinweis für die Oberfläche. Eigene Felder erscheinen
              *     als `custom.<schlüssel>`, wenn sie aktiv sind. `tags` und `attachments` erscheinen, wenn die Anfrage Tags
-             *     beziehungsweise Anhänge über ihre eigenen Endpunkte ändern darf (Befund F1 der Prüfung von TASK-051).
+             *     beziehungsweise Anhänge über ihre eigenen Endpunkte ändern darf (Befund F1 der Prüfung von TASK-051). `customer` und
+             *     `contact` erscheinen mit ihrer Schreibregel und werden über den Helpdeskvertrag geändert; `mail` ist nie änderbar (TASK-057).
              */
             writableFields: string[];
             /** Format: date-time */

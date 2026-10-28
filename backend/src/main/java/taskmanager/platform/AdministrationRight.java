@@ -34,7 +34,12 @@ public enum AdministrationRight {
      * See the background jobs of the installation and of the company, run a failed job again and cancel a waiting one
      * (TASK-054, DEC-083). Gives no access to what a job works on.
      */
-    JOBS_MANAGE("jobs.manage");
+    JOBS_MANAGE("jobs.manage"),
+    /**
+     * Manage the mailboxes of the helpdesk, the customer organizations and their contacts (TASK-057). Gives no access to the
+     * mails of a mailbox; the review queue needs the project action {@code helpdesk.review}.
+     */
+    HELPDESK_MANAGE("helpdesk.manage");
 
     private final String key;
 

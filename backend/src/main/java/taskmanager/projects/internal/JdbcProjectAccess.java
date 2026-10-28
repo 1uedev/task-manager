@@ -68,6 +68,12 @@ class JdbcProjectAccess implements ProjectAccess {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockForIntake(UUID companyId, UUID projectId) {
+        return projects.lock(companyId, projectId, false).isPresent();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<ProjectChanged> searchSources(UUID companyId) {
         return projects.all(companyId).stream().map(Project::changed).toList();
     }

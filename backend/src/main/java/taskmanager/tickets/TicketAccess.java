@@ -37,6 +37,34 @@ public interface TicketAccess {
     void lockForAttachmentChange(UUID ticketId);
 
     /**
+     * Creates a ticket for the helpdesk (TASK-057): from a mail of a confirmed contact with the intake as actor, or from the
+     * review queue with the person who processed it. The caller decided that the work is allowed; no right of the actor is
+     * checked here. The project row is locked {@code FOR SHARE} until the commit. The ticket gets the initial status of its
+     * type; required fields other than title and type are not enforced, as for a field that became required later.
+     * Title and description are cut to their limits. Returns empty when the project or the type does not exist.
+     */
+    Optional<Created> createForHelpdesk(UUID companyId, UUID projectId, String type, String title, String description, UUID actor);
+
+    /** A ticket the helpdesk created. */
+    record Created(UUID id, long number) {
+    }
+
+    /** Where a ticket lives: its company, project and number, or empty for an unknown identifier. */
+    Optional<Location> locate(UUID ticketId);
+
+    record Location(UUID companyId, UUID projectId, long number) {
+    }
+
+    /**
+     * Records a change of one of the helpdesk fields ({@link #CUSTOMER_FIELD}, {@link #CONTACT_FIELD}, {@link #MAIL_FIELD})
+     * in the history, as {@link #recordTagChange} does: the version stays, the ticket row is held {@code FOR SHARE}.
+     */
+    void recordHelpdeskChange(UUID ticketId, Instant occurredAt, UUID actor, String field, String removed, String added);
+
+    /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a helpdesk change. */
+    void lockForHelpdeskChange(UUID ticketId);
+
+    /**
      * Every ticket of the company with its five fields, to rebuild a projection (TASK-029). Needs a transaction; the fields
      * must not be shown without the read rules of the reader.
      */
@@ -50,4 +78,16 @@ public interface TicketAccess {
 
     /** The field of the ticket that holds its attachments; its read rule decides who sees them and their changes in the history. */
     String ATTACHMENTS_FIELD = "attachments";
+
+    /** The customer organization of the ticket (TASK-057). */
+    String CUSTOMER_FIELD = "customer";
+
+    /** The contact of the customer who asked (TASK-057). */
+    String CONTACT_FIELD = "contact";
+
+    /** The mails of the ticket (TASK-057); only read, they arrive through the mail intake. */
+    String MAIL_FIELD = "mail";
+
+    /** The actor of what the mail intake does by itself, such as a ticket from a confirmed contact; no account has it. */
+    UUID MAIL_INTAKE = new UUID(0, 0x4d41494cL);
 }
