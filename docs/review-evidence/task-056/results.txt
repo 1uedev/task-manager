@@ -1,0 +1,28 @@
+Nachprüfung TASK-056, Sitzung claude-20261028-review-056-01, 28. Oktober 2026, main 796acf1.
+Java 21 (-Djava.version=21), natives PostgreSQL 16.15 (-Dtaskmanager.test.server-version=16.15).
+
+1) Ganze Backend Suite auf main 796acf1, ./mvnw verify
+   44 Testklassen, Tests run: 343, Failures: 0, Errors: 0, Skipped: 0, Paketbau erfolgreich (exit 0)
+   JobExecutorTest: Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
+
+2) JobExecutorTest mit probes.patch auf main 796acf1
+   Tests run: 29, Failures: 0, Errors: 0, Skipped: 0
+
+3) JobExecutorTest mit probes.patch, JobExecutor.java vom Stand vor TASK-056 (cd25ff8),
+   nur ergänzt um das Feld stopGrace (= STOP_GRACE), damit die Tests übersetzen
+   Tests run: 29, Failures: 4
+   aFatalErrorEndsTheProcessEvenWhenItsOutcomeCannotBeWritten: Timed out waiting until the process is ended   (R1)
+   aPermanentFailureReportedAtTheStopKeepsItsCodeAndEndsTheJob: expected: <failed> but was: <queued>          (R2)
+   anAttemptThatEndsAtTheStopInterruptOnlyAfterTheStopReturnedIsGivenBackWithoutCounting:
+       Timed out waiting until the job is given back                                                        (R3)
+   probeNonFatalErrorAtStopCountsAndDoesNotEndTheProcess: expected: <failed> but was: <queued>              (Verhaltensänderung, gewollt laut DEC-085)
+
+4) Nur die Proben (JobExecutorTest#probe*) gegen den Stand vor TASK-056
+   Tests run: 6, Failures: 2
+   probeNonFatalErrorAtStopCountsAndDoesNotEndTheProcess: expected: <failed> but was: <queued>
+   probeStopDoesNotInterruptTheOutcomeWrite: expected: <1> but was: <2>
+   (vorher unterbrach der Stopp den ersten Schreibversuch des Ergebnisses, erst die Wiederholung gelang)
+
+5) python3 scripts/validate_repository.py: ok; python3 scripts/task_board.py --check: aktuell
+
+CI von PR #185 (Kopf vor dem Merge): qualification, frontend, backend, image, repository-checks alle success.

@@ -1,0 +1,141 @@
+diff --git a/backend/src/test/java/taskmanager/jobs/internal/JobExecutorTest.java b/backend/src/test/java/taskmanager/jobs/internal/JobExecutorTest.java
+index 70212ab..fe2a693 100644
+--- a/backend/src/test/java/taskmanager/jobs/internal/JobExecutorTest.java
++++ b/backend/src/test/java/taskmanager/jobs/internal/JobExecutorTest.java
+@@ -179,6 +179,40 @@ class JobExecutorTest {
+             });
+         }
+
++        // Review probes TASK-056 (Claude)
++        @Bean
++        JobHandler probeRetryable() {
++            return handler("probe.retryable", Duration.ofMinutes(1), execution -> {
++                try { Thread.sleep(60_000); } catch (InterruptedException i) { throw JobFailure.retryable("probe.retry", "retry", i); }
++            });
++        }
++
++        @Bean
++        JobHandler probeWrapped() {
++            return handler("probe.wrapped", Duration.ofMinutes(1), execution -> {
++                try { Thread.sleep(60_000); } catch (InterruptedException i) { throw new IllegalStateException("wrapped", i); }
++            });
++        }
++
++        @Bean
++        JobHandler probeAssert() {
++            return handler("probe.assert", Duration.ofMinutes(1), execution -> {
++                try { Thread.sleep(60_000); } catch (InterruptedException i) { throw new AssertionError("non fatal error at stop"); }
++            });
++        }
++
++        @Bean
++        JobHandler probeQuick() {
++            return handler("probe.quick", Duration.ofMinutes(1), execution -> { });
++        }
++
++        @Bean
++        JobHandler probeSwallow() {
++            return handler("probe.swallow", Duration.ofMinutes(1), execution -> {
++                try { Thread.sleep(60_000); } catch (InterruptedException i) { /* swallowed, returns normally */ }
++            });
++        }
++
+         @Bean
+         RecurringTask tick() {
+             return new RecurringTask() {
+@@ -616,6 +650,95 @@ class JobExecutorTest {
+         assertEquals("job.interrupted", row.get("error_code"));
+     }
+
++    // ---- Review probes TASK-056 (Claude) ----
++
++    @Test
++    void probeRetryableFailureAtStopIsGivenBack() {
++        UUID id = enqueue(NewJob.of(null, "probe.retryable").withMaxAttempts(1));
++        JobExecutor executor = started();
++        await("runs", () -> RUNS.containsKey(id));
++        stop(executor);
++        Map<String, Object> row = row(id);
++        assertEquals("queued", row.get("state"));
++        assertEquals(0, row.get("attempts"));
++        assertEquals("job.interrupted", row.get("error_code"));
++    }
++
++    @Test
++    void probeWrappedInterruptAtStopIsGivenBack() {
++        UUID id = enqueue(NewJob.of(null, "probe.wrapped").withMaxAttempts(1));
++        JobExecutor executor = started();
++        await("runs", () -> RUNS.containsKey(id));
++        stop(executor);
++        Map<String, Object> row = row(id);
++        assertEquals("queued", row.get("state"));
++        assertEquals(0, row.get("attempts"));
++        assertEquals("job.interrupted", row.get("error_code"));
++    }
++
++    @Test
++    void probeNonFatalErrorAtStopCountsAndDoesNotEndTheProcess() {
++        UUID id = enqueue(NewJob.of(null, "probe.assert").withMaxAttempts(1));
++        JobExecutor executor = executor();
++        List<Error> ended = java.util.Collections.synchronizedList(new ArrayList<>());
++        executor.fatal = ended::add;
++        executor.start();
++        await("runs", () -> RUNS.containsKey(id));
++        stop(executor);
++        Map<String, Object> row = row(id);
++        assertEquals("failed", row.get("state"));
++        assertEquals(1, row.get("attempts"));
++        assertEquals("job.failed", row.get("error_code"));
++        assertTrue(ended.isEmpty());
++    }
++
++    @Test
++    void probeSwallowedInterruptAtStopEndsAsSuccess() {
++        UUID id = enqueue(NewJob.of(null, "probe.swallow").withMaxAttempts(1));
++        JobExecutor executor = started();
++        await("runs", () -> RUNS.containsKey(id));
++        stop(executor);
++        assertEquals("succeeded", state(id));
++    }
++
++    @Test
++    void probeFatalErrorWhoseRecordThrowsAnErrorStillEndsTheProcess() {
++        JobRepository failing = mock(JobRepository.class, AdditionalAnswers.delegatesTo(repository));
++        doThrow(new OutOfMemoryError("while recording")).when(failing).fail(any(), any(), any(), any(), any(), any());
++        UUID id = enqueue(NewJob.of(null, "test.oom").withMaxAttempts(1));
++        JobExecutor executor = executor(failing);
++        List<Error> ended = java.util.Collections.synchronizedList(new ArrayList<>());
++        executor.fatal = ended::add;
++        executor.start();
++        await("ended", () -> !ended.isEmpty());
++        assertEquals("running", state(id));
++    }
++
++    @Test
++    void probeStopDoesNotInterruptTheOutcomeWrite() throws Exception {
++        CountDownLatch writing = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        AtomicInteger writes = new AtomicInteger();
++        JobRepository slow = mock(JobRepository.class, AdditionalAnswers.delegatesTo(repository));
++        org.mockito.Mockito.doAnswer(invocation -> {
++            writes.incrementAndGet();
++            writing.countDown();
++            if (!release.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
++                throw new IllegalStateException("not released");
++            }
++            return repository.succeed(invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2));
++        }).when(slow).succeed(any(), any(), any());
++        UUID id = enqueue(NewJob.of(null, "probe.quick").withMaxAttempts(1));
++        JobExecutor executor = executor(slow);
++        executor.start();
++        assertTrue(writing.await(10, java.util.concurrent.TimeUnit.SECONDS));
++        stop(executor); // grace 1 s + 3 s; the write blocks the whole time
++        release.countDown();
++        await("succeeded", () -> "succeeded".equals(state(id)));
++        // Only one write: the stop did not interrupt it (before TASK-056 the first write is interrupted and retried).
++        assertEquals(1, writes.get());
++    }
++
+     @Test
+     void aJobPutInTheQueueAgainByTheAdministrationKnowsThatItRanBefore() {
+         UUID id = enqueue(NewJob.of(null, "test.resume").withPayload(Map.of("first", "fail")).withMaxAttempts(1));
