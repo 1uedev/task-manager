@@ -6,6 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.sql.SQLException;
 import java.time.Clock;
@@ -23,11 +29,13 @@ import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.AdditionalAnswers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -74,6 +82,8 @@ class JobExecutorTest {
     /** What the handler of {@code test.resume} saw per run: attempt and {@code repeated()}. */
     static final List<String> SEEN = java.util.Collections.synchronizedList(new ArrayList<>());
     static volatile JdbcTemplate effects;
+    /** Holds the clean up of {@code test.cleanup} after the stop interrupted it (TASK-056, R3). */
+    static volatile CountDownLatch cleanUp = new CountDownLatch(1);
 
     @TestConfiguration
     static class Handlers {
@@ -140,6 +150,31 @@ class JobExecutorTest {
                         throw new IllegalStateException("first run fails after its effect");
                     }
                     Thread.sleep(60_000);
+                }
+            });
+        }
+
+        @Bean
+        JobHandler refusingHandler() {
+            // Reports a permanent failure when the stop interrupts it (TASK-056, R2).
+            return handler("test.refuse", Duration.ofMinutes(1), execution -> {
+                try {
+                    Thread.sleep(60_000);
+                } catch (InterruptedException interrupted) {
+                    throw JobFailure.permanent("test.refused_on_stop", "refused while stopping", interrupted);
+                }
+            });
+        }
+
+        @Bean
+        JobHandler cleaningHandler() {
+            // Cleans up after the stop interrupted it and passes the interrupt on only when the test lets it (TASK-056, R3).
+            return handler("test.cleanup", Duration.ofMinutes(1), execution -> {
+                try {
+                    Thread.sleep(60_000);
+                } catch (InterruptedException interrupted) {
+                    cleanUp.await();
+                    throw interrupted;
                 }
             });
         }
@@ -215,6 +250,7 @@ class JobExecutorTest {
         OVERLAPS.set(0);
         TICKS.set(0);
         SEEN.clear();
+        cleanUp = new CountDownLatch(1);
     }
 
     @AfterEach
@@ -224,10 +260,21 @@ class JobExecutorTest {
     }
 
     private JobExecutor executor() {
+        return executor(repository);
+    }
+
+    private JobExecutor executor(JobRepository repository) {
         JobExecutor executor = new JobExecutor(repository, properties, clock, transactions, context.getBeanProvider(JobHandler.class),
             context.getBeanProvider(RecurringTask.class));
+        executor.stopGrace = Duration.ofSeconds(1);
         executors.add(executor);
         return executor;
+    }
+
+    /** Stops an executor that a test started, and waits until the stop returned. */
+    private void stop(JobExecutor executor) {
+        executor.stop();
+        executors.remove(executor);
     }
 
     private JobExecutor started() {
@@ -510,8 +557,7 @@ class JobExecutorTest {
         UUID id = enqueue(NewJob.of(null, "test.resume").withMaxAttempts(1));
         JobExecutor executor = started();
         await("the job runs", () -> RUNS.containsKey(id));
-        executor.stop();
-        executors.remove(executor);
+        stop(executor);
         Map<String, Object> row = row(id);
         assertEquals("queued", row.get("state"));
         assertEquals(0, row.get("attempts"));
@@ -523,6 +569,51 @@ class JobExecutorTest {
         await("the job is done", () -> "succeeded".equals(state(id)));
         assertEquals(List.of("1/false", "1/true"), List.copyOf(SEEN));
         assertEquals(1, row(id).get("attempts"));
+    }
+
+    @Test
+    void aFatalErrorEndsTheProcessEvenWhenItsOutcomeCannotBeWritten() {
+        // TASK-056, R1: before, the failed write swallowed the error and the process went on.
+        JobRepository failing = mock(JobRepository.class, AdditionalAnswers.delegatesTo(repository));
+        doThrow(new DataAccessResourceFailureException("database gone")).when(failing).fail(any(), any(), any(), any(), any(), any());
+        UUID id = enqueue(NewJob.of(null, "test.oom").withMaxAttempts(1));
+        JobExecutor executor = executor(failing);
+        List<Error> ended = java.util.Collections.synchronizedList(new ArrayList<>());
+        executor.fatal = ended::add;
+        executor.start();
+        await("the process is ended", () -> !ended.isEmpty());
+        assertTrue(ended.get(0) instanceof OutOfMemoryError);
+        verify(failing, times(3)).fail(eq(id), any(), any(), any(), any(), any());
+        // The outcome is missing; the lease decides later.
+        assertEquals("running", state(id));
+    }
+
+    @Test
+    void aPermanentFailureReportedAtTheStopKeepsItsCodeAndEndsTheJob() {
+        // TASK-056, R2: before, the stop turned it into job.interrupted and the job waited again.
+        UUID id = enqueue(NewJob.of(null, "test.refuse").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await("the job runs", () -> RUNS.containsKey(id));
+        stop(executor);
+        Map<String, Object> row = row(id);
+        assertEquals("failed", row.get("state"));
+        assertEquals(1, row.get("attempts"));
+        assertEquals("test.refused_on_stop", row.get("error_code"));
+    }
+
+    @Test
+    void anAttemptThatEndsAtTheStopInterruptOnlyAfterTheStopReturnedIsGivenBackWithoutCounting() {
+        // TASK-056, R3: before, the stop forgot its interrupt after waiting and the last attempt failed with job.failed.
+        UUID id = enqueue(NewJob.of(null, "test.cleanup").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await("the job runs", () -> RUNS.containsKey(id));
+        stop(executor);
+        assertEquals("running", state(id));
+        cleanUp.countDown();
+        await("the job is given back", () -> "queued".equals(state(id)));
+        Map<String, Object> row = row(id);
+        assertEquals(0, row.get("attempts"));
+        assertEquals("job.interrupted", row.get("error_code"));
     }
 
     @Test

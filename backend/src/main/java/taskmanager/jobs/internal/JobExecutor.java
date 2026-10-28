@@ -48,11 +48,13 @@ import taskmanager.jobs.RecurringTask;
  *       reporting (their lease expired) and puts due recurring tasks in the table.</li>
  *   <li>An attempt that takes longer than the timeout of its handler is interrupted and counts as failed with
  *       {@code job.timeout}. The log holds the details of every failure under the reference stored with the job.</li>
- *   <li>An attempt that the stop of the executor interrupts does not count: the job waits again at once, even after its last
- *       attempt (TASK-055).</li>
+ *   <li>An attempt that ends at the interrupt of the stop of the executor does not count: the job waits again at once, even
+ *       after its last attempt and even when the handler ends only after the stop returned (TASK-055, TASK-056). An error or
+ *       a permanent failure that the handler reports keeps its code.</li>
  *   <li>An error of a handler is recorded like an exception and the worker thread goes on. Only an error that leaves the
  *       virtual machine in doubt, such as {@link OutOfMemoryError}, ends the process, so that its environment starts it
- *       again instead of keeping a half working executor (TASK-055).</li>
+ *       again instead of keeping a half working executor; this holds even when its outcome cannot be written (TASK-055,
+ *       TASK-056).</li>
  * </ul>
  */
 @Component
@@ -61,7 +63,6 @@ class JobExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutor.class);
     private static final String MDC_KEY = "correlationId";
     static final String RECURRING = "recurring.";
-    private static final Duration STOP_GRACE = Duration.ofSeconds(15);
 
     private interface Target {
         Duration timeout();
@@ -78,8 +79,10 @@ class JobExecutor {
     private final String owner;
     private final Instant startedAt;
     private final Set<UUID> active = ConcurrentHashMap.newKeySet();
-    /** The worker threads that the stop interrupted, so their attempt does not count. */
-    private final Set<Thread> interruptedByStop = ConcurrentHashMap.newKeySet();
+    /** The attempt that each worker thread runs right now, until it really ended (TASK-056). */
+    private final Map<Thread, Watchdog> attempts = new ConcurrentHashMap<>();
+    /** How long the stop waits for running attempts before it interrupts them; tests shorten it. */
+    Duration stopGrace = Duration.ofSeconds(15);
     /** What happens after an error that leaves the virtual machine in doubt; tests replace it. */
     Consumer<Error> fatal = JobExecutor::exit;
     private final Object idle = new Object();
@@ -189,15 +192,18 @@ class JobExecutor {
         synchronized (idle) {
             idle.notifyAll();
         }
-        long deadline = System.nanoTime() + STOP_GRACE.toNanos();
+        long deadline = System.nanoTime() + stopGrace.toNanos();
         for (Thread worker : workers) {
             join(worker, deadline);
         }
-        // A job that is still running after the grace period is interrupted; it runs again without waiting and without
-        // counting the attempt.
+        // An attempt that is still running after the grace period is interrupted; when it ends at this interrupt, it runs again
+        // without waiting and without counting, even if it ends only after the stop returned (TASK-056). A thread that waits
+        // for work or records an outcome is not interrupted.
         workers.stream().filter(Thread::isAlive).forEach(worker -> {
-            interruptedByStop.add(worker);
-            worker.interrupt();
+            Watchdog attempt = attempts.get(worker);
+            if (attempt != null) {
+                attempt.stop();
+            }
         });
         long last = System.nanoTime() + Duration.ofSeconds(3).toNanos();
         for (Thread worker : workers) {
@@ -210,7 +216,6 @@ class JobExecutor {
             LOG.debug("The executor {} could not sign off: {}", owner, failure.toString());
         }
         workers.clear();
-        interruptedByStop.clear();
         LOG.info("Job executor {} stopped.", owner);
     }
 
@@ -272,7 +277,7 @@ class JobExecutor {
             try {
                 idle.wait(Math.max(100, properties.pollInterval().toMillis()));
             } catch (InterruptedException interrupted) {
-                // Only the stop interrupts an idle thread, after it ended the loop.
+                // Nothing interrupts an idle thread; the stop wakes it through the monitor.
             }
         }
     }
@@ -284,13 +289,14 @@ class JobExecutor {
         try {
             Target target = targets.get(job.kind());
             if (target == null) {
-                record(job, JobFailure.permanent("job.handler_missing", "No handler for the kind " + job.kind(), null), false);
+                record(job, JobFailure.permanent("job.handler_missing", "No handler for the kind " + job.kind(), null), false, false);
                 return;
             }
             Map<String, String> payload = transaction.execute(status -> jobs.payload(job.id()));
             JobExecution execution = new JobExecution(job.id(), job.companyId(), job.kind(), payload, job.attempt(), job.maxAttempts(),
                 job.repeated() || job.attempt() > 1);
             Watchdog watchdog = new Watchdog(Thread.currentThread());
+            attempts.put(Thread.currentThread(), watchdog);
             ScheduledFuture<?> alarm = maintenance.schedule(watchdog::fire, Math.max(1, target.timeout().toMillis()), TimeUnit.MILLISECONDS);
             Throwable failure = null;
             try {
@@ -308,25 +314,36 @@ class JobExecutor {
                 if (!recorded) {
                     LOG.warn("Job {} of kind {} finished, but the executor {} no longer held it; its outcome is not recorded.", job.id(), job.kind(), owner);
                 }
-            } else {
-                record(job, failure, watchdog.fired());
-                if (failure instanceof Error error && fatal(error)) {
-                    throw error;
+            } else if (failure instanceof Error error && fatal(error)) {
+                // The process ends even when the outcome cannot be written; the lease then decides (TASK-056).
+                try {
+                    record(job, failure, watchdog.fired(), false);
+                } catch (RuntimeException unrecorded) {
+                    LOG.warn("The outcome of job {} could not be recorded: {}", job.id(), unrecorded.toString());
                 }
+                throw error;
+            } else {
+                record(job, failure, watchdog.fired(), watchdog.stopped());
             }
         } catch (RuntimeException failure) {
             // The outcome could not be written; the lease expires and the job runs again.
             LOG.warn("The outcome of job {} could not be recorded: {}", job.id(), failure.toString());
         } finally {
+            attempts.remove(Thread.currentThread());
             active.remove(job.id());
             MDC.remove(MDC_KEY);
         }
     }
 
-    private void record(JobRepository.Claimed job, Throwable failure, boolean timedOut) {
+    /**
+     * Records a failed attempt. An attempt that the stop interrupted does not count, unless the handler reported an error or a
+     * permanent failure: those keep their code and end the job as they would without the stop (TASK-056).
+     */
+    private void record(JobRepository.Claimed job, Throwable failure, boolean timedOut, boolean stopped) {
         UUID reference = UUID.randomUUID();
         Instant now = clock.instant();
-        if (!timedOut && interruptedByStop.contains(Thread.currentThread())) {
+        boolean kept = failure instanceof Error || (failure instanceof JobFailure known && known.permanent());
+        if (stopped && !timedOut && !kept) {
             // The stop interrupted the attempt: it does not count, the job waits again at once (TASK-055).
             LOG.warn("Job {} of kind {} was interrupted by the stop of the executor in attempt {} of {} (reference {}); it waits again "
                 + "without using up the attempt.", job.id(), job.kind(), job.attempt(), job.maxAttempts(), reference, failure);
@@ -430,11 +447,12 @@ class JobExecutor {
         }
     }
 
-    /** Interrupts an attempt that took too long, but never after it ended. */
+    /** Interrupts an attempt that took too long or that the stop ends, but never after it ended. */
     private static final class Watchdog {
         private final Thread thread;
         private boolean finished;
         private boolean fired;
+        private boolean stopped;
 
         Watchdog(Thread thread) {
             this.thread = thread;
@@ -447,12 +465,23 @@ class JobExecutor {
             }
         }
 
+        synchronized void stop() {
+            if (!finished) {
+                stopped = true;
+                thread.interrupt();
+            }
+        }
+
         synchronized void done() {
             finished = true;
         }
 
         synchronized boolean fired() {
             return fired;
+        }
+
+        synchronized boolean stopped() {
+            return stopped;
         }
     }
 }
