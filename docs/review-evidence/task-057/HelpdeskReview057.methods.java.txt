@@ -1,0 +1,181 @@
+    @Test
+    void reviewForgedLowerHeaderIsTrusted() {
+        Setup s = setup();
+        deliver(s, "Authentication-Results: other.example; dmarc=fail header.from=nordwerk.example\r\n"
+            + confirmed("nordwerk.example"), "Forged lower header", "Synthetic");
+        intake.fetch(s.mailbox());
+        assertEquals(1, tickets(s));
+        System.out.println("P1 lower forged matching header: ticket created");
+    }
+
+    @Test
+    void reviewChangedAccountCollidesWithPreviousOrigin() throws Exception {
+        Setup s=setup();
+        Setup other=setup();
+        deliver(s,confirmed("nordwerk.example"),"Old account","Synthetic");
+        intake.fetch(s.mailbox());
+        deliver(other,confirmed("nordwerk.example"),"New account","Synthetic");
+        Store store=Session.getInstance(new Properties()).getStore("imap");
+        store.connect("127.0.0.1",MAIL.getImap().getPort(),other.account().getLogin(),MAIL_PASSWORD);
+        Folder folder=store.getFolder("INBOX"); folder.open(Folder.READ_ONLY);
+        long validity=((jakarta.mail.UIDFolder)folder).getUIDValidity();
+        long uid=((jakarta.mail.UIDFolder)folder).getUID(folder.getMessage(1));
+        folder.close(false); store.close();
+        // Legal collision across independent IMAP accounts, made deterministic for the fixture.
+        jdbc.update("update helpdesk_message set uid_validity=?,uid=? where mailbox_id=?",validity,uid,s.mailbox());
+        String path="/api/v1/helpdesk/mailboxes/"+s.mailbox();
+        Response change=s.admin().send("PUT",path,mailboxRequest("Changed account "+COUNTER.incrementAndGet(),s.project(),
+            other.account().getLogin(),MAIL_PASSWORD,MAIL.getImap().getPort(),AUTHSERV),"\"1\"");
+        assertEquals(200,change.status(),change.body());
+        intake.fetch(s.mailbox());
+        assertEquals(1,messages(s).size());
+        assertEquals(0,unseen(other));
+        System.out.println("E6 changed IMAP account: new message skipped and marked seen on origin collision");
+    }
+
+    @Test
+    void reviewBusyAndConcurrentQueueActions() throws Exception {
+        Setup s=setup();
+        Browser reviewer=reviewer(s);
+        deliver(s,"","Queue race","Synthetic"); intake.fetch(s.mailbox());
+        UUID id=(UUID)messages(s).get(0).get("id");
+        String path="/api/v1/helpdesk/inbox/"+id;
+        String etag=reviewer.get(path).etag();
+        try(var connection=jdbc.getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            try(var statement=connection.prepareStatement("select id from helpdesk_message where id=? for update")) {
+                statement.setObject(1,id); statement.executeQuery().close();
+                Response busy=reviewer.send("POST",path+"/discard",Map.of("reason","Synthetic"),etag);
+                assertEquals(503,busy.status(),busy.body()); assertEquals("helpdesk.busy",busy.code());
+                assertEquals("review",messages(s).get(0).get("state"));
+            } finally {connection.rollback();}
+        }
+        var start=new java.util.concurrent.CountDownLatch(1);
+        Future<Response> ticket=POOL.submit(()->{start.await();return reviewer.send("POST",path+"/ticket",Map.of(),etag);});
+        Future<Response> discard=POOL.submit(()->{start.await();return reviewer.send("POST",path+"/discard",Map.of("reason","Synthetic"),etag);});
+        start.countDown();
+        List<Integer> statuses=new ArrayList<>(List.of(ticket.get().status(),discard.get().status()));
+        statuses.sort(Integer::compareTo); assertEquals(List.of(200,409),statuses);
+        assertTrue(tickets(s)<=1);
+        System.out.println("E8 queue: held lock returns 503 helpdesk.busy without mutation; concurrent ticket/discard returns 200/409");
+    }
+
+    @Test
+    void reviewSilentImapServerTimesOut() throws Exception {
+        Setup s=setup();
+        try(ServerSocket server=new ServerSocket(0)) {
+            jdbc.update("update helpdesk_mailbox set imap_port=? where id=?",server.getLocalPort(),s.mailbox());
+            long started=System.nanoTime();
+            intake.fetch(s.mailbox());
+            long elapsed=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started);
+            assertTrue(elapsed>=4500 && elapsed<15000,"timeout elapsed "+elapsed);
+            assertEquals("helpdesk.timeout",jdbc.queryForObject("select error_code from helpdesk_mailbox where id=?",String.class,s.mailbox()));
+            assertEquals(0,messages(s).size());
+            System.out.println("E9 silent IMAP server: timeout recorded without message or ticket");
+        }
+    }
+
+    @Test
+    void reviewImapFailureLeaksReflectedSecretIntoLog() throws Exception {
+        Setup s=setup();
+        var capture=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        capture.start();
+        var log=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger("taskmanager.helpdesk.internal");
+        log.addAppender(capture);
+        try(ServerSocket server=new ServerSocket(0)) {
+            server.setSoTimeout(15000);
+            var peer=Executors.newSingleThreadExecutor();
+            var finished=peer.submit(() -> {
+                try {
+                    for(int n=0;n<2;n++) try(var socket=server.accept()) {
+                        socket.setSoTimeout(10000);
+                        var reader=new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream()));
+                        var writer=new java.io.PrintWriter(socket.getOutputStream(),true);
+                        writer.print("* OK synthetic IMAP\r\n"); writer.flush();
+                        for(String line;(line=reader.readLine())!=null;) {
+                            String tag=line.split(" ")[0];
+                            if(line.toUpperCase().contains("CAPABILITY")) {
+                                writer.print("* CAPABILITY IMAP4rev1\r\n"+tag+" OK capabilities\r\n"); writer.flush();
+                            } else if(line.toUpperCase().contains("LOGIN")) {
+                                writer.print(tag+" NO rejected "+MAIL_PASSWORD+"\r\n"); writer.flush(); break;
+                            } else {writer.print(tag+" OK\r\n");writer.flush();}
+                        }
+                    }
+                } catch(Exception failure) {throw new RuntimeException(failure);}
+            });
+            try {
+                jdbc.update("update helpdesk_mailbox set imap_port=? where id=?",server.getLocalPort(),s.mailbox());
+                Response result=s.admin().send("POST","/api/v1/helpdesk/mailboxes/"+s.mailbox()+"/test",null,null);
+                assertEquals("helpdesk.authentication_failed",result.json().get("code").asString());
+                assertFalse(result.body().contains(MAIL_PASSWORD));
+                intake.fetch(s.mailbox());
+                finished.get(20,TimeUnit.SECONDS);
+                assertEquals(2,capture.list.stream().filter(e->e.getFormattedMessage().contains(MAIL_PASSWORD)).count());
+                System.out.println("E7 IMAP failure: reflected synthetic password appears in both test and fetch logs; API clean");
+            } finally {peer.shutdownNow();}
+        } finally {log.detachAppender(capture);capture.stop();}
+    }
+
+    @Test
+    void reviewUidValidityDedupEndsAfterFirstBatch() throws Exception {
+        Setup s = setup();
+        deliver(s, confirmed("nordwerk.example"), "First", "Synthetic");
+        deliver(s, confirmed("nordwerk.example"), "Second", "Synthetic");
+        intake.fetch(s.mailbox());
+        intake.fetch(s.mailbox());
+        assertEquals(2, tickets(s));
+        jdbc.update("update helpdesk_mailbox set uid_validity=uid_validity+1 where id=?", s.mailbox());
+        jdbc.update("update helpdesk_message set uid_validity=uid_validity+1 where mailbox_id=?", s.mailbox());
+        Store store=Session.getInstance(new Properties()).getStore("imap");
+        store.connect("127.0.0.1", MAIL.getImap().getPort(), s.account().getLogin(), MAIL_PASSWORD);
+        Folder folder=store.getFolder("INBOX"); folder.open(Folder.READ_WRITE);
+        folder.setFlags(1, folder.getMessageCount(), new Flags(Flags.Flag.SEEN), false);
+        folder.close(false); store.close();
+        intake.fetch(s.mailbox());
+        assertEquals(2, tickets(s));
+        intake.fetch(s.mailbox());
+        assertEquals(3, tickets(s));
+        System.out.println("P2 UIDVALIDITY across two batches: tickets 2 -> 2 -> 3");
+    }
+
+    @Test
+    void reviewOptionsLeakUnreadableContacts() {
+        Browser limited=person();
+        Setup s=setup(limited);
+        grant(limited.id,s.project(),"ticket.read","ticket.edit","READ:title","READ:customer","WRITE:customer");
+        deliver(s,confirmed("nordwerk.example"),"Restricted contact","Synthetic");
+        intake.fetch(s.mailbox());
+        long number=jdbc.queryForObject("select number from ticket where project_id=?",Long.class,s.project());
+        String base="/api/v1/projects/"+s.project()+"/tickets/"+number+"/helpdesk";
+        assertTrue(limited.get(base).json().get("contact").isNull());
+        Response options=limited.get(base+"/options");
+        assertEquals(200,options.status());
+        assertTrue(options.body().contains(s.contactAddress()));
+        System.out.println("P3 contact read denied but options contains contact name and address");
+    }
+
+    @Test
+    void reviewForeignCustomerAfterFiftiethRecipientIsIgnored() {
+        Setup s=setup();
+        Setup other=setup();
+        String recipients=java.util.stream.IntStream.range(0,50).mapToObj(i->"n"+i+"@unlisted.example")
+            .collect(java.util.stream.Collectors.joining(", "))+", "+other.contactAddress();
+        deliver(s,confirmed("nordwerk.example")+"Cc: "+recipients+"\r\n","Foreign recipient 51","Synthetic");
+        intake.fetch(s.mailbox());
+        assertEquals(1,tickets(s));
+        assertFalse(messages(s).get(0).get("cc_addresses").toString().contains(other.contactAddress()));
+        System.out.println("P4 foreign customer at Cc position 51: ticket created, foreign address dropped");
+    }
+
+    @Test
+    void reviewUpperTrustedFailureStillRejectsAndMissingFromQueues() {
+        Setup s=setup();
+        deliver(s,"Authentication-Results: "+AUTHSERV+"; dmarc=fail header.from=nordwerk.example\r\n"
+            +confirmed("nordwerk.example"),"Top own failure","Synthetic");
+        intake.fetch(s.mailbox());
+        assertEquals("sender_unconfirmed",messages(s).get(0).get("reason"));
+        deliverRaw(s,confirmed("nordwerk.example")+"To: "+s.address()+"\r\nSubject: No From\r\n\r\nSynthetic");
+        intake.fetch(s.mailbox());
+        assertEquals("sender_missing",messages(s).get(1).get("reason"));
+        assertEquals(0,tickets(s));
+    }
