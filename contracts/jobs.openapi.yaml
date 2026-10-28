@@ -144,17 +144,17 @@ components:
         position: {type: integer, format: int64, description: Reihenfolge der Liste und Beginn der nächsten Seite.}
         kind: {type: string, description: 'Art des Auftrags, zum Beispiel recurring.files.cleanup'}
         state: {$ref: '#/components/schemas/JobState'}
-        attempts: {type: integer, description: Begonnene Versuche.}
+        attempts: {type: integer, description: Begonnene Versuche seit dem letzten Einstellen; ein durch den Stopp des Prozesses unterbrochener Versuch zählt nicht.}
         maxAttempts: {type: integer}
         runAt: {type: string, format: date-time, description: Frühester Zeitpunkt des nächsten Versuchs.}
         createdAt: {type: string, format: date-time}
-        startedAt: {type: [string, 'null'], format: date-time}
+        startedAt: {type: [string, 'null'], format: date-time, description: Beginn des letzten Laufs; bleibt beim erneuten Einstellen erhalten.}
         finishedAt: {type: [string, 'null'], format: date-time}
         errorCode:
           type: [string, 'null']
           description: |
             Stabiler Code des letzten Fehlers, etwa job.failed, job.timeout, job.lease_expired (der Ausführer endete ohne
-            Rückmeldung), job.handler_missing, job.interrupted (Stopp des Prozesses) oder ein Code des Fachmoduls.
+            Rückmeldung), job.handler_missing, job.interrupted (Stopp des Prozesses; der Versuch zählt nicht und der Auftrag wartet wieder) oder ein Code des Fachmoduls.
         errorReference: {type: [string, 'null'], format: uuid, description: Kennung des Protokolleintrags mit den Einzelheiten.}
         installation: {type: boolean, description: Aufgabe der Installation statt eines Auftrags für das Unternehmen.}
     JobSummary:

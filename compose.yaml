@@ -40,6 +40,8 @@ services:
     ports:
       - "127.0.0.1:${TASK_MANAGER_PORT:-8080}:8080"
     restart: unless-stopped
+    # Longer than the grace period of the job executor (15 s plus 3 s), in case this process runs jobs too (TASK-055).
+    stop_grace_period: 30s
 
   # The separate worker process (TASK-054): it works off the background jobs and the recurring tasks such as the clean up
   # of the file store, without a web server and without a port. With it, the web process keeps its own executor off.
@@ -66,6 +68,8 @@ services:
       retries: 3
     mem_limit: 768m
     restart: unless-stopped
+    # Longer than the grace period of the job executor (15 s plus 3 s): running jobs end in order and wait again (TASK-055).
+    stop_grace_period: 30s
 
   # Synthetic demo data and the search measurement; started only on request (docker compose --profile tools ...).
   demo:

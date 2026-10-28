@@ -46,7 +46,7 @@ Weitere Befehle:
 
 | Befehl | Wirkung |
 |---|---|
-| `docker compose stop` / `docker compose start` | Anhalten und fortsetzen; Daten und Sitzungen bleiben. |
+| `docker compose stop` / `docker compose start` | Anhalten und fortsetzen; Daten und Sitzungen bleiben. Laufende Hintergrundaufträge bekommen dabei bis zu 30 Sekunden (`stop_grace_period`) und warten danach wieder, ohne einen Versuch zu verbrauchen. |
 | `docker compose down` | Container entfernen; die Volumes und damit alle Daten und Anhänge bleiben. |
 | `docker compose down -v` | Container **und Daten samt Anhängen** entfernen, für einen frischen Start. |
 | `docker compose run --rm app reset-admin-password admin` | Neues Einmalpasswort für ein Konto mit Kontenverwaltung, wenn niemand mehr angemeldet ist. |

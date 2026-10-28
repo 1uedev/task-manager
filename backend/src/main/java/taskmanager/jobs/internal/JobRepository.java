@@ -20,8 +20,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JobRepository {
-    /** A job reserved by an executor. */
-    public record Claimed(UUID id, UUID companyId, String kind, int attempt, int maxAttempts) {
+    /** A job reserved by an executor; {@code repeated} when a run of it started before this one (TASK-055). */
+    public record Claimed(UUID id, UUID companyId, String kind, int attempt, int maxAttempts, boolean repeated) {
     }
 
     /** Counts per state and the age of the oldest due job. */
@@ -61,15 +61,21 @@ public class JobRepository {
             .params(companyId, kind, dedupKey).query(UUID.class).single();
     }
 
-    /** Reserves the job that is due longest for the owner, skipping jobs another executor holds. */
+    /**
+     * Reserves the job that is due longest for the owner, skipping jobs another executor holds. A job whose {@code started_at}
+     * is already set ran before: the start of a run stays when the job waits again, also after a retry of the administration.
+     */
     Optional<Claimed> claim(String owner, Instant now, Instant leaseUntil) {
         return jdbc.sql("""
+                with next as (
+                    select id, started_at is not null as ran from job where state = 'queued' and run_at <= ?
+                    order by run_at, seq limit 1 for update skip locked)
                 update job set state = 'running', attempts = attempts + 1, lease_owner = ?, lease_until = ?, started_at = ?
-                where id = (select id from job where state = 'queued' and run_at <= ? order by run_at, seq limit 1 for update skip locked)
-                returning id, company_id, kind, attempts, max_attempts""")
-            .params(owner, ts(leaseUntil), ts(now), ts(now))
+                from next where job.id = next.id
+                returning job.id, job.company_id, job.kind, job.attempts, job.max_attempts, next.ran""")
+            .params(ts(now), owner, ts(leaseUntil), ts(now))
             .query((rs, row) -> new Claimed(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getString("kind"),
-                rs.getInt("attempts"), rs.getInt("max_attempts")))
+                rs.getInt("attempts"), rs.getInt("max_attempts"), rs.getBoolean("ran")))
             .optional();
     }
 
@@ -115,6 +121,18 @@ public class JobRepository {
                 update job set state = 'queued', run_at = ?, lease_owner = null, lease_until = null, error_code = ?, error_reference = ?
                 where id = ? and state = 'running' and lease_owner = ?""")
             .params(ts(retryAt), code, reference, id, owner).update() == 1;
+    }
+
+    /**
+     * Gives a job back that the stop of its executor interrupted (TASK-055): the attempt does not count, the job waits again at
+     * once, also when it was its last attempt. Only while the owner still holds it.
+     */
+    boolean giveBack(UUID id, String owner, Instant now, String code, UUID reference) {
+        return jdbc.sql("""
+                update job set state = 'queued', attempts = attempts - 1, run_at = ?, lease_owner = null, lease_until = null,
+                    error_code = ?, error_reference = ?
+                where id = ? and state = 'running' and lease_owner = ?""")
+            .params(ts(now), code, reference, id, owner).update() == 1;
     }
 
     /**
@@ -220,10 +238,10 @@ public class JobRepository {
         return jdbc.sql("select " + COLUMNS + " from job where id = ?").param(id).query(JobRepository::job).optional();
     }
 
+    /** Puts the job back with all its attempts; {@code started_at} stays, so its next run knows an earlier one ran (TASK-055). */
     void requeue(UUID id, Instant now) {
         jdbc.sql("""
-                update job set state = 'queued', attempts = 0, run_at = ?, started_at = null, finished_at = null, error_code = null,
-                    error_reference = null
+                update job set state = 'queued', attempts = 0, run_at = ?, finished_at = null, error_code = null, error_reference = null
                 where id = ?""")
             .params(ts(now), id).update();
     }
