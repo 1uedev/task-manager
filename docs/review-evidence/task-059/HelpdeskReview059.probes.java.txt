@@ -1,0 +1,213 @@
+    @Autowired HelpdeskRepository probeRepository;
+    @Autowired SecretBox probeSecrets;
+    @Autowired TicketOpener probeOpener;
+    @Autowired java.time.Clock probeClock;
+
+    private MailIntake probe(MailClient client, int batch) {
+        return new MailIntake(probeRepository, client, probeSecrets, probeOpener,
+            new HelpdeskProperties("", java.time.Duration.ofSeconds(60), 25_000_000L, batch, java.time.Duration.ofSeconds(5)),
+            probeClock, transactions);
+    }
+
+    private byte[] raw(Setup s, String id, String extra) {
+        return (confirmed("nordwerk.example")+"From: "+s.contactAddress()+"\r\nTo: "+s.address()+"\r\n"
+            +extra+"Message-ID: <"+id+"@probe.example>\r\nSubject: "+id+"\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nSynthetic")
+            .getBytes(StandardCharsets.UTF_8);
+    }
+
+    static void await(java.util.concurrent.CountDownLatch gate) {
+        try {assertTrue(gate.await(20,java.util.concurrent.TimeUnit.SECONDS),"probe barrier timed out");}
+        catch(InterruptedException failure){Thread.currentThread().interrupt();throw new AssertionError(failure);}
+    }
+
+    static class ProbeConnection implements MailClient.Connection {
+        final long validity;
+        final java.util.SortedMap<Long,byte[]> mails=new java.util.TreeMap<>();
+        final java.util.Set<Long> seen=java.util.concurrent.ConcurrentHashMap.newKeySet();
+        java.util.function.LongConsumer beforeReturn=uid->{};
+        ProbeConnection(long validity){this.validity=validity;}
+        public long uidValidity(){return validity;}
+        public List<Long> uids(long last,boolean unseen,int limit){return mails.keySet().stream()
+            .filter(uid->uid>last && (!unseen || !seen.contains(uid))).limit(limit).toList();}
+        public long size(long uid){return mails.get(uid).length;}
+        public byte[] fetch(long uid){byte[] result=mails.get(uid);beforeReturn.accept(uid);return result;}
+        public ParsedMail header(long uid){try{return ParsedMail.parse(mails.get(uid));}catch(Exception e){throw new AssertionError(e);}}
+        public void markSeen(long uid){seen.add(uid);}
+        public void close(){}
+    }
+
+    @Test
+    void probeRecipientGroupStillBypassesForeignCustomerCheck() throws Exception {
+        Setup s=setup(); Setup other=setup();
+        byte[] message=raw(s,"grouped-foreign-customer","Cc: Support-Team: "+other.contactAddress()+";\r\n");
+        ParsedMail parsed=ParsedMail.parse(message);
+        assertTrue(parsed.recipientsComplete());
+        assertEquals(List.of("support-team: "+other.contactAddress()+";"),parsed.cc());
+        ProbeConnection connection=new ProbeConnection(100);connection.mails.put(1L,message);
+        probe((m,p)->connection,1).fetch(s.mailbox());
+        assertEquals(1,tickets(s));
+        assertEquals("ticket",messages(s).get(0).get("state"));
+        System.out.println("E1 valid recipient group with foreign contact: automatic ticket");
+    }
+
+    @Test
+    void probeCombinedRecipientLimitIsPerHeaderInsteadOfPerMail() {
+        Setup s=setup();
+        String recipients=java.util.stream.IntStream.range(0,1000).mapToObj(i->"n"+i+"@unlisted.example")
+            .collect(java.util.stream.Collectors.joining(",\r\n "));
+        // The fixture adds one To address, bringing the mail total to 1001.
+        deliver(s,confirmed("nordwerk.example")+"Cc: "+recipients+"\r\n","Combined count 1001","Synthetic");
+        intake.fetch(s.mailbox());
+        assertEquals(1,tickets(s));
+        System.out.println("E2 1001 total To/Cc recipients: automatic ticket instead of recipients_incomplete");
+    }
+
+    @Test
+    void probeConcurrentComparisonSerializesUnknownDuplicateIds() throws Exception {
+        Setup s=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=200,last_uid=0,compare_until=2 where id=?",s.mailbox());
+        var both=new java.util.concurrent.CountDownLatch(2);
+        MailClient client=(mailbox,password)->{
+            ProbeConnection connection=new ProbeConnection(200);
+            connection.mails.put(1L,raw(s,"concurrent-same-id",""));
+            connection.mails.put(2L,raw(s,"concurrent-same-id",""));
+            connection.beforeReturn=uid->{if(uid==1){both.countDown();await(both);}};
+            return connection;
+        };
+        MailIntake first=probe(client,5),second=probe(client,5);
+        Future<?> a=POOL.submit(()->first.fetch(s.mailbox()));
+        Future<?> b=POOL.submit(()->second.fetch(s.mailbox()));
+        a.get(25,java.util.concurrent.TimeUnit.SECONDS); b.get(25,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1,tickets(s)); assertEquals(1,messages(s).size());
+        assertNull(jdbc.queryForObject("select compare_until from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        System.out.println("E3 concurrent comparison: one ticket, comparison completed, no deadlock");
+    }
+
+    @Test
+    void probeComparisonSurvivesFailureAndRecreatedIntake() {
+        Setup s=setup();
+        ProbeConnection old=new ProbeConnection(100);
+        for(long uid=1;uid<=6;uid++)old.mails.put(uid,raw(s,"restore-"+uid,""));
+        probe((m,p)->old,10).fetch(s.mailbox()); assertEquals(6,tickets(s));
+        ProbeConnection current=new ProbeConnection(200);current.mails.putAll(old.mails);
+        probe((m,p)->current,2).fetch(s.mailbox());
+        assertEquals(6L,jdbc.queryForObject("select compare_until from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        current.beforeReturn=uid->{throw new IllegalStateException("synthetic interrupted fetch");};
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->probe((m,p)->current,2).fetch(s.mailbox()));
+        assertEquals(2L,jdbc.queryForObject("select last_uid from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        current.beforeReturn=uid->{};
+        probe((m,p)->current,2).fetch(s.mailbox());
+        probe((m,p)->current,2).fetch(s.mailbox());
+        assertEquals(6,tickets(s));
+        assertNull(jdbc.queryForObject("select compare_until from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        System.out.println("E4 persisted comparison survives failure and new intake instances without duplicate tickets");
+    }
+
+    @Test
+    void probeSourceChangeDuringFetchPreservesNewPosition() throws Exception {
+        Setup s=setup();Setup other=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        ProbeConnection old=new ProbeConnection(100);old.mails.put(99L,raw(s,"old-source",""));
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        old.beforeReturn=uid->{entered.countDown();await(release);};
+        Future<?> previous=POOL.submit(()->probe((m,p)->old,1).fetch(s.mailbox()));
+        try {
+            await(entered);
+            Response change=s.admin().send("PUT","/api/v1/helpdesk/mailboxes/"+s.mailbox(),
+                mailboxRequest("During fetch "+COUNTER.incrementAndGet(),s.project(),other.account().getLogin(),MAIL_PASSWORD,
+                    MAIL.getImap().getPort(),AUTHSERV),"\"1\"");
+            assertEquals(200,change.status(),change.body());
+            ProbeConnection current=new ProbeConnection(200);current.mails.put(1L,raw(s,"new-source",""));
+            probe((m,p)->current,1).fetch(s.mailbox());
+        } finally {release.countDown();}
+        previous.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        Map<String,Object> state=jdbc.queryForMap("select source,uid_validity,last_uid from helpdesk_mailbox where id=?",s.mailbox());
+        assertEquals(2,state.get("source"));assertEquals(200L,state.get("uid_validity"));assertEquals(1L,state.get("last_uid"));
+        assertEquals(List.of(1,2),messages(s).stream().map(m->(Integer)m.get("source")).sorted().toList());
+        System.out.println("E5 source changed during old fetch: old mail recorded in old source; new position preserved");
+    }
+
+    @Test
+    void probeOldUidValidityCanAdvanceNewCursorPastUnprocessedMail() throws Exception {
+        Setup s=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        ProbeConnection old=new ProbeConnection(100);old.mails.put(100L,raw(s,"old-epoch",""));
+        var oldEntered=new java.util.concurrent.CountDownLatch(1);var oldRelease=new java.util.concurrent.CountDownLatch(1);
+        old.beforeReturn=uid->{oldEntered.countDown();await(oldRelease);};
+        Future<?> a=POOL.submit(()->probe((m,p)->old,1).fetch(s.mailbox()));
+        ProbeConnection current=new ProbeConnection(200);
+        current.mails.put(1L,raw(s,"new-epoch-one",""));current.mails.put(2L,raw(s,"new-epoch-two",""));
+        var newEntered=new java.util.concurrent.CountDownLatch(1);var newRelease=new java.util.concurrent.CountDownLatch(1);
+        Future<?> c=null;
+        try {
+            await(oldEntered);
+            probe((m,p)->current,1).fetch(s.mailbox());
+            current.beforeReturn=uid->{newEntered.countDown();await(newRelease);};
+            c=POOL.submit(()->probe((m,p)->current,1).fetch(s.mailbox()));
+            await(newEntered);
+            oldRelease.countDown();a.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            newRelease.countDown();c.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        } finally {oldRelease.countDown();newRelease.countDown();}
+        Map<String,Object> state=jdbc.queryForMap("select uid_validity,last_uid from helpdesk_mailbox where id=?",s.mailbox());
+        assertEquals(200L,state.get("uid_validity"));assertEquals(100L,state.get("last_uid"));
+        current.beforeReturn=uid->{};current.mails.put(3L,raw(s,"new-epoch-three",""));
+        probe((m,p)->current,5).fetch(s.mailbox());
+        assertEquals(3,messages(s).size());assertFalse(current.seen.contains(3L));
+        System.out.println("E6 overlapping UIDVALIDITY generations: new epoch cursor is 100 after processing UID 2; UID 3 skipped");
+    }
+
+    @Test
+    void probeMigrationPreservesExistingOriginAndSeparatesSources() throws Exception {
+        String url=TestDatabase.createEmptyDatabase();
+        org.flywaydb.core.Flyway.configure().dataSource(url,TestDatabase.username(),TestDatabase.password()).target("0026").load().migrate();
+        JdbcTemplate db=new JdbcTemplate(new org.springframework.jdbc.datasource.DriverManagerDataSource(url,TestDatabase.username(),TestDatabase.password()));
+        UUID mailbox=UUID.randomUUID(),company=UUID.randomUUID(),project=UUID.randomUUID(),message=UUID.randomUUID(),actor=UUID.randomUUID();
+        db.update("""
+            insert into helpdesk_mailbox(id,company_id,name,enabled,project_id,ticket_type,imap_host,imap_port,imap_security,
+                username,folder,max_bytes,uid_validity,last_uid,version,created_at,created_by,updated_at,updated_by)
+            values(?,?,?,true,?,'task','imap.example',993,'tls','synthetic','INBOX',25000000,100,7,1,now(),?,now(),?)
+            """,mailbox,company,"Migration probe",project,actor,actor);
+        db.update("""
+            insert into helpdesk_message(id,company_id,mailbox_id,project_id,uid_validity,uid,message_id,received_at,size_bytes,state,version)
+            values(?,?,?,?,100,7,'<migration@probe.example>',now(),0,'review',1)
+            """,message,company,mailbox,project);
+        org.flywaydb.core.Flyway.configure().dataSource(url,TestDatabase.username(),TestDatabase.password()).load().migrate();
+        assertEquals(1,db.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,mailbox));
+        assertEquals(1,db.queryForObject("select source from helpdesk_message where id=?",Integer.class,message));
+        assertEquals(7L,db.queryForObject("select last_uid from helpdesk_mailbox where id=?",Long.class,mailbox));
+        String insert="insert into helpdesk_message(id,company_id,mailbox_id,project_id,source,uid_validity,uid,received_at,size_bytes,state,version) values(?,?,?,?,?,100,7,now(),0,'review',1)";
+        db.update(insert,UUID.randomUUID(),company,mailbox,project,2);
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+            ()->db.update(insert,UUID.randomUUID(),company,mailbox,project,1));
+        assertEquals(2,db.queryForObject("select count(*) from helpdesk_message",Integer.class));
+        System.out.println("E7 V0026 populated -> V0027: origin and position preserved, new source allowed, same origin refused");
+    }
+
+    @Test
+    void probeUnexpectedFailureLogContainsNoMessagesOrThrowable() {
+        Setup s=setup();
+        String marker="SYNTHETIC_ERROR_TEXT_NOT_FOR_LOG";
+        var capture=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();capture.start();
+        var log=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(MailIntake.class);log.addAppender(capture);
+        try {
+            probe((m,p)->{throw new IllegalStateException(marker,new IOException(marker));},1).run();
+            assertTrue(capture.list.stream().anyMatch(e->e.getFormattedMessage().contains("IllegalStateException")));
+            assertTrue(capture.list.stream().noneMatch(e->e.getFormattedMessage().contains(marker) || e.getThrowableProxy()!=null));
+            assertEquals("helpdesk.intake_failed",jdbc.queryForObject("select error_code from helpdesk_mailbox where id=?",String.class,s.mailbox()));
+        } finally {log.detachAppender(capture);capture.stop();}
+        System.out.println("E8 unexpected nested failure: class names only, no failure text or attached throwable");
+    }
+
+    @Test
+    void probeContactWriteWithoutReadDoesNotExposeOptions() {
+        Setup s=setup();
+        ProbeConnection connection=new ProbeConnection(100);connection.mails.put(1L,raw(s,"field-rules",""));
+        probe((m,p)->connection,1).fetch(s.mailbox());
+        Browser user=member(s);
+        grant(user.id,s.project(),"ticket.read","ticket.edit","READ:title","READ:customer","WRITE:customer","WRITE:contact");
+        long number=jdbc.queryForObject("select number from ticket where project_id=?",Long.class,s.project());
+        Response response=user.get("/api/v1/projects/"+s.project()+"/tickets/"+number+"/helpdesk/options");
+        assertEquals(200,response.status(),response.body());assertFalse(response.body().contains(s.contactAddress()));
+        assertEquals(0,response.json().get(0).get("contacts").size());
+        System.out.println("E9 write contact without read contact: contact options hidden");
+    }
