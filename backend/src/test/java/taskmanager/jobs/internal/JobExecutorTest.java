@@ -71,6 +71,8 @@ class JobExecutorTest {
     static final Set<UUID> RUNNING = ConcurrentHashMap.newKeySet();
     static final AtomicInteger OVERLAPS = new AtomicInteger();
     static final AtomicInteger TICKS = new AtomicInteger();
+    /** What the handler of {@code test.resume} saw per run: attempt and {@code repeated()}. */
+    static final List<String> SEEN = java.util.Collections.synchronizedList(new ArrayList<>());
     static volatile JdbcTemplate effects;
 
     @TestConfiguration
@@ -111,6 +113,35 @@ class JobExecutorTest {
             // Records its effect under the job identifier, so a repeated attempt finds it and does not add a second one.
             return handler("test.effect", Duration.ofMinutes(1), execution -> effects.update(
                 "insert into test_job_effect (job_id, attempt) values (?, ?) on conflict (job_id) do nothing", execution.id(), execution.attempt()));
+        }
+
+        @Bean
+        JobHandler overflowHandler() {
+            // A stack overflow is unwound and leaves the virtual machine sound: the worker thread goes on (TASK-055, F1).
+            return handler("test.overflow", Duration.ofMinutes(1), execution -> {
+                throw new StackOverflowError("test");
+            });
+        }
+
+        @Bean
+        JobHandler outOfMemoryHandler() {
+            return handler("test.oom", Duration.ofMinutes(1), execution -> {
+                throw new OutOfMemoryError("test");
+            });
+        }
+
+        @Bean
+        JobHandler resumeHandler() {
+            // The first run waits until the stop interrupts it or fails; every run records what it saw (TASK-055, F2 and F3).
+            return handler("test.resume", Duration.ofMinutes(1), execution -> {
+                SEEN.add(execution.attempt() + "/" + execution.repeated());
+                if (!execution.repeated()) {
+                    if ("fail".equals(execution.payload().get("first"))) {
+                        throw new IllegalStateException("first run fails after its effect");
+                    }
+                    Thread.sleep(60_000);
+                }
+            });
         }
 
         @Bean
@@ -183,6 +214,7 @@ class JobExecutorTest {
         RUNNING.clear();
         OVERLAPS.set(0);
         TICKS.set(0);
+        SEEN.clear();
     }
 
     @AfterEach
@@ -440,6 +472,82 @@ class JobExecutorTest {
         assertEquals(Duration.ofSeconds(60), defaults.delayAfter(2));
         assertEquals(Duration.ofMinutes(4), defaults.delayAfter(4));
         assertEquals(Duration.ofHours(1), defaults.delayAfter(30));
+    }
+
+    @Test
+    void anErrorOfAHandlerIsRecordedAndTheWorkerThreadGoesOn() {
+        // Three threads, three overflowing jobs: before TASK-055 each one ended a thread and nothing ran any more.
+        List<UUID> overflowing = new ArrayList<>();
+        transaction.executeWithoutResult(status -> {
+            for (int i = 0; i < 3; i++) {
+                overflowing.add(jobs.enqueue(NewJob.of(null, "test.overflow").withMaxAttempts(1)));
+            }
+        });
+        started();
+        await("the overflowing jobs failed", () -> overflowing.stream().allMatch(id -> "failed".equals(state(id))));
+        assertEquals("job.failed", row(overflowing.get(0)).get("error_code"));
+        UUID next = enqueue(NewJob.of(null, "test.count"));
+        await("the next job is done", () -> "succeeded".equals(state(next)));
+    }
+
+    @Test
+    void anErrorThatLeavesTheVirtualMachineInDoubtEndsTheProcessAfterRecordingTheJob() {
+        UUID id = enqueue(NewJob.of(null, "test.oom").withMaxAttempts(1));
+        JobExecutor executor = executor();
+        List<Error> ended = java.util.Collections.synchronizedList(new ArrayList<>());
+        executor.fatal = ended::add;
+        executor.start();
+        await("the process is ended", () -> !ended.isEmpty());
+        assertTrue(ended.get(0) instanceof OutOfMemoryError);
+        assertEquals("failed", state(id));
+        assertTrue(JobExecutor.fatal(new OutOfMemoryError()));
+        assertFalse(JobExecutor.fatal(new StackOverflowError()));
+        assertFalse(JobExecutor.fatal(new NoClassDefFoundError()));
+    }
+
+    @Test
+    void aStopDuringTheLastAttemptGivesTheJobBackWithoutUsingTheAttempt() {
+        UUID id = enqueue(NewJob.of(null, "test.resume").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await("the job runs", () -> RUNS.containsKey(id));
+        executor.stop();
+        executors.remove(executor);
+        Map<String, Object> row = row(id);
+        assertEquals("queued", row.get("state"));
+        assertEquals(0, row.get("attempts"));
+        assertEquals("job.interrupted", row.get("error_code"));
+        assertNotNull(row.get("error_reference"));
+
+        // After the restart it runs once more, knows that a run began before and ends.
+        started();
+        await("the job is done", () -> "succeeded".equals(state(id)));
+        assertEquals(List.of("1/false", "1/true"), List.copyOf(SEEN));
+        assertEquals(1, row(id).get("attempts"));
+    }
+
+    @Test
+    void aJobPutInTheQueueAgainByTheAdministrationKnowsThatItRanBefore() {
+        UUID id = enqueue(NewJob.of(null, "test.resume").withPayload(Map.of("first", "fail")).withMaxAttempts(1));
+        started();
+        await("the first run failed", () -> "failed".equals(state(id)));
+        // What JobAdministration.retry does in its transaction.
+        transaction.executeWithoutResult(status -> repository.requeue(id, clock.instant()));
+        await("the retried job is done", () -> "succeeded".equals(state(id)));
+        assertEquals(List.of("1/false", "1/true"), List.copyOf(SEEN));
+        assertEquals(1, row(id).get("attempts"));
+    }
+
+    @Test
+    void theFirstRunOfAJobIsNotRepeatedAndALaterAttemptIs() {
+        UUID id = enqueue(NewJob.of(null, "test.fail").withMaxAttempts(2));
+        Instant now = clock.instant();
+        JobRepository.Claimed first = transaction.execute(status -> repository.claim("probe", now, now.plusSeconds(60))).orElseThrow();
+        assertEquals(1, first.attempt());
+        assertFalse(first.repeated());
+        transaction.executeWithoutResult(status -> repository.fail(id, "probe", now, now, "job.failed", UUID.randomUUID()));
+        JobRepository.Claimed second = transaction.execute(status -> repository.claim("probe", now, now.plusSeconds(60))).orElseThrow();
+        assertEquals(2, second.attempt());
+        assertTrue(second.repeated());
     }
 
     private static void await(CountDownLatch latch) {

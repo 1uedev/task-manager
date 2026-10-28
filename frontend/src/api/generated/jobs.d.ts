@@ -116,7 +116,7 @@ export interface components {
             /** @description Art des Auftrags, zum Beispiel recurring.files.cleanup */
             kind: string;
             state: components["schemas"]["JobState"];
-            /** @description Begonnene Versuche. */
+            /** @description Begonnene Versuche seit dem letzten Einstellen; ein durch den Stopp des Prozesses unterbrochener Versuch zählt nicht. */
             attempts: number;
             maxAttempts: number;
             /**
@@ -126,13 +126,16 @@ export interface components {
             runAt: string;
             /** Format: date-time */
             createdAt: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Beginn des letzten Laufs; bleibt beim erneuten Einstellen erhalten.
+             */
             startedAt: string | null;
             /** Format: date-time */
             finishedAt: string | null;
             /**
              * @description Stabiler Code des letzten Fehlers, etwa job.failed, job.timeout, job.lease_expired (der Ausführer endete ohne
-             *     Rückmeldung), job.handler_missing, job.interrupted (Stopp des Prozesses) oder ein Code des Fachmoduls.
+             *     Rückmeldung), job.handler_missing, job.interrupted (Stopp des Prozesses; der Versuch zählt nicht und der Auftrag wartet wieder) oder ein Code des Fachmoduls.
              */
             errorCode: string | null;
             /**

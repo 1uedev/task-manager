@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 34 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 35 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-055](#task-055-befunde-f1-bis-f4-der-prüfung-von-task-054-beheben) | Befunde F1 bis F4 der Prüfung von TASK-054 beheben | claude-20261028-jobsfix-01 | 2026-10-28 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -74,6 +72,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-052](#task-052-befunde-f1-bis-f5-der-prüfung-von-task-044-beheben) | Befunde F1 bis F5 der Prüfung von TASK-044 beheben | claude-20261026-configfix-01 | 2026-10-26 |
 | [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-27 |
 | [TASK-054](#task-054-dauerhafte-hintergrundaufträge-paket-a8) | Dauerhafte Hintergrundaufträge (Paket A8) | claude-20261027-jobs-01 | 2026-10-27 |
+| [TASK-055](#task-055-befunde-f1-bis-f4-der-prüfung-von-task-054-beheben) | Befunde F1 bis F4 der Prüfung von TASK-054 beheben | claude-20261028-jobsfix-01 | 2026-10-28 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -742,7 +741,7 @@ Nicht Teil: Mailabruf und Versand, Benachrichtigungen, SLA, Git, KI, Benutzerauf
 
 ## TASK-055 Befunde F1 bis F4 der Prüfung von TASK-054 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-jobsfix-01 · **Aktualisiert:** 2026-10-28
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-jobsfix-01 · **Aktualisiert:** 2026-10-28
 
 **Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-054 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md). **Arbeitsstand:** Holger hat am 28. Oktober 2026 der Empfehlung des Berichts zugestimmt („ich gehe mit deiner Empfehlung“): F1 vor dem ersten fachlichen Verbraucher beheben, F2 bis F4 im selben kleinen Korrekturauftrag, und ein geordneter Neustart verbraucht keine Versuche (F2). Branch claude/project-thread-t9h650 nach dem Merge dieser Reservierung; Ergebnis mit DEC-084, keine Migration vorgesehen.
 
@@ -758,4 +757,6 @@ Nicht Teil: die Hinweise H1 bis H8 des Berichts, weitere Änderungen am Modul `j
 
 **Abnahmekriterien:** Die Experimente E1 bis E3 aus docs/review-evidence/task-054 laufen mit umgekehrter Erwartung als Regression grün: nach einem Error läuft ein weiterer Auftrag, ein Stopp im letzten Versuch lässt den Auftrag wartend mit unverändertem Versuchszähler, nach dem erneuten Einstellen sieht der Bearbeiter `repeated() = true`; compose.yaml setzt eine Stoppfrist über der Gnadenfrist; alle bestehenden Tests und die Imageprüfung bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-084 als Ergebnis zur Prüfung stellen.
+**Nächster Schritt:** Getrennte KI prüft nach (DEC-040), besonders die Rückgabe eines durch den Stopp unterbrochenen Versuchs (`JobRepository.giveBack`, nur mit Besitzerbedingung), das Abholen über die CTE mit `FOR UPDATE SKIP LOCKED` samt `repeated`, und das bewusste Beenden des Prozesses nach einem `VirtualMachineError`. Holger nimmt TASK-054 und TASK-055 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-084. F1: `JobExecutor` vermerkt einen Error eines Bearbeiters und lässt den Faden weiterlaufen; nur `VirtualMachineError` außer `StackOverflowError` beendet nach dem Vermerk den Prozess mit Code 70. F2: Der Stopp merkt sich die Fäden, die er nach der Gnadenfrist unterbricht; deren Versuch gibt `JobRepository.giveBack` ohne Zählung zurück (`job.interrupted`, sofort fällig, auch nach dem letzten Versuch). F3: `JobExecution.repeated` ist ein eigener Wert aus `attempt > 1` oder einem früheren Start (`started_at` bleibt beim erneuten Einstellen erhalten, das Abholen liefert ihn über eine CTE). F4: `stop_grace_period: 30s` für `app` und `worker` in compose.yaml. Vertrag `contracts/jobs.openapi.yaml` (Beschreibungen von `attempts`, `startedAt`, `job.interrupted`), backend/README.md, docs/DEMO.md, Testattrappe der Browsertests (behält `startedAt` beim erneuten Einstellen). Neue Tests in `JobExecutorTest`: drei überlaufende Bearbeiter bei drei Fäden und danach ein erledigter Auftrag (E1 umgekehrt), `OutOfMemoryError` beendet über den ersetzbaren Ausgang, Stopp im letzten Versuch lässt den Auftrag mit 0 Versuchen wartend und der nächste Lauf sieht `repeated() = true` (E2 umgekehrt), erneut eingestellter Auftrag sieht `repeated() = true` (E3 umgekehrt), erster Lauf nicht wiederholt, zweiter Versuch schon. Lokal gelaufen (Java 21 mit `-Djava.version=21`, PostgreSQL 16): `JobExecutorTest` (20), `JobsApiTest`, `JobsContractTest` und die ganze Backend Suite (44 Testklassen, 340 Tests, ohne Fehler), `npm run verify` und alle 114 Browsertests. Nicht lokal gelaufen: Imageprüfung und echter `docker compose stop`; die Imageprüfung läuft in CI. PostgreSQL 18.6 und Java 25 prüft CI.

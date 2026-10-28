@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,11 @@ import taskmanager.jobs.RecurringTask;
  *       reporting (their lease expired) and puts due recurring tasks in the table.</li>
  *   <li>An attempt that takes longer than the timeout of its handler is interrupted and counts as failed with
  *       {@code job.timeout}. The log holds the details of every failure under the reference stored with the job.</li>
+ *   <li>An attempt that the stop of the executor interrupts does not count: the job waits again at once, even after its last
+ *       attempt (TASK-055).</li>
+ *   <li>An error of a handler is recorded like an exception and the worker thread goes on. Only an error that leaves the
+ *       virtual machine in doubt, such as {@link OutOfMemoryError}, ends the process, so that its environment starts it
+ *       again instead of keeping a half working executor (TASK-055).</li>
  * </ul>
  */
 @Component
@@ -72,10 +78,13 @@ class JobExecutor {
     private final String owner;
     private final Instant startedAt;
     private final Set<UUID> active = ConcurrentHashMap.newKeySet();
+    /** The worker threads that the stop interrupted, so their attempt does not count. */
+    private final Set<Thread> interruptedByStop = ConcurrentHashMap.newKeySet();
+    /** What happens after an error that leaves the virtual machine in doubt; tests replace it. */
+    Consumer<Error> fatal = JobExecutor::exit;
     private final Object idle = new Object();
     private final List<Thread> workers = new ArrayList<>();
     private volatile boolean running;
-    private volatile boolean stopping;
     private ScheduledExecutorService maintenance;
     private volatile Instant backlogReported = Instant.MIN;
 
@@ -177,7 +186,6 @@ class JobExecutor {
             return;
         }
         running = false;
-        stopping = true;
         synchronized (idle) {
             idle.notifyAll();
         }
@@ -185,8 +193,12 @@ class JobExecutor {
         for (Thread worker : workers) {
             join(worker, deadline);
         }
-        // A job that is still running after the grace period is interrupted; it runs again without waiting.
-        workers.stream().filter(Thread::isAlive).forEach(Thread::interrupt);
+        // A job that is still running after the grace period is interrupted; it runs again without waiting and without
+        // counting the attempt.
+        workers.stream().filter(Thread::isAlive).forEach(worker -> {
+            interruptedByStop.add(worker);
+            worker.interrupt();
+        });
         long last = System.nanoTime() + Duration.ofSeconds(3).toNanos();
         for (Thread worker : workers) {
             join(worker, last);
@@ -198,6 +210,7 @@ class JobExecutor {
             LOG.debug("The executor {} could not sign off: {}", owner, failure.toString());
         }
         workers.clear();
+        interruptedByStop.clear();
         LOG.info("Job executor {} stopped.", owner);
     }
 
@@ -228,8 +241,27 @@ class JobExecutor {
                 pause();
                 continue;
             }
-            execute(claimed.get());
+            try {
+                execute(claimed.get());
+            } catch (Error error) {
+                // Only an error that leaves the virtual machine in doubt gets here (TASK-055); this thread does not go on.
+                LOG.error("The job executor {} ends its process after {}.", owner, error.toString(), error);
+                fatal.accept(error);
+                return;
+            }
         }
+    }
+
+    /** Whether an error of a handler leaves the virtual machine in doubt; a stack overflow is unwound and harmless. */
+    static boolean fatal(Throwable failure) {
+        return failure instanceof VirtualMachineError && !(failure instanceof StackOverflowError);
+    }
+
+    /** Ends the process from another thread, so that the stop of the executor can wait for this one. */
+    private static void exit(Error error) {
+        Thread exit = new Thread(() -> System.exit(70), "job-executor-exit");
+        exit.setDaemon(false);
+        exit.start();
     }
 
     private void pause() {
@@ -256,7 +288,8 @@ class JobExecutor {
                 return;
             }
             Map<String, String> payload = transaction.execute(status -> jobs.payload(job.id()));
-            JobExecution execution = new JobExecution(job.id(), job.companyId(), job.kind(), payload, job.attempt(), job.maxAttempts());
+            JobExecution execution = new JobExecution(job.id(), job.companyId(), job.kind(), payload, job.attempt(), job.maxAttempts(),
+                job.repeated() || job.attempt() > 1);
             Watchdog watchdog = new Watchdog(Thread.currentThread());
             ScheduledFuture<?> alarm = maintenance.schedule(watchdog::fire, Math.max(1, target.timeout().toMillis()), TimeUnit.MILLISECONDS);
             Throwable failure = null;
@@ -277,7 +310,7 @@ class JobExecutor {
                 }
             } else {
                 record(job, failure, watchdog.fired());
-                if (failure instanceof Error error && !(failure instanceof AssertionError)) {
+                if (failure instanceof Error error && fatal(error)) {
                     throw error;
                 }
             }
@@ -291,6 +324,17 @@ class JobExecutor {
     }
 
     private void record(JobRepository.Claimed job, Throwable failure, boolean timedOut) {
+        UUID reference = UUID.randomUUID();
+        Instant now = clock.instant();
+        if (!timedOut && interruptedByStop.contains(Thread.currentThread())) {
+            // The stop interrupted the attempt: it does not count, the job waits again at once (TASK-055).
+            LOG.warn("Job {} of kind {} was interrupted by the stop of the executor in attempt {} of {} (reference {}); it waits again "
+                + "without using up the attempt.", job.id(), job.kind(), job.attempt(), job.maxAttempts(), reference, failure);
+            if (!retrying(() -> jobs.giveBack(job.id(), owner, now, "job.interrupted", reference))) {
+                LOG.warn("The executor {} no longer held job {}; it is not given back.", owner, job.id());
+            }
+            return;
+        }
         String code;
         boolean permanent = false;
         if (failure instanceof JobFailure known) {
@@ -298,15 +342,11 @@ class JobExecutor {
             permanent = known.permanent();
         } else if (timedOut) {
             code = "job.timeout";
-        } else if (stopping) {
-            code = "job.interrupted";
         } else {
             code = "job.failed";
         }
-        UUID reference = UUID.randomUUID();
-        Instant now = clock.instant();
         boolean last = permanent || job.attempt() >= job.maxAttempts();
-        Instant retryAt = last ? null : "job.interrupted".equals(code) ? now : now.plus(properties.delayAfter(job.attempt()));
+        Instant retryAt = last ? null : now.plus(properties.delayAfter(job.attempt()));
         LOG.warn("Job {} of kind {} failed in attempt {} of {} with {} (reference {}){}.", job.id(), job.kind(), job.attempt(), job.maxAttempts(),
             code, reference, last ? ", it does not run again" : ", next attempt at " + retryAt, failure);
         boolean recorded = retrying(() -> jobs.fail(job.id(), owner, now, retryAt, code, reference));

@@ -592,7 +592,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     }
     if (match[2] === 'retry') {
       if (!['failed', 'cancelled'].includes(job.state)) return problem(409, 'job.state_conflict');
-      Object.assign(job, { state: 'queued', attempts: 0, startedAt: null, finishedAt: null, errorCode: null, errorReference: null, runAt: '2026-10-27T10:00:00Z' });
+      Object.assign(job, { state: 'queued', attempts: 0, finishedAt: null, errorCode: null, errorReference: null, runAt: '2026-10-27T10:00:00Z' });
     } else {
       if (job.state !== 'queued') return problem(409, 'job.state_conflict');
       Object.assign(job, { state: 'cancelled', finishedAt: '2026-10-27T10:00:00Z' });
