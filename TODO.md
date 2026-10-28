@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 35 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 36 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-056](#task-056-befunde-r1-bis-r3-der-nachprüfung-von-task-055-beheben) | Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben | claude-20261028-jobsfix-02 | 2026-10-28 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -75,6 +73,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-053](#task-053-befunde-der-prüfung-von-task-051-und-der-nachprüfung-von-task-052-beheben) | Befunde der Prüfung von TASK-051 und der Nachprüfung von TASK-052 beheben | claude-20261026-attachfix-01 | 2026-10-27 |
 | [TASK-054](#task-054-dauerhafte-hintergrundaufträge-paket-a8) | Dauerhafte Hintergrundaufträge (Paket A8) | claude-20261027-jobs-01 | 2026-10-27 |
 | [TASK-055](#task-055-befunde-f1-bis-f4-der-prüfung-von-task-054-beheben) | Befunde F1 bis F4 der Prüfung von TASK-054 beheben | claude-20261028-jobsfix-01 | 2026-10-28 |
+| [TASK-056](#task-056-befunde-r1-bis-r3-der-nachprüfung-von-task-055-beheben) | Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben | claude-20261028-jobsfix-02 | 2026-10-28 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -765,7 +764,7 @@ Nicht Teil: die Hinweise H1 bis H8 des Berichts, weitere Änderungen am Modul `j
 
 ## TASK-056 Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-jobsfix-02 · **Aktualisiert:** 2026-10-28
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-jobsfix-02 · **Aktualisiert:** 2026-10-28
 
 **Bezug:** REQ-OPS-006, REQ-ACL-004 (nur der Teil Hintergrundprozess), REQ-HD-005 (nur die Grundlage: keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-055 (gemergt, BEREIT ZUR PRÜFUNG) und der Prüfbericht [docs/REVIEW_TASK-055_PR-183.md](docs/REVIEW_TASK-055_PR-183.md). **Arbeitsstand:** Holger hat am 28. Oktober 2026 im Projektgespräch zugestimmt („ja“), R1 bis R3 der Nachprüfung durch Codex zusammen zu beheben. Branch claude/project-thread-t9h650 nach dem Merge dieser Reservierung; Ergebnis mit DEC-085, keine Migration vorgesehen.
 
@@ -780,4 +779,6 @@ Nicht Teil: die übrigen Hinweise der Berichte zu TASK-054 und TASK-055 (unter a
 
 **Abnahmekriterien:** Die Experimente des Berichts laufen mit umgekehrter Erwartung als Regression grün: nach einem fatalen Error mit dauerhaft scheiterndem Vermerk wird der Ausgang aufgerufen (R1); ein beim Stopp gemeldeter endgültiger Fachfehler endet als `failed` mit seinem Code (R2); ein Bearbeiter, der seine Stoppunterbrechung erst nach der Rückkehr von `stop()` weitergibt, wird ohne Zählung zurückgegeben (R3); alle bestehenden Tests bleiben grün. Getrennte KI prüft nach (DEC-040); Holger nimmt fachlich ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und mit DEC-085 als Ergebnis zur Prüfung stellen.
+**Nächster Schritt:** Getrennte KI prüft nach (DEC-040), besonders die Klassifikation beim Stopp in `JobExecutor.record` (nur Error und `JobFailure.permanent` behalten ihre Bedeutung), die Markierung je Versuch (`Watchdog.stop`, entfernt erst am Ende von `execute`) und den Prozessausstieg trotz gescheitertem Vermerk. Holger nimmt TASK-054 bis TASK-056 fachlich ab.
+
+**Ergebnis und Prüfungen:** DEC-085. R1: `execute` versucht den Vermerk eines fatalen Errors bestmöglich und wirft den Error danach in jedem Fall weiter, so dass `work` den Prozess beendet. R2: `record` gibt einen vom Stopp unterbrochenen Versuch nur zurück, wenn kein Error und kein `JobFailure.permanent` gemeldet wurde. R3: Statt einer Menge unterbrochener Fäden, die `stop()` am Ende leerte, führt jeder Versuch seinen `Watchdog` mit den Merkmalen Zeitlimit und Stopp; `stop()` unterbricht über ihn nur laufende Versuche, und `execute` entfernt ihn erst nach dem Vermerk. Die Wartezeit des Stopps ist für Tests einstellbar (`stopGrace`, sonst 15 Sekunden). backend/README.md beschreibt die Grenzen des kooperativen Stopps, docs/DEMO.md trennt die 15 Sekunden des Ausführers von den 30 Sekunden von Docker. Neue Tests in `JobExecutorTest`, alle drei scheitern auf dem Stand vor TASK-056 und sind danach grün: fataler Error mit dauerhaft scheiterndem `JobRepository.fail` ruft den Ausgang auf (R1), beim Stopp gemeldetes `JobFailure.permanent` endet als `failed` mit seinem Code und einem Versuch (R2), ein Bearbeiter, der die Unterbrechung erst nach der Rückkehr von `stop()` weitergibt, wartet mit 0 Versuchen und `job.interrupted` (R3). Lokal gelaufen (Java 21 mit `-Djava.version=21`, PostgreSQL 16): `JobExecutorTest` (23) und die ganze Backend Suite (44 Testklassen, 343 Tests, ohne Fehler); die drei neuen Tests zusätzlich gegen den Stand vor TASK-056 (alle drei scheitern). Nicht lokal gelaufen: Frontend und Browsertests (keine Änderung an Vertrag oder Oberfläche), Imageprüfung und echter `docker compose stop`; das prüft CI. PostgreSQL 18.6 und Java 25 prüft CI.
