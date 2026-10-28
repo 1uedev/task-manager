@@ -5,7 +5,7 @@ index 70212ab..fe2a693 100644
 @@ -179,6 +179,40 @@ class JobExecutorTest {
              });
          }
- 
+
 +        // Review probes TASK-056 (Claude)
 +        @Bean
 +        JobHandler probeRetryable() {
@@ -46,7 +46,7 @@ index 70212ab..fe2a693 100644
 @@ -616,6 +650,95 @@ class JobExecutorTest {
          assertEquals("job.interrupted", row.get("error_code"));
      }
- 
+
 +    // ---- Review probes TASK-056 (Claude) ----
 +
 +    @Test
