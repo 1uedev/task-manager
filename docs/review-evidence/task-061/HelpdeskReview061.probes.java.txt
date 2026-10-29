@@ -1,0 +1,191 @@
+    @Autowired HelpdeskRepository reviewRepository;
+    @Test
+    void probeOverlappingOldCommitFirstStillMakesOneTicket() throws Exception {
+        Setup s=setup();byte[] raw=scripted(s,"old-commits-first","");
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        var held=new java.util.concurrent.atomic.AtomicBoolean();
+        PlatformTransactionManager decorated=new PlatformTransactionManager(){
+            public org.springframework.transaction.TransactionStatus getTransaction(org.springframework.transaction.TransactionDefinition d){return transactions.getTransaction(d);}
+            public void rollback(org.springframework.transaction.TransactionStatus status){transactions.rollback(status);}
+            public void commit(org.springframework.transaction.TransactionStatus status){
+                if(!held.get() && messages(s).size()==1 && held.compareAndSet(false,true)){entered.countDown();hold(release);}
+                transactions.commit(status);
+            }
+        };
+        ReviewConnection old=new ReviewConnection(100,raw);
+        Future<?> a=POOL.submit(()->probe((m,p)->old,decorated).fetch(s.mailbox()));
+        Future<?> b=null;
+        try{
+            hold(entered);b=POOL.submit(()->new ScriptedMailbox(200).put(1,raw).intake(context,5).fetch(s.mailbox()));
+            awaitMailboxWait();assertFalse(b.isDone());
+        }finally{release.countDown();}
+        a.get(20,java.util.concurrent.TimeUnit.SECONDS);b.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1,tickets(s));assertEquals(1,messages(s).size());
+        assertEquals(2,jdbc.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,s.mailbox()));
+        System.out.println("E7 overlapping fetches: old record commits first, new fetch waited on mailbox then recognizes Message-ID; one ticket, no deadlock");
+    }
+
+    @Test
+    void probeWaitingLockCurrentSeesCommittedGenerationAndRejectsIt() throws Exception {
+        Setup s=setup();jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        var tx=new TransactionTemplate(transactions);var changed=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        Future<?> restart=POOL.submit(()->tx.execute(status->{
+            assertTrue(reviewRepository.restartFolder(s.mailbox(),1,100,200,0,2L,"probe",java.time.Instant.now()));
+            changed.countDown();hold(release);return null;
+        }));
+        Future<Boolean> old=null;
+        try{
+            hold(changed);old=POOL.submit(()->tx.execute(status->reviewRepository.lockCurrent(s.mailbox(),1,100)));
+            awaitMailboxWait();assertFalse(old.isDone());
+        }finally{release.countDown();}
+        restart.get(20,java.util.concurrent.TimeUnit.SECONDS);assertFalse(old.get(20,java.util.concurrent.TimeUnit.SECONDS));
+        System.out.println("E6 restart holds row first: waiting lockCurrent evaluates new committed generation and rejects old state");
+    }
+
+    @Autowired SecretBox reviewSecrets;
+    @Autowired TicketOpener reviewOpener;
+    @Autowired java.time.Clock reviewClock;
+
+    private MailIntake probe(MailClient client, PlatformTransactionManager manager) {
+        return new MailIntake(reviewRepository,client,reviewSecrets,reviewOpener,
+            new HelpdeskProperties("",java.time.Duration.ofSeconds(60),25_000_000L,5,java.time.Duration.ofSeconds(5)),reviewClock,manager);
+    }
+
+    private static class ReviewConnection implements MailClient.Connection {
+        final long validity;final byte[] raw;
+        Runnable listHook=()->{};
+        int fetches;boolean seen;
+        ReviewConnection(long validity,byte[] raw){this.validity=validity;this.raw=raw;}
+        public long uidValidity(){return validity;}
+        public List<Long> uids(long last,boolean unseen,int limit){if(!unseen && limit!=Integer.MAX_VALUE)listHook.run();return last<1?List.of(1L):List.of();}
+        public long size(long uid){return raw.length;}
+        public byte[] fetch(long uid){fetches++;return raw;}
+        public ParsedMail header(long uid){try{return ParsedMail.headerOnly(new jakarta.mail.internet.MimeMessage(Session.getInstance(new Properties()),new java.io.ByteArrayInputStream(raw)));}catch(Exception e){throw new AssertionError(e);}}
+        public void markSeen(long uid){seen=true;}
+        public void close(){}
+    }
+
+    private void changeAccount(Setup s,Setup other) {
+        Response answer=s.admin().send("PUT","/api/v1/helpdesk/mailboxes/"+s.mailbox(),
+            mailboxRequest("Changed "+COUNTER.incrementAndGet(),s.project(),other.account().getLogin(),MAIL_PASSWORD,
+                MAIL.getImap().getPort(),AUTHSERV),"\"1\"");
+        assertEquals(200,answer.status(),answer.body());
+    }
+
+    @Test
+    void probeKnownOriginCanBeMarkedSeenAfterRestartOrSettingsCommit() {
+        for(boolean settings:List.of(false,true)) {
+            Setup s=setup();Setup other=setup();byte[] raw=scripted(s,"known-origin","");
+            new ScriptedMailbox(100).put(1,raw).intake(context,5).fetch(s.mailbox());
+            jdbc.update("update helpdesk_mailbox set last_uid=0 where id=?",s.mailbox());
+            ReviewConnection old=new ReviewConnection(100,raw);
+            old.listHook=()->{
+                if(settings)changeAccount(s,other);
+                else new ScriptedMailbox(200).put(1,raw).intake(context,5).fetch(s.mailbox());
+            };
+            probe((m,p)->old,transactions).fetch(s.mailbox());
+            assertTrue(old.seen,"observed defect: known origin marked seen after generation changed");
+            assertEquals(0,old.fetches,"known origin bypassed reading and lockCurrent");
+            assertEquals(1,tickets(s));assertEquals(1,messages(s).size());
+            assertEquals(2,jdbc.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,s.mailbox()));
+            assertEquals(settings?0L:1L,jdbc.queryForObject("select last_uid from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+            System.out.println("E1 known origin: stale markSeen after "+(settings?"settings":"folder restart")+" commit; DB outcome/cursor unchanged");
+        }
+    }
+
+    @Test
+    void probeNewRecordCanBeMarkedSeenAfterLaterRestartCommit() {
+        Setup s=setup();byte[] raw=scripted(s,"after-record","");
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        ReviewConnection old=new ReviewConnection(100,raw);
+        var triggered=new java.util.concurrent.atomic.AtomicBoolean();
+        PlatformTransactionManager decorated=new PlatformTransactionManager(){
+            public org.springframework.transaction.TransactionStatus getTransaction(org.springframework.transaction.TransactionDefinition d){return transactions.getTransaction(d);}
+            public void rollback(org.springframework.transaction.TransactionStatus status){transactions.rollback(status);}
+            public void commit(org.springframework.transaction.TransactionStatus status){
+                transactions.commit(status);
+                if(!triggered.get() && messages(s).size()==1 && triggered.compareAndSet(false,true)){
+                    new ScriptedMailbox(200).put(1,raw).intake(context,5).fetch(s.mailbox());
+                    assertFalse(old.seen,"restart commits before old markSeen is called");
+                }
+            }
+        };
+        probe((m,p)->old,decorated).fetch(s.mailbox());
+        assertTrue(triggered.get());assertTrue(old.seen,"observed defect: markSeen after newer generation committed");
+        assertEquals(1,tickets(s));assertEquals(1,messages(s).size());
+        assertEquals(2,jdbc.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,s.mailbox()));
+        System.out.println("E2 new record: second generation commits after record transaction, before old markSeen call; one ticket");
+    }
+
+    @Test
+    void probeSettingsBeforeRecordRejectOldMailWithoutMarkingSeen() throws Exception {
+        Setup s=setup();Setup other=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old=new ScriptedMailbox(100).put(1,scripted(s,"old-settings",""))
+            .beforeFetch(uid->{entered.countDown();hold(release);});
+        Future<?> running=POOL.submit(()->old.intake(context,5).fetch(s.mailbox()));
+        try{hold(entered);changeAccount(s,other);}finally{release.countDown();}
+        running.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(0,tickets(s));assertEquals(0,messages(s).size());assertFalse(old.seen(1));
+        assertNull(jdbc.queryForObject("select uid_validity from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        assertEquals(0L,jdbc.queryForObject("select last_uid from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        System.out.println("E3 settings committed before record: no mail, no ticket, no markSeen, no cursor write");
+    }
+
+    private void awaitMailboxWait() {
+        long end=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while(System.nanoTime()<end){
+            Integer waits=jdbc.queryForObject("select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%helpdesk_mailbox%'",Integer.class);
+            if(waits>0)return;
+            try{Thread.sleep(20);}catch(InterruptedException e){throw new AssertionError(e);}
+        }
+        throw new AssertionError("no mailbox lock wait observed");
+    }
+
+    @Test
+    void probeMailboxLockSerializesRestartAndSettingsWithoutDeadlock() throws Exception {
+        for(boolean settings:List.of(false,true)){
+            Setup s=setup();Setup other=setup();
+            jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+            var tx=new TransactionTemplate(transactions);var locked=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+            Future<?> holder=POOL.submit(()->tx.execute(status->{assertTrue(reviewRepository.lockCurrent(s.mailbox(),1,100));locked.countDown();hold(release);return null;}));
+            Future<?> contender=null;
+            try{
+                hold(locked);
+                contender=POOL.submit(()->{
+                    if(settings)changeAccount(s,other);
+                    else assertEquals(Boolean.TRUE,tx.execute(status->reviewRepository.restartFolder(s.mailbox(),1,100,200,0,2L,"probe",java.time.Instant.now())));
+                });
+                awaitMailboxWait();assertFalse(contender.isDone());
+            }finally{release.countDown();}
+            holder.get(20,java.util.concurrent.TimeUnit.SECONDS);contender.get(20,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(Boolean.FALSE,tx.execute(status->reviewRepository.lockCurrent(s.mailbox(),1,100)));
+            assertEquals(2,jdbc.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,s.mailbox()));
+            System.out.println("E4 mailbox lock serializes "+(settings?"settings update":"restartFolder")+"; observed DB wait, no deadlock");
+        }
+    }
+
+    @Test
+    void probeUsualRecipientFormsAndMalformedGroupsForBothPaths() throws Exception {
+        String[] good={"Lea <LEA@example.test>","\"Lang, Lea\" <lea@example.test>",
+            "=?UTF-8?Q?M=C3=BCller=2C_Lea?= <lea@example.test>",
+            "Team: Lea <lea@example.test>, \"Ben, B\" <ben@example.test>;","Leer:;","undisclosed-recipients:;",
+            "Lea (Kommentar) <lea@example.test>","Team: Lea <lea@example.test>,\r\n Ben <ben@example.test>;"};
+        int[] counts={1,1,1,2,0,0,1,2};
+        for(String head:List.of("To","Cc"))for(int i=0;i<good.length;i++){
+            byte[] raw=("From: sender@example.test\r\n"+head+": "+good[i]+"\r\nSubject: x\r\n\r\nBody").getBytes(StandardCharsets.UTF_8);
+            var mime=new jakarta.mail.internet.MimeMessage(Session.getInstance(new Properties()),new java.io.ByteArrayInputStream(raw));
+            ParsedMail full=ParsedMail.parse(raw),header=ParsedMail.headerOnly(mime);
+            assertTrue(full.recipientsComplete(),head+" "+i);assertTrue(header.recipientsComplete(),"header "+head+" "+i);
+            assertEquals(counts[i],full.to().size()+full.cc().size());assertEquals(full.to(),header.to());assertEquals(full.cc(),header.cc());
+            assertNull(header.body());
+        }
+        for(String head:List.of("To","Cc"))for(String bad:List.of("Outer: Inner: foreign@example.test;;","MissingEnd: foreign@example.test","Broken: \"unterminated <foreign@example.test>;")){
+            byte[] raw=("From: sender@example.test\r\n"+head+": "+bad+"\r\n\r\nBody").getBytes(StandardCharsets.UTF_8);
+            assertFalse(ParsedMail.parse(raw).recipientsComplete());
+            assertFalse(ParsedMail.headerOnly(new jakarta.mail.internet.MimeMessage(Session.getInstance(new Properties()),new java.io.ByteArrayInputStream(raw))).recipientsComplete());
+        }
+        System.out.println("E5 eight usual forms x To/Cc x full/header accepted; three malformed forms x To/Cc x full/header rejected");
+    }
