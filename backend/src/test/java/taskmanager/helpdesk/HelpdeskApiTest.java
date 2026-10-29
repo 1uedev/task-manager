@@ -53,6 +53,9 @@ import taskmanager.TestDatabase;
 import taskmanager.helpdesk.internal.MailIntake;
 import taskmanager.helpdesk.internal.ScriptedMailbox;
 import taskmanager.identity.account.AccountService;
+import taskmanager.jobs.JobExecution;
+import taskmanager.jobs.JobFailure;
+import taskmanager.jobs.JobHandler;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
 import tools.jackson.databind.JsonNode;
@@ -93,7 +96,8 @@ class HelpdeskApiTest {
     }
 
     private static GreenMail startMailServer() {
-        GreenMail server = new GreenMail(ServerSetupTest.IMAP.dynamicPort());
+        GreenMail server = new GreenMail(new com.icegreen.greenmail.util.ServerSetup[] {ServerSetupTest.IMAP.dynamicPort(),
+            ServerSetupTest.SMTP.dynamicPort()});
         server.start();
         return server;
     }
@@ -944,6 +948,341 @@ class HelpdeskApiTest {
         assertEquals(java.util.Arrays.asList("recipients_incomplete", null, "recipients_incomplete"),
             messages.stream().map(row -> row.get("reason")).toList());
         assertEquals(1, tickets(setup));
+    }
+
+    // ---------------------------------------------------------------- replies (TASK-058)
+
+    /** A member who may send replies in the project of the setup: helpdesk.reply and the read rules of every field. */
+    private Browser replier(Setup setup) {
+        Browser replier = member(setup);
+        grant(replier.id, setup.project(), "helpdesk.reply", "ticket.read", "READ:*");
+        return replier;
+    }
+
+    /** Gives the mailbox of the setup an SMTP server, here GreenMail or a scripted one, and its address. */
+    private void smtp(Setup setup, int port) {
+        jdbc.update("update helpdesk_mailbox set smtp_host = '127.0.0.1', smtp_port = ?, smtp_security = 'none', address = ? where id = ?",
+            port, setup.address(), setup.mailbox());
+    }
+
+    /** A ticket from a mail of the confirmed contact; returns its number and the Message-ID of the mail. */
+    private Object[] ticketFromMail(Setup setup, String subject) {
+        String messageId = "<" + UUID.randomUUID() + "@nordwerk.example>";
+        deliverRaw(setup, confirmed("nordwerk.example") + "From: Lea Lang <" + setup.contactAddress() + ">\r\nTo: " + setup.address()
+            + "\r\nSubject: " + subject + "\r\nMessage-ID: " + messageId + "\r\nDate: Wed, 28 Oct 2026 10:00:00 +0100\r\n"
+            + "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBitte helfen.\r\n");
+        intake.fetch(setup.mailbox());
+        long number = jdbc.queryForObject("select number from ticket where project_id = ? order by number desc limit 1", Long.class, setup.project());
+        return new Object[] {number, messageId};
+    }
+
+    private String ticketPath(Setup setup, long number) {
+        return "/api/v1/projects/" + setup.project() + "/tickets/" + number + "/helpdesk";
+    }
+
+    private Response reply(Browser browser, Setup setup, long number, String body) {
+        return browser.send("POST", ticketPath(setup, number) + "/replies",
+            Map.of("mailboxId", setup.mailbox(), "subject", "Re: Anfrage", "body", body), null);
+    }
+
+    private JobHandler replyHandler() {
+        return context.getBeansOfType(JobHandler.class).values().stream().filter(h -> h.kind().equals("helpdesk.reply")).findFirst().orElseThrow();
+    }
+
+    /** Runs the current job of the reply as the executor would, in the given attempt. */
+    private RuntimeException runReplyJob(UUID reply, int attempt) {
+        Map<String, Object> job = jdbc.queryForMap("select j.id, j.company_id, j.max_attempts from job j join helpdesk_reply r on r.job_id = j.id where r.id = ?",
+            reply);
+        try {
+            replyHandler().handle(new JobExecution((UUID) job.get("id"), (UUID) job.get("company_id"), "helpdesk.reply",
+                Map.of("reply", reply.toString()), attempt, (Integer) job.get("max_attempts"), attempt > 1));
+            return null;
+        } catch (RuntimeException failure) {
+            return failure;
+        } catch (Exception unexpected) {
+            throw new AssertionError(unexpected);
+        }
+    }
+
+    private String replyState(UUID reply) {
+        return jdbc.queryForObject("select state from helpdesk_reply where id = ?", String.class, reply);
+    }
+
+    private List<jakarta.mail.internet.MimeMessage> receivedBy(String address) {
+        List<jakarta.mail.internet.MimeMessage> result = new ArrayList<>();
+        for (jakarta.mail.internet.MimeMessage message : MAIL.getReceivedMessages()) {
+            try {
+                if (message.getAllRecipients() != null && java.util.Arrays.stream(message.getAllRecipients())
+                        .anyMatch(a -> ((jakarta.mail.internet.InternetAddress) a).getAddress().equalsIgnoreCase(address))) {
+                    result.add(message);
+                }
+            } catch (jakarta.mail.MessagingException unreadable) {
+                throw new AssertionError(unreadable);
+            }
+        }
+        return result;
+    }
+
+    @Test
+    void aConfirmedReplyIsSentOnceWithTheHeadersOfItsThread() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Object[] ticket = ticketFromMail(setup, "Drucker defekt");
+        long number = (Long) ticket[0];
+        Browser replier = replier(setup);
+
+        Response view = replier.get(ticketPath(setup, number));
+        assertTrue(view.json().get("replyAllowed").asBoolean(), view.body());
+        Response form = replier.get(ticketPath(setup, number) + "/reply");
+        assertEquals(200, form.status(), form.body());
+        assertEquals("Re: Drucker defekt", form.json().get("subject").asString());
+        assertEquals(setup.mailbox().toString(), form.json().get("suggestedMailbox").asString());
+        assertEquals(setup.contactAddress(), form.json().get("recipients").get(0).asString());
+
+        Response sent = reply(replier, setup, number, "Wir kümmern uns darum.");
+        assertEquals(201, sent.status(), sent.body());
+        assertEquals("pending", sent.json().get("state").asString());
+        UUID reply = UUID.fromString(sent.json().get("id").asString());
+        assertEquals(1, jdbc.queryForObject("select count(*) from job where kind = 'helpdesk.reply' and payload->>'reply' = ?", Long.class,
+            reply.toString()), "exactly one send job, written with the reply");
+        assertEquals(0, receivedBy(setup.contactAddress()).size(), "nothing is sent before the job runs");
+
+        assertNull(runReplyJob(reply, 1));
+        assertEquals("sent", replyState(reply));
+        List<jakarta.mail.internet.MimeMessage> received = receivedBy(setup.contactAddress());
+        assertEquals(1, received.size());
+        jakarta.mail.internet.MimeMessage mail = received.get(0);
+        assertEquals("Re: Anfrage", mail.getSubject());
+        assertEquals(setup.address(), ((jakarta.mail.internet.InternetAddress) mail.getFrom()[0]).getAddress());
+        assertEquals(ticket[1], mail.getHeader("In-Reply-To")[0]);
+        assertEquals("<" + reply + "@firma.example>", mail.getMessageID());
+        assertNull(mail.getHeader("Auto-Submitted"), "a reply of a person is no automatic mail");
+        assertTrue(GreenMailUtil.getBody(mail).contains("Wir k"), GreenMailUtil.getBody(mail));
+
+        // The job running again, after a lost outcome or a retry by the administration, sends nothing.
+        assertNull(runReplyJob(reply, 2));
+        assertEquals(1, receivedBy(setup.contactAddress()).size());
+
+        // The reply is in the ticket and in its history.
+        Response after = replier.get(ticketPath(setup, number));
+        assertEquals("sent", after.json().get("replies").get(0).get("state").asString());
+        Response history = replier.get("/api/v1/projects/" + setup.project() + "/tickets/" + number + "/history");
+        assertTrue(history.body().contains(reply.toString()), history.body());
+        assertEquals(List.of("reply.confirmed"), jdbc.queryForList("select operation from helpdesk_audit_event where target_id = ?", String.class, reply));
+    }
+
+    @Test
+    void theAnswerOfTheCustomerJoinsTheTicketOfTheReply() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Netzwerk")[0];
+        Browser replier = replier(setup);
+        UUID reply = UUID.fromString(reply(replier, setup, number, "Bitte neu starten.").json().get("id").asString());
+        assertNull(runReplyJob(reply, 1));
+        String replyId = "<" + reply + "@firma.example>";
+        long ticketsBefore = tickets(setup);
+
+        // A confirmed answer of the contact joins the ticket.
+        deliver(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyId + "\r\nReferences: <alt@nordwerk.example> " + replyId + "\r\n",
+            "Re: Re: Netzwerk", "Hat geholfen.");
+        intake.fetch(setup.mailbox());
+        assertEquals(ticketsBefore, tickets(setup), "no new ticket");
+        Map<String, Object> answer = jdbc.queryForMap("select * from helpdesk_message where mailbox_id = ? order by uid desc limit 1", setup.mailbox());
+        assertEquals("ticket", answer.get("state"));
+        UUID ticketId = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, setup.project(), number);
+        assertEquals(ticketId, answer.get("ticket_id"));
+        assertEquals(2, replier.get(ticketPath(setup, number)).json().get("mails").size());
+
+        // Unconfirmed, it waits with the ticket as a hint, and a reviewer adds it there.
+        deliver(setup, "In-Reply-To: " + replyId + "\r\n", "Re: Netzwerk", "Noch eine Frage.");
+        intake.fetch(setup.mailbox());
+        Map<String, Object> waiting = jdbc.queryForMap("select * from helpdesk_message where mailbox_id = ? order by uid desc limit 1", setup.mailbox());
+        assertEquals("review", waiting.get("state"));
+        assertEquals("sender_unconfirmed", waiting.get("reason"));
+        assertEquals(ticketId, waiting.get("related_ticket_id"));
+        Browser reviewer = reviewer(setup);
+        UUID waitingId = (UUID) waiting.get("id");
+        Response shown = reviewer.get("/api/v1/helpdesk/inbox/" + waitingId);
+        assertEquals(number, shown.json().get("relatedTicket").get("number").asLong());
+        Response attached = reviewer.send("POST", "/api/v1/helpdesk/inbox/" + waitingId + "/attach", null, shown.etag());
+        assertEquals(200, attached.status(), attached.body());
+        assertEquals(number, attached.json().get("number").asLong());
+        assertEquals(ticketsBefore, tickets(setup));
+        assertEquals(3, replier.get(ticketPath(setup, number)).json().get("mails").size());
+        assertEquals(409, reviewer.send("POST", "/api/v1/helpdesk/inbox/" + waitingId + "/attach", null, "\"2\"").status());
+
+        // A confirmed contact of another customer answering the reply does not join the ticket.
+        Response other = setup.admin().send("POST", "/api/v1/helpdesk/customers", Map.of("name", "Südtechnik " + COUNTER.incrementAndGet(),
+            "projects", List.of(setup.project())), null);
+        String foreign = "mia" + COUNTER.incrementAndGet() + "@suedtechnik.example";
+        assertEquals(201, setup.admin().send("POST", "/api/v1/helpdesk/contacts", Map.of("customerId", other.json().get("id").asString(),
+            "name", "Mia", "addresses", List.of(foreign)), null).status());
+        deliverRaw(setup, confirmed("suedtechnik.example") + "In-Reply-To: " + replyId + "\r\nFrom: Mia <" + foreign + ">\r\nTo: "
+            + setup.address() + "\r\nSubject: Re: Netzwerk\r\nMessage-ID: <" + UUID.randomUUID() + "@suedtechnik.example>\r\n\r\nHallo\r\n");
+        intake.fetch(setup.mailbox());
+        Map<String, Object> mismatch = jdbc.queryForMap("select * from helpdesk_message where mailbox_id = ? order by uid desc limit 1", setup.mailbox());
+        assertEquals("reply_customer_mismatch", mismatch.get("reason"));
+        assertEquals(ticketsBefore, tickets(setup));
+
+        // An auto responder answering the reply and the reply itself coming back get no ticket and no answer.
+        long replies = jdbc.queryForObject("select count(*) from helpdesk_reply", Long.class);
+        deliver(setup, confirmed("nordwerk.example") + "Auto-Submitted: auto-replied\r\nIn-Reply-To: " + replyId + "\r\n", "Abwesend", "Bin weg.");
+        deliverRaw(setup, "From: Support <" + setup.address() + ">\r\nTo: " + setup.contactAddress() + "\r\nSubject: Re: Anfrage\r\nMessage-ID: "
+            + replyId + "\r\n\r\nKopie\r\n");
+        intake.fetch(setup.mailbox());
+        List<Map<String, Object>> last = jdbc.queryForList("select state, reason from helpdesk_message where mailbox_id = ? order by uid desc limit 2",
+            setup.mailbox());
+        assertEquals("own_reply", last.get(0).get("reason"));
+        assertEquals("automatic", last.get(1).get("reason"));
+        assertTrue(last.stream().allMatch(m -> m.get("state").equals("automatic")));
+        assertEquals(ticketsBefore, tickets(setup));
+        assertEquals(replies, jdbc.queryForObject("select count(*) from helpdesk_reply", Long.class), "nothing answers by itself");
+    }
+
+    @Test
+    void repliesNeedTheirRightAndTheContactOfTheTicket() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Rechte")[0];
+        String path = ticketPath(setup, number);
+
+        // Reading every field is not enough without helpdesk.reply.
+        Browser reader = member(setup);
+        grant(reader.id, setup.project(), "ticket.read", "READ:*");
+        assertFalse(reader.get(path).json().get("replyAllowed").asBoolean());
+        assertEquals(403, reader.get(path + "/reply").status());
+        assertEquals(403, reply(reader, setup, number, "Text").status());
+        // helpdesk.reply without the read rule for the mails is not enough either.
+        Browser blind = member(setup);
+        grant(blind.id, setup.project(), "helpdesk.reply", "ticket.read", "READ:title", "READ:contact");
+        assertEquals(403, reply(blind, setup, number, "Text").status());
+        // Someone outside the project does not see the ticket.
+        assertEquals(404, reply(person(), setup, number, "Text").status());
+
+        Browser replier = replier(setup);
+        Response foreign = replier.send("POST", path + "/replies", Map.of("mailboxId", setup.mailbox(), "to", "jemand@fremd.example",
+            "subject", "Re", "body", "Text"), null);
+        assertEquals(400, foreign.status());
+        assertTrue(foreign.body().contains("to.not_of_contact"), foreign.body());
+        Response empty = replier.send("POST", path + "/replies", Map.of("mailboxId", setup.mailbox(), "subject", "Zwei\nZeilen", "body", " "), null);
+        assertTrue(empty.body().contains("subject.invalid") && empty.body().contains("body.invalid"), empty.body());
+        jdbc.update("update helpdesk_mailbox set smtp_host = null where id = ?", setup.mailbox());
+        Response unavailable = reply(replier, setup, number, "Text");
+        assertTrue(unavailable.body().contains("mailboxId.unavailable"), unavailable.body());
+        smtp(setup, MAIL.getSmtp().getPort());
+
+        // Without a contact on the ticket there is nobody to answer.
+        Browser editor = reviewer(setup);
+        assertEquals(200, editor.send("PUT", path + "/customer", Map.of("customerId", setup.customer()), null).status());
+        assertEquals(409, reply(replier, setup, number, "Text").status());
+        assertEquals(0, jdbc.queryForObject("select count(*) from helpdesk_reply where project_id = ?", Long.class, setup.project()));
+    }
+
+    @Test
+    void aMissingAnswerOfTheServerLeavesTheReplyUncertainAndNothingRepeatsIt() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.DROP_AFTER_DATA)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Unklar")[0];
+            Browser replier = replier(setup);
+            UUID reply = UUID.fromString(reply(replier, setup, number, "Antwort").json().get("id").asString());
+
+            RuntimeException failure = runReplyJob(reply, 1);
+            assertTrue(failure instanceof JobFailure known && known.permanent() && known.code().equals("helpdesk.send_uncertain"), String.valueOf(failure));
+            assertEquals("uncertain", replyState(reply));
+            assertEquals(1, server.handedOver().size());
+            // A later run of the same job does not send again.
+            assertNull(runReplyJob(reply, 2));
+            assertEquals(1, server.connections());
+
+            // The open sends show it to whoever may reply.
+            Response open = replier.get("/api/v1/helpdesk/replies");
+            assertEquals("uncertain", find(open.json(), reply).get("state").asString());
+            assertEquals(0, person().get("/api/v1/helpdesk/replies").json().size());
+
+            // A person sends again only with the risk of a duplicate confirmed.
+            Response view = replier.get(ticketPath(setup, number));
+            String etag = "\"" + view.json().get("replies").get(0).get("version").asLong() + "\"";
+            Response refused = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of(), etag);
+            assertEquals(409, refused.status());
+            assertEquals("helpdesk.reply_uncertain", refused.code());
+            server.mode(ScriptedSmtp.Mode.ACCEPT);
+            Response again = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of("duplicateAccepted", true), etag);
+            assertEquals(200, again.status(), again.body());
+            assertEquals(2, again.json().get("sends").asInt());
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("sent", replyState(reply));
+            assertEquals(2, server.handedOver().size());
+        }
+    }
+
+    @Test
+    void aRefusalFailsTheReplyAndATemporaryOneWaitsForTheNextAttempt() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.REFUSE_RECIPIENT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Abgelehnt")[0];
+            Browser replier = replier(setup);
+            UUID refused = UUID.fromString(reply(replier, setup, number, "Eins").json().get("id").asString());
+            RuntimeException failure = runReplyJob(refused, 1);
+            assertTrue(failure instanceof JobFailure known && known.permanent(), String.valueOf(failure));
+            assertEquals("failed", replyState(refused));
+            assertEquals("helpdesk.recipient_refused", jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, refused));
+
+            server.mode(ScriptedSmtp.Mode.DEFER_RECIPIENT);
+            UUID deferred = UUID.fromString(reply(replier, setup, number, "Zwei").json().get("id").asString());
+            failure = runReplyJob(deferred, 1);
+            assertTrue(failure instanceof JobFailure known && !known.permanent(), String.valueOf(failure));
+            assertEquals("pending", replyState(deferred));
+            failure = runReplyJob(deferred, 5);
+            assertTrue(failure instanceof JobFailure known && known.permanent(), String.valueOf(failure));
+            assertEquals("failed", replyState(deferred));
+            assertEquals(0, server.handedOver().size(), "the server never took a mail");
+        }
+        // A server that is not reachable sent nothing for sure: the reply waits for the next attempt.
+        UUID unreachable;
+        try (ServerSocket closed = new ServerSocket(0)) {
+            smtp(setup, closed.getLocalPort());
+        }
+        long number = jdbc.queryForObject("select number from ticket where project_id = ?", Long.class, setup.project());
+        unreachable = UUID.fromString(reply(replier(setup), setup, number, "Drei").json().get("id").asString());
+        RuntimeException failure = runReplyJob(unreachable, 1);
+        assertTrue(failure instanceof JobFailure known && !known.permanent() && known.code().equals("helpdesk.connection_failed"), String.valueOf(failure));
+        assertEquals("pending", replyState(unreachable));
+    }
+
+    @Test
+    void anAttemptWhoseOutcomeWasLostIsNotRepeatedAndAChangedRecipientIsNotWritten() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Abbruch")[0];
+            Browser replier = replier(setup);
+            // The process ended after the attempt began: the reply is still marked as being sent.
+            UUID lost = UUID.fromString(reply(replier, setup, number, "Eins").json().get("id").asString());
+            jdbc.update("update helpdesk_reply set state = 'sending' where id = ?", lost);
+            assertNull(runReplyJob(lost, 2));
+            assertEquals("uncertain", replyState(lost));
+            assertEquals("helpdesk.send_interrupted", jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, lost));
+            assertEquals(0, server.connections());
+
+            // A person who learned that it arrived records it as sent.
+            Response view = replier.get(ticketPath(setup, number));
+            String etag = "\"" + find(view.json().get("replies"), lost).get("version").asLong() + "\"";
+            Response settled = replier.send("POST", ticketPath(setup, number) + "/replies/" + lost + "/settle", null, etag);
+            assertEquals(200, settled.status(), settled.body());
+            assertEquals("sent", settled.json().get("state").asString());
+            assertEquals(0, server.connections());
+
+            // The contact lost the address between the confirmation and the send: nothing is sent.
+            UUID changed = UUID.fromString(reply(replier, setup, number, "Zwei").json().get("id").asString());
+            jdbc.update("delete from helpdesk_contact_address where contact_id = ?", setup.contact());
+            RuntimeException ignored = runReplyJob(changed, 1);
+            assertNull(ignored);
+            assertEquals("failed", replyState(changed));
+            assertEquals("helpdesk.recipient_changed", jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, changed));
+            assertEquals(0, server.connections());
+        }
     }
 
     private static String unknown(String prefix, int count) {

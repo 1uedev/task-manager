@@ -66,7 +66,7 @@ class PermissionsController {
     static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "helpdesk.manage", "jobs.manage",
         "permissions.audit.read", "permissions.manage", "projects.manage", "session_duration.manage");
     /** For one project, or for every project the account is a member of when granted without a project. */
-    static final List<String> PROJECT_ACTIONS = List.of("helpdesk.review", "project.manage", "project.read", "tag.create", "tags.manage",
+    static final List<String> PROJECT_ACTIONS = List.of("helpdesk.reply", "helpdesk.review", "project.manage", "project.read", "tag.create", "tags.manage",
         "ticket.create", "ticket.edit", "ticket.read");
     static final Map<String, List<String>> FIELDS = Map.of(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "mail",
         "status", "tags", "title", "type"));

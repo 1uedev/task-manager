@@ -271,6 +271,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/helpdesk/inbox/{id}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mail zum Ticket der beantworteten Antwort nehmen (Projektaktion helpdesk.review, If-Match)
+         * @description Nur für wartende Mails mit `relatedTicket` (sonst 409 `helpdesk.no_related_ticket` oder `helpdesk.message_processed`).
+         *     Dateien werden Anhänge des Tickets, die Mail ein Eintrag der Historie. Kontakt und Kunde der Mail stehen nur dabei,
+         *     wenn der Absender Kontakt des Kunden des Tickets ist.
+         */
+        post: operations["attachMessageToTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/helpdesk/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Noch nicht angenommene Antworten in den Projekten mit helpdesk.reply, neueste zuerst
+         * @description Ausstehende, gescheiterte und unklare Antworten, höchstens 100.
+         */
+        get: operations["listOpenReplies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/tickets/{number}/helpdesk": {
         parameters: {
             query?: never;
@@ -325,6 +367,88 @@ export interface paths {
          */
         put: operations["setTicketCustomer"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/helpdesk/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Was eine Antwort an den Kontakt verwenden kann (helpdesk.reply, Leseregeln mail und contact)
+         * @description Ohne Kontakt am Ticket 409 `helpdesk.reply_no_contact`.
+         */
+        get: operations["getReplyForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/helpdesk/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Antwort an den Kontakt bestätigen; der Versand folgt im Hintergrund
+         * @description Ohne `to` geht die Antwort an die erste Adresse des Kontakts. Verletzungen: `mailboxId.unavailable`,
+         *     `to.not_of_contact`, `subject.invalid`, `body.invalid`. Die Antwort ist ein Eintrag des Felds `mail` in der Historie.
+         */
+        post: operations["sendReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gescheiterte oder unklare Antwort erneut senden (If-Match)
+         * @description Nur im Zustand `failed` oder `uncertain` (sonst 409 `helpdesk.reply_not_failed`). Eine unklare Antwort kann den Kunden
+         *     schon erreicht haben; ohne `duplicateAccepted` antwortet der Server mit 409 `helpdesk.reply_uncertain`.
+         */
+        post: operations["sendReplyAgain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unklare Antwort als angenommen festhalten, ohne zu senden (If-Match)
+         * @description Nur im Zustand `uncertain` (sonst 409 `helpdesk.reply_not_uncertain`). Steht im Audit.
+         */
+        post: operations["settleReply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -522,7 +646,8 @@ export interface components {
             state: components["schemas"]["MessageState"];
             /**
              * @description Warum die Mail geprüft werden muss: sender_missing, sender_ambiguous, sender_unknown, sender_unconfirmed,
-             *     customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable.
+             *     customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable,
+             *     reply_customer_mismatch (Antwort auf ein Ticket eines anderen Kunden), own_reply (eigene Antwort des Helpdesks).
              */
             reason: string | null;
             ticket: {
@@ -540,6 +665,13 @@ export interface components {
             /** Format: uuid */
             processedBy: string | null;
             discardReason: string | null;
+            /** @description Das Ticket der Antwort, auf die diese wartende Mail antwortet (TASK-058). */
+            relatedTicket: {
+                /** Format: uuid */
+                projectId: string;
+                /** Format: int64 */
+                number: number;
+            } | null;
             /** Format: int64 */
             version: number;
         };
@@ -601,6 +733,72 @@ export interface components {
             customer: components["schemas"]["NamedReference"] | null;
             contact: components["schemas"]["TicketContact"] | null;
             mails: components["schemas"]["TicketMail"][] | null;
+            /** @description Die Antworten des Tickets, wie die Mails nur mit der Leseregel mail. */
+            replies: components["schemas"]["Reply"][] | null;
+            /** @description Ob die Person dem Kontakt antworten darf; nur eine Momentaufnahme, der Server prüft beim Senden. */
+            replyAllowed: boolean;
+        };
+        /** @enum {string} */
+        ReplyState: "pending" | "sent" | "failed" | "uncertain";
+        Reply: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            mailboxId: string;
+            fromAddress: string;
+            toAddress: string;
+            subject: string;
+            body: string;
+            state: components["schemas"]["ReplyState"];
+            /**
+             * @description Letzter Fehler ohne Text des Mailservers, etwa helpdesk.connection_failed, helpdesk.authentication_failed,
+             *     helpdesk.recipient_refused, helpdesk.send_refused, helpdesk.send_uncertain, helpdesk.send_interrupted,
+             *     helpdesk.mailbox_unavailable, helpdesk.recipient_changed, helpdesk.author_inactive.
+             */
+            errorCode: string | null;
+            /** @description Wie oft eine Person den Versand bestätigt hat. */
+            sends: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: date-time */
+            attemptedAt: string | null;
+            /** Format: date-time */
+            sentAt: string | null;
+            /** Format: int64 */
+            version: number;
+        };
+        ReplyForm: {
+            mailboxes: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                address: string;
+            }[];
+            /** Format: uuid */
+            contactId: string;
+            contactName: string;
+            recipients: string[];
+            subject: string | null;
+            /** Format: uuid */
+            suggestedMailbox: string | null;
+        };
+        OpenReply: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            /** Format: int64 */
+            number: number;
+            toAddress: string;
+            subject: string;
+            state: components["schemas"]["ReplyState"];
+            errorCode: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            attemptedAt: string | null;
         };
         CustomerOption: {
             /** Format: uuid */
@@ -636,6 +834,7 @@ export interface components {
         Id: string;
         ProjectId: string;
         Number: number;
+        ReplyId: string;
         /** @description Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412. */
         IfMatch: string;
     };
@@ -1139,6 +1338,59 @@ export interface operations {
             428: components["responses"]["Problem"];
         };
     };
+    attachMessageToTicket: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Zum Ticket genommen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedTicket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+        };
+    };
+    listOpenReplies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Offene Antworten */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenReply"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     getTicketHelpdesk: {
         parameters: {
             query?: never;
@@ -1225,6 +1477,151 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getReplyForm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Angaben für das Formular */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyForm"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    sendReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    mailboxId: string;
+                    to?: string | null;
+                    subject: string;
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Bestätigt und zum Versand eingestellt */
+            201: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reply"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    sendReplyAgain: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                replyId: components["parameters"]["ReplyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    duplicateAccepted?: boolean | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Wieder zum Versand eingestellt */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reply"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    settleReply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                replyId: components["parameters"]["ReplyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Festgehalten */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reply"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

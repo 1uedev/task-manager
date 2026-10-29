@@ -11,7 +11,7 @@ const HELPDESK_FIELDS = ['customer', 'contact', 'mail'];
 // The fixed actor of tickets the mail intake opens (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
-const PROJECT_ACTIONS = ['helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
+const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -69,7 +69,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     activeWorkers: 1,
     jobConflict: false,
     // The helpdesk (TASK-057): customers, contacts, mailboxes with their status, mails and the customer of each ticket.
-    helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], ticketCustomers: new Map() },
+    helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map() },
     requests: [],
   };
 
@@ -293,6 +293,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body, query);
     if (p.startsWith('/jobs')) return jobsRoute(account, method, p, query);
     if (p.startsWith('/helpdesk/inbox')) return inboxRoute(account, method, p, query, headers, body);
+    if (p === '/helpdesk/replies' && method === 'GET') {
+      // As the backend (TASK-058): replies not yet accepted, of the projects in which the person may reply.
+      return ok(hd.replies.filter((reply) => reply.state !== 'sent' && mayReply(account, reply.projectId))
+        .map((reply) => ({ id: reply.id, projectId: reply.projectId, number: state.tickets.find((entry) => entry.id === reply.ticketId).number, toAddress: reply.toAddress,
+          subject: reply.subject, state: reply.state, errorCode: reply.errorCode, createdAt: reply.createdAt, attemptedAt: reply.attemptedAt })));
+    }
     if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
@@ -373,7 +379,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       }
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
-    if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, body);
+    if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
     if (tail === '/history') {
       const shown = [...readable(account, item.id), ...HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
@@ -707,7 +713,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const messageView = (message, withBody) => {
     const { raw: _raw, companyId: _company, ...rest } = message;
     const ticket = message.ticketId ? state.tickets.find((entry) => entry.id === message.ticketId) : null;
-    return { ...rest, body: withBody ? message.body : null, ticket: ticket ? { projectId: ticket.projectId, number: ticket.number } : null };
+    const related = message.relatedTicketId ? state.tickets.find((entry) => entry.id === message.relatedTicketId) : null;
+    const { relatedTicketId: _related, ...shown } = rest;
+    return { ...shown, body: withBody ? message.body : null, ticket: ticket ? { projectId: ticket.projectId, number: ticket.number } : null,
+      relatedTicket: related ? { projectId: related.projectId, number: related.number } : null };
   };
 
   function inboxRoute(account, method, p, query, headers, body) {
@@ -742,6 +751,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       Object.assign(message, { state: 'discarded', discardReason: body.reason.trim(), processedAt: now(), processedBy: account.id, version: message.version + 1 });
       return ok(messageView(message, true), `"${message.version}"`);
     }
+    if (tail === '/attach') {
+      const ticket = message.relatedTicketId ? state.tickets.find((entry) => entry.id === message.relatedTicketId) : null;
+      if (!ticket || message.state !== 'review') return problem(409, 'helpdesk.no_related_ticket');
+      state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
+        changes: [{ field: 'mail', from: null, to: JSON.stringify({ id: message.id, from: message.fromAddress, subject: message.subject }) }] });
+      Object.assign(message, { state: 'ticket', ticketId: ticket.id, processedAt: now(), processedBy: account.id, version: message.version + 1 });
+      return ok({ ticketId: ticket.id, projectId: ticket.projectId, number: ticket.number, attachments: message.attachments });
+    }
     if (tail === '/ticket') {
       const contact = body.contactId ? hd.contacts.find((entry) => entry.id === body.contactId) : null;
       const ticket = addTicket(message.subject ?? '(kein Betreff)', message.body, account, message.projectId);
@@ -754,7 +771,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return problem(404, 'resource.not_found');
   }
 
-  function ticketHelpdeskRoute(account, item, ticket, method, tail, body) {
+  // helpdesk.reply with ticket.read and the read rules on mail and contact, as ReplyService.mayReply.
+  const mayReply = (account, projectId) => may(account, 'helpdesk.reply', projectId) && may(account, 'ticket.read', projectId)
+    && field(account, projectId, 'mail', 'read') && field(account, projectId, 'contact', 'read');
+  const replyView = ({ ticketId: _ticket, projectId: _project, contactId: _contact, ...reply }) => reply;
+
+  function ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body) {
     const readableHere = HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read'));
     const writableHere = may(account, 'ticket.edit', item.id) ? ['customer', 'contact'].filter((name) => field(account, item.id, name, 'read') && field(account, item.id, name, 'write')) : [];
     const view = () => {
@@ -765,8 +787,57 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         customer: readableHere.includes('customer') && customer ? { id: customer.id, name: customer.name } : null,
         contact: readableHere.includes('contact') && contact ? { id: contact.id, name: contact.name, addresses: contact.addresses } : null,
         mails: readableHere.includes('mail') ? hd.messages.filter((message) => message.ticketId === ticket.id).map((message) => ({ id: message.id, receivedAt: message.receivedAt,
-          sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments })) : null };
+          sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments })) : null,
+        replies: readableHere.includes('mail') ? hd.replies.filter((reply) => reply.ticketId === ticket.id).map(replyView) : null,
+        replyAllowed: Boolean(contact) && mayReply(account, item.id) };
     };
+    const senders = () => hd.mailboxes.filter((mailbox) => mailbox.enabled && mailbox.projectId === item.id && mailbox.smtpHost && mailbox.address);
+    const contactOfTicket = () => {
+      const link = hd.ticketCustomers.get(ticket.id);
+      return link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
+    };
+    if (tail.startsWith('/helpdesk/repl')) {
+      if (!mayReply(account, item.id)) return problem(403, 'auth.forbidden');
+      const contact = contactOfTicket();
+      if (!contact) return problem(409, 'helpdesk.reply_no_contact');
+      if (tail === '/helpdesk/reply' && method === 'GET') {
+        const last = hd.messages.filter((message) => message.ticketId === ticket.id).at(-1);
+        const list = senders();
+        return ok({ mailboxes: list.map((mailbox) => ({ id: mailbox.id, name: mailbox.name, address: mailbox.address })), contactId: contact.id, contactName: contact.name,
+          recipients: contact.addresses, subject: last?.subject ? `Re: ${last.subject}` : null,
+          suggestedMailbox: list.find((mailbox) => mailbox.id === last?.mailboxId)?.id ?? list[0]?.id ?? null });
+      }
+      if (tail === '/helpdesk/replies' && method === 'POST') {
+        const mailbox = senders().find((entry) => entry.id === body.mailboxId);
+        const violations = [];
+        if (!mailbox) violations.push('mailboxId.unavailable');
+        if (!contact.addresses.includes(body.to)) violations.push('to.not_of_contact');
+        if (!body.subject?.trim() || /[\r\n]/.test(body.subject)) violations.push('subject.invalid');
+        if (!body.body?.trim()) violations.push('body.invalid');
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        const reply = { id: uuid(), ticketId: ticket.id, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
+          subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1 };
+        hd.replies.push(reply);
+        state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
+          changes: [{ field: 'mail', from: null, to: JSON.stringify({ reply: reply.id, to: reply.toAddress, subject: reply.subject }) }] });
+        return { status: 201, body: replyView(reply), etag: `"${reply.version}"` };
+      }
+      const match = tail.match(/^\/helpdesk\/replies\/([^/]+)\/(send|settle)$/);
+      const reply = hd.replies.find((entry) => entry.ticketId === ticket.id && entry.id === match?.[1]);
+      if (!match || method !== 'POST') return problem(404, 'resource.not_found');
+      if (!reply) return problem(404, 'helpdesk.reply_not_found');
+      if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
+      if (headers['if-match'] !== `"${reply.version}"`) return problem(412, 'helpdesk.version_conflict');
+      if (match[2] === 'settle') {
+        if (reply.state !== 'uncertain') return problem(409, 'helpdesk.reply_not_uncertain');
+        Object.assign(reply, { state: 'sent', sentAt: now(), version: reply.version + 1 });
+        return ok(replyView(reply), `"${reply.version}"`);
+      }
+      if (!['failed', 'uncertain'].includes(reply.state)) return problem(409, 'helpdesk.reply_not_failed');
+      if (reply.state === 'uncertain' && body.duplicateAccepted !== true) return problem(409, 'helpdesk.reply_uncertain');
+      Object.assign(reply, { state: 'pending', sends: reply.sends + 1, version: reply.version + 1 });
+      return ok(replyView(reply), `"${reply.version}"`);
+    }
     if (tail === '/helpdesk' && method === 'GET') return ok(view());
     if (tail === '/helpdesk/options' && method === 'GET') {
       if (!writableHere.includes('customer')) return problem(403, 'auth.forbidden');
@@ -854,6 +925,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     addJob,
     addMail,
     addTicket,
+    addReply: (ticket, extra = {}) => {
+      const link = hd.ticketCustomers.get(ticket.id);
+      const contact = hd.contacts.find((entry) => entry.id === link?.contactId);
+      const reply = { id: uuid(), ticketId: ticket.id, projectId: ticket.projectId, contactId: contact?.id ?? null, mailboxId: hd.mailboxes[0]?.id ?? uuid(),
+        fromAddress: hd.mailboxes[0]?.address ?? 'support@firma.example', toAddress: contact?.addresses[0] ?? 'lea@nordwerk.example', subject: 'Re: Drucker defekt',
+        body: 'Wir kümmern uns.', state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: anna.id, attemptedAt: null, sentAt: null, version: 1, ...extra };
+      hd.replies.push(reply);
+      return reply;
+    },
     deactivate: (account) => { account.active = false; },
   };
 }

@@ -45,11 +45,11 @@ class ReviewController {
     record MessageBody(UUID id, UUID mailboxId, UUID projectId, Instant receivedAt, Instant sentAt, String fromAddress, String fromName,
             String to, String cc, String subject, String body, long sizeBytes, List<Message.AttachmentNote> attachments, String state,
             String reason, TicketReference ticket, UUID contactId, UUID customerId, Instant processedAt, UUID processedBy,
-            String discardReason, long version) {
-        static MessageBody of(Message m, TicketReference ticket, boolean withBody) {
+            String discardReason, TicketReference relatedTicket, long version) {
+        static MessageBody of(Message m, TicketReference ticket, TicketReference related, boolean withBody) {
             return new MessageBody(m.id(), m.mailboxId(), m.projectId(), m.receivedAt(), m.sentAt(), m.fromAddress(), m.fromName(), m.to(),
                 m.cc(), m.subject(), withBody ? m.body() : null, m.sizeBytes(), m.attachments(), m.state(), m.reason(), ticket, m.contactId(),
-                m.customerId(), m.processedAt(), m.processedBy(), m.discardReason(), m.version());
+                m.customerId(), m.processedAt(), m.processedBy(), m.discardReason(), related, m.version());
         }
     }
 
@@ -78,7 +78,7 @@ class ReviewController {
             throw ApiProblemException.of(400, "helpdesk.limit_invalid");
         }
         return Requests.retrying(() -> review.list(actor, state, project, before, size)).stream()
-            .map(message -> MessageBody.of(message, ticket(message), false)).toList();
+            .map(message -> MessageBody.of(message, ticket(message.ticketId()), ticket(message.relatedTicketId()), false)).toList();
     }
 
     @GetMapping("/summary")
@@ -92,7 +92,8 @@ class ReviewController {
     ResponseEntity<MessageBody> get(@PathVariable UUID id) {
         AccessContext actor = requests.actor();
         Message message = Requests.retrying(() -> review.get(actor, id));
-        return ResponseEntity.ok().eTag(Requests.etag(message.version())).body(MessageBody.of(message, ticket(message), true));
+        return ResponseEntity.ok().eTag(Requests.etag(message.version()))
+            .body(MessageBody.of(message, ticket(message.ticketId()), ticket(message.relatedTicketId()), true));
     }
 
     @GetMapping("/{id}/candidates")
@@ -120,13 +121,23 @@ class ReviewController {
         AccessContext actor = requests.actor();
         long version = Requests.expectedVersion(ifMatch);
         Message message = Requests.retrying(() -> review.discard(actor, id, version, body == null ? null : body.reason()));
-        return ResponseEntity.ok().eTag(Requests.etag(message.version())).body(MessageBody.of(message, null, true));
+        return ResponseEntity.ok().eTag(Requests.etag(message.version())).body(MessageBody.of(message, null, null, true));
     }
 
-    private TicketReference ticket(Message message) {
-        if (message.ticketId() == null) {
+    /** Adds the mail to the ticket of the reply it answers (TASK-058). */
+    @PostMapping("/{id}/attach")
+    CreatedBody attach(@PathVariable UUID id, @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        AccessContext actor = requests.actor();
+        long version = Requests.expectedVersion(ifMatch);
+        var opened = Requests.retrying(() -> review.attach(actor, id, version));
+        var location = tickets.locate(opened.ticketId()).orElseThrow();
+        return new CreatedBody(opened.ticketId(), location.projectId(), opened.number(), opened.attachments());
+    }
+
+    private TicketReference ticket(UUID id) {
+        if (id == null) {
             return null;
         }
-        return tickets.locate(message.ticketId()).map(l -> new TicketReference(l.projectId(), l.number())).orElse(null);
+        return tickets.locate(id).map(l -> new TicketReference(l.projectId(), l.number())).orElse(null);
     }
 }

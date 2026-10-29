@@ -32,6 +32,12 @@ import taskmanager.tickets.TicketAccess;
  * mail not marked as seen; older mails stay untouched. After a new UIDVALIDITY every mail up to the highest UID the folder
  * had then is compared by its Message-ID, and one the mailbox already holds is skipped; the bound is stored with the
  * mailbox, so the comparison lasts across batches, failures and restarts (TASK-059, F2). The mailbox shows a notice.
+ *
+ * <p>Replies of the helpdesk (TASK-058): a mail that names the Message-ID of a reply of the project in In-Reply-To or References
+ * joins the ticket of that reply instead of opening a new one, if the intake would have made a ticket of it and its sender
+ * is a contact of the customer of that ticket; otherwise it waits in the review queue with that ticket as a hint. A reply of
+ * the helpdesk itself that arrives in the folder is recorded as automatic and gets no ticket; automatic mails never get an
+ * answer, so an auto responder cannot start a loop.
  */
 @Component
 @ConditionalOnExpression("'${taskmanager.process:web}' != 'command'")
@@ -217,14 +223,22 @@ public class MailIntake implements RecurringTask {
             String unreadable) {
         Instant now = clock.instant();
         Decision decision;
+        // The ticket of a reply this mail answers, through In-Reply-To or References (TASK-058).
+        UUID replied = parsed == null ? null : repository.repliedTicket(mailbox.companyId(), mailbox.projectId(), parsed.references()).orElse(null);
         if (unreadable != null) {
             decision = Decision.review(unreadable);
+        } else if (repository.ownReply(mailbox.companyId(), parsed.messageId())) {
+            // A reply of the helpdesk that came back, for example as a copy: never a ticket and never answered.
+            decision = new Decision("automatic", "own_reply", null, null);
         } else if (parsed.automatic()) {
             decision = Decision.automatic();
         } else if (size > mailbox.maxBytes()) {
             decision = Decision.review("too_large");
         } else {
             decision = classify(mailbox, parsed);
+            if (decision.state().equals("ticket") && replied != null && !sameCustomer(replied, decision.customer())) {
+                decision = Decision.review("reply_customer_mismatch");
+            }
         }
         ParsedMail.Sender sender = parsed == null || parsed.from().isEmpty() ? null : parsed.from().get(0);
         List<Message.AttachmentNote> files = parsed == null ? List.of()
@@ -236,8 +250,13 @@ public class MailIntake implements RecurringTask {
             parsed == null ? null : parsed.body(), size, files, raw != null,
             // A mail that gets a ticket waits as review until its ticket is written in this transaction.
             decision.state().equals("ticket") ? "review" : decision.state(), decision.reason(), null, null, null,
-            null, null, null, 1);
+            null, null, null, decision.state().equals("review") ? replied : null, 1);
         if (!repository.insertMessage(message, source, raw)) {
+            return;
+        }
+        if (decision.state().equals("ticket") && replied != null) {
+            // The answer of a confirmed contact of the customer of the ticket joins that ticket instead of opening a new one.
+            opener.append(message, parsed, replied, decision.customer(), decision.contact(), TicketAccess.MAIL_INTAKE, now);
             return;
         }
         if (decision.state().equals("ticket")) {
@@ -290,6 +309,11 @@ public class MailIntake implements RecurringTask {
             return Decision.review("foreign_customer");
         }
         return new Decision("ticket", null, customer.get(), contact.get());
+    }
+
+    /** Whether the ticket has this customer; a reply joins its ticket only from a contact of the customer of the ticket. */
+    private boolean sameCustomer(UUID ticket, Customer customer) {
+        return repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::customerId).filter(customer.id()::equals).isPresent();
     }
 
     private static List<String> concat(List<String> first, List<String> second) {

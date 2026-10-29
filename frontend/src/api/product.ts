@@ -54,6 +54,9 @@ export type Candidate = HelpdeskTypes['schemas']['Candidate'];
 export type CreatedFromMail = HelpdeskTypes['schemas']['CreatedTicket'];
 export type TicketHelpdesk = HelpdeskTypes['schemas']['TicketHelpdesk'];
 export type CustomerOption = HelpdeskTypes['schemas']['CustomerOption'];
+export type Reply = HelpdeskTypes['schemas']['Reply'];
+export type ReplyForm = HelpdeskTypes['schemas']['ReplyForm'];
+export type OpenReply = HelpdeskTypes['schemas']['OpenReply'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -433,3 +436,24 @@ export const ticketCustomerOptions = (api: ServerApi, projectId: string, number:
 export const setTicketCustomer = (api: ServerApi, projectId: string, number: number, customerId: string | null, contactId: string | null) =>
   run(() => api.helpdesk.PUT('/projects/{projectId}/tickets/{number}/helpdesk/customer', { params: { path: { projectId, number } }, body: { customerId, contactId } }),
     one<TicketHelpdesk>(isTicketHelpdesk));
+
+// ---------------------------------------------------------------- replies (TASK-058)
+
+const isReply = (v: unknown) => hasStrings(v, 'id', 'toAddress', 'subject', 'state') && typeof (v as Reply).version === 'number';
+export const readReplyForm = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/reply', { params: { path: { projectId, number } } }),
+    one<ReplyForm>((v) => record(v) && Array.isArray(v.mailboxes) && Array.isArray(v.recipients)));
+export const sendReply = (api: ServerApi, projectId: string, number: number, mailboxId: string, to: string, subject: string, body: string) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/replies', { params: { path: { projectId, number } },
+    body: { mailboxId, to, subject, body } }), one<Reply>(isReply));
+export const sendReplyAgain = (api: ServerApi, projectId: string, number: number, replyId: string, version: number, duplicateAccepted: boolean) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/send', {
+    params: { path: { projectId, number, replyId }, ...ifMatch(`"${version}"`) }, body: { duplicateAccepted } }), one<Reply>(isReply));
+export const settleReply = (api: ServerApi, projectId: string, number: number, replyId: string, version: number) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/settle', {
+    params: { path: { projectId, number, replyId }, ...ifMatch(`"${version}"`) } }), one<Reply>(isReply));
+export const listOpenReplies = (api: ServerApi) =>
+  run(() => api.helpdesk.GET('/helpdesk/replies'), listOf<OpenReply>((v) => hasStrings(v, 'id', 'projectId', 'state') && typeof (v as OpenReply).number === 'number'));
+export const attachMessage = (api: ServerApi, id: string, etag: string) =>
+  run(() => api.helpdesk.POST('/helpdesk/inbox/{id}/attach', { params: { path: { id }, ...ifMatch(etag) } }),
+    one<CreatedFromMail>((v) => hasStrings(v, 'ticketId', 'projectId') && typeof (v as CreatedFromMail).number === 'number'));

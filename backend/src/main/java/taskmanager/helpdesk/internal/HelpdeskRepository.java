@@ -24,7 +24,7 @@ class HelpdeskRepository {
         + "created_at, created_by, updated_at, updated_by";
     private static final String MESSAGE_COLUMNS = "id, company_id, mailbox_id, project_id, uid_validity, uid, message_id, received_at, "
         + "sent_at, from_address, from_name, to_addresses, cc_addresses, subject, body, size_bytes, attachments::text as attachments, "
-        + "raw is not null as has_raw, state, reason, ticket_id, contact_id, customer_id, processed_at, processed_by, discard_reason, version";
+        + "raw is not null as has_raw, state, reason, ticket_id, contact_id, customer_id, processed_at, processed_by, discard_reason, related_ticket_id, version";
 
     private final JdbcClient jdbc;
 
@@ -331,13 +331,13 @@ class HelpdeskRepository {
         return jdbc.sql("""
                 insert into helpdesk_message (id, company_id, mailbox_id, project_id, source, uid_validity, uid, message_id, received_at,
                     sent_at, from_address, from_name, to_addresses, cc_addresses, subject, body, size_bytes, attachments, raw, state,
-                    reason, ticket_id, contact_id, customer_id, processed_at, processed_by, version)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    reason, ticket_id, contact_id, customer_id, processed_at, processed_by, related_ticket_id, version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict (mailbox_id, source, uid_validity, uid) do nothing
                 """).params(m.id(), m.companyId(), m.mailboxId(), m.projectId(), source, m.uidValidity(), m.uid(), m.messageId(),
                 ts(m.receivedAt()), ts(m.sentAt()), m.fromAddress(), m.fromName(), m.to(), m.cc(), m.subject(), m.body(), m.sizeBytes(),
                 JSON.writeValueAsString(m.attachments()), raw, m.state(), m.reason(), m.ticketId(), m.contactId(), m.customerId(),
-                ts(m.processedAt()), m.processedBy(), m.version()).update() == 1;
+                ts(m.processedAt()), m.processedBy(), m.relatedTicketId(), m.version()).update() == 1;
     }
 
     Optional<Message> message(UUID companyId, UUID id) {
@@ -403,7 +403,98 @@ class HelpdeskRepository {
             rs.getString("to_addresses"), rs.getString("cc_addresses"), rs.getString("subject"), rs.getString("body"),
             rs.getLong("size_bytes"), attachments, rs.getBoolean("has_raw"), rs.getString("state"), rs.getString("reason"),
             rs.getObject("ticket_id", UUID.class), rs.getObject("contact_id", UUID.class), rs.getObject("customer_id", UUID.class),
-            instant(rs, "processed_at"), rs.getObject("processed_by", UUID.class), rs.getString("discard_reason"), rs.getLong("version"));
+            instant(rs, "processed_at"), rs.getObject("processed_by", UUID.class), rs.getString("discard_reason"),
+            rs.getObject("related_ticket_id", UUID.class), rs.getLong("version"));
+    }
+
+    // ------------------------------------------------------------------------------------------------ replies (TASK-058)
+
+    private static final String REPLY_COLUMNS = "id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, "
+        + "subject, body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at, "
+        + "created_by, updated_at, updated_by, version";
+
+    void insertReply(Reply r) {
+        jdbc.sql("""
+                insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject,
+                    body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at,
+                    created_by, updated_at, updated_by, version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(r.id(), r.companyId(), r.projectId(), r.ticketId(), r.mailboxId(), r.contactId(), r.fromAddress(), r.toAddress(),
+                r.subject(), r.body(), r.messageId(), r.inReplyTo(), r.references(), r.state(), r.errorCode(), r.jobId(), r.sends(),
+                ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version()).update();
+    }
+
+    Optional<Reply> reply(UUID companyId, UUID id) {
+        return jdbc.sql("select " + REPLY_COLUMNS + " from helpdesk_reply where company_id = ? and id = ?").params(companyId, id)
+            .query(HelpdeskRepository::reply).optional();
+    }
+
+    Optional<Reply> lockReply(UUID id) {
+        return jdbc.sql("select " + REPLY_COLUMNS + " from helpdesk_reply where id = ? for update").param(id)
+            .query(HelpdeskRepository::reply).optional();
+    }
+
+    List<Reply> repliesOfTicket(UUID ticketId) {
+        return jdbc.sql("select " + REPLY_COLUMNS + " from helpdesk_reply where ticket_id = ? order by created_at, id").param(ticketId)
+            .query(HelpdeskRepository::reply).list();
+    }
+
+    /** The replies of the projects that are not known to be sent, newest first. */
+    List<Reply> openReplies(UUID companyId, Collection<UUID> projects, int limit) {
+        if (projects.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("select " + REPLY_COLUMNS + " from helpdesk_reply where company_id = ? and project_id = any(?) and state <> 'sent' "
+                + "order by created_at desc, id desc limit ?")
+            .params(companyId, projects.toArray(UUID[]::new), limit).query(HelpdeskRepository::reply).list();
+    }
+
+    /** Writes the state of a reply and moves its version on. */
+    void replyState(UUID id, String state, String errorCode, Instant attemptedAt, Instant sentAt, Instant now, UUID actor) {
+        jdbc.sql("""
+                update helpdesk_reply set state = ?, error_code = ?, attempted_at = coalesce(?, attempted_at), sent_at = ?, updated_at = ?,
+                    updated_by = ?, version = version + 1
+                where id = ?
+                """).params(state, errorCode, ts(attemptedAt), ts(sentAt), ts(now), actor, id).update();
+    }
+
+    /** A person sends the reply again: a new job, the reply waits again. */
+    void replyAgain(UUID id, UUID jobId, Instant now, UUID actor) {
+        jdbc.sql("""
+                update helpdesk_reply set state = 'pending', error_code = null, job_id = ?, sends = sends + 1, updated_at = ?, updated_by = ?,
+                    version = version + 1
+                where id = ?
+                """).params(jobId, ts(now), actor, id).update();
+    }
+
+    /** Whether one of the replies of the company carries this Message-ID: the mail is our own. */
+    boolean ownReply(UUID companyId, String messageId) {
+        return messageId != null && jdbc.sql("select count(*) from helpdesk_reply where company_id = ? and message_id = ?")
+            .params(companyId, messageId).query(Long.class).single() > 0;
+    }
+
+    /**
+     * The ticket of the newest reply of the project that one of the Message-IDs names, from In-Reply-To or References of an
+     * incoming mail.
+     */
+    Optional<UUID> repliedTicket(UUID companyId, UUID projectId, Collection<String> messageIds) {
+        if (messageIds.isEmpty()) {
+            return Optional.empty();
+        }
+        return jdbc.sql("""
+                select ticket_id from helpdesk_reply where company_id = ? and project_id = ? and message_id = any(?)
+                order by created_at desc, id desc limit 1
+                """).params(companyId, projectId, messageIds.toArray(String[]::new)).query(UUID.class).optional();
+    }
+
+    private static Reply reply(ResultSet rs, int row) throws SQLException {
+        return new Reply(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
+            rs.getObject("ticket_id", UUID.class), rs.getObject("mailbox_id", UUID.class), rs.getObject("contact_id", UUID.class),
+            rs.getString("from_address"), rs.getString("to_address"), rs.getString("subject"), rs.getString("body"),
+            rs.getString("message_id"), rs.getString("in_reply_to"), rs.getString("references_header"), rs.getString("state"),
+            rs.getString("error_code"), rs.getObject("job_id", UUID.class), rs.getInt("sends"), instant(rs, "attempted_at"),
+            instant(rs, "sent_at"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
+            rs.getObject("updated_by", UUID.class), rs.getLong("version"));
     }
 
     // ------------------------------------------------------------------------------------------------ customer of a ticket

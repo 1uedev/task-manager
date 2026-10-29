@@ -27,10 +27,12 @@ import java.util.regex.Pattern;
 /**
  * What the intake reads from a mail (TASK-057): sender, recipients, subject, the text, the files and the signals of an
  * automatic message and of the authentication the receiving server recorded. HTML becomes plain text; nothing of the mail
- * runs or is shown as markup. Every text is cut to a size the database and the interface can hold.
+ * runs or is shown as markup. Every text is cut to a size the database and the interface can hold. {@code references} are
+ * the Message-IDs of In-Reply-To and References, through which a mail answers a reply of a ticket (TASK-058).
  */
 record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<String> to, List<String> cc, String subject,
-        String body, List<File> files, boolean automatic, List<String> authenticationResults, boolean recipientsComplete) {
+        String body, List<File> files, boolean automatic, List<String> authenticationResults, boolean recipientsComplete,
+        List<String> references) {
 
     static final int BODY_MAX = 200_000;
     private static final int SUBJECT_MAX = 1_000;
@@ -42,6 +44,9 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
     private static final Pattern BREAKS = Pattern.compile("(?i)<\\s*(br|/p|/div|/li|/tr|/h[1-6])\\b[^>]*>");
     private static final Pattern TAGS = Pattern.compile("(?s)<[^>]*>");
     private static final Pattern ENTITY = Pattern.compile("&(#x?[0-9a-fA-F]+|[a-zA-Z]+);");
+    private static final Pattern MESSAGE_ID = Pattern.compile("<[^<>\\s]{1,996}>");
+    // More would not help: a reply of the ticket is among the last Message-IDs of a thread.
+    private static final int REFERENCES_MAX = 100;
 
     record Sender(String address, String name) {
     }
@@ -62,7 +67,7 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
         List<String> cc = recipients.read(message, "Cc");
         return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), to, cc,
             subject(message), cut(clean(body), BODY_MAX), List.copyOf(files), automatic(message), headers(message, "Authentication-Results"),
-            recipients.complete());
+            recipients.complete(), references(message));
     }
 
     /** Reads only the header of a mail that is too large to fetch; it has no text and no files. */
@@ -71,7 +76,8 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
         List<String> to = recipients.read(message, "To");
         List<String> cc = recipients.read(message, "Cc");
         return new ParsedMail(header(message, "Message-ID"), sentAt(message), senders(message), to, cc,
-            subject(message), null, List.of(), automatic(message), headers(message, "Authentication-Results"), recipients.complete());
+            subject(message), null, List.of(), automatic(message), headers(message, "Authentication-Results"), recipients.complete(),
+            references(message));
     }
 
     /** The domain of an address, lower case. */
@@ -214,6 +220,25 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
         } catch (MessagingException | RuntimeException unreadable) {
             return false;
         }
+    }
+
+    /** The Message-IDs of In-Reply-To and References, the newest last, each once and at most {@link #REFERENCES_MAX}. */
+    private static List<String> references(jakarta.mail.Message message) throws MessagingException {
+        List<String> ids = new ArrayList<>();
+        for (String name : List.of("References", "In-Reply-To")) {
+            String[] values = message.getHeader(name);
+            if (values == null) {
+                continue;
+            }
+            for (String value : values) {
+                Matcher matcher = MESSAGE_ID.matcher(MimeUtility.unfold(value));
+                while (matcher.find()) {
+                    ids.remove(matcher.group());
+                    ids.add(matcher.group());
+                }
+            }
+        }
+        return List.copyOf(ids.subList(Math.max(0, ids.size() - REFERENCES_MAX), ids.size()));
     }
 
     private static List<Sender> senders(jakarta.mail.Message message) throws MessagingException {

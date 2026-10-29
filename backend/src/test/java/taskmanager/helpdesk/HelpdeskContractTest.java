@@ -65,7 +65,7 @@ class HelpdeskContractTest {
     @Test
     void everyMappedRouteIsDocumentedAndEveryDocumentedRouteExists() throws IOException {
         Set<String> mapped = mapped();
-        assertEquals(20, mapped.size(), mapped.toString());
+        assertEquals(26, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
     }
 }
