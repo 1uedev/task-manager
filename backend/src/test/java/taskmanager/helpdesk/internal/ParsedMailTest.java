@@ -99,4 +99,33 @@ class ParsedMailTest {
         assertEquals("nordwerk.example", ParsedMail.domain("Lea@NORDWERK.example"));
         assertEquals("", ParsedMail.domain("ohne"));
     }
+
+    /**
+     * TASK-061, S2: a nested group, a group without its end and an unfinished display name are not repaired into an address
+     * that no contact matches; the recipients count as incomplete, also when only the header of a large mail is read.
+     */
+    @Test
+    void brokenGroupsLeaveTheRecipientsIncomplete() throws Exception {
+        List<String> broken = List.of("Outer: Inner: lea@nordwerk.example;;", "MissingEnd: lea@nordwerk.example",
+            "Broken: \"unterminated <lea@nordwerk.example>;");
+        for (String header : List.of("To", "Cc")) {
+            for (String value : broken) {
+                String raw = "From: a@firma.example\r\n" + header + ": " + value + "\r\nSubject: x\r\n\r\nText\r\n";
+                assertFalse(parse(raw).recipientsComplete(), header + ": " + value);
+                assertFalse(headerOnly(raw).recipientsComplete(), "header only, " + header + ": " + value);
+            }
+        }
+        String fine = "From: a@firma.example\r\nTo: Team: Lea <LEA@nordwerk.example>, ben@nordwerk.example;\r\n"
+            + "Cc: Leer:;, \"Lang, Lea\" <lea@nordwerk.example>\r\nSubject: x\r\n\r\nText\r\n";
+        for (ParsedMail mail : List.of(parse(fine), headerOnly(fine))) {
+            assertTrue(mail.recipientsComplete());
+            assertEquals(List.of("lea@nordwerk.example", "ben@nordwerk.example"), mail.to());
+            assertEquals(List.of("lea@nordwerk.example"), mail.cc());
+        }
+    }
+
+    private static ParsedMail headerOnly(String raw) throws Exception {
+        return ParsedMail.headerOnly(new jakarta.mail.internet.MimeMessage(jakarta.mail.Session.getInstance(new java.util.Properties()),
+            new java.io.ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8))));
+    }
 }

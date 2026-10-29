@@ -816,7 +816,9 @@ class HelpdeskApiTest {
         current.beforeFetch(uid -> { }).put(3, scripted(setup, "neu-3", ""));
         current.intake(context, 5).fetch(setup.mailbox());
         assertTrue(current.seen(3), "the next mail is taken");
-        assertEquals(4, messages(setup).size());
+        // The overtaken fetch of the old UIDVALIDITY recorded nothing (TASK-061, S1); the folder holds the mail again under the new one.
+        assertEquals(3, messages(setup).size());
+        assertFalse(old.seen(100));
         assertEquals(3L, jdbc.queryForObject("select last_uid from helpdesk_mailbox where id = ?", Long.class, setup.mailbox()));
     }
 
@@ -841,6 +843,76 @@ class HelpdeskApiTest {
         assertEquals(2L, state.get("last_uid"));
         assertEquals(1L, jdbc.queryForObject("select count(*) from helpdesk_audit_event where target_id = ? and operation = 'mailbox.uidvalidity_changed'",
             Long.class, setup.mailbox()));
+    }
+
+    /**
+     * S1 of the review of TASK-060: the same mail, read by a fetch of the old UIDVALIDITY that is overtaken by a start over of
+     * the folder, becomes one ticket. The overtaken fetch writes neither mail nor ticket; in the other order the new fetch
+     * recognizes the mail by its Message-ID.
+     */
+    @Test
+    void theSameMailInTheOldAndTheNewUidValidityBecomesOneTicket() throws Exception {
+        Setup setup = setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity = 100, last_uid = 0 where id = ?", setup.mailbox());
+        byte[] mail = scripted(setup, "dieselbe", "");
+        var oldRead = new java.util.concurrent.CountDownLatch(1);
+        var oldGo = new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old = new ScriptedMailbox(100).put(100, mail).beforeFetch(uid -> { oldRead.countDown(); hold(oldGo); });
+        Future<?> overtaken = POOL.submit(() -> old.intake(context, 5).fetch(setup.mailbox()));
+        try {
+            hold(oldRead);
+            new ScriptedMailbox(200).put(1, mail).intake(context, 5).fetch(setup.mailbox());
+            assertEquals(1, tickets(setup));
+        } finally {
+            oldGo.countDown();
+        }
+        overtaken.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1, tickets(setup), "the overtaken fetch wrote no second ticket");
+        assertEquals(1, messages(setup).size(), "nor a second mail");
+        assertFalse(old.seen(100), "and did not mark the mail as seen");
+
+        // The other order: the old fetch records first, the new one recognizes the mail.
+        Setup other = setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity = 100, last_uid = 0 where id = ?", other.mailbox());
+        byte[] again = scripted(other, "zuerst-alt", "");
+        new ScriptedMailbox(100).put(100, again).intake(context, 5).fetch(other.mailbox());
+        new ScriptedMailbox(200).put(1, again).intake(context, 5).fetch(other.mailbox());
+        assertEquals(1, tickets(other));
+        assertEquals(1, messages(other).size());
+    }
+
+    /** H1 of the review of TASK-060: a mail too large to fetch is read only by its header and waits with its reason. */
+    @Test
+    void aMailTooLargeToFetchIsReadByItsHeader() {
+        Setup setup = setup();
+        Setup other = setup();
+        jdbc.update("update helpdesk_mailbox set max_bytes = 600 where id = ?", setup.mailbox());
+        String text = "x".repeat(1_000);
+        byte[] large = (new String(scripted(setup, "gross", "Cc: Outer: Inner: " + other.contactAddress() + ";;\r\n"), StandardCharsets.UTF_8)
+            + text).getBytes(StandardCharsets.UTF_8);
+        ScriptedMailbox folder = new ScriptedMailbox(100).put(1, large);
+        folder.intake(context, 5).fetch(setup.mailbox());
+        List<Map<String, Object>> messages = messages(setup);
+        assertEquals(1, messages.size());
+        assertEquals("too_large", messages.get(0).get("reason"));
+        assertNull(messages.get(0).get("body"), "only the header was read");
+        assertTrue(folder.seen(1));
+        assertEquals(0, tickets(setup));
+    }
+
+    /** S2 of the review of TASK-060: a broken group that could hide a contact of another customer keeps the mail in the queue. */
+    @Test
+    void aBrokenGroupKeepsTheMailInTheQueue() {
+        Setup setup = setup();
+        Setup other = setup();
+        ScriptedMailbox folder = new ScriptedMailbox(100)
+            .put(1, scripted(setup, "verschachtelt", "Cc: Outer: Inner: " + other.contactAddress() + ";;\r\n"))
+            .put(2, scripted(setup, "ohne-ende", "Cc: MissingEnd: " + other.contactAddress() + "\r\n"))
+            .put(3, scripted(setup, "offener-name", "To: Broken: \"unterminated <" + other.contactAddress() + ">;\r\n"));
+        folder.intake(context, 5).fetch(setup.mailbox());
+        assertEquals(List.of("recipients_incomplete", "recipients_incomplete", "recipients_incomplete"),
+            messages(setup).stream().map(row -> row.get("reason")).toList());
+        assertEquals(0, tickets(setup));
     }
 
     /** R2 of the review of TASK-059: a contact of another customer inside a group of To or Cc keeps the mail in the queue. */

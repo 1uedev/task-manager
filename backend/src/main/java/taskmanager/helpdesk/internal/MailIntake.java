@@ -23,8 +23,9 @@ import taskmanager.tickets.TicketAccess;
  * its ticket, if it gets one, then marked as seen, and only then the position in the folder moves on. The origin (mailbox,
  * source, UIDVALIDITY, UID) is unique, so a mail whose outcome was recorded but whose position was lost is recognized at the
  * next fetch and adds nothing. The source changes with server, port, account or folder, so a mail of a new folder is never
- * taken for one of the old (TASK-059, F3), and with a new UIDVALIDITY; the position moves only for the source and UIDVALIDITY
- * the fetch read, so a fetch that overlaps a start over writes nothing (TASK-060, R1). A failure of one mailbox is recorded
+ * taken for one of the old (TASK-059, F3), and with a new UIDVALIDITY. A mail is recorded and the position moves only under
+ * the lock of the mailbox and only for the source and UIDVALIDITY the fetch read; from the moment a start over of the folder
+ * is committed, a fetch that still reads the old state writes neither mail, ticket nor position (TASK-060, R1; TASK-061, S1). A failure of one mailbox is recorded
  * with its code and does not stop the others.
  *
  * <p>Where the intake starts: at the first fetch of a folder, or after the server changed its UIDVALIDITY, at the oldest
@@ -185,17 +186,23 @@ public class MailIntake implements RecurringTask {
             ParsedMail mail = parsed;
             byte[] content = raw;
             String failure = unreadable;
-            transaction.executeWithoutResult(status -> {
-                // After a new UIDVALIDITY a mail the mailbox already holds keeps its first outcome. The lock makes the
-                // comparison and the insert one decision, also against a second fetch of the same mailbox.
-                if (compare && mail != null && mail.messageId() != null) {
-                    repository.lockMailbox(mailbox.id());
-                    if (repository.knownMessageId(mailbox.id(), mail.messageId())) {
-                        return;
-                    }
+            // The mail is recorded under the lock of the mailbox, and only while this fetch still reads its current source
+            // and UIDVALIDITY: a fetch overtaken by a start over of the folder writes neither mail nor ticket (TASK-061, S1).
+            // After a new UIDVALIDITY a mail the mailbox already holds keeps its first outcome; the same lock makes the
+            // comparison and the insert one decision, also against a second fetch of the same mailbox.
+            boolean current = transaction.execute(status -> {
+                if (!repository.lockCurrent(mailbox.id(), source, validity)) {
+                    return false;
+                }
+                if (compare && mail != null && mail.messageId() != null && repository.knownMessageId(mailbox.id(), mail.messageId())) {
+                    return true;
                 }
                 record(mailbox, source, validity, uid, size, mail, content, failure);
+                return true;
             });
+            if (!current) {
+                return false;
+            }
         }
         try {
             connection.markSeen(uid);

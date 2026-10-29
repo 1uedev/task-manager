@@ -283,9 +283,14 @@ class HelpdeskRepository {
                 """).params(uidValidity, start, compareUntil, notice, ts(now), id, source, previousValidity).update() == 1;
     }
 
-    /** Locks the mailbox row, so that the comparison of Message-IDs and the insert are one decision per mailbox. */
-    void lockMailbox(UUID id) {
-        jdbc.sql("select id from helpdesk_mailbox where id = ? for update").param(id).query(UUID.class).optional();
+    /**
+     * Locks the mailbox row and tells whether the fetch still reads its current source and UIDVALIDITY. Under this lock the
+     * intake records a mail, compares Message-IDs and writes nothing for a stale fetch; a start over of the folder writes the
+     * same row and waits for it (TASK-061, S1).
+     */
+    boolean lockCurrent(UUID id, int source, long uidValidity) {
+        return jdbc.sql("select coalesce(source = ? and uid_validity = ?, false) from helpdesk_mailbox where id = ? for update")
+            .params(source, uidValidity, id).query(Boolean.class).optional().orElse(false);
     }
 
     void clearNotice(UUID id) {

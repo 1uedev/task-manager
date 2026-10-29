@@ -125,10 +125,16 @@ describe('login', () => {
 
   test('a session the server ended leads back to the login on the next request', async () => {
     await withApp({ as: BEN }, async (page, backend) => {
+      // The start page may still be loading; a request of it that already meets the ended session would lead to the login
+      // before the click and take the link away from under it (TASK-061, H2). So the session ends only once the page is idle,
+      // and the click is the next request.
+      await page.waitForLoadState('networkidle');
+      const before = backend.state.requests.length;
       backend.deactivate(backend.ben);
       await page.getByRole('link', { name: 'Projekte', exact: true }).click();
       await page.waitForSelector('h1:has-text("Anmelden")');
       assert.equal(await page.getByRole('status').innerText(), 'Ihre Sitzung ist beendet. Bitte melden Sie sich erneut an.');
+      assert.ok(backend.state.requests.length > before, 'the click made the request that met the ended session');
     });
   });
 });
@@ -281,6 +287,8 @@ describe('changes', () => {
       assert.equal(await box.isChecked(), false);
       await save(ben.page).click();
       await ben.page.getByText(/Sie dürfen eines der geänderten Felder nicht mehr ändern\./).waitFor();
+      // The page reloads the rights after the message; wait for the field to go instead of counting once.
+      await ben.page.getByLabel(/^Titel/).waitFor({ state: 'detached' });
       assert.equal(await ben.page.getByLabel(/^Titel/).count(), 0, 'the page shows the current rights: read only');
       assert.equal(backend.state.tickets[0].values.title, 'Anmeldung prüfen', 'nothing was written');
     } finally {

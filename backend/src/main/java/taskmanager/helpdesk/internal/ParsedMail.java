@@ -240,7 +240,9 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
     /**
      * The recipients of To and Cc of one mail and whether all of them could be read. The limit holds for the whole mail, not
      * per header (TASK-060, R3), and a group such as {@code Team: a@example.org;} counts with each of its addresses
-     * (TASK-060, R2). An unreadable header or group, or more recipients than the limit, leaves the mail incomplete.
+     * (TASK-060, R2). An unreadable header or group, or more recipients than the limit, leaves the mail incomplete. Headers and
+     * groups are read strictly: the lenient parser repairs a nested or unfinished group silently into one address that no
+     * contact matches (TASK-061, S2); such a mail waits for a person instead.
      */
     private static final class Recipients {
         private int count;
@@ -254,7 +256,7 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
             }
             for (String value : values) {
                 try {
-                    for (Address address : InternetAddress.parseHeader(value, false)) {
+                    for (Address address : InternetAddress.parseHeader(value, true)) {
                         if (!(address instanceof InternetAddress internet)) {
                             continue;
                         }
@@ -262,7 +264,7 @@ record ParsedMail(String messageId, Instant sentAt, List<Sender> from, List<Stri
                             add(internet, result);
                             continue;
                         }
-                        for (InternetAddress member : internet.getGroup(false)) {
+                        for (InternetAddress member : internet.getGroup(true)) {
                             if (member.isGroup()) {
                                 complete = false;
                             } else {
