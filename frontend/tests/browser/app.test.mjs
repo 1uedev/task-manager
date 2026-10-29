@@ -287,6 +287,8 @@ describe('changes', () => {
       assert.equal(await box.isChecked(), false);
       await save(ben.page).click();
       await ben.page.getByText(/Sie dürfen eines der geänderten Felder nicht mehr ändern\./).waitFor();
+      // The page reloads the rights after the message; wait for the field to go instead of counting once.
+      await ben.page.getByLabel(/^Titel/).waitFor({ state: 'detached' });
       assert.equal(await ben.page.getByLabel(/^Titel/).count(), 0, 'the page shows the current rights: read only');
       assert.equal(backend.state.tickets[0].values.title, 'Anmeldung prüfen', 'nothing was written');
     } finally {
