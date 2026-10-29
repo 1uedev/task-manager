@@ -1,0 +1,113 @@
+diff --git a/backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java b/backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java
+index 0ebc7e1..3c817b7 100644
+--- a/backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java
++++ b/backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java
+@@ -1285,6 +1285,108 @@ class HelpdeskApiTest {
+         }
+     }
+ 
++    // ---------------------------------------------------------------- review experiments (not part of the product)
++
++    @Test
++    void e1TheLastAttemptLostByTheProcessLeavesTheReplyPendingForever() throws Exception {
++        Setup setup = setup();
++        smtp(setup, MAIL.getSmtp().getPort());
++        long number = (Long) ticketFromMail(setup, "E1")[0];
++        Browser replier = replier(setup);
++        UUID reply = UUID.fromString(reply(replier, setup, number, "E1").json().get("id").asString());
++        UUID job = jdbc.queryForObject("select job_id from helpdesk_reply where id = ?", UUID.class, reply);
++        // The fifth attempt began: the reply is marked as being sent, then the process ends; the lease runs out.
++        jdbc.update("update helpdesk_reply set state = 'sending', attempted_at = now() where id = ?", reply);
++        jdbc.update("update job set state = 'running', attempts = max_attempts, lease_owner = 'gone', lease_until = now() - interval '1 minute' where id = ?", job);
++        // The same statement as JobRepository.releaseExpired.
++        jdbc.update("""
++                update job set
++                    state = case when attempts >= max_attempts then 'failed' else 'queued' end,
++                    finished_at = case when attempts >= max_attempts then now() else null end,
++                    run_at = now(), lease_owner = null, lease_until = null, error_code = 'job.lease_expired', error_reference = null
++                where id in (select id from job where state = 'running' and lease_until < now() for update skip locked)""");
++        System.out.println("E1 job state: " + jdbc.queryForObject("select state from job where id = ?", String.class, job));
++        System.out.println("E1 reply state in db: " + replyState(reply));
++        Response view = replier.get(ticketPath(setup, number));
++        System.out.println("E1 reply state shown: " + view.json().get("replies").get(0).get("state").asString());
++        String etag = "\"" + view.json().get("replies").get(0).get("version").asLong() + "\"";
++        Response again = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of("duplicateAccepted", true), etag);
++        System.out.println("E1 send again: " + again.status() + " " + again.code());
++        Response settle = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/settle", null, etag);
++        System.out.println("E1 settle: " + settle.status() + " " + settle.code());
++        System.out.println("E1 open list state: " + find(replier.get("/api/v1/helpdesk/replies").json(), reply).get("state").asString());
++        assertEquals("sending", replyState(reply));
++        assertEquals(409, again.status());
++        assertEquals(409, settle.status());
++    }
++
++    @Test
++    void e2ACancelledJobLeavesThePendingReplyWithoutWayOut() throws Exception {
++        Setup setup = setup();
++        smtp(setup, MAIL.getSmtp().getPort());
++        long number = (Long) ticketFromMail(setup, "E2")[0];
++        Browser replier = replier(setup);
++        UUID reply = UUID.fromString(reply(replier, setup, number, "E2").json().get("id").asString());
++        UUID job = jdbc.queryForObject("select job_id from helpdesk_reply where id = ?", UUID.class, reply);
++        // The same statement as JobRepository.cancel (the administration cancels a waiting job).
++        jdbc.update("update job set state = 'cancelled', finished_at = now() where id = ?", job);
++        Response view = replier.get(ticketPath(setup, number));
++        String etag = "\"" + view.json().get("replies").get(0).get("version").asLong() + "\"";
++        Response again = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of("duplicateAccepted", true), etag);
++        System.out.println("E2 reply " + replyState(reply) + ", send again: " + again.status() + " " + again.code());
++        assertEquals("pending", replyState(reply));
++        assertEquals(409, again.status());
++    }
++
++    @Test
++    void e3AColleagueCannotSendAgainAfterTheAuthorLeftTheProject() throws Exception {
++        Setup setup = setup();
++        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.DEFER_RECIPIENT)) {
++            smtp(setup, server.port());
++            long number = (Long) ticketFromMail(setup, "E3")[0];
++            Browser author = replier(setup);
++            Browser colleague = replier(setup);
++            UUID reply = UUID.fromString(reply(author, setup, number, "E3").json().get("id").asString());
++            runReplyJob(reply, 5);
++            assertEquals("failed", replyState(reply));
++            Response removed = setup.admin().send("DELETE", "/api/v1/projects/" + setup.project() + "/members/" + author.id, null,
++                setup.admin().get("/api/v1/projects/" + setup.project()).etag());
++            System.out.println("E3 author removed: " + removed.status());
++            server.mode(ScriptedSmtp.Mode.ACCEPT);
++            Response view = colleague.get(ticketPath(setup, number));
++            String etag = "\"" + view.json().get("replies").get(0).get("version").asLong() + "\"";
++            Response again = colleague.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of(), etag);
++            System.out.println("E3 colleague sends again: " + again.status());
++            RuntimeException failure = runReplyJob(reply, 1);
++            System.out.println("E3 job: " + failure + ", reply " + replyState(reply) + " "
++                + jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, reply) + ", handed over " + server.handedOver().size());
++            assertEquals(200, again.status());
++            assertEquals("failed", replyState(reply));
++        }
++    }
++
++    @Test
++    void e4TheReferencesOfALongThreadExceedTheLineLimit() throws Exception {
++        Setup setup = setup();
++        smtp(setup, MAIL.getSmtp().getPort());
++        long number = (Long) ticketFromMail(setup, "E4")[0];
++        Browser replier = replier(setup);
++        UUID last = null;
++        for (int i = 0; i < 20; i++) {
++            last = UUID.fromString(reply(replier, setup, number, "E4 " + i).json().get("id").asString());
++        }
++        assertNull(runReplyJob(last, 1));
++        jakarta.mail.internet.MimeMessage mail = receivedBy(setup.contactAddress()).stream().reduce((a, b) -> b).orElseThrow();
++        java.io.ByteArrayOutputStream raw = new java.io.ByteArrayOutputStream();
++        mail.writeTo(raw);
++        int longest = 0;
++        for (String line : raw.toString(StandardCharsets.ISO_8859_1).split("\r\n")) {
++            if (line.startsWith("References:")) { longest = line.length(); }
++        }
++        System.out.println("E4 References line length as received: " + longest);
++        assertTrue(longest > 998);
++    }
++
+     private static String unknown(String prefix, int count) {
+         return java.util.stream.IntStream.range(0, count).mapToObj(i -> prefix + i + "@unbekannt.example")
+             .collect(java.util.stream.Collectors.joining(", "));
