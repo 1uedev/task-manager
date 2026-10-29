@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-061](#task-061-befunde-s1-und-s2-der-nachprüfung-von-task-060-beheben) | Befunde S1 und S2 der Nachprüfung von TASK-060 beheben | claude-20261029-helpdeskfix-03 | 2026-10-29 |
 
 ### Blockiert – BLOCKIERT
 
@@ -136,3 +138,23 @@ Nicht Teil: H2 und H4 der Prüfung von TASK-057 (Entscheidung bei der Abnahme), 
 **Ergebnis:** Umgesetzt im Ergebnis PR vom Branch claude/project-thread-b4u17z, beschrieben in DEC-088, backend/README.md (Helpdesk Eingang) und dem Nachtrag TASK-060 in docs/HELPDESK_SLA.md; keine Migration und keine Vertragsänderung. R1: Die Quelle ist die Abrufgeneration und wächst auch mit jedem neuen UIDVALIDITY; Beginn und Neustart eines Ordners gelten nur gegen den gelesenen Stand, die Position rückt nur für Quelle und UIDVALIDITY des Abrufs vor, ein überholter Abruf endet ohne Schreiben. R2: Adressgruppen werden in ihre Adressen aufgelöst, eine unlesbare Gruppe macht die Empfänger unvollständig. R3: eine Grenze für To und Cc zusammen, auch beim Lesen nur des Kopfs. Testmodell: Kontakte in der Kundenauswahl nur mit Lese und Schreibregel für `contact`. Prüfungen: vier neue Fälle in `HelpdeskApiTest` (E6 mit festem Ablauf über den Testadapter `ScriptedMailbox`: nach überlappenden Abrufen über einen Wechsel von UIDVALIDITY wird die nächste Mail übernommen; zwei Abrufe, die denselben Wechsel sehen, beginnen den Ordner einmal neu; E1: fremder Kontakt in einer Gruppe in Cc und in To führt zu `foreign_customer`, leere Gruppe nicht; E2: 1001 Empfänger in Cc, 1000 nicht, 500 in To und 500 in Cc plus die Adresse des Postfachs zu `recipients_incomplete`), alle vier vor der Korrektur rot und danach grün; der Browserfall „follows the field rules“ fragt die Kundenauswahl ab und war mit dem alten Testmodell rot. Alle Backendtests mit `./mvnw verify` (Java 21, PostgreSQL 16 lokal), Frontend `npm run verify`, alle 124 Browsertests, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests -v`, `git diff --check`. Nicht lokal gelaufen: Backend mit Java 25 und PostgreSQL 18 (CI), Docker Image.
 
 **Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040); danach nimmt Holger TASK-057, TASK-059 und TASK-060 zusammen ab.
+
+## TASK-061 Befunde S1 und S2 der Nachprüfung von TASK-060 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261029-helpdeskfix-03 · **Aktualisiert:** 2026-10-29
+
+**Bezug:** REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002. **Abhängigkeiten:** TASK-060 (Ergebnis PR #196), Prüfbericht docs/REVIEW_TASK-060_PR-196.md (PR #197). **Arbeitsstand:** Holgers Wahl „Zusätzlich H2 Browsertest“ vom 29. Oktober 2026 im Projektgespräch, also S1, S2, H1, H3 und H2. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-089, voraussichtlich ohne Migration.
+
+**Umfang:** Nur die Befunde und Hinweise aus dem Prüfbericht:
+
+1. S1: Ein überholter Abruf schreibt weder Eingang noch Ticket. Die Abrufgeneration (Quelle und UIDVALIDITY) wird vor dem Speichern in derselben Transaktion unter einer Sperre des Postfachs geprüft, die mit dem Neustart des Ordners verträglich ist.
+2. S2: Empfängerzeilen und Gruppenmitglieder werden ohne stille Fehlerkorrektur gelesen; verschachtelte, nicht abgeschlossene oder sonst ungültige Gruppen und Anzeigenamen machen die Empfänger unvollständig (`recipients_incomplete`), auch beim Lesen nur des Kopfs.
+3. H1: Der Testadapter `ScriptedMailbox` liest übergroße Mails über den echten Pfad `headerOnly`.
+4. H3: DEC-088 oder ihr Nachfolger, README, SLA-Nachtrag und TODO nennen den verbindlichen Zeitpunkt, ab dem ein überholter Abruf nichts mehr schreibt.
+5. H2: Der Browsertest „a session the server ended leads back to the login on the next request“ wird stabil, ohne die Prüfung abzuschwächen.
+
+Nicht Teil: H2 und H4 der Prüfung von TASK-057 (Entscheidung bei der Abnahme), H5 und H6, TASK-058.
+
+**Abnahmekriterien:** Regressionstest E1 des Prüfberichts: dieselbe Mail in alter und neuer Generation ergibt genau ein Ticket, auch in umgekehrter Reihenfolge; Regressionen für verschachtelte Gruppe, fehlendes Semikolon und nicht geschlossenen Anzeigenamen in To und Cc führen in die Prüfwarteschlange, auch über `headerOnly`; die neuen Tests sind vor der Korrektur rot und danach grün; alle Backend, Frontend und Browsertests grün, der Sitzungstest mehrfach hintereinander. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057, TASK-059, TASK-060 und TASK-061 zusammen ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
