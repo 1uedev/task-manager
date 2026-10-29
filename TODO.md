@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-060](#task-060-befunde-r1-bis-r3-der-nachprüfung-von-task-059-beheben) | Befunde R1 bis R3 der Nachprüfung von TASK-059 beheben | claude-20261028-helpdeskfix-02 | 2026-10-28 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +42,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-057](#task-057-helpdesk-eingang-über-imap-mit-prüfwarteschlange-paket-a9-teil-1) | Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1) | claude-20261028-helpdesk-01 | 2026-10-28 |
 | [TASK-059](#task-059-befunde-f1-bis-f5-der-prüfung-von-task-057-beheben) | Befunde F1 bis F5 der Prüfung von TASK-057 beheben | claude-20261028-helpdeskfix-01 | 2026-10-28 |
+| [TASK-060](#task-060-befunde-r1-bis-r3-der-nachprüfung-von-task-059-beheben) | Befunde R1 bis R3 der Nachprüfung von TASK-059 beheben | claude-20261028-helpdeskfix-02 | 2026-10-29 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -119,7 +118,7 @@ Nicht Teil: H2 und H4 (Entscheidung bei der Abnahme), H5 und H6, TASK-058.
 
 ## TASK-060 Befunde R1 bis R3 der Nachprüfung von TASK-059 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-helpdeskfix-02 · **Aktualisiert:** 2026-10-28
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-helpdeskfix-02 · **Aktualisiert:** 2026-10-29
 
 **Bezug:** REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002, Feldrechte nach DEC-067. **Abhängigkeiten:** TASK-059 (Ergebnis PR #193), Prüfbericht docs/REVIEW_TASK-059_PR-193.md (PR #194). **Arbeitsstand:** Holgers Wahl „R1 bis R3 plus Testmodell“ vom 28. Oktober 2026 im Projektgespräch. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-088 und, falls der Abrufzustand eine Spalte braucht, Migration V0028.
 
@@ -134,4 +133,6 @@ Nicht Teil: H2 und H4 der Prüfung von TASK-057 (Entscheidung bei der Abnahme), 
 
 **Abnahmekriterien:** Für jeden Befund ein Regressionstest nach der Nachstellung im Prüfbericht (E6, E1, E2), der vor der Korrektur rot und danach grün ist; nach überlappenden Abrufen über einen Wechsel der UIDVALIDITY wird die neue Mail übernommen; ein fremder Kundenkontakt in einer Gruppe in To oder CC führt in die Prüfwarteschlange, ebenso insgesamt 1001 Empfänger bei beliebiger Aufteilung auf To und CC, 1000 dagegen nicht; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057, TASK-059 und TASK-060 zusammen ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
+**Ergebnis:** Umgesetzt im Ergebnis PR vom Branch claude/project-thread-b4u17z, beschrieben in DEC-088, backend/README.md (Helpdesk Eingang) und dem Nachtrag TASK-060 in docs/HELPDESK_SLA.md; keine Migration und keine Vertragsänderung. R1: Die Quelle ist die Abrufgeneration und wächst auch mit jedem neuen UIDVALIDITY; Beginn und Neustart eines Ordners gelten nur gegen den gelesenen Stand, die Position rückt nur für Quelle und UIDVALIDITY des Abrufs vor, ein überholter Abruf endet ohne Schreiben. R2: Adressgruppen werden in ihre Adressen aufgelöst, eine unlesbare Gruppe macht die Empfänger unvollständig. R3: eine Grenze für To und Cc zusammen, auch beim Lesen nur des Kopfs. Testmodell: Kontakte in der Kundenauswahl nur mit Lese und Schreibregel für `contact`. Prüfungen: vier neue Fälle in `HelpdeskApiTest` (E6 mit festem Ablauf über den Testadapter `ScriptedMailbox`: nach überlappenden Abrufen über einen Wechsel von UIDVALIDITY wird die nächste Mail übernommen; zwei Abrufe, die denselben Wechsel sehen, beginnen den Ordner einmal neu; E1: fremder Kontakt in einer Gruppe in Cc und in To führt zu `foreign_customer`, leere Gruppe nicht; E2: 1001 Empfänger in Cc, 1000 nicht, 500 in To und 500 in Cc plus die Adresse des Postfachs zu `recipients_incomplete`), alle vier vor der Korrektur rot und danach grün; der Browserfall „follows the field rules“ fragt die Kundenauswahl ab und war mit dem alten Testmodell rot. Alle Backendtests mit `./mvnw verify` (Java 21, PostgreSQL 16 lokal), Frontend `npm run verify`, alle 124 Browsertests, `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests -v`, `git diff --check`. Nicht lokal gelaufen: Backend mit Java 25 und PostgreSQL 18 (CI), Docker Image.
+
+**Nächster Schritt:** Getrennte KI prüft das Ergebnis (DEC-040); danach nimmt Holger TASK-057, TASK-059 und TASK-060 zusammen ab.

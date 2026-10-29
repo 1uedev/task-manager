@@ -48,6 +48,11 @@ Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem
 - Alle Empfänger zählen für die Prüfung auf Kontakte anderer Kunden. Eine Mail mit mehr als 1000 Empfängern oder einer unlesbaren Empfängerzeile wartet mit eigenem Grund auf Prüfung.
 - Die Wiedererkennung enthält zusätzlich die Quelle des Postfachs, die sich mit Server, Port, Konto oder Ordner ändert. Der Abgleich über die Message-ID nach einem Wechsel von UIDVALIDITY ist am Postfach gespeichert und gilt über alle Abrufpakete und Neustarts.
 
+### Nachtrag TASK-060 (DEC-088): Korrekturen nach der Nachprüfung von TASK-059
+
+- Die Quelle wächst auch mit jedem neuen UIDVALIDITY. Ein Abruf schreibt seine Position nur für die Quelle und das UIDVALIDITY, die er gelesen hat; überschneidet er sich mit einem Neustart des Ordners, endet er ohne zu schreiben, und keine neue Mail wird übergangen.
+- Mitglieder einer Adressgruppe in To oder Cc zählen für die Prüfung auf Kontakte anderer Kunden wie einzelne Empfänger. Die Grenze von 1000 Empfängern gilt für To und Cc einer Mail zusammen.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

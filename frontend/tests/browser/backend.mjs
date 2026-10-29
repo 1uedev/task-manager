@@ -770,8 +770,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (tail === '/helpdesk' && method === 'GET') return ok(view());
     if (tail === '/helpdesk/options' && method === 'GET') {
       if (!writableHere.includes('customer')) return problem(403, 'auth.forbidden');
+      // As the backend: contacts only with read and write on contact (TASK-059, F4; TASK-060).
+      const contacts = writableHere.includes('contact');
       return ok(hd.customers.filter((customer) => customer.projects.includes(item.id)).map((customer) => ({ id: customer.id, name: customer.name,
-        contacts: hd.contacts.filter((contact) => contact.customerId === customer.id).map((contact) => ({ id: contact.id, name: contact.name, addresses: contact.addresses })) })));
+        contacts: hd.contacts.filter((contact) => contacts && contact.customerId === customer.id).map((contact) => ({ id: contact.id, name: contact.name, addresses: contact.addresses })) })));
     }
     if (tail === '/helpdesk/customer' && method === 'PUT') {
       if (writableHere.length < 2) return problem(403, 'auth.forbidden');
