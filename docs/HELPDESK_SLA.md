@@ -56,6 +56,7 @@ Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem
 ### Nachtrag TASK-061 (DEC-089): Korrekturen nach der Nachprüfung von TASK-060
 
 - Ab dem Neustart eines Ordners schreibt ein Abruf, der noch den alten Stand liest, weder Eingang noch Ticket. Dieselbe Mail wird so auch bei überlappenden Abrufen nur einmal zum Ticket.
+- Nachtrag vom 29. Oktober 2026 (DEC-090): Eine schon gespeicherte Mail kann ein solcher Abruf noch auf dem Server als gelesen markieren. Im Task Manager ändert das nichts.
 - Empfängerzeilen werden streng gelesen. Eine fehlerhafte oder verschachtelte Adressgruppe führt in die Prüfwarteschlange, statt still umgedeutet zu werden.
 
 ## Kundenportal und Antworten

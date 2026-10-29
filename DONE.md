@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,108 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-061 Befunde S1 und S2 der Nachprüfung von TASK-060 beheben
+
+**Bezug:** REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002. **Verantwortlich:** claude-20261029-helpdeskfix-03. **Abgeschlossen:** 2026-10-29.
+
+**Abnahmekriterien:** Regressionstest E1 des Prüfberichts: dieselbe Mail in alter und neuer Generation ergibt genau ein Ticket, auch in umgekehrter Reihenfolge; Regressionen für verschachtelte Gruppe, fehlendes Semikolon und nicht geschlossenen Anzeigenamen in To und Cc führen in die Prüfwarteschlange, auch über `headerOnly`; die neuen Tests sind vor der Korrektur rot und danach grün; alle Backend, Frontend und Browsertests grün, der Sitzungstest mehrfach hintereinander. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057, TASK-059, TASK-060 und TASK-061 zusammen ab.
+
+**Ergebnis:** DEC-089, präzisiert durch DEC-090; keine Migration, keine Vertragsänderung (PR #199):
+- S1: `HelpdeskRepository.lockCurrent` sperrt die Postfachzeile und prüft Quelle und UIDVALIDITY in der Transaktion des Eintrags. Ab dem Commit eines Neustarts des Ordners oder einer neuen Quelle schreibt ein überholter Abruf weder Eingang noch Ticket noch Position. Berichtigung durch DEC-090: Die ursprünglich zugesagte ausbleibende Lesemarkierung gilt nicht; eine schon gespeicherte Mail kann der überholte Abruf noch auf dem Server als gelesen markieren (T1).
+- S2: Empfängerzeilen und Gruppen werden streng gelesen; verschachtelte, nicht abgeschlossene Gruppen und offene Anzeigenamen führen zu `recipients_incomplete`, auch über `headerOnly`.
+- H1: Der Testadapter `ScriptedMailbox` liest übergroße Mails über `ParsedMail.headerOnly`.
+- H2: Der Browsertest zum Sitzungsende wartet, bis die Seite keine Anfragen mehr offen hat; der Fall „a right withdrawn in another browser…“ wartet auf das Verschwinden des Titelfelds.
+- H3: verbindlicher Zeitpunkt in DEC-089, backend/README.md und dem Nachtrag in docs/HELPDESK_SLA.md.
+
+**Prüfungen:** CI grün auf PR #199. Lokal (Java 21, PostgreSQL 16): 374 Backendtests, Frontend `npm run verify`, alle 124 Browsertests, Sitzungsende-Test achtmal hintereinander grün; die Regressionen zu S1 und S2 waren ohne die Korrektur rot. Die Nachprüfung lief die Backendsuite selbst: 374 Tests mit einem Fehler in `LdapLoginTest` (siehe Offen), isoliert grün. Nicht lokal: Java 25, PostgreSQL 18 und Image (CI).
+
+**Review:** Getrennte Nachprüfung durch Codex ([Bericht](docs/REVIEW_TASK-061_PR-199.md), PR #200): S1 und S2 behoben, Befund T1 (P3, Lesemarkierung nach neuer Quelle), Hinweise H1 bis H3.
+
+**Abnahme:** Holger, 2026-10-29, im Projektgespräch mit der Wahl „Abnehmen, H2 und H4 klären“ und danach „Beides so lassen“ (DEC-090); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. T1: Ein überholter Abruf kann eine schon gespeicherte Mail noch als gelesen markieren; als schwächere Zusage in DEC-090 festgehalten, Korrektur nicht beauftragt.
+2. `LdapLoginTest.java:515` (vier gleichzeitige Erstanmeldungen) war im Gesamtlauf der Nachprüfung einmal rot; nicht untersucht.
+
+**Referenz:** Reservierung #198 (4b720c6), Ergebnis #199 (c49a53f), Prüfbericht #200 (80144bf); verknüpft mit TASK-060, DEC-089 und DEC-090.
+
+## TASK-060 Befunde R1 bis R3 der Nachprüfung von TASK-059 beheben
+
+**Bezug:** REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002, Feldrechte nach DEC-067. **Verantwortlich:** claude-20261028-helpdeskfix-02. **Abgeschlossen:** 2026-10-29.
+
+**Abnahmekriterien:** Für jeden Befund ein Regressionstest nach der Nachstellung im Prüfbericht (E6, E1, E2), der vor der Korrektur rot und danach grün ist; nach überlappenden Abrufen über einen Wechsel der UIDVALIDITY wird die neue Mail übernommen; ein fremder Kundenkontakt in einer Gruppe in To oder CC führt in die Prüfwarteschlange, ebenso insgesamt 1001 Empfänger bei beliebiger Aufteilung auf To und CC, 1000 dagegen nicht; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-088, keine Migration und keine Vertragsänderung (PR #196):
+- R1: Die Quelle ist die Abrufgeneration und wächst auch mit jedem neuen UIDVALIDITY; Beginn und Neustart eines Ordners gelten nur gegen den gelesenen Stand, die Position rückt nur für Quelle und UIDVALIDITY des Abrufs vor.
+- R2: Adressgruppen werden in ihre Adressen aufgelöst, eine unlesbare Gruppe macht die Empfänger unvollständig.
+- R3: Eine Grenze von 1000 Empfängern für To und Cc zusammen, auch beim Lesen nur des Kopfs.
+- Testmodell der Browsertests: Kontakte in der Kundenauswahl nur mit Lese und Schreibregel für `contact`.
+- Neuer Testadapter `ScriptedMailbox` für feste Abläufe des Abrufs.
+
+**Prüfungen:** CI grün auf PR #196. Lokal (Java 21, PostgreSQL 16): 370 Backendtests, Frontend `npm run verify`, alle 124 Browsertests; die vier neuen Fälle in `HelpdeskApiTest` und der Browserfall „follows the field rules“ waren vor der Korrektur rot. Nicht lokal: Java 25, PostgreSQL 18 und Image (CI).
+
+**Review:** Getrennte Nachprüfung durch Codex ([Bericht](docs/REVIEW_TASK-060_PR-196.md), PR #197): R1 bis R3 behoben, neue Befunde S1 (zweites Ticket aus überholtem Abruf) und S2 (nachsichtiges Lesen von Gruppen), beide über TASK-061 behoben; Hinweise H1 bis H3 ebenfalls in TASK-061.
+
+**Abnahme:** Holger, 2026-10-29, gemeinsam mit TASK-057, TASK-059 und TASK-061 (DEC-090); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; siehe TASK-061.
+
+**Referenz:** Reservierung #195 (463c3e4), Ergebnis #196 (c22d6f7), Prüfbericht #197 (e4c7bef); verknüpft mit TASK-059, TASK-061 und DEC-088.
+
+## TASK-059 Befunde F1 bis F5 der Prüfung von TASK-057 beheben
+
+**Bezug:** REQ-HD-001 (geschützte Zugangsdaten), REQ-HD-002 (Duplikate, Zuordnung), REQ-ORG-002, Feldrechte nach DEC-067. **Verantwortlich:** claude-20261028-helpdeskfix-01. **Abgeschlossen:** 2026-10-29.
+
+**Abnahmekriterien:** Für jeden Befund ein Regressionstest nach der Nachstellung im Prüfbericht (E2, E3, E4, E6, E7), der vor der Korrektur rot und danach grün ist; kein Passwort im Protokoll bei einem Server, der die Anmeldung spiegelt; keine doppelten Tickets bei mehr wieder aufgetauchten Nachrichten als dem Paketlimit; keine übergangene Nachricht nach Wechsel von Konto oder Ordner; keine Kontaktdaten ohne Leserecht auf `contact`; ein fremder Kunde an beliebiger Empfängerposition führt in die Prüfwarteschlange; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-057 und TASK-059 zusammen ab.
+
+**Ergebnis:** DEC-087 mit Korrekturmigration V0027 (PR #193):
+- F1: Protokoll nur mit Postfach, Code und Klassen der Ursachen, nie mit dem Text des Mailservers.
+- F2: Abgleichgrenze `compare_until` am Postfach, Abgleich und Eintrag unter Sperre des Postfachs, gültig über alle Pakete, Fehler und Neustarts.
+- F3: Quelle `source` am Postfach und in der Herkunft jeder Mail, Positionen nur für die aktuelle Quelle.
+- F4: Kundenauswahl nach den Lese und Schreibregeln für `customer` und `contact`.
+- F5: Alle Empfänger bis 1000 werden geprüft, sonst Grund `recipients_incomplete`.
+- H1: Vertrauensvoraussetzung an den eigenen Empfangsserver dokumentiert.
+- H3: stabile Browsertests des Helpdesks; Backendtests mit höchstens acht offenen Spring Kontexten (`src/test/resources/spring.properties`).
+
+**Prüfungen:** CI grün auf PR #193. Lokal (Java 21, PostgreSQL 16.15): `./mvnw clean verify` mit 366 Tests, `scripts/lifecycle-check.sh`, Frontend `npm run verify`, alle 124 Browsertests, `helpdesk.test.mjs` dreimal hintereinander; die fünf neuen Fälle waren vor der Korrektur rot. Nicht lokal: Java 25, PostgreSQL 18 und Image (CI).
+
+**Review:** Getrennte Nachprüfung durch Codex ([Bericht](docs/REVIEW_TASK-059_PR-193.md), PR #194): F1 bis F5 behoben, neue Befunde R1 bis R3, über TASK-060 behoben.
+
+**Abnahme:** Holger, 2026-10-29, gemeinsam mit TASK-057, TASK-060 und TASK-061 (DEC-090); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** Keine eigenen; siehe TASK-057 und TASK-061.
+
+**Referenz:** Reservierung #192 (d65f05d), Ergebnis #193 (059de83), Prüfbericht #194 (6872405); verknüpft mit TASK-057, TASK-060 und DEC-087.
+
+## TASK-057 Helpdesk Eingang über IMAP mit Prüfwarteschlange (Paket A9, Teil 1)
+
+**Bezug:** REQ-HD-001 (Eingang, geschützte Zugangsdaten, erkennbare Verbindungsfehler), REQ-HD-002 (Duplikate, unbekannte Absender nach DEC-031, automatische Antworten und Schleifen beim Eingang), REQ-ORG-002 (Unternehmensgrenze), REQ-TKT-003 (nur Mailanhänge über das Modul `files`). **Verantwortlich:** claude-20261028-helpdesk-01. **Abgeschlossen:** 2026-10-29.
+
+**Abnahmekriterien:** Eine Nachricht eines bestätigten bekannten Kontakts einer freigegebenen Organisation erzeugt genau ein Ticket mit Kunde, Kontakt, Text und Anhängen, auch nach erneutem Abruf, Neustart oder zwei gleichzeitigen Ausführern; ein unbekannter, nicht bestätigter oder mehrdeutiger Absender landet mit Grund in der Prüfwarteschlange und erzeugt kein Ticket; eine gefälschte From Adresse ohne `dmarc=pass` des eigenen Empfangsservers führt nie direkt zum Ticket; eine automatische Antwort erzeugt kein Ticket; ein Wechsel von UIDVALIDITY erzeugt keine Duplikate; die Prüfwarteschlange ist ohne `helpdesk.review` im Zielprojekt nicht sichtbar (403), eine doppelte Bearbeitung legt nichts doppelt an; Kennwörter erscheinen weder in Antworten noch im Protokoll noch unverschlüsselt in der Datenbank; ein falsches Kennwort oder ein nicht erreichbarer Server ist in der Postfachliste sichtbar; ohne Leserecht auf `mail`, `customer` oder `contact` erscheinen diese Felder weder in Ticket noch Historie noch Suche. Tests gegen GreenMail. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt fachlich ab.
+
+**Ergebnis:** DEC-086 mit Migration V0026 und Vertrag contracts/helpdesk.openapi.yaml (PR #189), korrigiert durch TASK-059 bis TASK-061:
+- Modul `helpdesk` mit Kundenorganisationen, Kontakten und IMAP Postfächern; Kennwörter mit AES-GCM und `TASK_MANAGER_SECRET_KEY` verschlüsselt.
+- Abruf als wiederkehrende Aufgabe im Modul `jobs`, Herkunft über Postfach, Quelle, UIDVALIDITY und UID; Mails bleiben auf dem Server.
+- Absenderprüfung über `Authentication-Results` des eigenen Empfangsservers mit `dmarc=pass`; alles andere mit Grund in die Prüfwarteschlange, automatische Mails ohne Ticket.
+- Prüfwarteschlange mit der Projektaktion `helpdesk.review`, Verwaltung mit dem Unternehmensrecht `helpdesk.manage`.
+- Ticketfelder `customer`, `contact` und `mail` mit Feldrechten und Historie, Anhänge über den Port `AttachmentIntake` des Moduls `files`.
+- Oberfläche Helpdesk, Prüfwarteschlange und Bereich „Kunde und Mails“ am Ticket, Katalog de und en.
+- Abweichung, durch DEC-090 entschieden: Ohne `helpdesk.review` ist die Liste leer und eine einzelne Mail antwortet mit 404 statt 403 (H2). Betreff und Text stehen als Titel und Beschreibung im Ticket und folgen deren Feldrechten, nicht dem Feld `mail` (H4).
+
+**Prüfungen:** CI grün auf PR #189 (Backend, Frontend, Image, Qualifikation, Repository). Lokal: `HelpdeskApiTest` gegen GreenMail und PostgreSQL, `SenderCheckTest`, `ParsedMailTest`, `SecretBoxTest`, `HelpdeskContractTest`, alle Backendtests mit `./mvnw verify` (Java 21, PostgreSQL 16), Frontend `npm run verify` und alle Browsertests einschließlich `helpdesk.test.mjs`. Nicht lokal: Java 25, PostgreSQL 18 und Image (CI); kein Test gegen einen produktiven Mailserver.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-057_PR-189.md), PR #191): Befunde F1 bis F5 (alle P2), über TASK-059 behoben; Hinweise H1 und H3 in TASK-059, H2 und H4 durch Holger in DEC-090 entschieden, H5 und H6 offen. Nachprüfungen siehe TASK-059 bis TASK-061.
+
+**Abnahme:** Holger, 2026-10-29, im Projektgespräch mit der Wahl „Abnehmen, H2 und H4 klären“ und „Beides so lassen“, gemeinsam mit TASK-059, TASK-060 und TASK-061 (DEC-090); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:**
+1. H5: Größen und Zeitgrenzen ohne Last und Ressourcentest; eine als klein gemeldete Mail wird vollständig in den Speicher gelesen.
+2. H6: ein Abrufauftrag arbeitet alle Postfächer nacheinander ab statt einer je Postfach; die Message-ID dient nur nach einem Wechsel von UIDVALIDITY dem Abgleich; ein Postfach ohne Passwort lässt sich auch ohne Schlüssel anlegen.
+3. T1 und der LDAP-Test, siehe TASK-061.
+4. TASK-058 (Antworten über SMTP) ist mit dieser Abnahme nicht mehr blockiert.
+
+**Referenz:** Reservierung #188 (a4c2e0f), Ergebnis #189 (1d80f18), Prüfbericht #191 (71c0cbb); verknüpft mit TASK-058 bis TASK-061, DEC-086 und DEC-090.
 
 ## TASK-056 Befunde R1 bis R3 der Nachprüfung von TASK-055 beheben
 
