@@ -246,26 +246,41 @@ class HelpdeskRepository {
     }
 
     /**
-     * Moves the position on, only while the source is still the one the fetch reads; a fetch that runs while the settings
-     * change writes nothing for the new source. The comparison of Message-IDs ends once the position passed its bound.
+     * Moves the position on, only while the fetch still reads the current source and UIDVALIDITY; a fetch that runs while the
+     * settings change or another fetch starts the folder over writes nothing and learns so from the answer (TASK-060, R1). It
+     * never changes the UIDVALIDITY. The comparison of Message-IDs ends once the position passed its bound.
      */
-    void position(UUID id, int source, long uidValidity, long lastUid) {
-        jdbc.sql("""
-                update helpdesk_mailbox set uid_validity = ?, last_uid = greatest(last_uid, ?),
+    boolean position(UUID id, int source, long uidValidity, long lastUid) {
+        return jdbc.sql("""
+                update helpdesk_mailbox set last_uid = greatest(last_uid, ?),
                     compare_until = case when compare_until <= ? then null else compare_until end
-                where id = ? and source = ?
-                """).params(uidValidity, lastUid, lastUid, id, source).update();
+                where id = ? and source = ? and uid_validity = ?
+                """).params(lastUid, lastUid, id, source, uidValidity).update() == 1;
     }
 
     /**
-     * A new UIDVALIDITY: the intake starts the folder over, leaves a notice and compares Message-IDs up to {@code compareUntil},
+     * The first fetch of a folder: it starts at {@code start}, only while the source is the one the fetch read and nobody
+     * started the folder before it (TASK-060, R1).
+     */
+    boolean startFolder(UUID id, int source, long uidValidity, long start) {
+        return jdbc.sql("""
+                update helpdesk_mailbox set uid_validity = ?, last_uid = ?, compare_until = null
+                where id = ? and source = ? and uid_validity is null
+                """).params(uidValidity, start, id, source).update() == 1;
+    }
+
+    /**
+     * A new UIDVALIDITY: the intake starts the folder over as a new source, so that no fetch that still reads the old state
+     * can move the position afterwards (TASK-060, R1). Only from the state the fetch read; a second fetch that saw the same
+     * change finds the new source and writes nothing. It leaves a notice and compares Message-IDs up to {@code compareUntil}
      * across every batch, failure and restart until the position passes it (TASK-059, F2).
      */
-    void restartFolder(UUID id, int source, long uidValidity, long compareUntil, String notice, Instant now) {
-        jdbc.sql("""
-                update helpdesk_mailbox set uid_validity = ?, last_uid = 0, compare_until = ?, notice = ?, notice_at = ?
-                where id = ? and source = ?
-                """).params(uidValidity, compareUntil, notice, ts(now), id, source).update();
+    boolean restartFolder(UUID id, int source, long previousValidity, long uidValidity, long start, Long compareUntil, String notice,
+            Instant now) {
+        return jdbc.sql("""
+                update helpdesk_mailbox set source = source + 1, uid_validity = ?, last_uid = ?, compare_until = ?, notice = ?, notice_at = ?
+                where id = ? and source = ? and uid_validity = ?
+                """).params(uidValidity, start, compareUntil, notice, ts(now), id, source, previousValidity).update() == 1;
     }
 
     /** Locks the mailbox row, so that the comparison of Message-IDs and the insert are one decision per mailbox. */

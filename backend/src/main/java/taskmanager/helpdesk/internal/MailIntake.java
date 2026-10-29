@@ -23,7 +23,9 @@ import taskmanager.tickets.TicketAccess;
  * its ticket, if it gets one, then marked as seen, and only then the position in the folder moves on. The origin (mailbox,
  * source, UIDVALIDITY, UID) is unique, so a mail whose outcome was recorded but whose position was lost is recognized at the
  * next fetch and adds nothing. The source changes with server, port, account or folder, so a mail of a new folder is never
- * taken for one of the old (TASK-059, F3). A failure of one mailbox is recorded with its code and does not stop the others.
+ * taken for one of the old (TASK-059, F3), and with a new UIDVALIDITY; the position moves only for the source and UIDVALIDITY
+ * the fetch read, so a fetch that overlaps a start over writes nothing (TASK-060, R1). A failure of one mailbox is recorded
+ * with its code and does not stop the others.
  *
  * <p>Where the intake starts: at the first fetch of a folder, or after the server changed its UIDVALIDITY, at the oldest
  * mail not marked as seen; older mails stay untouched. After a new UIDVALIDITY every mail up to the highest UID the folder
@@ -109,27 +111,41 @@ public class MailIntake implements RecurringTask {
             int source = mailbox.source();
             Long compareUntil = mailbox.uidValidity() != null && mailbox.uidValidity() == validity ? mailbox.compareUntil() : null;
             if (mailbox.uidValidity() == null || mailbox.uidValidity() != validity) {
-                boolean changed = mailbox.uidValidity() != null;
+                Long previous = mailbox.uidValidity();
                 List<Long> unseen = connection.uids(0, true, 1);
                 long top = highest(connection);
                 long start = unseen.isEmpty() ? top : unseen.get(0) - 1;
+                Long bound = previous != null && top > start ? top : null;
                 Instant now = clock.instant();
-                transaction.executeWithoutResult(status -> {
-                    if (changed) {
-                        repository.restartFolder(mailboxId, source, validity, top, "helpdesk.uidvalidity_changed", now);
-                        repository.audit(mailbox.companyId(), "mailbox", mailboxId, "mailbox.uidvalidity_changed",
-                            "{\"from\":" + mailbox.uidValidity() + ",\"to\":" + validity + "}", null, now);
+                int current = source;
+                // Only from the state this fetch read: another fetch that already started the folder wins, and this one
+                // ends without writing (TASK-060, R1).
+                boolean started = transaction.execute(status -> {
+                    if (previous == null) {
+                        return repository.startFolder(mailboxId, current, validity, start);
                     }
-                    repository.position(mailboxId, source, validity, start);
+                    if (!repository.restartFolder(mailboxId, current, previous, validity, start, bound, "helpdesk.uidvalidity_changed", now)) {
+                        return false;
+                    }
+                    repository.audit(mailbox.companyId(), "mailbox", mailboxId, "mailbox.uidvalidity_changed",
+                        "{\"from\":" + previous + ",\"to\":" + validity + "}", null, now);
+                    return true;
                 });
+                if (!started) {
+                    return;
+                }
+                source = previous == null ? source : source + 1;
                 lastUid = start;
-                compareUntil = changed && top > start ? top : null;
+                compareUntil = bound;
             }
             for (long uid : connection.uids(lastUid, false, properties.batch())) {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
-                take(mailbox, connection, source, validity, uid, compareUntil != null && uid <= compareUntil);
+                if (!take(mailbox, connection, source, validity, uid, compareUntil != null && uid <= compareUntil)) {
+                    // The folder was started over or the settings changed meanwhile; the next fetch reads the new state.
+                    return;
+                }
             }
             transaction.executeWithoutResult(status -> repository.fetchSucceeded(mailboxId, clock.instant()));
         } catch (MailClient.MailFailure failure) {
@@ -144,12 +160,13 @@ public class MailIntake implements RecurringTask {
         return all.isEmpty() ? 0 : all.get(all.size() - 1);
     }
 
-    private void take(Mailbox mailbox, MailClient.Connection connection, int source, long validity, long uid, boolean compare)
+    /** Takes one mail; false when the position could not move because this fetch no longer reads the current state. */
+    private boolean take(Mailbox mailbox, MailClient.Connection connection, int source, long validity, long uid, boolean compare)
             throws MailClient.MailFailure {
         if (!transaction.execute(status -> repository.knownOrigin(mailbox.id(), source, validity, uid))) {
             long size = connection.size(uid);
             if (size < 0) {
-                return;
+                return true;
             }
             byte[] raw = null;
             ParsedMail parsed = null;
@@ -185,7 +202,7 @@ public class MailIntake implements RecurringTask {
         } catch (MailClient.MailFailure failure) {
             LOG.info("Mail {} of mailbox {} could not be marked as seen: {}", uid, mailbox.id(), failure.code());
         }
-        transaction.executeWithoutResult(status -> repository.position(mailbox.id(), source, validity, uid));
+        return transaction.execute(status -> repository.position(mailbox.id(), source, validity, uid));
     }
 
     /** Records one mail and, for a confirmed contact of a released customer, its ticket; runs in one transaction. */

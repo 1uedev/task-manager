@@ -51,6 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
 import taskmanager.helpdesk.internal.MailIntake;
+import taskmanager.helpdesk.internal.ScriptedMailbox;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
@@ -121,6 +122,7 @@ class HelpdeskApiTest {
     @Autowired CompanyContext companies;
     @Autowired PlatformTransactionManager transactions;
     @Autowired MailIntake intake;
+    @Autowired org.springframework.context.ApplicationContext context;
 
     // ---------------------------------------------------------------- a minimal browser
 
@@ -775,6 +777,122 @@ class HelpdeskApiTest {
         assertEquals(List.of("foreign_customer", "recipients_incomplete"), messages.stream().map(row -> row.get("reason")).toList());
         assertTrue(messages.get(0).get("cc_addresses").toString().contains(other.contactAddress()));
         assertEquals(0, tickets(setup));
+    }
+
+    /**
+     * R1 of the review of TASK-059: a fetch that still reads the old UIDVALIDITY when another fetch starts the folder over, and
+     * its release after a third fetch moved on, leave the position of the new UIDVALIDITY where it is; the next mail is taken.
+     */
+    @Test
+    void aFetchOfTheOldUidValidityDoesNotMoveThePositionOfTheNewOne() throws Exception {
+        Setup setup = setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity = 100, last_uid = 0 where id = ?", setup.mailbox());
+        var oldRead = new java.util.concurrent.CountDownLatch(1);
+        var oldGo = new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old = new ScriptedMailbox(100).put(100, scripted(setup, "alt-100", ""))
+            .beforeFetch(uid -> { oldRead.countDown(); hold(oldGo); });
+        var newRead = new java.util.concurrent.CountDownLatch(1);
+        var newGo = new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox current = new ScriptedMailbox(200).put(1, scripted(setup, "neu-1", "")).put(2, scripted(setup, "neu-2", ""));
+        Future<?> first = POOL.submit(() -> old.intake(context, 1).fetch(setup.mailbox()));
+        Future<?> third = null;
+        try {
+            hold(oldRead);
+            current.intake(context, 1).fetch(setup.mailbox());
+            current.beforeFetch(uid -> { newRead.countDown(); hold(newGo); });
+            third = POOL.submit(() -> current.intake(context, 1).fetch(setup.mailbox()));
+            hold(newRead);
+            oldGo.countDown();
+            first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            newGo.countDown();
+            third.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            oldGo.countDown();
+            newGo.countDown();
+        }
+        Map<String, Object> state = jdbc.queryForMap("select uid_validity, last_uid from helpdesk_mailbox where id = ?", setup.mailbox());
+        assertEquals(200L, state.get("uid_validity"));
+        assertEquals(2L, state.get("last_uid"), "the old fetch did not move the position of the new UIDVALIDITY");
+        current.beforeFetch(uid -> { }).put(3, scripted(setup, "neu-3", ""));
+        current.intake(context, 5).fetch(setup.mailbox());
+        assertTrue(current.seen(3), "the next mail is taken");
+        assertEquals(4, messages(setup).size());
+        assertEquals(3L, jdbc.queryForObject("select last_uid from helpdesk_mailbox where id = ?", Long.class, setup.mailbox()));
+    }
+
+    /** R1: two fetches that see the same new UIDVALIDITY start the folder over once; the second ends without writing. */
+    @Test
+    void twoFetchesThatSeeTheSameNewUidValidityStartTheFolderOverOnce() throws Exception {
+        Setup setup = setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity = 100, last_uid = 5 where id = ?", setup.mailbox());
+        // Both fetches read the old state before either starts the folder over.
+        var both = new java.util.concurrent.CountDownLatch(2);
+        ScriptedMailbox current = new ScriptedMailbox(200).put(1, scripted(setup, "gleich-1", "")).put(2, scripted(setup, "gleich-2", ""))
+            .beforeOpen(() -> { both.countDown(); hold(both); });
+        Future<?> a = POOL.submit(() -> current.intake(context, 5).fetch(setup.mailbox()));
+        Future<?> b = POOL.submit(() -> current.intake(context, 5).fetch(setup.mailbox()));
+        a.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        b.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(2, messages(setup).size());
+        assertEquals(2, tickets(setup));
+        Map<String, Object> state = jdbc.queryForMap("select source, uid_validity, last_uid from helpdesk_mailbox where id = ?", setup.mailbox());
+        assertEquals(2, state.get("source"), "one start over, one new source");
+        assertEquals(200L, state.get("uid_validity"));
+        assertEquals(2L, state.get("last_uid"));
+        assertEquals(1L, jdbc.queryForObject("select count(*) from helpdesk_audit_event where target_id = ? and operation = 'mailbox.uidvalidity_changed'",
+            Long.class, setup.mailbox()));
+    }
+
+    /** R2 of the review of TASK-059: a contact of another customer inside a group of To or Cc keeps the mail in the queue. */
+    @Test
+    void aContactOfAnotherCustomerInsideAGroupCounts() {
+        Setup setup = setup();
+        Setup other = setup();
+        ScriptedMailbox folder = new ScriptedMailbox(100)
+            .put(1, scripted(setup, "gruppe-cc", "Cc: Support-Team: " + other.contactAddress() + ";\r\n"))
+            .put(2, scripted(setup, "gruppe-to", "To: Alle: kollege@unbekannt.example, Lea <" + other.contactAddress().toUpperCase() + ">;\r\n"))
+            .put(3, scripted(setup, "leere-gruppe", "Cc: Niemand:;, kollege@unbekannt.example\r\n"));
+        folder.intake(context, 5).fetch(setup.mailbox());
+        List<Map<String, Object>> messages = messages(setup);
+        assertEquals(java.util.Arrays.asList("foreign_customer", "foreign_customer", null), messages.stream().map(row -> row.get("reason")).toList());
+        assertEquals(other.contactAddress(), messages.get(0).get("cc_addresses"), "the members of a group are its addresses");
+        assertEquals(1, tickets(setup), "only the mail without a foreign contact gets a ticket");
+    }
+
+    /** R3 of the review of TASK-059: the limit of recipients holds for To and Cc of a mail together. */
+    @Test
+    void theLimitOfRecipientsHoldsForToAndCcTogether() {
+        Setup setup = setup();
+        // The fixture writes one To address of its own.
+        deliver(setup, confirmed("nordwerk.example") + "Cc: " + unknown("a", 1_000) + "\r\n", "1001 gesamt", "Text");
+        deliver(setup, confirmed("nordwerk.example") + "Cc: " + unknown("b", 999) + "\r\n", "1000 gesamt", "Text");
+        deliver(setup, confirmed("nordwerk.example") + "To: " + unknown("c", 500) + "\r\nCc: " + unknown("d", 500) + "\r\n", "Geteilt", "Text");
+        intake.fetch(setup.mailbox());
+        List<Map<String, Object>> messages = messages(setup);
+        assertEquals(java.util.Arrays.asList("recipients_incomplete", null, "recipients_incomplete"),
+            messages.stream().map(row -> row.get("reason")).toList());
+        assertEquals(1, tickets(setup));
+    }
+
+    private static String unknown(String prefix, int count) {
+        return java.util.stream.IntStream.range(0, count).mapToObj(i -> prefix + i + "@unbekannt.example")
+            .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    /** A confirmed mail of the contact of the setup for a scripted folder; {@code headers} may add recipients. */
+    private static byte[] scripted(Setup setup, String id, String headers) {
+        return (confirmed("nordwerk.example") + "From: Lea Lang <" + setup.contactAddress() + ">\r\nTo: " + setup.address() + "\r\n" + headers
+            + "Subject: " + id + "\r\nMessage-ID: <" + id + "-" + UUID.randomUUID() + "@nordwerk.example>\r\nMIME-Version: 1.0\r\n"
+            + "Content-Type: text/plain; charset=UTF-8\r\n\r\nText\r\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void hold(java.util.concurrent.CountDownLatch gate) {
+        try {
+            assertTrue(gate.await(20, java.util.concurrent.TimeUnit.SECONDS), "the fetch did not arrive");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(interrupted);
+        }
     }
 
     private Browser member(Setup setup) {

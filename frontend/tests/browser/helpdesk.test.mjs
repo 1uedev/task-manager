@@ -269,6 +269,10 @@ describe('customer and mails of a ticket', () => {
       assert.equal(await page.getByTestId('ticket-contact').count(), 0, 'no contact without its read rule');
       assert.equal(await page.getByTestId('ticket-mails').count(), 0, 'no mails without their read rule');
       assert.equal(await section.getByRole('button', { name: 'Kunde ändern' }).count(), 0, 'no change without both write rules');
+      // The model answers the choice as the backend does: customers with the rules on customer, contacts only with those on contact.
+      const options = await page.evaluate((path) => fetch(path).then((answer) => answer.json()),
+        `/api/v1/projects/${backend.project.id}/tickets/${number}/helpdesk/options`);
+      assert.deepEqual(options.map((option) => [option.name, option.contacts.length]), [['Nordwerk', 0]], 'no contacts without the rules on contact');
       await page.getByTestId('history').getByText('von E-Mail Eingang', { exact: false }).first().waitFor();
       await page.getByTestId('history').getByText('Kunde: Leer wird Nordwerk').waitFor();
     });
