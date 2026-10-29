@@ -53,6 +53,11 @@ Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem
 - Die Quelle wächst auch mit jedem neuen UIDVALIDITY. Ein Abruf schreibt seine Position nur für die Quelle und das UIDVALIDITY, die er gelesen hat; überschneidet er sich mit einem Neustart des Ordners, endet er ohne zu schreiben, und keine neue Mail wird übergangen.
 - Mitglieder einer Adressgruppe in To oder Cc zählen für die Prüfung auf Kontakte anderer Kunden wie einzelne Empfänger. Die Grenze von 1000 Empfängern gilt für To und Cc einer Mail zusammen.
 
+### Nachtrag TASK-061 (DEC-089): Korrekturen nach der Nachprüfung von TASK-060
+
+- Ab dem Neustart eines Ordners schreibt ein Abruf, der noch den alten Stand liest, weder Eingang noch Ticket. Dieselbe Mail wird so auch bei überlappenden Abrufen nur einmal zum Ticket.
+- Empfängerzeilen werden streng gelesen. Eine fehlerhafte oder verschachtelte Adressgruppe führt in die Prüfwarteschlange, statt still umgedeutet zu werden.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

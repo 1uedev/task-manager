@@ -1,8 +1,13 @@
 package taskmanager.helpdesk.internal;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import java.io.ByteArrayInputStream;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -91,11 +96,17 @@ public final class ScriptedMailbox {
             return raw;
         }
 
+        /** The path of a mail too large to fetch, as the IMAP adapter takes it: only the header (TASK-061, H1). */
         @Override
         public ParsedMail header(long uid) {
+            byte[] raw;
+            synchronized (ScriptedMailbox.this) {
+                raw = mails.get(uid);
+            }
+            beforeFetch.accept(uid);
             try {
-                return ParsedMail.parse(fetch(uid));
-            } catch (Exception failure) {
+                return ParsedMail.headerOnly(new MimeMessage(Session.getInstance(new Properties()), new ByteArrayInputStream(raw)));
+            } catch (MessagingException failure) {
                 throw new IllegalStateException(failure);
             }
         }
