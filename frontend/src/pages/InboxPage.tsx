@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  createContact, discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listCustomers, listInbox, listProjects, readInboxMessage, readInboxSummary,
-  ticketFromMessage, type MailMessage, type MessageState,
+  attachMessage, createContact, discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listCustomers, listInbox, listOpenReplies, listProjects,
+  readInboxMessage, readInboxSummary, ticketFromMessage, type MailMessage, type MessageState,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad } from '../app/hooks.ts';
@@ -61,6 +61,7 @@ export function InboxPage() {
         <p className="hint" data-testid="inbox-summary">{t('inbox.summary', { review: summary.value.review, automatic: summary.value.automatic })}</p>
       )}
       <NoticeView notice={notice} />
+      <OpenReplies round={round} />
       <SelectField label={t('inbox.filter')} value={state} onChange={(value) => { setOpen(null); setState(value as MessageState); }}
         options={HELPDESK_STATES.map((value) => ({ value, label: t(`inbox.state.${value}` as MessageKey) }))} />
       {problem !== null ? <ProblemView problem={problem} onAction={refresh} actionLabel="states.retry" />
@@ -82,6 +83,10 @@ export function InboxPage() {
                 {message.ticket && (
                   <p><a href={hrefFor({ name: 'ticket', projectId: message.ticket.projectId, number: message.ticket.number })}>
                     {t('inbox.toTicket', { number: message.ticket.number })}</a></p>
+                )}
+                {message.relatedTicket && (
+                  <p><a href={hrefFor({ name: 'ticket', projectId: message.relatedTicket.projectId, number: message.relatedTicket.number })}>
+                    {t('inbox.related', { number: message.relatedTicket.number })}</a></p>
                 )}
                 {open === message.id && (
                   <MessageView id={message.id} onDone={(text) => {
@@ -134,6 +139,18 @@ function MessageView({ id, onDone }: { readonly id: string; readonly onDone: (no
     onDone({ kind: 'success', text: t('inbox.created', { number: result.data.value.number }) });
   }
 
+  async function attach(etag: string) {
+    setNotice(null);
+    setBusy(true);
+    const result = await attachMessage(api, id, etag);
+    setBusy(false);
+    if (result.kind !== 'ok') {
+      if (result.problem.code === 'helpdesk.version_conflict') reload();
+      return setNotice({ kind: 'info', text: text(result.problem, specific) });
+    }
+    onDone({ kind: 'success', text: t('inbox.attached', { number: result.data.value.number }) });
+  }
+
   async function discard(event: FormEvent, etag: string) {
     event.preventDefault();
     setNotice(null);
@@ -177,7 +194,10 @@ function MessageView({ id, onDone }: { readonly id: string; readonly onDone: (no
                     ...(candidates.state === 'ok' ? candidates.value : []).map((candidate) => ({
                       value: candidate.contactId, label: `${candidate.contactName} (${candidate.customerName})${candidate.sender ? ` ${t('inbox.sender')}` : ''}` }))]} />
                 <p className="actions">
-                  <button type="button" disabled={busy} onClick={() => void create(etag)}>{t('inbox.createTicket')}</button>
+                  {value.state === 'review' && value.relatedTicket && (
+                    <button type="button" disabled={busy} onClick={() => void attach(etag)}>{t('inbox.attach', { number: value.relatedTicket.number })}</button>
+                  )}
+                  <button type="button" disabled={busy} className={value.relatedTicket ? 'secondary' : undefined} onClick={() => void create(etag)}>{t('inbox.createTicket')}</button>
                   {!discarding && <button type="button" className="secondary" onClick={() => setDiscarding(true)}>{t('inbox.discard')}</button>}
                 </p>
                 {has(HELPDESK_RIGHT) && value.fromAddress && (
@@ -243,5 +263,30 @@ function NewContact({ address, name, onCreated }: { readonly address: string; re
         <NoticeView notice={notice} />
       </form>
     </details>
+  );
+}
+
+// Replies to customers that the mail server has not accepted yet (TASK-058), of the projects in which the person may reply:
+// pending ones, and failed or uncertain ones that wait for a decision in their ticket.
+function OpenReplies({ round }: { readonly round: number }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const code = useHelpdeskCode();
+  const [replies] = useLoad(() => listOpenReplies(api), [api, round]);
+  if (replies.state !== 'ok' || replies.value.length === 0) return null;
+  return (
+    <section className="panel" aria-labelledby="open-replies" data-testid="open-replies">
+      <h2 id="open-replies">{t('inbox.openReplies')}</h2>
+      <ul className="plain-list">
+        {replies.value.map((reply) => (
+          <li key={reply.id}>
+            <a href={hrefFor({ name: 'ticket', projectId: reply.projectId, number: reply.number })}>
+              {t('inbox.openReply', { subject: reply.subject, to: reply.toAddress, number: reply.number })}</a>{' '}
+            <span className={`badge reply-${reply.state}`}>{t(`ticketHelpdesk.replyState.${reply.state}` as MessageKey)}</span>
+            {reply.errorCode && <span className="hint"> {code(reply.errorCode)}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

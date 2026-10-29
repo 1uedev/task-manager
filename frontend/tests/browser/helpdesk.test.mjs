@@ -312,3 +312,110 @@ describe('customer and mails of a ticket', () => {
     });
   });
 });
+
+// TASK-058: replies to the contact of a ticket. Ben may reply in the project; the mailbox sends over SMTP.
+function withReplier(backend) {
+  withReviewer(backend);
+  backend.state.groups.push({ id: '00000000-0000-4000-8000-00000000cccc', name: 'Antworten', members: [backend.ben.id],
+    actions: [{ action: 'helpdesk.reply', projectId: backend.project.id }], fields: [] });
+  backend.state.helpdesk.mailboxes.push({ id: '00000000-0000-4000-8000-00000000b002', name: 'Support', enabled: true, projectId: backend.project.id, ticketType: 'task',
+    imapHost: 'imap.firma.example', imapPort: 993, imapSecurity: 'tls', username: 'support', password: SECRET, folder: 'INBOX', smtpHost: 'smtp.firma.example', smtpPort: 465,
+    smtpSecurity: 'tls', address: 'support@firma.example', authservId: null, maxBytes: 25000000, version: 1, updatedAt: '2026-10-28T08:00:00Z', updatedBy: backend.anna.id,
+    status: { polledAt: null, succeededAt: null, errorCode: null, errorAt: null, notice: null, noticeAt: null } });
+  const { customer, contact } = withCustomer(backend);
+  const ticket = backend.addTicket('Drucker defekt', 'Text', { id: MAIL_INTAKE });
+  backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: customer.id, contactId: contact.id });
+  backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, fromAddress: 'lea@nordwerk.example', fromName: 'Lea Lang', mailboxId: '00000000-0000-4000-8000-00000000b002' });
+  return ticket;
+}
+
+describe('replies to customers', () => {
+  test('a reply is written, checked with recipient and sender in view and only then confirmed', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/start', prepare: (backend) => { ticket = withReplier(backend); } }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      await section.getByRole('button', { name: 'Dem Kunden antworten' }).click();
+      const form = section.getByTestId('reply-form');
+      assert.equal(await form.getByLabel('Betreff').inputValue(), 'Re: Drucker defekt');
+      await form.getByLabel('Text').fill('Hallo Frau Lang,\nwir tauschen den Drucker morgen.');
+      await form.getByRole('button', { name: 'Antwort prüfen' }).click();
+      const check = form.getByTestId('reply-check');
+      await check.getByText('Diese Antwort geht an Lea Lang <lea@nordwerk.example>, gesendet von Support <support@firma.example>.').waitFor();
+      assert.equal(backend.state.helpdesk.replies.length, 0, 'nothing is stored before the confirmation');
+      await check.getByRole('button', { name: 'Jetzt senden' }).click();
+      await section.getByText('Die Antwort ist bestätigt und wird gesendet.').waitFor();
+      const [reply] = backend.state.helpdesk.replies;
+      assert.equal(reply.toAddress, 'lea@nordwerk.example');
+      assert.equal(reply.mailboxId, '00000000-0000-4000-8000-00000000b002');
+      assert.equal(reply.body, 'Hallo Frau Lang,\nwir tauschen den Drucker morgen.');
+      await section.locator(`li[data-reply="${reply.id}"]`).getByTestId('reply-state').getByText('wird gesendet').waitFor();
+      await page.getByTestId('history').getByText('Antwort an lea@nordwerk.example zum Versand bestätigt: Re: Drucker defekt').waitFor();
+    });
+  });
+
+  test('an uncertain reply is sent again only with the accepted duplicate, or recorded as arrived', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/start', prepare: (backend) => {
+      ticket = withReplier(backend);
+      backend.addReply(ticket, { subject: 'Re: Erste', state: 'uncertain', errorCode: 'helpdesk.send_uncertain', attemptedAt: '2026-10-29T08:00:00Z' });
+      backend.addReply(ticket, { subject: 'Re: Zweite', state: 'uncertain', errorCode: 'helpdesk.send_uncertain', attemptedAt: '2026-10-29T08:00:00Z' });
+    } }, async (page, backend) => {
+      const [first, second] = backend.state.helpdesk.replies;
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const one = page.locator(`li[data-reply="${first.id}"]`);
+      await one.getByTestId('reply-state').getByText('Versand unklar').waitFor();
+      const again = one.getByRole('button', { name: 'Erneut senden' });
+      assert.equal(await again.isDisabled(), true, 'no second send without accepting a duplicate');
+      await one.getByLabel('Mir ist bewusst, dass der Kunde die Antwort doppelt erhalten kann.').check();
+      await again.click();
+      await one.getByTestId('reply-state').getByText('wird gesendet').waitFor();
+      assert.equal(first.sends, 2);
+      const send = backend.writes().find((write) => write.path.endsWith(`/replies/${first.id}/send`));
+      assert.equal(JSON.parse(send.body.toString('utf8')).duplicateAccepted, true);
+      assert.equal(send.ifMatch, '"1"');
+
+      const two = page.locator(`li[data-reply="${second.id}"]`);
+      await two.getByRole('button', { name: 'Als angekommen festhalten' }).click();
+      await two.getByTestId('reply-state').getByText('vom Mailserver angenommen').waitFor();
+      assert.equal(second.state, 'sent');
+      assert.equal(second.sends, 1);
+    });
+  });
+
+  test('without helpdesk.reply there is no reply, and the server refuses it', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/start', prepare: (backend) => {
+      ticket = withReplier(backend);
+      backend.state.groups = backend.state.groups.filter((group) => group.name !== 'Antworten');
+    } }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      await page.getByTestId('ticket-mails').waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Dem Kunden antworten' }).count(), 0);
+      const status = await page.evaluate((path) => fetch(path).then((answer) => answer.status),
+        `/api/v1/projects/${backend.project.id}/tickets/${ticket.number}/helpdesk/reply`);
+      assert.equal(status, 403);
+    });
+  });
+
+  test('the answer of another customer waits in review and is taken to its ticket; open replies are listed', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      ticket = withReplier(backend);
+      backend.addReply(ticket, { subject: 'Re: Drucker defekt', state: 'failed', errorCode: 'helpdesk.recipient_refused' });
+      backend.addMail({ subject: 'Re: Drucker defekt', fromAddress: 'max@anders.example', reason: 'reply_customer_mismatch', relatedTicketId: ticket.id });
+    } }, async (page, backend) => {
+      const open = page.getByTestId('open-replies');
+      await open.getByText('Re: Drucker defekt an lea@nordwerk.example, Ticket 3').waitFor();
+      await open.getByText('Der Mailserver hat den Empfänger abgelehnt').waitFor();
+      const mail = backend.state.helpdesk.messages.at(-1);
+      const item = page.locator(`li[data-message="${mail.id}"]`);
+      await item.getByRole('button', { name: 'Re: Drucker defekt' }).click();
+      await item.getByRole('link', { name: 'Antwortet auf Ticket 3' }).waitFor();
+      await item.getByRole('button', { name: 'Zu Ticket 3 nehmen' }).click();
+      await page.getByText('Die Mail steht jetzt bei Ticket 3.').waitFor();
+      assert.equal(mail.state, 'ticket');
+      assert.equal(mail.ticketId, ticket.id);
+    });
+  });
+});

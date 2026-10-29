@@ -59,6 +59,16 @@ Der Eingang ist mit TASK-057 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem
 - Nachtrag vom 29. Oktober 2026 (DEC-090): Eine schon gespeicherte Mail kann ein solcher Abruf noch auf dem Server als gelesen markieren. Im Task Manager ändert das nichts.
 - Empfängerzeilen werden streng gelesen. Eine fehlerhafte oder verschachtelte Adressgruppe führt in die Prüfwarteschlange, statt still umgedeutet zu werden.
 
+### Nachtrag TASK-058 (DEC-091): umgesetzte Antworten über SMTP
+
+Die Antworten sind mit TASK-058 umgesetzt, zur Prüfung und Abnahme. Gegenüber dem Vorschlag unten gilt:
+
+- Antworten schreibt am Ticket, wer die Projektaktion `helpdesk.reply` hat und Mails und Kontakt des Tickets lesen darf. Empfänger ist eine Adresse des Kontakts, Absender ein Postfach des Projekts mit SMTP. Vor dem Senden zeigt die Oberfläche alles noch einmal; erst die Bestätigung zählt. Entwürfe, weitere Empfänger, Anhänge, Sprache und Vorlagen gibt es noch nicht.
+- Die Zustände der Tabelle unter „Versand und Bestätigungen“ gelten ohne den Entwurf: ausstehend, vom Mailserver angenommen, nicht gesendet (sicher gescheitert) und Versand unklar. Unklar wird nie von selbst wiederholt; erneut senden geht nur mit bestätigtem Duplikatrisiko, alternativ lässt sich die Antwort als angekommen festhalten.
+- Vor dem Versand prüft der Auftrag Mitgliedschaft und Aktivität des Urhebers sowie Postfach und Empfänger. Gruppenrechte gelten zum Zeitpunkt der Bestätigung, weil der Auftrag ohne Sitzung läuft.
+- Antworten des Kunden kommen über `In-Reply-To` und `References` zum Ticket, wenn der Absender wie beim Eingang bestätigt ist und zum Kunden des Ticket gehört. Sonst wartet die Mail mit Verweis auf das Ticket in der Prüfwarteschlange. Eigene zurückkommende Antworten und automatische Mails erhalten keine Antwort.
+- Ausstehende, gescheiterte und unklare Antworten stehen in der Prüfwarteschlange für alle, die im Projekt antworten dürfen. Benachrichtigungen und SLA folgen später.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

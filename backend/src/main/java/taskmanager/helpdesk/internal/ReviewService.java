@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import taskmanager.permissions.AccessContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.tickets.TicketAccess;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -35,10 +36,13 @@ public class ReviewService {
     private final HelpdeskAccess access;
     private final ProjectAccess projects;
     private final TicketOpener opener;
+    private final TicketAccess tickets;
     private final Clock clock;
 
-    ReviewService(HelpdeskRepository repository, HelpdeskAccess access, ProjectAccess projects, TicketOpener opener, Clock clock) {
+    ReviewService(HelpdeskRepository repository, HelpdeskAccess access, ProjectAccess projects, TicketOpener opener, TicketAccess tickets,
+            Clock clock) {
         this.repository = repository;
+        this.tickets = tickets;
         this.access = access;
         this.projects = projects;
         this.opener = opener;
@@ -125,6 +129,40 @@ public class ReviewService {
             .orElseThrow(() -> ApiProblemException.withViolations(400, "request.invalid", List.of("type.unknown")));
         repository.audit(actor.companyId(), "message", message.id(), "message.ticket_created",
             JSON.writeValueAsString(new Outcome(opened.ticketId(), contactId, null)), actor.userId(), now);
+        return opened;
+    }
+
+    /**
+     * Adds the mail to the ticket of the reply it answers (TASK-058), for a mail that waits because its sender could not be
+     * confirmed or is no contact of the customer of that ticket. The person decides; contact and customer of the mail are
+     * recorded only when the sender is a contact of the customer of the ticket.
+     */
+    @Transactional
+    public TicketOpener.Opened attach(AccessContext actor, UUID id, long expectedVersion) {
+        Message message = lockForChange(actor, id, expectedVersion);
+        UUID ticket = message.relatedTicketId();
+        if (ticket == null || tickets.locate(ticket).filter(l -> l.projectId().equals(message.projectId())).isEmpty()) {
+            throw ApiProblemException.of(409, "helpdesk.no_related_ticket");
+        }
+        Contact contact = message.fromAddress() == null ? null : repository.contactByAddress(actor.companyId(), message.fromAddress()).orElse(null);
+        UUID ticketCustomer = repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::customerId).orElse(null);
+        if (contact != null && !contact.customerId().equals(ticketCustomer)) {
+            contact = null;
+        }
+        Customer customer = contact == null ? null : repository.customer(actor.companyId(), contact.customerId()).orElse(null);
+        ParsedMail parsed = null;
+        Optional<byte[]> raw = repository.raw(message.id());
+        if (raw.isPresent()) {
+            try {
+                parsed = ParsedMail.parse(raw.get());
+            } catch (Exception unreadable) {
+                LOG.info("Mail {} could not be read again: {}", message.id(), unreadable.toString());
+            }
+        }
+        Instant now = clock.instant();
+        TicketOpener.Opened opened = opener.append(message, parsed, ticket, customer, contact, actor.userId(), now);
+        repository.audit(actor.companyId(), "message", message.id(), "message.attached",
+            JSON.writeValueAsString(new Outcome(ticket, contact == null ? null : contact.id(), null)), actor.userId(), now);
         return opened;
     }
 

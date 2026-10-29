@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Helpdesk Eingang über Mail (TASK-057)
+  title: Task Manager API, Helpdesk über Mail (TASK-057, TASK-058)
   version: 0.1.0
   description: |
     Erster Teil des Helpdesks über Mail (DEC-086, Paket A9, REQ-HD-001 bis REQ-HD-004): Kundenorganisationen und
@@ -25,6 +25,16 @@ info:
     `Authentication-Results` des eigenen Empfangsservers (`authservId`) `dmarc=pass` für die Domain des Absenders meldet.
     Alles andere wartet in der Prüfwarteschlange; automatische Mails (Abwesenheitsnotizen, Zustellberichte, Listen)
     erhalten kein Ticket.
+
+    Antworten (TASK-058, DEC-091): Wer im Projekt die Projektaktion `helpdesk.reply` und `ticket.read` mit den Leseregeln
+    `mail` und `contact` hat, schreibt dem Kontakt des Tickets über ein Postfach des Projekts mit SMTP Angaben und Adresse.
+    Die bestätigte Antwort entsteht zusammen mit ihrem Versandauftrag (`helpdesk.reply`) in einer Transaktion und wird im
+    Hintergrund gesendet. Zustände: `pending` (wartet auf den Versand, auch nach einem sicher folgenlosen Fehler, der beim
+    nächsten Versuch vergehen kann), `sent` (vom SMTP Server angenommen; kein Nachweis der Zustellung), `failed` (sicher nicht
+    gesendet), `uncertain` (übergeben, aber ohne Antwort des Servers; keine selbsttätige Wiederholung). Nur eine Person
+    sendet eine gescheiterte Antwort erneut, eine unklare nur mit bestätigtem Risiko einer zweiten Zustellung. Eine Mail, die
+    in In-Reply-To oder References die Message-ID einer Antwort nennt, kommt zum Ticket dieser Antwort, wenn sie sonst ein
+    Ticket ergeben hätte und ihr Absender Kontakt des Kunden dieses Tickets ist; sonst wartet sie mit dem Ticket als Hinweis.
 servers:
   - url: /api/v1
 security:
@@ -396,6 +406,44 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/inbox/{id}/attach:
+    post:
+      operationId: attachMessageToTicket
+      summary: Mail zum Ticket der beantworteten Antwort nehmen (Projektaktion helpdesk.review, If-Match)
+      description: |
+        Nur für wartende Mails mit `relatedTicket` (sonst 409 `helpdesk.no_related_ticket` oder `helpdesk.message_processed`).
+        Dateien werden Anhänge des Tickets, die Mail ein Eintrag der Historie. Kontakt und Kunde der Mail stehen nur dabei,
+        wenn der Absender Kontakt des Kunden des Tickets ist.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Zum Ticket genommen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreatedTicket'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/replies:
+    get:
+      operationId: listOpenReplies
+      summary: Noch nicht angenommene Antworten in den Projekten mit helpdesk.reply, neueste zuerst
+      description: Ausstehende, gescheiterte und unklare Antworten, höchstens 100.
+      responses:
+        '200':
+          description: Offene Antworten
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/OpenReply'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
   /projects/{projectId}/tickets/{number}/helpdesk:
     get:
       operationId: getTicketHelpdesk
@@ -461,6 +509,122 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/reply:
+    get:
+      operationId: getReplyForm
+      summary: Was eine Antwort an den Kontakt verwenden kann (helpdesk.reply, Leseregeln mail und contact)
+      description: Ohne Kontakt am Ticket 409 `helpdesk.reply_no_contact`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      responses:
+        '200':
+          description: Angaben für das Formular
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReplyForm'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/replies:
+    post:
+      operationId: sendReply
+      summary: Antwort an den Kontakt bestätigen; der Versand folgt im Hintergrund
+      description: |
+        Ohne `to` geht die Antwort an die erste Adresse des Kontakts. Verletzungen: `mailboxId.unavailable`,
+        `to.not_of_contact`, `subject.invalid`, `body.invalid`. Die Antwort ist ein Eintrag des Felds `mail` in der Historie.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mailboxId, subject, body]
+              properties:
+                mailboxId: {type: string, format: uuid}
+                to: {type: [string, 'null']}
+                subject: {type: string, maxLength: 998}
+                body: {type: string, maxLength: 100000}
+      responses:
+        '201':
+          description: Bestätigt und zum Versand eingestellt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reply'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/send:
+    post:
+      operationId: sendReplyAgain
+      summary: Gescheiterte oder unklare Antwort erneut senden (If-Match)
+      description: |
+        Nur im Zustand `failed` oder `uncertain` (sonst 409 `helpdesk.reply_not_failed`). Eine unklare Antwort kann den Kunden
+        schon erreicht haben; ohne `duplicateAccepted` antwortet der Server mit 409 `helpdesk.reply_uncertain`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+        - $ref: '#/components/parameters/ReplyId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                duplicateAccepted: {type: [boolean, 'null']}
+      responses:
+        '200':
+          description: Wieder zum Versand eingestellt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reply'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/replies/{replyId}/settle:
+    post:
+      operationId: settleReply
+      summary: Unklare Antwort als angenommen festhalten, ohne zu senden (If-Match)
+      description: Nur im Zustand `uncertain` (sonst 409 `helpdesk.reply_not_uncertain`). Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+        - $ref: '#/components/parameters/ReplyId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Festgehalten
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reply'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -483,6 +647,11 @@ components:
       in: path
       required: true
       schema: {type: integer, format: int64}
+    ReplyId:
+      name: replyId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     IfMatch:
       name: If-Match
       in: header
@@ -669,7 +838,7 @@ components:
     Message:
       type: object
       required: [id, mailboxId, projectId, receivedAt, sentAt, fromAddress, fromName, to, cc, subject, body, sizeBytes, attachments,
-        state, reason, ticket, contactId, customerId, processedAt, processedBy, discardReason, version]
+        state, reason, ticket, contactId, customerId, processedAt, processedBy, discardReason, relatedTicket, version]
       properties:
         id: {type: string, format: uuid}
         mailboxId: {type: string, format: uuid}
@@ -691,7 +860,8 @@ components:
           type: [string, 'null']
           description: |
             Warum die Mail geprüft werden muss: sender_missing, sender_ambiguous, sender_unknown, sender_unconfirmed,
-            customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable.
+            customer_not_released, foreign_customer, recipients_incomplete, too_large, unreadable, automatic, ticket_type_unavailable,
+            reply_customer_mismatch (Antwort auf ein Ticket eines anderen Kunden), own_reply (eigene Antwort des Helpdesks).
         ticket:
           type: [object, 'null']
           required: [projectId, number]
@@ -703,6 +873,13 @@ components:
         processedAt: {type: [string, 'null'], format: date-time}
         processedBy: {type: [string, 'null'], format: uuid}
         discardReason: {type: [string, 'null']}
+        relatedTicket:
+          type: [object, 'null']
+          description: Das Ticket der Antwort, auf die diese wartende Mail antwortet (TASK-058).
+          required: [projectId, number]
+          properties:
+            projectId: {type: string, format: uuid}
+            number: {type: integer, format: int64}
         version: {type: integer, format: int64}
     InboxSummary:
       type: object
@@ -765,7 +942,7 @@ components:
           items: {$ref: '#/components/schemas/AttachmentNote'}
     TicketHelpdesk:
       type: object
-      required: [readable, writable, customer, contact, mails]
+      required: [readable, writable, customer, contact, mails, replies, replyAllowed]
       properties:
         readable:
           type: array
@@ -784,6 +961,73 @@ components:
         mails:
           type: [array, 'null']
           items: {$ref: '#/components/schemas/TicketMail'}
+        replies:
+          type: [array, 'null']
+          description: Die Antworten des Tickets, wie die Mails nur mit der Leseregel mail.
+          items: {$ref: '#/components/schemas/Reply'}
+        replyAllowed:
+          type: boolean
+          description: Ob die Person dem Kontakt antworten darf; nur eine Momentaufnahme, der Server prüft beim Senden.
+    ReplyState:
+      type: string
+      enum: [pending, sent, failed, uncertain]
+    Reply:
+      type: object
+      required: [id, mailboxId, fromAddress, toAddress, subject, body, state, errorCode, sends, createdAt, createdBy, attemptedAt,
+        sentAt, version]
+      properties:
+        id: {type: string, format: uuid}
+        mailboxId: {type: string, format: uuid}
+        fromAddress: {type: string}
+        toAddress: {type: string}
+        subject: {type: string}
+        body: {type: string}
+        state: {$ref: '#/components/schemas/ReplyState'}
+        errorCode:
+          type: [string, 'null']
+          description: |
+            Letzter Fehler ohne Text des Mailservers, etwa helpdesk.connection_failed, helpdesk.authentication_failed,
+            helpdesk.recipient_refused, helpdesk.send_refused, helpdesk.send_uncertain, helpdesk.send_interrupted,
+            helpdesk.mailbox_unavailable, helpdesk.recipient_changed, helpdesk.author_inactive.
+        sends: {type: integer, description: Wie oft eine Person den Versand bestätigt hat.}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        attemptedAt: {type: [string, 'null'], format: date-time}
+        sentAt: {type: [string, 'null'], format: date-time}
+        version: {type: integer, format: int64}
+    ReplyForm:
+      type: object
+      required: [mailboxes, contactId, contactName, recipients, subject, suggestedMailbox]
+      properties:
+        mailboxes:
+          type: array
+          items:
+            type: object
+            required: [id, name, address]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              address: {type: string}
+        contactId: {type: string, format: uuid}
+        contactName: {type: string}
+        recipients:
+          type: array
+          items: {type: string}
+        subject: {type: [string, 'null']}
+        suggestedMailbox: {type: [string, 'null'], format: uuid}
+    OpenReply:
+      type: object
+      required: [id, projectId, number, toAddress, subject, state, errorCode, createdAt, attemptedAt]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        toAddress: {type: string}
+        subject: {type: string}
+        state: {$ref: '#/components/schemas/ReplyState'}
+        errorCode: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+        attemptedAt: {type: [string, 'null'], format: date-time}
     CustomerOption:
       type: object
       required: [id, name, contacts]

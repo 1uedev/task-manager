@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-058](#task-058-helpdesk-antworten-über-smtp-paket-a9-teil-2) | Helpdesk Antworten über SMTP (Paket A9, Teil 2) | claude-20261028-helpdesk-01 | 2026-10-29 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -38,7 +36,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-058](#task-058-helpdesk-antworten-über-smtp-paket-a9-teil-2) | Helpdesk Antworten über SMTP (Paket A9, Teil 2) | claude-20261028-helpdesk-01 | 2026-10-29 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -53,12 +53,24 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-058 Helpdesk Antworten über SMTP (Paket A9, Teil 2)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261028-helpdesk-01 · **Aktualisiert:** 2026-10-29
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261028-helpdesk-01 · **Aktualisiert:** 2026-10-29
 
-**Bezug:** REQ-HD-001 (Versand, erkennbare ausstehende Sendungen), REQ-HD-002 (Antworten zuordnen, Wiederholungen, Schleifen), REQ-HD-005, REQ-TKT-005 (interne Versandaufträge, unklare Zustellung). **Abhängigkeiten:** TASK-057 mit TASK-059 bis TASK-061, abgenommen (DEC-090). **Arbeitsstand:** Zweiter Teil von Paket A9 mit derselben Zustimmung vom 28. Oktober 2026; der Blocker ist mit Holgers Abnahme von TASK-057, TASK-059, TASK-060 und TASK-061 am 29. Oktober 2026 aufgehoben (DEC-090). Branch wird beim Start festgelegt; Ergebnis mit eigener DEC und Migration, Nummern beim Start auf main prüfen.
+**Bezug:** REQ-HD-001 (Versand, erkennbare ausstehende Sendungen), REQ-HD-002 (Antworten zuordnen, Wiederholungen, Schleifen), REQ-HD-005, REQ-TKT-005 (interne Versandaufträge, unklare Zustellung). **Abhängigkeiten:** TASK-057 mit TASK-059 bis TASK-061, abgenommen (DEC-090). **Arbeitsstand:** Branch `claude/project-thread-b4u17z`, Ergebnis-PR mit DEC-091 und Migration V0028. Holger hat am 29. Oktober 2026 „Ja, direkt umsetzen“ gewählt; die Abnahmekriterien unten hat die Sitzung mit dem Ergebnis geschärft und legt sie zur Prüfung vor.
 
-**Umfang:** Vorschlag: Kundenantwort am Ticket an den Kontakt über das SMTP des Postfachs, sichtbar getrennt von internen Arbeiten, mit Prüfung der aktuellen Rechte vor dem Versand; Versand als Auftrag im Modul `jobs` mit den Zuständen aus docs/HELPDESK_SLA.md (ausstehend, vom Server angenommen, sicher gescheitert, Versandstatus unklar ohne blinde Wiederholung); eigene Message-ID und Antwortkennung, damit Antworten des Kunden über `In-Reply-To` und `References` zusammen mit der Absenderprüfung aus TASK-057 dem bestehenden Ticket zugeordnet werden, sonst Prüfwarteschlange; keine automatische Antwort auf automatische Nachrichten; ausstehende und gescheiterte Sendungen für zuständige Personen sichtbar. Nicht Teil: Vorlagen mit Branding (A17), Benachrichtigungen, SLA, KI Entwürfe, Portal.
+**Umfang:** Kundenantwort am Ticket an eine Adresse des Kontakts über das SMTP eines Postfachs des Projekts, mit der neuen Projektaktion `helpdesk.reply`, Prüfschritt vor der Bestätigung und Versand als Auftrag `helpdesk.reply` im Modul `jobs`; Zustände ausstehend, vom Mailserver angenommen, nicht gesendet und Versand unklar mit erneutem Senden oder Festhalten durch eine Person; eigene Message-ID, `In-Reply-To` und `References`; Zuordnung der Antworten des Kunden zum Ticket nur bei bestätigtem Absender des Kunden des Tickets, sonst Prüfwarteschlange mit Verweis auf das Ticket; Übersicht der nicht angenommenen Antworten. Nicht Teil: Entwürfe, weitere Empfänger, Anhänge, Vorlagen mit Branding (A17), Benachrichtigungen, SLA, KI Entwürfe, Portal, Zustellberichte, Ablage im Gesendet Ordner.
 
-**Abnahmekriterien:** Werden mit dem Start nach Vorlage des Ergebnisses von TASK-057 festgelegt; mindestens: genau ein interner Versandauftrag je bestätigter Antwort auch nach Neustart, unklarer Versandstatus ohne automatische Wiederholung, Antwort des Kunden landet im richtigen Ticket nur bei bestätigtem Absender, keine Mailschleife mit einem Autoresponder.
+**Abnahmekriterien:** Vorschlag der Sitzung, zur Prüfung:
+1. Nur mit `helpdesk.reply`, `ticket.read` und den Leseregeln für `mail` und `contact`; Empfänger nur Adressen des Kontakts des Tickets, Absender nur sendende Postfächer des Projekts; ohne Kontakt 409. Die Oberfläche zeigt Empfänger und Absender vor der Bestätigung.
+2. Je bestätigter Antwort genau ein Versandauftrag in derselben Transaktion wie Antwort, Historie und Audit, auch nach Neustart oder mit zwei Ausführern.
+3. Vor dem Versand prüft der Auftrag Projekt, aktiven Urheber mit Mitgliedschaft, Postfach und Empfänger; eine geänderte Lage endet als nicht gesendet ohne Versand.
+4. Vorübergehende Fehler vor der Übergabe werden wiederholt, endgültige Ablehnungen enden als nicht gesendet; eine fehlende Antwort des Servers nach der Übergabe und ein Versuch, der die Antwort noch im Versand findet, ergeben Versand unklar ohne automatische Wiederholung.
+5. Erneut senden nur für nicht gesendete Antworten oder für unklare mit bestätigtem Duplikatrisiko; eine unklare lässt sich als angekommen festhalten.
+6. Die Antwort des Kunden mit `In-Reply-To` oder `References` auf eine Antwort landet ohne neues Ticket im Ticket der Antwort nur bei bestätigtem Absender des Kunden des Tickets, sonst in der Prüfwarteschlange mit Verweis und Übernahme dorthin.
+7. Keine Antwort auf automatische Mails; eine zurückkommende eigene Antwort wird als automatisch vermerkt. Keine Mailschleife mit einem Autoresponder.
+8. Nicht angenommene Antworten sind für Personen mit `helpdesk.reply` im Projekt sichtbar; Protokolle enthalten keinen Text des Mailservers.
 
-**Nächster Schritt:** Abnahmekriterien gegen den abgenommenen Stand von TASK-057 schärfen, DEC und Migrationsnummer auf main prüfen und mit der Umsetzung beginnen. Die offenen Punkte aus DEC-090 (Lesemarkierung eines überholten Abrufs, H5 und H6 der Prüfung von TASK-057) gehören nicht dazu, solange Holger sie nicht beauftragt.
+**Ergebnis:** Modul `helpdesk` mit `ReplyService`, `ReplySender`, `SmtpMailSender`, Migration V0028, Vertrag `contracts/helpdesk.openapi.yaml` (sechs neue Routen), Oberfläche am Ticket und in der Prüfwarteschlange, Beschreibung in backend/README.md und docs/HELPDESK_SLA.md, Entscheidung DEC-091.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 380 Tests, darunter sechs neue Tests der Antworten gegen GreenMail und `ScriptedSmtp` (Abbruch nach DATA, Ablehnung 550 und 451); Frontend `npm run verify` und 128 Browser Tests, davon vier neue. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker; die Migrationsliste ist angepasst, der Lauf erfolgt in CI.
+
+**Nächster Schritt:** Getrennte Prüfung durch eine andere KI (Codex), danach Holgers Abnahme.

@@ -371,10 +371,12 @@ function parseReference(raw: string | null | undefined): { readonly name: string
   return value !== null && typeof value.name === 'string' ? { name: value.name } : null;
 }
 
-function parseMail(raw: string | null | undefined): { readonly from: string | null; readonly subject: string | null } | null {
+// A received mail carries its sender, a reply of the helpdesk its recipient (TASK-058).
+function parseMail(raw: string | null | undefined): { readonly from: string | null; readonly to: string | null; readonly subject: string | null } | null {
   const value = parseJson(raw);
   if (value === null) return null;
-  return { from: typeof value.from === 'string' ? value.from : null, subject: typeof value.subject === 'string' ? value.subject : null };
+  return { from: typeof value.from === 'string' ? value.from : null, to: typeof value.reply === 'string' && typeof value.to === 'string' ? value.to : null,
+    subject: typeof value.subject === 'string' ? value.subject : null };
 }
 
 function parseAttachment(raw: string | null | undefined): { readonly name: string; readonly size: number } | null {
@@ -425,6 +427,7 @@ function History({ project, ticket, round }: { readonly project: Project; readon
   const referenceText = (raw: string | null | undefined) => parseReference(raw)?.name ?? t('field.empty');
   const mailText = (raw: string | null | undefined) => {
     const mail = parseMail(raw);
+    if (mail?.to) return t('history.replyConfirmed', { to: mail.to, subject: mail.subject ?? t('inbox.noSubject') });
     return t('history.mailReceived', { from: mail?.from ?? t('inbox.noSender'), subject: mail?.subject ?? t('inbox.noSubject') });
   };
 
