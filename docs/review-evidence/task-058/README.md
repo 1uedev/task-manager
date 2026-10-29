@@ -4,7 +4,7 @@ Prüfbasis `ab9a6eea5589b4489437bf6fe31064e20dd5c74f` (gemergter PR #202), 29. O
 
 ## Nachstellung im Backend (E1 bis E4)
 
-[HelpdeskApiTest.probes.diff](HelpdeskApiTest.probes.diff) ergänzt vorübergehend vier Methoden `e1` bis `e4` in `backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java`. Ausgeführt in einem getrennten Arbeitsverzeichnis mit `./mvnw -Djava.version=21 -Dtaskmanager.test.jdbc-url=… -Dtest='HelpdeskApiTest#e*' test`. Produktcode unverändert. Wo der Test einen Schritt des Jobmoduls nachbildet, verwendet er wörtlich die SQL Anweisung aus `JobRepository.releaseExpired` beziehungsweise `JobRepository.cancel`.
+[HelpdeskApiTest.probes.java.txt](HelpdeskApiTest.probes.java.txt) enthält vier Methoden `e1` bis `e4`, die vorübergehend vor der Hilfsmethode `unknown` eingefügt werden, in `backend/src/test/java/taskmanager/helpdesk/HelpdeskApiTest.java`. Ausgeführt in einem getrennten Arbeitsverzeichnis mit `./mvnw -Djava.version=21 -Dtaskmanager.test.jdbc-url=… -Dtest='HelpdeskApiTest#e*' test`. Produktcode unverändert. Wo der Test einen Schritt des Jobmoduls nachbildet, verwendet er wörtlich die SQL Anweisung aus `JobRepository.releaseExpired` beziehungsweise `JobRepository.cancel`.
 
 | Experiment | Ablauf | Beobachtung |
 |---|---|---|
