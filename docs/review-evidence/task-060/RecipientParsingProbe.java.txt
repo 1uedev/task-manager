@@ -1,0 +1,17 @@
+import jakarta.mail.internet.InternetAddress;
+public class RecipientParsingProbe {
+  public static void main(String[] args) throws Exception {
+    String[] values = {"Team: Contact <foreign@example.test>;", "Empty:;", "Outer: Inner: foreign@example.test;;", "Broken: \"unterminated <foreign@example.test>;", "MissingEnd: foreign@example.test"};
+    for (int i=0;i<values.length;i++) for (boolean strict:new boolean[]{false,true}) {
+      try {
+        InternetAddress[] parsed=InternetAddress.parseHeader(values[i],strict);
+        String result="";
+        for(InternetAddress address:parsed) {
+          result += "address="+address.getAddress()+", group="+address.isGroup();
+          if(address.isGroup()) result += ", members="+java.util.Arrays.toString(address.getGroup(strict));
+        }
+        System.out.println("case="+i+", strict="+strict+", "+result);
+      } catch (Exception failure) {System.out.println("case="+i+", strict="+strict+", exception="+failure.getClass().getSimpleName());}
+    }
+  }
+}

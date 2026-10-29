@@ -1,0 +1,141 @@
+    @Autowired HelpdeskRepository reviewRepository;
+
+    @Test
+    void probeOldFetchCreatesSecondTicketAfterNewGenerationAlreadyImportedSameMail() throws Exception {
+        Setup s=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        byte[] same=scripted(s,"same-message","");
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old=new ScriptedMailbox(100).put(100,same)
+            .beforeFetch(uid->{entered.countDown();hold(release);});
+        Future<?> a=POOL.submit(()->old.intake(context,1).fetch(s.mailbox()));
+        try {
+            hold(entered);
+            new ScriptedMailbox(200).put(1,same).intake(context,1).fetch(s.mailbox());
+            assertEquals(1,tickets(s));
+        } finally {release.countDown();}
+        a.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(2,tickets(s),"observed defect: stale fetch creates duplicate ticket");
+        assertEquals(1L,jdbc.queryForObject("select count(distinct message_id) from helpdesk_message where mailbox_id=?",Long.class,s.mailbox()));
+        assertEquals(2,jdbc.queryForObject("select source from helpdesk_mailbox where id=?",Integer.class,s.mailbox()));
+        assertEquals(1L,jdbc.queryForObject("select last_uid from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        System.out.println("E1 observed: same Message-ID, two sources, two tickets; current cursor preserved");
+    }
+
+    @Test
+    void probeReturnedValidityKeepsOldGenerationFromMovingCursor() throws Exception {
+        Setup s=setup();
+        jdbc.update("update helpdesk_mailbox set uid_validity=100,last_uid=0 where id=?",s.mailbox());
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old=new ScriptedMailbox(100).put(100,scripted(s,"old-held",""))
+            .beforeFetch(uid->{entered.countDown();hold(release);});
+        Future<?> a=POOL.submit(()->old.intake(context,1).fetch(s.mailbox()));
+        ScriptedMailbox returned=new ScriptedMailbox(100).put(1,scripted(s,"returned-one",""))
+            .put(2,scripted(s,"returned-two",""));
+        try {
+            hold(entered);
+            new ScriptedMailbox(200).put(1,scripted(s,"middle","")).intake(context,1).fetch(s.mailbox());
+            returned.intake(context,1).fetch(s.mailbox());
+        } finally {release.countDown();}
+        a.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        Map<String,Object> state=jdbc.queryForMap("select source,uid_validity,last_uid,compare_until from helpdesk_mailbox where id=?",s.mailbox());
+        assertEquals(3,state.get("source"));assertEquals(100L,state.get("uid_validity"));
+        assertEquals(1L,state.get("last_uid"));assertEquals(2L,state.get("compare_until"));
+        returned.intake(context,5).fetch(s.mailbox());
+        assertTrue(returned.seen(2));assertEquals(4,tickets(s));
+        System.out.println("E2 validity 100 -> 200 -> 100: stale generation cannot move cursor or comparison bound");
+    }
+
+    @Test
+    void probeInitialStartAndSettingsChangeAreConditional() throws Exception {
+        Setup s=setup();
+        var both=new java.util.concurrent.CountDownLatch(2);
+        ScriptedMailbox folder=new ScriptedMailbox(100).put(1,scripted(s,"initial-one",""))
+            .beforeOpen(()->{both.countDown();hold(both);});
+        Future<?> a=POOL.submit(()->folder.intake(context,1).fetch(s.mailbox()));
+        Future<?> b=POOL.submit(()->folder.intake(context,1).fetch(s.mailbox()));
+        a.get(20,java.util.concurrent.TimeUnit.SECONDS);b.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1,tickets(s));
+        var tx=new TransactionTemplate(transactions);
+        assertEquals(Boolean.FALSE,tx.execute(status->reviewRepository.startFolder(s.mailbox(),1,999,99)));
+        assertEquals(Boolean.FALSE,tx.execute(status->reviewRepository.restartFolder(s.mailbox(),1,999,200,0,5L,"probe",java.time.Instant.now())));
+        assertEquals(Boolean.FALSE,tx.execute(status->reviewRepository.position(s.mailbox(),1,999,99)));
+        Setup next=setup();Setup other=setup();
+        var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
+        ScriptedMailbox old=new ScriptedMailbox(100).put(99,scripted(next,"old-settings",""))
+            .beforeOpen(()->{entered.countDown();hold(release);});
+        Future<?> delayed=POOL.submit(()->old.intake(context,1).fetch(next.mailbox()));
+        try {
+            hold(entered);
+            Response changed=next.admin().send("PUT","/api/v1/helpdesk/mailboxes/"+next.mailbox(),
+                mailboxRequest("Changed "+COUNTER.incrementAndGet(),next.project(),other.account().getLogin(),MAIL_PASSWORD,
+                    MAIL.getImap().getPort(),AUTHSERV),"\"1\"");
+            assertEquals(200,changed.status(),changed.body());
+            new ScriptedMailbox(200).put(1,scripted(next,"new-settings","")).intake(context,1).fetch(next.mailbox());
+        } finally {release.countDown();}
+        delayed.get(20,java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1,tickets(next));assertFalse(old.seen(99));
+        assertEquals(200L,jdbc.queryForObject("select uid_validity from helpdesk_mailbox where id=?",Long.class,next.mailbox()));
+        System.out.println("E3 concurrent initial start and settings change before start: stale CAS rejected");
+    }
+
+    @Test
+    void probeGroupsAndMalformedGroupsThroughRealParser() throws Exception {
+        Setup s=setup();Setup other=setup();
+        String[] headers={
+            "To: TEAM: Anzeigename <"+other.contactAddress().toUpperCase(java.util.Locale.ROOT)+">;\r\n",
+            "Cc: TEAM: \"Name, mit Komma\" <"+other.contactAddress()+">;\r\n",
+            "Cc: Leer:;\r\n",
+            "Cc: Outer: Inner: "+other.contactAddress()+";;\r\n",
+            "Cc: Broken: \"unterminated <"+other.contactAddress()+">;\r\n",
+            "Cc: MissingEnd: "+other.contactAddress()+"\r\n"
+        };
+        ScriptedMailbox folder=new ScriptedMailbox(100);
+        for(int i=0;i<headers.length;i++){
+            byte[] raw=scripted(s,"group-case-"+i,headers[i]);
+            ParsedMail parsed=ParsedMail.parse(raw);
+            System.out.println("E4 group case "+i+": complete="+parsed.recipientsComplete()+", to="+parsed.to()+", cc="+parsed.cc());
+            folder.put(i+1,raw);
+        }
+        folder.intake(context,10).fetch(s.mailbox());
+        var result=messages(s);assertEquals(headers.length,result.size());
+        System.out.println("E4 all reasons: "+result.stream().map(row->row.get("reason")).toList());
+        assertEquals("foreign_customer",result.get(0).get("reason"));
+        assertEquals("foreign_customer",result.get(1).get("reason"));
+        assertNull(result.get(2).get("reason"));
+        for(int i=3;i<headers.length;i++)assertEquals("recipients_incomplete",result.get(i).get("reason"),"case "+i);
+        assertEquals(1,tickets(s));
+    }
+
+    @Test
+    void probeOneBudgetAcrossRepeatedHeadersGroupsAndHeaderOnly() throws Exception {
+        Setup s=setup();
+        for(int total:new int[]{1000,1001}){
+            String head="To: "+unknown("one",249)+"\r\nTo: Team: "+unknown("two",250)+";\r\n"
+                +"Cc: "+unknown("three",250)+"\r\nCc: More: "+unknown("four",total-750)+";\r\n";
+            byte[] raw=scripted(s,"budget-"+total,head);
+            ParsedMail full=ParsedMail.parse(raw);
+            var mime=new jakarta.mail.internet.MimeMessage(Session.getInstance(new Properties()),new java.io.ByteArrayInputStream(raw));
+            ParsedMail header=ParsedMail.headerOnly(mime);
+            assertEquals(total<=1000,full.recipientsComplete());
+            assertEquals(full.recipientsComplete(),header.recipientsComplete());
+            assertEquals(1000,full.to().size()+full.cc().size());
+            assertEquals(full.to(),header.to());assertEquals(full.cc(),header.cc());
+        }
+        System.out.println("E5 combined repeated To/Cc headers and groups: 1000 complete, 1001 incomplete, also headerOnly");
+    }
+
+    @Test
+    void probePersistentComparisonAfterFailureAndNewIntakeInstances() {
+        Setup s=setup();ScriptedMailbox old=new ScriptedMailbox(100),current=new ScriptedMailbox(200);
+        for(int i=1;i<=6;i++){byte[] raw=scripted(s,"persist-"+i,"");old.put(i,raw);current.put(i,raw);}
+        old.intake(context,10).fetch(s.mailbox());assertEquals(6,tickets(s));
+        current.intake(context,2).fetch(s.mailbox());
+        assertEquals(6L,jdbc.queryForObject("select compare_until from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        current.beforeFetch(uid->{throw new IllegalStateException("synthetic interrupted fetch");});
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->current.intake(context,2).fetch(s.mailbox()));
+        current.beforeFetch(uid->{});current.intake(context,2).fetch(s.mailbox());current.intake(context,2).fetch(s.mailbox());
+        assertEquals(6,tickets(s));assertNull(jdbc.queryForObject("select compare_until from helpdesk_mailbox where id=?",Long.class,s.mailbox()));
+        System.out.println("E6 persistent comparison and fresh intake instances after failure: no duplicate or skipped mail");
+    }
