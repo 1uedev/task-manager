@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  assignTicketTag, companyTags, listMembers, projectTags, readHistory, readProject, readTicket, removeTicketTag, ticketTags, updateTicket,
+  assignTicketTag, companyTags, listMembers, projectTags, readHistory, readProject, readTicket, removeTicketTag, SLA_PRIORITIES, ticketTags, updateTicket,
   type CustomValues, type Project, type Tag, type Ticket, type TicketChange,
 } from '../api/product.ts';
 import {
@@ -17,6 +17,7 @@ import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { TicketAttachments } from './TicketAttachments.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
+import { TicketSla } from './TicketSla.tsx';
 import { statusName, typeName } from './ProjectPage.tsx';
 
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'] as const;
@@ -24,9 +25,9 @@ type Field = (typeof FIELDS)[number];
 type Draft = Record<Field, string>;
 // The text of every custom field control by field key.
 type CustomDraft = Readonly<Record<string, string>>;
-const FIELD_LABEL: Record<Field | 'tags' | 'attachments' | 'customer' | 'contact' | 'mail', MessageKey> = {
+const FIELD_LABEL: Record<Field | 'tags' | 'attachments' | 'customer' | 'contact' | 'mail' | 'priority', MessageKey> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags',
-  attachments: 'field.attachments', customer: 'field.customer', contact: 'field.contact', mail: 'field.mail',
+  attachments: 'field.attachments', customer: 'field.customer', contact: 'field.contact', mail: 'field.mail', priority: 'field.priority',
 };
 
 function customDraftOf(ticket: Ticket, fields: readonly CustomField[]): CustomDraft {
@@ -281,6 +282,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
           </form>
         </section>
         <div>
+          <TicketSla key={`sla-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
           <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
@@ -413,6 +415,7 @@ function History({ project, ticket, round }: { readonly project: Project; readon
     if (field === 'type') return typeName(project, raw);
     if (field === 'assignee') return name(raw);
     if (field === 'tags') return tagNames.get(raw) ?? raw.slice(0, 8);
+    if (field === 'priority' && (SLA_PRIORITIES as readonly string[]).includes(raw)) return t(`priority.${raw}` as MessageKey);
     return raw;
   };
 

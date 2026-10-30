@@ -533,6 +533,12 @@ class HelpdeskRepository {
     record TicketCustomer(UUID customerId, UUID contactId) {
     }
 
+    /** When the intake stored the first mail of the ticket (TASK-068), or empty for a ticket without mails. */
+    Optional<Instant> firstMessageAt(UUID ticketId) {
+        return jdbc.sql("select min(received_at) from helpdesk_message where ticket_id = ?").param(ticketId)
+            .query((rs, row) -> instant(rs, "min")).optional().filter(java.util.Objects::nonNull);
+    }
+
     Optional<TicketCustomer> ticketCustomer(UUID ticketId) {
         return jdbc.sql("select customer_id, contact_id from helpdesk_ticket_customer where ticket_id = ?").param(ticketId)
             .query((rs, row) -> new TicketCustomer(rs.getObject("customer_id", UUID.class), rs.getObject("contact_id", UUID.class)))

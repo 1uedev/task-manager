@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1142,6 +1143,50 @@ class HelpdeskApiTest {
         assertTrue(last.stream().allMatch(m -> m.get("state").equals("automatic")));
         assertEquals(ticketsBefore, tickets(setup));
         assertEquals(replies, jdbc.queryForObject("select count(*) from helpdesk_reply", Long.class), "nothing answers by itself");
+    }
+
+    /** The service deadlines on the real mail path (TASK-068): the cycle starts at the mail, the sent reply meets the first response. */
+    @Test
+    void aTicketFromMailGetsItsDeadlinesAndTheSentReplyMeetsTheFirstResponse() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser sla = person(AdministrationRight.SLA_MANAGE);
+        List<Map<String, Object>> week = new ArrayList<>();
+        for (int day = 1; day <= 7; day++) {
+            week.add(Map.of("day", day, "hours", List.of(Map.of("from", "00:00", "to", "24:00"))));
+        }
+        Response calendar = sla.send("POST", "/api/v1/sla/calendars", Map.of("name", "Immer " + COUNTER.incrementAndGet(),
+            "timeZone", "Europe/Berlin", "week", week, "exceptions", List.of()), null);
+        assertEquals(201, calendar.status(), calendar.body());
+        Map<String, Object> minutes = Map.of("firstResponse", 60, "resolution", 480);
+        Response rule = sla.send("POST", "/api/v1/sla/rules", Map.of("name", "Standard", "projectId", setup.project(),
+            "calendarId", calendar.json().get("id").asString(), "budgets", Map.of("low", minutes, "normal", minutes, "high", minutes,
+            "critical", minutes)), null);
+        assertEquals(201, rule.status(), rule.body());
+
+        long number = (Long) ticketFromMail(setup, "Server steht")[0];
+        Browser replier = replier(setup);
+        grant(replier.id, setup.project(), "READ:priority");
+        String path = "/api/v1/projects/" + setup.project() + "/tickets/" + number + "/sla";
+        Instant received = jdbc.queryForObject("select received_at from helpdesk_message where mailbox_id = ? order by uid desc limit 1",
+            java.sql.Timestamp.class, setup.mailbox()).toInstant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Response view = replier.get(path);
+        assertEquals(200, view.status(), view.body());
+        assertEquals("active", view.json().get("state").asString(), view.body());
+        JsonNode cycle = view.json().get("cycles").get(0);
+        assertEquals(received, Instant.parse(cycle.get("startedAt").asString()), "the cycle starts when the mail came in");
+        assertEquals(received.plusSeconds(3600), Instant.parse(cycle.get("firstResponse").get("dueAt").asString()));
+        assertEquals("running", cycle.get("firstResponse").get("state").asString());
+
+        UUID reply = UUID.fromString(reply(replier, setup, number, "Wir starten ihn neu.").json().get("id").asString());
+        assertEquals("running", replier.get(path).json().get("cycles").get(0).get("firstResponse").get("state").asString(),
+            "a confirmed reply that is not sent yet meets nothing");
+        assertNull(runReplyJob(reply, 1));
+        assertEquals("sent", replyState(reply));
+        JsonNode met = replier.get(path).json().get("cycles").get(0);
+        assertEquals("met", met.get("firstResponse").get("state").asString(), met.toString());
+        assertEquals("running", met.get("resolution").get("state").asString());
+        assertFalse(met.get("firstResponse").get("breached").asBoolean());
     }
 
     @Test

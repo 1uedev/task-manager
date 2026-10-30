@@ -5,10 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.files.AttachmentIntake;
+import taskmanager.helpdesk.CustomerAnswered;
+import taskmanager.helpdesk.TicketCustomerChanged;
 import taskmanager.tickets.TicketAccess;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -24,11 +27,13 @@ class TicketOpener {
     private final TicketAccess tickets;
     private final AttachmentIntake attachments;
     private final HelpdeskRepository repository;
+    private final ApplicationEventPublisher events;
 
-    TicketOpener(TicketAccess tickets, AttachmentIntake attachments, HelpdeskRepository repository) {
+    TicketOpener(TicketAccess tickets, AttachmentIntake attachments, HelpdeskRepository repository, ApplicationEventPublisher events) {
         this.tickets = tickets;
         this.attachments = attachments;
         this.repository = repository;
+        this.events = events;
     }
 
     public record Opened(UUID ticketId, long number, List<Message.AttachmentNote> attachments) {
@@ -69,6 +74,10 @@ class TicketOpener {
             JSON.writeValueAsString(new MailReference(message.id().toString(), message.fromAddress(), message.subject())));
         repository.processed(message.id(), "ticket", ticket, contact == null ? null : contact.id(), customer == null ? null : customer.id(),
             notes, null, now, actor, message.version() + 1);
+        if (customer != null) {
+            // The deadlines start at the first registration of the mail, also when it waited in the review queue (TASK-068, S-12).
+            events.publishEvent(new TicketCustomerChanged(message.companyId(), message.projectId(), ticket, customer.id(), message.receivedAt(), now));
+        }
         return Optional.of(new Opened(ticket, created.get().number(), notes));
     }
 
@@ -96,6 +105,7 @@ class TicketOpener {
             JSON.writeValueAsString(new MailReference(message.id().toString(), message.fromAddress(), message.subject())));
         repository.processed(message.id(), "ticket", ticket, contact == null ? null : contact.id(), customer == null ? null : customer.id(),
             notes, null, now, actor, message.version() + 1);
+        events.publishEvent(new CustomerAnswered(message.companyId(), message.projectId(), ticket, message.receivedAt()));
         long number = tickets.locate(ticket).map(TicketAccess.Location::number).orElse(0L);
         return new Opened(ticket, number, notes);
     }
