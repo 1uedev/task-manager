@@ -663,6 +663,42 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-066 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben
+
+**Bezug:** REQ-OPS-006 (Hintergrundaufträge). **Verantwortlich:** claude-20261030-jobsfix-04. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Die neuen Browsertests sind mit dem Stand nach TASK-065 rot, sofern sie eine Lücke des Produkts zeigen, und mit der Korrektur grün; alle Frontend und Browsertests grün. Holger nimmt TASK-065 und TASK-066 zusammen ab.
+
+**Ergebnis:** DEC-096. `JobsPage` zählt je Listenabruf und je Abruf der Übersicht eine eigene Nummer (`listRequest`, `summaryRequest`) und übernimmt nur die Antwort des zuletzt gestarteten Abrufs; das ersetzt die Laderunden aus TASK-065. `jobs.test.mjs` hat eine gemeinsame Hilfe `hold`, die passende Listenabrufe zurückhält und beim Freigeben bis zum Eintreffen der Antwort wartet, und zwei neue Tests (verspätete ältere Seite nach Filterwechsel, verspätetes erstes „Aktualisieren“).
+
+**Prüfungen:** Frontend `npm run verify` mit 77 Tests und `npm run test:browser` mit 131 Tests grün; `jobs.test.mjs` dreimal hintereinander grün. Mit der Seite vor TASK-065 (main 72920f1) sind alle drei Tests der verspäteten Antworten rot; mit der Seite nach TASK-065 sind sie grün, weil die Laderunden diese Fälle schon abdeckten. Die Absicherung überlappender Abrufe derselben Runde (F1) ist über die Oberfläche nicht erreichbar, weil „Ältere Aufträge laden“ während eines Abrufs gesperrt ist, und hat deshalb keinen eigenen roten Browsertest. Backend unverändert, nicht erneut ausgeführt.
+
+**Review:** Keine weitere getrennte Prüfung; Holger hat auf die Empfehlung hin ohne sie abgenommen, weil TASK-066 nur die Jobübersicht und ihre Tests ändert und die CI grün ist.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit „Dann sind abgenommen“ auf die Empfehlung, TASK-065 und TASK-066 jetzt zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (gemeinsam für TASK-065 und TASK-066, nicht beauftragt):
+1. Aus der Codex Nachprüfung von TASK-054 ([Bericht](docs/REVIEW_TASK-054_PR-179.md)): H1 (nach Verlust der Reservierung kann ein alter Versuch neben einem neuen weiterlaufen; Bearbeiter halten ihre Wirkung unter der Auftragskennung fest), H2 (Prozessuhren, Lebensdauer der Dedup-Schlüssel, Wiederholung alter wiederkehrender Aufgaben), H3 (Nutzdaten in `job.payload` liegen in der Verantwortung des Aufrufers), H4 (README Satz zum Ausführer im Webprozess und Kommentar in V0025).
+2. Aus der Codex Prüfung von TASK-065: H1 (eine alte Antwort, die vor dem Start des neuen Abrufs ankommt, steht bis zu dessen Antwort kurz da).
+
+**Referenz:** Reservierung mit Prüfbericht #215 (375c142), Ergebnis #216 (3c3ed3f); verknüpft mit TASK-065 und DEC-096.
+
+## TASK-065 Befunde F1 und F2 der Codex Nachprüfung von TASK-054 beheben
+
+**Bezug:** REQ-OPS-006 (Hintergrundaufträge), REQ-HD-005 (keine Mehrfachaktion nach Neustart oder Wiederholung). **Verantwortlich:** claude-20261030-jobsfix-03. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Regressionstests mit echter Datenbank für beide Reihenfolgen verspäteter Ergebnisse (alter Erfolg vor neuem Fehler und alter Fehler vor neuem Erfolg) sowie für einen alten Versuch nach erneutem Einstellen durch die Verwaltung; ein Browsertest mit umgekehrter Antwortreihenfolge beim Filterwechsel; alle Backend Tests einschließlich der Helpdesk Tests, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt ab.
+
+**Ergebnis:** DEC-095. F1: `JobRepository.claim` vergibt je Übernahme eine eigene Kennung in `lease_owner` (Ausführer, `#`, Zufallskennung); `renew`, `succeed`, `fail` und `giveBack` prüfen diese Kennung, `JobExecutor` führt seine laufenden Versuche je Kennung. F2: `JobsPage` zählt Laderunden und verwirft Antworten älterer Runden für Liste und Übersicht. README des Backends beschreibt die Grenze gleichzeitiger Versuche nach Verlust der Reservierung genauer.
+
+**Prüfungen:** Backend `./mvnw verify` gegen lokales PostgreSQL 16 (JDK 21) mit 407 Tests grün, darunter drei neue Tests in `JobExecutorTest` (alter Erfolg vor neuem endgültigen Fehler mit Verlängerung des neuen Versuchs über die Reservierungsdauer hinaus, alter Fehler vor neuem Erfolg, alter Versuch nach erneutem Einstellen durch die Verwaltung) und alle 40 Helpdesk API Tests. Mit dem alten Verhalten (eine Kennung je Ausführer) sind alle drei neuen Tests rot. Frontend `npm run verify` mit 77 Tests und 129 Browsertests grün; der neue Browsertest hält die Antwort für „Gescheitert“ zurück und ist mit der alten Seite rot. Nicht lokal ausgeführt: PostgreSQL 18.6 im Container und `backend/scripts/lifecycle-check.sh` (keine Migration), beides läuft in CI.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-065_PR-214.md), PR #215): Kern von F1 und F2 plausibel behoben, kein P1 oder P2, F1 P3 (Seitenabrufe derselben Laderunde nicht einzeln versioniert) und H2 (fehlende Browsertests) durch TASK-066 behoben, H1 bleibt Hinweis. Codex hat keine Tests ausgeführt.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit „Dann sind abgenommen“ auf die Empfehlung, TASK-065 und TASK-066 jetzt zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Referenz:** Reservierung #213 (ca618a1), Ergebnis #214 (7dd7c84); verknüpft mit TASK-054, TASK-066 und DEC-095.
+
 ## TASK-064 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben
 
 **Bezug:** REQ-HD-001 (Antworten an Kunden), REQ-TKT-005 (unklare Zustellung). **Verantwortlich:** claude-20261030-replyfix-03. **Abgeschlossen:** 2026-10-30.
