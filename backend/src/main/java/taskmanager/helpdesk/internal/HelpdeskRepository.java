@@ -475,9 +475,9 @@ class HelpdeskRepository {
     }
 
     /** The replies of all companies that wait or are being sent, longest unchanged first: candidates for {@code ReplyWatch}. */
-    List<UUID> unsettledReplies(int limit) {
-        return jdbc.sql("select id from helpdesk_reply where state in ('pending', 'sending') order by updated_at, id limit ?").param(limit)
-            .query(UUID.class).list();
+    List<UUID> unsettledReplies(UUID after, int limit) {
+        return jdbc.sql("select id from helpdesk_reply where state in ('pending', 'sending') and (?::uuid is null or id > ?) order by id limit ?")
+            .params(after, after, limit).query(UUID.class).list();
     }
 
     /** Writes the state of a reply and moves its version on. */

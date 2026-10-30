@@ -49,8 +49,9 @@ class JobService implements Jobs {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public boolean active(UUID id) {
-        return jobs.find(id).map(job -> job.state().equals("queued") || job.state().equals("running")).orElse(false);
+        return jobs.shareState(id).map(state -> state.equals("queued") || state.equals("running")).orElse(false);
     }
 
     static void validKind(String kind) {

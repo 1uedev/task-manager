@@ -28,6 +28,8 @@ final class ScriptedSmtp implements AutoCloseable {
         DROP_AFTER_DATA,
         /** Closes the connection on the command DATA, before any of the mail is sent (TASK-062). */
         DROP_AT_DATA,
+        /** Closes the connection after the first line of the mail, before its end (TASK-063). */
+        DROP_IN_DATA,
         /** Reads the whole mail and accepts it only after {@link #SLOW} (TASK-062). */
         SLOW_ACCEPT,
         /**
@@ -46,6 +48,8 @@ final class ScriptedSmtp implements AutoCloseable {
     private volatile Mode mode;
     private final AtomicInteger connections = new AtomicInteger();
     private final List<String> handedOver = new CopyOnWriteArrayList<>();
+    private final List<String> broken = new CopyOnWriteArrayList<>();
+    private volatile Socket current;
     private final java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
 
     ScriptedSmtp(Mode mode) throws IOException {
@@ -73,7 +77,12 @@ final class ScriptedSmtp implements AutoCloseable {
         gate.countDown();
     }
 
-    /** The mails the server read to their end, whatever it answered. */
+    /** The mails whose connection ended before their end line; the server holds none of them. */
+    List<String> broken() {
+        return broken;
+    }
+
+    /** The mails the server read to their end line, whatever it answered. */
     List<String> handedOver() {
         return handedOver;
     }
@@ -81,6 +90,7 @@ final class ScriptedSmtp implements AutoCloseable {
     private void serve() {
         while (!server.isClosed()) {
             try (Socket socket = server.accept()) {
+                current = socket;
                 connections.incrementAndGet();
                 talk(socket);
             } catch (IOException ended) {
@@ -112,8 +122,20 @@ final class ScriptedSmtp implements AutoCloseable {
                 }
                 say(out, "354 End data with <CR><LF>.<CR><LF>");
                 StringBuilder mail = new StringBuilder();
+                boolean first = true;
                 while ((line = in.readLine()) != null && !line.equals(".")) {
                     mail.append(line).append("\r\n");
+                    if (first && mode == Mode.DROP_IN_DATA) {
+                        // Ends in the middle of the mail: it was never handed over (TASK-063, F4).
+                        broken.add(mail.toString());
+                        return;
+                    }
+                    first = false;
+                }
+                if (line == null) {
+                    // The connection ended before the end of the mail: not handed over either.
+                    broken.add(mail.toString());
+                    return;
                 }
                 handedOver.add(mail.toString());
                 if (mode == Mode.DROP_AFTER_DATA) {
@@ -155,5 +177,14 @@ final class ScriptedSmtp implements AutoCloseable {
     public void close() throws IOException {
         gate.countDown();
         server.close();
+        Socket open = current;
+        if (open != null) {
+            open.close();
+        }
+        try {
+            thread.join(5_000);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

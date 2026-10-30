@@ -121,15 +121,17 @@ class ReplySender implements JobHandler {
         }
         Instant now = clock.instant();
         UUID by = confirmedBy(execution, reply);
+        // Without a readable confirming person the reply is recorded in the name of its last change (TASK-063, H1).
+        UUID actor = by == null ? reply.updatedBy() : by;
         if (reply.state().equals("sending")) {
             LOG.warn("Reply {} was handed over before without a recorded outcome; it is uncertain and not sent again", replyId);
-            repository.replyState(replyId, "uncertain", "helpdesk.send_interrupted", null, null, now, by);
+            repository.replyState(replyId, "uncertain", "helpdesk.send_interrupted", null, null, now, actor);
             return Optional.empty();
         }
         if (!reply.state().equals("pending")) {
             return Optional.empty();
         }
-        String refused = refusal(reply, by);
+        String refused = by == null ? "helpdesk.job_invalid" : refusal(reply, by);
         Mailbox mailbox = repository.mailbox(reply.companyId(), reply.mailboxId()).orElse(null);
         String password = null;
         if (refused == null) {
@@ -143,7 +145,7 @@ class ReplySender implements JobHandler {
         }
         if (refused != null) {
             LOG.info("Reply {} is not sent: {}", replyId, refused);
-            repository.replyState(replyId, "failed", refused, null, null, now, by);
+            repository.replyState(replyId, "failed", refused, null, null, now, actor);
             return Optional.empty();
         }
         repository.replyState(replyId, "sending", reply.errorCode(), now, null, now, by);
@@ -152,13 +154,19 @@ class ReplySender implements JobHandler {
             reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now), by));
     }
 
-    /** The person who confirmed this send; jobs written before TASK-062 carry none and stand for the author. */
+    /**
+     * The person who confirmed this send; jobs written before TASK-062 carry none and stand for the author. A payload that names
+     * no valid person gives {@code null}, and the job does not send (TASK-063, H1).
+     */
     private static UUID confirmedBy(JobExecution execution, Reply reply) {
-        try {
-            String by = execution.payload().get("by");
-            return by == null ? reply.createdBy() : UUID.fromString(by);
-        } catch (IllegalArgumentException invalid) {
+        String by = execution.payload().get("by");
+        if (by == null) {
             return reply.createdBy();
+        }
+        try {
+            return UUID.fromString(by);
+        } catch (IllegalArgumentException invalid) {
+            return null;
         }
     }
 

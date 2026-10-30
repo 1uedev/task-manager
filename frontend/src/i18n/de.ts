@@ -732,6 +732,7 @@ export const de = {
   'helpdesk.code.helpdesk.send_uncertain': 'Die Antwort des Mailservers fehlt; die Mail kann angekommen sein',
   'helpdesk.code.helpdesk.send_interrupted': 'Der Versand wurde unterbrochen; die Mail kann angekommen sein',
   'helpdesk.code.helpdesk.job_ended': 'Der Versandauftrag endete, ohne die Mail zu übergeben; sie wurde nicht gesendet',
+  'helpdesk.code.helpdesk.job_invalid': 'Der Versandauftrag nennt keine gültige bestätigende Person; nichts wurde gesendet',
   'helpdesk.code.helpdesk.send_broken': 'Der Mailserver brach vor dem Ende der Mail ab; sie wurde nicht gesendet',
   'helpdesk.code.helpdesk.mailbox_unavailable': 'Das Postfach sendet nicht mehr für dieses Projekt',
   'helpdesk.code.helpdesk.recipient_changed': 'Die Adresse gehört nicht mehr zum Kontakt des Tickets',

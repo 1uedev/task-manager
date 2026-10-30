@@ -234,6 +234,11 @@ public class JobRepository {
             .query(JobRepository::job).optional();
     }
 
+    /** The state of the job under a share lock that a retry or cancel of the administration waits for (TASK-063). */
+    Optional<String> shareState(UUID id) {
+        return jdbc.sql("select state from job where id = ? for share").param(id).query(String.class).optional();
+    }
+
     Optional<Job> find(UUID id) {
         return jdbc.sql("select " + COLUMNS + " from job where id = ?").param(id).query(JobRepository::job).optional();
     }

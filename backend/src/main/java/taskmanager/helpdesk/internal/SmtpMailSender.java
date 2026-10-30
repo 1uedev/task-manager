@@ -9,6 +9,7 @@ import jakarta.mail.URLName;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeUtility;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
@@ -185,7 +186,7 @@ class SmtpMailSender implements MailSender {
         };
         message.setFrom(address(mail.fromAddress(), mail.fromName()));
         message.setRecipient(Message.RecipientType.TO, address(mail.toAddress(), mail.toName()));
-        message.setSubject(mail.subject(), StandardCharsets.UTF_8.name());
+        message.setHeader("Subject", subject(mail.subject()));
         message.setText(mail.body(), StandardCharsets.UTF_8.name());
         message.setSentDate(Date.from(mail.date()));
         if (mail.inReplyTo() != null) {
@@ -196,7 +197,56 @@ class SmtpMailSender implements MailSender {
             message.setHeader("References", String.join("\r\n ", references));
         }
         message.saveChanges();
+        // Whatever the values, no line of a header may grow beyond the limit of RFC 5322 (TASK-063, F2).
+        for (String header : java.util.Collections.list(message.getAllHeaderLines())) {
+            for (String line : header.split("\r\n")) {
+                if (line.length() > LINE_MAX) {
+                    throw new MessagingException("A header of the reply is too long");
+                }
+            }
+        }
         return message;
+    }
+
+    /** The longest line of a header that RFC 5322 allows, without its line break. */
+    static final int LINE_MAX = 998;
+
+    /** The longest name the reply shows for sender or recipient; a longer one is cut, the address stays as it is. */
+    static final int NAME_MAX = 200;
+
+    /**
+     * The subject as a header value: encoded where needed and folded. A long run without spaces cannot be folded as text, so
+     * the subject then goes as a series of short encoded words that can (TASK-063, F2). Control characters other than the tab
+     * are refused.
+     */
+    static String subject(String subject) throws MessagingException, UnsupportedEncodingException {
+        if (subject == null || subject.isEmpty() || subject.codePoints().anyMatch(point -> point != '\t' && Character.isISOControl(point))) {
+            throw new MessagingException("The subject of the reply is not a single line");
+        }
+        String plain = MimeUtility.fold(9, MimeUtility.encodeText(subject, StandardCharsets.UTF_8.name(), null));
+        if (java.util.Arrays.stream(plain.split("\r\n")).allMatch(line -> line.length() <= 76)) {
+            return plain;
+        }
+        // Encoded words of at most 45 bytes of UTF-8 each, never splitting a character, one per line (RFC 2047, 75 characters).
+        List<String> words = new java.util.ArrayList<>();
+        StringBuilder chunk = new StringBuilder();
+        int bytes = 0;
+        for (int point : subject.codePoints().toArray()) {
+            int size = new String(Character.toChars(point)).getBytes(StandardCharsets.UTF_8).length;
+            if (bytes + size > 45) {
+                words.add(encodedWord(chunk.toString()));
+                chunk.setLength(0);
+                bytes = 0;
+            }
+            chunk.appendCodePoint(point);
+            bytes += size;
+        }
+        words.add(encodedWord(chunk.toString()));
+        return String.join("\r\n ", words);
+    }
+
+    private static String encodedWord(String text) {
+        return "=?UTF-8?B?" + java.util.Base64.getEncoder().encodeToString(text.getBytes(StandardCharsets.UTF_8)) + "?=";
     }
 
     /** A single plain address with an encoded name; anything else, such as a group or a comment, is refused. */
@@ -205,8 +255,12 @@ class SmtpMailSender implements MailSender {
             throw new AddressException("Not a plain address");
         }
         InternetAddress result = new InternetAddress(address, true);
-        // A name never breaks the line of its header, whatever was stored before (TASK-062, X-F3).
-        result.setPersonal(name == null ? null : name.replaceAll("\\p{Cntrl}+", " ").strip(), StandardCharsets.UTF_8.name());
+        // A name never breaks the line of its header, whatever was stored before (TASK-062, X-F3), and stays short (TASK-063, F2).
+        String shown = name == null ? null : name.replaceAll("\\p{Cntrl}+", " ").strip();
+        if (shown != null && shown.codePointCount(0, shown.length()) > NAME_MAX) {
+            shown = shown.substring(0, shown.offsetByCodePoints(0, NAME_MAX));
+        }
+        result.setPersonal(shown == null || shown.isEmpty() ? null : shown, StandardCharsets.UTF_8.name());
         return result;
     }
 }

@@ -100,4 +100,36 @@ class SmtpMailSenderTest {
         String unfolded = message.getHeader("References")[0].replaceAll("\r\n\\s+", " ");
         assertEquals(ids.stream().collect(Collectors.joining(" ")), unfolded);
     }
+
+    private static MailSender.Outgoing withSubject(String subject, String fromName, String toName) {
+        return new MailSender.Outgoing("<reply-1@firma.example>", "support@firma.example", fromName, "lea@nordwerk.example", toName, subject,
+            "Text", null, null, Instant.parse("2026-10-30T08:00:00Z"));
+    }
+
+    private static void assertLinesWithinLimit(String raw) {
+        String head = raw.substring(0, raw.indexOf("\r\n\r\n"));
+        for (String line : head.split("\r\n")) {
+            assertTrue(line.length() <= 998, "line of " + line.length() + " characters");
+        }
+    }
+
+    @Test
+    void longSubjectsAndNamesStayWithinTheLineLimit() throws Exception {
+        String name = "N".repeat(1_000);
+        for (String subject : List.of("a".repeat(998), "\u00e4".repeat(998), "Re: " + "x".repeat(500) + " " + "y".repeat(493),
+                "\uD83D\uDE00".repeat(400))) {
+            MimeMessage message = SmtpMailSender.message(SESSION, withSubject(subject, name, name));
+            assertLinesWithinLimit(raw(message));
+            assertEquals(subject, message.getSubject(), "the subject arrives unchanged");
+            String shown = ((jakarta.mail.internet.InternetAddress) message.getFrom()[0]).getPersonal();
+            assertEquals("N".repeat(SmtpMailSender.NAME_MAX), shown, "a long name is cut");
+        }
+    }
+
+    @Test
+    void aSubjectWithALineBreakIsRefused() {
+        for (String subject : List.of("Re: a\r\nBcc: mia@suedtechnik.example", "Re: a\rb", "Re: a\nb", "Re: \u0000")) {
+            assertThrows(MessagingException.class, () -> SmtpMailSender.message(SESSION, withSubject(subject, "Support", "Lea")), subject);
+        }
+    }
 }
