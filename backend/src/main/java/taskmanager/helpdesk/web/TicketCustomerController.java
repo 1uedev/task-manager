@@ -2,6 +2,7 @@ package taskmanager.helpdesk.web;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,11 +49,12 @@ class TicketCustomerController {
         }
     }
 
+    /** A mail of the ticket; {@code newAnswer} marks one that joined the ticket and nobody has seen yet (TASK-067). */
     record MailBody(UUID id, Instant receivedAt, Instant sentAt, String fromAddress, String fromName, String to, String cc, String subject,
-            String body, List<Message.AttachmentNote> attachments) {
-        static MailBody of(Message m) {
+            String body, List<Message.AttachmentNote> attachments, boolean newAnswer, long version) {
+        static MailBody of(Message m, Set<UUID> newAnswers) {
             return new MailBody(m.id(), m.receivedAt(), m.sentAt(), m.fromAddress(), m.fromName(), m.to(), m.cc(), m.subject(), m.body(),
-                m.attachments());
+                m.attachments(), newAnswers.contains(m.id()), m.version());
         }
     }
 
@@ -73,7 +75,7 @@ class TicketCustomerController {
             return new ViewBody(view.readable().stream().sorted().toList(), view.writable().stream().sorted().toList(),
                 view.customer() == null ? null : new NamedBody(view.customer().id(), view.customer().name()),
                 view.contact() == null ? null : ContactBody.of(view.contact()),
-                mails ? view.mails().stream().map(MailBody::of).toList() : null,
+                mails ? view.mails().stream().map(m -> MailBody.of(m, view.newAnswers())).toList() : null,
                 mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed());
         }
     }

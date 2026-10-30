@@ -293,6 +293,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/helpdesk/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Neue Kundenantworten an bestehenden Tickets in den Projekten mit helpdesk.reply, neueste zuerst
+         * @description Mails, die einem schon bestehenden Ticket zugeordnet wurden (selbst als Antwort auf eine Antwort oder über
+         *     `…/inbox/{id}/attach`) und die noch niemand als gesehen markiert hat, höchstens 100. Nur Projekte, in denen die Person
+         *     Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067).
+         */
+        get: operations["listNewAnswers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/helpdesk/answers/{id}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Neue Kundenantwort für alle als gesehen markieren (Rechte wie eine Antwort, If-Match)
+         * @description Ohne `ticket.read` 404 `helpdesk.message_not_found`, ohne die Rechte einer Antwort 403, eine Mail, die keine neue
+         *     Kundenantwort ist, 409 `helpdesk.answer_not_new`. Steht mit Person und Zeitpunkt im Audit (`answer.seen`).
+         */
+        post: operations["markAnswerSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/helpdesk/replies": {
         parameters: {
             query?: never;
@@ -726,6 +769,10 @@ export interface components {
             subject: string | null;
             body: string | null;
             attachments: components["schemas"]["AttachmentNote"][];
+            /** @description Die Mail kam zu einem bestehenden Ticket und niemand hat sie als gesehen markiert (TASK-067). */
+            newAnswer: boolean;
+            /** Format: int64 */
+            version: number;
         };
         TicketHelpdesk: {
             readable: ("contact" | "customer" | "mail")[];
@@ -784,6 +831,27 @@ export interface components {
             subject: string | null;
             /** Format: uuid */
             suggestedMailbox: string | null;
+        };
+        NewAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            /** Format: int64 */
+            number: number;
+            fromAddress: string | null;
+            fromName: string | null;
+            subject: string | null;
+            /** Format: date-time */
+            receivedAt: string;
+            /** Format: int64 */
+            version: number;
+        };
+        SeenAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            version: number;
         };
         OpenReply: {
             /** Format: uuid */
@@ -1360,6 +1428,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreatedTicket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+        };
+    };
+    listNewAnswers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Neue Kundenantworten */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewAnswer"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    markAnswerSeen: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Version aus dem ETag; fehlt sie, 428 `helpdesk.precondition_required`, ist sie veraltet, 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Als gesehen markiert */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeenAnswer"];
                 };
             };
             401: components["responses"]["Problem"];

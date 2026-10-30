@@ -75,7 +75,8 @@ class TicketOpener {
     /**
      * Adds the mail to an existing ticket (TASK-058): an answer of the customer to a reply of the ticket. The files become
      * attachments of the ticket, the mail an entry of the field {@code mail} in its history; customer and contact of the ticket
-     * stay as they are. The mail leaves the review queue with the ticket, its contact and customer.
+     * stay as they are. The mail leaves the review queue with the ticket, its contact and customer, and is a new answer until a
+     * person who may reply in the project marks it as seen (TASK-067).
      *
      * @param parsed the mail as read, or {@code null} for a mail without content (too large or unreadable)
      */
@@ -96,6 +97,7 @@ class TicketOpener {
             JSON.writeValueAsString(new MailReference(message.id().toString(), message.fromAddress(), message.subject())));
         repository.processed(message.id(), "ticket", ticket, contact == null ? null : contact.id(), customer == null ? null : customer.id(),
             notes, null, now, actor, message.version() + 1);
+        repository.joined(message.id(), now);
         long number = tickets.locate(ticket).map(TicketAccess.Location::number).orElse(0L);
         return new Opened(ticket, number, notes);
     }

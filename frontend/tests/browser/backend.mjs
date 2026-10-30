@@ -299,6 +299,24 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         .map((reply) => ({ id: reply.id, projectId: reply.projectId, number: state.tickets.find((entry) => entry.id === reply.ticketId).number, toAddress: reply.toAddress,
           subject: reply.subject, state: reply.state, errorCode: reply.errorCode, createdAt: reply.createdAt, attemptedAt: reply.attemptedAt })));
     }
+    if (p === '/helpdesk/answers' && method === 'GET') {
+      // As the backend (TASK-067): mails that joined an existing ticket and nobody marked as seen, newest first.
+      return ok(hd.messages.filter((message) => message.joinedAt && !message.seenAt && message.ticketId && mayReply(account, message.projectId))
+        .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt))
+        .map((message) => ({ id: message.id, projectId: message.projectId, number: state.tickets.find((entry) => entry.id === message.ticketId).number,
+          fromAddress: message.fromAddress, fromName: message.fromName, subject: message.subject, receivedAt: message.receivedAt, version: message.version })));
+    }
+    const seen = p.match(/^\/helpdesk\/answers\/([^/]+)\/seen$/);
+    if (seen && method === 'POST') {
+      const message = hd.messages.find((entry) => entry.id === seen[1]);
+      if (!message || !may(account, 'ticket.read', message.projectId)) return problem(404, 'helpdesk.message_not_found');
+      if (!mayReply(account, message.projectId)) return problem(403, 'auth.forbidden');
+      if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
+      if (headers['if-match'] !== `"${message.version}"`) return problem(412, 'helpdesk.version_conflict');
+      if (!message.joinedAt || message.seenAt) return problem(409, 'helpdesk.answer_not_new');
+      Object.assign(message, { seenAt: now(), seenBy: account.id, version: message.version + 1 });
+      return ok({ id: message.id, version: message.version }, `"${message.version}"`);
+    }
     if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
@@ -756,7 +774,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!ticket || message.state !== 'review') return problem(409, 'helpdesk.no_related_ticket');
       state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
         changes: [{ field: 'mail', from: null, to: JSON.stringify({ id: message.id, from: message.fromAddress, subject: message.subject }) }] });
-      Object.assign(message, { state: 'ticket', ticketId: ticket.id, processedAt: now(), processedBy: account.id, version: message.version + 1 });
+      Object.assign(message, { state: 'ticket', ticketId: ticket.id, processedAt: now(), processedBy: account.id, joinedAt: now(), version: message.version + 1 });
       return ok({ ticketId: ticket.id, projectId: ticket.projectId, number: ticket.number, attachments: message.attachments });
     }
     if (tail === '/ticket') {
@@ -787,7 +805,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         customer: readableHere.includes('customer') && customer ? { id: customer.id, name: customer.name } : null,
         contact: readableHere.includes('contact') && contact ? { id: contact.id, name: contact.name, addresses: contact.addresses } : null,
         mails: readableHere.includes('mail') ? hd.messages.filter((message) => message.ticketId === ticket.id).map((message) => ({ id: message.id, receivedAt: message.receivedAt,
-          sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments })) : null,
+          sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments,
+          newAnswer: Boolean(message.joinedAt && !message.seenAt), version: message.version })) : null,
         replies: readableHere.includes('mail') ? hd.replies.filter((reply) => reply.ticketId === ticket.id).map(replyView) : null,
         replyAllowed: Boolean(contact) && mayReply(account, item.id) };
     };
@@ -866,7 +885,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     const message = { id: uuid(), mailboxId: hd.mailboxes[0]?.id ?? uuid(), projectId: project.id, receivedAt: now(), sentAt: null, fromAddress: 'max@unbekannt.example',
       fromName: 'Max Muster', to: 'support@firma.example', cc: null, subject: 'Drucker defekt', body: 'Hallo,\nder Drucker im zweiten Stock druckt nicht.', sizeBytes: 2048,
       attachments: [], state: 'review', reason: 'sender_unknown', ticketId: null, contactId: null, customerId: null, processedAt: null, processedBy: null, discardReason: null,
-      version: 1, ...extra };
+      joinedAt: null, seenAt: null, seenBy: null, version: 1, ...extra };
     hd.messages.push(message);
     return message;
   };

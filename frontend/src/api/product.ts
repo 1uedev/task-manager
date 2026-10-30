@@ -57,6 +57,8 @@ export type CustomerOption = HelpdeskTypes['schemas']['CustomerOption'];
 export type Reply = HelpdeskTypes['schemas']['Reply'];
 export type ReplyForm = HelpdeskTypes['schemas']['ReplyForm'];
 export type OpenReply = HelpdeskTypes['schemas']['OpenReply'];
+export type NewAnswer = HelpdeskTypes['schemas']['NewAnswer'];
+export type SeenAnswer = HelpdeskTypes['schemas']['SeenAnswer'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -457,3 +459,12 @@ export const listOpenReplies = (api: ServerApi) =>
 export const attachMessage = (api: ServerApi, id: string, etag: string) =>
   run(() => api.helpdesk.POST('/helpdesk/inbox/{id}/attach', { params: { path: { id }, ...ifMatch(etag) } }),
     one<CreatedFromMail>((v) => hasStrings(v, 'ticketId', 'projectId') && typeof (v as CreatedFromMail).number === 'number'));
+
+// ---------------------------------------------------------------- new answers (TASK-067)
+
+export const readNewAnswers = (api: ServerApi) =>
+  run(() => api.helpdesk.GET('/helpdesk/answers'), listOf<NewAnswer>((v) => hasStrings(v, 'id', 'projectId', 'receivedAt')
+    && typeof (v as NewAnswer).number === 'number' && typeof (v as NewAnswer).version === 'number'));
+export const markAnswerSeen = (api: ServerApi, id: string, version: number) =>
+  run(() => api.helpdesk.POST('/helpdesk/answers/{id}/seen', { params: { path: { id }, ...ifMatch(`"${version}"`) } }),
+    one<SeenAnswer>((v) => hasStrings(v, 'id') && typeof (v as SeenAnswer).version === 'number'));

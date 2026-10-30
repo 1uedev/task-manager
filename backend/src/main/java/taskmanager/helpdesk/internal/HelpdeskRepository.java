@@ -379,6 +379,41 @@ class HelpdeskRepository {
             .param(ticketId).query(HelpdeskRepository::message).list();
     }
 
+    // ------------------------------------------------------------------------------------------------ new answers (TASK-067)
+
+    /** Marks a mail that joined a ticket that already existed: it is a new answer until a person has seen it. */
+    void joined(UUID id, Instant now) {
+        jdbc.sql("update helpdesk_message set joined_at = ? where id = ?").params(ts(now), id).update();
+    }
+
+    /** Whether the mail is a new answer: it joined an existing ticket and nobody marked it as seen yet. */
+    boolean newAnswer(UUID id) {
+        return jdbc.sql("select count(*) from helpdesk_message where id = ? and joined_at is not null and seen_at is null").param(id)
+            .query(Long.class).single() > 0;
+    }
+
+    /** The new answers of the ticket. */
+    List<UUID> newAnswersOfTicket(UUID ticketId) {
+        return jdbc.sql("select id from helpdesk_message where ticket_id = ? and joined_at is not null and seen_at is null")
+            .param(ticketId).query(UUID.class).list();
+    }
+
+    /** The new answers of the projects, the latest first. */
+    List<Message> newAnswers(UUID companyId, Collection<UUID> projects, int limit) {
+        if (projects.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("select " + MESSAGE_COLUMNS + " from helpdesk_message where company_id = ? and project_id = any(?) "
+                + "and joined_at is not null and seen_at is null and ticket_id is not null order by joined_at desc, id desc limit ?")
+            .params(companyId, projects.toArray(UUID[]::new), limit).query(HelpdeskRepository::message).list();
+    }
+
+    /** A person has seen the new answer; the version moves on. */
+    void answerSeen(UUID id, Instant now, UUID actor) {
+        jdbc.sql("update helpdesk_message set seen_at = ?, seen_by = ?, version = version + 1 where id = ?")
+            .params(ts(now), actor, id).update();
+    }
+
     /** Records the outcome of the review queue; the raw mail is dropped. */
     void processed(UUID id, String state, UUID ticketId, UUID contactId, UUID customerId, List<Message.AttachmentNote> attachments,
             String discardReason, Instant now, UUID actor, long version) {

@@ -53,9 +53,10 @@ public class TicketCustomerService {
     /**
      * What the caller sees: each part only with its read rule; {@code writable} names the fields the caller may change. The
      * replies of the ticket come with the mails (TASK-058); {@code replyAllowed} says whether the caller may send one.
+     * {@code newAnswers} names the mails that joined the ticket and nobody marked as seen yet (TASK-067).
      */
     public record View(Set<String> readable, Set<String> writable, Customer customer, Contact contact, List<Message> mails,
-            List<Reply> replies, boolean replyAllowed) {
+            List<Reply> replies, boolean replyAllowed, Set<UUID> newAnswers) {
     }
 
     /** A customer released for the project with its contacts, for the choice in the ticket. */
@@ -81,8 +82,9 @@ public class TicketCustomerService {
             ? link.map(HelpdeskRepository.TicketCustomer::contactId).flatMap(id -> repository.contact(actor.companyId(), id)).orElse(null) : null;
         List<Message> mails = readable.contains(TicketAccess.MAIL_FIELD) ? repository.messagesOfTicket(ticket) : List.of();
         List<Reply> replies = readable.contains(TicketAccess.MAIL_FIELD) ? repository.repliesOfTicket(ticket) : List.of();
+        Set<UUID> newAnswers = readable.contains(TicketAccess.MAIL_FIELD) ? Set.copyOf(repository.newAnswersOfTicket(ticket)) : Set.of();
         return new View(Set.copyOf(readable), Set.copyOf(writable), customer, contact, mails, replies,
-            contact != null && this.replies.mayReply(actor, projectId));
+            contact != null && this.replies.mayReply(actor, projectId), newAnswers);
     }
 
     /**

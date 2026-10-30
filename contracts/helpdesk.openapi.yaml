@@ -429,6 +429,48 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+  /helpdesk/answers:
+    get:
+      operationId: listNewAnswers
+      summary: Neue Kundenantworten an bestehenden Tickets in den Projekten mit helpdesk.reply, neueste zuerst
+      description: |
+        Mails, die einem schon bestehenden Ticket zugeordnet wurden (selbst als Antwort auf eine Antwort oder über
+        `…/inbox/{id}/attach`) und die noch niemand als gesehen markiert hat, höchstens 100. Nur Projekte, in denen die Person
+        Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067).
+      responses:
+        '200':
+          description: Neue Kundenantworten
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/NewAnswer'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /helpdesk/answers/{id}/seen:
+    post:
+      operationId: markAnswerSeen
+      summary: Neue Kundenantwort für alle als gesehen markieren (Rechte wie eine Antwort, If-Match)
+      description: |
+        Ohne `ticket.read` 404 `helpdesk.message_not_found`, ohne die Rechte einer Antwort 403, eine Mail, die keine neue
+        Kundenantwort ist, 409 `helpdesk.answer_not_new`. Steht mit Person und Zeitpunkt im Audit (`answer.seen`).
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Als gesehen markiert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SeenAnswer'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
   /helpdesk/replies:
     get:
       operationId: listOpenReplies
@@ -926,7 +968,7 @@ components:
           items: {type: string}
     TicketMail:
       type: object
-      required: [id, receivedAt, sentAt, fromAddress, fromName, to, cc, subject, body, attachments]
+      required: [id, receivedAt, sentAt, fromAddress, fromName, to, cc, subject, body, attachments, newAnswer, version]
       properties:
         id: {type: string, format: uuid}
         receivedAt: {type: string, format: date-time}
@@ -940,6 +982,10 @@ components:
         attachments:
           type: array
           items: {$ref: '#/components/schemas/AttachmentNote'}
+        newAnswer:
+          type: boolean
+          description: Die Mail kam zu einem bestehenden Ticket und niemand hat sie als gesehen markiert (TASK-067).
+        version: {type: integer, format: int64}
     TicketHelpdesk:
       type: object
       required: [readable, writable, customer, contact, mails, replies, replyAllowed]
@@ -1016,6 +1062,24 @@ components:
           items: {type: string}
         subject: {type: [string, 'null']}
         suggestedMailbox: {type: [string, 'null'], format: uuid}
+    NewAnswer:
+      type: object
+      required: [id, projectId, number, fromAddress, fromName, subject, receivedAt, version]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        fromAddress: {type: [string, 'null']}
+        fromName: {type: [string, 'null']}
+        subject: {type: [string, 'null']}
+        receivedAt: {type: string, format: date-time}
+        version: {type: integer, format: int64}
+    SeenAnswer:
+      type: object
+      required: [id, version]
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, format: int64}
     OpenReply:
       type: object
       required: [id, projectId, number, toAddress, subject, state, errorCode, createdAt, attemptedAt]
