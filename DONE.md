@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,92 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-064 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben
+
+**Bezug:** REQ-HD-001 (Antworten an Kunden), REQ-TKT-005 (unklare Zustellung). **Verantwortlich:** claude-20261030-replyfix-03. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Ein Dekodierungs Roundtrip Test für normale, lange, internationale und wie kodierte Wörter aussehende Betreffe; der Abbruchtest erzwingt seine Reihenfolge selbst; alle Backend, Frontend und Browsertests grün. Holger nimmt TASK-058, TASK-062, TASK-063 und TASK-064 zusammen ab.
+
+**Ergebnis:** DEC-094, keine Migration. `SmtpMailSender.subject` sendet einen Betreff mit `=?` immer als kodierte Wörter, sodass er beim Empfänger unverändert ankommt. `ScriptedSmtp` liest im Modus `DROP_IN_DATA` die Mail bis zur Abschlusszeile, verwirft sie und beendet die Verbindung ohne Antwort; der Absender hat damit immer die ganze Mail geschrieben, unabhängig von seinen Puffern. Neue Tests `ScriptedSmtpTest` treiben den Testserver zeilenweise. Die Zeitreserve einer SMTP Antwort in `HelpdeskApiTest` steigt von 20 auf 60 Sekunden; die übrigen Reserven (Verbindungsaufbau 5 Sekunden gegen die 6 Sekunden von `SLOW_ACCEPT`, 30 Sekunden für das Ende eines freigegebenen Auftrags) bleiben, weil sie dort Absicht oder unkritisch sind. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 404 Tests ohne Fehler, darunter der neue Einheitentest `everySubjectArrivesAsItWasTyped` (acht Betreffe, Rückdekodierung über die Bibliothek und über die gesendete Kopfzeile) und drei neue Tests in `ScriptedSmtpTest` (Verbindungsende vor der Abschlusszeile, verworfene Mail ohne Antwort, vollständige Mail). Gegen den Stand vor der Korrektur ist der Betrefftest rot (`=?UTF-8?B?SGFsbG8=?=` kam als `Hallo` an). Frontend und Browsertests nicht ausgeführt, weil sich dort nichts ändert; sie laufen in CI. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker (keine neue Migration), läuft in CI.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-064_PR-210.md), abgelegt mit diesem Abschluss PR): F1 und H2 behoben, kein neuer P1 oder P2 Befund, F1 P3 und H1 zur Testhärtung; Empfehlung gemeinsame Abnahme. Codex hat keine Tests ausgeführt.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit der Wahl „Ja, jetzt abnehmen“ auf die Frage „Nimmst du TASK-058, 062, 063 und 064 jetzt zusammen ab?“ nach der Codex Prüfung von TASK-064; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (gemeinsam für TASK-058 und TASK-062 bis TASK-064, nicht beauftragt):
+1. Aus der Claude Prüfung von TASK-058: H1 (eigene Antwort nur an der Message-ID erkannt), H2 (keine Wiederholungssicherheit der Bestätigung), H3 (Reihenfolge des Verlaufs nach Kopfdatum), H4 (kurzes Fenster für vorübergehende Fehler), H5 (Systemübergänge auf Personen gebucht), H6 (Testlücken), H7 (angehängte Kundenantworten fallen ohne Benachrichtigung nicht auf; braucht eine fachliche Entscheidung), H8 (Beschreibung der Sperrreihenfolge).
+2. Aus der Codex Prüfung von TASK-058: H1 (Gruppenrechte bei der Bestätigung), H2 (Auftragsschlüssel sichert keine wiederholte HTTP Bestätigung), H3 (Übersicht kann offene Antworten ausblenden), H4 (Konfliktregel mehrerer Referenzen, Vertragsgrenzen), H5 (weitere Regressionen).
+3. Aus der Codex Prüfung von TASK-062: H2 (bewusst enge Adressregel, auch Kleinschreibung des lokalen Teils), H3, H5 und die nicht garantierte Gesamtlaufzeit eines Auftrags aus C-F4.
+4. Aus der Codex Prüfung von TASK-063: H1 (keine allgemeine Freigabe aller Sperrreihenfolgen) und H3 (Klärung über mehrere Transaktionen, neue Einträge hinter einer passierten Kennung erst im nächsten Lauf; `ScriptedSmtp.close` prüft das Threadende nicht).
+5. Aus der Codex Prüfung von TASK-064: F1 P3 (Socket Selbsttests in `ScriptedSmtpTest` ohne Lesezeitlimit) und H1 (Offenprüfung vor der Abschlusszeile zu schwach); reine Testhärtung.
+6. Ein Abbruch innerhalb der Maildaten bleibt für den Absender unklar (DEC-093).
+
+**Referenz:** Reservierung #209 (a628d4f), Ergebnis #210 (a5e60ed); verknüpft mit TASK-063 und DEC-094.
+
+## TASK-063 Befunde der Codex Prüfung von TASK-062 beheben
+
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Verantwortlich:** claude-20261030-replyfix-02. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Regressionstests für eine Wiederholung in der Jobverwaltung gleichzeitig mit der Klärung, lange Betreffe und Namen, beide Reihenfolgen der Kundengrenze, einen Abbruch im Inhalt der Mail, ein ungültiges `by` und mehr als 200 aktive Antworten vor einer verwaisten; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058, TASK-062 und TASK-063 zusammen ab.
+
+**Ergebnis:** DEC-093, keine Migration. `Jobs.active` liest den Auftrag mit geteilter Zeilensperre (`JobRepository.shareState`), Wiederholung und Abbruch der Jobverwaltung warten darauf; `SmtpMailSender` faltet den Betreff, zerlegt lange Folgen in kodierte Wörter, kürzt Namen auf 200 Zeichen, lehnt Steuerzeichen im Betreff ab und prüft jede Kopfzeile auf 998 Zeichen; ein ungültiges `by` endet als `helpdesk.job_invalid`; `ReplyWatch` geht seitenweise durch alle wartenden Antworten; `ScriptedSmtp` zählt nur vollständige Mails als übergeben (neuer Modus `DROP_IN_DATA`, Liste `broken`), schließt offene Verbindungen und wartet auf seinen Thread. Neuer Fehlercode `helpdesk.job_invalid` in Vertrag und Oberfläche. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 400 Tests, darunter vier neue API Tests (Wiederholung der Jobverwaltung gleichzeitig mit der Klärung in beiden Reihenfolgen, ungültiges `by`, 250 Antworten mit wartendem Auftrag vor einer verwaisten, Abbruch innerhalb der Maildaten), der neu geschriebene Test der Kundengrenze mit echtem Anhängen vor dem Kundenwechsel und zwei neue Einheitentests (lange Betreffe und Namen, Betreff mit Zeilenumbruch). Gegen den Stand vor der Korrektur (main ae1bd96) sind fünf der neuen Tests rot (Wiederholung, ungültiges `by`, viele Antworten, lange Kopfzeilen, Zeilenumbruch im Betreff); der Test der Kundengrenze und der Abbruch in den Daten sind dort grün, weil sie Testlücken schließen, keinen Fehler des Produkts. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker (keine neue Migration), läuft in CI.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-063_PR-208.md), PR #209): F1 bis F4, H1 und H6 behoben, H4 verbessert, neuer F1 P3 (Betreff wie kodiertes Wort) durch TASK-064 behoben, Hinweise H1 bis H3.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit der Wahl „Ja, jetzt abnehmen“ auf die Frage „Nimmst du TASK-058, 062, 063 und 064 jetzt zusammen ab?“ nach der Codex Prüfung von TASK-064; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** siehe TASK-064.
+
+**Referenz:** Reservierung #207 (ae1bd96), Ergebnis #208 (86c0faa), Prüfbericht #209 (a628d4f); verknüpft mit TASK-062, TASK-064 und DEC-093.
+
+## TASK-062 Befunde der Prüfungen von TASK-058 beheben
+
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Verantwortlich:** claude-20261030-replyfix-01. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Regressionstests für die drei Fälle verwaister Antworten mit echter Lease Freigabe, für beide Ergebnisreihenfolgen eines alten Versuchs nach einer neuen Runde, für das erneute Senden nach Austritt des Urhebers, für Adressen mit Kommentar und Zeilenumbruch, Gruppen und Steuerzeichen bei Postfach und Kontakt, für die Zeilenlänge mit 20 langen Message-IDs, für die Einordnung vor und nach dem Datenende sowie eine späte Annahme innerhalb des neuen Zeitlimits und für einen Kundenwechsel zwischen Vergleich und Anhängen in beiden Commit Reihenfolgen; die neuen Tests sind vor der Korrektur rot und danach grün; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058 und TASK-062 zusammen ab.
+
+**Ergebnis:** DEC-092, keine Migration. Neue wiederkehrende Aufgabe `helpdesk.replies` (`ReplyWatch`) und Klärung bei jeder Aktion einer Person mit dem Port `Jobs.active`; Ausgang eines Versuchs nur für den eigenen Auftrag unter der Sperre der Antwort; Auftrag mit Nutzlast `by` der bestätigenden Person; strenge einfache Adressen in `DirectoryService.normalizedAddress`, Namen ohne Steuerzeichen, geprüfte und gefaltete Message-IDs; `SmtpMailSender` unterscheidet die Phasen über das Datenende und nutzt `taskmanager.helpdesk.smtp-timeout` (Standard zehn Minuten), Zeitlimit des Auftrags fünf Minuten darüber; Sperre je Ticket für Kundenvergleich, Kundenwechsel und Nehmen aus der Prüfwarteschlange. Neue Fehlercodes `helpdesk.job_ended` und `helpdesk.send_broken` in Vertrag und Oberfläche. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 394 Tests, darunter neun neue API Tests in `HelpdeskApiTest` (verwaiste Antworten mit echter Lease Freigabe und Abbruch in der Jobverwaltung, Klärung bei Aktion vor der Aufgabe, beide Reihenfolgen alter Versuche, Austritt der verfassenden und der bestätigenden Person, Adressen bei Kontakt und Postfach, früher gespeicherte Adresse, Abbruch vor dem Datenende, späte Annahme nach sechs Sekunden bei fünf Sekunden Verbindungszeitlimit, Kundenwechsel in beiden Sperrreihenfolgen) und fünf Einheitentests in `SmtpMailSenderTest` (Adressen, Gruppen, Namen mit Zeilenumbruch, ungültige Message-IDs, 20 Referenzen mit je etwa 250 Zeichen). Gegen den Stand vor der Korrektur (main 42f2183) sind 13 der 14 neuen Tests rot; grün blieb dort nur die Ablehnung zusammengesetzter Adressen über die API, die schon der alte Parser abwies. Zusätzlich gezielt geprüft: ohne die Auftragsprüfung beim Ausgang wird der Reihenfolgetest rot. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün (ein erster paralleler Lauf hatte einen Ausreißer im Designtest „a typed color is checked before it is shown“ unter Last, der Wiederholungslauf war vollständig grün). Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker, ohne neue Migration unverändert, läuft in CI.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-062_PR-206.md), PR #207): Korrekturen nachvollziehbar, F1 P2 (Klärung gegen Wiederholung der Jobverwaltung) und F2 bis F4 P3, durch TASK-063 behoben.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit der Wahl „Ja, jetzt abnehmen“ auf die Frage „Nimmst du TASK-058, 062, 063 und 064 jetzt zusammen ab?“ nach der Codex Prüfung von TASK-064; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** siehe TASK-064.
+
+**Referenz:** Reservierung #204 (42f2183) mit Nachtrag #205 (2751a28), Ergebnis #206 (e975fcb), Prüfbericht #207 (ae1bd96); verknüpft mit TASK-058, TASK-063 und DEC-092.
+
+## TASK-058 Helpdesk Antworten über SMTP (Paket A9, Teil 2)
+
+**Bezug:** REQ-HD-001 (Versand, erkennbare ausstehende Sendungen), REQ-HD-002 (Antworten zuordnen, Wiederholungen, Schleifen), REQ-HD-005, REQ-TKT-005 (interne Versandaufträge, unklare Zustellung). **Verantwortlich:** claude-20261028-helpdesk-01. **Abgeschlossen:** 2026-10-30.
+
+**Abnahmekriterien:** Vorschlag der Sitzung, zur Prüfung:
+1. Nur mit `helpdesk.reply`, `ticket.read` und den Leseregeln für `mail` und `contact`; Empfänger nur Adressen des Kontakts des Tickets, Absender nur sendende Postfächer des Projekts; ohne Kontakt 409. Die Oberfläche zeigt Empfänger und Absender vor der Bestätigung.
+2. Je bestätigter Antwort genau ein Versandauftrag in derselben Transaktion wie Antwort, Historie und Audit, auch nach Neustart oder mit zwei Ausführern.
+3. Vor dem Versand prüft der Auftrag Projekt, aktiven Urheber mit Mitgliedschaft, Postfach und Empfänger; eine geänderte Lage endet als nicht gesendet ohne Versand.
+4. Vorübergehende Fehler vor der Übergabe werden wiederholt, endgültige Ablehnungen enden als nicht gesendet; eine fehlende Antwort des Servers nach der Übergabe und ein Versuch, der die Antwort noch im Versand findet, ergeben Versand unklar ohne automatische Wiederholung.
+5. Erneut senden nur für nicht gesendete Antworten oder für unklare mit bestätigtem Duplikatrisiko; eine unklare lässt sich als angekommen festhalten.
+6. Die Antwort des Kunden mit `In-Reply-To` oder `References` auf eine Antwort landet ohne neues Ticket im Ticket der Antwort nur bei bestätigtem Absender des Kunden des Tickets, sonst in der Prüfwarteschlange mit Verweis und Übernahme dorthin.
+7. Keine Antwort auf automatische Mails; eine zurückkommende eigene Antwort wird als automatisch vermerkt. Keine Mailschleife mit einem Autoresponder.
+8. Nicht angenommene Antworten sind für Personen mit `helpdesk.reply` im Projekt sichtbar; Protokolle enthalten keinen Text des Mailservers.
+
+**Ergebnis:** Modul `helpdesk` mit `ReplyService`, `ReplySender`, `SmtpMailSender`, Migration V0028, Vertrag `contracts/helpdesk.openapi.yaml` (sechs neue Routen), Oberfläche am Ticket und in der Prüfwarteschlange, Beschreibung in backend/README.md und docs/HELPDESK_SLA.md, Entscheidung DEC-091.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 380 Tests, darunter sechs neue Tests der Antworten gegen GreenMail und `ScriptedSmtp` (Abbruch nach DATA, Ablehnung 550 und 451); Frontend `npm run verify` und 128 Browser Tests, davon vier neue. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker; die Migrationsliste ist angepasst, der Lauf erfolgt in CI.
+
+**Review:** Zwei getrennte Prüfungen: Claude ([Bericht](docs/REVIEW_TASK-058_PR-202.md), PR #203, F1 P2, F2 bis F4 P3, Hinweise H1 bis H8) und Codex ([Bericht](docs/REVIEW_TASK-058_PR-202_CODEX.md), PR #205, F1 bis F4 P2, Hinweise H1 bis H5); alle Befunde durch TASK-062 bis TASK-064 behoben. Die geschärften Abnahmekriterien oben hat die Sitzung vorgeschlagen; Holger hat sie mit der Abnahme angenommen.
+
+**Abnahme:** Holger, 2026-10-30, im Projektgespräch mit der Wahl „Ja, jetzt abnehmen“ auf die Frage „Nimmst du TASK-058, 062, 063 und 064 jetzt zusammen ab?“ nach der Codex Prüfung von TASK-064; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben:** siehe TASK-064.
+
+**Referenz:** Freigabe mit DEC-090 (#201, abbac70), Ergebnis #202 (ab9a6ee), Prüfberichte #203 (5ace9ab) und #205 (2751a28); verknüpft mit TASK-057, TASK-062 und DEC-091.
 
 ## TASK-061 Befunde S1 und S2 der Nachprüfung von TASK-060 beheben
 
