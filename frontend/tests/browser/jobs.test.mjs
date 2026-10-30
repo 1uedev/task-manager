@@ -37,6 +37,40 @@ async function withApp({ prepare = withJobsRight, as = ANNA, locale = 'de-DE', h
   }
 }
 
+// Waits until the job table shows exactly the given number of rows.
+async function rows(page, count) {
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid="job-table"] tbody tr').length === n, count);
+}
+
+// Holds the answers of the job list requests that match, at most `times` of them, until `release` lets them through.
+// `release` waits until the held answers reached the page and then gives the page a moment to apply them, as it did before
+// the corrections: the assertions after it check that nothing changed, so a page that is too slow lets a test pass, never fail.
+async function hold(page, matches, { times = Infinity } = {}) {
+  let open;
+  const gate = new Promise((resolve) => { open = resolve; });
+  let asked;
+  const first = new Promise((resolve) => { asked = resolve; });
+  const pending = [];
+  let count = 0;
+  await page.route((url) => url.pathname === '/api/v1/jobs' && matches(url), async (route) => {
+    if (count >= times) return route.fallback();
+    count++;
+    const finished = page.waitForEvent('requestfinished', (request) => request === route.request());
+    pending.push(finished);
+    asked();
+    await gate;
+    await route.fallback();
+  });
+  return {
+    asked: first,
+    async release() {
+      open();
+      await Promise.all(pending);
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    },
+  };
+}
+
 describe('background jobs', () => {
   test('without jobs.manage there is no entry and the page refuses', async () => {
     await withApp({ prepare: null }, async (page, backend) => {
@@ -152,31 +186,67 @@ describe('background jobs', () => {
     } }, async (page) => {
       const table = page.getByTestId('job-table');
       await table.waitFor();
-      let releaseFailed;
-      const failedHeld = new Promise((resolve) => { releaseFailed = resolve; });
-      let failedAsked;
-      const failedArrived = new Promise((resolve) => { failedAsked = resolve; });
-      await page.route((url) => url.pathname === '/api/v1/jobs' && url.searchParams.get('state') === 'failed', async (route) => {
-        failedAsked();
-        await failedHeld;
-        await route.fallback();
-      });
+      const held = await hold(page, (url) => url.searchParams.get('state') === 'failed');
 
       await page.getByLabel('Zustand', { exact: true }).selectOption('failed');
-      await failedArrived;
+      await held.asked;
       await page.getByLabel('Zustand', { exact: true }).selectOption('cancelled');
-      await page.waitForFunction(() => document.querySelectorAll('[data-testid="job-table"] tbody tr').length === 1);
+      await rows(page, 1);
       await table.locator('tbody tr', { hasText: 'Abgebrochen' }).waitFor();
-      const failedFinished = page.waitForEvent('requestfinished', (request) => new URL(request.url()).searchParams.get('state') === 'failed');
-      releaseFailed();
-      await failedFinished;
-      // Gives the page the time to apply the late answer, as it did before the correction.
-      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      await held.release();
 
       assert.equal(await page.getByLabel('Zustand', { exact: true }).inputValue(), 'cancelled');
       assert.equal(await table.locator('tbody tr', { hasText: 'mail.rejected' }).count(), 0, 'the late list of failed jobs is dropped');
       assert.equal(await table.locator('tbody tr').count(), 1);
       assert.equal(await table.locator('tbody tr', { hasText: 'Abgebrochen' }).count(), 1);
+    });
+  });
+
+  test('a late older page of an earlier filter is not added to the list of the chosen one', async () => {
+    // TASK-066, H2: the next page of all jobs arrives only after the list of failed jobs is shown.
+    await withApp({ prepare: (backend) => {
+      withJobsRight(backend);
+      for (let i = 0; i < 55; i++) backend.addJob('recurring.files.cleanup', 'succeeded');
+      backend.addJob('mail.send', 'failed', { errorCode: 'mail.rejected' });
+    } }, async (page) => {
+      const table = page.getByTestId('job-table');
+      await rows(page, 50);
+      const held = await hold(page, (url) => url.searchParams.has('before'));
+
+      await page.getByRole('button', { name: 'Ältere Aufträge laden' }).click();
+      await held.asked;
+      await page.getByLabel('Zustand', { exact: true }).selectOption('failed');
+      await rows(page, 1);
+      await page.getByText('Keine älteren Aufträge.').waitFor();
+      await held.release();
+
+      assert.equal(await table.locator('tbody tr').count(), 1, 'the late older page is dropped');
+      assert.equal(await table.locator('tbody tr', { hasText: 'mail.rejected' }).count(), 1);
+      await page.getByText('Keine älteren Aufträge.').waitFor();
+    });
+  });
+
+  test('a late answer of an earlier refresh does not replace the newer list', async () => {
+    // TASK-066, H2: the first refresh answers only after a second refresh showed the newer state of the job.
+    await withApp({ prepare: (backend) => {
+      withJobsRight(backend);
+      backend.addJob('mail.send', 'failed', { errorCode: 'mail.rejected' });
+    } }, async (page, backend) => {
+      const table = page.getByTestId('job-table');
+      await table.locator('tbody tr', { hasText: 'Gescheitert' }).waitFor();
+      const held = await hold(page, (url) => !url.searchParams.has('before'), { times: 1 });
+
+      await page.getByRole('button', { name: 'Aktualisieren' }).click();
+      await held.asked;
+      backend.state.jobs[0].state = 'cancelled';
+      await page.getByRole('button', { name: 'Aktualisieren' }).click();
+      await table.locator('tbody tr', { hasText: 'Abgebrochen' }).waitFor();
+      // The in-memory backend answers a held request only when it is let through; the old state stands for its older answer.
+      backend.state.jobs[0].state = 'failed';
+      await held.release();
+
+      assert.equal(await table.locator('tbody tr', { hasText: 'Abgebrochen' }).count(), 1, 'the newer state stays');
+      assert.equal(await table.locator('tbody tr', { hasText: 'Gescheitert' }).count(), 0, 'the late answer of the first refresh is dropped');
     });
   });
 

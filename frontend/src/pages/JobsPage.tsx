@@ -28,21 +28,25 @@ export function JobsPage() {
   // The waiting job whose cancellation waits for the confirmation.
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [round, setRound] = useState(0);
-  // The current loading round: an answer of an earlier round, such as the list of a filter chosen before, is dropped (TASK-065).
-  const loading = useRef(0);
+  // Every request counts up its own number; only the answer of the request started last is shown, so a late answer of an
+  // earlier filter, an earlier refresh or an earlier page never replaces a newer one (TASK-065, TASK-066).
+  const summaryRequest = useRef(0);
+  const listRequest = useRef(0);
 
-  async function loadSummary(current: number) {
+  async function loadSummary() {
+    const request = ++summaryRequest.current;
     const result = await readJobSummary(api);
-    if (current !== loading.current) return;
+    if (request !== summaryRequest.current) return;
     if (result.kind !== 'ok') return setSummaryProblem(result.problem);
     setSummaryProblem(null);
     setSummary(result.data.value);
   }
 
-  async function load(before: number | null, current: number) {
+  async function load(before: number | null) {
+    const request = ++listRequest.current;
     setBusy(true);
     const result = await listJobs(api, filter === 'all' ? null : filter, before);
-    if (current !== loading.current) return;
+    if (request !== listRequest.current) return;
     setBusy(false);
     if (result.kind !== 'ok') return setProblem(result.problem);
     setProblem(null);
@@ -51,9 +55,8 @@ export function JobsPage() {
   }
 
   useEffect(() => {
-    const current = ++loading.current;
-    void loadSummary(current);
-    void load(null, current);
+    void loadSummary();
+    void load(null);
   }, [api, filter, round]);
 
   const refresh = () => {
@@ -158,7 +161,7 @@ export function JobsPage() {
           </div>
           {more
             ? <p className="actions"><button type="button" className="secondary" disabled={busy}
-                onClick={() => void load(jobs[jobs.length - 1]?.position ?? null, loading.current)}>{t('jobs.more')}</button></p>
+                onClick={() => void load(jobs[jobs.length - 1]?.position ?? null)}>{t('jobs.more')}</button></p>
             : <p className="hint">{t('jobs.end')}</p>}
         </>
       )}

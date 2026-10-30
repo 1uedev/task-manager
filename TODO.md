@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-066](#task-066-befund-f1-und-hinweis-h2-der-codex-prüfung-von-task-065-beheben) | Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben | claude-20261030-jobsfix-04 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -41,6 +39,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-065](#task-065-befunde-f1-und-f2-der-codex-nachprüfung-von-task-054-beheben) | Befunde F1 und F2 der Codex Nachprüfung von TASK-054 beheben | claude-20261030-jobsfix-03 | 2026-10-30 |
+| [TASK-066](#task-066-befund-f1-und-hinweis-h2-der-codex-prüfung-von-task-065-beheben) | Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben | claude-20261030-jobsfix-04 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -76,9 +75,9 @@ Nicht Teil: die Hinweise H1 bis H4 der Nachprüfung, außer einer knappen Korrek
 
 ## TASK-066 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-jobsfix-04 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-jobsfix-04 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-OPS-006 (Hintergrundaufträge). **Abhängigkeiten:** TASK-065 (Ergebnis PR #214), Prüfbericht [docs/REVIEW_TASK-065_PR-214.md](docs/REVIEW_TASK-065_PR-214.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „F1 und H2 noch kurz nachziehen“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-lxrdya; Ergebnis mit DEC-096, keine Migration.
+**Bezug:** REQ-OPS-006 (Hintergrundaufträge). **Abhängigkeiten:** TASK-065 (Ergebnis PR #214), Prüfbericht [docs/REVIEW_TASK-065_PR-214.md](docs/REVIEW_TASK-065_PR-214.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „F1 und H2 noch kurz nachziehen“ gewählt; Reservierung PR #215 gemergt, Ergebnis auf Branch claude/project-thread-lxrdya mit DEC-096, ohne Migration.
 
 **Umfang:**
 
@@ -89,4 +88,8 @@ Nicht Teil: H1 der Prüfung (kurzzeitige Anzeige vor dem neuen Abruf) bleibt Hin
 
 **Abnahmekriterien:** Die neuen Browsertests sind mit dem Stand nach TASK-065 rot, sofern sie eine Lücke des Produkts zeigen, und mit der Korrektur grün; alle Frontend und Browsertests grün. Holger nimmt TASK-065 und TASK-066 zusammen ab.
 
-**Nächster Schritt:** Merge dieser Reservierung, danach Umsetzung.
+**Ergebnis:** DEC-096. `JobsPage` zählt je Listenabruf und je Abruf der Übersicht eine eigene Nummer (`listRequest`, `summaryRequest`) und übernimmt nur die Antwort des zuletzt gestarteten Abrufs; das ersetzt die Laderunden aus TASK-065. `jobs.test.mjs` hat eine gemeinsame Hilfe `hold`, die passende Listenabrufe zurückhält und beim Freigeben bis zum Eintreffen der Antwort wartet, und zwei neue Tests (verspätete ältere Seite nach Filterwechsel, verspätetes erstes „Aktualisieren“).
+
+**Prüfungen:** Frontend `npm run verify` mit 77 Tests und `npm run test:browser` mit 131 Tests grün; `jobs.test.mjs` dreimal hintereinander grün. Mit der Seite vor TASK-065 (main 72920f1) sind alle drei Tests der verspäteten Antworten rot; mit der Seite nach TASK-065 sind sie grün, weil die Laderunden diese Fälle schon abdeckten. Die Absicherung überlappender Abrufe derselben Runde (F1) ist über die Oberfläche nicht erreichbar, weil „Ältere Aufträge laden“ während eines Abrufs gesperrt ist, und hat deshalb keinen eigenen roten Browsertest. Backend unverändert, nicht erneut ausgeführt.
+
+**Nächster Schritt:** Holger nimmt TASK-065 und TASK-066 zusammen ab; eine weitere Prüfung ist angeboten, aber nicht Voraussetzung.
