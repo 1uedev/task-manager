@@ -107,9 +107,9 @@ Nicht Teil: die übrigen Hinweise beider Berichte (C-H1 bis C-H8, X-H1 bis X-H5)
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-02 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-062 (Ergebnis PR #206), Prüfbericht [docs/REVIEW_TASK-062_PR-206.md](docs/REVIEW_TASK-062_PR-206.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Vorgeschlagen nach der Codex Prüfung vom 30. Oktober 2026; Arbeit beginnt erst nach Holgers Wahl und dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-093, keine Migration geplant.
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-062 (Ergebnis PR #206), Prüfbericht [docs/REVIEW_TASK-062_PR-206.md](docs/REVIEW_TASK-062_PR-206.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „F1 bis F4 plus H1, H4, H6“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-093, keine Migration geplant.
 
-**Umfang:** Vorschlag „F1 bis F4 plus H1, H4, H6“:
+**Umfang:** Holgers Wahl „F1 bis F4 plus H1, H4, H6“:
 
 1. F1: Die Klärung verwaister Antworten und eine Wiederholung in der Jobverwaltung schließen sich aus; `Jobs.active` liest den Auftrag unter einer Sperre, die auch die Wiederholung nimmt.
 2. F2: Betreff und Namen können keine Kopfzeile über 998 Zeichen erzeugen, auch nicht als lange Folge ohne Leerzeichen.
@@ -123,4 +123,4 @@ Nicht Teil: H2 (Adressregel als bewusste Grenze), H3, H5 und die Gesamtlaufzeit 
 
 **Abnahmekriterien:** Regressionstests für eine Wiederholung in der Jobverwaltung gleichzeitig mit der Klärung, lange Betreffe und Namen, beide Reihenfolgen der Kundengrenze, einen Abbruch im Inhalt der Mail, ein ungültiges `by` und mehr als 200 aktive Antworten vor einer verwaisten; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058, TASK-062 und TASK-063 zusammen ab.
 
-**Nächster Schritt:** Holgers Wahl abwarten, nach dem Merge dieser Reservierung umsetzen.
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
