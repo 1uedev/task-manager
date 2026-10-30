@@ -1,0 +1,45 @@
+package taskmanager.helpdesk.internal;
+import java.io.*; import java.net.*; import java.nio.charset.StandardCharsets; import java.time.*; import java.util.*;
+public class SmtpExperiment {
+  static volatile String mode; static volatile boolean gotDot;
+  public static void main(String[] a) throws Exception {
+    ServerSocket ss = new ServerSocket(0);
+    Thread t = new Thread(() -> { while (true) { try (Socket s = ss.accept()) { serve(s); } catch (Exception e) { } } });
+    t.setDaemon(true); t.start();
+    HelpdeskProperties props = new HelpdeskProperties("", Duration.ofSeconds(60), 1000, 50, Duration.ofSeconds(2));
+    SmtpMailSender sender = new SmtpMailSender(props);
+    Mailbox mb = new Mailbox(UUID.randomUUID(), UUID.randomUUID(), "Support", true, UUID.randomUUID(), "t", "h", 993, "tls", "u", null, "INBOX",
+      "127.0.0.1", ss.getLocalPort(), "none", "support@firma.example", null, 1000, null, 0, 1, null, null, null, null, null, null, null, 1, null, null, null, null);
+    for (String m : List.of("DROP_AT_RCPT", "TIMEOUT_AT_RCPT", "REJECT_554_AFTER_DOT", "REJECT_451_AFTER_DOT", "SLOW_250_AFTER_DOT")) {
+      mode = m; gotDot = false;
+      MailSender.Outgoing out = new MailSender.Outgoing("<" + UUID.randomUUID() + "@firma.example>", "support@firma.example", "Support",
+        "lea@nordwerk.example", "Lea", "Re: Test", "Text", null, null, Instant.now());
+      try { sender.send(mb, "", out); System.out.println(m + " -> accepted"); }
+      catch (MailSender.SendFailure f) { System.out.println(m + " -> code=" + f.code() + " certain=" + f.certain() + " permanent=" + f.permanent() + " serverReadWholeMail=" + gotDot); }
+      Thread.sleep(500);
+    }
+  }
+  static void serve(Socket s) throws Exception {
+    BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.ISO_8859_1));
+    OutputStream out = s.getOutputStream();
+    w(out, "220 test");
+    String line; boolean data = false;
+    while ((line = in.readLine()) != null) {
+      if (data) { if (line.equals(".")) { data = false; gotDot = true;
+          switch (mode) {
+            case "REJECT_554_AFTER_DOT" -> w(out, "554 5.7.1 rejected");
+            case "REJECT_451_AFTER_DOT" -> w(out, "451 4.3.0 try later");
+            case "SLOW_250_AFTER_DOT" -> { Thread.sleep(3000); w(out, "250 queued"); }
+            default -> w(out, "250 ok");
+          } } continue; }
+      String u = line.toUpperCase();
+      if (u.startsWith("EHLO") || u.startsWith("HELO")) w(out, "250 hi");
+      else if (u.startsWith("MAIL")) w(out, "250 ok");
+      else if (u.startsWith("RCPT")) { if (mode.equals("DROP_AT_RCPT")) { s.close(); return; } if (mode.equals("TIMEOUT_AT_RCPT")) { Thread.sleep(3000); return; } w(out, "250 ok"); }
+      else if (u.startsWith("DATA")) { w(out, "354 go"); data = true; }
+      else if (u.startsWith("QUIT")) { w(out, "221 bye"); return; }
+      else w(out, "250 ok");
+    }
+  }
+  static void w(OutputStream o, String l) throws IOException { o.write((l + "\r\n").getBytes(StandardCharsets.ISO_8859_1)); o.flush(); }
+}
