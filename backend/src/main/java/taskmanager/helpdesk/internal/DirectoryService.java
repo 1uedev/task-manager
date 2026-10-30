@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.platform.ApiProblemException;
@@ -25,6 +26,10 @@ public class DirectoryService {
     static final int NAME_MAX = 120;
     static final int ADDRESSES_MAX = 20;
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** A dot-atom, the {@code @} and host name labels, in lower case (TASK-062, X-F3). */
+    private static final Pattern PLAIN_ADDRESS = Pattern.compile(
+        "[a-z0-9!#$%&'*+/=?^_`{|}~-]{1,64}(\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]{1,64})*"
+            + "@[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*");
 
     private final HelpdeskRepository repository;
     private final HelpdeskAccess access;
@@ -186,23 +191,28 @@ public class DirectoryService {
         return List.copyOf(result);
     }
 
-    /** One plain address such as {@code lea@nordwerk.example} in lower case, or {@code null}. */
+    /**
+     * One plain address such as {@code lea@nordwerk.example} in lower case, or {@code null}. Only a dot-atom before and host
+     * names after the {@code @} are accepted: no comment, no quoted part, no group, no name and no control character, so the
+     * value can stand alone in a header and as a recipient of SMTP (TASK-062, X-F3).
+     */
     static String normalizedAddress(String value) {
         if (value == null) {
             return null;
         }
         String address = value.strip().toLowerCase(Locale.ROOT);
-        if (address.length() < 3 || address.length() > 254 || address.contains(" ") || address.contains("<")) {
+        if (address.length() < 3 || address.length() > 254 || !PLAIN_ADDRESS.matcher(address).matches()) {
             return null;
         }
         try {
             InternetAddress parsed = new InternetAddress(address, true);
             parsed.validate();
-            return parsed.getAddress().contains("@") ? address : null;
+            return address.equals(parsed.getAddress()) && !parsed.isGroup() ? address : null;
         } catch (AddressException invalid) {
             return null;
         }
     }
+
 
     private static String describe(Customer customer) {
         return JSON.writeValueAsString(new CustomerDescription(customer.name(), customer.projects()));

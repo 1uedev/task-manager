@@ -15,4 +15,10 @@ public interface Jobs {
      * @throws IllegalArgumentException when the kind, the key, the payload or the number of attempts is not acceptable
      */
     UUID enqueue(NewJob job);
+
+    /**
+     * Whether the job still waits or runs, so that an executor may still run it. A job that ended in any way, or that the
+     * clean up removed, is not active; only a retry of the administration makes an ended job wait again.
+     */
+    boolean active(UUID id);
 }

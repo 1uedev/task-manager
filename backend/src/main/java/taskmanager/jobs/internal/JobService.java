@@ -48,6 +48,11 @@ class JobService implements Jobs {
         return jobs.insert(UUID.randomUUID(), job.companyId(), job.kind(), job.payload(), job.dedupKey(), runAt, attempts, now);
     }
 
+    @Override
+    public boolean active(UUID id) {
+        return jobs.find(id).map(job -> job.state().equals("queued") || job.state().equals("running")).orElse(false);
+    }
+
     static void validKind(String kind) {
         if (kind == null || kind.length() > KIND_MAX || !KIND.matcher(kind).matches()) {
             throw new IllegalArgumentException("A job kind is lower case words separated by dots, at most " + KIND_MAX + " characters: " + kind);

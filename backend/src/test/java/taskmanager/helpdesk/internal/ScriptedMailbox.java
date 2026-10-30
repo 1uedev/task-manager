@@ -56,7 +56,7 @@ public final class ScriptedMailbox {
     public MailIntake intake(ApplicationContext context, int batch) {
         HelpdeskProperties defaults = context.getBean(HelpdeskProperties.class);
         HelpdeskProperties properties = new HelpdeskProperties(defaults.secretKey(), Duration.ofSeconds(60), defaults.maxBytes(), batch,
-            defaults.timeout());
+            defaults.timeout(), defaults.smtpTimeout());
         MailClient client = (mailbox, password) -> {
             beforeOpen.run();
             return new Connection();

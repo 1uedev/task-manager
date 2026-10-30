@@ -65,9 +65,18 @@ Die Antworten sind mit TASK-058 umgesetzt, zur Prüfung und Abnahme. Gegenüber 
 
 - Antworten schreibt am Ticket, wer die Projektaktion `helpdesk.reply` hat und Mails und Kontakt des Tickets lesen darf. Empfänger ist eine Adresse des Kontakts, Absender ein Postfach des Projekts mit SMTP. Vor dem Senden zeigt die Oberfläche alles noch einmal; erst die Bestätigung zählt. Entwürfe, weitere Empfänger, Anhänge, Sprache und Vorlagen gibt es noch nicht.
 - Die Zustände der Tabelle unter „Versand und Bestätigungen“ gelten ohne den Entwurf: ausstehend, vom Mailserver angenommen, nicht gesendet (sicher gescheitert) und Versand unklar. Unklar wird nie von selbst wiederholt; erneut senden geht nur mit bestätigtem Duplikatrisiko, alternativ lässt sich die Antwort als angekommen festhalten.
-- Vor dem Versand prüft der Auftrag Mitgliedschaft und Aktivität des Urhebers sowie Postfach und Empfänger. Gruppenrechte gelten zum Zeitpunkt der Bestätigung, weil der Auftrag ohne Sitzung läuft.
+- Vor dem Versand prüft der Auftrag Mitgliedschaft und Aktivität des Urhebers sowie Postfach und Empfänger (seit TASK-062 der Person, die den Versand zuletzt bestätigt hat). Gruppenrechte gelten zum Zeitpunkt der Bestätigung, weil der Auftrag ohne Sitzung läuft.
 - Antworten des Kunden kommen über `In-Reply-To` und `References` zum Ticket, wenn der Absender wie beim Eingang bestätigt ist und zum Kunden des Ticket gehört. Sonst wartet die Mail mit Verweis auf das Ticket in der Prüfwarteschlange. Eigene zurückkommende Antworten und automatische Mails erhalten keine Antwort.
 - Ausstehende, gescheiterte und unklare Antworten stehen in der Prüfwarteschlange für alle, die im Projekt antworten dürfen. Benachrichtigungen und SLA folgen später.
+
+### Nachtrag TASK-062 (DEC-092): Korrekturen nach den Prüfungen von TASK-058
+
+- Eine Antwort bleibt nicht mehr dauerhaft ausstehend, wenn ihr Versandauftrag ohne Ergebnis endet oder in der Jobverwaltung abgebrochen wird. Spätestens nach einer Minute ist sie unklar, wenn die Mail schon beim Server war, sonst nicht gesendet; beides lässt sich wie gewohnt erneut senden oder festhalten.
+- Ein später Ausgang eines älteren Versuchs ändert eine neuere Sendung nie.
+- Der Auftrag prüft die Person, die den Versand zuletzt bestätigt hat. Eine Kollegin oder ein Kollege kann so eine Antwort erneut senden, auch wenn die verfassende Person das Projekt verlassen hat.
+- Postfächer und Kontakte nehmen nur eine einfache Adresse ohne Namen, Kommentar oder Gruppe an. Message-IDs in den Kopfzeilen werden geprüft und `References` wird gefaltet.
+- Ein Abbruch, bevor die Mail ganz beim Server ist, gilt als sicher nicht gesendet und wird wiederholt. Für die Antwort des Servers gilt ein eigenes Zeitlimit von zehn Minuten.
+- Ein Wechsel des Kunden am Ticket und eine eingehende Antwort des Kunden sperren dasselbe; weicht der Kunde danach ab, wartet die Mail in der Prüfwarteschlange.
 
 ## Kundenportal und Antworten
 

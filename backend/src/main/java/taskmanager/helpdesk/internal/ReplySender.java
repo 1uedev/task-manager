@@ -20,10 +20,10 @@ import taskmanager.projects.ProjectAccess;
 /**
  * Sends a confirmed reply (TASK-058, DEC-091) as the job {@code helpdesk.reply}.
  *
- * <p>An attempt first marks the reply as {@code sending} in a transaction of its own, after checking again that the author
- * is an active member of the project, that the mailbox still sends for the project from the same address and that the
- * recipient is still an address of the contact of the ticket; a precondition that no longer holds fails the reply for good.
- * Then it talks to the SMTP server and records the outcome:
+ * <p>An attempt first marks the reply as {@code sending} in a transaction of its own, after checking again that the person
+ * who confirmed this send (the payload {@code by}, TASK-062) is an active member of the project, that the mailbox still sends
+ * for the project from the same address and that the recipient is still an address of the contact of the ticket; a
+ * precondition that no longer holds fails the reply for good. Then it talks to the SMTP server and records the outcome:
  * <ul>
  *   <li>accepted: {@code sent};</li>
  *   <li>certainly not accepted and worth another try: back to {@code pending}, the job runs again after its delay, and after
@@ -32,8 +32,10 @@ import taskmanager.projects.ProjectAccess;
  *   <li>handed over without an answer: {@code uncertain}.</li>
  * </ul>
  * An attempt that finds the reply still {@code sending} comes after one whose outcome was lost (the process ended, the time
- * limit or the stop interrupted it) and records {@code uncertain} without sending: nothing is ever sent twice by itself. The
- * log names the reply and the code, never the text of the mail server.
+ * limit or the stop interrupted it) and records {@code uncertain} without sending: nothing is ever sent twice by itself. An
+ * outcome is recorded only while the reply still belongs to the job of the attempt, so a late attempt never changes a send
+ * a person started since (TASK-062, X-F1); when the last attempt ends without an outcome, {@code ReplyWatch} settles the
+ * reply. The log names the reply and the code, never the text of the mail server.
  */
 @Component
 class ReplySender implements JobHandler {
@@ -46,9 +48,10 @@ class ReplySender implements JobHandler {
     private final ObjectProvider<IdentityAccess> identity;
     private final Clock clock;
     private final TransactionTemplate transaction;
+    private final Duration timeout;
 
     ReplySender(HelpdeskRepository repository, MailSender sender, SecretBox secrets, ProjectAccess projects,
-            ObjectProvider<IdentityAccess> identity, Clock clock, PlatformTransactionManager transactions) {
+            ObjectProvider<IdentityAccess> identity, Clock clock, PlatformTransactionManager transactions, HelpdeskProperties properties) {
         this.repository = repository;
         this.sender = sender;
         this.secrets = secrets;
@@ -56,6 +59,7 @@ class ReplySender implements JobHandler {
         this.identity = identity;
         this.clock = clock;
         this.transaction = new TransactionTemplate(transactions);
+        this.timeout = properties.smtpTimeout().plusMinutes(5);
     }
 
     @Override
@@ -63,13 +67,14 @@ class ReplySender implements JobHandler {
         return ReplyService.JOB_KIND;
     }
 
+    /** Longer than one answer of the SMTP server may take (TASK-062); the attempt records its outcome itself in any case. */
     @Override
     public Duration timeout() {
-        return Duration.ofMinutes(2);
+        return timeout;
     }
 
     /** What an attempt does after the first transaction: send this mail with this password, or nothing. */
-    private record Prepared(Mailbox mailbox, String password, MailSender.Outgoing mail) {
+    private record Prepared(Mailbox mailbox, String password, MailSender.Outgoing mail, UUID by) {
     }
 
     @Override
@@ -85,23 +90,24 @@ class ReplySender implements JobHandler {
             return;
         }
         Prepared work = prepared.get();
+        UUID job = execution.id();
         try {
             sender.send(work.mailbox(), work.password(), work.mail());
         } catch (MailSender.SendFailure failure) {
             LOG.info("Reply {} was not sent in attempt {} of {}: {} ({})", replyId, execution.attempt(), execution.maxAttempts(),
                 failure.code(), MailClient.kinds(failure.getCause()));
             if (!failure.certain()) {
-                finish(replyId, "uncertain", failure.code(), null);
+                finish(replyId, job, work.by(), "uncertain", failure.code(), null);
                 throw JobFailure.permanent(failure.code(), "The mail server may have accepted the reply", null);
             }
             if (failure.permanent() || execution.attempt() >= execution.maxAttempts()) {
-                finish(replyId, "failed", failure.code(), null);
+                finish(replyId, job, work.by(), "failed", failure.code(), null);
                 throw JobFailure.permanent(failure.code(), "The reply was not sent", null);
             }
-            finish(replyId, "pending", failure.code(), null);
+            finish(replyId, job, work.by(), "pending", failure.code(), null);
             throw JobFailure.retryable(failure.code(), "The reply was not sent yet", null);
         }
-        finish(replyId, "sent", null, clock.instant());
+        finish(replyId, job, work.by(), "sent", null, clock.instant());
     }
 
     /**
@@ -114,15 +120,16 @@ class ReplySender implements JobHandler {
             return Optional.empty();
         }
         Instant now = clock.instant();
+        UUID by = confirmedBy(execution, reply);
         if (reply.state().equals("sending")) {
             LOG.warn("Reply {} was handed over before without a recorded outcome; it is uncertain and not sent again", replyId);
-            repository.replyState(replyId, "uncertain", "helpdesk.send_interrupted", null, null, now, reply.createdBy());
+            repository.replyState(replyId, "uncertain", "helpdesk.send_interrupted", null, null, now, by);
             return Optional.empty();
         }
         if (!reply.state().equals("pending")) {
             return Optional.empty();
         }
-        String refused = refusal(reply);
+        String refused = refusal(reply, by);
         Mailbox mailbox = repository.mailbox(reply.companyId(), reply.mailboxId()).orElse(null);
         String password = null;
         if (refused == null) {
@@ -136,22 +143,32 @@ class ReplySender implements JobHandler {
         }
         if (refused != null) {
             LOG.info("Reply {} is not sent: {}", replyId, refused);
-            repository.replyState(replyId, "failed", refused, null, null, now, reply.createdBy());
+            repository.replyState(replyId, "failed", refused, null, null, now, by);
             return Optional.empty();
         }
-        repository.replyState(replyId, "sending", reply.errorCode(), now, null, now, reply.createdBy());
+        repository.replyState(replyId, "sending", reply.errorCode(), now, null, now, by);
         String toName = repository.contact(reply.companyId(), reply.contactId()).map(Contact::name).orElse(null);
         return Optional.of(new Prepared(mailbox, password, new MailSender.Outgoing(reply.messageId(), reply.fromAddress(), mailbox.name(),
-            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now)));
+            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now), by));
+    }
+
+    /** The person who confirmed this send; jobs written before TASK-062 carry none and stand for the author. */
+    private static UUID confirmedBy(JobExecution execution, Reply reply) {
+        try {
+            String by = execution.payload().get("by");
+            return by == null ? reply.createdBy() : UUID.fromString(by);
+        } catch (IllegalArgumentException invalid) {
+            return reply.createdBy();
+        }
     }
 
     /** Why the reply may no longer be sent as confirmed, or {@code null}. */
-    private String refusal(Reply reply) {
+    private String refusal(Reply reply, UUID by) {
         if (!projects.lockForIntake(reply.companyId(), reply.projectId())) {
             return "helpdesk.project_missing";
         }
         IdentityAccess accounts = identity.getIfUnique();
-        if (accounts == null || !accounts.userActive(reply.companyId(), reply.createdBy()) || !projects.isMember(reply.projectId(), reply.createdBy())) {
+        if (accounts == null || !accounts.userActive(reply.companyId(), by) || !projects.isMember(reply.projectId(), by)) {
             return "helpdesk.author_inactive";
         }
         Optional<Mailbox> mailbox = repository.mailbox(reply.companyId(), reply.mailboxId());
@@ -160,14 +177,17 @@ class ReplySender implements JobHandler {
         }
         boolean recipient = repository.ticketCustomer(reply.ticketId()).map(HelpdeskRepository.TicketCustomer::contactId)
             .filter(reply.contactId()::equals).flatMap(id -> repository.contact(reply.companyId(), id))
-            .map(contact -> contact.addresses().contains(reply.toAddress())).orElse(false);
+            .map(contact -> ReplyService.recipient(contact, reply.toAddress())).orElse(false);
         return recipient ? null : "helpdesk.recipient_changed";
     }
 
-    private void finish(UUID replyId, String state, String code, Instant sentAt) {
+    /** Records the outcome only while the reply is still being sent by this job; otherwise it belongs to a later send. */
+    private void finish(UUID replyId, UUID job, UUID by, String state, String code, Instant sentAt) {
         transaction.executeWithoutResult(status -> repository.lockReply(replyId).ifPresent(reply -> {
-            if (reply.state().equals("sending")) {
-                repository.replyState(replyId, state, code, null, sentAt, clock.instant(), reply.createdBy());
+            if (reply.state().equals("sending") && reply.jobId().equals(job)) {
+                repository.replyState(replyId, state, code, null, sentAt, clock.instant(), by);
+            } else {
+                LOG.warn("The outcome {} of reply {} came after the send of its job ended; it is not recorded", state, replyId);
             }
         }));
     }

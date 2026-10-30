@@ -124,6 +124,8 @@ public class TicketCustomerService {
             throw projectNotFound();
         }
         UUID ticket = ticket(actor, projectId, number);
+        // The same lock as an answer of the customer that joins the ticket takes for its comparison (TASK-062, X-F4).
+        repository.lockTicketCustomer(ticket);
         var current = repository.ticketCustomer(ticket).orElse(new HelpdeskRepository.TicketCustomer(null, null));
         Set<String> changing = new HashSet<>();
         if (!Objects.equals(current.customerId(), customerId)) {
