@@ -111,7 +111,7 @@ class HelpdeskApiTest {
         registry.add("taskmanager.helpdesk.secret-key", () -> KEY);
         registry.add("taskmanager.helpdesk.timeout", () -> "5s");
         // Each answer of an SMTP server may take longer than opening the connection (TASK-062, C-F4).
-        registry.add("taskmanager.helpdesk.smtp-timeout", () -> "8s");
+        registry.add("taskmanager.helpdesk.smtp-timeout", () -> "20s");
         // Small batches, so that the tests see what lasts from one fetch to the next (TASK-059, F2).
         registry.add("taskmanager.helpdesk.batch", () -> "5");
     }
@@ -1369,7 +1369,7 @@ class HelpdeskApiTest {
             Response cancel = jobs.send("POST", "/api/v1/jobs/" + jobOf(cancelled) + "/cancel", null, null);
             assertEquals(200, cancel.status(), cancel.body());
 
-            // While the leases last, the jobs still run: nothing is settled.
+            // Before the expired leases are given back, the jobs count as running: nothing is settled.
             watchReplies();
             assertEquals("sending", replyState(handedOver));
             assertEquals("pending", replyState(waiting));
@@ -1568,10 +1568,29 @@ class HelpdeskApiTest {
             smtp(setup, server.port());
             long number = (Long) ticketFromMail(setup, "Langsam")[0];
             UUID reply = replyId(replier(setup), setup, number, "Eins");
-            // The check takes six seconds, longer than the five of the connection and shorter than the eight of an SMTP answer.
+            // The check takes six seconds, longer than the five of the connection and well within the twenty of an SMTP answer.
             assertNull(runReplyJob(reply, 1));
             assertEquals("sent", replyState(reply));
         }
+    }
+
+    /** The process of a connection the test holds open. */
+    private static long pid(java.sql.Connection connection) throws SQLException {
+        try (var statement = connection.createStatement(); var result = statement.executeQuery("select pg_backend_pid()")) {
+            result.next();
+            return result.getLong(1);
+        }
+    }
+
+    /** The processes that wait for a lock the given process holds (TASK-063, H4: only this test's own waits count). */
+    private List<Long> blockedBy(long pid) {
+        return jdbc.queryForList("select pid::bigint from pg_stat_activity where ?::int = any(pg_blocking_pids(pid))", Long.class, pid);
+    }
+
+    private void deliverAnswer(Setup setup, String replyMessageId, String text) {
+        deliverRaw(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyMessageId + "\r\nFrom: Lea Lang <" + setup.contactAddress()
+            + ">\r\nTo: " + setup.address() + "\r\nSubject: Re: Anfrage\r\nMessage-ID: <" + UUID.randomUUID() + "@nordwerk.example>\r\n\r\n"
+            + text + "\r\n");
     }
 
     @Test
@@ -1589,20 +1608,19 @@ class HelpdeskApiTest {
         UUID otherCustomer = UUID.fromString(other.json().get("id").asString());
         int mails = replier.get(ticketPath(setup, number)).json().get("mails").size();
         String lockKey = "helpdesk.ticket_customer:" + ticket;
+        javax.sql.DataSource source = context.getBean(javax.sql.DataSource.class);
 
         // First order: the change holds the lock of the ticket when the answer is compared again, and commits first.
-        deliverRaw(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyMessageId + "\r\nFrom: Lea Lang <" + setup.contactAddress()
-            + ">\r\nTo: " + setup.address() + "\r\nSubject: Re: Anfrage\r\nMessage-ID: <" + UUID.randomUUID() + "@nordwerk.example>\r\n\r\nDanke\r\n");
-        javax.sql.DataSource source = context.getBean(javax.sql.DataSource.class);
+        deliverAnswer(setup, replyMessageId, "Danke");
         try (java.sql.Connection change = source.getConnection()) {
             change.setAutoCommit(false);
             try (var lock = change.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?, 0))")) {
                 lock.setString(1, lockKey);
                 lock.executeQuery().close();
             }
+            long changing = pid(change);
             Future<?> fetch = POOL.submit(() -> intake.fetch(setup.mailbox()));
-            awaitTrue(() -> jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and not granted", Long.class) > 0,
-                "the answer waits for the lock of the ticket");
+            awaitTrue(() -> !blockedBy(changing).isEmpty(), "the answer waits for the lock of the ticket");
             try (var update = change.prepareStatement("update helpdesk_ticket_customer set customer_id = ?, contact_id = null where ticket_id = ?")) {
                 update.setObject(1, otherCustomer);
                 update.setObject(2, ticket);
@@ -1613,25 +1631,152 @@ class HelpdeskApiTest {
         }
         Map<String, Object> answer = jdbc.queryForMap("select state, reason, related_ticket_id from helpdesk_message where mailbox_id = ? order by uid desc limit 1",
             setup.mailbox());
+        assertEquals("review", answer.get("state"));
         assertEquals("reply_customer_mismatch", answer.get("reason"));
         assertEquals(ticket, answer.get("related_ticket_id"));
         assertEquals(mails, jdbc.queryForObject("select count(*) from helpdesk_message where ticket_id = ?", Long.class, ticket).intValue());
 
-        // Second order: an answer that joins the ticket holds the lock, and a change of the customer waits for it.
+        // Second order: the answer is compared and being added when the change starts; the answer commits first, the change waits.
+        jdbc.update("update helpdesk_ticket_customer set customer_id = ?, contact_id = ? where ticket_id = ?", setup.customer(), setup.contact(), ticket);
+        deliverAnswer(setup, replyMessageId, "Nochmals danke");
         Browser editor = reviewer(setup);
-        try (java.sql.Connection joining = source.getConnection()) {
-            joining.setAutoCommit(false);
-            try (var lock = joining.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?, 0))")) {
-                lock.setString(1, lockKey);
+        try (java.sql.Connection held = source.getConnection()) {
+            held.setAutoCommit(false);
+            // Holding the ticket row stops the answer while it adds itself, after its comparison under the lock of the ticket.
+            try (var lock = held.prepareStatement("select id from ticket where id = ? for update")) {
+                lock.setObject(1, ticket);
                 lock.executeQuery().close();
             }
+            long holding = pid(held);
+            Future<?> fetch = POOL.submit(() -> intake.fetch(setup.mailbox()));
+            awaitTrue(() -> !blockedBy(holding).isEmpty(), "the answer is being added");
+            long adding = blockedBy(holding).get(0);
             Future<Response> put = POOL.submit(() -> editor.send("PUT", ticketPath(setup, number) + "/customer",
-                Map.of("customerId", setup.customer()), null));
-            awaitTrue(() -> jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and not granted", Long.class) > 0,
-                "the change waits for the answer");
+                Map.of("customerId", otherCustomer), null));
+            awaitTrue(() -> !blockedBy(adding).isEmpty(), "the change waits for the answer");
             assertFalse(put.isDone());
-            joining.commit();
+            held.commit();
+            fetch.get(30, java.util.concurrent.TimeUnit.SECONDS);
             assertEquals(200, put.get(30, java.util.concurrent.TimeUnit.SECONDS).status());
+        }
+        Map<String, Object> joined = jdbc.queryForMap("select state, ticket_id from helpdesk_message where mailbox_id = ? order by uid desc limit 1",
+            setup.mailbox());
+        assertEquals("ticket", joined.get("state"), "compared before the change, the answer joins the ticket");
+        assertEquals(ticket, joined.get("ticket_id"));
+        assertEquals(mails + 1, jdbc.queryForObject("select count(*) from helpdesk_message where ticket_id = ?", Long.class, ticket).intValue());
+        assertEquals(otherCustomer, jdbc.queryForObject("select customer_id from helpdesk_ticket_customer where ticket_id = ?", UUID.class, ticket),
+            "the change follows afterwards");
+    }
+
+    @Test
+    void aRetryOfTheAdministrationAndTheSettlingExcludeEachOther() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Wiederholung")[0];
+            Browser replier = replier(setup);
+            UUID reply = replyId(replier, setup, number, "Eins");
+            lastAttemptLost(reply);
+            releaseExpiredJobs();
+            UUID job = jobOf(reply);
+            assertEquals("failed", jdbc.queryForObject("select state from job where id = ?", String.class, job));
+
+            // The administration retries the ended job while the watch settles: the watch waits and then leaves the reply alone.
+            javax.sql.DataSource source = context.getBean(javax.sql.DataSource.class);
+            try (java.sql.Connection retry = source.getConnection()) {
+                retry.setAutoCommit(false);
+                try (var lock = retry.prepareStatement("select id from job where id = ? for update")) {
+                    lock.setObject(1, job);
+                    lock.executeQuery().close();
+                }
+                try (var update = retry.prepareStatement("update job set state = 'queued', attempts = 0, finished_at = null, run_at = now() where id = ?")) {
+                    update.setObject(1, job);
+                    assertEquals(1, update.executeUpdate());
+                }
+                long retrying = pid(retry);
+                Future<?> watch = POOL.submit(() -> {
+                    watchReplies();
+                    return null;
+                });
+                awaitTrue(() -> !blockedBy(retrying).isEmpty(), "the watch waits for the retry");
+                retry.commit();
+                watch.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            assertEquals("pending", replyState(reply), "a job that waits again is not settled");
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("sent", replyState(reply));
+            assertEquals(1, server.handedOver().size());
+
+            // The other order: settled first, a later retry of the administration finds the reply settled and sends nothing.
+            UUID second = replyId(replier, setup, number, "Zwei");
+            lastAttemptLost(second);
+            releaseExpiredJobs();
+            watchReplies();
+            assertEquals("failed", replyState(second));
+            Response retried = person(AdministrationRight.JOBS_MANAGE).send("POST", "/api/v1/jobs/" + jobOf(second) + "/retry", null, null);
+            assertEquals(200, retried.status(), retried.body());
+            assertNull(runReplyJob(second, 1));
+            assertEquals("failed", replyState(second));
+            assertEquals(1, server.handedOver().size());
+        }
+    }
+
+    @Test
+    void aJobWithAnInvalidConfirmingPersonSendsNothing() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Nutzlast")[0];
+            UUID reply = replyId(replier(setup), setup, number, "Eins");
+            jdbc.update("update job set payload = jsonb_set(payload, '{by}', '\"kein-konto\"') where id = ?", jobOf(reply));
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("failed", replyState(reply));
+            assertEquals("helpdesk.job_invalid", errorOf(reply));
+            assertEquals(0, server.connections());
+        }
+    }
+
+    @Test
+    void manyRepliesWhoseJobsStillRunDoNotHideAnOrphan() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Viele")[0];
+        Browser replier = replier(setup);
+        UUID active = replyId(replier, setup, number, "Aktiv");
+        // 250 copies whose job still waits, all sorted before the orphan and older than it.
+        jdbc.update("""
+                insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject, body,
+                    message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at, created_by,
+                    updated_at, updated_by, version)
+                select ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, company_id, project_id, ticket_id, mailbox_id, contact_id,
+                    from_address, to_address, subject, body, '<copy-' || n || '-' || message_id || '>', in_reply_to, references_header, state,
+                    error_code, job_id, sends, attempted_at, sent_at, created_at, created_by, updated_at - interval '1 hour', updated_by, version
+                from helpdesk_reply, generate_series(1, 250) n where id = ?""", active);
+        try {
+            UUID orphan = replyId(replier, setup, number, "Verwaist");
+            lastAttemptLost(orphan);
+            releaseExpiredJobs();
+            watchReplies();
+            assertEquals("failed", replyState(orphan), "one run of the watch reaches every waiting reply");
+            assertEquals("pending", replyState(active));
+        } finally {
+            jdbc.update("delete from helpdesk_reply where id::text like '00000000-0000-4000-8000-%'");
+        }
+    }
+
+    @Test
+    void aConnectionThatEndsInsideTheMailIsUncertainAndTheServerHoldsNothing() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.DROP_IN_DATA)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Abbruch mittendrin")[0];
+            UUID reply = replyId(replier(setup), setup, number, "Eins\r\nZwei\r\nDrei");
+            RuntimeException failure = runReplyJob(reply, 1);
+            // The sender wrote the whole mail before it learned of the end, so it cannot tell this from a lost answer.
+            assertTrue(failure instanceof JobFailure known && known.code().equals("helpdesk.send_uncertain"), String.valueOf(failure));
+            assertEquals("uncertain", replyState(reply));
+            assertEquals(0, server.handedOver().size());
+            assertEquals(1, server.broken().size());
         }
     }
 

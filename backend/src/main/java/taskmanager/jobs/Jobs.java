@@ -18,7 +18,9 @@ public interface Jobs {
 
     /**
      * Whether the job still waits or runs, so that an executor may still run it. A job that ended in any way, or that the
-     * clean up removed, is not active; only a retry of the administration makes an ended job wait again.
+     * clean up removed, is not active; only a retry of the administration makes an ended job wait again. The answer holds
+     * until the transaction of the caller ends: the job stays share locked, so a retry of the administration waits for it
+     * (TASK-063). Call it inside a transaction.
      */
     boolean active(UUID id);
 }

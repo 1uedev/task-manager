@@ -732,6 +732,7 @@ export const en: Record<MessageKey, Message> = {
   'helpdesk.code.helpdesk.send_uncertain': 'The answer of the mail server is missing; the mail may have arrived',
   'helpdesk.code.helpdesk.send_interrupted': 'Sending was interrupted; the mail may have arrived',
   'helpdesk.code.helpdesk.job_ended': 'The send job ended without handing the mail over; it was not sent',
+  'helpdesk.code.helpdesk.job_invalid': 'The send job names no valid confirming person; nothing was sent',
   'helpdesk.code.helpdesk.send_broken': 'The mail server broke off before the end of the mail; it was not sent',
   'helpdesk.code.helpdesk.mailbox_unavailable': 'The mailbox no longer sends for this project',
   'helpdesk.code.helpdesk.recipient_changed': 'The address no longer belongs to the contact of the ticket',

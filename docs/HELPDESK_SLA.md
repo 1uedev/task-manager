@@ -78,6 +78,13 @@ Die Antworten sind mit TASK-058 umgesetzt, zur Prüfung und Abnahme. Gegenüber 
 - Ein Abbruch, bevor die Mail ganz beim Server ist, gilt als sicher nicht gesendet und wird wiederholt. Für die Antwort des Servers gilt ein eigenes Zeitlimit von zehn Minuten.
 - Ein Wechsel des Kunden am Ticket und eine eingehende Antwort des Kunden sperren dasselbe; weicht der Kunde danach ab, wartet die Mail in der Prüfwarteschlange.
 
+### Nachtrag TASK-063 (DEC-093): Korrekturen nach der Codex Prüfung von TASK-062
+
+- Eine Wiederholung in der Jobverwaltung und die Klärung einer verwaisten Antwort schließen sich aus; es gibt keinen Zwischenzustand mehr, in dem die Wiederholung wirkungslos bleibt, obwohl der Auftrag schon wieder wartet.
+- Sehr lange Betreffe und Namen erzeugen keine zu langen Kopfzeilen mehr; lange Namen werden gekürzt angezeigt.
+- Ein Versandauftrag mit fehlerhafter Angabe der bestätigenden Person sendet nicht.
+- Die minütliche Klärung erreicht jede wartende Antwort, auch wenn sehr viele Antworten gleichzeitig unterwegs sind.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

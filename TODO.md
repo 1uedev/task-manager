@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-063](#task-063-befunde-der-codex-prüfung-von-task-062-beheben) | Befunde der Codex Prüfung von TASK-062 beheben | claude-20261030-replyfix-02 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -42,6 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-058](#task-058-helpdesk-antworten-über-smtp-paket-a9-teil-2) | Helpdesk Antworten über SMTP (Paket A9, Teil 2) | claude-20261028-helpdesk-01 | 2026-10-29 |
 | [TASK-062](#task-062-befunde-der-prüfungen-von-task-058-beheben) | Befunde der Prüfungen von TASK-058 beheben | claude-20261030-replyfix-01 | 2026-10-30 |
+| [TASK-063](#task-063-befunde-der-codex-prüfung-von-task-062-beheben) | Befunde der Codex Prüfung von TASK-062 beheben | claude-20261030-replyfix-02 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -105,7 +104,7 @@ Nicht Teil: die übrigen Hinweise beider Berichte (C-H1 bis C-H8, X-H1 bis X-H5)
 
 ## TASK-063 Befunde der Codex Prüfung von TASK-062 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-02 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-replyfix-02 · **Aktualisiert:** 2026-10-30
 
 **Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-062 (Ergebnis PR #206), Prüfbericht [docs/REVIEW_TASK-062_PR-206.md](docs/REVIEW_TASK-062_PR-206.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „F1 bis F4 plus H1, H4, H6“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-093, keine Migration geplant.
 
@@ -123,4 +122,8 @@ Nicht Teil: H2 (Adressregel als bewusste Grenze), H3, H5 und die Gesamtlaufzeit 
 
 **Abnahmekriterien:** Regressionstests für eine Wiederholung in der Jobverwaltung gleichzeitig mit der Klärung, lange Betreffe und Namen, beide Reihenfolgen der Kundengrenze, einen Abbruch im Inhalt der Mail, ein ungültiges `by` und mehr als 200 aktive Antworten vor einer verwaisten; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058, TASK-062 und TASK-063 zusammen ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
+**Ergebnis:** DEC-093, keine Migration. `Jobs.active` liest den Auftrag mit geteilter Zeilensperre (`JobRepository.shareState`), Wiederholung und Abbruch der Jobverwaltung warten darauf; `SmtpMailSender` faltet den Betreff, zerlegt lange Folgen in kodierte Wörter, kürzt Namen auf 200 Zeichen, lehnt Steuerzeichen im Betreff ab und prüft jede Kopfzeile auf 998 Zeichen; ein ungültiges `by` endet als `helpdesk.job_invalid`; `ReplyWatch` geht seitenweise durch alle wartenden Antworten; `ScriptedSmtp` zählt nur vollständige Mails als übergeben (neuer Modus `DROP_IN_DATA`, Liste `broken`), schließt offene Verbindungen und wartet auf seinen Thread. Neuer Fehlercode `helpdesk.job_invalid` in Vertrag und Oberfläche. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 400 Tests, darunter vier neue API Tests (Wiederholung der Jobverwaltung gleichzeitig mit der Klärung in beiden Reihenfolgen, ungültiges `by`, 250 Antworten mit wartendem Auftrag vor einer verwaisten, Abbruch innerhalb der Maildaten), der neu geschriebene Test der Kundengrenze mit echtem Anhängen vor dem Kundenwechsel und zwei neue Einheitentests (lange Betreffe und Namen, Betreff mit Zeilenumbruch). Gegen den Stand vor der Korrektur (main ae1bd96) sind fünf der neuen Tests rot (Wiederholung, ungültiges `by`, viele Antworten, lange Kopfzeilen, Zeilenumbruch im Betreff); der Test der Kundengrenze und der Abbruch in den Daten sind dort grün, weil sie Testlücken schließen, keinen Fehler des Produkts. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker (keine neue Migration), läuft in CI.
+
+**Nächster Schritt:** Getrennte Prüfung durch eine andere KI, danach nimmt Holger TASK-058, TASK-062 und TASK-063 zusammen ab.
