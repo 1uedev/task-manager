@@ -110,6 +110,8 @@ class HelpdeskApiTest {
         registry.add("taskmanager.files.directory", STORE::toString);
         registry.add("taskmanager.helpdesk.secret-key", () -> KEY);
         registry.add("taskmanager.helpdesk.timeout", () -> "5s");
+        // Each answer of an SMTP server may take longer than opening the connection (TASK-062, C-F4).
+        registry.add("taskmanager.helpdesk.smtp-timeout", () -> "8s");
         // Small batches, so that the tests see what lasts from one fetch to the next (TASK-059, F2).
         registry.add("taskmanager.helpdesk.batch", () -> "5");
     }
@@ -989,13 +991,15 @@ class HelpdeskApiTest {
         return context.getBeansOfType(JobHandler.class).values().stream().filter(h -> h.kind().equals("helpdesk.reply")).findFirst().orElseThrow();
     }
 
-    /** Runs the current job of the reply as the executor would, in the given attempt. */
+    /** Runs the current job of the reply as the executor would, in the given attempt, with the payload the job carries. */
     private RuntimeException runReplyJob(UUID reply, int attempt) {
-        Map<String, Object> job = jdbc.queryForMap("select j.id, j.company_id, j.max_attempts from job j join helpdesk_reply r on r.job_id = j.id where r.id = ?",
-            reply);
+        Map<String, Object> job = jdbc.queryForMap("select j.id, j.company_id, j.max_attempts, j.payload::text as payload from job j"
+            + " join helpdesk_reply r on r.job_id = j.id where r.id = ?", reply);
+        Map<String, String> payload = new LinkedHashMap<>();
+        JSON.readTree((String) job.get("payload")).properties().forEach(entry -> payload.put(entry.getKey(), entry.getValue().asString()));
         try {
             replyHandler().handle(new JobExecution((UUID) job.get("id"), (UUID) job.get("company_id"), "helpdesk.reply",
-                Map.of("reply", reply.toString()), attempt, (Integer) job.get("max_attempts"), attempt > 1));
+                payload, attempt, (Integer) job.get("max_attempts"), attempt > 1));
             return null;
         } catch (RuntimeException failure) {
             return failure;
@@ -1282,6 +1286,352 @@ class HelpdeskApiTest {
             assertEquals("failed", replyState(changed));
             assertEquals("helpdesk.recipient_changed", jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, changed));
             assertEquals(0, server.connections());
+        }
+    }
+
+    // ---------------------------------------------------------------- fixes of the replies (TASK-062)
+
+    private UUID replyId(Browser browser, Setup setup, long number, String body) {
+        Response created = reply(browser, setup, number, body);
+        assertEquals(201, created.status(), created.body());
+        return UUID.fromString(created.json().get("id").asString());
+    }
+
+    private UUID jobOf(UUID reply) {
+        return jdbc.queryForObject("select job_id from helpdesk_reply where id = ?", UUID.class, reply);
+    }
+
+    private String errorOf(UUID reply) {
+        return jdbc.queryForObject("select error_code from helpdesk_reply where id = ?", String.class, reply);
+    }
+
+    /** The job of the reply runs its last attempt, whose executor ended: its lease is over. */
+    private void lastAttemptLost(UUID reply) {
+        jdbc.update("update job set state = 'running', attempts = max_attempts, lease_owner = 'ended', lease_until = now() - interval '1 minute'"
+            + " where id = ?", jobOf(reply));
+    }
+
+    /** What the executor does with jobs whose lease ended. */
+    private void releaseExpiredJobs() {
+        Object repository = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(
+            context.getBean(taskmanager.jobs.internal.JobRepository.class));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(repository, "releaseExpired", java.time.Instant.now());
+    }
+
+    /** One run of the recurring task that settles replies whose job ended. */
+    private void watchReplies() throws Exception {
+        context.getBeansOfType(taskmanager.jobs.RecurringTask.class).values().stream().filter(task -> task.name().equals("helpdesk.replies"))
+            .findFirst().orElseThrow().run();
+    }
+
+    private String replyVersion(Browser browser, Setup setup, long number, UUID reply) {
+        return "\"" + find(browser.get(ticketPath(setup, number)).json().get("replies"), reply).get("version").asLong() + "\"";
+    }
+
+    private Response sendAgain(Browser browser, Setup setup, long number, UUID reply, boolean duplicateAccepted) {
+        return browser.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send",
+            duplicateAccepted ? Map.of("duplicateAccepted", true) : Map.of(), replyVersion(browser, setup, number, reply));
+    }
+
+    private void awaitTrue(java.util.function.BooleanSupplier condition, String what) {
+        long end = System.nanoTime() + java.time.Duration.ofSeconds(20).toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > end) {
+                throw new AssertionError("waited in vain: " + what);
+            }
+            Thread.onSpinWait();
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(interrupted);
+            }
+        }
+    }
+
+    @Test
+    void aReplyWhoseJobEndedWithoutAnOutcomeIsSettledAndCanBeSentAgain() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Verwaist")[0];
+            Browser replier = replier(setup);
+            Browser jobs = person(AdministrationRight.JOBS_MANAGE);
+
+            // The last attempt was handed to the mail server and its executor ended; the same for one that ended before.
+            UUID handedOver = replyId(replier, setup, number, "Eins");
+            jdbc.update("update helpdesk_reply set state = 'sending' where id = ?", handedOver);
+            lastAttemptLost(handedOver);
+            UUID waiting = replyId(replier, setup, number, "Zwei");
+            lastAttemptLost(waiting);
+            // The administration cancels the job of a reply that waits.
+            UUID cancelled = replyId(replier, setup, number, "Drei");
+            Response cancel = jobs.send("POST", "/api/v1/jobs/" + jobOf(cancelled) + "/cancel", null, null);
+            assertEquals(200, cancel.status(), cancel.body());
+
+            // While the leases last, the jobs still run: nothing is settled.
+            watchReplies();
+            assertEquals("sending", replyState(handedOver));
+            assertEquals("pending", replyState(waiting));
+            assertEquals("failed", replyState(cancelled));
+            assertEquals("helpdesk.job_ended", errorOf(cancelled));
+
+            releaseExpiredJobs();
+            assertEquals("failed", jdbc.queryForObject("select state from job where id = ?", String.class, jobOf(handedOver)));
+            watchReplies();
+            assertEquals("uncertain", replyState(handedOver));
+            assertEquals("helpdesk.send_interrupted", errorOf(handedOver));
+            assertEquals("failed", replyState(waiting));
+            assertEquals("helpdesk.job_ended", errorOf(waiting));
+            assertEquals(0, server.connections(), "settling sends nothing");
+
+            // Each can be sent again or recorded like any failed or uncertain reply.
+            Response again = sendAgain(replier, setup, number, waiting, false);
+            assertEquals(200, again.status(), again.body());
+            assertNull(runReplyJob(waiting, 1));
+            assertEquals("sent", replyState(waiting));
+            Response settled = replier.send("POST", ticketPath(setup, number) + "/replies/" + handedOver + "/settle", null,
+                replyVersion(replier, setup, number, handedOver));
+            assertEquals(200, settled.status(), settled.body());
+            assertEquals(1, server.handedOver().size());
+        }
+    }
+
+    @Test
+    void aReplyIsSettledWhenAPersonActsBeforeTheWatch() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Sofort")[0];
+            Browser replier = replier(setup);
+            UUID reply = replyId(replier, setup, number, "Eins");
+            String version = replyVersion(replier, setup, number, reply);
+            lastAttemptLost(reply);
+            releaseExpiredJobs();
+            // Still shown as waiting, but a send again finds the job ended and sends with a new one.
+            Response again = replier.send("POST", ticketPath(setup, number) + "/replies/" + reply + "/send", Map.of(), version);
+            assertEquals(200, again.status(), again.body());
+            assertEquals(2, again.json().get("sends").asInt());
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("sent", replyState(reply));
+            assertEquals(1, server.handedOver().size());
+        }
+    }
+
+    @Test
+    void anOldAttemptNeverChangesALaterSend() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp first = new ScriptedSmtp(ScriptedSmtp.Mode.HELD); ScriptedSmtp second = new ScriptedSmtp(ScriptedSmtp.Mode.HELD);
+                ScriptedSmtp third = new ScriptedSmtp(ScriptedSmtp.Mode.HELD); ScriptedSmtp fourth = new ScriptedSmtp(ScriptedSmtp.Mode.HELD)) {
+            long number = (Long) ticketFromMail(setup, "Runden")[0];
+            Browser replier = replier(setup);
+
+            // First order: the old attempt is accepted while the new send is under way, which then loses its answer.
+            smtp(setup, first.port());
+            UUID reply = replyId(replier, setup, number, "Eins");
+            Future<RuntimeException> old = POOL.submit(() -> runReplyJob(reply, 1));
+            awaitTrue(() -> first.handedOver().size() == 1, "the old attempt handed the mail over");
+            lastAttemptLost(reply);
+            releaseExpiredJobs();
+            watchReplies();
+            assertEquals("uncertain", replyState(reply));
+            assertEquals(200, sendAgain(replier, setup, number, reply, true).status());
+            smtp(setup, second.port());
+            Future<RuntimeException> current = POOL.submit(() -> runReplyJob(reply, 1));
+            awaitTrue(() -> second.handedOver().size() == 1, "the new send handed the mail over");
+            first.release();
+            assertNull(old.get(30, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals("sending", replyState(reply), "the acceptance of the old attempt is not the outcome of the new send");
+            second.mode(ScriptedSmtp.Mode.DROP_AFTER_DATA);
+            second.release();
+            RuntimeException missing = current.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue(missing instanceof JobFailure known && known.code().equals("helpdesk.send_uncertain"), String.valueOf(missing));
+            assertEquals("uncertain", replyState(reply));
+
+            // Second order: the new send is accepted first, the old attempt loses its answer afterwards.
+            smtp(setup, third.port());
+            UUID other = replyId(replier, setup, number, "Zwei");
+            Future<RuntimeException> late = POOL.submit(() -> runReplyJob(other, 1));
+            awaitTrue(() -> third.handedOver().size() == 1, "the old attempt handed the mail over");
+            lastAttemptLost(other);
+            releaseExpiredJobs();
+            watchReplies();
+            assertEquals(200, sendAgain(replier, setup, number, other, true).status());
+            smtp(setup, fourth.port());
+            Future<RuntimeException> newer = POOL.submit(() -> runReplyJob(other, 1));
+            awaitTrue(() -> fourth.handedOver().size() == 1, "the new send handed the mail over");
+            fourth.release();
+            assertNull(newer.get(30, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals("sent", replyState(other));
+            Object sentAt = jdbc.queryForObject("select sent_at from helpdesk_reply where id = ?", Object.class, other);
+            third.mode(ScriptedSmtp.Mode.DROP_AFTER_DATA);
+            third.release();
+            RuntimeException lost = late.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue(lost instanceof JobFailure known && known.code().equals("helpdesk.send_uncertain"), String.valueOf(lost));
+            assertEquals("sent", replyState(other), "the missing answer of the old attempt does not make the sent reply uncertain");
+            assertEquals(sentAt, jdbc.queryForObject("select sent_at from helpdesk_reply where id = ?", Object.class, other));
+        }
+    }
+
+    @Test
+    void aColleagueSendsAgainAfterTheAuthorLeftTheProject() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.REFUSE_RECIPIENT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Vertretung")[0];
+            Browser author = replier(setup);
+            Browser colleague = replier(setup);
+            UUID reply = replyId(author, setup, number, "Eins");
+            runReplyJob(reply, 1);
+            assertEquals("failed", replyState(reply));
+            Response removed = setup.admin().send("DELETE", "/api/v1/projects/" + setup.project() + "/members/" + author.id, null,
+                setup.admin().get("/api/v1/projects/" + setup.project()).etag());
+            assertTrue(removed.status() == 200 || removed.status() == 204, removed.body());
+
+            server.mode(ScriptedSmtp.Mode.ACCEPT);
+            assertEquals(200, sendAgain(colleague, setup, number, reply, false).status());
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("sent", replyState(reply), "the job checks the person who confirmed this send");
+            assertEquals(colleague.id, jdbc.queryForObject("select updated_by from helpdesk_reply where id = ?", UUID.class, reply));
+
+            // The one who confirmed leaving before the job runs stops the send.
+            UUID second = replyId(colleague, setup, number, "Zwei");
+            Response gone = setup.admin().send("DELETE", "/api/v1/projects/" + setup.project() + "/members/" + colleague.id, null,
+                setup.admin().get("/api/v1/projects/" + setup.project()).etag());
+            assertTrue(gone.status() == 200 || gone.status() == 204, gone.body());
+            assertNull(runReplyJob(second, 1));
+            assertEquals("failed", replyState(second));
+            assertEquals("helpdesk.author_inactive", errorOf(second));
+            assertEquals(1, server.handedOver().size());
+        }
+    }
+
+    @Test
+    void onlyPlainAddressesAreStoredForContactsAndMailboxes() {
+        Setup setup = setup();
+        for (String invalid : List.of("Lea <lea@nordwerk.example>", "lea@nordwerk.example (Lea)", "lea@nordwerk.example\r\nBcc: mia@suedtechnik.example",
+                "Gruppe: lea@nordwerk.example;", "lea@nord\u0001werk.example")) {
+            Response contact = setup.admin().send("POST", "/api/v1/helpdesk/contacts",
+                Map.of("customerId", setup.customer(), "name", "Lea", "addresses", List.of(invalid)), null);
+            assertEquals(400, contact.status(), invalid);
+            assertTrue(contact.body().contains("addresses.invalid"), contact.body());
+            Map<String, Object> request = mailboxRequest("Postfach " + COUNTER.incrementAndGet(), setup.project(), "support", MAIL_PASSWORD,
+                MAIL.getImap().getPort(), AUTHSERV);
+            request.put("address", invalid);
+            Response mailbox = setup.admin().send("POST", "/api/v1/helpdesk/mailboxes", request, null);
+            assertEquals(400, mailbox.status(), invalid);
+            assertTrue(mailbox.body().contains("address.invalid"), mailbox.body());
+        }
+    }
+
+    @Test
+    void anAddressStoredBeforeThatIsNotPlainIsNotSentTo() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Alt")[0];
+            Browser replier = replier(setup);
+            UUID reply = replyId(replier, setup, number, "Eins");
+            // An address written before the strict check, with a second recipient hidden in a comment.
+            jdbc.update("update helpdesk_contact_address set address = ? where contact_id = ?", setup.contactAddress() + " (x)", setup.contact());
+            jdbc.update("update helpdesk_reply set to_address = ? where id = ?", setup.contactAddress() + " (x)", reply);
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("failed", replyState(reply));
+            assertEquals("helpdesk.recipient_changed", errorOf(reply));
+            assertEquals(0, server.connections());
+            Response form = reply(replier, setup, number, "Zwei");
+            assertEquals(400, form.status(), form.body());
+        }
+    }
+
+    @Test
+    void aBrokenConnectionBeforeTheEndOfTheMailSentNothing() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.DROP_AT_DATA)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Abbruch vorher")[0];
+            UUID reply = replyId(replier(setup), setup, number, "Eins");
+            RuntimeException failure = runReplyJob(reply, 1);
+            assertTrue(failure instanceof JobFailure known && !known.permanent(), String.valueOf(failure));
+            assertEquals("pending", replyState(reply), "certainly not sent: the next attempt sends");
+            assertEquals(0, server.handedOver().size());
+            server.mode(ScriptedSmtp.Mode.ACCEPT);
+            assertNull(runReplyJob(reply, 2));
+            assertEquals("sent", replyState(reply));
+        }
+    }
+
+    @Test
+    void aServerThatChecksTheMailLongerThanTheConnectionTimeoutStillDelivers() throws Exception {
+        Setup setup = setup();
+        try (ScriptedSmtp server = new ScriptedSmtp(ScriptedSmtp.Mode.SLOW_ACCEPT)) {
+            smtp(setup, server.port());
+            long number = (Long) ticketFromMail(setup, "Langsam")[0];
+            UUID reply = replyId(replier(setup), setup, number, "Eins");
+            // The check takes six seconds, longer than the five of the connection and shorter than the eight of an SMTP answer.
+            assertNull(runReplyJob(reply, 1));
+            assertEquals("sent", replyState(reply));
+        }
+    }
+
+    @Test
+    void aChangeOfTheCustomerDuringTheComparisonSendsTheAnswerToReview() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Wechsel")[0];
+        UUID ticket = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, setup.project(), number);
+        Browser replier = replier(setup);
+        UUID reply = replyId(replier, setup, number, "Eins");
+        assertNull(runReplyJob(reply, 1));
+        String replyMessageId = jdbc.queryForObject("select message_id from helpdesk_reply where id = ?", String.class, reply);
+        Response other = setup.admin().send("POST", "/api/v1/helpdesk/customers", Map.of("name", "Südtechnik " + COUNTER.incrementAndGet(),
+            "projects", List.of(setup.project())), null);
+        UUID otherCustomer = UUID.fromString(other.json().get("id").asString());
+        int mails = replier.get(ticketPath(setup, number)).json().get("mails").size();
+        String lockKey = "helpdesk.ticket_customer:" + ticket;
+
+        // First order: the change holds the lock of the ticket when the answer is compared again, and commits first.
+        deliverRaw(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyMessageId + "\r\nFrom: Lea Lang <" + setup.contactAddress()
+            + ">\r\nTo: " + setup.address() + "\r\nSubject: Re: Anfrage\r\nMessage-ID: <" + UUID.randomUUID() + "@nordwerk.example>\r\n\r\nDanke\r\n");
+        javax.sql.DataSource source = context.getBean(javax.sql.DataSource.class);
+        try (java.sql.Connection change = source.getConnection()) {
+            change.setAutoCommit(false);
+            try (var lock = change.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                lock.setString(1, lockKey);
+                lock.executeQuery().close();
+            }
+            Future<?> fetch = POOL.submit(() -> intake.fetch(setup.mailbox()));
+            awaitTrue(() -> jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and not granted", Long.class) > 0,
+                "the answer waits for the lock of the ticket");
+            try (var update = change.prepareStatement("update helpdesk_ticket_customer set customer_id = ?, contact_id = null where ticket_id = ?")) {
+                update.setObject(1, otherCustomer);
+                update.setObject(2, ticket);
+                assertEquals(1, update.executeUpdate());
+            }
+            change.commit();
+            fetch.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        Map<String, Object> answer = jdbc.queryForMap("select state, reason, related_ticket_id from helpdesk_message where mailbox_id = ? order by uid desc limit 1",
+            setup.mailbox());
+        assertEquals("reply_customer_mismatch", answer.get("reason"));
+        assertEquals(ticket, answer.get("related_ticket_id"));
+        assertEquals(mails, jdbc.queryForObject("select count(*) from helpdesk_message where ticket_id = ?", Long.class, ticket).intValue());
+
+        // Second order: an answer that joins the ticket holds the lock, and a change of the customer waits for it.
+        Browser editor = reviewer(setup);
+        try (java.sql.Connection joining = source.getConnection()) {
+            joining.setAutoCommit(false);
+            try (var lock = joining.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                lock.setString(1, lockKey);
+                lock.executeQuery().close();
+            }
+            Future<Response> put = POOL.submit(() -> editor.send("PUT", ticketPath(setup, number) + "/customer",
+                Map.of("customerId", setup.customer()), null));
+            awaitTrue(() -> jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and not granted", Long.class) > 0,
+                "the change waits for the answer");
+            assertFalse(put.isDone());
+            joining.commit();
+            assertEquals(200, put.get(30, java.util.concurrent.TimeUnit.SECONDS).status());
         }
     }
 

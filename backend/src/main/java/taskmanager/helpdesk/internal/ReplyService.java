@@ -31,8 +31,8 @@ import tools.jackson.databind.json.JsonMapper;
  * sender a mailbox of the project with SMTP settings and an address.
  *
  * <p>Confirming a reply writes it with its send job in one transaction, together with an entry of the field {@code mail} in
- * the history; the job sends it later (outbox). The rights count at the confirmation; the job checks again that the author
- * is an active member of the project and that mailbox and recipient still fit, but not the rights in the groups, because a
+ * the history; the job sends it later (outbox). The rights count at the confirmation; the job checks again that the person
+ * who confirmed the send last is an active member of the project and that mailbox and recipient still fit, but not the rights in the groups, because a
  * job has no session to check them with. A failed reply is sent again only by a person, an uncertain one only when the person
  * confirms the risk of a second delivery.
  *
@@ -118,7 +118,7 @@ public class ReplyService {
             violations.add("mailboxId.unavailable");
         }
         String to = rawTo == null || rawTo.isBlank() ? contact.addresses().get(0) : DirectoryService.normalizedAddress(rawTo);
-        if (to == null || !contact.addresses().contains(to) || mailbox != null && to.equals(mailbox.address())) {
+        if (!recipient(contact, to) || mailbox != null && to.equals(mailbox.address())) {
             violations.add("to.not_of_contact");
         }
         String subject = ParsedMail.clean(rawSubject);
@@ -136,7 +136,7 @@ public class ReplyService {
         Instant now = clock.instant();
         UUID id = UUID.randomUUID();
         List<String> thread = thread(ticket);
-        UUID job = enqueue(actor.companyId(), id, 1);
+        UUID job = enqueue(actor.companyId(), id, 1, actor.userId());
         Reply reply = new Reply(id, actor.companyId(), projectId, ticket, mailbox.id(), contact.id(), mailbox.address(), to, subject, body,
             "<" + id + "@" + ParsedMail.domain(mailbox.address()) + ">", thread.isEmpty() ? null : thread.get(thread.size() - 1),
             thread.isEmpty() ? null : String.join(" ", thread), "pending", null, job, 1, null, null, now, actor.userId(), now, actor.userId(), 1);
@@ -166,11 +166,11 @@ public class ReplyService {
         if (mailbox == null || !mailbox.address().equals(reply.fromAddress())) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("mailboxId.unavailable"));
         }
-        if (!contact.id().equals(reply.contactId()) || !contact.addresses().contains(reply.toAddress())) {
+        if (!contact.id().equals(reply.contactId()) || !recipient(contact, reply.toAddress())) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("to.not_of_contact"));
         }
         Instant now = clock.instant();
-        UUID job = enqueue(actor.companyId(), reply.id(), reply.sends() + 1);
+        UUID job = enqueue(actor.companyId(), reply.id(), reply.sends() + 1, actor.userId());
         repository.replyAgain(reply.id(), job, now, actor.userId());
         repository.audit(actor.companyId(), "reply", reply.id(), "reply.sent_again",
             JSON.writeValueAsString(new Again(reply.state(), reply.errorCode())), actor.userId(), now);
@@ -210,8 +210,15 @@ public class ReplyService {
             .map(m -> new Sender(m.id(), m.name(), m.address())).toList();
     }
 
+    /** Whether the mailbox sends for the project: enabled, with SMTP server and a plain address (TASK-062, X-F3). */
     static boolean sends(Mailbox mailbox, UUID projectId) {
-        return mailbox.enabled() && mailbox.projectId().equals(projectId) && mailbox.smtpHost() != null && mailbox.address() != null;
+        return mailbox.enabled() && mailbox.projectId().equals(projectId) && mailbox.smtpHost() != null
+            && mailbox.address() != null && mailbox.address().equals(DirectoryService.normalizedAddress(mailbox.address()));
+    }
+
+    /** Whether the address is one of the contact and plain enough to send to; addresses stored before TASK-062 may not be. */
+    static boolean recipient(Contact contact, String address) {
+        return address != null && contact.addresses().contains(address) && address.equals(DirectoryService.normalizedAddress(address));
     }
 
     /** "Re: " before the subject of the last mail, unless it starts with it already. */
@@ -229,7 +236,8 @@ public class ReplyService {
         }
         List<Entry> entries = new ArrayList<>();
         repository.messagesOfTicket(ticket).forEach(m -> {
-            if (m.messageId() != null && m.messageId().matches("<[^<>\\s]{1,996}>")) {
+            // Only identifiers of printable ASCII go into a header of the reply (TASK-062, C-F3).
+            if (m.messageId() != null && SmtpMailSender.MESSAGE_ID.matcher(m.messageId()).matches()) {
                 entries.add(new Entry(m.sentAt() == null ? m.receivedAt() : m.sentAt(), m.messageId()));
             }
         });
@@ -239,8 +247,9 @@ public class ReplyService {
         return ids.subList(Math.max(0, ids.size() - REFERENCES_MAX), ids.size());
     }
 
-    private UUID enqueue(UUID companyId, UUID replyId, int send) {
-        return jobs.enqueue(NewJob.of(companyId, JOB_KIND).withPayload(Map.of("reply", replyId.toString()))
+    /** The job of one send; it carries the person who confirmed it, whose membership the job checks (TASK-062, C-F2). */
+    private UUID enqueue(UUID companyId, UUID replyId, int send, UUID confirmedBy) {
+        return jobs.enqueue(NewJob.of(companyId, JOB_KIND).withPayload(Map.of("reply", replyId.toString(), "by", confirmedBy.toString()))
             .withDedupKey("reply:" + replyId + ":" + send).withMaxAttempts(MAX_ATTEMPTS));
     }
 
@@ -261,7 +270,26 @@ public class ReplyService {
         if (reply.version() != expectedVersion) {
             throw ApiProblemException.of(412, "helpdesk.version_conflict");
         }
-        return reply;
+        // A reply whose job ended without an outcome is settled first, so that it can be sent again or recorded (TASK-062).
+        return settleOrphan(reply, clock.instant());
+    }
+
+    /**
+     * Settles a reply that waits or is being sent although its job will not run it again (TASK-062, C-F1 and X-F2): the last
+     * attempt ended without a recorded outcome, failed otherwise, or the administration cancelled the job. One that was handed
+     * to the mail server may have arrived and becomes uncertain ({@code helpdesk.send_interrupted}); one that was not becomes
+     * failed ({@code helpdesk.job_ended}). Either way a person can send it again or record it. The reply must be locked; a
+     * reply whose job still waits or runs is left alone, and once ended a job only runs again through a retry of the
+     * administration, which then finds the reply no longer pending and sends nothing.
+     */
+    Reply settleOrphan(Reply reply, Instant now) {
+        boolean sending = reply.state().equals("sending");
+        if (!sending && !reply.state().equals("pending") || jobs.active(reply.jobId())) {
+            return reply;
+        }
+        repository.replyState(reply.id(), sending ? "uncertain" : "failed", sending ? "helpdesk.send_interrupted" : "helpdesk.job_ended",
+            null, null, now, reply.updatedBy());
+        return repository.reply(reply.companyId(), reply.id()).orElseThrow();
     }
 
     /**

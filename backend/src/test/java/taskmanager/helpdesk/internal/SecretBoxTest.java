@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /** TASK-057: the mailbox passwords are encrypted with the key of the operation and bound to their mailbox. */
 class SecretBoxTest {
     private static SecretBox box(String key) {
-        return new SecretBox(new HelpdeskProperties(key, Duration.ofSeconds(60), 25_000_000L, 50, Duration.ofSeconds(20)));
+        return new SecretBox(new HelpdeskProperties(key, Duration.ofSeconds(60), 25_000_000L, 50, Duration.ofSeconds(20), Duration.ofMinutes(10)));
     }
 
     private static String key(char c) {

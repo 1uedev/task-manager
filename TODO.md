@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-062](#task-062-befunde-der-prüfungen-von-task-058-beheben) | Befunde der Prüfungen von TASK-058 beheben | claude-20261030-replyfix-01 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -41,6 +39,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-058](#task-058-helpdesk-antworten-über-smtp-paket-a9-teil-2) | Helpdesk Antworten über SMTP (Paket A9, Teil 2) | claude-20261028-helpdesk-01 | 2026-10-29 |
+| [TASK-062](#task-062-befunde-der-prüfungen-von-task-058-beheben) | Befunde der Prüfungen von TASK-058 beheben | claude-20261030-replyfix-01 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -79,7 +78,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-062 Befunde der Prüfungen von TASK-058 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-01 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-replyfix-01 · **Aktualisiert:** 2026-10-30
 
 **Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-058 (Ergebnis PR #202), Prüfberichte docs/REVIEW_TASK-058_PR-202.md (Claude, PR #203) und docs/REVIEW_TASK-058_PR-202_CODEX.md (Codex, abgelegt mit dem Nachtrag zur Reservierung PR #204). **Arbeitsstand:** Holgers Wahl „F1 bis F4 beheben“ vom 30. Oktober 2026 zur Claude Prüfung; der danach übergebene Codex Bericht empfiehlt seine Befunde F1 bis F4 ebenfalls vor der Abnahme und überschneidet sich mit der Claude Prüfung, daher deckt TASK-062 mit diesem Nachtrag beide ab. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-092, Migration V0029 nur falls nötig.
 
@@ -96,4 +95,8 @@ Nicht Teil: die übrigen Hinweise beider Berichte (C-H1 bis C-H8, X-H1 bis X-H5)
 
 **Abnahmekriterien:** Regressionstests für die drei Fälle verwaister Antworten mit echter Lease Freigabe, für beide Ergebnisreihenfolgen eines alten Versuchs nach einer neuen Runde, für das erneute Senden nach Austritt des Urhebers, für Adressen mit Kommentar und Zeilenumbruch, Gruppen und Steuerzeichen bei Postfach und Kontakt, für die Zeilenlänge mit 20 langen Message-IDs, für die Einordnung vor und nach dem Datenende sowie eine späte Annahme innerhalb des neuen Zeitlimits und für einen Kundenwechsel zwischen Vergleich und Anhängen in beiden Commit Reihenfolgen; die neuen Tests sind vor der Korrektur rot und danach grün; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058 und TASK-062 zusammen ab.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
+**Ergebnis:** DEC-092, keine Migration. Neue wiederkehrende Aufgabe `helpdesk.replies` (`ReplyWatch`) und Klärung bei jeder Aktion einer Person mit dem Port `Jobs.active`; Ausgang eines Versuchs nur für den eigenen Auftrag unter der Sperre der Antwort; Auftrag mit Nutzlast `by` der bestätigenden Person; strenge einfache Adressen in `DirectoryService.normalizedAddress`, Namen ohne Steuerzeichen, geprüfte und gefaltete Message-IDs; `SmtpMailSender` unterscheidet die Phasen über das Datenende und nutzt `taskmanager.helpdesk.smtp-timeout` (Standard zehn Minuten), Zeitlimit des Auftrags fünf Minuten darüber; Sperre je Ticket für Kundenvergleich, Kundenwechsel und Nehmen aus der Prüfwarteschlange. Neue Fehlercodes `helpdesk.job_ended` und `helpdesk.send_broken` in Vertrag und Oberfläche. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 394 Tests, darunter neun neue API Tests in `HelpdeskApiTest` (verwaiste Antworten mit echter Lease Freigabe und Abbruch in der Jobverwaltung, Klärung bei Aktion vor der Aufgabe, beide Reihenfolgen alter Versuche, Austritt der verfassenden und der bestätigenden Person, Adressen bei Kontakt und Postfach, früher gespeicherte Adresse, Abbruch vor dem Datenende, späte Annahme nach sechs Sekunden bei fünf Sekunden Verbindungszeitlimit, Kundenwechsel in beiden Sperrreihenfolgen) und fünf Einheitentests in `SmtpMailSenderTest` (Adressen, Gruppen, Namen mit Zeilenumbruch, ungültige Message-IDs, 20 Referenzen mit je etwa 250 Zeichen). Gegen den Stand vor der Korrektur (main 42f2183) sind 13 der 14 neuen Tests rot; grün blieb dort nur die Ablehnung zusammengesetzter Adressen über die API, die schon der alte Parser abwies. Zusätzlich gezielt geprüft: ohne die Auftragsprüfung beim Ausgang wird der Reihenfolgetest rot. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün (ein erster paralleler Lauf hatte einen Ausreißer im Designtest „a typed color is checked before it is shown“ unter Last, der Wiederholungslauf war vollständig grün). Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker, ohne neue Migration unverändert, läuft in CI.
+
+**Nächster Schritt:** Getrennte Prüfung durch eine andere KI, danach nimmt Holger TASK-058 und TASK-062 zusammen ab.

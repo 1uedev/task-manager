@@ -395,6 +395,31 @@ class HelpdeskRepository {
         jdbc.sql("update helpdesk_message set state = 'review', reason = ? where id = ?").params(reason, id).update();
     }
 
+    /** A mail that would have joined a ticket waits in the review queue with that ticket as its reference (TASK-062, X-F4). */
+    void reviewWithTicket(UUID id, String reason, UUID relatedTicketId) {
+        jdbc.sql("update helpdesk_message set state = 'review', reason = ?, related_ticket_id = ? where id = ?").params(reason, relatedTicketId, id)
+            .update();
+    }
+
+    /**
+     * Serializes the changes of customer and contact of one ticket with the answers that join it (TASK-062, X-F4), until the
+     * transaction ends. A lock of its own, because the ticket row is only locked {@code FOR SHARE} by the helpdesk and the link
+     * row may not exist yet.
+     */
+    void lockTicketCustomer(UUID ticketId) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtextextended('helpdesk.ticket_customer:' || ?::text, 0))").param(ticketId.toString())
+            .query((rs, row) -> 1).list();
+    }
+
+    /** Locks the contact {@code FOR SHARE}, so that it keeps its customer until the transaction ends; then reads it. */
+    Optional<Contact> shareContact(UUID companyId, UUID contactId) {
+        if (jdbc.sql("select id from helpdesk_contact where id = ? and company_id = ? for share").params(contactId, companyId)
+                .query(UUID.class).optional().isEmpty()) {
+            return Optional.empty();
+        }
+        return contact(companyId, contactId);
+    }
+
     private static Message message(ResultSet rs, int row) throws SQLException {
         List<Message.AttachmentNote> attachments = JSON.readValue(rs.getString("attachments"), new TypeReference<List<Message.AttachmentNote>>() { });
         return new Message(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("mailbox_id", UUID.class),
@@ -447,6 +472,12 @@ class HelpdeskRepository {
         return jdbc.sql("select " + REPLY_COLUMNS + " from helpdesk_reply where company_id = ? and project_id = any(?) and state <> 'sent' "
                 + "order by created_at desc, id desc limit ?")
             .params(companyId, projects.toArray(UUID[]::new), limit).query(HelpdeskRepository::reply).list();
+    }
+
+    /** The replies of all companies that wait or are being sent, longest unchanged first: candidates for {@code ReplyWatch}. */
+    List<UUID> unsettledReplies(int limit) {
+        return jdbc.sql("select id from helpdesk_reply where state in ('pending', 'sending') order by updated_at, id limit ?").param(limit)
+            .query(UUID.class).list();
     }
 
     /** Writes the state of a reply and moves its version on. */

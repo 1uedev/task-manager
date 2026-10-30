@@ -144,6 +144,7 @@ public class ReviewService {
         if (ticket == null || tickets.locate(ticket).filter(l -> l.projectId().equals(message.projectId())).isEmpty()) {
             throw ApiProblemException.of(409, "helpdesk.no_related_ticket");
         }
+        repository.lockTicketCustomer(ticket);
         Contact contact = message.fromAddress() == null ? null : repository.contactByAddress(actor.companyId(), message.fromAddress()).orElse(null);
         UUID ticketCustomer = repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::customerId).orElse(null);
         if (contact != null && !contact.customerId().equals(ticketCustomer)) {

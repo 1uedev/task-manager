@@ -255,8 +255,16 @@ public class MailIntake implements RecurringTask {
             return;
         }
         if (decision.state().equals("ticket") && replied != null) {
-            // The answer of a confirmed contact of the customer of the ticket joins that ticket instead of opening a new one.
-            opener.append(message, parsed, replied, decision.customer(), decision.contact(), TicketAccess.MAIL_INTAKE, now);
+            // The answer of a confirmed contact of the customer of the ticket joins that ticket instead of opening a new one. The
+            // customer is compared again under the lock that a change of customer or contact of the ticket also takes, so a
+            // change committed since the first comparison sends the mail to review instead (TASK-062, X-F4).
+            repository.lockTicketCustomer(replied);
+            Contact contact = repository.shareContact(mailbox.companyId(), decision.contact().id()).orElse(null);
+            if (contact == null || !contact.customerId().equals(decision.customer().id()) || !sameCustomer(replied, decision.customer())) {
+                repository.reviewWithTicket(message.id(), "reply_customer_mismatch", replied);
+                return;
+            }
+            opener.append(message, parsed, replied, decision.customer(), contact, TicketAccess.MAIL_INTAKE, now);
             return;
         }
         if (decision.state().equals("ticket")) {

@@ -13,15 +13,28 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A small SMTP server for the failures a real one does not show on demand (TASK-058): it refuses the recipient with a code,
- * or it reads the whole mail and ends the connection before it answers, so the sender cannot know whether it was taken.
+ * or it reads the whole mail and ends the connection before it answers, so the sender cannot know whether it was taken. For
+ * TASK-062 it also ends the connection before the mail and accepts a mail only after a long check.
  * Every mail it read to the end counts as handed over.
  */
 final class ScriptedSmtp implements AutoCloseable {
+    /** How long the server checks a mail in {@link Mode#SLOW_ACCEPT}. */
+    static final java.time.Duration SLOW = java.time.Duration.ofSeconds(6);
+
     enum Mode {
         /** Answers 250 to everything and takes the mail. */
         ACCEPT,
         /** Reads the whole mail and closes the connection without an answer to its end. */
         DROP_AFTER_DATA,
+        /** Closes the connection on the command DATA, before any of the mail is sent (TASK-062). */
+        DROP_AT_DATA,
+        /** Reads the whole mail and accepts it only after {@link #SLOW} (TASK-062). */
+        SLOW_ACCEPT,
+        /**
+         * Reads the whole mail and answers only after {@link #release()}: it accepts the mail, unless the mode changed to
+         * {@link #DROP_AFTER_DATA} meanwhile (TASK-062).
+         */
+        HELD,
         /** Refuses the recipient with 550. */
         REFUSE_RECIPIENT,
         /** Refuses the recipient for now with 451. */
@@ -33,6 +46,7 @@ final class ScriptedSmtp implements AutoCloseable {
     private volatile Mode mode;
     private final AtomicInteger connections = new AtomicInteger();
     private final List<String> handedOver = new CopyOnWriteArrayList<>();
+    private final java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
 
     ScriptedSmtp(Mode mode) throws IOException {
         this.mode = mode;
@@ -52,6 +66,11 @@ final class ScriptedSmtp implements AutoCloseable {
 
     int connections() {
         return connections.get();
+    }
+
+    /** Lets a {@link Mode#HELD} server answer. */
+    void release() {
+        gate.countDown();
     }
 
     /** The mails the server read to their end, whatever it answered. */
@@ -88,6 +107,9 @@ final class ScriptedSmtp implements AutoCloseable {
                     default -> "250 OK";
                 });
             } else if (command.equals("DATA")) {
+                if (mode == Mode.DROP_AT_DATA) {
+                    return;
+                }
                 say(out, "354 End data with <CR><LF>.<CR><LF>");
                 StringBuilder mail = new StringBuilder();
                 while ((line = in.readLine()) != null && !line.equals(".")) {
@@ -96,6 +118,21 @@ final class ScriptedSmtp implements AutoCloseable {
                 handedOver.add(mail.toString());
                 if (mode == Mode.DROP_AFTER_DATA) {
                     return;
+                }
+                if (mode == Mode.SLOW_ACCEPT || mode == Mode.HELD) {
+                    try {
+                        if (mode == Mode.SLOW_ACCEPT) {
+                            Thread.sleep(SLOW.toMillis());
+                        } else {
+                            gate.await();
+                        }
+                    } catch (InterruptedException stopped) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    if (mode == Mode.DROP_AFTER_DATA) {
+                        return;
+                    }
                 }
                 say(out, "250 OK queued");
             } else if (command.startsWith("RSET") || command.startsWith("NOOP")) {
@@ -116,6 +153,7 @@ final class ScriptedSmtp implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        gate.countDown();
         server.close();
     }
 }
