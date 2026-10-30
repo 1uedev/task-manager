@@ -127,6 +127,20 @@ class SmtpMailSenderTest {
     }
 
     @Test
+    void everySubjectArrivesAsItWasTyped() throws Exception {
+        // TASK-064, F1: text that looks like an encoded word must not be decoded into something else.
+        for (String subject : List.of("Re: Anfrage", "Re: " + "Wort ".repeat(60).trim(), "Re: Grüße aus Köln \uD83D\uDE00",
+                "=?UTF-8?B?SGFsbG8=?=", "Re: =?ISO-8859-1?Q?Gr=FC=DFe?= und mehr", "=?", "a=?b?c?=d", "\t=?UTF-8?Q?x?=\t")) {
+            MimeMessage message = SmtpMailSender.message(SESSION, withSubject(subject, "Support", "Lea"));
+            String raw = raw(message);
+            assertLinesWithinLimit(raw);
+            assertEquals(subject, message.getSubject(), "decoded by the library");
+            assertEquals(subject, jakarta.mail.internet.MimeUtility.decodeText(jakarta.mail.internet.MimeUtility.unfold(
+                message.getHeader("Subject", null))), "decoded from the header as sent");
+        }
+    }
+
+    @Test
     void aSubjectWithALineBreakIsRefused() {
         for (String subject : List.of("Re: a\r\nBcc: mia@suedtechnik.example", "Re: a\rb", "Re: a\nb", "Re: \u0000")) {
             assertThrows(MessagingException.class, () -> SmtpMailSender.message(SESSION, withSubject(subject, "Support", "Lea")), subject);

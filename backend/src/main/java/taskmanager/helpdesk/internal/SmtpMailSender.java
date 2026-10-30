@@ -217,14 +217,15 @@ class SmtpMailSender implements MailSender {
     /**
      * The subject as a header value: encoded where needed and folded. A long run without spaces cannot be folded as text, so
      * the subject then goes as a series of short encoded words that can (TASK-063, F2). Control characters other than the tab
-     * are refused.
+     * are refused. A subject that holds {@code =?} always goes as encoded words, so that text which looks like an encoded word
+     * arrives as it was typed instead of being decoded by the recipient (TASK-064, F1).
      */
     static String subject(String subject) throws MessagingException, UnsupportedEncodingException {
         if (subject == null || subject.isEmpty() || subject.codePoints().anyMatch(point -> point != '\t' && Character.isISOControl(point))) {
             throw new MessagingException("The subject of the reply is not a single line");
         }
         String plain = MimeUtility.fold(9, MimeUtility.encodeText(subject, StandardCharsets.UTF_8.name(), null));
-        if (java.util.Arrays.stream(plain.split("\r\n")).allMatch(line -> line.length() <= 76)) {
+        if (!subject.contains("=?") && java.util.Arrays.stream(plain.split("\r\n")).allMatch(line -> line.length() <= 76)) {
             return plain;
         }
         // Encoded words of at most 45 bytes of UTF-8 each, never splitting a character, one per line (RFC 2047, 75 characters).

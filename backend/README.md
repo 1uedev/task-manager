@@ -319,6 +319,8 @@ Grenze: Bricht die Verbindung, während die Mail schon beim Server liegt, aber v
 (4) Die Aufgabe `helpdesk.replies` geht in jedem Lauf seitenweise durch alle ausstehenden und versendenden Antworten, sodass Antworten mit laufendem Auftrag keine verwaisten verdrängen.
 (5) Tests: Der Testserver `ScriptedSmtp` zählt nur bis zur Abschlusszeile gelesene Mails als übergeben, ein Abbruch im Inhalt steht getrennt (`broken`); die Wartebarrieren der Sperrtests prüfen über `pg_blocking_pids` genau die beteiligte Verbindung; das SMTP Antwortlimit der Tests ist 20 Sekunden.
 
+**Korrektur nach der Codex Prüfung von TASK-063 (TASK-064, DEC-094).** Ohne Migration. Ein Betreff, der `=?` enthält, geht immer als kodierte Wörter (RFC 2047); so kommt Text, der wie ein kodiertes Wort aussieht, beim Empfänger so an, wie er eingegeben wurde, und wird nicht zu anderem Text dekodiert.
+
 **Übersicht.** `GET /api/v1/helpdesk/replies` nennt bis zu 100 noch nicht angenommene Antworten der Projekte, in denen die Person Mitglied ist und antworten darf; die Prüfwarteschlange zeigt sie oben.
 
 **Grenzen.** (1) Keine Entwürfe, keine weiteren Empfänger, keine Anhänge, keine Vorlagen mit Branding (A17), keine Benachrichtigungen und kein SLA. (2) Die Annahme durch den Server ist kein Beweis der Zustellung; Zustellberichte werden nicht ausgewertet. (3) Gruppenrechte gelten zum Zeitpunkt der Bestätigung. (4) Eine unklare Antwort kann den Kunden erreicht haben; erneutes Senden kann ein Duplikat erzeugen, darauf weist die Oberfläche hin. (5) Gesendete Antworten werden nicht im Gesendet Ordner des Postfachs abgelegt.

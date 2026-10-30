@@ -85,6 +85,10 @@ Die Antworten sind mit TASK-058 umgesetzt, zur Prüfung und Abnahme. Gegenüber 
 - Ein Versandauftrag mit fehlerhafter Angabe der bestätigenden Person sendet nicht.
 - Die minütliche Klärung erreicht jede wartende Antwort, auch wenn sehr viele Antworten gleichzeitig unterwegs sind.
 
+### Nachtrag TASK-064 (DEC-094): Korrektur nach der Codex Prüfung von TASK-063
+
+- Ein Betreff kommt beim Kunden immer so an, wie er eingegeben wurde, auch wenn er Zeichenfolgen enthält, die wie eine Mailkodierung aussehen.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

@@ -110,8 +110,9 @@ class HelpdeskApiTest {
         registry.add("taskmanager.files.directory", STORE::toString);
         registry.add("taskmanager.helpdesk.secret-key", () -> KEY);
         registry.add("taskmanager.helpdesk.timeout", () -> "5s");
-        // Each answer of an SMTP server may take longer than opening the connection (TASK-062, C-F4).
-        registry.add("taskmanager.helpdesk.smtp-timeout", () -> "20s");
+        // Each answer of an SMTP server may take longer than opening the connection (TASK-062, C-F4). A held server waits
+        // while the test runs whole jobs and the watch; sixty seconds leave room for a slow machine (TASK-064, H2).
+        registry.add("taskmanager.helpdesk.smtp-timeout", () -> "60s");
         // Small batches, so that the tests see what lasts from one fetch to the next (TASK-059, F2).
         registry.add("taskmanager.helpdesk.batch", () -> "5");
     }
@@ -1568,7 +1569,7 @@ class HelpdeskApiTest {
             smtp(setup, server.port());
             long number = (Long) ticketFromMail(setup, "Langsam")[0];
             UUID reply = replyId(replier(setup), setup, number, "Eins");
-            // The check takes six seconds, longer than the five of the connection and well within the twenty of an SMTP answer.
+            // The check takes six seconds, longer than the five of the connection and well within the sixty of an SMTP answer.
             assertNull(runReplyJob(reply, 1));
             assertEquals("sent", replyState(reply));
         }
@@ -1772,7 +1773,8 @@ class HelpdeskApiTest {
             long number = (Long) ticketFromMail(setup, "Abbruch mittendrin")[0];
             UUID reply = replyId(replier(setup), setup, number, "Eins\r\nZwei\r\nDrei");
             RuntimeException failure = runReplyJob(reply, 1);
-            // The sender wrote the whole mail before it learned of the end, so it cannot tell this from a lost answer.
+            // The server waits for the end line before it drops the connection, so the sender has always written the whole mail
+            // and cannot tell this from a lost answer (TASK-064, H2).
             assertTrue(failure instanceof JobFailure known && known.code().equals("helpdesk.send_uncertain"), String.valueOf(failure));
             assertEquals("uncertain", replyState(reply));
             assertEquals(0, server.handedOver().size());
