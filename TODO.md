@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-064](#task-064-befund-f1-und-hinweis-h2-der-codex-prüfung-von-task-063-beheben) | Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben | claude-20261030-replyfix-03 | 2026-10-30 |
 
 ### Blockiert – BLOCKIERT
 
@@ -127,3 +129,20 @@ Nicht Teil: H2 (Adressregel als bewusste Grenze), H3, H5 und die Gesamtlaufzeit 
 **Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 400 Tests, darunter vier neue API Tests (Wiederholung der Jobverwaltung gleichzeitig mit der Klärung in beiden Reihenfolgen, ungültiges `by`, 250 Antworten mit wartendem Auftrag vor einer verwaisten, Abbruch innerhalb der Maildaten), der neu geschriebene Test der Kundengrenze mit echtem Anhängen vor dem Kundenwechsel und zwei neue Einheitentests (lange Betreffe und Namen, Betreff mit Zeilenumbruch). Gegen den Stand vor der Korrektur (main ae1bd96) sind fünf der neuen Tests rot (Wiederholung, ungültiges `by`, viele Antworten, lange Kopfzeilen, Zeilenumbruch im Betreff); der Test der Kundengrenze und der Abbruch in den Daten sind dort grün, weil sie Testlücken schließen, keinen Fehler des Produkts. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker (keine neue Migration), läuft in CI.
 
 **Nächster Schritt:** Getrennte Prüfung durch eine andere KI, danach nimmt Holger TASK-058, TASK-062 und TASK-063 zusammen ab.
+
+## TASK-064 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-03 · **Aktualisiert:** 2026-10-30
+
+**Bezug:** REQ-HD-001 (Antworten an Kunden), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-063 (Ergebnis PR #208), Prüfbericht [docs/REVIEW_TASK-063_PR-208.md](docs/REVIEW_TASK-063_PR-208.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „Erst F1 und H2 beheben“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-094, keine Migration geplant.
+
+**Umfang:** Holgers Wahl „Erst F1 und H2 beheben“:
+
+1. F1: Ein Betreff, der wörtlich wie ein kodiertes Wort nach RFC 2047 aussieht (zum Beispiel `=?UTF-8?B?SGFsbG8=?=`), wird vollständig kodiert und kommt beim Empfänger unverändert als eingegebener Text an.
+2. H2: Der Test für einen Abbruch innerhalb der Maildaten hängt nicht mehr vom Schreib und Pufferverhalten des Clients ab; die Zeitreserven der SMTP Tests werden geprüft und wo nötig vergrößert.
+
+Nicht Teil: H1 und H3 der Prüfung von TASK-063 sowie die offenen Hinweise früherer Prüfungen; sie bleiben Hinweise für die Abnahme.
+
+**Abnahmekriterien:** Ein Dekodierungs Roundtrip Test für normale, lange, internationale und wie kodierte Wörter aussehende Betreffe; der Abbruchtest erzwingt seine Reihenfolge selbst; alle Backend, Frontend und Browsertests grün. Holger nimmt TASK-058, TASK-062, TASK-063 und TASK-064 zusammen ab.
+
+**Nächster Schritt:** Merge dieser Reservierung, danach Umsetzung.
