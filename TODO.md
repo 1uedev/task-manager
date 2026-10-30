@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-062](#task-062-befunde-f1-bis-f4-der-prüfung-von-task-058-beheben) | Befunde F1 bis F4 der Prüfung von TASK-058 beheben | claude-20261030-replyfix-01 | 2026-10-30 |
 
 ### Blockiert – BLOCKIERT
 
@@ -74,3 +76,22 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 380 Tests, darunter sechs neue Tests der Antworten gegen GreenMail und `ScriptedSmtp` (Abbruch nach DATA, Ablehnung 550 und 451); Frontend `npm run verify` und 128 Browser Tests, davon vier neue. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker; die Migrationsliste ist angepasst, der Lauf erfolgt in CI.
 
 **Nächster Schritt:** Getrennte Prüfung durch eine andere KI (Codex), danach Holgers Abnahme.
+
+## TASK-062 Befunde F1 bis F4 der Prüfung von TASK-058 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-01 · **Aktualisiert:** 2026-10-30
+
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002, REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-058 (Ergebnis PR #202), Prüfbericht docs/REVIEW_TASK-058_PR-202.md (PR #203). **Arbeitsstand:** Holgers Wahl „F1 bis F4 beheben“ vom 30. Oktober 2026 im Projektgespräch. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-092, Migration V0029 nur falls nötig.
+
+**Umfang:** Nur die Befunde aus dem Prüfbericht:
+
+1. F1: Eine Antwort, deren Versandauftrag ohne vermerkten Ausgang endet (letzter Versuch verloren, anderer Fehler im letzten Versuch, Abbruch in der Jobverwaltung), bleibt nicht dauerhaft ausstehend; sie wird unklar oder nicht gesendet und lässt sich im Helpdesk erneut senden oder festhalten.
+2. F2: Der Auftrag prüft die Person, die den Versand zuletzt bestätigt hat, nicht den ursprünglichen Urheber.
+3. F3: `In-Reply-To` und `References` bleiben unter der Zeilengrenze von RFC 5322 (Faltung) und übernehmen nur Message-IDs aus druckbarem ASCII.
+4. F4: Ein eigenes, längeres Zeitlimit für die Antwort des Servers auf das Datenende; ein Abbruch vor dem Datenende gilt als sicher nicht gesendet.
+
+Nicht Teil: die Hinweise H1 bis H8 des Berichts, insbesondere H7 (Benachrichtigung bei Kundenantworten, gehört zum Paket Benachrichtigungen).
+
+**Abnahmekriterien:** Regressionstests für die drei Fälle von F1, für das erneute Senden nach Austritt des Urhebers (F2), für die Zeilenlänge mit 20 langen Message-IDs (F3) und für die Einordnung vor und nach dem Datenende sowie eine späte Annahme innerhalb des neuen Zeitlimits (F4); die neuen Tests sind vor der Korrektur rot und danach grün; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058 und TASK-062 zusammen ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
