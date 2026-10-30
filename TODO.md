@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 3 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -31,11 +31,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-068](#task-068-sla-fristen-und-geschäftszeiten-a10-teil-1) | SLA Fristen und Geschäftszeiten (A10 Teil 1) | claude-20261030-sla-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-10-30 |
 
 ### Blockiert – BLOCKIERT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-070](#task-070-sla-eskalationen-a10-teil-2) | SLA Eskalationen (A10 Teil 2) | claude-20261030-sla-01 | 2026-10-30 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -71,6 +74,39 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
 
+## TASK-068 SLA Fristen und Geschäftszeiten (A10 Teil 1)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-30
+
+**Bezug:** REQ-HD-003 (SLA Fristen), REQ-HD-004 (Geschäftszeiten), ACC-002; DEC-032; OPEN-008. **Abhängigkeiten:** TASK-054 bis TASK-056 (Hintergrundaufträge) und TASK-057 bis TASK-064 (Helpdesk über Mail), abgenommen; TASK-044 (Projektkonfiguration), abgenommen. **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „nach H7 bitte A10 und A6 parallel“ das Paket A10 beauftragt und am selben Tag die 20 Vorschläge zu OPEN-008 mit „Ja, so übernehmen“ bestätigt (Punkte unten). Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-2gq3w2; Ergebnis mit DEC-098 und der beim Ergebnis nächsten freien Migrationsnummer auf main.
+
+**Umfang:** Kalender, SLA Regeln, Priorität und Fristuhren je Ticket mit Anzeige am Ticket und ihrer Oberfläche. Nicht Teil: Eskalationen (TASK-070), Mail an interne Empfänger, Benachrichtigungen, Portal, Auswertungen und Berichte über Fristen, Filter nach Fristzustand in der Suche, Neubewertung laufender Zyklen, Feiertagsimport, Verträge je Kunde über die Zuordnung in Regel 3 hinaus.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 bestätigt, Klärung von OPEN-008):
+1. Neues Ticketfeld `priority` mit den Werten Niedrig, Normal, Hoch, Kritisch, Vorgabe Normal, mit Feldregeln und Historie.
+2. Budgets ohne Produktvorgabe: Erstreaktion und Lösung in Geschäftsminuten je Regel und Priorität; 120 und 480 Minuten nur in den Demodaten.
+3. Zuordnung der Regel in der Reihenfolge Projekt mit Kunde und Tickettyp, Projekt mit Kunde, Standard des Projekts; zwei gleich passende Regeln werden beim Speichern abgelehnt; ohne Regel zeigt das Ticket „Keine SLA zugeordnet“.
+4. Fristen nur für Tickets mit gesetztem Feld `customer`; ein später gesetzter Kunde startet mit dem Zeitpunkt aus Regel 7.
+5. Neues Unternehmensrecht `sla.manage` für Kalender, Regeln und deren Zuordnung; Lesen der Fristen folgt der Leseregel des Tickets.
+6. Kalender mit IANA Zeitzone, je Wochentag einem oder mehreren offenen Zeiträumen und datierten Ausnahmen; Zeitumstellung wie in docs/HELPDESK_SLA.md (nicht existierende Uhrzeit auf die nächste gültige, doppelte Startzeit auf das frühere, doppelte Endzeit auf das spätere Vorkommen). Ein laufender Zyklus behält die Fassung von Regel und Kalender, mit der er begann.
+7. Start ist der erste dauerhafte Eingang: bei einer Mail der Zeitpunkt der Speicherung durch den Abruf, auch bei späterer Übernahme aus der Prüfwarteschlange (S-12); sonst die Anlage des Tickets. Der Date Header zählt nicht.
+8. Qualifizierte Erstreaktion ist eine Antwort über SMTP im Zustand „gesendet“, zum Zeitpunkt der Annahme durch den Mailserver.
+9. Jeder Status eines Ablaufs bekommt in der Projektkonfiguration eine SLA Art: offen (Vorgabe), wartet auf Kunde, gelöst, verworfen.
+10. Kundenpause (DEC-032) beginnt mit dem Wechsel in „wartet auf Kunde“ und endet mit einer dem Ticket zugeordneten Kundenantwort oder dem nächsten Statuswechsel; eine Antwort des Supports beendet sie nicht.
+11. Lösung ist erfüllt, wenn das Ticket in „gelöst“ steht und im Zyklus mindestens eine Antwort gesendet wurde, zum späteren der beiden Zeitpunkte (H-09); „verworfen“ beendet den Zyklus als Abbruch.
+12. Rückkehr aus „gelöst“ in einen offenen Status beginnt einen neuen Zyklus mit neuem Budget (S-10); eine Kundenmail allein öffnet nicht wieder.
+13. Prioritätswechsel: neues Budget minus verbrauchte Zeit, bei negativem Rest ab diesem Moment verletzt (S-09); erfüllte Uhren bleiben erfüllt.
+14. Das Ticket zeigt je Uhr Zustand (läuft, pausiert, erfüllt, verletzt, abgebrochen), Fälligkeit mit Zeitzone, verbleibende Geschäftszeit, Regel und Kalender; während einer Pause nur das Restbudget.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Die Rechenbeispiele S-01 bis S-14 und H-09, H-10, H-12 aus docs/HELPDESK_SLA.md sind als Backend Tests der Berechnung umgesetzt, dazu Tests der Grenzauflösung bei Zeitumstellung.
+2. Kalender und Regeln sind versioniert, nur mit `sla.manage` änderbar, mit Audit; mehrdeutige Zuordnung wird mit 409 abgelehnt.
+3. Uhren werden in der Transaktion der auslösenden Änderung (Ticket, Status, Priorität, Kunde, Antwort gesendet, Kundenantwort) fortgeschrieben; nebenläufige Änderungen erzeugen keinen doppelten oder verlorenen Zyklus.
+4. Die Fristen am Ticket erscheinen nur mit Leserecht auf das Ticket und verraten keine verborgenen Felder.
+5. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Kalender, Regeln und die Anzeige am Ticket; Demodaten mit einem Kalender und einer Regel.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+
 ## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-time-01 · **Aktualisiert:** 2026-10-30
@@ -103,3 +139,25 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Regeln, Korrektur, Storno, Konflikt und Export, Browser Tests für Buchen am Ticket, Korrigieren, Stornieren, „Meine Zeiten“ und Auswertung.
 
 **Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+
+## TASK-070 SLA Eskalationen (A10 Teil 2)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-30
+
+**Bezug:** REQ-HD-005 (Eskalationen), ACC-002; OPEN-008. **Abhängigkeiten:** TASK-068 geliefert. **Arbeitsstand:** Mit TASK-068 von Holger am 30. Oktober 2026 beauftragt und mit den Vorschlägen 17 bis 20 bestätigt. Blockiert, bis das Ergebnis von TASK-068 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit eigener DEC-ID.
+
+**Umfang:** Eskalationsstufen, ihre Überwachung und die Liste „SLA Eskalationen“ mit Oberfläche. Nicht Teil: Mail, Benachrichtigungen, automatische Eingriffe.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 bestätigt):
+1. Je Regel und Uhr eine Liste von Stufen mit Prozentwert und Empfängergruppe aus der Rechteverwaltung; Vorschlag beim Anlegen 80 % Warnung und 100 % Fälligkeit, ohne feste Produktvorgabe.
+2. Eine Eskalation erscheint als Hinweis am Ticket und in einer Liste „SLA Eskalationen“ für Mitglieder der Empfängergruppe, die das Ticket lesen dürfen; keine Mail, weil Konten keine Mailadresse haben und Benachrichtigungen ein eigenes späteres Paket sind.
+3. Eine Stufe entsteht je Ticket, Zyklus, Uhr und Stufe höchstens einmal; nach einem Ausfall wird nur die höchste fällige Stufe nachgeholt, übersprungene werden protokolliert (H-11). Überwachung als wiederkehrende Aufgabe `sla.watch` jede Minute.
+4. Keine automatische Zuweisung und kein Statuswechsel durch Eskalationen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. S-13 und H-11 als Tests; mehrere Ausführer erzeugen keine doppelte Stufe.
+2. Die Liste zeigt nur Tickets, die die Person lesen darf, und nur Stufen ihrer Gruppen; Rechte werden beim Lesen geprüft, nicht beim Entstehen.
+3. Eine Pause oder Erfüllung vor der Schwelle erzeugt keine Stufe; eine bereits entstandene bleibt im Verlauf.
+4. Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-068 umsetzen.
