@@ -517,7 +517,6 @@ components:
               sla:
                 type: string
                 enum: [open, waiting, resolved, cancelled]
-                default: open
                 description: |
                   Art des Status für Servicefristen (TASK-068): `waiting` pausiert die Lösungsfrist, solange auf den Kunden
                   gewartet wird; `resolved` erfüllt die Lösungsfrist zusammen mit einer gesendeten Antwort; `cancelled`

@@ -8,9 +8,11 @@ const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
 const TAG_FIELD = 'tags';
 const ATTACHMENT_FIELD = 'attachments';
 const HELPDESK_FIELDS = ['customer', 'contact', 'mail'];
+const PRIORITY_FIELD = 'priority';
+const PRIORITIES = ['low', 'normal', 'high', 'critical'];
 // The fixed actor of tickets the mail intake opens (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
 const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
@@ -69,6 +71,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     activeWorkers: 1,
     jobConflict: false,
     // The helpdesk (TASK-057): customers, contacts, mailboxes with their status, mails and the customer of each ticket.
+    // Service deadlines (TASK-068): calendars, rules and the priority per ticket; `cycles` holds prepared cycles per ticket.
+    sla: { calendars: [], rules: [], priorities: new Map(), cycles: new Map() },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map() },
     requests: [],
   };
@@ -300,6 +304,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           subject: reply.subject, state: reply.state, errorCode: reply.errorCode, createdAt: reply.createdAt, attemptedAt: reply.attemptedAt })));
     }
     if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
+    if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -380,8 +385,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
     if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
+    if (tail.startsWith('/sla')) return ticketSlaRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
@@ -771,6 +777,116 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return problem(404, 'resource.not_found');
   }
 
+  // Calendars and SLA rules as the backend (TASK-068): the company right sla.manage, versions in If-Match, the most specific
+  // rule unique per project, customer and type.
+  const sla = state.sla;
+  function slaRoute(account, method, p, headers, body) {
+    if (!may(account, 'sla.manage')) return problem(403, 'auth.forbidden');
+    const version = () => Number((headers['if-match'] ?? '').replaceAll('"', ''));
+    const invalidCalendar = (input) => {
+      const violations = [];
+      if (!input.name?.trim()) violations.push('name.invalid');
+      if (!/^[A-Za-z]+\/[A-Za-z_]+$/.test(input.timeZone ?? '') && input.timeZone !== 'UTC') violations.push('timeZone.invalid');
+      const spans = (hours) => hours.every((span) => /^\d\d:\d\d$/.test(span.from) && /^(\d\d:\d\d)$/.test(span.to) && span.from < span.to);
+      if (!(input.week ?? []).every((day) => spans(day.hours))) violations.push('week.hours_invalid');
+      if (!(input.week ?? []).some((day) => day.hours.length > 0)) violations.push('week.closed');
+      if (!(input.exceptions ?? []).every((item) => /^\d{4}-\d\d-\d\d$/.test(item.date))) violations.push('exceptions.date_invalid');
+      if (!(input.exceptions ?? []).every((item) => spans(item.hours))) violations.push('exceptions.hours_invalid');
+      return violations;
+    };
+    if (p === '/sla/calendars' && method === 'GET') return ok([...sla.calendars].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/sla/calendars' && method === 'POST') {
+      const violations = invalidCalendar(body);
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      if (sla.calendars.some((item) => item.name.toLowerCase() === body.name.trim().toLowerCase())) return problem(409, 'sla.calendar_name_taken');
+      const calendar = { id: uuid(), name: body.name.trim(), timeZone: body.timeZone, week: body.week, exceptions: body.exceptions ?? [], version: 1,
+        createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      sla.calendars.push(calendar);
+      return { status: 201, body: calendar, etag: '"1"' };
+    }
+    let match = p.match(/^\/sla\/calendars\/([^/]+)$/);
+    if (match) {
+      const calendar = sla.calendars.find((item) => item.id === match[1]);
+      if (!calendar) return problem(404, 'sla.calendar_not_found');
+      if (method === 'GET') return ok(calendar, `"${calendar.version}"`);
+      if (version() !== calendar.version) return problem(412, 'sla.version_conflict');
+      const violations = invalidCalendar(body);
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      Object.assign(calendar, { name: body.name.trim(), timeZone: body.timeZone, week: body.week, exceptions: body.exceptions ?? [], version: calendar.version + 1, updatedAt: now() });
+      return ok(calendar, `"${calendar.version}"`);
+    }
+    if (p === '/sla/options' && method === 'GET') {
+      return ok({ projects: state.projects.map((item) => ({ id: item.id, key: item.key, name: item.name, ticketTypes: state.configurations.get(item.id).configuration.ticketTypes })),
+        customers: hd.customers.map((item) => ({ id: item.id, name: item.name, projects: item.projects })) });
+    }
+    const checkedRule = (input, projectId, id) => {
+      const violations = [];
+      if (!input.name?.trim()) violations.push('name.invalid');
+      if (!state.projects.some((item) => item.id === projectId)) violations.push('projectId.unknown');
+      if (input.customerId && !hd.customers.find((item) => item.id === input.customerId)?.projects.includes(projectId)) violations.push('customerId.not_released');
+      if (input.ticketType && !input.customerId) violations.push('ticketType.requires_customer');
+      if (!sla.calendars.some((item) => item.id === input.calendarId)) violations.push('calendarId.unknown');
+      const budgets = input.budgets ?? {};
+      if (!PRIORITIES.every((priority) => budgets[priority])) violations.push('budgets.required');
+      else if (!PRIORITIES.every((priority) => [budgets[priority].firstResponse, budgets[priority].resolution].every((value) => Number.isInteger(value) && value >= 1 && value <= 525600))) {
+        violations.push('budgets.invalid');
+      }
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      if (sla.rules.some((rule) => rule.id !== id && rule.projectId === projectId && (rule.customerId ?? null) === (input.customerId ?? null)
+        && (rule.ticketType ?? null) === (input.ticketType ?? null))) return problem(409, 'sla.rule_conflict');
+      return null;
+    };
+    if (p === '/sla/rules' && method === 'GET') return ok([...sla.rules].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/sla/rules' && method === 'POST') {
+      const refused = checkedRule(body, body.projectId, null);
+      if (refused) return refused;
+      const rule = { id: uuid(), name: body.name.trim(), projectId: body.projectId, customerId: body.customerId ?? null, ticketType: body.ticketType ?? null,
+        calendarId: body.calendarId, budgets: body.budgets, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      sla.rules.push(rule);
+      return { status: 201, body: rule, etag: '"1"' };
+    }
+    match = p.match(/^\/sla\/rules\/([^/]+)$/);
+    const rule = sla.rules.find((item) => item.id === match?.[1]);
+    if (!match) return problem(404, 'resource.not_found');
+    if (!rule) return problem(404, 'sla.rule_not_found');
+    if (version() !== rule.version) return problem(412, 'sla.version_conflict');
+    if (method === 'DELETE') {
+      sla.rules.splice(sla.rules.indexOf(rule), 1);
+      return { status: 204, body: null };
+    }
+    const refused = checkedRule(body, rule.projectId, rule.id);
+    if (refused) return refused;
+    Object.assign(rule, { name: body.name.trim(), customerId: body.customerId ?? null, ticketType: body.ticketType ?? null, calendarId: body.calendarId,
+      budgets: body.budgets, version: rule.version + 1, updatedAt: now() });
+    return ok(rule, `"${rule.version}"`);
+  }
+
+  // The priority and the deadlines of a ticket: the priority with its read rule, the cycles also with the read rule of customer.
+  function ticketSlaRoute(account, item, ticket, method, tail, body) {
+    const readableHere = [PRIORITY_FIELD, 'customer'].filter((name) => field(account, item.id, name, 'read'));
+    const writableHere = may(account, 'ticket.edit', item.id) && field(account, item.id, PRIORITY_FIELD, 'read') && field(account, item.id, PRIORITY_FIELD, 'write') ? [PRIORITY_FIELD] : [];
+    const view = () => {
+      const priority = sla.priorities.get(ticket.id) ?? 'normal';
+      const both = readableHere.length === 2;
+      const cycles = sla.cycles.get(ticket.id) ?? [];
+      const stateOf = !hd.ticketCustomers.get(ticket.id) ? 'no_customer' : cycles.length === 0 ? 'no_rule' : 'active';
+      return { readable: readableHere, writable: writableHere, priority: readableHere.includes(PRIORITY_FIELD) ? priority : null,
+        state: both ? stateOf : null, cycles: both ? cycles : null, now: '2026-10-30T10:00:00Z' };
+    };
+    if (tail === '/sla' && method === 'GET') return ok(view());
+    if (tail === '/sla/priority' && method === 'PUT') {
+      if (!writableHere.includes(PRIORITY_FIELD)) return problem(403, 'auth.forbidden');
+      if (!PRIORITIES.includes(body?.priority)) return problem(400, 'request.invalid', { violations: ['priority.invalid'] });
+      const before = sla.priorities.get(ticket.id) ?? 'normal';
+      if (before !== body.priority) {
+        sla.priorities.set(ticket.id, body.priority);
+        state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: PRIORITY_FIELD, from: before, to: body.priority }] });
+      }
+      return ok(view());
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   // helpdesk.reply with ticket.read and the read rules on mail and contact, as ReplyService.mayReply.
   const mayReply = (account, projectId) => may(account, 'helpdesk.reply', projectId) && may(account, 'ticket.read', projectId)
     && field(account, projectId, 'mail', 'read') && field(account, projectId, 'contact', 'read');
@@ -925,6 +1041,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     addJob,
     addMail,
     addTicket,
+    // A prepared cycle of a ticket, as the server would report it (TASK-068).
+    addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {
       const link = hd.ticketCustomers.get(ticket.id);
       const contact = hd.contacts.find((entry) => entry.id === link?.contactId);

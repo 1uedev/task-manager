@@ -81,7 +81,7 @@ Die Vorführumgebung ist kein Betrieb und die Sicherung kein Nachweis für A18. 
 | `carla` | Lesen ohne Beschreibung | WEB | nur Titel, Typ, Status und Tags lesen, nichts ändern |
 | `david` | Entwicklung | HELP | wie ben, aber nur im Helpdesk |
 
-Dazu vier Projekte (WEB Webportal Relaunch, APP Mobile App, HELP Interner Helpdesk, INF Infrastruktur, das nur der Administrator sieht), 43 Tickets in allen drei Status, fünf Tags im Unternehmenskatalog und zwei bis drei je Projektkatalog. Alle Namen und Texte sind erfunden. Ein zweiter Lauf gegen dieselbe Datenbank bricht ab, statt doppelte Daten anzulegen.
+Dazu vier Projekte (WEB Webportal Relaunch, APP Mobile App, HELP Interner Helpdesk, INF Infrastruktur, das nur der Administrator sieht), 43 Tickets in allen drei Status, fünf Tags im Unternehmenskatalog und zwei bis drei je Projektkatalog. Für die Servicefristen (TASK-068) kommen im Projekt HELP der Kunde Nordwerk Maschinenbau, der Kalender „Bürozeiten“ (Montag bis Freitag 8 bis 17 Uhr in Europe/Berlin, Ausnahmen an Weihnachten) und die Regel „Helpdesk Standard“ mit 120 Minuten bis zur Erstreaktion und 480 Minuten bis zur Lösung für jede Priorität dazu; „Erledigt“ hat dort die SLA Art gelöst. HELP-1 bis HELP-3 tragen den Kunden und zeigen ihre Fristen, HELP-1 mit Priorität Hoch. Gruppen mit allen Feldern sehen auch Kunde, Kontakt und Priorität. Alle Namen und Texte sind erfunden. Ein zweiter Lauf gegen dieselbe Datenbank bricht ab, statt doppelte Daten anzulegen.
 
 ## Ablauf für die fachliche Abnahme
 
