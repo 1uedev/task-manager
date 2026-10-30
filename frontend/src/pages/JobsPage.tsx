@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import { cancelJob, JOB_STATES, JOBS_PAGE, listJobs, readJobSummary, retryJob, type Job, type JobState, type JobSummary } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -28,17 +28,21 @@ export function JobsPage() {
   // The waiting job whose cancellation waits for the confirmation.
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [round, setRound] = useState(0);
+  // The current loading round: an answer of an earlier round, such as the list of a filter chosen before, is dropped (TASK-065).
+  const loading = useRef(0);
 
-  async function loadSummary() {
+  async function loadSummary(current: number) {
     const result = await readJobSummary(api);
+    if (current !== loading.current) return;
     if (result.kind !== 'ok') return setSummaryProblem(result.problem);
     setSummaryProblem(null);
     setSummary(result.data.value);
   }
 
-  async function load(before: number | null) {
+  async function load(before: number | null, current: number) {
     setBusy(true);
     const result = await listJobs(api, filter === 'all' ? null : filter, before);
+    if (current !== loading.current) return;
     setBusy(false);
     if (result.kind !== 'ok') return setProblem(result.problem);
     setProblem(null);
@@ -47,8 +51,9 @@ export function JobsPage() {
   }
 
   useEffect(() => {
-    void loadSummary();
-    void load(null);
+    const current = ++loading.current;
+    void loadSummary(current);
+    void load(null, current);
   }, [api, filter, round]);
 
   const refresh = () => {
@@ -153,7 +158,7 @@ export function JobsPage() {
           </div>
           {more
             ? <p className="actions"><button type="button" className="secondary" disabled={busy}
-                onClick={() => void load(jobs[jobs.length - 1]?.position ?? null)}>{t('jobs.more')}</button></p>
+                onClick={() => void load(jobs[jobs.length - 1]?.position ?? null, loading.current)}>{t('jobs.more')}</button></p>
             : <p className="hint">{t('jobs.end')}</p>}
         </>
       )}

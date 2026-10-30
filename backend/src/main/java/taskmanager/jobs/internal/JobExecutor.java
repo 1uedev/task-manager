@@ -38,12 +38,14 @@ import taskmanager.jobs.RecurringTask;
 /**
  * Runs the jobs (TASK-054, DEC-083). It exists in the separate {@code worker} process and, unless the operation turns it off,
  * in the web process; the commands of the container never run jobs. Several executors in several processes share the table:
- * each reserves a due job with {@code FOR UPDATE SKIP LOCKED}, so no job runs twice at the same time.
+ * each reserves a due job with {@code FOR UPDATE SKIP LOCKED}, so no two executors reserve the same job at once. After a lost
+ * lease, an attempt may still run while another one started; handlers therefore keep their effect under the job identifier.
  *
  * <ul>
  *   <li>Worker threads reserve the job that is due longest, run its handler outside any transaction and record the outcome:
  *       done, or a failed attempt that waits for a growing delay, or failed for good after the last attempt or a permanent
- *       failure. The outcome only counts while the executor still holds the job.</li>
+ *       failure. The outcome only counts while the lease of this one reservation is still held: an earlier attempt that lost
+ *       its lease cannot end or reset a later attempt, also not one of the same executor (TASK-065).</li>
  *   <li>A maintenance thread renews the leases of the running jobs, gives back the jobs of executors that ended without
  *       reporting (their lease expired) and puts due recurring tasks in the table.</li>
  *   <li>An attempt that takes longer than the timeout of its handler is interrupted and counts as failed with
@@ -78,7 +80,8 @@ class JobExecutor {
     private final Map<String, RecurringTask> recurring = new HashMap<>();
     private final String owner;
     private final Instant startedAt;
-    private final Set<UUID> active = ConcurrentHashMap.newKeySet();
+    /** The leases of the attempts that run right now; each reservation has its own, so an old attempt never ends a newer one. */
+    private final Set<String> active = ConcurrentHashMap.newKeySet();
     /** The attempt that each worker thread runs right now, until it really ended (TASK-056). */
     private final Map<Thread, Watchdog> attempts = new ConcurrentHashMap<>();
     /** How long the stop waits for running attempts before it interrupts them; tests shorten it. */
@@ -151,9 +154,14 @@ class JobExecutor {
         return name + "/" + ProcessHandle.current().pid() + "/" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** The name under which this executor holds jobs. */
+    /** The name of this executor; each of its leases starts with it. */
     String owner() {
         return owner;
+    }
+
+    /** Whether an attempt under the lease still runs or records its outcome. */
+    boolean runs(String lease) {
+        return active.contains(lease);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -284,7 +292,7 @@ class JobExecutor {
 
     /** Runs one reserved job and records its outcome. */
     void execute(JobRepository.Claimed job) {
-        active.add(job.id());
+        active.add(job.lease());
         MDC.put(MDC_KEY, "job-" + job.id());
         try {
             Target target = targets.get(job.kind());
@@ -310,9 +318,9 @@ class JobExecutor {
                 Thread.interrupted();
             }
             if (failure == null) {
-                boolean recorded = retrying(() -> jobs.succeed(job.id(), owner, clock.instant()));
+                boolean recorded = retrying(() -> jobs.succeed(job.id(), job.lease(), clock.instant()));
                 if (!recorded) {
-                    LOG.warn("Job {} of kind {} finished, but the executor {} no longer held it; its outcome is not recorded.", job.id(), job.kind(), owner);
+                    LOG.warn("Job {} of kind {} finished, but its lease {} was no longer held; its outcome is not recorded.", job.id(), job.kind(), job.lease());
                 }
             } else if (failure instanceof Error error && fatal(error)) {
                 // The process ends even when the outcome cannot be written; the lease then decides (TASK-056).
@@ -330,7 +338,7 @@ class JobExecutor {
             LOG.warn("The outcome of job {} could not be recorded: {}", job.id(), failure.toString());
         } finally {
             attempts.remove(Thread.currentThread());
-            active.remove(job.id());
+            active.remove(job.lease());
             MDC.remove(MDC_KEY);
         }
     }
@@ -347,8 +355,8 @@ class JobExecutor {
             // The stop interrupted the attempt: it does not count, the job waits again at once (TASK-055).
             LOG.warn("Job {} of kind {} was interrupted by the stop of the executor in attempt {} of {} (reference {}); it waits again "
                 + "without using up the attempt.", job.id(), job.kind(), job.attempt(), job.maxAttempts(), reference, failure);
-            if (!retrying(() -> jobs.giveBack(job.id(), owner, now, "job.interrupted", reference))) {
-                LOG.warn("The executor {} no longer held job {}; it is not given back.", owner, job.id());
+            if (!retrying(() -> jobs.giveBack(job.id(), job.lease(), now, "job.interrupted", reference))) {
+                LOG.warn("The lease {} of job {} was no longer held; it is not given back.", job.lease(), job.id());
             }
             return;
         }
@@ -366,9 +374,9 @@ class JobExecutor {
         Instant retryAt = last ? null : now.plus(properties.delayAfter(job.attempt()));
         LOG.warn("Job {} of kind {} failed in attempt {} of {} with {} (reference {}){}.", job.id(), job.kind(), job.attempt(), job.maxAttempts(),
             code, reference, last ? ", it does not run again" : ", next attempt at " + retryAt, failure);
-        boolean recorded = retrying(() -> jobs.fail(job.id(), owner, now, retryAt, code, reference));
+        boolean recorded = retrying(() -> jobs.fail(job.id(), job.lease(), now, retryAt, code, reference));
         if (!recorded) {
-            LOG.warn("The executor {} no longer held job {}; its failure is not recorded.", owner, job.id());
+            LOG.warn("The lease {} of job {} was no longer held; its failure is not recorded.", job.lease(), job.id());
         }
     }
 
@@ -437,10 +445,10 @@ class JobExecutor {
 
     private void renew() {
         try {
-            List<UUID> ids = List.copyOf(active);
-            if (!ids.isEmpty()) {
+            List<String> leases = List.copyOf(active);
+            if (!leases.isEmpty()) {
                 Instant until = clock.instant().plus(properties.lease());
-                transaction.execute(status -> jobs.renew(owner, ids, until));
+                transaction.execute(status -> jobs.renew(leases, until));
             }
         } catch (RuntimeException failure) {
             LOG.warn("The executor {} could not renew its leases: {}", owner, failure.toString());

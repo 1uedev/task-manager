@@ -143,6 +143,43 @@ describe('background jobs', () => {
     });
   });
 
+  test('a late answer of an earlier filter does not replace the list of the chosen one', async () => {
+    // TASK-065, F2: the answer for "failed" arrives only after the list of "cancelled" is shown.
+    await withApp({ prepare: (backend) => {
+      withJobsRight(backend);
+      backend.addJob('mail.send', 'failed', { errorCode: 'mail.rejected' });
+      backend.addJob('sla.check', 'cancelled');
+    } }, async (page) => {
+      const table = page.getByTestId('job-table');
+      await table.waitFor();
+      let releaseFailed;
+      const failedHeld = new Promise((resolve) => { releaseFailed = resolve; });
+      let failedAsked;
+      const failedArrived = new Promise((resolve) => { failedAsked = resolve; });
+      await page.route((url) => url.pathname === '/api/v1/jobs' && url.searchParams.get('state') === 'failed', async (route) => {
+        failedAsked();
+        await failedHeld;
+        await route.fallback();
+      });
+
+      await page.getByLabel('Zustand', { exact: true }).selectOption('failed');
+      await failedArrived;
+      await page.getByLabel('Zustand', { exact: true }).selectOption('cancelled');
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid="job-table"] tbody tr').length === 1);
+      await table.locator('tbody tr', { hasText: 'Abgebrochen' }).waitFor();
+      const failedFinished = page.waitForEvent('requestfinished', (request) => new URL(request.url()).searchParams.get('state') === 'failed');
+      releaseFailed();
+      await failedFinished;
+      // Gives the page the time to apply the late answer, as it did before the correction.
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
+
+      assert.equal(await page.getByLabel('Zustand', { exact: true }).inputValue(), 'cancelled');
+      assert.equal(await table.locator('tbody tr', { hasText: 'mail.rejected' }).count(), 0, 'the late list of failed jobs is dropped');
+      assert.equal(await table.locator('tbody tr').count(), 1);
+      assert.equal(await table.locator('tbody tr', { hasText: 'Abgebrochen' }).count(), 1);
+    });
+  });
+
   test('the page speaks English', async () => {
     await withApp({ locale: 'en-US', prepare: (backend) => {
       withJobsRight(backend);
