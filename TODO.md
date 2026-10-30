@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-063](#task-063-befunde-der-codex-prüfung-von-task-062-beheben) | Befunde der Codex Prüfung von TASK-062 beheben | claude-20261030-replyfix-02 | 2026-10-30 |
 
 ### Blockiert – BLOCKIERT
 
@@ -100,3 +102,25 @@ Nicht Teil: die übrigen Hinweise beider Berichte (C-H1 bis C-H8, X-H1 bis X-H5)
 **Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 394 Tests, darunter neun neue API Tests in `HelpdeskApiTest` (verwaiste Antworten mit echter Lease Freigabe und Abbruch in der Jobverwaltung, Klärung bei Aktion vor der Aufgabe, beide Reihenfolgen alter Versuche, Austritt der verfassenden und der bestätigenden Person, Adressen bei Kontakt und Postfach, früher gespeicherte Adresse, Abbruch vor dem Datenende, späte Annahme nach sechs Sekunden bei fünf Sekunden Verbindungszeitlimit, Kundenwechsel in beiden Sperrreihenfolgen) und fünf Einheitentests in `SmtpMailSenderTest` (Adressen, Gruppen, Namen mit Zeilenumbruch, ungültige Message-IDs, 20 Referenzen mit je etwa 250 Zeichen). Gegen den Stand vor der Korrektur (main 42f2183) sind 13 der 14 neuen Tests rot; grün blieb dort nur die Ablehnung zusammengesetzter Adressen über die API, die schon der alte Parser abwies. Zusätzlich gezielt geprüft: ohne die Auftragsprüfung beim Ausgang wird der Reihenfolgetest rot. Frontend `npm run verify` mit 77 Tests und 128 Browser Tests grün (ein erster paralleler Lauf hatte einen Ausreißer im Designtest „a typed color is checked before it is shown“ unter Last, der Wiederholungslauf war vollständig grün). Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker, ohne neue Migration unverändert, läuft in CI.
 
 **Nächster Schritt:** Getrennte Prüfung durch eine andere KI, danach nimmt Holger TASK-058 und TASK-062 zusammen ab.
+
+## TASK-063 Befunde der Codex Prüfung von TASK-062 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-02 · **Aktualisiert:** 2026-10-30
+
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-062 (Ergebnis PR #206), Prüfbericht [docs/REVIEW_TASK-062_PR-206.md](docs/REVIEW_TASK-062_PR-206.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „F1 bis F4 plus H1, H4, H6“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-093, keine Migration geplant.
+
+**Umfang:** Holgers Wahl „F1 bis F4 plus H1, H4, H6“:
+
+1. F1: Die Klärung verwaister Antworten und eine Wiederholung in der Jobverwaltung schließen sich aus; `Jobs.active` liest den Auftrag unter einer Sperre, die auch die Wiederholung nimmt.
+2. F2: Betreff und Namen können keine Kopfzeile über 998 Zeichen erzeugen, auch nicht als lange Folge ohne Leerzeichen.
+3. F3: Der Test der Kundengrenze prüft beide echten Reihenfolgen, auch „Anhängen committet zuerst, Kundenwechsel danach“, und den Zustand `review`.
+4. F4: Der SMTP Testserver zählt nur eine bis zur Abschlusszeile gelesene Mail als Übergabe; ein Abbruch im Inhalt ist getrennt erfasst.
+5. H1: Ein vorhandenes, aber ungültiges `by` im Auftrag wird ausdrücklich zurückgewiesen statt still auf den Urheber zurückzufallen.
+6. H4: Stabilere Tests: Wartebarrieren nur auf den Sperrschlüssel des Tickets, größere Zeitreserven, sauberes Schließen des Testservers.
+7. H6: Die Aufgabe `helpdesk.replies` wählt nur Antworten aus, deren Auftrag beendet ist, sodass aktive Antworten keine verwaisten verdrängen.
+
+Nicht Teil: H2 (Adressregel als bewusste Grenze), H3, H5 und die Gesamtlaufzeit des Auftrags aus C-F4; sie bleiben Hinweise für die Abnahme.
+
+**Abnahmekriterien:** Regressionstests für eine Wiederholung in der Jobverwaltung gleichzeitig mit der Klärung, lange Betreffe und Namen, beide Reihenfolgen der Kundengrenze, einen Abbruch im Inhalt der Mail, ein ungültiges `by` und mehr als 200 aktive Antworten vor einer verwaisten; alle Backend, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt TASK-058, TASK-062 und TASK-063 zusammen ab.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
