@@ -15,7 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A small SMTP server for the failures a real one does not show on demand (TASK-058): it refuses the recipient with a code,
  * or it reads the whole mail and ends the connection before it answers, so the sender cannot know whether it was taken. For
  * TASK-062 it also ends the connection before the mail and accepts a mail only after a long check.
- * Every mail it read to the end counts as handed over.
+ * Every mail it read to its end line counts as handed over; a mail it dropped or whose connection ended before counts as
+ * broken.
  */
 final class ScriptedSmtp implements AutoCloseable {
     /** How long the server checks a mail in {@link Mode#SLOW_ACCEPT}. */
@@ -28,7 +29,11 @@ final class ScriptedSmtp implements AutoCloseable {
         DROP_AFTER_DATA,
         /** Closes the connection on the command DATA, before any of the mail is sent (TASK-062). */
         DROP_AT_DATA,
-        /** Closes the connection after the first line of the mail, before its end (TASK-063). */
+        /**
+         * Keeps only the first line of the mail, reads the rest without keeping it and closes the connection before it answers
+         * the end line, so the server holds nothing (TASK-063). It waits for the end line so that the sender has always
+         * written the whole mail when it learns of the end, whatever its buffers do (TASK-064, H2).
+         */
         DROP_IN_DATA,
         /** Reads the whole mail and accepts it only after {@link #SLOW} (TASK-062). */
         SLOW_ACCEPT,
@@ -126,8 +131,11 @@ final class ScriptedSmtp implements AutoCloseable {
                 while ((line = in.readLine()) != null && !line.equals(".")) {
                     mail.append(line).append("\r\n");
                     if (first && mode == Mode.DROP_IN_DATA) {
-                        // Ends in the middle of the mail: it was never handed over (TASK-063, F4).
+                        // Drops the mail after its first line: it was never handed over (TASK-063, F4).
                         broken.add(mail.toString());
+                        while ((line = in.readLine()) != null && !line.equals(".")) {
+                            // The rest of the mail is read and dropped.
+                        }
                         return;
                     }
                     first = false;

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-064](#task-064-befund-f1-und-hinweis-h2-der-codex-prüfung-von-task-063-beheben) | Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben | claude-20261030-replyfix-03 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -43,6 +41,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-058](#task-058-helpdesk-antworten-über-smtp-paket-a9-teil-2) | Helpdesk Antworten über SMTP (Paket A9, Teil 2) | claude-20261028-helpdesk-01 | 2026-10-29 |
 | [TASK-062](#task-062-befunde-der-prüfungen-von-task-058-beheben) | Befunde der Prüfungen von TASK-058 beheben | claude-20261030-replyfix-01 | 2026-10-30 |
 | [TASK-063](#task-063-befunde-der-codex-prüfung-von-task-062-beheben) | Befunde der Codex Prüfung von TASK-062 beheben | claude-20261030-replyfix-02 | 2026-10-30 |
+| [TASK-064](#task-064-befund-f1-und-hinweis-h2-der-codex-prüfung-von-task-063-beheben) | Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben | claude-20261030-replyfix-03 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -132,9 +131,9 @@ Nicht Teil: H2 (Adressregel als bewusste Grenze), H3, H5 und die Gesamtlaufzeit 
 
 ## TASK-064 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-063 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-03 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-replyfix-03 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-HD-001 (Antworten an Kunden), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-063 (Ergebnis PR #208), Prüfbericht [docs/REVIEW_TASK-063_PR-208.md](docs/REVIEW_TASK-063_PR-208.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „Erst F1 und H2 beheben“ gewählt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-094, keine Migration geplant.
+**Bezug:** REQ-HD-001 (Antworten an Kunden), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-063 (Ergebnis PR #208), Prüfbericht [docs/REVIEW_TASK-063_PR-208.md](docs/REVIEW_TASK-063_PR-208.md) (Codex, abgelegt mit dieser Reservierung). **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „Erst F1 und H2 beheben“ gewählt; Reservierung mit PR #209 gemergt. Branch claude/project-thread-b4u17z; Ergebnis mit DEC-094, keine Migration geplant.
 
 **Umfang:** Holgers Wahl „Erst F1 und H2 beheben“:
 
@@ -145,4 +144,8 @@ Nicht Teil: H1 und H3 der Prüfung von TASK-063 sowie die offenen Hinweise früh
 
 **Abnahmekriterien:** Ein Dekodierungs Roundtrip Test für normale, lange, internationale und wie kodierte Wörter aussehende Betreffe; der Abbruchtest erzwingt seine Reihenfolge selbst; alle Backend, Frontend und Browsertests grün. Holger nimmt TASK-058, TASK-062, TASK-063 und TASK-064 zusammen ab.
 
-**Nächster Schritt:** Merge dieser Reservierung, danach Umsetzung.
+**Ergebnis:** DEC-094, keine Migration. `SmtpMailSender.subject` sendet einen Betreff mit `=?` immer als kodierte Wörter, sodass er beim Empfänger unverändert ankommt. `ScriptedSmtp` liest im Modus `DROP_IN_DATA` die Mail bis zur Abschlusszeile, verwirft sie und beendet die Verbindung ohne Antwort; der Absender hat damit immer die ganze Mail geschrieben, unabhängig von seinen Puffern. Neue Tests `ScriptedSmtpTest` treiben den Testserver zeilenweise. Die Zeitreserve einer SMTP Antwort in `HelpdeskApiTest` steigt von 20 auf 60 Sekunden; die übrigen Reserven (Verbindungsaufbau 5 Sekunden gegen die 6 Sekunden von `SLOW_ACCEPT`, 30 Sekunden für das Ende eines freigegebenen Auftrags) bleiben, weil sie dort Absicht oder unkritisch sind. Beschreibung in backend/README.md und docs/HELPDESK_SLA.md.
+
+**Prüfungen:** Backend `./mvnw verify` gegen PostgreSQL 16 mit 404 Tests ohne Fehler, darunter der neue Einheitentest `everySubjectArrivesAsItWasTyped` (acht Betreffe, Rückdekodierung über die Bibliothek und über die gesendete Kopfzeile) und drei neue Tests in `ScriptedSmtpTest` (Verbindungsende vor der Abschlusszeile, verworfene Mail ohne Antwort, vollständige Mail). Gegen den Stand vor der Korrektur ist der Betrefftest rot (`=?UTF-8?B?SGFsbG8=?=` kam als `Hallo` an). Frontend und Browsertests nicht ausgeführt, weil sich dort nichts ändert; sie laufen in CI. Nicht lokal ausgeführt: `backend/scripts/lifecycle-check.sh` mit Docker (keine neue Migration), läuft in CI.
+
+**Nächster Schritt:** Kurze getrennte Prüfung durch eine andere KI (DEC-040), danach nimmt Holger TASK-058, TASK-062, TASK-063 und TASK-064 zusammen ab.
