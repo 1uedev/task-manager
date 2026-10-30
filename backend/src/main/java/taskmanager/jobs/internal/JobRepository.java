@@ -20,8 +20,11 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JobRepository {
-    /** A job reserved by an executor; {@code repeated} when a run of it started before this one (TASK-055). */
-    public record Claimed(UUID id, UUID companyId, String kind, int attempt, int maxAttempts, boolean repeated) {
+    /**
+     * A job reserved by an executor; {@code repeated} when a run of it started before this one (TASK-055). {@code lease} names
+     * this one reservation: the executor followed by a new random identifier, never given out again (TASK-065).
+     */
+    public record Claimed(UUID id, UUID companyId, String kind, int attempt, int maxAttempts, boolean repeated, String lease) {
     }
 
     /** Counts per state and the age of the oldest due job. */
@@ -64,8 +67,11 @@ public class JobRepository {
     /**
      * Reserves the job that is due longest for the owner, skipping jobs another executor holds. A job whose {@code started_at}
      * is already set ran before: the start of a run stays when the job waits again, also after a retry of the administration.
+     * Every reservation gets its own lease in {@code lease_owner}, so the outcome of an earlier attempt of the same executor
+     * cannot end a later one (TASK-065).
      */
     Optional<Claimed> claim(String owner, Instant now, Instant leaseUntil) {
+        String lease = owner + "#" + UUID.randomUUID();
         return jdbc.sql("""
                 with next as (
                     select id, started_at is not null as ran from job where state = 'queued' and run_at <= ?
@@ -73,9 +79,9 @@ public class JobRepository {
                 update job set state = 'running', attempts = attempts + 1, lease_owner = ?, lease_until = ?, started_at = ?
                 from next where job.id = next.id
                 returning job.id, job.company_id, job.kind, job.attempts, job.max_attempts, next.ran""")
-            .params(ts(now), owner, ts(leaseUntil), ts(now))
+            .params(ts(now), lease, ts(leaseUntil), ts(now))
             .query((rs, row) -> new Claimed(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getString("kind"),
-                rs.getInt("attempts"), rs.getInt("max_attempts"), rs.getBoolean("ran")))
+                rs.getInt("attempts"), rs.getInt("max_attempts"), rs.getBoolean("ran"), lease))
             .optional();
     }
 
@@ -88,51 +94,51 @@ public class JobRepository {
         return payload;
     }
 
-    /** Renews the leases the owner holds; returns how many it still holds. */
-    int renew(String owner, List<UUID> ids, Instant leaseUntil) {
-        if (ids.isEmpty()) {
+    /** Renews the leases that are still held; returns how many those are. */
+    int renew(List<String> leases, Instant leaseUntil) {
+        if (leases.isEmpty()) {
             return 0;
         }
-        return jdbc.sql("update job set lease_until = ? where state = 'running' and lease_owner = ? and id = any(?)")
-            .params(ts(leaseUntil), owner, ids.toArray(UUID[]::new)).update();
+        return jdbc.sql("update job set lease_until = ? where state = 'running' and lease_owner = any(?)")
+            .params(ts(leaseUntil), leases.toArray(String[]::new)).update();
     }
 
-    /** Marks the job done if the owner still holds it. */
-    boolean succeed(UUID id, String owner, Instant now) {
+    /** Marks the job done if its lease is still held. */
+    boolean succeed(UUID id, String lease, Instant now) {
         return jdbc.sql("""
                 update job set state = 'succeeded', finished_at = ?, lease_owner = null, lease_until = null, error_code = null,
                     error_reference = null
                 where id = ? and state = 'running' and lease_owner = ?""")
-            .params(ts(now), id, owner).update() == 1;
+            .params(ts(now), id, lease).update() == 1;
     }
 
     /**
-     * Records a failed attempt if the owner still holds the job: it waits for the next attempt at {@code retryAt}, or fails for
+     * Records a failed attempt if its lease is still held: it waits for the next attempt at {@code retryAt}, or fails for
      * good when {@code retryAt} is {@code null}.
      */
-    boolean fail(UUID id, String owner, Instant now, Instant retryAt, String code, UUID reference) {
+    boolean fail(UUID id, String lease, Instant now, Instant retryAt, String code, UUID reference) {
         if (retryAt == null) {
             return jdbc.sql("""
                     update job set state = 'failed', finished_at = ?, lease_owner = null, lease_until = null, error_code = ?, error_reference = ?
                     where id = ? and state = 'running' and lease_owner = ?""")
-                .params(ts(now), code, reference, id, owner).update() == 1;
+                .params(ts(now), code, reference, id, lease).update() == 1;
         }
         return jdbc.sql("""
                 update job set state = 'queued', run_at = ?, lease_owner = null, lease_until = null, error_code = ?, error_reference = ?
                 where id = ? and state = 'running' and lease_owner = ?""")
-            .params(ts(retryAt), code, reference, id, owner).update() == 1;
+            .params(ts(retryAt), code, reference, id, lease).update() == 1;
     }
 
     /**
      * Gives a job back that the stop of its executor interrupted (TASK-055): the attempt does not count, the job waits again at
-     * once, also when it was its last attempt. Only while the owner still holds it.
+     * once, also when it was its last attempt. Only while its lease is still held.
      */
-    boolean giveBack(UUID id, String owner, Instant now, String code, UUID reference) {
+    boolean giveBack(UUID id, String lease, Instant now, String code, UUID reference) {
         return jdbc.sql("""
                 update job set state = 'queued', attempts = attempts - 1, run_at = ?, lease_owner = null, lease_until = null,
                     error_code = ?, error_reference = ?
                 where id = ? and state = 'running' and lease_owner = ?""")
-            .params(ts(now), code, reference, id, owner).update() == 1;
+            .params(ts(now), code, reference, id, lease).update() == 1;
     }
 
     /**

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-065](#task-065-befunde-f1-und-f2-der-codex-nachprüfung-von-task-054-beheben) | Befunde F1 und F2 der Codex Nachprüfung von TASK-054 beheben | claude-20261030-jobsfix-03 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -38,7 +36,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-065](#task-065-befunde-f1-und-f2-der-codex-nachprüfung-von-task-054-beheben) | Befunde F1 und F2 der Codex Nachprüfung von TASK-054 beheben | claude-20261030-jobsfix-03 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -53,9 +53,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-065 Befunde F1 und F2 der Codex Nachprüfung von TASK-054 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-jobsfix-03 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-jobsfix-03 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-OPS-006 (Hintergrundaufträge), REQ-HD-005 (keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-054 (abgenommen, PR #179 und #180), Prüfbericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md) (Codex Nachprüfung auf main 3f38643, PR #212). **Arbeitsstand:** Holger hat am 30. Oktober 2026 die Behebung beider Befunde beauftragt; Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-lxrdya; Ergebnis mit DEC-095, keine Migration geplant.
+**Bezug:** REQ-OPS-006 (Hintergrundaufträge), REQ-HD-005 (keine Mehrfachaktion nach Neustart oder Wiederholung). **Abhängigkeiten:** TASK-054 (abgenommen, PR #179 und #180), Prüfbericht [docs/REVIEW_TASK-054_PR-179.md](docs/REVIEW_TASK-054_PR-179.md) (Codex Nachprüfung auf main 3f38643, PR #212). **Arbeitsstand:** Holger hat am 30. Oktober 2026 die Behebung beider Befunde beauftragt; Reservierung PR #213 gemergt, Ergebnis auf Branch claude/project-thread-lxrdya mit DEC-095, ohne Migration.
 
 **Umfang:**
 
@@ -66,4 +66,8 @@ Nicht Teil: die Hinweise H1 bis H4 der Nachprüfung, außer einer knappen Korrek
 
 **Abnahmekriterien:** Regressionstests mit echter Datenbank für beide Reihenfolgen verspäteter Ergebnisse (alter Erfolg vor neuem Fehler und alter Fehler vor neuem Erfolg) sowie für einen alten Versuch nach erneutem Einstellen durch die Verwaltung; ein Browsertest mit umgekehrter Antwortreihenfolge beim Filterwechsel; alle Backend Tests einschließlich der Helpdesk Tests, Frontend und Browsertests grün. Getrennte KI prüft das Ergebnis (DEC-040); Holger nimmt ab.
 
-**Nächster Schritt:** Merge dieser Reservierung, danach Umsetzung.
+**Ergebnis:** DEC-095. F1: `JobRepository.claim` vergibt je Übernahme eine eigene Kennung in `lease_owner` (Ausführer, `#`, Zufallskennung); `renew`, `succeed`, `fail` und `giveBack` prüfen diese Kennung, `JobExecutor` führt seine laufenden Versuche je Kennung. F2: `JobsPage` zählt Laderunden und verwirft Antworten älterer Runden für Liste und Übersicht. README des Backends beschreibt die Grenze gleichzeitiger Versuche nach Verlust der Reservierung genauer.
+
+**Prüfungen:** Backend `./mvnw verify` gegen lokales PostgreSQL 16 (JDK 21) mit 407 Tests grün, darunter drei neue Tests in `JobExecutorTest` (alter Erfolg vor neuem endgültigen Fehler mit Verlängerung des neuen Versuchs über die Reservierungsdauer hinaus, alter Fehler vor neuem Erfolg, alter Versuch nach erneutem Einstellen durch die Verwaltung) und alle 40 Helpdesk API Tests. Mit dem alten Verhalten (eine Kennung je Ausführer) sind alle drei neuen Tests rot. Frontend `npm run verify` mit 77 Tests und 129 Browsertests grün; der neue Browsertest hält die Antwort für „Gescheitert“ zurück und ist mit der alten Seite rot. Nicht lokal ausgeführt: PostgreSQL 18.6 im Container und `backend/scripts/lifecycle-check.sh` (keine Migration), beides läuft in CI.
+
+**Nächster Schritt:** Getrennte Prüfung durch eine andere KI (DEC-040), danach Abnahme durch Holger.

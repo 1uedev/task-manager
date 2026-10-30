@@ -84,6 +84,21 @@ class JobExecutorTest {
     static volatile JdbcTemplate effects;
     /** Holds the clean up of {@code test.cleanup} after the stop interrupted it (TASK-056, R3). */
     static volatile CountDownLatch cleanUp = new CountDownLatch(1);
+    /** The runs of {@code test.gate} in their order: each signals its start and waits until the test lets it end (TASK-065). */
+    static final List<Gate> GATES = java.util.Collections.synchronizedList(new ArrayList<>());
+    static final AtomicInteger GATE_RUNS = new AtomicInteger();
+
+    /** One run of {@code test.gate}: how it ends ({@code ok}, {@code fail} or {@code permanent}) once the test released it. */
+    record Gate(CountDownLatch entered, CountDownLatch release, java.util.concurrent.atomic.AtomicReference<String> outcome) {
+        Gate() {
+            this(new CountDownLatch(1), new CountDownLatch(1), new java.util.concurrent.atomic.AtomicReference<>("ok"));
+        }
+
+        void end(String how) {
+            outcome.set(how);
+            release.countDown();
+        }
+    }
 
     @TestConfiguration
     static class Handlers {
@@ -180,6 +195,22 @@ class JobExecutorTest {
         }
 
         @Bean
+        JobHandler gateHandler() {
+            // Runs that overlap after a lost lease; the test decides when and how each one ends (TASK-065, F1).
+            return handler("test.gate", Duration.ofMinutes(1), execution -> {
+                Gate gate = GATES.get(GATE_RUNS.getAndIncrement());
+                gate.entered().countDown();
+                gate.release().await();
+                switch (gate.outcome().get()) {
+                    case "fail" -> throw new IllegalStateException("late failure");
+                    case "permanent" -> throw JobFailure.permanent("test.gate_refused", "refused", null);
+                    default -> {
+                    }
+                }
+            });
+        }
+
+        @Bean
         RecurringTask tick() {
             return new RecurringTask() {
                 public String name() {
@@ -251,6 +282,11 @@ class JobExecutorTest {
         TICKS.set(0);
         SEEN.clear();
         cleanUp = new CountDownLatch(1);
+        GATES.clear();
+        GATE_RUNS.set(0);
+        for (int i = 0; i < 3; i++) {
+            GATES.add(new Gate());
+        }
     }
 
     @AfterEach
@@ -635,10 +671,107 @@ class JobExecutorTest {
         JobRepository.Claimed first = transaction.execute(status -> repository.claim("probe", now, now.plusSeconds(60))).orElseThrow();
         assertEquals(1, first.attempt());
         assertFalse(first.repeated());
-        transaction.executeWithoutResult(status -> repository.fail(id, "probe", now, now, "job.failed", UUID.randomUUID()));
+        transaction.executeWithoutResult(status -> repository.fail(id, first.lease(), now, now, "job.failed", UUID.randomUUID()));
         JobRepository.Claimed second = transaction.execute(status -> repository.claim("probe", now, now.plusSeconds(60))).orElseThrow();
         assertEquals(2, second.attempt());
         assertTrue(second.repeated());
+    }
+
+    /** The lease of the running attempt expires and the maintenance gives the job back, while that attempt goes on. */
+    private void loseLease(UUID id) {
+        transaction.executeWithoutResult(status -> {
+            jdbc.update("update job set lease_until = now() - interval '1 minute' where id = ?", id);
+            repository.releaseExpired(clock.instant());
+        });
+    }
+
+    private String lease(UUID id) {
+        return jdbc.queryForObject("select lease_owner from job where id = ?", String.class, id);
+    }
+
+    @Test
+    void anOldAttemptThatSucceedsLateDoesNotEndTheNewerAttemptOfTheSameExecutor() {
+        // TASK-065, F1: before, the old success marked the job done while the newer attempt still ran, and its failure was lost.
+        UUID id = enqueue(NewJob.of(null, "test.gate").withMaxAttempts(3));
+        JobExecutor executor = started();
+        await(GATES.get(0).entered());
+        String first = lease(id);
+        loseLease(id);
+        await(GATES.get(1).entered());
+        String second = lease(id);
+
+        GATES.get(0).end("ok");
+        await("the old attempt ended", () -> !executor.runs(first));
+        assertEquals("running", state(id));
+        assertEquals(second, lease(id));
+        // The newer attempt keeps its renewal after the old one ended: it outlives its lease of three seconds.
+        sleep(Duration.ofSeconds(4));
+        assertEquals("running", state(id));
+        assertEquals(second, lease(id));
+        assertEquals(2, row(id).get("attempts"));
+
+        GATES.get(1).end("permanent");
+        await("the newer attempt failed", () -> "failed".equals(state(id)));
+        assertEquals("test.gate_refused", row(id).get("error_code"));
+        assertEquals(2, GATE_RUNS.get());
+        // Each reservation had its own lease of the same executor.
+        assertTrue(first.startsWith(executor.owner() + "#") && second.startsWith(executor.owner() + "#"));
+        assertFalse(second.equals(first));
+    }
+
+    @Test
+    void anOldAttemptThatFailsLateDoesNotResetTheNewerAttemptOfTheSameExecutor() {
+        UUID id = enqueue(NewJob.of(null, "test.gate").withMaxAttempts(3));
+        JobExecutor executor = started();
+        await(GATES.get(0).entered());
+        String first = lease(id);
+        loseLease(id);
+        await(GATES.get(1).entered());
+        String second = lease(id);
+
+        GATES.get(0).end("fail");
+        await("the old attempt ended", () -> !executor.runs(first));
+        assertEquals("running", state(id));
+        assertEquals(second, lease(id));
+        assertEquals("job.lease_expired", row(id).get("error_code"));
+
+        GATES.get(1).end("ok");
+        await("the newer attempt is done", () -> "succeeded".equals(state(id)));
+        assertEquals(2, row(id).get("attempts"));
+        assertNull(row(id).get("error_code"));
+        assertEquals(2, GATE_RUNS.get());
+    }
+
+    @Test
+    void anOldAttemptDoesNotEndTheRunThatTheAdministrationStartedAgain() {
+        // The last attempt loses its lease and fails; the administration queues the job again, which starts at attempt 1 once more.
+        UUID id = enqueue(NewJob.of(null, "test.gate").withMaxAttempts(1));
+        JobExecutor executor = started();
+        await(GATES.get(0).entered());
+        String first = lease(id);
+        loseLease(id);
+        assertEquals("failed", state(id));
+        transaction.executeWithoutResult(status -> repository.requeue(id, clock.instant()));
+        await(GATES.get(1).entered());
+        String retried = lease(id);
+        assertEquals(1, row(id).get("attempts"));
+
+        GATES.get(0).end("permanent");
+        await("the old attempt ended", () -> !executor.runs(first));
+        assertEquals("running", state(id));
+        assertEquals(retried, lease(id));
+
+        GATES.get(1).end("ok");
+        await("the retried run is done", () -> "succeeded".equals(state(id)));
+        assertNull(row(id).get("error_code"));
+    }
+
+    private static void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static void await(CountDownLatch latch) {
