@@ -81,7 +81,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-replyfix-01 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-058 (Ergebnis PR #202), Prüfberichte docs/REVIEW_TASK-058_PR-202.md (Claude, PR #203) und docs/REVIEW_TASK-058_PR-202_CODEX.md (Codex, mit dieser Reservierung abgelegt). **Arbeitsstand:** Holgers Wahl „F1 bis F4 beheben“ vom 30. Oktober 2026 zur Claude Prüfung; der danach übergebene Codex Bericht empfiehlt seine Befunde F1 bis F4 ebenfalls vor der Abnahme und überschneidet sich mit der Claude Prüfung, daher deckt diese Reservierung beide ab. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-092, Migration V0029 nur falls nötig.
+**Bezug:** REQ-HD-001 (erkennbare ausstehende Sendungen), REQ-HD-002 (Zuordnung von Antworten), REQ-TKT-005 (unklare Zustellung). **Abhängigkeiten:** TASK-058 (Ergebnis PR #202), Prüfberichte docs/REVIEW_TASK-058_PR-202.md (Claude, PR #203) und docs/REVIEW_TASK-058_PR-202_CODEX.md (Codex, abgelegt mit dem Nachtrag zur Reservierung PR #204). **Arbeitsstand:** Holgers Wahl „F1 bis F4 beheben“ vom 30. Oktober 2026 zur Claude Prüfung; der danach übergebene Codex Bericht empfiehlt seine Befunde F1 bis F4 ebenfalls vor der Abnahme und überschneidet sich mit der Claude Prüfung, daher deckt TASK-062 mit diesem Nachtrag beide ab. Branch claude/project-thread-b4u17z nach dem Merge dieser Reservierung; Ergebnis mit DEC-092, Migration V0029 nur falls nötig.
 
 **Umfang:** Befunde beider Berichte (C für Claude, X für Codex):
 
