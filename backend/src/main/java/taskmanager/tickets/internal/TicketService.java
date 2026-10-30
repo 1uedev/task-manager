@@ -55,10 +55,10 @@ public class TicketService {
     static final Set<String> FIELDS = Set.copyOf(ProjectConfiguration.FIELD_KEYS);
     /**
      * The fields of the history besides the custom ones: the five fields, the tags the tags module records (TASK-042) and the
-     * attachments the files module records (TASK-051), the customer, the contact and the mails the helpdesk records (TASK-057).
+     * attachments the files module records (TASK-051), the customer, the contact and the mails the helpdesk records (TASK-057) and the priority the SLA module records (TASK-068).
      */
     private static final Set<String> SEPARATE_FIELDS = Set.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD,
-        TicketAccess.CUSTOMER_FIELD, TicketAccess.CONTACT_FIELD, TicketAccess.MAIL_FIELD);
+        TicketAccess.CUSTOMER_FIELD, TicketAccess.CONTACT_FIELD, TicketAccess.MAIL_FIELD, TicketAccess.PRIORITY_FIELD);
     private static final Set<String> HISTORY_FIELDS = union(FIELDS, SEPARATE_FIELDS);
     private static final int TITLE_MAX = 200;
     private static final int DESCRIPTION_MAX = 20_000;

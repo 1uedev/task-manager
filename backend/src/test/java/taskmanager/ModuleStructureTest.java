@@ -14,7 +14,7 @@ class ModuleStructureTest {
     @Test
     void containsTheFirstSliceModules() {
         Set<String> names = MODULES.stream().map(module -> module.getIdentifier().toString()).collect(Collectors.toSet());
-        assertEquals(Set.of("platform", "identity", "permissions", "projects", "tickets", "tags", "search", "appearance", "files", "jobs", "helpdesk"), names);
+        assertEquals(Set.of("platform", "identity", "permissions", "projects", "tickets", "tags", "search", "appearance", "files", "jobs", "helpdesk", "sla"), names);
     }
 
     @Test
