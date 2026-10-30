@@ -88,7 +88,7 @@ after_first=$(history)
 echo "$after_first"
 [ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true,0025:true,0026:true,0027:true,0028:true,0029:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 27 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 28 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
