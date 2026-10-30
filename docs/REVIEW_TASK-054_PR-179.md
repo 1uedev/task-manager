@@ -1,3 +1,139 @@
+# Aktuelle unabhängige Nachprüfung TASK-054 / PR #179 und PR #180
+
+Stand: **30. Oktober 2026**, aktuelles main beim Prüfstart **`3f3864366457038efd9345307b9ac81fda75af18`**. Codex, Sitzung `codex-20261030-task054-review-02`, eigene Prüfkopie und getrennte Kopie für Experimente. Keine Mitarbeit an der Produktimplementierung dieser Aufgabe; Prüfung nach DEC-040.
+
+**Ergebnis: Ein neu nachgewiesener P2-Befund und ein P3-Befund.** Die regulären Prüfungen bestehen: **404 Backendtests, 77 Frontendtests und 128 Browsertests**. Ein gezieltes Experiment zeigt dennoch, dass der verspätete Abschluss eines alten Versuchs einen neueren Versuch desselben Ausführers überschreiben kann (F1). Ein Browserexperiment zeigt eine veraltete Liste nach einem Filterwechsel (F2). Vor einer erneuten positiven technischen Freigabe sollte F1 korrigiert werden.
+
+## Grundlage und Einordnung
+
+- Auftrag: unabhängige Prüfung des Ergebnisses [PR #179](https://github.com/1uedev/task-manager/pull/179), Merge `dc99440c4184e592e3c162e95404a6e5748c637f`, mit [Nachtrag #180](https://github.com/1uedev/task-manager/pull/180), Merge `23adfe3ab745ba9914d8681c388bf6ef00c51a3b`, auf **aktuellem main**.
+- TASK-054 steht dort bereits in **DONE.md**, einschließlich seiner ursprünglichen Abnahmekriterien und Holgers dokumentierter Abnahme vom 28. Oktober. TODO.md enthält den Eintrag nicht mehr. Diese Prüfung benutzt deshalb den erhaltenen Eintrag in DONE.md; sie verändert weder TODO/DONE noch die historische Abnahme.
+- Aktuelles main enthält die Korrekturen aus TASK-055/056 und spätere Erweiterungen wie `Jobs.active`. Die alten F1–F4 des Berichts vom 27. Oktober werden deshalb nicht erneut als offene Implementierungsfehler ausgegeben. Die neuen Befunde sind eigene Ergebnisse dieser Nachprüfung. Die für beide neuen Befunde maßgeblichen Codepfade waren bereits am Stand von PR #180 vorhanden.
+- Gelesen: AGENTS.md, Aufgabeneintrag und Entscheidungen DEC-040/083, Architekturabschnitt „Zuverlässige Hintergrundarbeit“, Backend-README „Hintergrundaufträge“, Modul jobs einschließlich Ports, Executor, Repository, Retention, Administration und Controller, Migration V0025, jobs.openapi.yaml, Worker-Einstieg, Datei-Aufräumlauf, Rechtekatalog/AdministrationRight/identity.openapi.yaml, JobsPage mit de/en und Browsertests, compose.yaml, image-check.sh und lifecycle-check.sh sowie die zugehörigen Tests.
+- Die bestätigte Rückstauanzeige in Übersicht und Protokoll wird auf Folgen geprüft. Ihre Aufnahme in die Bereitschaftsanzeige wird nicht neu zur Entscheidung gestellt.
+- Der frühere Bericht unter diesem Pfad bleibt **unverändert als historischer Anhang** erhalten. Dessen Befundnummern, Zeilen und Testergebnisse gehören zum damaligen Stand.
+
+## Tatsächlich ausgeführte Prüfungen
+
+| Prüfung | Ergebnis dieser Sitzung |
+|---|---|
+| `python scripts/validate_repository.py` | erfolgreich; nach Fertigstellung des Berichts nochmals geprüft |
+| `python scripts/task_board.py --check` | erfolgreich, Aufgabenübersicht unverändert |
+| `python -m unittest discover -s tests -v` | **38 Tests erfolgreich, 1 Skip** für den Unix-spezifischen Zeitzonenwechsel; letzter Lauf mit UTF-8-Modus |
+| Backend Maven `verify`, JDK 25.0.4.1, Maven 3.9.16, lokales PostgreSQL 18.6 | **404 Tests, 0 Failures, 0 Errors, 0 Skips, BUILD SUCCESS**, 9 Minuten |
+| Darin `JobExecutorTest` / `JobsApiTest` / `JobsContractTest` | **23 / 7 / 1 erfolgreich** |
+| Darin Dateien und Lebenszyklus | FilesApiTest 9, FilesContractTest 1, AttachmentServiceTest 6, FileSystemStorageTest 9, UploadRulesTest 4, ApplicationLifecycleTest 3 erfolgreich |
+| Frontend `npm ci --offline`, `npm run verify`, Node 24.22.0 | Generierung, Typprüfung, **77 Tests** und Build erfolgreich |
+| `npm run test:browser`, installiertes Chrome über Playwright | **128/128 erfolgreich**, 23 Suites, kein Skip; einschließlich Jobs-Oberfläche de/en |
+| Zusatzexperimente E1/E2 | **2/2 Beobachtungstests erfolgreich**; E1 erwartet ausdrücklich den falschen Zustand aus F1 |
+| E3: Browser mit gesteuerter Antwortreihenfolge | erwarteter Anzeigefehler reproduziert, Prozess erfolgreich beendet |
+| E4: Original-JAR, Worker → harter Abbruch → Web → harter Abbruch → Worker | **1/1 erfolgreich**, beide bestätigten Aufträge bleiben erhalten und werden erledigt |
+| E5: zwei unabhängige Worker-JVMs mit Original-JAR | **1/1 erfolgreich**, genau ein zusätzlicher Aufräumauftrag für die gemeinsam fällige Aufgabe |
+| `git diff --check` und Prüfung der Änderungsliste | nur dieser Bericht geändert, keine Produkt-/Testdatei im Ergebnis-PR |
+
+Der erste Python-Lauf hatte acht fehlgeschlagene Assertions wegen der Windows-Standardkodierung temporärer Testdateien. Der erneute Lauf mit `PYTHONUTF8=1` bestand. Ein erster Zusatztest-Anlauf kompilierte wegen einer mehrdeutigen Assertion im **eigenen Testcode** nicht; nach deren Korrektur bestanden die Experimente. Beide Vorläufe sind keine Produktfehler.
+
+**Grenzen:** PostgreSQL lief lokal in Version 18.6, nicht im gepinnten Testcontainer. Docker ist installiert, der Linux-Daemon war jedoch nicht erreichbar. Deshalb weder `image-check.sh`, `lifecycle-check.sh` noch einen Compose-Stopp tatsächlich ausgeführt. Die Skripte wurden gelesen. E4/E5 benutzen das unveränderte gebaute JAR in echten Windows-JVMs, keine Container; E4 verwendet harte Prozessabbrüche, keinen SIGTERM-Nachweis. Geordneter Context-Stopp, letzter Versuch und Unterbrechung sind zusätzlich durch die vorhandenen Backendtests abgedeckt. Keine aktuellen CI-Ergebnisse werden als eigene Ausführung ausgegeben.
+
+## Befunde der aktuellen Nachprüfung
+
+### F1 · P2 · Ein alter Versuch desselben Ausführers kann den neueren Versuch als erledigt markieren
+
+**Dateien/Zeilen:** `backend/src/main/java/taskmanager/jobs/internal/JobRepository.java:68–79` und `:101–134`; `JobExecutor.java:133`, `:287`, `:313`, `:333`, `:369`.
+
+`lease_owner` identifiziert den Ausführer, nicht die einzelne Reservierung. Er bleibt über mehrere Versuche gleich. `succeed`, `fail` und `giveBack` prüfen nur Auftrags-ID, `running` und diesen Besitzer. Nach Ablauf und erneuter Übernahme **durch einen anderen Faden desselben Ausführers** können sie den alten und den neuen Versuch daher nicht unterscheiden.
+
+**Nachstellung E1, echte Datenbank und echte Worker-Fäden:**
+
+1. Ein Testbearbeiter hält Versuch 1 an einer Barriere fest.
+2. Der Test stellt den gespeicherten Lease-Ablauf her und ruft die echte `releaseExpired`-Methode auf, während Versuch 1 weiterläuft.
+3. Ein freier Faden desselben Ausführers übernimmt den Auftrag als Versuch 2; dieser Bearbeiter wartet an einer eigenen Barriere. Zwei überlappende Aufrufe werden nachgewiesen.
+4. Versuch 1 wird freigegeben und endet erfolgreich. Der Auftrag wird **`succeeded`**, obwohl Versuch 2 weiterhin läuft.
+5. Versuch 2 wird freigegeben und meldet einen endgültigen Fehler. Der Fehler kann nicht mehr gespeichert werden, weil Versuch 1 den Zustand bereits geändert hat.
+
+Das ist eine kontrollierte Nachstellung des Zustands nach einem Reservierungsverlust, etwa nach vorübergehend ausgefallener Verlängerung. Es wurde keine reale Netzwerkstörung erzeugt. Der Kontrollversuch E2 bestätigt: Ein alter Abschluss mit **anderem** Besitzer wird korrekt zurückgewiesen. Die Lücke betrifft dieselbe Ausführerkennung.
+
+**Auswirkung:** Der Betriebszustand kann einen noch laufenden beziehungsweise endgültig gescheiterten aktuellen Versuch als erfolgreich ausweisen. Ein verspäteter Fehler kann entsprechend einen neueren Lauf zurückstellen. Die Absicherung „nur der Besitzer seiner Reservierung schreibt“ ist für diesen Fall unvollständig. Zusätzlich arbeitet `active` nur mit Auftrags-IDs; das Ende des alten Versuchs entfernt damit auch den gemeinsamen Eintrag einer noch laufenden neuen Ausführung.
+
+**Vorschlag:** Pro Übernahme eine eindeutige Reservierungskennung beziehungsweise eine nicht wiederverwendbare Generation erzeugen. Verlängerung, Erfolg, Fehlschlag und Rückgabe müssen diese Kennung atomar prüfen. Die lokalen laufenden Versuche ebenfalls getrennt führen, damit ein alter Abschluss nicht die Verlängerung des neuen entfernt. Regressionsfälle für beide Ergebnisreihenfolgen und erneutes Einstellen durch die Verwaltung ergänzen. Der zurückgesetzte Versuchszähler allein genügt nicht als dauerhaft eindeutige Generation.
+
+### F2 · P3 · Eine verspätete Listenantwort überschreibt den neueren Zustandsfilter
+
+**Datei/Zeilen:** `frontend/src/pages/JobsPage.tsx:39–53`.
+
+Mehrere `load`-Aufrufe können gleichzeitig laufen. Jeder setzt die Liste nach seinem Abschluss, ohne zu prüfen, ob Filter beziehungsweise Laderunde noch aktuell sind.
+
+**Nachstellung E3:** Produktionsbuild der echten Oberfläche im Chrome, API-Modell der vorhandenen Browsertests. Die Antwort auf „Gescheitert“ wird zurückgehalten. Danach wird „Abgebrochen“ ausgewählt und dessen korrekte Liste angezeigt. Anschließend wird die ältere Antwort freigegeben. Ergebnis: Auswahl weiterhin **Abgebrochen**, Tabelle enthält **Gescheitert** und bietet „Erneut einstellen“ an.
+
+**Auswirkung:** Die Ansicht widerspricht der Auswahl. Es wurde keine Rechteumgehung nachgewiesen; beide Aufträge liegen im erlaubten Bestand der Person.
+
+**Vorschlag:** Laderunden beziehungsweise Anfragekennungen vergleichen und veraltete Ergebnisse verwerfen; beim Filterwechsel laufende Anfragen gegebenenfalls abbrechen. Fehler, Ladezustand und Nachladen älterer Seiten derselben Runde zuordnen. Einen Browserfall mit umgekehrter Antwortreihenfolge ergänzen.
+
+## Hinweise
+
+### H1 – Gleichzeitige Ausführung und Exactly-once müssen eingeschränkt beschrieben werden
+
+`SKIP LOCKED` verhindert eine doppelte **gleichzeitige Erstreservierung**. Nach Verlust einer Lease kann der alte Bearbeiter weiterlaufen, während ein neuer übernimmt. `renew` wertet verlorene Reservierungen nicht aus; ein Zeitlimit unterbricht kooperativ und beendet keinen Faden zwangsweise. Das war im früheren Bericht bereits als Grenze genannt.
+
+Die absolute Aussage „Mehrere Ausführer führen denselben Auftrag nicht gleichzeitig aus“ ist deshalb zu weit. Der Vertrag C12 mit Wirkung unter stabiler Auftrags-ID bleibt notwendig; Exactly-once-Fachwirkung wird vom Modul nicht allgemein garantiert. F1 betrifft darüber hinaus die fehlerhafte Zuordnung des **Ergebnisses**, die auch ein idempotenter Bearbeiter nicht selbst repariert.
+
+### H2 – Uhren, Wiederholungen und Retention bleiben Betriebsgrenzen
+
+Reservierung, Verlängerung und Ablauf verwenden Prozessuhren. Eine ausreichende Uhrabweichung kann zur vorzeitigen Übernahme führen. Dedup-Schlüssel gelten bis zur Löschung des Auftrags und liefern auch einen bereits erledigten Auftrag zurück; nach dessen Aufbewahrung kann derselbe Schlüssel einen neuen Auftrag erzeugen. Wiederholung einer alten wiederkehrenden Aufgabe durch die Verwaltung prüft nicht auf einen neueren wartenden/laufenden Auftrag derselben Art. Diese Grenzen sind gegenüber dem früheren Bericht weiterhin erkennbar.
+
+### H3 – Rechte, Unternehmensgrenze, Audit und Datenminimierung
+
+Übersicht/Liste enthalten eigene und Installationsaufträge; fremde Unternehmensaufträge sind ausgeschlossen. Aktionen sperren nur sichtbare Aufträge und protokollieren Konto, Name, Auftrag und Operation in derselben Transaktion. Ohne `jobs.manage` antworten die vier gültigen Aufrufe mit 403; ohne Anmeldung 401. Katalog, Initialvergabe aus `AdministrationRight` und Identitätsvertrag enthalten das Recht. Die API- und Browsertests stützen dies.
+
+Die Anforderung zu „keinen Nutzdaten in der Datenbank“ ist wörtlich nicht mit einer dauerhaften Queue vereinbar: `job.payload` speichert die notwendigen Referenznutzdaten. **Keine Fehlermeldungen oder geheimen Volltexte** sollen darin stehen. API und Oberfläche liefern das Payload nicht aus; Fehler bestehen dort nur aus Code und Referenz. Die Begrenzung auf 20 Werte à 200 Zeichen erkennt semantisch keine Geheimnisse. Diese Verantwortung bleibt beim internen Aufrufer; externe beliebige Aufträge werden hier nicht angeboten.
+
+### H4 – Aufräumlauf, Bereitschaft und Dokumentation
+
+Die Datei-Aufräumlogik selbst bleibt in `AttachmentCleanup`; `FilesCleanupTask` ruft sie auf. Die vorhandenen Dateitests bestehen. Neu gegenüber dem ursprünglichen Timer sind insbesondere der frühere erste Lauf, das Zeitlimit der wiederkehrenden Aufgabe und die Abhängigkeit von einem eingeschalteten Ausführer. Ohne Web-Ausführer und ohne eigenen Worker läuft kein Aufräumen.
+
+Die akzeptierte Rückstauanzeige bleibt erhalten. Sie zählt zuletzt gesehene Prozesse, nicht garantiert funktionsfähige Bearbeiter, und die Worker-Gesundheitsprüfung prüft nur den lebenden Java-Prozess. Nach dem Ausfall aller Ausführer erkennen die API-Zähler den Rückstau; die Bereitschaft bleibt absichtlich davon getrennt.
+
+Die README-Aussage, die Vorführumgebung betreibe zusätzlich einen Ausführer im Webprozess, widerspricht weiterhin `TASK_MANAGER_JOBS_WORKER: "false"` in Compose und dem genau einen Ausführer erwartenden Imagecheck. Auch der Kommentar in V0025 über einen Fälligkeitsschlüssel beschreibt nicht die aktuelle Implementierung: Diese verwendet die gesperrte Schedule-Zeile, Fortschreiben und `pending(kind)`. Die Abweichungen sind Dokumentationshinweise, kein Nachweis einer doppelten regulären Fälligkeit.
+
+## Einzelabgleich der ursprünglichen Abnahmekriterien
+
+Die Kriterien sind wortsinngleich aus dem auf main erhaltenen Eintrag in DONE.md übernommen.
+
+| Nr. | Kriterium | Beleg und Bewertung |
+|---|---|---|
+| 1 | Zurückgerollter Auftrag existiert nicht | `MANDATORY`, atomarer Insert; `aJobOfARolledBackChangeDoesNotExistAndACommittedOneRunsOnce` und Verweigerung ohne Transaktion bestehen. **Erfüllt.** |
+| 2 | Bestätigter Auftrag genau einmal erfolgreich, auch mit zwei Ausführern | Der vorhandene Test bearbeitet 150 Aufträge mit zwei Ausführern ohne Überlappung. **Im regulären Fall erfüllt; als absolute Zusage nicht erfüllt**, siehe F1/H1. |
+| 3 | Abbruch während der Ausführung führt nach Lease-Ablauf zu einer weiteren Ausführung mit Wiederholungsnachweis | Vorhandener Effekt-Test erkennt die unter Auftrags-ID gespeicherte frühere Wirkung; E4 bestätigt reale Prozessabbrüche und Wiederaufnahme. **Für Restversuche erfüllt.** Der absichtlich verlorene letzte Versuch endet laut DEC-083 als `failed/job.lease_expired`; geordneter Stopp gibt den Versuch seit TASK-055/056 zurück. |
+| 4 | Dauerfehler erreicht Höchstzahl, ist ohne Geheimnisse sichtbar und mit Recht erneut einstellbar | Executor-, API- und Browsertests bestehen, Audit wird mitgeschrieben. **Erfüllt im regulären Ablauf; F1 bleibt Ausnahme bei überlappenden Versuchen.** |
+| 5 | Ohne jobs.manage weder Übersicht noch Liste noch Aktion, 403 | `withoutTheRightNothingIsVisibleOrChangeable` und Entzug beim nächsten Aufruf bestehen. **Erfüllt für gültige authentifizierte Anfragen.** |
+| 6 | Wiederkehrende Aufgabe mit zwei Prozessen einmal je Fälligkeit | Schedule-Sperre/Commit im Code, vorhandener Zwei-Ausführer-Test und **E5 mit zwei unabhängigen Original-JAR-Workern**. **Für normale Fälligkeiten erfüllt**, administrative Wiederholung siehe H2. |
+| 7 | Aufräumlauf verhält sich wie vorher, Tests grün | Files-Tests und `theFileCleanUpIsARecurringTaskOfTheExecutor` bestehen; E5 führt die echte wiederkehrende Dateiaufgabe aus. **Fachlogik erfüllt, Betriebsänderungen siehe H4.** |
+| 8 | Neustart von Webprozess und Ausführer verliert keinen bestätigten Auftrag | ApplicationLifecycleTest sowie **E4 mit Worker/Web/Worker und harten Abbrüchen**. Beide bestätigten Aufträge vorhanden und erfolgreich, 2 beziehungsweise 1 Versuche. **Im nachgestellten Ablauf erfüllt**, keine Zusage unbegrenzter Wiederholung nach ausgeschöpftem Budget. |
+
+## Zusatzexperimente und Aussagegrenzen
+
+| Kennung | Durchführung | Beobachtung |
+|---|---|---|
+| E1 | `reviewOldAttemptOfSameExecutorOverwritesNewAttempt`, Testbearbeiter mit zwei Barrieren; Lease-Zustand kontrolliert abgelaufen, echte Freigabe und echte Worker-Fäden | Alter Erfolg setzt den laufenden neuen Versuch auf succeeded; dessen endgültiger Fehler bleibt unvermerkt |
+| E2 | `reviewOldOwnerCannotFinishNewOwner`, echte claim/releaseExpired/succeed-Operationen | Unterschiedliche Besitzerkennungen: alter Abschluss zurückgewiesen |
+| E3 | Vorhandene Browserhilfen und Produktionsbuild, ältere Filterantwort gezielt verzögert | Auswahl cancelled, sichtbarer Datensatz failed |
+| E4 | `reviewPackagedWorkerAndWebRestartKeepCommittedJobs`, Original-JAR; Retention-Bearbeiter über eine externe Datenbanksperre angehalten, Worker hart beendet, Web übernimmt; danach Web hart beendet und weiterer Auftrag durch neuen Worker verarbeitet | Bestätigte Aufträge nicht verloren, wiederaufgenommener Auftrag mit Versuch 2 erfolgreich |
+| E5 | `reviewTwoPackagedWorkersEnqueueOneDueRun`, zwei echte JVMs, gemeinsam fällige files.cleanup nach Bereitschaft beider Prozesse | Genau ein zusätzlicher Auftrag, erfolgreich abgeschlossen, beide Prozesse lebendig |
+
+Die zusätzlichen Java-Beobachtungstests wurden ausschließlich in der getrennten Experimentkopie ergänzt. Sie und das lokale Browserskript werden nicht als Produktänderung ausgeliefert. Die vollständigen regulären Tests liefen vorher auf unverändertem Produkt- und Testcode. Insbesondere ist „Beobachtungstest erfolgreich“ bei E1/E3 kein bestandenes fachliches Abnahmekriterium.
+
+## Empfehlung
+
+**F1 vor einer erneuten technischen Freigabe beheben und mit beiden Reihenfolgen verspäteter Ergebnisse nachprüfen.** F2 unabhängig als kleine Korrektur der Betriebsoberfläche behandeln. Die bestehenden Grenzen zu kooperativen Zeitlimits, Uhrquelle, Wiederholung und Betriebsanzeige im Vertrag beziehungsweise in der Dokumentation präzise benennen; die bereits akzeptierte Entscheidung zur Bereitschaftsanzeige bleibt erhalten.
+
+Die neue Prüfung erklärt keine Aufgabe für abgenommen und ändert keinen Status. Die frühere fachliche Abnahme in DONE.md bleibt als historische Entscheidung bestehen. Der Ergebnis-PR enthält ausschließlich diesen erweiterten Bericht.
+
+---
+
+# Historischer Anhang – Bericht vom 27. Oktober 2026
+
+Der folgende frühere Bericht bleibt unverändert erhalten. Seine Testergebnisse und offenen Befunde beziehen sich auf seinen damaligen Prüfstand, nicht auf die oben dokumentierte Nachprüfung.
+
 # Prüfung TASK-054 / PR #179 und PR #180
 
 Stand: 27. Oktober 2026. Prüfer: Claude, Sitzung `claude-20261027-review-054-01`, Branch `claude/project-thread-t9h650`, eigener Arbeitsbereich. Auftrag: Holgers Bitte vom 27. Oktober 2026, die getrennte Prüfung von TASK-054 statt Codex selbst vorzunehmen (DEC-040). Die Sitzung, die TASK-054 umgesetzt hat (`claude-20261027-jobs-01`), ist eine andere als diese. Prüfumfang und Schwerpunkte folgen dem Prüfauftrag, den die Umsetzungssitzung für Codex formuliert hat.
