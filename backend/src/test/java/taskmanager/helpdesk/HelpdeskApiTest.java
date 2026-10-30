@@ -1077,6 +1077,76 @@ class HelpdeskApiTest {
     }
 
     @Test
+    void anAnswerThatJoinsATicketIsNewUntilSomeoneMarksItAsSeen() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Neu")[0];
+        Browser replier = replier(setup);
+        UUID reply = UUID.fromString(reply(replier, setup, number, "Bitte prüfen.").json().get("id").asString());
+        assertNull(runReplyJob(reply, 1));
+        String replyId = "<" + reply + "@firma.example>";
+        assertEquals(0, replier.get("/api/v1/helpdesk/answers").json().size(), "a mail that opens a ticket is no new answer");
+
+        // A confirmed answer of the contact joins the ticket and is new.
+        deliver(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyId + "\r\n", "Re: Neu", "Geht wieder.");
+        intake.fetch(setup.mailbox());
+        UUID answer = jdbc.queryForObject("select id from helpdesk_message where mailbox_id = ? order by uid desc limit 1", UUID.class,
+            setup.mailbox());
+        Response list = replier.get("/api/v1/helpdesk/answers");
+        assertEquals(200, list.status(), list.body());
+        assertEquals(1, list.json().size(), list.body());
+        assertEquals(answer.toString(), list.json().get(0).get("id").asString());
+        assertEquals(number, list.json().get(0).get("number").asLong());
+        assertEquals(setup.project().toString(), list.json().get(0).get("projectId").asString());
+        var mails = replier.get(ticketPath(setup, number)).json().get("mails");
+        assertFalse(mails.get(0).get("newAnswer").asBoolean());
+        assertTrue(mails.get(1).get("newAnswer").asBoolean());
+        long version = mails.get(1).get("version").asLong();
+
+        // Without the rights of a reply there is neither list nor marking; outside the project the mail does not exist.
+        Browser reader = member(setup);
+        grant(reader.id, setup.project(), "ticket.read", "READ:*");
+        assertEquals(0, reader.get("/api/v1/helpdesk/answers").json().size());
+        assertEquals(403, reader.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, "\"" + version + "\"").status());
+        Browser blind = member(setup);
+        grant(blind.id, setup.project(), "helpdesk.reply", "ticket.read", "READ:title", "READ:contact");
+        assertEquals(0, blind.get("/api/v1/helpdesk/answers").json().size());
+        assertEquals(403, blind.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, "\"" + version + "\"").status());
+        Response outside = person().send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, "\"" + version + "\"");
+        assertEquals(404, outside.status());
+        assertEquals("helpdesk.message_not_found", outside.code());
+
+        // Marking needs the current version and holds for everybody.
+        assertEquals(428, replier.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, null).status());
+        assertEquals(412, replier.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, "\"" + (version + 1) + "\"").status());
+        Browser colleague = replier(setup);
+        assertEquals(1, colleague.get("/api/v1/helpdesk/answers").json().size());
+        Response seen = replier.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, "\"" + version + "\"");
+        assertEquals(200, seen.status(), seen.body());
+        assertEquals(version + 1, seen.json().get("version").asLong());
+        assertEquals(0, colleague.get("/api/v1/helpdesk/answers").json().size());
+        assertFalse(colleague.get(ticketPath(setup, number)).json().get("mails").get(1).get("newAnswer").asBoolean());
+        Response again = colleague.send("POST", "/api/v1/helpdesk/answers/" + answer + "/seen", null, seen.etag());
+        assertEquals(409, again.status());
+        assertEquals("helpdesk.answer_not_new", again.code());
+        assertEquals(List.of("answer.seen"), jdbc.queryForList("select operation from helpdesk_audit_event where target_id = ?", String.class, answer));
+        assertEquals(replier.id, jdbc.queryForObject("select seen_by from helpdesk_message where id = ?", UUID.class, answer));
+
+        // A mail that a reviewer adds to the ticket is new as well.
+        deliver(setup, "In-Reply-To: " + replyId + "\r\n", "Re: Neu", "Noch etwas.");
+        intake.fetch(setup.mailbox());
+        UUID waiting = jdbc.queryForObject("select id from helpdesk_message where mailbox_id = ? order by uid desc limit 1", UUID.class,
+            setup.mailbox());
+        assertEquals(0, replier.get("/api/v1/helpdesk/answers").json().size(), "a mail in the review queue is no answer yet");
+        Browser reviewer = reviewer(setup);
+        Response shown = reviewer.get("/api/v1/helpdesk/inbox/" + waiting);
+        assertEquals(200, reviewer.send("POST", "/api/v1/helpdesk/inbox/" + waiting + "/attach", null, shown.etag()).status());
+        list = replier.get("/api/v1/helpdesk/answers");
+        assertEquals(1, list.json().size(), list.body());
+        assertEquals(waiting.toString(), list.json().get(0).get("id").asString());
+    }
+
+    @Test
     void theAnswerOfTheCustomerJoinsTheTicketOfTheReply() throws Exception {
         Setup setup = setup();
         smtp(setup, MAIL.getSmtp().getPort());

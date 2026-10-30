@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply,
+  markAnswerSeen, readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply,
   type Ticket, type TicketHelpdesk as HelpdeskView,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -11,6 +11,7 @@ import type { MessageKey } from '../i18n/index.ts';
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { useHelpdeskCode } from './HelpdeskPage.tsx';
+import { ANSWER_PROBLEMS } from './InboxPage.tsx';
 
 // Customer, contact and the mails of a ticket (TASK-057). Each part follows the rules of its ticket field, which only the
 // server knows: a part without the read rule is not shown, and the choice is offered only with the write rules.
@@ -103,16 +104,18 @@ function MailThread({ value, project, ticket, onChanged }: {
       <h3>{t('ticketHelpdesk.mails')}</h3>
       <ul className="plain-list" data-testid="ticket-mails">
         {entries.map(({ mail, reply }) => mail !== null ? (
-          <li key={mail.id}>
-            <details>
+          <li key={mail.id} data-mail={mail.id} className={mail.newAnswer ? 'new-answer' : undefined}>
+            <details open={mail.newAnswer}>
               <summary>{t('ticketHelpdesk.mail', { subject: mail.subject ?? t('inbox.noSubject'), from: mail.fromAddress ?? t('inbox.noSender'),
-                date: formatDateTime(mail.receivedAt, language) })}</summary>
+                date: formatDateTime(mail.receivedAt, language) })}
+                {mail.newAnswer && <>{' '}<span className="badge new-answer" data-testid="new-answer">{t('ticketHelpdesk.newAnswer')}</span></>}</summary>
               <p className="prewrap mail-body">{mail.body ?? t('inbox.noBody')}</p>
               {mail.attachments.map((file, index) => (
                 <p key={index} className="hint">{t('inbox.file', { name: file.name, size: formatBytes(file.size, language) })}
                   {file.refusal ? ` ${code(file.refusal)}` : ''}</p>
               ))}
             </details>
+            {mail.newAnswer && value.replyAllowed && <AnswerSeen id={mail.id} version={mail.version} onChanged={onChanged} />}
           </li>
         ) : reply !== null && (
           <li key={reply.id} data-reply={reply.id}>
@@ -129,6 +132,33 @@ function MailThread({ value, project, ticket, onChanged }: {
         ))}
       </ul>
     </>
+  );
+}
+
+// A new answer of the customer (TASK-067) stays highlighted until a person who may reply marks it as seen for everybody.
+function AnswerSeen({ id, version, onChanged }: { readonly id: string; readonly version: number; readonly onChanged: () => void }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  async function seen() {
+    setBusy(true);
+    setNotice(null);
+    const result = await markAnswerSeen(api, id, version);
+    setBusy(false);
+    if (result.kind !== 'ok') {
+      setNotice({ kind: 'info', text: text(result.problem, ANSWER_PROBLEMS) });
+    }
+    onChanged();
+  }
+
+  return (
+    <div className="inline-form" data-testid="answer-seen">
+      <p className="actions"><button type="button" className="secondary" disabled={busy} onClick={() => void seen()}>{t('inbox.markSeen')}</button></p>
+      <NoticeView notice={notice} />
+    </div>
   );
 }
 

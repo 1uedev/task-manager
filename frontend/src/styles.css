@@ -513,3 +513,7 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
 .attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
 .attachments li > a { font-weight: 600; overflow-wrap: anywhere; }
 .attachment-warning { flex-basis: 100%; margin: 0; color: var(--warning); font-size: 0.9rem; }
+
+/* A new answer of the customer that nobody has marked as seen yet (TASK-067). */
+li.new-answer { border-left: 3px solid var(--brand-primary); padding-left: 0.6rem; }
+.badge.new-answer { display: inline-flex; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 650; background: var(--accent-soft); color: var(--brand-text); }

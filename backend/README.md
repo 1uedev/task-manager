@@ -55,7 +55,7 @@ Jedes direkte Unterpaket von `taskmanager` ist ein Modul. Spring Modulith prüft
 | `search` | Berechtigte Suche mit eigener Projektion (TASK-029) | platform, identity, permissions, projects, tickets, tags |
 | `files` | Dateispeicher und Anhänge von Tickets (TASK-051) | platform, identity, permissions, projects, tickets, jobs |
 | `jobs` | Dauerhafte Hintergrundaufträge, wiederkehrende Aufgaben und ihre Sicht für den Betrieb (TASK-054) | platform, identity |
-| `helpdesk` | Eingang über IMAP, Kunden, Kontakte, Postfächer, Prüfwarteschlange (TASK-057) und Antworten über SMTP (TASK-058) | platform, identity, permissions, projects, tickets, files, jobs |
+| `helpdesk` | Eingang über IMAP, Kunden, Kontakte, Postfächer, Prüfwarteschlange (TASK-057), Antworten über SMTP (TASK-058) und neue Kundenantworten (TASK-067) | platform, identity, permissions, projects, tickets, files, jobs |
 
 Die Tabelle folgt der Ordnung aus [TECHNICAL_CONTRACTS.md](../docs/TECHNICAL_CONTRACTS.md). Wie Tickets, Tags und Suche in einem gemeinsamen Ablauf zusammengesetzt werden, entscheiden TASK-027 bis TASK-029; eine neue erlaubte Abhängigkeit wird dort begründet und im selben PR eingetragen. Öffentlich ist jeweils nur das Modulpaket selbst; Unterpakete sind intern.
 
@@ -324,6 +324,20 @@ Grenze: Bricht die Verbindung, während die Mail schon beim Server liegt, aber v
 **Übersicht.** `GET /api/v1/helpdesk/replies` nennt bis zu 100 noch nicht angenommene Antworten der Projekte, in denen die Person Mitglied ist und antworten darf; die Prüfwarteschlange zeigt sie oben.
 
 **Grenzen.** (1) Keine Entwürfe, keine weiteren Empfänger, keine Anhänge, keine Vorlagen mit Branding (A17), keine Benachrichtigungen und kein SLA. (2) Die Annahme durch den Server ist kein Beweis der Zustellung; Zustellberichte werden nicht ausgewertet. (3) Gruppenrechte gelten zum Zeitpunkt der Bestätigung. (4) Eine unklare Antwort kann den Kunden erreicht haben; erneutes Senden kann ein Duplikat erzeugen, darauf weist die Oberfläche hin. (5) Gesendete Antworten werden nicht im Gesendet Ordner des Postfachs abgelegt.
+
+## Neue Kundenantworten (TASK-067)
+
+Hinweis H7 der Prüfung von TASK-058 (DEC-097). Migration V0029 ergänzt `helpdesk_message` um `joined_at`, `seen_at` und `seen_by`.
+
+**Neu.** Eine Mail, die ohne neues Ticket zu einem bestehenden Ticket kommt, ist neu: von selbst als Antwort auf eine eigene Antwort (`TicketOpener.append`) oder über `POST /api/v1/helpdesk/inbox/{id}/attach`. Beide setzen `joined_at` in derselben Transaktion. Mails, die ein Ticket eröffnen, sind nie neu; Mails, die vor V0029 angehängt wurden, bleiben unmarkiert.
+
+**Liste.** `GET /api/v1/helpdesk/answers` nennt bis zu 100 neue Kundenantworten, die neueste zuerst, nur aus Projekten, in denen die Person Mitglied ist und antworten darf (`helpdesk.reply`, `ticket.read`, Leseregeln für `mail` und `contact`, wie beim Versand). Die Prüfwarteschlange zeigt sie oben als „Neue Kundenantworten“ mit Verweis auf das Ticket.
+
+**Als gesehen markieren.** `POST /api/v1/helpdesk/answers/{id}/seen` mit If-Match der Version der Mail verlangt dieselben Rechte; ohne `ticket.read` antwortet der Server mit 404 `helpdesk.message_not_found` wie bei einer unbekannten Mail, sonst mit 403. Eine schon gesehene oder nie neue Mail antwortet 409 `helpdesk.answer_not_new`, eine veraltete Version 412 `helpdesk.version_conflict`, fehlendes If-Match 428. Die Markierung gilt für alle, setzt `seen_at` und `seen_by`, erhöht die Version und steht im Audit (`message`, `answer.seen`, Ticket im Detail).
+
+**Ticket.** Die Mails im Helpdesk Abschnitt des Tickets tragen `newAnswer` und `version`. Eine neue Antwort ist aufgeklappt und hervorgehoben; wer antworten darf, markiert sie dort als gesehen.
+
+**Grenzen.** Kein Wiederöffnen erledigter Tickets, keine Benachrichtigung (REQ-TKT-005, eigenes Paket), kein SLA. Gesehen gilt für das ganze Team, nicht je Person.
 
 ## Suche (TASK-029)
 

@@ -297,9 +297,14 @@ public class ReplyService {
      * rules of {@code mail} and {@code contact} the reply is refused (403).
      */
     private void requireReply(AccessContext actor, UUID projectId) {
+        requireReply(actor, projectId, () -> ApiProblemException.of(404, "project.not_found"));
+    }
+
+    /** The same check with the answer for a caller without {@code ticket.read}, for objects found by their own identifier. */
+    void requireReply(AccessContext actor, UUID projectId, Supplier<ApiProblemException> notFound) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
         if (!permissions.inspect(actor, resource, READ, Set.of()).allowed()) {
-            throw ApiProblemException.of(404, "project.not_found");
+            throw notFound.get();
         }
         try {
             permissions.require(actor, resource, READ, FIELDS, Set.of());

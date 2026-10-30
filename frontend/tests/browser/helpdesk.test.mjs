@@ -418,4 +418,57 @@ describe('replies to customers', () => {
       assert.equal(mail.ticketId, ticket.id);
     });
   });
+
+  test('a customer answer that joined its ticket is listed as new until somebody marks it as seen', async () => {
+    let ticket;
+    let answer;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      ticket = withReplier(backend);
+      answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', fromAddress: 'lea@nordwerk.example', fromName: 'Lea Lang',
+        joinedAt: '2026-10-21T08:05:00Z' });
+      backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', fromAddress: 'lea@nordwerk.example', fromName: 'Lea Lang',
+        joinedAt: '2026-10-21T08:06:00Z' });
+    } }, async (page, backend) => {
+      const list = page.getByTestId('new-answers');
+      const first = list.locator(`li[data-answer="${answer.id}"]`);
+      await first.getByRole('link', { name: 'Re: Drucker defekt, Ticket 3' }).waitFor();
+      await first.getByText('von Lea Lang <lea@nordwerk.example>').waitFor();
+      assert.equal(await list.locator('li').count(), 2);
+      await first.getByRole('button', { name: 'Gesehen' }).click();
+      await first.waitFor({ state: 'detached' });
+      assert.equal(await list.locator('li').count(), 1);
+      assert.equal(answer.seenBy, backend.ben.id);
+      const call = backend.state.requests.findLast((entry) => entry.method === 'POST' && entry.path.endsWith('/seen'));
+      assert.equal(call.ifMatch, '"1"');
+
+      // In the ticket the remaining answer is opened and marked; marking it there removes it from the list as well.
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      const second = backend.state.helpdesk.messages.at(-1);
+      const mail = section.locator(`li[data-mail="${second.id}"]`);
+      await mail.getByTestId('new-answer').waitFor();
+      assert.equal(await section.getByTestId('new-answer').count(), 1);
+      await mail.getByTestId('answer-seen').getByRole('button', { name: 'Gesehen' }).click();
+      await mail.getByTestId('new-answer').waitFor({ state: 'detached' });
+      assert.ok(second.seenAt);
+      await page.goto(`${base()}#/inbox`);
+      await page.getByRole('heading', { name: 'Prüfwarteschlange' }).waitFor();
+      assert.equal(await page.getByTestId('new-answers').count(), 0);
+    });
+  });
+
+  test('marking an answer that somebody else marked first is explained', async () => {
+    let answer;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      const ticket = withReplier(backend);
+      answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', joinedAt: '2026-10-21T08:05:00Z' });
+    } }, async (page, backend) => {
+      const item = page.getByTestId('new-answers').locator(`li[data-answer="${answer.id}"]`);
+      await item.waitFor();
+      Object.assign(answer, { seenAt: '2026-10-21T08:07:00Z', seenBy: backend.anna.id, version: answer.version + 1 });
+      await item.getByRole('button', { name: 'Gesehen' }).click();
+      await page.getByTestId('new-answers').getByRole('status').waitFor();
+      await item.waitFor({ state: 'detached' });
+    });
+  });
 });
