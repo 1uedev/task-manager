@@ -10,6 +10,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.helpdesk.CustomerDirectory;
+import taskmanager.permissions.GroupDirectory;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.AdministrationRights;
 import taskmanager.platform.ApiProblemException;
@@ -35,20 +36,22 @@ public class SlaAdministration {
     private final CompanyContext company;
     private final ProjectAccess projects;
     private final CustomerDirectory customers;
+    private final GroupDirectory groups;
     private final Clock clock;
 
     SlaAdministration(SlaRepository repository, ObjectProvider<AdministrationRights> rights, CompanyContext company, ProjectAccess projects,
-            CustomerDirectory customers, Clock clock) {
+            CustomerDirectory customers, GroupDirectory groups, Clock clock) {
         this.repository = repository;
         this.rights = rights;
         this.company = company;
         this.projects = projects;
         this.customers = customers;
+        this.groups = groups;
         this.clock = clock;
     }
 
     /** What a rule can name: the projects with their ticket types and the customers with the projects they are released for. */
-    public record Options(List<ProjectOption> projects, List<CustomerDirectory.Summary> customers) {
+    public record Options(List<ProjectOption> projects, List<CustomerDirectory.Summary> customers, List<GroupDirectory.Summary> groups) {
     }
 
     public record ProjectOption(UUID id, String key, String name, List<ProjectConfiguration.TicketType> ticketTypes) {
@@ -151,15 +154,17 @@ public class SlaAdministration {
                 .flatMap(version -> projects.configuration(project.projectId(), version)).map(ProjectConfiguration::ticketTypes).orElse(List.of());
             list.add(new ProjectOption(project.projectId(), project.key(), project.name(), types));
         }
-        return new Options(list, customers.customers(companyId));
+        return new Options(list, customers.customers(companyId), groups.groups(companyId));
     }
 
     @Transactional
-    public Rule createRule(UUID actor, String rawName, UUID projectId, UUID customerId, String ticketType, UUID calendarId, Rule.Budgets budgets) {
+    public Rule createRule(UUID actor, String rawName, UUID projectId, UUID customerId, String ticketType, UUID calendarId, Rule.Budgets budgets,
+            List<Rule.Stage> escalations) {
         UUID companyId = requireManage();
-        String name = checkedRule(companyId, rawName, projectId, customerId, ticketType, calendarId, budgets);
+        String name = checkedRule(companyId, rawName, projectId, customerId, ticketType, calendarId, budgets, escalations);
         Instant now = clock.instant();
-        Rule rule = new Rule(UUID.randomUUID(), companyId, name, projectId, customerId, ticketType, calendarId, budgets, true, 1, now, actor, now, actor);
+        Rule rule = new Rule(UUID.randomUUID(), companyId, name, projectId, customerId, ticketType, calendarId, budgets, escalations, true, 1, now,
+            actor, now, actor);
         try {
             repository.insertRule(rule);
         } catch (DuplicateKeyException taken) {
@@ -172,18 +177,18 @@ public class SlaAdministration {
     /** Changes a rule; the project of a rule stays, a rule for another project is a new rule. */
     @Transactional
     public Rule updateRule(UUID actor, UUID id, long expectedVersion, String rawName, UUID customerId, String ticketType, UUID calendarId,
-            Rule.Budgets budgets) {
+            Rule.Budgets budgets, List<Rule.Stage> escalations) {
         UUID companyId = requireManage();
         Rule current = repository.lockRule(companyId, id).orElseThrow(() -> ApiProblemException.of(404, "sla.rule_not_found"));
         if (current.version() != expectedVersion) {
             throw ApiProblemException.of(412, "sla.version_conflict");
         }
-        String name = checkedRule(companyId, rawName, current.projectId(), customerId, ticketType, calendarId, budgets);
-        Rule changed = new Rule(id, companyId, name, current.projectId(), customerId, ticketType, calendarId, budgets, true, current.version() + 1,
-            current.createdAt(), current.createdBy(), clock.instant(), actor);
+        String name = checkedRule(companyId, rawName, current.projectId(), customerId, ticketType, calendarId, budgets, escalations);
+        Rule changed = new Rule(id, companyId, name, current.projectId(), customerId, ticketType, calendarId, budgets, escalations, true,
+            current.version() + 1, current.createdAt(), current.createdBy(), clock.instant(), actor);
         if (changed.name().equals(current.name()) && java.util.Objects.equals(customerId, current.customerId())
                 && java.util.Objects.equals(ticketType, current.ticketType()) && calendarId.equals(current.calendarId())
-                && budgets.equals(current.budgets())) {
+                && budgets.equals(current.budgets()) && changed.escalations().equals(current.escalations())) {
             return current;
         }
         try {
@@ -205,12 +210,12 @@ public class SlaAdministration {
         }
         Instant now = clock.instant();
         repository.updateRule(new Rule(id, companyId, current.name(), current.projectId(), current.customerId(), current.ticketType(),
-            current.calendarId(), current.budgets(), false, current.version() + 1, current.createdAt(), current.createdBy(), now, actor));
+            current.calendarId(), current.budgets(), current.escalations(), false, current.version() + 1, current.createdAt(), current.createdBy(), now, actor));
         repository.audit(companyId, "rule", id, "rule.removed", null, actor, now);
     }
 
     private String checkedRule(UUID companyId, String rawName, UUID projectId, UUID customerId, String ticketType, UUID calendarId,
-            Rule.Budgets budgets) {
+            Rule.Budgets budgets, List<Rule.Stage> escalations) {
         List<String> violations = new ArrayList<>();
         String name = name(rawName, violations);
         ProjectConfiguration configuration = projectId == null ? null : projects.currentConfigurationVersion(projectId)
@@ -235,6 +240,11 @@ public class SlaAdministration {
             violations.add("calendarId.unknown");
         }
         violations.addAll(Rule.Budgets.violations(budgets));
+        if (escalations != null && !escalations.isEmpty()) {
+            java.util.Set<UUID> known = new java.util.HashSet<>();
+            groups.groups(companyId).forEach(group -> known.add(group.id()));
+            violations.addAll(Rule.Stage.violations(escalations, known));
+        }
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }

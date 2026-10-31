@@ -65,7 +65,8 @@ export interface paths {
          * @description Eine Regel gilt in einem Projekt für jedes Ticket mit Kunde, für einen Kunden oder für einen Kunden und einen
          *     Tickettyp. Ungültige Angaben ergeben 400 `request.invalid` mit Verletzungen aus `name.invalid`, `projectId.unknown`,
          *     `customerId.not_released`, `ticketType.requires_customer`, `ticketType.unknown`, `calendarId.unknown`,
-         *     `budgets.required`, `budgets.invalid`. Eine aktive Regel, die dieselben Tickets gleich genau trifft, ergibt 409
+         *     `budgets.required`, `budgets.invalid`, `escalations.invalid`, `escalations.group_unknown`, `escalations.duplicate`,
+         *     `escalations.too_many`. Eine aktive Regel, die dieselben Tickets gleich genau trifft, ergibt 409
          *     `sla.rule_conflict`. Steht im Audit.
          */
         post: operations["createSlaRule"];
@@ -112,6 +113,28 @@ export interface paths {
          * @description Die Projekte mit ihren Tickettypen und die Kunden mit den Projekten, für die sie freigegeben sind.
          */
         get: operations["getSlaOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sla/escalations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liste „SLA Eskalationen“ (TASK-070)
+         * @description Jede vollständige Anmeldung, ohne besonderes Recht. Erreichte Stufen der Gruppen, in denen die Person Mitglied ist,
+         *     neueste zuerst, höchstens 200, nur auf Tickets, die die Person mit den Leseregeln von `customer` und `priority` lesen
+         *     darf. Die Rechte gelten beim Lesen, nicht beim Erreichen der Stufe. Ohne Gruppe mit Stufen ist die Liste leer.
+         */
+        get: operations["listSlaEscalations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -240,6 +263,22 @@ export interface components {
             /** Format: uuid */
             calendarId: string;
             budgets: components["schemas"]["Budgets"];
+            /**
+             * @description Eskalationsstufen je Uhr (TASK-070), Teil jeder Regelversion; je Uhr höchstens 10. Ein laufender Zyklus behält die
+             *     Stufen der Version, mit der er begann. Fehlt die Angabe, hat die Regel keine Stufen.
+             */
+            escalations?: components["schemas"]["Stage"][];
+        };
+        /**
+         * @description Hat die Uhr `clock` den Anteil `percent` ihres Budgets verbraucht, erscheint das Ticket für die Mitglieder der Gruppe
+         *     `groupId` in ihrer Liste. Die Position in der Liste der Regelversion kennzeichnet die Stufe.
+         */
+        Stage: {
+            /** @enum {string} */
+            clock: "first_response" | "resolution";
+            percent: number;
+            /** Format: uuid */
+            groupId: string;
         };
         Rule: components["schemas"]["RuleRequest"] & {
             /** Format: uuid */
@@ -256,6 +295,12 @@ export interface components {
             updatedBy: string;
         };
         Options: {
+            /** @description Die Gruppen des Unternehmens als Empfänger von Stufen (TASK-070). */
+            groups: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            }[];
             projects: {
                 /** Format: uuid */
                 id: string;
@@ -325,6 +370,49 @@ export interface components {
             closedAt?: string | null;
             firstResponse: components["schemas"]["Clock"];
             resolution: components["schemas"]["Clock"];
+            /** @description Erreichte Stufen des Zyklus für Gruppen, in denen die Person Mitglied ist (TASK-070); sie bleiben im Verlauf. */
+            escalations: components["schemas"]["ReachedStage"][];
+        };
+        ReachedStage: {
+            /** @enum {string} */
+            kind: "first_response" | "resolution";
+            percent: number;
+            /** Format: uuid */
+            groupId: string;
+            groupName: string;
+            /**
+             * Format: date-time
+             * @description Wann die Uhr den Anteil erreichte
+             */
+            thresholdAt: string;
+            /**
+             * Format: date-time
+             * @description Wann die Überwachung die Stufe festhielt
+             */
+            reachedAt: string;
+        };
+        EscalationItem: {
+            /** Format: uuid */
+            projectId: string;
+            projectKey: string;
+            /** Format: int64 */
+            number: number;
+            cycleNumber: number;
+            /**
+             * @description Null solange der Zyklus offen ist
+             * @enum {string|null}
+             */
+            cycleOutcome?: "met" | "cancelled" | null;
+            /** @enum {string} */
+            kind: "first_response" | "resolution";
+            percent: number;
+            /** Format: uuid */
+            groupId: string;
+            groupName: string;
+            /** Format: date-time */
+            thresholdAt: string;
+            /** Format: date-time */
+            reachedAt: string;
         };
         /**
          * @description `readable` und `writable` nennen die Felder `priority` und `customer`, soweit die Person sie lesen oder schreiben
@@ -626,6 +714,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Options"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listSlaEscalations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Erreichte Stufen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EscalationItem"][];
                 };
             };
             401: components["responses"]["Problem"];

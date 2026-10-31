@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -34,15 +34,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-070](#task-070-sla-eskalationen-a10-teil-2) | SLA Eskalationen (A10 Teil 2) | claude-20261030-sla-01 | 2026-10-30 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-068](#task-068-sla-fristen-und-geschäftszeiten-a10-teil-1) | SLA Fristen und Geschäftszeiten (A10 Teil 1) | claude-20261030-sla-01 | 2026-10-30 |
+| [TASK-070](#task-070-sla-eskalationen-a10-teil-2) | SLA Eskalationen (A10 Teil 2) | claude-20261030-sla-01 | 2026-10-31 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -115,9 +114,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-070 SLA Eskalationen (A10 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-31
 
-**Bezug:** REQ-HD-005 (Eskalationen), ACC-002; OPEN-008. **Abhängigkeiten:** TASK-068 geliefert. **Arbeitsstand:** Mit TASK-068 von Holger am 30. Oktober 2026 beauftragt und mit den Vorschlägen 17 bis 20 bestätigt. Blockiert, bis das Ergebnis von TASK-068 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit eigener DEC-ID.
+**Bezug:** REQ-HD-005 (Eskalationen), ACC-002; OPEN-008. **Abhängigkeiten:** TASK-068 geliefert (PR #222 auf main, Prüfung und Abnahme offen). **Arbeitsstand:** Mit TASK-068 von Holger am 30. Oktober 2026 beauftragt und mit den Vorschlägen 17 bis 20 bestätigt. Nach dem Merge von PR #222 am 31. Oktober 2026 in derselben Sitzung ohne neue Reservierung umgesetzt, Branch claude/project-thread-2gq3w2 mit DEC-100 und Migration V0032.
 
 **Umfang:** Eskalationsstufen, ihre Überwachung und die Liste „SLA Eskalationen“ mit Oberfläche. Nicht Teil: Mail, Benachrichtigungen, automatische Eingriffe.
 
@@ -133,4 +132,10 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Eine Pause oder Erfüllung vor der Schwelle erzeugt keine Stufe; eine bereits entstandene bleibt im Verlauf.
 4. Migration, Vertrag gegen Routen, Backend und Browser Tests.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-068 umsetzen.
+**Ergebnis:** DEC-100. Stufen je Regelversion (`escalations` mit Uhr, Prozent und Gruppe), wiederkehrende Aufgabe `sla.watch` jede Minute, Tabelle `sla_escalation` mit einer Zeile je Zyklus, Uhr und Stufe, übersprungene Stufen als eigene Zeilen mit Protokoll, Port `GroupDirectory` des Berechtigungsmoduls, Liste `GET /api/v1/sla/escalations` und erreichte Stufen in den Zyklen der Ticketansicht; Migration V0032, Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml), Beschreibung in [backend/README.md](backend/README.md#eskalationen-task-070). Oberfläche: Stufen im Regelformular mit dem Vorschlag 80 und 100 Prozent je Uhr für die erste Gruppe, neue Seite „SLA Eskalationen“ in der Hauptnavigation, Hinweis im Abschnitt „Priorität und Fristen“ am Ticket. Demodaten: Regel „Helpdesk Standard“ mit 80 % für Projektleitung und 100 % für Verwaltung Demo je Uhr.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 453 Tests), darunter `EscalationsTest` (6 Tests: S-13, H-11, Schwelle über Nacht und nach einer Pause, pausierte und erfüllte Uhr, gleicher Anteil für zwei Gruppen und Rundung, Prüfung der Stufen) und vier neue Tests in `SlaApiTest` (Prüfung und Versionen der Stufen, Überwachung einmal je Stufe mit Rechten beim Lesen und ohne Eingriff am Ticket, vier gleichzeitige Läufe nach einem Ausfall mit nur der höchsten Stufe, Pause und Erfüllung vor der Schwelle und erhaltene Stufe nach Abbruch), `SlaContractTest` mit 12 Routen. Frontend `tsc`, 77 Einheitentests und 138 Browsertests grün, davon 3 neue in `sla.test.mjs`. Nicht geprüft: Lifecycle Skript und Abbild lokal ohne Docker, die laufen in der CI.
+
+**Bekannte Grenzen:** Keine Mail und keine Benachrichtigung, die Liste lädt beim Öffnen und mit „Aktualisieren“; bis zu einer Minute Verzug; eine gelöschte Gruppe bleibt in den Stufen stehen und erreicht niemanden; nach einem Prioritätswechsel gelten die Schwellen des neuen Budgets, gespeicherte Stufen bleiben.
+
+**Nächster Schritt:** Technische Prüfung (Codex oder eine getrennte Claude Prüfung) und Abnahme durch Holger, zusammen mit oder nach TASK-068.

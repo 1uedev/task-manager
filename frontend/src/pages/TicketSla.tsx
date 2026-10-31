@@ -16,7 +16,7 @@ export function durationParts(seconds: number): { hours: number; minutes: number
   return { hours: Math.floor(minutes / 60), minutes: minutes % 60 };
 }
 
-// The priority and the deadlines of a ticket (TASK-068). The server decides what is shown: the priority with the read rule
+// The priority and the deadlines of a ticket (TASK-068) with the reached escalation stages of the groups of the person (TASK-070). The server decides what is shown: the priority with the read rule
 // of `priority`, the deadlines only with the read rules of `priority` and `customer`; the choice only with the write rule.
 export function TicketSla({ project, ticket, round, onChanged }: {
   readonly project: Project;
@@ -107,6 +107,16 @@ export function TicketSla({ project, ticket, round, onChanged }: {
                 )}
                 {clock('sla.firstResponse', cycle.firstResponse, cycle.timeZone)}
                 {clock('sla.resolution', cycle.resolution, cycle.timeZone)}
+                {(cycle.escalations ?? []).length > 0 && (
+                  <ul className="plain-list" data-testid="sla-escalations">
+                    {(cycle.escalations ?? []).map((stage) => (
+                      <li key={`${stage.kind}/${stage.percent}/${stage.groupId}`} className="field-error" data-percent={stage.percent}>
+                        {t('ticketSla.escalation', { percent: stage.percent, clock: t(stage.kind === 'first_response' ? 'sla.firstResponse' : 'sla.resolution'),
+                          group: stage.groupName, date: date(stage.thresholdAt, cycle.timeZone) })}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ol>

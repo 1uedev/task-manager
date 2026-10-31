@@ -304,6 +304,23 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           subject: reply.subject, state: reply.state, errorCode: reply.errorCode, createdAt: reply.createdAt, attemptedAt: reply.attemptedAt })));
     }
     if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
+    if (p === '/sla/escalations' && method === 'GET') {
+      // As the backend (TASK-070): every full login; stages of the groups of the person on tickets they may read with the
+      // read rules of customer and priority, newest first, checked when reading.
+      const mine = new Set(groupsOf(account).map((group) => group.id));
+      const items = [];
+      for (const ticket of state.tickets) {
+        if (!may(account, 'ticket.read', ticket.projectId) || !field(account, ticket.projectId, 'customer', 'read') || !field(account, ticket.projectId, PRIORITY_FIELD, 'read')) continue;
+        const key = state.projects.find((entry) => entry.id === ticket.projectId)?.key ?? '';
+        for (const cycle of sla.cycles.get(ticket.id) ?? []) {
+          for (const stage of cycle.escalations ?? []) {
+            if (!mine.has(stage.groupId)) continue;
+            items.push({ projectId: ticket.projectId, projectKey: key, number: ticket.number, cycleNumber: cycle.number, cycleOutcome: cycle.outcome ?? null, ...stage });
+          }
+        }
+      }
+      return ok(items.sort((a, b) => b.reachedAt.localeCompare(a.reachedAt)));
+    }
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
@@ -817,7 +834,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     }
     if (p === '/sla/options' && method === 'GET') {
       return ok({ projects: state.projects.map((item) => ({ id: item.id, key: item.key, name: item.name, ticketTypes: state.configurations.get(item.id).configuration.ticketTypes })),
-        customers: hd.customers.map((item) => ({ id: item.id, name: item.name, projects: item.projects })) });
+        customers: hd.customers.map((item) => ({ id: item.id, name: item.name, projects: item.projects })),
+        groups: state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)) });
     }
     const checkedRule = (input, projectId, id) => {
       const violations = [];
@@ -831,6 +849,17 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       else if (!PRIORITIES.every((priority) => [budgets[priority].firstResponse, budgets[priority].resolution].every((value) => Number.isInteger(value) && value >= 1 && value <= 525600))) {
         violations.push('budgets.invalid');
       }
+      // The stages as Rule.Stage.violations: at most 10 per clock, then per stage the first reason, each code once.
+      const stages = input.escalations ?? [];
+      if (['first_response', 'resolution'].some((clock) => stages.filter((stage) => stage?.clock === clock).length > 10)) violations.push('escalations.too_many');
+      const seen = new Set();
+      for (const stage of stages) {
+        const code = !['first_response', 'resolution'].includes(stage?.clock) || !Number.isInteger(stage.percent) || stage.percent < 1 || stage.percent > 1000 ? 'escalations.invalid'
+          : !state.groups.some((group) => group.id === stage.groupId) ? 'escalations.group_unknown'
+          : seen.has(`${stage.clock}/${stage.percent}/${stage.groupId}`) ? 'escalations.duplicate' : null;
+        if (code === null) seen.add(`${stage.clock}/${stage.percent}/${stage.groupId}`);
+        else if (!violations.includes(code)) violations.push(code);
+      }
       if (violations.length > 0) return problem(400, 'request.invalid', { violations });
       if (sla.rules.some((rule) => rule.id !== id && rule.projectId === projectId && (rule.customerId ?? null) === (input.customerId ?? null)
         && (rule.ticketType ?? null) === (input.ticketType ?? null))) return problem(409, 'sla.rule_conflict');
@@ -841,7 +870,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const refused = checkedRule(body, body.projectId, null);
       if (refused) return refused;
       const rule = { id: uuid(), name: body.name.trim(), projectId: body.projectId, customerId: body.customerId ?? null, ticketType: body.ticketType ?? null,
-        calendarId: body.calendarId, budgets: body.budgets, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+        calendarId: body.calendarId, budgets: body.budgets, escalations: body.escalations ?? [], version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
       sla.rules.push(rule);
       return { status: 201, body: rule, etag: '"1"' };
     }
@@ -857,7 +886,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     const refused = checkedRule(body, rule.projectId, rule.id);
     if (refused) return refused;
     Object.assign(rule, { name: body.name.trim(), customerId: body.customerId ?? null, ticketType: body.ticketType ?? null, calendarId: body.calendarId,
-      budgets: body.budgets, version: rule.version + 1, updatedAt: now() });
+      budgets: body.budgets, escalations: body.escalations ?? [], version: rule.version + 1, updatedAt: now() });
     return ok(rule, `"${rule.version}"`);
   }
 
@@ -868,7 +897,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     const view = () => {
       const priority = sla.priorities.get(ticket.id) ?? 'normal';
       const both = readableHere.length === 2;
-      const cycles = sla.cycles.get(ticket.id) ?? [];
+      // Reached stages only of the groups of the person (TASK-070).
+      const mine = new Set(groupsOf(account).map((group) => group.id));
+      const cycles = (sla.cycles.get(ticket.id) ?? []).map((cycle) => ({ ...cycle, escalations: (cycle.escalations ?? []).filter((stage) => mine.has(stage.groupId)) }));
       const stateOf = !hd.ticketCustomers.get(ticket.id) ? 'no_customer' : cycles.length === 0 ? 'no_rule' : 'active';
       return { readable: readableHere, writable: writableHere, priority: readableHere.includes(PRIORITY_FIELD) ? priority : null,
         state: both ? stateOf : null, cycles: both ? cycles : null, now: '2026-10-30T10:00:00Z' };

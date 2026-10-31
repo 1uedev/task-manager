@@ -428,7 +428,8 @@ def seed_demo(args) -> None:
 
 def seed_deadlines(admin: Client, project: str) -> None:
     """Service deadlines in the helpdesk project (TASK-068): office hours, one rule with 120 and 480 business minutes for
-    every priority, "Erledigt" as the solved status, and a customer on three tickets so that their clocks run."""
+    every priority and two escalation stages per clock (TASK-070), "Erledigt" as the solved status, and a customer on three
+    tickets so that their clocks run."""
     print("service deadlines")
     current = admin.call("GET", f"/projects/{project}")
     configuration = current.body["configuration"]
@@ -444,7 +445,12 @@ def seed_deadlines(admin: Client, project: str) -> None:
                        {"date": "2026-12-26", "hours": []}],
     }).body["id"]
     budgets = {priority: {"firstResponse": 120, "resolution": 480} for priority in ("low", "normal", "high", "critical")}
-    admin.call("POST", "/sla/rules", {"name": "Helpdesk Standard", "projectId": project, "calendarId": calendar, "budgets": budgets})
+    # Escalation stages (TASK-070): a warning at 80 % for the project leads, the due stage at 100 % for the administration.
+    groups = {group["name"]: group["id"] for group in admin.call("GET", "/permissions/groups").body}
+    stages = [{"clock": clock, "percent": percent, "groupId": groups[name]}
+              for clock in ("first_response", "resolution") for percent, name in ((80, "Projektleitung"), (100, "Verwaltung Demo"))]
+    admin.call("POST", "/sla/rules", {"name": "Helpdesk Standard", "projectId": project, "calendarId": calendar, "budgets": budgets,
+                                      "escalations": stages})
     for number in (1, 2, 3):
         admin.call("PUT", f"/projects/{project}/tickets/{number}/helpdesk/customer", {"customerId": customer, "contactId": None})
     admin.call("PUT", f"/projects/{project}/tickets/1/sla/priority", {"priority": "high"})

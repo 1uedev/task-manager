@@ -106,28 +106,30 @@ class SlaRepository {
 
     void insertRule(Rule rule) {
         jdbc.sql("""
-                insert into sla_rule (id, company_id, name, project_id, customer_id, ticket_type, calendar_id, budgets, active, version,
+                insert into sla_rule (id, company_id, name, project_id, customer_id, ticket_type, calendar_id, budgets, escalations, active, version,
                     created_at, created_by, updated_at, updated_by)
-                values (?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?, ?, ?, ?, ?, ?)
                 """).params(rule.id(), rule.companyId(), rule.name(), rule.projectId(), rule.customerId(), rule.ticketType(), rule.calendarId(),
-                JSON.writeValueAsString(rule.budgets()), rule.active(), rule.version(), ts(rule.createdAt()), rule.createdBy(),
-                ts(rule.updatedAt()), rule.updatedBy()).update();
+                JSON.writeValueAsString(rule.budgets()), JSON.writeValueAsString(rule.escalations()), rule.active(), rule.version(),
+                ts(rule.createdAt()), rule.createdBy(), ts(rule.updatedAt()), rule.updatedBy()).update();
         insertRuleVersion(rule);
     }
 
     void updateRule(Rule rule) {
         jdbc.sql("""
-                update sla_rule set name = ?, customer_id = ?, ticket_type = ?, calendar_id = ?, budgets = cast(? as jsonb), active = ?,
-                    version = ?, updated_at = ?, updated_by = ? where id = ?
+                update sla_rule set name = ?, customer_id = ?, ticket_type = ?, calendar_id = ?, budgets = cast(? as jsonb),
+                    escalations = cast(? as jsonb), active = ?, version = ?, updated_at = ?, updated_by = ? where id = ?
                 """).params(rule.name(), rule.customerId(), rule.ticketType(), rule.calendarId(), JSON.writeValueAsString(rule.budgets()),
-                rule.active(), rule.version(), ts(rule.updatedAt()), rule.updatedBy(), rule.id()).update();
+                JSON.writeValueAsString(rule.escalations()), rule.active(), rule.version(), ts(rule.updatedAt()), rule.updatedBy(), rule.id()).update();
         insertRuleVersion(rule);
     }
 
     private void insertRuleVersion(Rule rule) {
-        jdbc.sql("insert into sla_rule_version (rule_id, version, calendar_id, budgets, created_at, created_by) values (?, ?, ?, cast(? as jsonb), ?, ?)")
-            .params(rule.id(), rule.version(), rule.calendarId(), JSON.writeValueAsString(rule.budgets()), ts(rule.updatedAt()),
-                rule.updatedBy()).update();
+        jdbc.sql("""
+                insert into sla_rule_version (rule_id, version, calendar_id, budgets, escalations, created_at, created_by)
+                values (?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?, ?)
+                """).params(rule.id(), rule.version(), rule.calendarId(), JSON.writeValueAsString(rule.budgets()),
+                JSON.writeValueAsString(rule.escalations()), ts(rule.updatedAt()), rule.updatedBy()).update();
     }
 
     Optional<Rule.Budgets> ruleBudgets(UUID ruleId, long version) {
@@ -135,10 +137,20 @@ class SlaRepository {
             .query((rs, row) -> JSON.readValue(rs.getString(1), Rule.Budgets.class)).optional();
     }
 
+    /** The escalation stages of a rule version, in their stored order; the position identifies a stage. */
+    List<Rule.Stage> ruleStages(UUID ruleId, long version) {
+        return jdbc.sql("select escalations::text from sla_rule_version where rule_id = ? and version = ?").params(ruleId, version)
+            .query((rs, row) -> stages(rs.getString(1))).optional().orElse(List.of());
+    }
+
+    private static List<Rule.Stage> stages(String json) {
+        return List.of(JSON.readValue(json, Rule.Stage[].class));
+    }
+
     private static Rule rule(ResultSet rs) throws SQLException {
         return new Rule(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getString("name"),
             rs.getObject("project_id", UUID.class), rs.getObject("customer_id", UUID.class), rs.getString("ticket_type"),
-            rs.getObject("calendar_id", UUID.class), JSON.readValue(rs.getString("budgets"), Rule.Budgets.class), rs.getBoolean("active"),
+            rs.getObject("calendar_id", UUID.class), JSON.readValue(rs.getString("budgets"), Rule.Budgets.class), stages(rs.getString("escalations")), rs.getBoolean("active"),
             rs.getLong("version"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
             rs.getObject("updated_by", UUID.class));
     }
@@ -231,6 +243,65 @@ class SlaRepository {
             rs.getLong("rule_version"), rs.getObject("calendar_id", UUID.class), rs.getLong("calendar_version"), rs.getString("priority"),
             instant(rs, "started_at"), first, resolution, instant(rs, "replied_at"), instant(rs, "resolved_since"), rs.getString("outcome"),
             rs.getString("reason"), instant(rs, "closed_at"), 0);
+    }
+
+    // ------------------------------------------------------------------------------------------------ escalations (TASK-070)
+
+    /** A stage a clock of a cycle reached; {@code stage} is its position in the stages of the rule version. */
+    record Escalation(UUID id, UUID companyId, UUID projectId, UUID ticketId, UUID cycleId, int cycleNumber, String cycleOutcome, String kind,
+            int stage, int percent, UUID groupId, Instant thresholdAt, Instant reachedAt, boolean skipped) {
+    }
+
+    /** Tickets with an open cycle whose clock runs and whose rule version has stages, after {@code after}, at most {@code limit}. */
+    List<UUID> watchedTickets(UUID after, int limit) {
+        return jdbc.sql("""
+                select distinct y.ticket_id from sla_cycle y
+                  join sla_clock c on c.cycle_id = y.id and c.state = 'running'
+                  join sla_rule_version v on v.rule_id = y.rule_id and v.version = y.rule_version
+                 where y.outcome is null and jsonb_array_length(v.escalations) > 0 and y.ticket_id > ?
+                 order by y.ticket_id limit ?
+                """).params(after == null ? NONE : after, limit).query(UUID.class).list();
+    }
+
+    /** Locks the row of a ticket the module already knows, without creating one; empty when it does not know the ticket. */
+    Optional<TicketRow> lockKnownTicket(UUID ticketId) {
+        return jdbc.sql("select * from sla_ticket where ticket_id = ? for update").param(ticketId).query((rs, row) -> ticketRow(rs)).optional();
+    }
+
+    /** Stores a reached or skipped stage once; returns whether it was new. */
+    boolean insertEscalation(Escalation escalation) {
+        return jdbc.sql("""
+                insert into sla_escalation (id, company_id, project_id, ticket_id, cycle_id, kind, stage, percent, group_id, threshold_at, reached_at,
+                    skipped)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict (cycle_id, kind, stage) do nothing
+                """).params(escalation.id(), escalation.companyId(), escalation.projectId(), escalation.ticketId(), escalation.cycleId(),
+                escalation.kind(), escalation.stage(), escalation.percent(), escalation.groupId(), ts(escalation.thresholdAt()),
+                ts(escalation.reachedAt()), escalation.skipped()).update() == 1;
+    }
+
+    /** The stages of a cycle, reached and skipped. */
+    List<Escalation> escalationsOf(UUID cycleId) {
+        return jdbc.sql(ESCALATIONS + " where e.cycle_id = ? order by e.reached_at, e.kind, e.stage").param(cycleId)
+            .query((rs, row) -> escalation(rs)).list();
+    }
+
+    /** The reached stages for any of the groups, newest first. */
+    List<Escalation> escalationsFor(UUID companyId, java.util.Collection<UUID> groups, int limit) {
+        if (groups.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(ESCALATIONS + " where e.company_id = ? and not e.skipped and e.group_id = any(?) order by e.reached_at desc, e.id limit ?")
+            .params(companyId, groups.toArray(UUID[]::new), limit).query((rs, row) -> escalation(rs)).list();
+    }
+
+    private static final String ESCALATIONS = """
+            select e.*, y.number as cycle_number, y.outcome as cycle_outcome from sla_escalation e join sla_cycle y on y.id = e.cycle_id""";
+
+    private static Escalation escalation(ResultSet rs) throws SQLException {
+        return new Escalation(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
+            rs.getObject("ticket_id", UUID.class), rs.getObject("cycle_id", UUID.class), rs.getInt("cycle_number"), rs.getString("cycle_outcome"),
+            rs.getString("kind"), rs.getInt("stage"), rs.getInt("percent"), rs.getObject("group_id", UUID.class), instant(rs, "threshold_at"),
+            instant(rs, "reached_at"), rs.getBoolean("skipped"));
     }
 
     // ------------------------------------------------------------------------------------------------ audit

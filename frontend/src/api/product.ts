@@ -67,6 +67,9 @@ export type SlaOptions = SlaTypes['schemas']['Options'];
 export type SlaPriority = SlaTypes['schemas']['Priority'];
 export type SlaClock = SlaTypes['schemas']['Clock'];
 export type SlaCycle = SlaTypes['schemas']['Cycle'];
+export type SlaStage = SlaTypes['schemas']['Stage'];
+export type SlaReachedStage = SlaTypes['schemas']['ReachedStage'];
+export type SlaEscalation = SlaTypes['schemas']['EscalationItem'];
 export type TicketSla = SlaTypes['schemas']['TicketSla'];
 
 export interface Versioned<T> {
@@ -485,13 +488,16 @@ export const updateSlaCalendar = (api: ServerApi, id: string, version: number, b
   run(() => api.sla.PUT('/sla/calendars/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaCalendar>(isSlaCalendar));
 export const listSlaRules = (api: ServerApi) => run(() => api.sla.GET('/sla/rules'), listOf<SlaRule>(isSlaRule));
 export const readSlaOptions = (api: ServerApi) =>
-  run(() => api.sla.GET('/sla/options'), one<SlaOptions>((v) => record(v) && Array.isArray(v.projects) && Array.isArray(v.customers)));
+  run(() => api.sla.GET('/sla/options'), one<SlaOptions>((v) => record(v) && Array.isArray(v.projects) && Array.isArray(v.customers) && Array.isArray(v.groups)));
 export const createSlaRule = (api: ServerApi, body: SlaRuleRequest) => run(() => api.sla.POST('/sla/rules', { body }), one<SlaRule>(isSlaRule));
 export const updateSlaRule = (api: ServerApi, id: string, version: number, body: SlaRuleRequest) =>
   run(() => api.sla.PUT('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaRule>(isSlaRule));
 export const removeSlaRule = (api: ServerApi, id: string, version: number) =>
   run(() => api.sla.DELETE('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) } }), nothing);
 
+const isSlaEscalation = (v: unknown) => hasStrings(v, 'projectId', 'projectKey', 'kind', 'groupId', 'groupName', 'thresholdAt', 'reachedAt')
+  && typeof (v as SlaEscalation).number === 'number' && typeof (v as SlaEscalation).percent === 'number';
+export const listSlaEscalations = (api: ServerApi) => run(() => api.sla.GET('/sla/escalations'), listOf<SlaEscalation>(isSlaEscalation));
 export const readTicketSla = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.sla.GET('/projects/{projectId}/tickets/{number}/sla', { params: { path: { projectId, number } } }), one<TicketSla>(isTicketSla));
 export const setTicketPriority = (api: ServerApi, projectId: string, number: number, priority: SlaPriority) =>

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import {
   createSlaCalendar, createSlaRule, listSlaCalendars, listSlaRules, readSlaOptions, removeSlaRule, SLA_PRIORITIES, updateSlaCalendar, updateSlaRule,
-  type SlaBudgets, type SlaCalendar, type SlaCalendarRequest, type SlaOptions, type SlaRule,
+  type SlaBudgets, type SlaCalendar, type SlaCalendarRequest, type SlaOptions, type SlaRule, type SlaStage,
 } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -188,6 +188,7 @@ function Rules({ calendars }: { readonly calendars: readonly SlaCalendar[] }) {
   const [editing, setEditing] = useState<SlaRule | 'new' | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const choices = options.state === 'ok' ? options.value : null;
+  const groupName = (id: string) => choices?.groups.find((item) => item.id === id)?.name ?? id.slice(0, 8);
   const projectName = (id: string) => {
     const project = choices?.projects.find((item) => item.id === id);
     return project === undefined ? id.slice(0, 8) : `${project.key} ${project.name}`;
@@ -222,7 +223,8 @@ function Rules({ calendars }: { readonly calendars: readonly SlaCalendar[] }) {
               <thead>
                 <tr>
                   <th scope="col">{t('sla.name')}</th><th scope="col">{t('sla.project')}</th><th scope="col">{t('sla.scope')}</th>
-                  <th scope="col">{t('sla.calendar')}</th><th scope="col">{t('sla.budgets')}</th><th scope="col">{t('sla.actions')}</th>
+                  <th scope="col">{t('sla.calendar')}</th><th scope="col">{t('sla.budgets')}</th><th scope="col">{t('sla.stages')}</th>
+                  <th scope="col">{t('sla.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -237,6 +239,13 @@ function Rules({ calendars }: { readonly calendars: readonly SlaCalendar[] }) {
                         <p key={priority} className="hint">{t('sla.budgetLine', { priority: t(`priority.${priority}` as MessageKey),
                           first: rule.budgets[priority].firstResponse, resolution: rule.budgets[priority].resolution })}</p>
                       ))}
+                    </td>
+                    <td data-testid="rule-stages">
+                      {(rule.escalations ?? []).length === 0 ? <p className="hint">{t('sla.stagesNone')}</p>
+                        : (rule.escalations ?? []).map((stage, index) => (
+                          <p key={index} className="hint">{t('sla.stageLine', { clock: t(stage.clock === 'first_response' ? 'sla.firstResponse' : 'sla.resolution'),
+                            percent: stage.percent, group: groupName(stage.groupId) })}</p>
+                        ))}
                     </td>
                     <td className="row-actions">
                       <button type="button" className="secondary" onClick={() => setEditing(rule)} disabled={choices === null}>{t('sla.edit')}</button>
@@ -290,6 +299,7 @@ function RuleForm({ rule, options, calendars, onDone }: {
     return [priority, { firstResponse: String(value.firstResponse), resolution: String(value.resolution) }];
   })) as Record<string, { firstResponse: string; resolution: string }>;
   const [budgets, setBudgets] = useState(initial);
+  const [stages, setStages] = useState<StageDraft[]>(() => initialStages(rule, options));
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   useUnsavedGuard(name !== (rule?.name ?? ''));
@@ -306,6 +316,7 @@ function RuleForm({ rule, options, calendars, onDone }: {
     const body = {
       name: name.trim(), projectId, customerId: customerId === '' ? null : customerId,
       ticketType: customerId === '' || ticketType === '' ? null : ticketType, calendarId, budgets: values,
+      escalations: stages.map((stage) => ({ clock: stage.clock, percent: percentOf(stage.percent), groupId: stage.groupId })),
     };
     setBusy(true);
     const result = rule === null ? await createSlaRule(api, body) : await updateSlaRule(api, rule.id, rule.version, body);
@@ -358,11 +369,72 @@ function RuleForm({ rule, options, calendars, onDone }: {
           </table>
         </div>
       </fieldset>
+      <StageEditor stages={stages} groups={options.groups} onChange={setStages} />
       <p className="actions">
         <button type="submit" disabled={busy}>{t('sla.save')}</button>
         <button type="button" className="secondary" onClick={() => onDone(null)}>{t('sla.cancel')}</button>
       </p>
       <NoticeView notice={notice} />
     </form>
+  );
+}
+
+type StageDraft = { readonly clock: SlaStage['clock']; readonly percent: string; readonly groupId: string };
+const CLOCKS: readonly SlaStage['clock'][] = ['first_response', 'resolution'];
+const percentOf = (value: string) => (/^[0-9]{1,4}$/.test(value.trim()) ? Number(value.trim()) : -1);
+
+/** The stages of a rule; a new rule proposes a warning at 80 % and the due stage at 100 % of both clocks for the first group (rule 1). */
+function initialStages(rule: SlaRule | null, options: SlaOptions): StageDraft[] {
+  if (rule !== null) return (rule.escalations ?? []).map((stage) => ({ clock: stage.clock, percent: String(stage.percent), groupId: stage.groupId }));
+  const first = options.groups[0];
+  if (first === undefined) return [];
+  return CLOCKS.flatMap((clock) => ['80', '100'].map((percent) => ({ clock, percent, groupId: first.id })));
+}
+
+// The escalation stages of a rule (TASK-070): at which share of a clock the ticket appears for which group. No mail, no
+// assignment, no change of the status (rules 2 and 4).
+function StageEditor({ stages, groups, onChange }: {
+  readonly stages: readonly StageDraft[];
+  readonly groups: SlaOptions['groups'];
+  readonly onChange: (stages: StageDraft[]) => void;
+}) {
+  const { t } = useI18n();
+  const clockLabel = (clock: SlaStage['clock']) => t(clock === 'first_response' ? 'sla.firstResponse' : 'sla.resolution');
+  const change = (index: number, next: Partial<StageDraft>) => onChange(stages.map((stage, at) => (at === index ? { ...stage, ...next } : stage)));
+  return (
+    <fieldset data-testid="stage-editor">
+      <legend>{t('sla.stages')}</legend>
+      <p className="hint">{t('sla.stagesHint')}</p>
+      {groups.length === 0 ? <p className="hint">{t('sla.stagesNoGroups')}</p> : (
+        <>
+          {stages.length === 0 ? <p className="hint">{t('sla.stagesNone')}</p> : (
+            <ol className="plain-list">
+              {stages.map((stage, index) => (
+                <li key={index} data-stage={index} className="stage-row">
+                  <SelectField label={t('sla.stageClock', { number: index + 1 })} value={stage.clock}
+                    onChange={(value) => change(index, { clock: value as SlaStage['clock'] })}
+                    options={CLOCKS.map((clock) => ({ value: clock, label: clockLabel(clock) }))} />
+                  <TextField label={t('sla.stagePercent', { number: index + 1 })} value={stage.percent} maxLength={4}
+                    onChange={(value) => change(index, { percent: value })} />
+                  <SelectField label={t('sla.stageGroup', { number: index + 1 })} value={stage.groupId}
+                    onChange={(value) => change(index, { groupId: value })}
+                    options={[
+                      ...(groups.some((group) => group.id === stage.groupId) ? [] : [{ value: stage.groupId, label: t('sla.stageGroupGone') }]),
+                      ...groups.map((group) => ({ value: group.id, label: group.name })),
+                    ]} />
+                  <button type="button" className="secondary" onClick={() => onChange(stages.filter((_, at) => at !== index))}>
+                    {t('sla.stageRemove', { number: index + 1 })}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+          <p className="actions">
+            <button type="button" className="secondary" disabled={stages.length >= 20}
+              onClick={() => onChange([...stages, { clock: 'first_response', percent: '100', groupId: groups[0]?.id ?? '' }])}>{t('sla.stageAdd')}</button>
+          </p>
+        </>
+      )}
+    </fieldset>
   );
 }
