@@ -6,6 +6,7 @@ import type { components as JobTypes } from './generated/jobs';
 import type { components as PermissionTypes } from './generated/permissions';
 import type { components as ProjectTypes } from './generated/projects';
 import type { components as SearchTypes } from './generated/search';
+import type { components as SlaTypes } from './generated/sla';
 import type { components as TagTypes } from './generated/tags';
 import type { components as TicketTypes } from './generated/tickets';
 import { readProblem, type ProblemInfo } from './problem.ts';
@@ -57,6 +58,16 @@ export type CustomerOption = HelpdeskTypes['schemas']['CustomerOption'];
 export type Reply = HelpdeskTypes['schemas']['Reply'];
 export type ReplyForm = HelpdeskTypes['schemas']['ReplyForm'];
 export type OpenReply = HelpdeskTypes['schemas']['OpenReply'];
+export type SlaCalendar = SlaTypes['schemas']['Calendar'];
+export type SlaCalendarRequest = SlaTypes['schemas']['CalendarRequest'];
+export type SlaRule = SlaTypes['schemas']['Rule'];
+export type SlaRuleRequest = SlaTypes['schemas']['RuleRequest'];
+export type SlaBudgets = SlaTypes['schemas']['Budgets'];
+export type SlaOptions = SlaTypes['schemas']['Options'];
+export type SlaPriority = SlaTypes['schemas']['Priority'];
+export type SlaClock = SlaTypes['schemas']['Clock'];
+export type SlaCycle = SlaTypes['schemas']['Cycle'];
+export type TicketSla = SlaTypes['schemas']['TicketSla'];
 
 export interface Versioned<T> {
   readonly value: T;
@@ -457,3 +468,32 @@ export const listOpenReplies = (api: ServerApi) =>
 export const attachMessage = (api: ServerApi, id: string, etag: string) =>
   run(() => api.helpdesk.POST('/helpdesk/inbox/{id}/attach', { params: { path: { id }, ...ifMatch(etag) } }),
     one<CreatedFromMail>((v) => hasStrings(v, 'ticketId', 'projectId') && typeof (v as CreatedFromMail).number === 'number'));
+
+// ---------------------------------------------------------------- service deadlines (TASK-068)
+
+export const SLA_PRIORITIES: readonly SlaPriority[] = ['low', 'normal', 'high', 'critical'];
+const isSlaCalendar = (v: unknown) => hasStrings(v, 'id', 'name', 'timeZone') && typeof (v as SlaCalendar).version === 'number'
+  && Array.isArray((v as SlaCalendar).week);
+const isSlaRule = (v: unknown) => hasStrings(v, 'id', 'name', 'projectId', 'calendarId') && typeof (v as SlaRule).version === 'number'
+  && record((v as SlaRule).budgets);
+const isTicketSla = (v: unknown) => record(v) && Array.isArray(v.readable) && Array.isArray(v.writable) && typeof v.now === 'string';
+
+export const listSlaCalendars = (api: ServerApi) => run(() => api.sla.GET('/sla/calendars'), listOf<SlaCalendar>(isSlaCalendar));
+export const createSlaCalendar = (api: ServerApi, body: SlaCalendarRequest) =>
+  run(() => api.sla.POST('/sla/calendars', { body }), one<SlaCalendar>(isSlaCalendar));
+export const updateSlaCalendar = (api: ServerApi, id: string, version: number, body: SlaCalendarRequest) =>
+  run(() => api.sla.PUT('/sla/calendars/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaCalendar>(isSlaCalendar));
+export const listSlaRules = (api: ServerApi) => run(() => api.sla.GET('/sla/rules'), listOf<SlaRule>(isSlaRule));
+export const readSlaOptions = (api: ServerApi) =>
+  run(() => api.sla.GET('/sla/options'), one<SlaOptions>((v) => record(v) && Array.isArray(v.projects) && Array.isArray(v.customers)));
+export const createSlaRule = (api: ServerApi, body: SlaRuleRequest) => run(() => api.sla.POST('/sla/rules', { body }), one<SlaRule>(isSlaRule));
+export const updateSlaRule = (api: ServerApi, id: string, version: number, body: SlaRuleRequest) =>
+  run(() => api.sla.PUT('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaRule>(isSlaRule));
+export const removeSlaRule = (api: ServerApi, id: string, version: number) =>
+  run(() => api.sla.DELETE('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) } }), nothing);
+
+export const readTicketSla = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.sla.GET('/projects/{projectId}/tickets/{number}/sla', { params: { path: { projectId, number } } }), one<TicketSla>(isTicketSla));
+export const setTicketPriority = (api: ServerApi, projectId: string, number: number, priority: SlaPriority) =>
+  run(() => api.sla.PUT('/projects/{projectId}/tickets/{number}/sla/priority', { params: { path: { projectId, number } }, body: { priority } }),
+    one<TicketSla>(isTicketSla));

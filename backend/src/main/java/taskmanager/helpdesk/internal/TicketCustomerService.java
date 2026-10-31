@@ -9,8 +9,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.helpdesk.TicketCustomerChanged;
 import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.Decision;
 import taskmanager.permissions.PermissionDenied;
@@ -39,9 +41,11 @@ public class TicketCustomerService {
     private final Permissions permissions;
     private final ReplyService replies;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     TicketCustomerService(HelpdeskRepository repository, TicketAccess tickets, ProjectAccess projects, Permissions permissions,
-            ReplyService replies, Clock clock) {
+            ReplyService replies, Clock clock, ApplicationEventPublisher events) {
+        this.events = events;
         this.repository = repository;
         this.replies = replies;
         this.tickets = tickets;
@@ -164,6 +168,10 @@ public class TicketCustomerService {
             if (changing.contains(TicketAccess.CONTACT_FIELD)) {
                 tickets.recordHelpdeskChange(ticket, now, actor.userId(), TicketAccess.CONTACT_FIELD,
                     reference(actor.companyId(), current.contactId(), false), contact == null ? null : TicketOpener.reference(contact.id(), contact.name()));
+            }
+            if (changing.contains(TicketAccess.CUSTOMER_FIELD)) {
+                events.publishEvent(new TicketCustomerChanged(actor.companyId(), projectId, ticket, customerId,
+                    repository.firstMessageAt(ticket).orElse(null), now));
             }
         }
         return view(actor, projectId, number);

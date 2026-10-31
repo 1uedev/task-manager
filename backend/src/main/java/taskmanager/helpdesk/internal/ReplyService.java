@@ -10,8 +10,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.helpdesk.ReplySent;
 import taskmanager.jobs.Jobs;
 import taskmanager.jobs.NewJob;
 import taskmanager.permissions.AccessContext;
@@ -51,6 +53,7 @@ public class ReplyService {
     private static final int REFERENCES_MAX = 20;
     private static final int OPEN_LIMIT = 100;
 
+    private final ApplicationEventPublisher events;
     private final HelpdeskRepository repository;
     private final TicketAccess tickets;
     private final ProjectAccess projects;
@@ -58,7 +61,9 @@ public class ReplyService {
     private final Jobs jobs;
     private final Clock clock;
 
-    ReplyService(HelpdeskRepository repository, TicketAccess tickets, ProjectAccess projects, Permissions permissions, Jobs jobs, Clock clock) {
+    ReplyService(HelpdeskRepository repository, TicketAccess tickets, ProjectAccess projects, Permissions permissions, Jobs jobs, Clock clock,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.repository = repository;
         this.tickets = tickets;
         this.projects = projects;
@@ -185,7 +190,9 @@ public class ReplyService {
             throw ApiProblemException.of(409, "helpdesk.reply_not_uncertain");
         }
         Instant now = clock.instant();
-        repository.replyState(reply.id(), "sent", null, null, reply.attemptedAt() == null ? now : reply.attemptedAt(), now, actor.userId());
+        Instant sentAt = reply.attemptedAt() == null ? now : reply.attemptedAt();
+        repository.replyState(reply.id(), "sent", null, null, sentAt, now, actor.userId());
+        events.publishEvent(new ReplySent(reply.companyId(), reply.projectId(), reply.ticketId(), reply.id(), sentAt));
         repository.audit(actor.companyId(), "reply", reply.id(), "reply.settled", null, actor.userId(), now);
         return repository.reply(actor.companyId(), reply.id()).orElseThrow();
     }

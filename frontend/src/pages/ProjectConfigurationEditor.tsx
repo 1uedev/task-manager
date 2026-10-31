@@ -21,6 +21,8 @@ import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 type Names = Readonly<Record<string, string>>;
 type Mapping = Readonly<Record<string, string>>;
 const CATEGORIES = ['open', 'in_progress', 'done'] as const;
+// The kind of a status for the service deadlines (TASK-068); a status without one counts as open.
+const SLA_KINDS = ['open', 'waiting', 'resolved', 'cancelled'] as const;
 const STANDARD_REQUIRABLE = ['description', 'assignee'] as const;
 
 const etagNumber = (etag: string | null): number | null => {
@@ -247,6 +249,9 @@ function StatusesEditor({ config, update }: { readonly config: Whole; readonly u
             <SelectField label={t('config.category')} value={item.category}
               onChange={(value) => update((c) => ({ ...c, statuses: c.statuses.map((x, i) => (i === index ? { ...x, category: value as typeof item.category } : x)) }))}
               options={CATEGORIES.map((category) => ({ value: category, label: t(`config.category.${category}` as MessageKey) }))} />
+            <SelectField label={t('config.sla')} value={item.sla ?? 'open'} hint={t('config.slaHint')}
+              onChange={(value) => update((c) => ({ ...c, statuses: c.statuses.map((x, i) => (i === index ? { ...x, sla: value as NonNullable<typeof item.sla> } : x)) }))}
+              options={SLA_KINDS.map((kind) => ({ value: kind, label: t(`config.sla.${kind}` as MessageKey) }))} />
             <button type="button" className="secondary" disabled={config.statuses.length === 1}
               onClick={() => update((c) => removeStatus(c, item.key))}>{t('config.remove', { name: item.name })}</button>
           </li>

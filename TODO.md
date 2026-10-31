@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 3 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-068](#task-068-sla-fristen-und-geschäftszeiten-a10-teil-1) | SLA Fristen und Geschäftszeiten (A10 Teil 1) | claude-20261030-sla-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-10-30 |
 
 ### Blockiert – BLOCKIERT
@@ -42,7 +41,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-068](#task-068-sla-fristen-und-geschäftszeiten-a10-teil-1) | SLA Fristen und Geschäftszeiten (A10 Teil 1) | claude-20261030-sla-01 | 2026-10-30 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -76,9 +77,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-068 SLA Fristen und Geschäftszeiten (A10 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-30
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-30
 
-**Bezug:** REQ-HD-003 (SLA Fristen), REQ-HD-004 (Geschäftszeiten), ACC-002; DEC-032; OPEN-008. **Abhängigkeiten:** TASK-054 bis TASK-056 (Hintergrundaufträge) und TASK-057 bis TASK-064 (Helpdesk über Mail), abgenommen; TASK-044 (Projektkonfiguration), abgenommen. **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „nach H7 bitte A10 und A6 parallel“ das Paket A10 beauftragt und am selben Tag die 20 Vorschläge zu OPEN-008 mit „Ja, so übernehmen“ bestätigt (Punkte unten). Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-2gq3w2; Ergebnis mit DEC-098 und der beim Ergebnis nächsten freien Migrationsnummer auf main.
+**Bezug:** REQ-HD-003 (SLA Fristen), REQ-HD-004 (Geschäftszeiten), ACC-002; DEC-032; OPEN-008. **Abhängigkeiten:** TASK-054 bis TASK-056 (Hintergrundaufträge) und TASK-057 bis TASK-064 (Helpdesk über Mail), abgenommen; TASK-044 (Projektkonfiguration), abgenommen. **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „nach H7 bitte A10 und A6 parallel“ das Paket A10 beauftragt und am selben Tag die 20 Vorschläge zu OPEN-008 mit „Ja, so übernehmen“ bestätigt (Punkte unten). Reservierung PR #220 gemergt, Ergebnis auf Branch claude/project-thread-2gq3w2 mit DEC-098 und Migration V0030 (V0029 belegt TASK-067, V0031 ist mit der Zeiterfassung A6 abgestimmt).
 
 **Umfang:** Kalender, SLA Regeln, Priorität und Fristuhren je Ticket mit Anzeige am Ticket und ihrer Oberfläche. Nicht Teil: Eskalationen (TASK-070), Mail an interne Empfänger, Benachrichtigungen, Portal, Auswertungen und Berichte über Fristen, Filter nach Fristzustand in der Suche, Neubewertung laufender Zyklen, Feiertagsimport, Verträge je Kunde über die Zuordnung in Regel 3 hinaus.
 
@@ -105,7 +106,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Die Fristen am Ticket erscheinen nur mit Leserecht auf das Ticket und verraten keine verborgenen Felder.
 5. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Kalender, Regeln und die Anzeige am Ticket; Demodaten mit einem Kalender und einer Regel.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+**Ergebnis:** DEC-098. Neues Modul `sla` mit Kalendern, Regeln, Priorität und Zyklen mit je einer Uhr für Erstreaktion und Lösung, Migration V0030, Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml) und Beschreibung in [backend/README.md](backend/README.md#servicefristen-task-068). Der Helpdesk meldet über neue öffentliche Ereignisse Kunde gesetzt oder entfernt (`TicketCustomerChanged`), Antwort gesendet (`ReplySent`) und Kundenantwort (`CustomerAnswered`) und stellt `CustomerDirectory` bereit; Tickets bekommen das getrennt geführte Feld `priority`, die Projektkonfiguration je Status die SLA Art. Oberfläche: Seite „Servicefristen“ für `sla.manage` mit Kalendern und Regeln, Abschnitt „Priorität und Fristen“ am Ticket, SLA Art je Status in den Projekteinstellungen, Bezeichnungen in Gruppen und Historie. Demodaten mit Kalender „Bürozeiten“, Regel „Helpdesk Standard“ (120 und 480 Minuten) und drei Tickets mit Kunde in HELP.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (54 Testklassen, 443 Tests), darunter `SlaCalculationTest` (24 Tests: S-01 bis S-14, H-09, H-10, H-12, Zeitumstellung, Überlappungen, Prüfungen der Eingaben), `SlaApiTest` (10 Tests: Rechte, Versionen, gleichzeitige Regeln, genaueste Regel, Start bei Anlage, Pause und Kundenantwort, Lösung und neuer Zyklus, Abbruch, Entfernen des Kunden, Prioritätswechsel mit Historie, Feldregeln, gleichzeitige Änderungen), `SlaContractTest` (11 Routen) und ein Test über den echten Mailweg in `HelpdeskApiTest` (Start beim Speichern der Mail, Erstreaktion erst mit gesendeter Antwort). Frontend `tsc`, 77 Einheitentests und 135 Browsertests grün, davon 4 neue in `sla.test.mjs`. Die Bildprüfung mit den Demodaten läuft erst in der CI. Nicht geprüft: Lifecycle Skript und Abbild lokal ohne Docker.
+
+**Bekannte Grenzen:** Eine geänderte SLA Art wirkt beim nächsten Statuswechsel eines Tickets; eine später angelegte Regel gilt nicht für Tickets, deren Kunde schon gesetzt war; ein Kundenwechsel von A nach B behält den laufenden Zyklus; laufende Zyklen werden nicht neu bewertet.
+
+**Nächster Schritt:** Technische Prüfung (Codex oder eine getrennte Claude Prüfung) und Abnahme durch Holger; danach TASK-070.
 
 ## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
 

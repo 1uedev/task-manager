@@ -32,6 +32,9 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     public static final Set<String> ALWAYS_REQUIRED = Set.of("title", "type", "status");
     /** The categories a status belongs to, for later views and searches across projects. */
     public static final Set<String> CATEGORIES = Set.of("open", "in_progress", "done");
+    /** The kinds of a status for service deadlines (TASK-068). */
+    public static final String SLA_OPEN = "open";
+    public static final Set<String> SLA_KINDS = Set.of(SLA_OPEN, "waiting", "resolved", "cancelled");
     /** The kinds of custom fields (TASK-044). */
     public static final String TEXT = "text";
     public static final String LONGTEXT = "longtext";
@@ -60,7 +63,18 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     public record TicketType(String key, String name) {
     }
 
-    public record Status(String key, String name, String category) {
+    /**
+     * A status. {@code sla} is its kind for service deadlines (TASK-068): {@code open}, {@code waiting} (for the customer,
+     * pauses the resolution), {@code resolved} or {@code cancelled}; documents written before TASK-068 read as {@code open}.
+     */
+    public record Status(String key, String name, String category, String sla) {
+        public Status {
+            sla = sla == null ? SLA_OPEN : sla;
+        }
+
+        public Status(String key, String name, String category) {
+            this(key, name, category, SLA_OPEN);
+        }
     }
 
     /** A step from one status to another; {@code requiredFields} must carry a value after the change that takes it. */
@@ -191,6 +205,11 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
         return ticketTypes.stream().anyMatch(type -> type.key().equals(key));
     }
 
+    /** The kind of the status for service deadlines; an unknown status counts as open (TASK-068). */
+    public String slaKindOf(String key) {
+        return statuses.stream().filter(status -> status.key().equals(key)).findFirst().map(Status::sla).orElse(SLA_OPEN);
+    }
+
     public boolean hasStatus(String key) {
         return statuses.stream().anyMatch(status -> status.key().equals(key));
     }
@@ -212,7 +231,7 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     public ProjectConfiguration normalized() {
         return new ProjectConfiguration(
             ticketTypes.stream().map(t -> new TicketType(t.key(), t.name().strip())).toList(),
-            statuses.stream().map(s -> new Status(s.key(), s.name().strip(), s.category())).toList(),
+            statuses.stream().map(s -> new Status(s.key(), s.name().strip(), s.category(), s.sla())).toList(),
             initialStatus, transitions, fields, workflows,
             customFields.stream().map(field -> new CustomField(field.key(), field.name().strip(), field.type(), field.required(),
                 field.active(), field.options().stream().map(option -> new Option(option.key(), option.name().strip(), option.active())).toList()))
@@ -235,6 +254,9 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
             "statuses", MAX_STATUSES, violations);
         if (statuses != null && statuses.stream().anyMatch(s -> s != null && (s.category() == null || !CATEGORIES.contains(s.category())))) {
             violations.add("statuses.category_invalid");
+        }
+        if (statuses != null && statuses.stream().anyMatch(s -> s != null && !SLA_KINDS.contains(s.sla()))) {
+            violations.add("statuses.sla_invalid");
         }
         Set<String> fieldIds = customFieldChecks(violations);
         if (initialStatus == null || !statusKeys.contains(initialStatus)) {
