@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 // Pages of the navigation. Detail pages (a project, a ticket, a group) hang below one of them.
-export const routes = ['start', 'projects', 'search', 'inbox', 'board', 'accounts', 'groups', 'helpdesk', 'jobs', 'appearance'] as const;
+export const routes = ['start', 'projects', 'search', 'inbox', 'board', 'accounts', 'groups', 'helpdesk', 'sla', 'jobs', 'appearance'] as const;
 export type RouteName = (typeof routes)[number];
 export const projectTabs = ['tickets', 'members', 'tags', 'settings', 'rights'] as const;
 export type ProjectTab = (typeof projectTabs)[number];

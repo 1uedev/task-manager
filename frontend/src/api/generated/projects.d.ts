@@ -66,7 +66,7 @@ export interface paths {
          *     lesbar. Es gelten dieselben Prüfungen wie bei der Veröffentlichung eines Entwurfs, aber ohne Zuordnung: Verwenden
          *     Tickets noch einen Status oder Tickettyp, den die neue Version nicht mehr vorsieht, antwortet der Server mit 409
          *     `project.configuration_in_use`. Ungültige Konfigurationen antworten mit 400 `request.invalid` und den Gründen in
-         *     `violations`, etwa `ticketTypes.required`, `statuses.key_duplicate`, `statuses.category_invalid`,
+         *     `violations`, etwa `ticketTypes.required`, `statuses.key_duplicate`, `statuses.category_invalid`, `statuses.sla_invalid`,
          *     `initialStatus.unknown`, `transitions.status_unknown`, `transitions.same_status`, `transitions.duplicate`,
          *     `transitions.required_field_unknown`, `workflows.type_unknown`, `workflows.type_duplicate`,
          *     `workflows.initialStatus.unknown`, `customFields.key_invalid`, `customFields.key_duplicate`,
@@ -332,6 +332,13 @@ export interface components {
                 name: string;
                 /** @enum {string} */
                 category: "open" | "in_progress" | "done";
+                /**
+                 * @description Art des Status für Servicefristen (TASK-068): `waiting` pausiert die Lösungsfrist, solange auf den Kunden
+                 *     gewartet wird; `resolved` erfüllt die Lösungsfrist zusammen mit einer gesendeten Antwort; `cancelled`
+                 *     beendet den Bearbeitungszyklus ohne Erfolg. Fehlt die Angabe, gilt `open`.
+                 * @enum {string}
+                 */
+                sla?: "open" | "waiting" | "resolved" | "cancelled";
             }[];
             /** @description Schlüssel eines Status */
             initialStatus: string;

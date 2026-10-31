@@ -65,6 +65,22 @@ public interface TicketAccess {
     void lockForHelpdeskChange(UUID ticketId);
 
     /**
+     * Records a change of the field {@link #PRIORITY_FIELD} in the history (TASK-068), as {@link #recordTagChange} does: the
+     * version stays, the ticket row is held {@code FOR SHARE}.
+     */
+    void recordPriorityChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added);
+
+    /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a priority change. */
+    void lockForPriorityChange(UUID ticketId);
+
+    /** What the deadlines of a ticket depend on (TASK-068): project, type, status and when the ticket was created. */
+    record State(UUID companyId, UUID projectId, long number, String type, String status, Instant createdAt) {
+    }
+
+    /** The current state of the ticket, or empty for an unknown identifier. Needs no lock; read it in the transaction of the change. */
+    Optional<State> state(UUID ticketId);
+
+    /**
      * Every ticket of the company with its five fields, to rebuild a projection (TASK-029). Needs a transaction; the fields
      * must not be shown without the read rules of the reader.
      */
@@ -87,6 +103,9 @@ public interface TicketAccess {
 
     /** The mails of the ticket (TASK-057); only read, they arrive through the mail intake. */
     String MAIL_FIELD = "mail";
+
+    /** The priority of the ticket for service deadlines (TASK-068): low, normal, high or critical. */
+    String PRIORITY_FIELD = "priority";
 
     /** The actor of what the mail intake does by itself, such as a ticket from a confirmed contact; no account has it. */
     UUID MAIL_INTAKE = new UUID(0, 0x4d41494cL);

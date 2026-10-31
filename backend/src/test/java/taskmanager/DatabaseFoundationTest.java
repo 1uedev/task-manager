@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028", "0030"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
@@ -46,7 +46,7 @@ class DatabaseFoundationTest {
             "helpdesk_customer_project", "helpdesk_mailbox", "helpdesk_message", "helpdesk_reply", "helpdesk_ticket_customer", "identity_account", "identity_audit_event", "identity_ldap_setting", "identity_login_throttle",
             "identity_session", "identity_setting", "job", "job_audit_event", "job_schedule", "job_worker", "permissions_action", "permissions_audit", "permissions_field",
             "permissions_group", "permissions_membership", "permissions_revision", "platform_company", "project",
-            "project_audit_event", "project_configuration", "project_configuration_draft", "project_member", "search_project", "search_project_tag", "search_state", "search_tag", "search_ticket", "search_ticket_custom", "search_ticket_tag", "tag", "tag_audit_event", "tag_project", "tag_ticket", "ticket", "ticket_change", "ticket_counter"), tables);
+            "project_audit_event", "project_configuration", "project_configuration_draft", "project_member", "search_project", "search_project_tag", "search_state", "search_tag", "search_ticket", "search_ticket_custom", "search_ticket_tag", "sla_audit_event", "sla_calendar", "sla_calendar_version", "sla_clock", "sla_cycle", "sla_rule", "sla_rule_version", "sla_ticket", "tag", "tag_audit_event", "tag_project", "tag_ticket", "ticket", "ticket_change", "ticket_counter"), tables);
         assertEquals(0, jdbc.queryForObject("select count(*) from identity_account", Integer.class), "no account is seeded");
         assertEquals(0, jdbc.queryForObject("select count(*) from platform_company", Integer.class), "no company is seeded");
         assertEquals(0, jdbc.queryForObject("select count(*) from permissions_revision", Integer.class));

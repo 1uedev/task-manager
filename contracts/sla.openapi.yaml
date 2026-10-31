@@ -1,0 +1,508 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Servicefristen (TASK-068)
+  version: 0.1.0
+  description: |
+    Geschäftszeitkalender, SLA Regeln, Priorität und Fristen eines Tickets (DEC-031, DEC-032, DEC-098). Jeder Endpunkt
+    verlangt eine vollständige Anmeldung (vor dem Passwortwechsel 403 `auth.password_change_required`). Kalender und Regeln
+    verlangen das Unternehmensrecht `sla.manage` (sonst 403 `auth.forbidden`). Die Sicht auf ein Ticket verlangt
+    `ticket.read`; die Priorität erscheint nur mit der Leseregel des Felds `priority`, die Fristen nur zusätzlich mit der
+    Leseregel des Felds `customer`. Ein Ticket, das die Person nicht lesen darf, beantwortet der Server wie ein unbekanntes
+    mit 404. Änderungen an Kalendern und Regeln verlangen die Version aus `If-Match` (fehlt sie, 428
+    `sla.precondition_required`; passt sie nicht, 412 `sla.version_conflict`). Ist die Datenbank kurz belegt, antwortet der
+    Server mit 503 `sla.busy` und `Retry-After`. Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Dauern zählen in ganzen Sekunden Geschäftszeit. Ein laufender Zyklus behält die Version von Regel und Kalender, mit der
+    er begann; eine Änderung gilt für neue Zyklen.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /sla/calendars:
+    get:
+      operationId: listSlaCalendars
+      summary: Geschäftszeitkalender (Recht sla.manage)
+      responses:
+        '200':
+          description: Alle Kalender, nach Namen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Calendar'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createSlaCalendar
+      summary: Kalender anlegen (Recht sla.manage)
+      description: |
+        Ungültige Angaben ergeben 400 `request.invalid` mit Verletzungen aus `name.invalid`, `timeZone.invalid`,
+        `week.day_invalid`, `week.day_duplicate`, `week.hours_invalid`, `week.hours_too_many`, `week.closed`,
+        `exceptions.too_many`, `exceptions.date_invalid`, `exceptions.date_duplicate`, `exceptions.hours_invalid`.
+        Ein vergebener Name ergibt 409 `sla.calendar_name_taken`. Steht im Audit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CalendarRequest'}
+      responses:
+        '201':
+          description: Angelegt, Version 1 im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Calendar'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /sla/calendars/{id}:
+    get:
+      operationId: getSlaCalendar
+      summary: Einen Kalender lesen (Recht sla.manage)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Kalender mit Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Calendar'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: updateSlaCalendar
+      summary: Kalender ändern (Recht sla.manage)
+      description: |
+        Prüfungen wie beim Anlegen. Eine Änderung ohne Unterschied erhöht die Version nicht. Laufende Zyklen rechnen mit
+        der Version weiter, mit der sie begannen. Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CalendarRequest'}
+      responses:
+        '200':
+          description: Geändert, neue Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Calendar'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /sla/rules:
+    get:
+      operationId: listSlaRules
+      summary: Aktive SLA Regeln (Recht sla.manage)
+      responses:
+        '200':
+          description: Alle aktiven Regeln
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Rule'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createSlaRule
+      summary: Regel anlegen (Recht sla.manage)
+      description: |
+        Eine Regel gilt in einem Projekt für jedes Ticket mit Kunde, für einen Kunden oder für einen Kunden und einen
+        Tickettyp. Ungültige Angaben ergeben 400 `request.invalid` mit Verletzungen aus `name.invalid`, `projectId.unknown`,
+        `customerId.not_released`, `ticketType.requires_customer`, `ticketType.unknown`, `calendarId.unknown`,
+        `budgets.required`, `budgets.invalid`. Eine aktive Regel, die dieselben Tickets gleich genau trifft, ergibt 409
+        `sla.rule_conflict`. Steht im Audit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RuleRequest'}
+      responses:
+        '201':
+          description: Angelegt, Version 1 im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rule'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /sla/rules/{id}:
+    put:
+      operationId: updateSlaRule
+      summary: Regel ändern (Recht sla.manage)
+      description: |
+        Prüfungen wie beim Anlegen. Das Projekt einer Regel bleibt; `projectId` im Körper wird nicht ausgewertet. Laufende
+        Zyklen behalten die Version, mit der sie begannen. Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RuleRequest'}
+      responses:
+        '200':
+          description: Geändert, neue Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rule'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeSlaRule
+      summary: Regel entfernen (Recht sla.manage)
+      description: Die Regel gilt danach für keinen neuen Zyklus; Zyklen, die sie nutzen, behalten sie. Steht im Audit.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Entfernt
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /sla/options:
+    get:
+      operationId: getSlaOptions
+      summary: Was eine Regel nennen kann (Recht sla.manage)
+      description: Die Projekte mit ihren Tickettypen und die Kunden mit den Projekten, für die sie freigegeben sind.
+      responses:
+        '200':
+          description: Auswahl
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Options'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/sla:
+    get:
+      operationId: getTicketSla
+      summary: Priorität und Fristen eines Tickets
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      responses:
+        '200':
+          description: Sicht nach den Feldregeln
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TicketSla'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/sla/priority:
+    put:
+      operationId: setTicketPriority
+      summary: Priorität eines Tickets ändern
+      description: |
+        Verlangt `ticket.edit` und die Schreibregel des Felds `priority` (sonst 403 `auth.forbidden`). Eine unbekannte
+        Priorität ergibt 400 `request.invalid` mit `priority.invalid`. Die Änderung steht in der Tickethistorie; ein offener
+        Zyklus rechnet ab dann mit dem Budget der neuen Priorität aus seiner Regelversion, bereits verbrauchte Zeit bleibt.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: {$ref: '#/components/schemas/Priority'}
+      responses:
+        '200':
+          description: Geändert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TicketSla'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Version aus dem ETag
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, sla.calendar_not_found, sla.calendar_name_taken,
+        sla.rule_not_found, sla.rule_conflict, sla.version_conflict, sla.precondition_required, sla.busy,
+        project.not_found, auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    Priority:
+      type: string
+      enum: [low, normal, high, critical]
+    Span:
+      type: object
+      description: |
+        Eine Spanne Ortszeit `HH:MM`, das Ende ausschließlich; `24:00` ist als Ende erlaubt. Überlappende Spannen eines
+        Tages werden zusammengefasst. Eine Ortszeit, die die Zeitumstellung überspringt, zählt ab dem Umstellungszeitpunkt.
+      required: [from, to]
+      properties:
+        from: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        to: {type: string, pattern: '^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$'}
+    Day:
+      type: object
+      description: Ein Wochentag nach ISO 8601, 1 Montag bis 7 Sonntag; höchstens 10 Spannen.
+      required: [day, hours]
+      properties:
+        day: {type: integer, minimum: 1, maximum: 7}
+        hours:
+          type: array
+          maxItems: 10
+          items: {$ref: '#/components/schemas/Span'}
+    Exception:
+      type: object
+      description: Ein Datum mit eigenen Zeiten; eine leere Liste schließt den Tag.
+      required: [date, hours]
+      properties:
+        date: {type: string, format: date}
+        hours:
+          type: array
+          maxItems: 10
+          items: {$ref: '#/components/schemas/Span'}
+    CalendarRequest:
+      type: object
+      required: [name, timeZone, week]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        timeZone: {type: string, description: 'IANA Zeitzone, etwa Europe/Berlin'}
+        week:
+          type: array
+          description: Mindestens ein Tag mit Zeiten; ein fehlender Tag ist geschlossen.
+          maxItems: 7
+          items: {$ref: '#/components/schemas/Day'}
+        exceptions:
+          type: array
+          maxItems: 400
+          items: {$ref: '#/components/schemas/Exception'}
+    Calendar:
+      allOf:
+        - $ref: '#/components/schemas/CalendarRequest'
+        - type: object
+          required: [id, version, createdAt, createdBy, updatedAt, updatedBy]
+          properties:
+            id: {type: string, format: uuid}
+            version: {type: integer, format: int64}
+            createdAt: {type: string, format: date-time}
+            createdBy: {type: string, format: uuid}
+            updatedAt: {type: string, format: date-time}
+            updatedBy: {type: string, format: uuid}
+    Minutes:
+      type: object
+      description: Budgets in Minuten Geschäftszeit, je 1 bis 525600.
+      required: [firstResponse, resolution]
+      properties:
+        firstResponse: {type: integer, minimum: 1, maximum: 525600}
+        resolution: {type: integer, minimum: 1, maximum: 525600}
+    Budgets:
+      type: object
+      required: [low, normal, high, critical]
+      properties:
+        low: {$ref: '#/components/schemas/Minutes'}
+        normal: {$ref: '#/components/schemas/Minutes'}
+        high: {$ref: '#/components/schemas/Minutes'}
+        critical: {$ref: '#/components/schemas/Minutes'}
+    RuleRequest:
+      type: object
+      required: [name, projectId, calendarId, budgets]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        projectId: {type: string, format: uuid}
+        customerId: {type: [string, 'null'], format: uuid}
+        ticketType: {type: [string, 'null'], description: Nur zusammen mit einem Kunden}
+        calendarId: {type: string, format: uuid}
+        budgets: {$ref: '#/components/schemas/Budgets'}
+    Rule:
+      allOf:
+        - $ref: '#/components/schemas/RuleRequest'
+        - type: object
+          required: [id, version, createdAt, createdBy, updatedAt, updatedBy]
+          properties:
+            id: {type: string, format: uuid}
+            version: {type: integer, format: int64}
+            createdAt: {type: string, format: date-time}
+            createdBy: {type: string, format: uuid}
+            updatedAt: {type: string, format: date-time}
+            updatedBy: {type: string, format: uuid}
+    Options:
+      type: object
+      required: [projects, customers]
+      properties:
+        projects:
+          type: array
+          items:
+            type: object
+            required: [id, key, name, ticketTypes]
+            properties:
+              id: {type: string, format: uuid}
+              key: {type: string}
+              name: {type: string}
+              ticketTypes:
+                type: array
+                items:
+                  type: object
+                  required: [key, name]
+                  properties:
+                    key: {type: string}
+                    name: {type: string}
+        customers:
+          type: array
+          items:
+            type: object
+            required: [id, name, projects]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              projects:
+                type: array
+                items: {type: string, format: uuid}
+    Clock:
+      type: object
+      description: |
+        Eine Fristuhr. `running` zählt, `paused` steht (Status der Art waiting), `met` ist erfüllt, `cancelled` endete mit
+        dem Zyklus ohne Erfüllung. `breached` ist wahr, sobald die Frist überschritten ist; `breachedAt` bleibt danach auch
+        bei erfüllter Uhr erhalten. `remainingSeconds` wird negativ, wenn die Frist überschritten ist.
+      required: [kind, state, breached, budgetSeconds, remainingSeconds]
+      properties:
+        kind: {type: string, enum: [first_response, resolution]}
+        state: {type: string, enum: [running, paused, met, cancelled]}
+        breached: {type: boolean}
+        budgetSeconds: {type: integer, format: int64}
+        remainingSeconds: {type: integer, format: int64}
+        dueAt: {type: [string, 'null'], format: date-time}
+        pausedAt: {type: [string, 'null'], format: date-time}
+        metAt: {type: [string, 'null'], format: date-time}
+        breachedAt: {type: [string, 'null'], format: date-time}
+    Cycle:
+      type: object
+      description: |
+        Ein Zyklus beginnt, wenn ein Ticket einen Kunden bekommt und eine Regel passt, und erneut, wenn ein erledigtes
+        Ticket wieder geöffnet wird. Er endet `met`, sobald eine Antwort gesendet und der Status erledigt ist, oder
+        `cancelled` (Grund `status_cancelled` oder `customer_removed`).
+      required: [number, ruleId, ruleName, ruleVersion, calendarId, calendarName, calendarVersion, timeZone, priority, startedAt,
+        firstResponse, resolution]
+      properties:
+        number: {type: integer}
+        ruleId: {type: string, format: uuid}
+        ruleName: {type: string}
+        ruleVersion: {type: integer, format: int64}
+        calendarId: {type: string, format: uuid}
+        calendarName: {type: string}
+        calendarVersion: {type: integer, format: int64}
+        timeZone: {type: string}
+        priority: {$ref: '#/components/schemas/Priority'}
+        startedAt: {type: string, format: date-time}
+        outcome: {type: [string, 'null'], enum: [met, cancelled, null]}
+        reason: {type: [string, 'null']}
+        closedAt: {type: [string, 'null'], format: date-time}
+        firstResponse: {$ref: '#/components/schemas/Clock'}
+        resolution: {$ref: '#/components/schemas/Clock'}
+    TicketSla:
+      type: object
+      description: |
+        `readable` und `writable` nennen die Felder `priority` und `customer`, soweit die Person sie lesen oder schreiben
+        darf. Ohne Leserecht auf `priority` ist `priority` null; fehlt das Leserecht auf eines der beiden Felder, sind `state` und
+        `cycles` null. `state` ist `no_customer`, `no_rule` (Kunde, aber keine passende Regel) oder `active` (mindestens ein Zyklus).
+        Zyklen erscheinen neueste zuerst.
+      required: [readable, writable, now]
+      properties:
+        readable:
+          type: array
+          items: {type: string, enum: [customer, priority]}
+        writable:
+          type: array
+          items: {type: string, enum: [customer, priority]}
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/Priority'
+            - type: 'null'
+        state: {type: [string, 'null'], enum: [no_customer, no_rule, active, null]}
+        cycles:
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/Cycle'}
+        now: {type: string, format: date-time}

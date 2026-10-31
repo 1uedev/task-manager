@@ -217,7 +217,7 @@ def admin_client(args) -> Client:
 
 # ---------------------------------------------------------------------- data building blocks
 
-ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments"]
+ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments", "customer", "contact", "priority"]
 PROJECT_ACTIONS_FULL = ["project.read", "project.manage", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_EDIT = ["project.read", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_READ = ["project.read", "ticket.read"]
@@ -403,9 +403,11 @@ def seed_demo(args) -> None:
     company = [builder.company_tag(name) for name in DEMO_COMPANY_TAGS]
     print("projects and tickets")
     jobs = []
+    project_ids: dict[str, str] = {}
     for key, name, description, local_tags, titles in DEMO_PROJECTS:
         members = [admin_id] + [people[u] for u, _, _, projects in DEMO_PEOPLE if key in projects]
         project = builder.project(key, name, description, members)
+        project_ids[key] = project
         local = [builder.project_tag(project, tag) for tag in local_tags]
         assignable = [people[u] for u, _, group, projects in DEMO_PEOPLE if key in projects and group != "Lesen ohne Beschreibung"]
         for title in titles:
@@ -419,9 +421,33 @@ def seed_demo(args) -> None:
             tags = rng.sample(local + company, k=rng.choice([0, 1, 1, 2, 3]))
             jobs.append((project, draft, status, tags))
     builder.tickets(jobs, "demo")
+    seed_deadlines(admin, project_ids["HELP"])
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
 
+
+def seed_deadlines(admin: Client, project: str) -> None:
+    """Service deadlines in the helpdesk project (TASK-068): office hours, one rule with 120 and 480 business minutes for
+    every priority, "Erledigt" as the solved status, and a customer on three tickets so that their clocks run."""
+    print("service deadlines")
+    current = admin.call("GET", f"/projects/{project}")
+    configuration = current.body["configuration"]
+    for status in configuration["statuses"]:
+        if status["key"] == "done":
+            status["sla"] = "resolved"
+    admin.call("PUT", f"/projects/{project}/configuration", configuration, headers={"If-Match": current.headers.get("etag")})
+    customer = admin.call("POST", "/helpdesk/customers", {"name": "Nordwerk Maschinenbau", "projects": [project]}).body["id"]
+    office = [{"from": "08:00", "to": "17:00"}]
+    calendar = admin.call("POST", "/sla/calendars", {
+        "name": "Bürozeiten", "timeZone": "Europe/Berlin", "week": [{"day": day, "hours": office} for day in range(1, 6)],
+        "exceptions": [{"date": "2026-12-24", "hours": [{"from": "08:00", "to": "12:00"}]}, {"date": "2026-12-25", "hours": []},
+                       {"date": "2026-12-26", "hours": []}],
+    }).body["id"]
+    budgets = {priority: {"firstResponse": 120, "resolution": 480} for priority in ("low", "normal", "high", "critical")}
+    admin.call("POST", "/sla/rules", {"name": "Helpdesk Standard", "projectId": project, "calendarId": calendar, "budgets": budgets})
+    for number in (1, 2, 3):
+        admin.call("PUT", f"/projects/{project}/tickets/{number}/helpdesk/customer", {"customerId": customer, "contactId": None})
+    admin.call("PUT", f"/projects/{project}/tickets/1/sla/priority", {"priority": "high"})
 
 # ---------------------------------------------------------------------- reference data set
 
