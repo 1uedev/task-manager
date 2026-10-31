@@ -4,7 +4,8 @@ import { ANNA, BEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-068: calendars and SLA rules for holders of sla.manage, and the priority and deadlines of a ticket after its field
-// rules, against the in-memory backend that follows the contract.
+// rules; TASK-070: the escalation stages of a rule, the list "SLA Eskalationen" and the hint at the ticket, against the
+// in-memory backend that follows the contract.
 
 let server;
 let browser;
@@ -25,6 +26,19 @@ function withSlaRights(backend) {
   backend.state.groups.push({ id: SLA_GROUP, name: 'Servicefristen', members: [backend.anna.id], actions: [{ action: 'sla.manage', projectId: null }],
     fields: ['priority', 'customer'].flatMap((field) => ['read', 'write'].map((operation) => ({ resourceType: 'ticket', field, projectId: null, operation, effect: 'allow' }))) });
 }
+
+// A cycle as the server reports it, with reached stages for the given groups.
+const cycle = (escalations, extra = {}) => ({
+  number: 1, ruleId: '00000000-0000-4000-8000-00000000e001', ruleName: 'Standard', ruleVersion: 1, calendarId: '00000000-0000-4000-8000-00000000e002',
+  calendarName: 'Bürozeiten', calendarVersion: 1, timeZone: 'Europe/Berlin', priority: 'normal', startedAt: '2026-10-30T08:00:00Z', outcome: null, reason: null, closedAt: null,
+  firstResponse: { kind: 'first_response', state: 'running', breached: false, budgetSeconds: 3600, remainingSeconds: 600, dueAt: '2026-10-30T09:00:00Z',
+    pausedAt: null, metAt: null, breachedAt: null },
+  resolution: { kind: 'resolution', state: 'running', breached: false, budgetSeconds: 28800, remainingSeconds: 25000, dueAt: '2026-10-30T16:00:00Z',
+    pausedAt: null, metAt: null, breachedAt: null },
+  escalations, ...extra,
+});
+const stage = (groupId, percent, extra = {}) => ({ kind: 'first_response', percent, groupId, groupName: 'Servicefristen', thresholdAt: '2026-10-30T08:48:00Z',
+  reachedAt: '2026-10-30T08:48:30Z', ...extra });
 
 async function withApp({ prepare = withSlaRights, as = ANNA, hash = '#/sla' } = {}, body) {
   const backend = createBackend();
@@ -133,6 +147,71 @@ describe('service deadlines', () => {
       await page.evaluate((id) => { location.hash = `#/projects/${id}/tickets/2`; }, backend.project.id);
       await page.getByRole('heading', { level: 1, name: /Suche nach Tags/ }).waitFor();
       assert.equal(await page.getByTestId('ticket-sla').count(), 0);
+    });
+  });
+  test('a new rule proposes the stages 80 and 100 percent, a refused stage names its reason', async () => {
+    await withApp({}, async (page, backend) => {
+      backend.state.sla.calendars.push({ id: '00000000-0000-4000-8000-00000000e002', name: 'Bürozeiten', timeZone: 'Europe/Berlin',
+        week: [{ day: 1, hours: [{ from: '08:00', to: '17:00' }] }], exceptions: [], version: 1 });
+      await page.reload();
+      await page.getByRole('button', { name: 'Regel anlegen' }).click();
+      const editor = page.getByTestId('stage-editor');
+      await editor.waitFor();
+      assert.equal(await editor.locator('[data-stage]').count(), 4);
+      assert.equal(await editor.getByLabel('Prozent der Stufe 1').inputValue(), '80');
+      assert.equal(await editor.getByLabel('Prozent der Stufe 2').inputValue(), '100');
+      assert.equal(await editor.getByLabel('Uhr der Stufe 3').inputValue(), 'resolution');
+      const groups = await editor.getByLabel('Gruppe der Stufe 1').locator('option').allInnerTexts();
+      assert.deepEqual(groups, ['Lesen', 'Servicefristen', 'Unternehmensverwaltung'], 'the groups of the rights administration');
+
+      const form = page.getByTestId('rule-form');
+      await form.getByLabel('Name').fill('Mit Stufen');
+      await editor.getByLabel('Prozent der Stufe 1').fill('0');
+      await form.getByRole('button', { name: 'Speichern' }).click();
+      await form.getByText('Jede Stufe braucht eine Uhr und einen Anteil von 1 bis 1000 Prozent.').waitFor();
+      await editor.getByLabel('Prozent der Stufe 1').fill('90');
+      await editor.getByLabel('Gruppe der Stufe 2').selectOption({ label: 'Servicefristen' });
+      await editor.getByRole('button', { name: 'Stufe 4 entfernen' }).click();
+      await editor.getByRole('button', { name: 'Stufe 3 entfernen' }).click();
+      await form.getByRole('button', { name: 'Speichern' }).click();
+      await page.getByText('Mit Stufen wurde gespeichert.').waitFor();
+      const rule = backend.state.sla.rules[0];
+      assert.deepEqual(rule.escalations, [{ clock: 'first_response', percent: 90, groupId: backend.group('Lesen').id },
+        { clock: 'first_response', percent: 100, groupId: SLA_GROUP }]);
+      await page.locator('[data-rule="Mit Stufen"]').getByText('Erste Antwort 100 %, Servicefristen').waitFor();
+
+      await page.locator('[data-rule="Mit Stufen"]').getByRole('button', { name: 'Bearbeiten' }).click();
+      assert.equal(await page.getByTestId('stage-editor').locator('[data-stage]').count(), 2, 'an existing rule keeps its stages');
+    });
+  });
+
+  test('the list shows the reached stages of the own groups and leads to the ticket with its hint', async () => {
+    await withApp({ hash: '#/start', prepare: (backend) => {
+      withSlaRights(backend);
+      const ticket = backend.state.tickets[0];
+      backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: '00000000-0000-4000-8000-00000000c001', contactId: null });
+      backend.addCycle(ticket, cycle([stage(SLA_GROUP, 80), stage(backend.group('Lesen').id, 100, { groupName: 'Lesen' })]));
+    } }, async (page, backend) => {
+      await page.getByRole('navigation').getByRole('link', { name: 'SLA Eskalationen' }).click();
+      const list = page.getByTestId('escalation-list');
+      await list.waitFor();
+      assert.equal(await list.locator('li').count(), 1, 'only the stages of groups of the person');
+      await list.getByText('Erste Antwort: 80 % der Frist erreicht, Gruppe Servicefristen').waitFor();
+      await list.getByRole('link', { name: `${backend.project.key}-1` }).click();
+      const hints = page.getByTestId('sla-escalations');
+      await hints.waitFor();
+      assert.equal(await hints.locator('li').count(), 1);
+      assert.match(await hints.innerText(), /Eskalation Erste Antwort: 80 % der Frist erreicht am .*, Gruppe Servicefristen/);
+    });
+  });
+
+  test('without a group with stages or without the read rules the list is empty', async () => {
+    await withApp({ as: BEN, hash: '#/escalations', prepare: (backend) => {
+      const ticket = backend.state.tickets[0];
+      backend.addCycle(ticket, cycle([stage(backend.group('Lesen').id, 80, { groupName: 'Lesen' })]));
+    } }, async (page) => {
+      await page.getByText('Keine Eskalationen für Ihre Gruppen.').waitFor();
+      assert.equal(await page.getByTestId('escalation-list').count(), 0, 'Ben is in the group but may not read customer and priority');
     });
   });
 });
