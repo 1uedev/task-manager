@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Unternehmenskatalog, nach Namen geordnet */
+        /** Unternehmenskatalog, nach Namen geordnet, ohne zusammengeführte Tags */
         get: operations["listCompanyTags"];
         put?: never;
         /** Tag im Unternehmenskatalog anlegen (tag.create oder tags.manage) */
@@ -39,10 +39,59 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Umbenennen, archivieren oder wiederherstellen (tags.manage)
+         * Umbenennen, beschreiben, färben, archivieren oder wiederherstellen (tags.manage)
          * @description Ohne echte Änderung bleibt die Version gleich.
          */
         patch: operations["changeCompanyTag"];
+        trace?: never;
+    };
+    "/tags/{tagId}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Vorschau des Zusammenführens in den Tag `into` (tags.manage)
+         * @description Nennt beide Tags und wie viele Tickets und Projekte, die die anfragende Person lesen darf, die Quelle tragen. Weitere
+         *     Zuordnungen an nicht lesbaren Objekten werden beim Zusammenführen mit umgestellt; ihre Zahl nennt der Server nicht.
+         */
+        get: operations["previewCompanyTagMerge"];
+        put?: never;
+        /**
+         * Den Tag in einen anderen desselben Katalogs zusammenführen (tags.manage)
+         * @description Antwortet mit dem Ziel. `If-Match` nennt die Version der Quelle.
+         */
+        post: operations["mergeCompanyTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vorschläge aus dem Unternehmenskatalog, für Tags von Projekten
+         * @description Nicht archivierte, nicht zusammengeführte Tags; Namen, die mit dem Text beginnen, zuerst, dann Namen mit einem Wort,
+         *     das so beginnt, dann Namen, die ihn enthalten, jeweils nach Namen. `createCompany` sagt, ob die anfragende Person
+         *     im Unternehmenskatalog anlegen darf.
+         */
+        get: operations["suggestCompanyTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/projects/{projectId}/catalog/tags": {
@@ -54,7 +103,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Katalog des Projekts, nach Namen geordnet */
+        /** Katalog des Projekts, nach Namen geordnet, ohne zusammengeführte Tags */
         get: operations["listProjectCatalogTags"];
         put?: never;
         /** Tag im Projektkatalog anlegen (tag.create oder tags.manage im Projekt) */
@@ -83,10 +132,85 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Umbenennen, archivieren oder wiederherstellen (tags.manage im Projekt)
+         * Umbenennen, beschreiben, färben, archivieren oder wiederherstellen (tags.manage im Projekt)
          * @description Ohne echte Änderung bleibt die Version gleich.
          */
         patch: operations["changeProjectCatalogTag"];
+        trace?: never;
+    };
+    "/projects/{projectId}/catalog/tags/{tagId}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Vorschau des Zusammenführens in den Tag `into` (tags.manage im Projekt)
+         * @description Nennt beide Tags und wie viele Tickets und Projekte, die die anfragende Person lesen darf, die Quelle tragen. Weitere
+         *     Zuordnungen an nicht lesbaren Objekten werden beim Zusammenführen mit umgestellt; ihre Zahl nennt der Server nicht.
+         */
+        get: operations["previewProjectCatalogTagMerge"];
+        put?: never;
+        /**
+         * Den Tag in einen anderen desselben Katalogs zusammenführen (tags.manage im Projekt)
+         * @description Antwortet mit dem Ziel. `If-Match` nennt die Version der Quelle.
+         */
+        post: operations["mergeProjectCatalogTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/catalog/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Vorschläge aus Unternehmenskatalog und Projektkatalog, für Tags von Tickets
+         * @description Reihenfolge wie bei `/tags/suggestions`, bei gleichem Namen der Unternehmenskatalog zuerst. `createCompany` und
+         *     `createProject` sagen, in welchem Katalog die anfragende Person anlegen darf. Wer den Projektkatalog nicht sieht,
+         *     bekommt 404 `project.not_found`.
+         */
+        get: operations["suggestProjectTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/catalog/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Tags nach Kennung, auch archivierte und zusammengeführte, etwa für die Tickethistorie
+         * @description Liefert die genannten Tags des Unternehmenskatalogs und des Projektkatalogs, nach Namen geordnet. Kennungen anderer
+         *     Kataloge und unbekannte Kennungen fehlen ohne Hinweis. Sichtbar wie der Projektkatalog.
+         */
+        get: operations["lookupTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/projects/{projectId}/tags": {
@@ -193,6 +317,35 @@ export interface components {
         ChangeRequest: {
             name?: string;
             archived?: boolean;
+            /** @description Reiner Text; Zeilenumbrüche und Tabulatoren erlaubt. Leer oder null entfernt die Beschreibung. */
+            description?: string | null;
+            color?: components["schemas"]["Color"] | null;
+        };
+        MergeRequest: {
+            /**
+             * Format: uuid
+             * @description Kennung des Ziels im selben Katalog
+             */
+            into: string;
+        };
+        /**
+         * @description Farbe der festen Palette; die Oberfläche zeigt sie in heller und dunkler Darstellung lesbar.
+         * @enum {string}
+         */
+        Color: "red" | "orange" | "amber" | "yellow" | "lime" | "green" | "teal" | "cyan" | "blue" | "indigo" | "violet" | "pink";
+        Usage: {
+            tickets: number;
+            projects: number;
+        };
+        MergePreview: {
+            source: components["schemas"]["Tag"];
+            target: components["schemas"]["Tag"];
+            usage: components["schemas"]["Usage"];
+        };
+        Suggestions: {
+            items: components["schemas"]["Tag"][];
+            createCompany: boolean;
+            createProject: boolean;
         };
         /** @description Ein vorhandener Tag über `tagId` oder ein Name des Unternehmenskatalogs. */
         ProjectAssignment: {
@@ -222,7 +375,19 @@ export interface components {
              * @description Projekt des Katalogs, null im Unternehmenskatalog
              */
             projectId: string | null;
+            description: string | null;
+            color: components["schemas"]["Color"] | null;
             archived: boolean;
+            /** @description Bei einem zusammengeführten Tag das Ziel, sonst null. */
+            mergedInto: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            /** @description Ob die anfragende Person den Katalog dieses Tags pflegen darf (tags.manage). */
+            manageable: boolean;
+            /** @description Nutzung, nur mit `usage=true` in Katalogen, sonst null. */
+            usage: components["schemas"]["Usage"] | null;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -248,10 +413,11 @@ export interface components {
         };
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found, tag.not_found,
-         *     tag.name_taken, tag.archived, tag.version_conflict, tag.precondition_required, tag.busy, auth.required,
-         *     auth.forbidden, auth.csrf_invalid, auth.password_change_required. Gründe in `violations`: name.invalid,
-         *     archived.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous, fields.required,
-         *     fields.unknown, paging.invalid.
+         *     tag.name_taken, tag.archived, tag.merged, tag.merge_too_large, tag.limit_reached, tag.version_conflict,
+         *     tag.precondition_required, tag.busy, auth.required, auth.forbidden, auth.csrf_invalid,
+         *     auth.password_change_required. Gründe in `violations`: name.invalid, archived.invalid, description.invalid,
+         *     color.invalid, into.invalid, ids.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous,
+         *     fields.required, fields.unknown, paging.invalid.
          */
         Problem: {
             headers: {
@@ -275,6 +441,11 @@ export interface components {
         Archived: boolean;
         /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
         After: string;
+        /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
+        Usage: boolean;
+        SuggestionLimit: number;
+        /** @description Kennung des Ziels. */
+        Into: string;
         Limit: number;
         /** @description ETag der zuletzt gelesenen Fassung. */
         IfMatch: string;
@@ -295,6 +466,8 @@ export interface operations {
                 /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
                 after?: components["parameters"]["After"];
                 limit?: components["parameters"]["Limit"];
+                /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
+                usage?: components["parameters"]["Usage"];
             };
             header?: never;
             path?: never;
@@ -385,6 +558,94 @@ export interface operations {
             503: components["responses"]["Problem"];
         };
     };
+    previewCompanyTagMerge: {
+        parameters: {
+            query: {
+                /** @description Kennung des Ziels. */
+                into: components["parameters"]["Into"];
+            };
+            header?: never;
+            path: {
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vorschau */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergePreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    mergeCompanyTag: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Tag"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    suggestCompanyTags: {
+        parameters: {
+            query?: {
+                /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
+                q?: components["parameters"]["Search"];
+                limit?: components["parameters"]["SuggestionLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vorschläge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestions"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listProjectCatalogTags: {
         parameters: {
             query?: {
@@ -395,6 +656,8 @@ export interface operations {
                 /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
                 after?: components["parameters"]["After"];
                 limit?: components["parameters"]["Limit"];
+                /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
+                usage?: components["parameters"]["Usage"];
             };
             header?: never;
             path: {
@@ -490,6 +753,129 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    previewProjectCatalogTagMerge: {
+        parameters: {
+            query: {
+                /** @description Kennung des Ziels. */
+                into: components["parameters"]["Into"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vorschau */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergePreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    mergeProjectCatalogTag: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Tag"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    suggestProjectTags: {
+        parameters: {
+            query?: {
+                /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
+                q?: components["parameters"]["Search"];
+                limit?: components["parameters"]["SuggestionLimit"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vorschläge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestions"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    lookupTags: {
+        parameters: {
+            query: {
+                /** @description 1 bis 100 Kennungen, wiederholt. */
+                id: string[];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };
