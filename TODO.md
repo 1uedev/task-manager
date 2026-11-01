@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-071](#task-071-befunde-der-codex-prüfung-von-task-070-beheben) | Befunde der Codex Prüfung von TASK-070 beheben | claude-20261030-sla-01 | 2026-10-31 |
 
 ### Blockiert – BLOCKIERT
 
@@ -53,6 +54,27 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
 Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023 und DEC-057 das Berechtigungsmodul aus TASK-025; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. TASK-024 ist inzwischen durch Claim-PR #73 für claude-20261018-identity-01 reserviert; TASK-026 bis TASK-031 haben weiterhin keinen Besitzer oder Arbeitsbranch. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+
+## TASK-071 Befunde der Codex Prüfung von TASK-070 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-31
+
+**Bezug:** REQ-HD-005, ACC-002. **Abhängigkeiten:** TASK-070 geliefert (PR #223 auf main); Bericht [docs/REVIEW_TASK-070_PR-223.md](docs/REVIEW_TASK-070_PR-223.md). **Arbeitsstand:** Holger hat am 31. Oktober 2026 den Bericht übergeben und zu H5 „Ja, Stufe nachtragen“ gewählt. Arbeit beginnt nach dem Merge dieser Reservierung, Branch claude/project-thread-2gq3w2, eigene DEC-ID, voraussichtlich ohne Migration.
+
+**Umfang:** Nur die Befunde F1 bis F3 und die Hinweise H1, H2 und H5 des Berichts; sonst nichts.
+1. H5 und F1: Bevor eine laufende Uhr pausiert, erfüllt, abgebrochen oder neu budgetiert wird, hält die auslösende Änderung in ihrer Transaktion die bis dahin erreichten Stufen fest, mit dem tatsächlichen Zeitpunkt der Schwelle. Eine nach der Schwelle, aber vor der nächsten Prüfung beendete Uhr behält ihre Stufe im Verlauf; nach dem Fortsetzen erscheint kein falscher Zeitpunkt. Macht erst ein kleineres neues Budget eine Stufe fällig, gilt der Zeitpunkt der Budgetänderung.
+2. F2: Die Liste „SLA Eskalationen“ liest Kandidaten seitenweise und prüft die Rechte, bis 200 sichtbare Einträge oder das Ende erreicht sind.
+3. F3: Eine Stufe ohne Uhr wird mit 400 `escalations.invalid` abgelehnt.
+4. H1: Die Testattrappe begrenzt die Liste wie der Server und lehnt eine leere Uhr gleich ab.
+5. H2: Tests für einen Prioritätswechsel vor und nach einer Schwelle und für eine Statusänderung, die mit der Überwachung zusammenfällt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Regressionstests für den Fall aus F1 (Pause nach der Schwelle), für H5 (Erfüllung nach der Schwelle vor der Prüfung) und für den kleineren Budgetwechsel.
+2. Ein API Test mit mehr als 200 neueren nicht lesbaren und einer älteren lesbaren Stufe.
+3. API Test für `clock: null` mit 400.
+4. Browsertests gegen die angepasste Attrappe; volle Backend- und Frontend-Suites grün.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
 
 ## TASK-067 Neue Kundenantworten an bestehenden Tickets sichtbar machen
 
