@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Tags (TASK-028, TASK-072)
-  version: 0.2.0
+  title: Task Manager API, Tags (TASK-028, TASK-072, TASK-073)
+  version: 0.3.0
   description: |
     Tag Kataloge und Tag Zuordnungen (DEC-068). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
     `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -40,6 +40,14 @@ info:
     Tags (409 `tag.limit_reached`), vorhandene Zuordnungen bleiben. Nutzungszahlen zählen nur Tickets in Projekten, in denen
     die anfragende Person Tickets mit dem Feld `tags` liest, und Projekte, die sie lesen darf. `manageable` sagt, ob die
     anfragende Person den Katalog des Tags pflegen darf.
+
+    Massenänderung (TASK-073, DEC-103): `POST /tags/bulk` fügt 1 bis 10 vorhandene Tags an 1 bis 500 Tickets hinzu oder
+    entfernt sie, auch über Projekte hinweg. Die Tags werden vorab geprüft (unbekannt oder in einem nicht sichtbaren
+    Projektkatalog 404 `tag.not_found`, zusammengeführt 409 `tag.merged`, archiviert beim Hinzufügen 409 `tag.archived`).
+    Danach wird jedes Ticket für sich in einer eigenen Transaktion mit den aktuellen Rechten geprüft und geändert wie bei
+    einer einzelnen Zuordnung; es gibt keine Gesamttransaktion. Ein Projekttag passt nur zu Tickets seines Projekts; passt
+    keiner der Tags, zählt das Ticket als `not_matching`. Eine Ablehnung (Rechte, Obergrenze, inzwischen archivierter Tag,
+    Sperre) lässt das Ticket ganz unverändert. Wiederholen erzeugt keine doppelten Zuordnungen.
 
     Der `ETag` ist die Version des Tags; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
     Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `tag.busy` und `Retry-After`; die
@@ -162,6 +170,31 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tags/bulk:
+    post:
+      operationId: bulkTicketTags
+      summary: Tags an vielen Tickets hinzufügen oder entfernen
+      description: |
+        Antwortet mit Zahlen je Ergebnis und einem Eintrag je genanntem Ticket (eine wiederholte Kennung zählt einmal).
+        `key` und bei einer Ablehnung `code` stehen nur bei Tickets, die die anfragende Person jetzt lesen darf
+        (`ticket.read`); sonst sind beide `null`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BulkRequest'}
+      responses:
+        '200':
+          description: Ergebnis der Massenänderung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BulkResult'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /tags/suggestions:
     get:
@@ -584,6 +617,40 @@ components:
       required: [into]
       properties:
         into: {type: string, format: uuid, description: Kennung des Ziels im selben Katalog}
+    BulkRequest:
+      type: object
+      additionalProperties: false
+      required: [action, tags, tickets]
+      properties:
+        action: {type: string, enum: [add, remove]}
+        tags:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: {type: string, format: uuid}
+        tickets:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: {type: string, format: uuid}
+    BulkResult:
+      type: object
+      required: [changed, unchanged, notMatching, refused, items]
+      properties:
+        changed: {type: integer, minimum: 0}
+        unchanged: {type: integer, minimum: 0, description: Alle passenden Tags waren schon so.}
+        notMatching: {type: integer, minimum: 0, description: Keiner der Tags passt zum Projekt des Tickets.}
+        refused: {type: integer, minimum: 0}
+        items:
+          type: array
+          items:
+            type: object
+            required: [ticketId, key, outcome, code]
+            properties:
+              ticketId: {type: string, format: uuid}
+              key: {type: [string, 'null'], description: Schlüssel des Tickets, nur wenn es lesbar ist}
+              outcome: {type: string, enum: [changed, unchanged, not_matching, refused]}
+              code: {type: [string, 'null'], description: Grund einer Ablehnung, nur bei lesbaren Tickets}
     Color:
       type: string
       description: Farbe der festen Palette; die Oberfläche zeigt sie in heller und dunkler Darstellung lesbar.

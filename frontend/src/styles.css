@@ -548,3 +548,14 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
 .tag-description { margin: 0.2rem 0 0; white-space: pre-line; }
 .tag-editor, .tag-merge { margin-top: 0.75rem; }
 .tag-preview { margin: 0.25rem 0 0.75rem; }
+
+/* Tag filter and bulk change (TASK-073). */
+.tag-filter { flex: 1 1 100%; border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin: 0; }
+.tag-filter legend { font-weight: 600; padding: 0 0.25rem; }
+.tag-filter .field, .tag-filter .tag-picker { margin: 0; max-width: 28rem; }
+.search-form .tag-filter .field { flex: none; }
+.item-list.selectable > li { display: grid; grid-template-columns: auto 1fr; column-gap: 0.75rem; align-items: baseline; }
+.item-list.selectable > li > .hint { grid-column: 2; }
+.select-page { margin: 0.5rem 0; }
+.selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-weight: 600; }
+.tag-bulk .confirm { border-left: 3px solid var(--brand-primary); padding-left: 0.75rem; margin-top: 0.75rem; }

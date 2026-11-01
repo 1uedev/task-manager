@@ -1019,6 +1019,174 @@ class TagsApiTest {
         assertProblem(post(project.manager(), projectTags(project), Map.of("tagId", extra.toString())), 409, "tag.limit_reached");
     }
 
+    // ---------------------------------------------------------------- bulk change (TASK-073)
+
+    private static Response bulk(Person person, String action, List<UUID> tags, List<UUID> tickets) {
+        return post(person, "/api/v1/tags/bulk", Map.of("action", action, "tags", tags.stream().map(UUID::toString).toList(),
+            "tickets", tickets.stream().map(UUID::toString).toList()));
+    }
+
+    private UUID ticketId(Project project, long number) {
+        return jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, project.id(), number);
+    }
+
+    private static void assertCounts(Response response, int changed, int unchanged, int notMatching, int refused) {
+        assertEquals(200, response.status(), response.body());
+        JsonNode json = response.json();
+        assertEquals(List.of(changed, unchanged, notMatching, refused), List.of(json.get("changed").asInt(), json.get("unchanged").asInt(),
+            json.get("notMatching").asInt(), json.get("refused").asInt()), response.body());
+    }
+
+    private static JsonNode item(Response response, UUID ticket) {
+        for (JsonNode item : response.json().get("items")) {
+            if (item.get("ticketId").asString().equals(ticket.toString())) {
+                return item;
+            }
+        }
+        throw new AssertionError("no item for " + ticket + ": " + response.body());
+    }
+
+    @Test
+    void aBulkChangeChecksEveryTicketForItselfAndNamesOnlyReadableTickets() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Person author = person();
+        Project first = project(worker, author);
+        Project second = project(worker, author);
+        Project readOnly = project(worker, author);
+        Project closed = project(author);
+        for (Project project : List.of(first, second, readOnly, closed)) {
+            grant(author.id(), project.id(), TICKETS);
+        }
+        grant(worker.id(), first.id(), TICKETS);
+        grant(worker.id(), first.id(), "tag.create");
+        grant(worker.id(), second.id(), TICKETS);
+        grant(worker.id(), readOnly.id(), "ticket.read", "READ:*", "READ:tags");
+        UUID company = tag(admin, "/api/v1/tags", "Sammel " + COUNTER.incrementAndGet());
+        UUID local = tag(worker, catalog(first), "Nur hier");
+        long a = ticket(author, first, "Eins");
+        long b = ticket(author, first, "Zwei");
+        long c = ticket(author, second, "Drei");
+        long d = ticket(author, readOnly, "Vier");
+        long e = ticket(author, closed, "Fünf");
+        List<UUID> all = List.of(ticketId(first, a), ticketId(first, b), ticketId(second, c), ticketId(readOnly, d), ticketId(closed, e));
+
+        Response added = bulk(worker, "add", List.of(company, local), all);
+        assertCounts(added, 3, 0, 0, 2);
+        assertEquals("changed", item(added, all.get(2)).get("outcome").asString(), "the company tag fits the other project");
+        assertEquals(List.of(company.toString()), StreamSupport.stream(worker.get(ticketTags(second, c)).json().spliterator(), false)
+            .map(tag -> tag.get("id").asString()).toList(), "the project tag stays in its project");
+        JsonNode refused = item(added, all.get(3));
+        assertEquals("refused", refused.get("outcome").asString());
+        assertEquals(readOnly.key() + "-" + d, refused.get("key").asString());
+        assertEquals("auth.forbidden", refused.get("code").asString(), "a readable ticket is named with the reason");
+        JsonNode hidden = item(added, all.get(4));
+        assertEquals("refused", hidden.get("outcome").asString());
+        assertTrue(hidden.get("key").isNull() && hidden.get("code").isNull(), "an unreadable ticket is neither named nor explained");
+        assertEquals(first.key() + "-" + a, item(added, all.get(0)).get("key").asString());
+        assertEquals(2, tagCount(worker, first, a));
+        assertEquals("\"1\"", worker.get("/api/v1/projects/" + first.id() + "/tickets/" + a).header("ETag"), "the version stays");
+        assertEquals(2L, jdbc.queryForObject("select count(*) from ticket_change where ticket_id = ? and field = 'tags'", Long.class, all.get(0)));
+
+        assertCounts(bulk(worker, "add", List.of(company, local), all.subList(0, 3)), 0, 3, 0, 0);
+        assertEquals(2L, jdbc.queryForObject("select count(*) from tag_ticket where ticket_id = ?", Long.class, all.get(0)),
+            "repeating adds nothing twice");
+        assertCounts(bulk(worker, "add", List.of(local), List.of(all.get(2))), 0, 0, 1, 0);
+        assertEquals("not_matching", item(bulk(worker, "remove", List.of(local), List.of(all.get(2))), all.get(2)).get("outcome").asString());
+
+        Response removed = bulk(worker, "remove", List.of(company), all);
+        assertCounts(removed, 3, 0, 0, 2);
+        assertEquals(1, tagCount(worker, first, a));
+        assertCounts(bulk(worker, "remove", List.of(company), all.subList(0, 3)), 0, 3, 0, 0);
+
+        // The tags of a bulk change are checked before any ticket.
+        assertEquals(200, patch(admin, "/api/v1/tags/" + company, Map.of("archived", true), "\"1\"").status());
+        assertProblem(bulk(worker, "add", List.of(company), all), 409, "tag.archived");
+        assertCounts(bulk(worker, "remove", List.of(company), all.subList(0, 1)), 0, 1, 0, 0);
+        grant(author.id(), closed.id(), "tag.create");
+        UUID foreign = tag(author, catalog(closed), "Fremd " + COUNTER.incrementAndGet());
+        assertProblem(bulk(worker, "add", List.of(foreign), all), 404, "tag.not_found");
+        assertProblem(bulk(worker, "add", List.of(UUID.randomUUID()), all), 404, "tag.not_found");
+        UUID source = tag(admin, "/api/v1/tags", "Quelle " + COUNTER.incrementAndGet());
+        UUID target = tag(admin, "/api/v1/tags", "Ziel " + COUNTER.incrementAndGet());
+        assertEquals(200, mergeInto(admin, "/api/v1/tags/" + source, target, "\"1\"").status());
+        assertProblem(bulk(worker, "remove", List.of(source), all), 409, "tag.merged");
+        assertEquals(List.of("tag.created", "tag.assigned", "tag.assigned", "tag.assigned", "tag.unassigned", "tag.unassigned",
+            "tag.unassigned", "tag.archived"), audit(company));
+    }
+
+    @Test
+    void aBulkChangeChecksItsBodyAndLimits() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        UUID company = tag(admin, "/api/v1/tags", "Grenze " + COUNTER.incrementAndGet());
+        List<String> ticket = List.of(UUID.randomUUID().toString());
+        assertEquals(List.of("action.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "replace", "tags", List.of(company.toString()), "tickets", ticket)).violations());
+        assertEquals(List.of("tags.invalid"), post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", List.of(), "tickets", ticket)).violations());
+        List<String> eleven = java.util.stream.IntStream.range(0, 11).mapToObj(i -> UUID.randomUUID().toString()).toList();
+        assertEquals(List.of("tags.invalid"), post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", eleven, "tickets", ticket)).violations());
+        List<String> many = java.util.stream.IntStream.range(0, 501).mapToObj(i -> UUID.randomUUID().toString()).toList();
+        assertEquals(List.of("tickets.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", many)).violations());
+        assertEquals(List.of("tickets.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", List.of("kein"))).violations());
+        assertEquals(List.of("fields.unknown"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", ticket, "name", "x")).violations());
+        Response unknown = post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", List.of(company.toString(), company.toString()),
+            "tickets", List.of(ticket.get(0), ticket.get(0))));
+        assertCounts(unknown, 0, 0, 0, 1);
+        assertEquals(1, unknown.json().get("items").size(), "a repeated ticket counts once");
+        assertTrue(item(unknown, UUID.fromString(ticket.get(0))).get("key").isNull());
+    }
+
+    @Test
+    void aBulkChangeKeepsTheLimitPerTicketWhole() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long full = ticket(worker, project, "Fast voll");
+        long empty = ticket(worker, project, "Leer");
+        String token = "m" + COUNTER.incrementAndGet();
+        for (int i = 0; i < 29; i++) {
+            assertEquals(204, post(worker, ticketTags(project, full), Map.of("name", token + "-" + i)).status());
+        }
+        UUID one = tag(admin, "/api/v1/tags", token + "-x");
+        UUID two = tag(admin, "/api/v1/tags", token + "-y");
+        Response result = bulk(worker, "add", List.of(one, two), List.of(ticketId(project, full), ticketId(project, empty)));
+        assertCounts(result, 1, 0, 0, 1);
+        assertEquals("tag.limit_reached", item(result, ticketId(project, full)).get("code").asString());
+        assertEquals(29, tagCount(worker, project, full), "a refused ticket keeps no part of the change");
+        assertEquals(2, tagCount(worker, project, empty));
+    }
+
+    @Test
+    void aBulkChangeWaitsForASingleChangeOfATicketAndThenAppliesIt() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        long first = ticket(worker, project, "Gleichzeitig");
+        long second = ticket(worker, project, "Daneben");
+        UUID company = tag(admin, "/api/v1/tags", "Parallel " + COUNTER.incrementAndGet());
+        UUID held = ticketId(project, second);
+        // A change of the second ticket holds its row; the bulk change finishes the first ticket and waits there.
+        Runnable release = hold("select id from ticket where id = '" + held + "' for update");
+        Future<Response> running;
+        try {
+            running = POOL.submit(() -> bulk(worker, "add", List.of(company), List.of(ticketId(project, first), held)));
+            assertTrue(waitsAt("from ticket"), "the bulk change waits for the ticket row");
+            assertEquals(1, tagCount(worker, project, first), "the first ticket is already committed");
+            assertFalse(running.isDone());
+        } finally {
+            release.run();
+        }
+        assertCounts(running.get(30, TimeUnit.SECONDS), 2, 0, 0, 0);
+        assertEquals(1, tagCount(worker, project, second));
+    }
+
     private static int tagCount(Person person, Project project, long number) {
         return person.get(ticketTags(project, number)).json().size();
     }
