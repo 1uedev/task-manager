@@ -286,12 +286,24 @@ class SlaRepository {
     }
 
     /** The reached stages for any of the groups, newest first. */
-    List<Escalation> escalationsFor(UUID companyId, java.util.Collection<UUID> groups, int limit) {
+    /**
+     * One page of the reached stages of {@code groups}, newest first ({@code reached_at} descending, then {@code id}), after the
+     * row {@code after} if given and outside the projects {@code excluded}, which the caller already found unreadable.
+     */
+    List<Escalation> escalationsFor(UUID companyId, java.util.Collection<UUID> groups, java.util.Collection<UUID> excluded, Escalation after,
+            int limit) {
         if (groups.isEmpty()) {
             return List.of();
         }
-        return jdbc.sql(ESCALATIONS + " where e.company_id = ? and not e.skipped and e.group_id = any(?) order by e.reached_at desc, e.id limit ?")
-            .params(companyId, groups.toArray(UUID[]::new), limit).query((rs, row) -> escalation(rs)).list();
+        String cursor = after == null ? "" : " and (e.reached_at < ? or (e.reached_at = ? and e.id > ?))";
+        List<Object> params = new java.util.ArrayList<>(List.of(companyId, groups.toArray(UUID[]::new), excluded.toArray(UUID[]::new)));
+        if (after != null) {
+            params.addAll(List.of(Timestamp.from(after.reachedAt()), Timestamp.from(after.reachedAt()), after.id()));
+        }
+        params.add(limit);
+        return jdbc.sql(ESCALATIONS + " where e.company_id = ? and not e.skipped and e.group_id = any(?) and not (e.project_id = any(?))" + cursor
+                + " order by e.reached_at desc, e.id limit ?")
+            .params(params).query((rs, row) -> escalation(rs)).list();
     }
 
     private static final String ESCALATIONS = """

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-071](#task-071-befunde-der-codex-prüfung-von-task-070-beheben) | Befunde der Codex Prüfung von TASK-070 beheben | claude-20261030-sla-01 | 2026-10-31 |
 
 ### Blockiert – BLOCKIERT
 
@@ -43,6 +42,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-068](#task-068-sla-fristen-und-geschäftszeiten-a10-teil-1) | SLA Fristen und Geschäftszeiten (A10 Teil 1) | claude-20261030-sla-01 | 2026-10-30 |
 | [TASK-070](#task-070-sla-eskalationen-a10-teil-2) | SLA Eskalationen (A10 Teil 2) | claude-20261030-sla-01 | 2026-10-31 |
+| [TASK-071](#task-071-befunde-der-codex-prüfung-von-task-070-beheben) | Befunde der Codex Prüfung von TASK-070 beheben | claude-20261030-sla-01 | 2026-11-01 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -57,9 +57,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-071 Befunde der Codex Prüfung von TASK-070 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-10-31
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-sla-01 · **Aktualisiert:** 2026-11-01
 
-**Bezug:** REQ-HD-005, ACC-002. **Abhängigkeiten:** TASK-070 geliefert (PR #223 auf main); Bericht [docs/REVIEW_TASK-070_PR-223.md](docs/REVIEW_TASK-070_PR-223.md). **Arbeitsstand:** Holger hat am 31. Oktober 2026 den Bericht übergeben und zu H5 „Ja, Stufe nachtragen“ gewählt. Arbeit beginnt nach dem Merge dieser Reservierung, Branch claude/project-thread-2gq3w2, eigene DEC-ID, voraussichtlich ohne Migration.
+**Bezug:** REQ-HD-005, ACC-002. **Abhängigkeiten:** TASK-070 geliefert (PR #223 auf main); Bericht [docs/REVIEW_TASK-070_PR-223.md](docs/REVIEW_TASK-070_PR-223.md). **Arbeitsstand:** Holger hat am 31. Oktober 2026 den Bericht übergeben und zu H5 „Ja, Stufe nachtragen“ gewählt. Reservierung PR #224 am 1. November 2026 gemergt; Ergebnis auf Branch claude/project-thread-2gq3w2 mit DEC-101, ohne Migration.
 
 **Umfang:** Nur die Befunde F1 bis F3 und die Hinweise H1, H2 und H5 des Berichts; sonst nichts.
 1. H5 und F1: Bevor eine laufende Uhr pausiert, erfüllt, abgebrochen oder neu budgetiert wird, hält die auslösende Änderung in ihrer Transaktion die bis dahin erreichten Stufen fest, mit dem tatsächlichen Zeitpunkt der Schwelle. Eine nach der Schwelle, aber vor der nächsten Prüfung beendete Uhr behält ihre Stufe im Verlauf; nach dem Fortsetzen erscheint kein falscher Zeitpunkt. Macht erst ein kleineres neues Budget eine Stufe fällig, gilt der Zeitpunkt der Budgetänderung.
@@ -74,7 +74,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. API Test für `clock: null` mit 400.
 4. Browsertests gegen die angepasste Attrappe; volle Backend- und Frontend-Suites grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+**Ergebnis:** DEC-101. `TicketSla.change` hält vor jedem Schreiben eines geänderten Zyklus (Statuswechsel, Kunde entfernt, Antwort gesendet, Priorität) die bis dahin erreichten Stufen unter derselben Sperre fest; die Überwachung nutzt dieselbe Methode `record`. `Escalations.due` nimmt einen Zeitpunkt vor dem letzten Stand als diesen Stand. Die Liste liest Kandidaten seitenweise (`SlaRepository.escalationsFor` mit Fortsetzung und ausgeschlossenen Projekten) bis 200 sichtbare Einträge. `Rule.Stage.violations` prüft eine fehlende Uhr zuerst. Testattrappe mit der Grenze von 200; Beschreibung in [backend/README.md](backend/README.md#eskalationen-task-070).
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 460 Tests), darunter `EscalationsTest` mit 8 Tests (neu: Zeitpunkte beim Speichern vor der Pause, kleineres Budget und früher Zeitpunkt) und 5 neue Tests in `SlaApiTest` (Pause nach der Schwelle mit erhaltenem Zeitpunkt, Antwort nach der Schwelle vor der Prüfung, kleineres und größeres Budget, Statuswechsel gleichzeitig mit drei Überwachungen, 201 nicht lesbare neuere Stufen vor einer lesbaren und Stufe ohne Uhr mit 400). Frontend `tsc`, 77 Einheitentests und 139 Browsertests grün, in `sla.test.mjs` neu die Grenze von 200 und die Ablehnung der leeren Uhr. Nicht lokal geprüft: Lifecycle Skript und Abbild ohne Docker.
+
+**Bekannte Grenzen:** H3 und H4 bleiben Hinweise. Zyklen, deren Stufen vor dieser Änderung nicht beim Anhalten gespeichert wurden, erhalten nach dem Fortsetzen weiter den Zeitpunkt des Fortsetzens.
+
+**Nächster Schritt:** Nachprüfung (Codex oder eine getrennte Claude Prüfung) und Abnahme durch Holger zusammen mit TASK-068 und TASK-070.
 
 ## TASK-067 Neue Kundenantworten an bestehenden Tickets sichtbar machen
 

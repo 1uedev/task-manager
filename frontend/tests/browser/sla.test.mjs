@@ -214,4 +214,27 @@ describe('service deadlines', () => {
       assert.equal(await page.getByTestId('escalation-list').count(), 0, 'Ben is in the group but may not read customer and priority');
     });
   });
+  test('the list shows at most 200 entries and a stage without clock is refused like on the server', async () => {
+    await withApp({ hash: '#/escalations', prepare: (backend) => {
+      withSlaRights(backend);
+      const ticket = backend.state.tickets[0];
+      backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: '00000000-0000-4000-8000-00000000c001', contactId: null });
+      const stages = Array.from({ length: 201 }, (_, index) => stage(SLA_GROUP, index + 1, { reachedAt: new Date(Date.UTC(2026, 9, 30, 8, index)).toISOString() }));
+      backend.addCycle(ticket, cycle(stages));
+    } }, async (page, backend) => {
+      const list = page.getByTestId('escalation-list');
+      await list.waitFor();
+      assert.equal(await list.locator('li').count(), 200);
+      assert.equal(await list.locator('li').first().getAttribute('data-percent'), '201', 'newest first');
+      const refused = await page.evaluate(async (groupId) => {
+        const csrf = document.cookie.split('; ').find((item) => item.startsWith('__Host-tm-csrf='))?.split('=')[1] ?? '';
+        const response = await fetch('/api/v1/sla/rules', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({ name: 'Ohne Uhr', projectId: 'x', calendarId: 'x', budgets: {}, escalations: [{ clock: null, percent: 80, groupId }] }) });
+        return { status: response.status, body: await response.json() };
+      }, SLA_GROUP);
+      assert.equal(refused.status, 400);
+      assert.ok(refused.body.violations.includes('escalations.invalid'), JSON.stringify(refused.body));
+      assert.ok(backend.state.sla.rules.length === 0);
+    });
+  });
 });

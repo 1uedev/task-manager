@@ -121,7 +121,7 @@ public class TicketSla {
         if (open.isPresent()) {
             SlaCycle cycle = open.get();
             if (!previous.equals(kind)) {
-                repository.updateCycle(cycle.statusChanged(previous, kind, now, calendar(cycle)));
+                change(row, cycle, now, cycle.statusChanged(previous, kind, now, calendar(cycle)));
             }
             return;
         }
@@ -144,7 +144,7 @@ public class TicketSla {
         Optional<SlaCycle> open = repository.openCycle(changed.ticketId());
         Instant now = now();
         if (changed.customerId() == null) {
-            open.ifPresent(cycle -> repository.updateCycle(cycle.close(SlaCycle.CANCELLED, "customer_removed", now, calendar(cycle))));
+            open.ifPresent(cycle -> change(row, cycle, now, cycle.close(SlaCycle.CANCELLED, "customer_removed", now, calendar(cycle))));
             return;
         }
         if (open.isPresent()) {
@@ -163,8 +163,9 @@ public class TicketSla {
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(ReplySent sent) {
-        repository.lockTicket(sent.ticketId(), sent.companyId(), sent.projectId());
-        repository.openCycle(sent.ticketId()).ifPresent(cycle -> repository.updateCycle(cycle.replySent(seconds(sent.sentAt()), calendar(cycle))));
+        SlaRepository.TicketRow row = repository.lockTicket(sent.ticketId(), sent.companyId(), sent.projectId());
+        Instant at = seconds(sent.sentAt());
+        repository.openCycle(sent.ticketId()).ifPresent(cycle -> change(row, cycle, at, cycle.replySent(at, calendar(cycle))));
     }
 
     @EventListener
@@ -276,27 +277,39 @@ public class TicketSla {
     @Transactional
     public List<EscalationItem> escalations(AccessContext actor) {
         Set<UUID> mine = groups.groupsOf(actor.companyId(), actor.userId());
-        List<SlaRepository.Escalation> rows = repository.escalationsFor(actor.companyId(), mine, ESCALATION_LIST_LIMIT);
-        if (rows.isEmpty()) {
+        if (mine.isEmpty()) {
             return List.of();
         }
         Map<UUID, String> groupNames = groupNames(actor.companyId());
         Map<UUID, String> projectKeys = new HashMap<>();
         projects.searchSources(actor.companyId()).forEach(project -> projectKeys.put(project.projectId(), project.key()));
         Map<UUID, Boolean> readable = new HashMap<>();
+        Set<UUID> unreadable = new HashSet<>();
         List<EscalationItem> items = new ArrayList<>();
-        for (SlaRepository.Escalation row : rows) {
-            boolean may = readable.computeIfAbsent(row.projectId(), projectId -> {
-                Decision read = permissions.inspect(actor, resource(actor, projectId), READ, FIELDS);
-                return read.allowed() && read.readableFields().containsAll(FIELDS);
-            });
-            if (!may) {
-                continue;
+        // The limit counts visible entries (TASK-071, F2): page through the candidates until it is reached or nothing is left;
+        // projects found unreadable are left out of the following pages, so every page brings a new project or visible rows.
+        SlaRepository.Escalation after = null;
+        List<SlaRepository.Escalation> page;
+        do {
+            page = repository.escalationsFor(actor.companyId(), mine, unreadable, after, ESCALATION_LIST_LIMIT);
+            for (SlaRepository.Escalation row : page) {
+                boolean may = readable.computeIfAbsent(row.projectId(), projectId -> {
+                    Decision read = permissions.inspect(actor, resource(actor, projectId), READ, FIELDS);
+                    return read.allowed() && read.readableFields().containsAll(FIELDS);
+                });
+                if (!may) {
+                    unreadable.add(row.projectId());
+                    continue;
+                }
+                Optional<TicketAccess.State> state = tickets.state(row.ticketId());
+                if (state.isPresent() && items.size() < ESCALATION_LIST_LIMIT) {
+                    items.add(new EscalationItem(row.projectId(), projectKeys.getOrDefault(row.projectId(), ""), state.get().number(), row.cycleNumber(),
+                        row.cycleOutcome(), row.kind(), row.percent(), row.groupId(), groupNames.getOrDefault(row.groupId(), ""), row.thresholdAt(),
+                        row.reachedAt()));
+                }
             }
-            tickets.state(row.ticketId()).ifPresent(state -> items.add(new EscalationItem(row.projectId(), projectKeys.getOrDefault(row.projectId(), ""),
-                state.number(), row.cycleNumber(), row.cycleOutcome(), row.kind(), row.percent(), row.groupId(),
-                groupNames.getOrDefault(row.groupId(), ""), row.thresholdAt(), row.reachedAt())));
-        }
+            after = page.isEmpty() ? after : page.getLast();
+        } while (page.size() == ESCALATION_LIST_LIMIT && items.size() < ESCALATION_LIST_LIMIT);
         return items;
     }
 
@@ -318,24 +331,40 @@ public class TicketSla {
         if (open.isEmpty()) {
             return 0;
         }
-        SlaCycle cycle = open.get();
+        Instant at = now.truncatedTo(ChronoUnit.SECONDS);
+        return record(row.get(), open.get(), at, at);
+    }
+
+    /**
+     * Writes a changed cycle; first the stages the running clocks reached up to {@code at} are stored, so that a clock that is
+     * paused, met, cancelled or gets a new budget keeps every stage it passed with the time it passed it (TASK-071, H5 and F1).
+     * Runs under the lock of the row of the ticket, like the watch.
+     */
+    private void change(SlaRepository.TicketRow row, SlaCycle before, Instant at, SlaCycle after) {
+        Instant now = now();
+        record(row, before, at, now.isAfter(at) ? now : at);
+        repository.updateCycle(after);
+    }
+
+    /** Stores the stages of {@code cycle} that are due at {@code at} (rule 3) with the time {@code reachedAt}; returns how many were reached. */
+    private int record(SlaRepository.TicketRow row, SlaCycle cycle, Instant at, Instant reachedAt) {
         List<Rule.Stage> stages = repository.ruleStages(cycle.ruleId(), cycle.ruleVersion());
         if (stages.isEmpty()) {
             return 0;
         }
         WorkCalendar calendar = calendar(cycle);
         List<SlaRepository.Escalation> stored = repository.escalationsOf(cycle.id());
-        Instant at = now.truncatedTo(ChronoUnit.SECONDS);
         int reached = 0;
-        for (SlaClock clock : List.of(cycle.firstResponse(), cycle.resolution())) {
+        for (SlaClock item : List.of(cycle.firstResponse(), cycle.resolution())) {
             Set<Integer> done = new HashSet<>();
-            stored.stream().filter(e -> e.kind().equals(clock.kind())).forEach(e -> done.add(e.stage()));
-            for (Escalations.Due due : Escalations.due(clock, stages, done, at, calendar)) {
-                boolean added = repository.insertEscalation(new SlaRepository.Escalation(UUID.randomUUID(), row.get().companyId(), row.get().projectId(),
-                    ticketId, cycle.id(), cycle.number(), null, clock.kind(), due.stage(), due.definition().percent(), due.definition().groupId(),
-                    due.thresholdAt(), at, due.skipped()));
+            stored.stream().filter(e -> e.kind().equals(item.kind())).forEach(e -> done.add(e.stage()));
+            for (Escalations.Due due : Escalations.due(item, stages, done, at, calendar)) {
+                boolean added = repository.insertEscalation(new SlaRepository.Escalation(UUID.randomUUID(), row.companyId(), row.projectId(),
+                    row.ticketId(), cycle.id(), cycle.number(), null, item.kind(), due.stage(), due.definition().percent(), due.definition().groupId(),
+                    due.thresholdAt(), reachedAt, due.skipped()));
                 if (added && due.skipped()) {
-                    LOG.info("Escalation stage {} of {} on ticket {} cycle {} passed over by a higher one", due.stage(), clock.kind(), ticketId, cycle.number());
+                    LOG.info("Escalation stage {} of {} on ticket {} cycle {} passed over by a higher one", due.stage(), item.kind(), row.ticketId(),
+                        cycle.number());
                 } else if (added) {
                     reached++;
                 }
@@ -370,7 +399,7 @@ public class TicketSla {
             tickets.recordPriorityChange(ticket, now, actor.userId(), row.priority(), priority);
             repository.openCycle(ticket).ifPresent(cycle -> {
                 Rule.Budgets budgets = repository.ruleBudgets(cycle.ruleId(), cycle.ruleVersion()).orElseThrow();
-                repository.updateCycle(cycle.priorityChanged(priority, budgets.seconds(priority), now, calendar(cycle)));
+                change(row, cycle, now, cycle.priorityChanged(priority, budgets.seconds(priority), now, calendar(cycle)));
             });
         }
         return view(actor, projectId, number);
