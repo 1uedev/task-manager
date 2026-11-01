@@ -80,7 +80,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Bekannte Grenzen:** H3 und H4 bleiben Hinweise. Zyklen, deren Stufen vor dieser Änderung nicht beim Anhalten gespeichert wurden, erhalten nach dem Fortsetzen weiter den Zeitpunkt des Fortsetzens.
 
-**Nächster Schritt:** Nachprüfung (Codex oder eine getrennte Claude Prüfung) und Abnahme durch Holger zusammen mit TASK-068 und TASK-070.
+**Nachprüfung:** Codex, Sitzung codex-20261101-task071-review-01, am festen Head 8602afe, Bericht [docs/REVIEW_TASK-071_PR-225.md](docs/REVIEW_TASK-071_PR-225.md): F1 bis F3 sowie H1, H2 und H5 behoben, kein neuer Befund, Empfehlung zur Abnahme; Hinweise H1 bis H3 ohne Handlungsbedarf für diese Aufgabe.
+
+**Nächster Schritt:** Abnahme durch Holger zusammen mit TASK-068 und TASK-070.
 
 ## TASK-067 Neue Kundenantworten an bestehenden Tickets sichtbar machen
 
