@@ -112,4 +112,22 @@ class EscalationsTest {
         assertEquals(List.of("escalations.duplicate"), Rule.Stage.violations(List.of(new Rule.Stage(SlaClock.RESOLUTION, 80, SUPPORT),
             new Rule.Stage(SlaClock.RESOLUTION, 80, SUPPORT)), groups));
     }
+    @Test
+    void storedAtThePauseTheStagesKeepTheTimesTheClockPassedThem() {
+        // TASK-071, F1: the review case, Monday from 09:00, pause at 11:00. The change stores what is due at 11:00 before the pause.
+        SlaClock clock = started();
+        List<Escalations.Due> due = Escalations.due(clock, STAGES, Set.of(), at("2026-10-19T11:00+02:00"), STANDARD);
+        assertEquals(List.of(at("2026-10-19T10:36+02:00"), at("2026-10-19T11:00+02:00")), due.stream().map(Escalations.Due::thresholdAt).toList());
+        SlaClock resumed = clock.pause(at("2026-10-19T11:00+02:00"), STANDARD).resume(at("2026-10-19T13:00+02:00"), STANDARD);
+        assertEquals(List.of(), Escalations.due(resumed, STAGES, Set.of(0, 1), at("2026-10-19T13:01+02:00"), STANDARD), "nothing left after the resume");
+    }
+
+    @Test
+    void aSmallerBudgetMakesAStageDueAtTheChangeAndAnEarlierTimeCountsAsTheCheckpoint() {
+        SlaClock clock = started().rebudget(15 * 60, at("2026-10-19T09:20+02:00"), STANDARD);
+        List<Escalations.Due> due = Escalations.due(clock, STAGES, Set.of(), at("2026-10-19T09:21+02:00"), STANDARD);
+        assertEquals(List.of(true, false), due.stream().map(Escalations.Due::skipped).toList(), "20 of 15 minutes: 100 % reached, 80 % skipped");
+        assertEquals(at("2026-10-19T09:20+02:00"), due.get(1).thresholdAt(), "due from the change of the budget on");
+        assertEquals(List.of(), Escalations.due(started(), STAGES, Set.of(), at("2026-10-19T08:00+02:00"), STANDARD), "a time before the checkpoint uses it");
+    }
 }

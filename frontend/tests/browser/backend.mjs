@@ -319,7 +319,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           }
         }
       }
-      return ok(items.sort((a, b) => b.reachedAt.localeCompare(a.reachedAt)));
+      // At most 200 visible entries, counted after the rights as on the server (TASK-071, F2).
+      return ok(items.sort((a, b) => b.reachedAt.localeCompare(a.reachedAt)).slice(0, 200));
     }
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');

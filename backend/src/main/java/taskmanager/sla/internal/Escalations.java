@@ -27,7 +27,9 @@ final class Escalations {
         if (!clock.running()) {
             return List.of();
         }
-        long consumed = clock.consumedAt(now, calendar);
+        // A change can be dated a little before the last checkpoint (the acceptance of a mail); the clock never runs backwards.
+        Instant at = now.isBefore(clock.checkpoint()) ? clock.checkpoint() : now;
+        long consumed = clock.consumedAt(at, calendar);
         List<Due> due = new ArrayList<>();
         int highest = -1;
         for (int position = 0; position < stages.size(); position++) {
@@ -39,8 +41,10 @@ final class Escalations {
             if (threshold > consumed) {
                 continue;
             }
-            Instant at = threshold <= clock.consumedSeconds() ? clock.checkpoint() : calendar.add(clock.checkpoint(), threshold - clock.consumedSeconds());
-            due.add(new Due(position, stage, at, true));
+            // A threshold inside the time already used before the checkpoint was passed at the checkpoint: the changes store the
+            // stages a clock reached before it pauses or gets a new budget (TASK-071), so this is a new, smaller budget.
+            Instant passed = threshold <= clock.consumedSeconds() ? clock.checkpoint() : calendar.add(clock.checkpoint(), threshold - clock.consumedSeconds());
+            due.add(new Due(position, stage, passed, true));
             if (highest < 0 || stage.percent() > due.get(highest).definition().percent()) {
                 highest = due.size() - 1;
             }

@@ -50,7 +50,9 @@ public record Rule(UUID id, UUID companyId, String name, UUID projectId, UUID cu
                 }
             }
             for (Stage stage : stages) {
-                if (stage == null || !List.of(SlaClock.FIRST_RESPONSE, SlaClock.RESOLUTION).contains(stage.clock()) || stage.percent() == null
+                // List.contains throws on null (TASK-071, F3), so a missing clock is checked first.
+                if (stage == null || stage.clock() == null || !List.of(SlaClock.FIRST_RESPONSE, SlaClock.RESOLUTION).contains(stage.clock())
+                        || stage.percent() == null
                         || stage.percent() < 1 || stage.percent() > MAX_PERCENT) {
                     add(violations, "escalations.invalid");
                 } else if (stage.groupId() == null || !groups.contains(stage.groupId())) {

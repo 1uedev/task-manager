@@ -356,6 +356,22 @@ class SlaApiTest {
         return jdbc.queryForList("select kind, percent, skipped from sla_escalation where ticket_id = ? order by percent", ticket);
     }
 
+    /** Moves the running clocks of the open cycle back by {@code minutes}, as if the cycle had started that much earlier. */
+    private void backdate(UUID ticket, int minutes) {
+        jdbc.update("""
+                update sla_clock set checkpoint_at = checkpoint_at - make_interval(mins => ?), due_at = due_at - make_interval(mins => ?)
+                where state = 'running' and cycle_id in (select id from sla_cycle where ticket_id = ? and outcome is null)
+                """, minutes, minutes, ticket);
+    }
+
+    private List<Map<String, Object>> thresholds(UUID ticket) {
+        return jdbc.queryForList("select kind, percent, skipped, threshold_at from sla_escalation where ticket_id = ? order by percent, kind", ticket);
+    }
+
+    private static Instant at(Map<String, Object> row) {
+        return ((java.sql.Timestamp) row.get("threshold_at")).toInstant();
+    }
+
     private List<JsonNode> listed(Browser browser, Setup setup, long number) {
         Response list = browser.get("/api/v1/sla/escalations");
         assertEquals(200, list.status(), list.body());
@@ -767,5 +783,143 @@ class SlaApiTest {
         assertEquals("cancelled", items.get(0).get("cycleOutcome").asString());
         watch(started(setup, other).plus(Duration.ofHours(10)));
         assertEquals(1, stagesOf(otherId).size(), "a closed cycle reaches nothing");
+    }
+
+    // ---------------------------------------------------------------- fixes of the review of TASK-070 (TASK-071)
+
+    @Test
+    void aPauseAfterTheThresholdKeepsTheStageWithTheTimeItWasPassed() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("resolution", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        backdate(ticket, 180);
+        Instant passed = start.minus(Duration.ofMinutes(180)).plus(Duration.ofMinutes(120));
+
+        status(setup, number, "waiting");
+        List<Map<String, Object>> stored = thresholds(ticket);
+        assertEquals(1, stored.size(), "F1 and H5: the pause stores the stage before the clock stops");
+        assertEquals(passed, at(stored.get(0)), "the time the clock passed 50 %, not the time of the pause");
+        publish(new CustomerAnswered(companies.find().orElseThrow(), setup.project(), ticket, Instant.now()));
+        watch(Instant.now().plus(Duration.ofHours(1)));
+        assertEquals(List.of(stored.get(0)), thresholds(ticket), "after the resume the stage keeps its time and comes not again");
+        assertEquals(passed, instant(listed(setup.agent(), setup, number).get(0).get("thresholdAt")));
+    }
+
+    @Test
+    void aClockMetAfterTheThresholdButBeforeTheWatchKeepsItsStage() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads), stage("first_response", 100, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        backdate(ticket, 40);
+
+        publish(new ReplySent(companies.find().orElseThrow(), setup.project(), ticket, UUID.randomUUID(), Instant.now()));
+        List<Map<String, Object>> stored = thresholds(ticket);
+        assertEquals(1, stored.size(), "H5: the reply stores the stage the clock passed before the next watch");
+        assertEquals(50, stored.get(0).get("percent"));
+        assertEquals(start.minus(Duration.ofMinutes(40)).plus(Duration.ofMinutes(30)), at(stored.get(0)));
+        watch(Instant.now().plus(Duration.ofHours(2)));
+        assertEquals(1, thresholds(ticket).size(), "the met clock reaches no further stage");
+        assertEquals(1, listed(setup.agent(), setup, number).size());
+    }
+
+    @Test
+    void aSmallerBudgetReachesAStageAtTheChangeAndALargerOneDefersIt() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 80, leads)));
+        long smaller = ticket(setup, "task");
+        UUID smallerId = ticketId(setup, smaller);
+        assertEquals(200, setCustomer(setup, smaller, setup.customer()).status());
+        backdate(smallerId, 20);
+        Instant before = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        assertEquals(200, priority(setup.agent(), setup, smaller, "critical").status());
+        assertEquals(List.of(), thresholds(smallerId), "20 of 60 minutes: the old budget had not reached 80 %");
+        watch(Instant.now());
+        List<Map<String, Object>> stored = thresholds(smallerId);
+        assertEquals(1, stored.size(), "20 of 15 minutes: the new budget is past 80 %");
+        assertFalse(at(stored.get(0)).isBefore(before), "the stage is due from the change of the budget on");
+        assertTrue(at(stored.get(0)).isBefore(Instant.now().plusSeconds(1)));
+
+        long larger = ticket(setup, "task");
+        UUID largerId = ticketId(setup, larger);
+        assertEquals(200, setCustomer(setup, larger, setup.customer()).status());
+        Instant start = started(setup, larger);
+        assertEquals(200, priority(setup.agent(), setup, larger, "low").status());
+        watch(start.plus(Duration.ofMinutes(60)));
+        assertEquals(List.of(), thresholds(largerId), "60 of 120 minutes: not yet 80 %");
+        watch(start.plus(Duration.ofMinutes(97)));
+        assertEquals(1, thresholds(largerId).size(), "96 of 120 minutes");
+    }
+
+    @Test
+    void aStatusChangeAndWatchesAtTheSameTimeStoreEachStageOnce() throws Exception {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("resolution", 50, leads), stage("first_response", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        backdate(ticket, 180);
+        List<Callable<Integer>> calls = new ArrayList<>();
+        calls.add(() -> status(setup, number, "waiting").status());
+        for (int i = 0; i < 3; i++) {
+            calls.add(() -> watch(Instant.now()));
+        }
+        for (Future<Integer> result : POOL.invokeAll(calls)) {
+            result.get();
+        }
+        assertEquals(2, thresholds(ticket).size(), thresholds(ticket).toString());
+        assertEquals(1, jdbc.queryForObject("select count(*) from sla_escalation where ticket_id = ? and kind = 'resolution'", Integer.class, ticket));
+    }
+
+    @Test
+    void theListCountsVisibleEntriesAndAStageWithoutClockIsRefused() {
+        Setup setup = setup();
+        Browser member = person();
+        UUID leads = group(setup.agent().id, member.id);
+        Map<String, Object> body = rule("Ohne Uhr", setup.project(), null, null, setup.calendar(), 60, 240);
+        Map<String, Object> missing = new LinkedHashMap<>();
+        missing.put("clock", null);
+        missing.put("percent", 80);
+        missing.put("groupId", leads);
+        body.put("escalations", List.of(missing));
+        Response refused = setup.admin().send("POST", "/api/v1/sla/rules", body, null);
+        assertEquals(400, refused.status(), "F3: " + refused.body());
+        assertEquals(List.of("escalations.invalid"), JSON.convertValue(refused.json().get("violations"), List.class));
+
+        // F2: an older stage the member may read behind 201 newer ones of a project they may not read.
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads)));
+        long readable = ticket(setup, "task");
+        assertEquals(200, setCustomer(setup, readable, setup.customer()).status());
+        Response project = setup.admin().get("/api/v1/projects/" + setup.project());
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/members/" + member.id, null, project.etag()).status());
+        grant(member.id, setup.project(), "ticket.read", "READ:*");
+        watch(started(setup, readable).plus(Duration.ofMinutes(31)));
+        assertEquals(1, listed(member, setup, readable).size());
+
+        Setup hidden = setup();
+        ruleWithStages(hidden, List.of(stage("first_response", 50, leads)));
+        long other = ticket(hidden, "task");
+        assertEquals(200, setCustomer(hidden, other, hidden.customer()).status());
+        UUID cycle = jdbc.queryForObject("select id from sla_cycle where ticket_id = ?", UUID.class, ticketId(hidden, other));
+        UUID company = companies.find().orElseThrow();
+        for (int i = 1; i <= 201; i++) {
+            jdbc.update("""
+                    insert into sla_escalation(id, company_id, project_id, ticket_id, cycle_id, kind, stage, percent, group_id, threshold_at, reached_at, skipped)
+                    values (?, ?, ?, ?, ?, 'first_response', ?, 50, ?, now(), now() + interval '1 day' + make_interval(mins => ?), false)
+                    """, UUID.randomUUID(), company, hidden.project(), ticketId(hidden, other), cycle, i, leads, i);
+        }
+        Response list = member.get("/api/v1/sla/escalations");
+        assertEquals(200, list.status(), list.body());
+        assertEquals(1, list.json().size(), "only the readable stage, found behind the 201 hidden ones");
+        assertEquals(readable, list.json().get(0).get("number").asLong());
     }
 }
