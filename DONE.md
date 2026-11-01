@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,78 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-071 Befunde der Codex Prüfung von TASK-070 beheben
+
+**Bezug:** REQ-HD-005, ACC-002. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** Regressionstests für den Fall aus F1 (Pause nach der Schwelle), für H5 (Erfüllung nach der Schwelle vor der Prüfung) und für den kleineren Budgetwechsel; ein API Test mit mehr als 200 neueren nicht lesbaren und einer älteren lesbaren Stufe; API Test für `clock: null` mit 400; Browsertests gegen die angepasste Attrappe; volle Backend- und Frontend-Suites grün.
+
+**Ergebnis:** DEC-101, ohne Migration. Holger hat am 31. Oktober 2026 zu H5 „Ja, Stufe nachtragen“ gewählt. `TicketSla.change` hält vor jedem Schreiben eines geänderten Zyklus (Statuswechsel, Kunde entfernt, Antwort gesendet, Priorität) die bis dahin erreichten Stufen unter derselben Sperre fest; die Überwachung nutzt dieselbe Methode `record`. `Escalations.due` nimmt einen Zeitpunkt vor dem letzten Stand als diesen Stand, so dass eine erst durch ein kleineres Budget fällige Stufe den Zeitpunkt der Budgetänderung erhält. Die Liste liest Kandidaten seitenweise (`SlaRepository.escalationsFor` mit Fortsetzung und ausgeschlossenen Projekten) bis 200 sichtbare Einträge. `Rule.Stage.violations` prüft eine fehlende Uhr zuerst. Testattrappe mit der Grenze von 200.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 460 Tests), darunter `EscalationsTest` mit 8 Tests und 5 neue Tests in `SlaApiTest`. Frontend `tsc`, 77 Einheitentests und 139 Browsertests grün. CI auf PR #225 grün. Nicht lokal geprüft: Lifecycle Skript und Abbild ohne Docker, beides in der CI.
+
+**Review:** Getrennte Nachprüfung durch Codex, Sitzung codex-20261101-task071-review-01, am festen Head 8602afe ([Bericht](docs/REVIEW_TASK-071_PR-225.md), PR #226): F1 bis F3 sowie H1, H2 und H5 behoben, kein neuer Befund, Empfehlung zur Abnahme. Codex hat 8 Tests aus `EscalationsTest`, 9 ausgewählte Fälle aus `SlaApiTest`, zwei eigene Zusatzfälle (zwei Prioritätswechsel ohne Überwachung dazwischen, Kunde nach der Schwelle entfernt) und die 8 SLA Browsertests ausgeführt, nicht die vollständigen Suites.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“ auf die Frage, ob TASK-068, TASK-070 und TASK-071 ohne eigene Prüfung von TASK-068 abgenommen werden; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Aus der Nachprüfung H1 (die Liste ist bei gleichzeitigem Schreiben keine eingefrorene Momentaufnahme), H2 (der Nebenläufigkeitstest erzwingt nicht beide Reihenfolgen, gezielte Barrieren wären eine spätere Härtung), H3 (Zyklen, deren Stufen vor dieser Änderung nicht beim Anhalten gespeichert wurden, erhalten nach dem Fortsetzen den Zeitpunkt des Fortsetzens).
+
+**Referenz:** Prüfbericht und Reservierung #224 (6ccb7eb), Ergebnis #225 (23afc8b), Nachprüfbericht #226 (a692820); verknüpft mit TASK-070 und DEC-101.
+
+## TASK-070 SLA Eskalationen (A10 Teil 2)
+
+**Bezug:** REQ-HD-005 (Eskalationen), ACC-002; OPEN-008. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** S-13 und H-11 als Tests, mehrere Ausführer erzeugen keine doppelte Stufe; die Liste zeigt nur Tickets, die die Person lesen darf, und nur Stufen ihrer Gruppen, Rechte werden beim Lesen geprüft; eine Pause oder Erfüllung vor der Schwelle erzeugt keine Stufe, eine bereits entstandene bleibt im Verlauf; Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 mit den Vorschlägen 17 bis 20 zu OPEN-008 bestätigt): Stufen je Regel und Uhr mit Prozentwert und Empfängergruppe, Vorschlag 80 % und 100 % ohne feste Produktvorgabe; Hinweis am Ticket und Liste „SLA Eskalationen“ für Mitglieder der Gruppe mit Leserecht, keine Mail; jede Stufe je Ticket, Zyklus, Uhr und Stufe höchstens einmal, nach einem Ausfall nur die höchste fällige mit Protokoll der übersprungenen (H-11), Überwachung `sla.watch` jede Minute; keine automatische Zuweisung und kein Statuswechsel.
+
+**Ergebnis:** DEC-100, Migration V0032. Stufen je Regelversion, wiederkehrende Aufgabe `sla.watch`, Tabelle `sla_escalation` mit einer Zeile je Zyklus, Uhr und Stufe, Port `GroupDirectory` des Berechtigungsmoduls, Liste `GET /api/v1/sla/escalations`, erreichte Stufen in der Ticketansicht; Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml), Beschreibung in [backend/README.md](backend/README.md#eskalationen-task-070). Oberfläche mit Stufen im Regelformular, Seite „SLA Eskalationen“ und Hinweis am Ticket; Demodaten mit Stufen je Uhr. Die Befunde der Prüfung sind mit TASK-071 behoben.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 453 Tests), darunter `EscalationsTest` mit 6 Tests, vier neue Tests in `SlaApiTest` und `SlaContractTest` mit 12 Routen. Frontend `tsc`, 77 Einheitentests und 138 Browsertests grün. CI auf PR #223 grün, Lifecycle Skript und Abbild nur in der CI.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261031-task070-review-01 ([Bericht](docs/REVIEW_TASK-070_PR-223.md), PR #224): F1 und F2 (P2) und F3 (P3) sowie Hinweise H1 bis H5; F1 bis F3, H1, H2 und H5 mit TASK-071 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“, zusammen mit TASK-068 und TASK-071; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H3 der Prüfung (eine Stufe mit gelöschter Gruppe erreicht niemanden und muss vor dem Speichern repariert werden) und H4 („jede Minute“ ist das Intervall, keine harte Zusage der Verzögerung). Mail und Benachrichtigungen für Eskalationen gehören zu einem späteren Paket.
+
+**Referenz:** Reservierung #220 (f55568c), Ergebnis #223 (f68438f), Prüfbericht #224 (6ccb7eb); verknüpft mit TASK-068, TASK-071 und DEC-100.
+
+## TASK-068 SLA Fristen und Geschäftszeiten (A10 Teil 1)
+
+**Bezug:** REQ-HD-003 (SLA Fristen), REQ-HD-004 (Geschäftszeiten), ACC-002; DEC-032; OPEN-008. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** Rechenbeispiele S-01 bis S-14 und H-09, H-10, H-12 aus docs/HELPDESK_SLA.md als Backend Tests, dazu Grenzauflösung bei Zeitumstellung; Kalender und Regeln versioniert, nur mit `sla.manage` änderbar, mit Audit, mehrdeutige Zuordnung mit 409 abgelehnt; Uhren in der Transaktion der auslösenden Änderung fortgeschrieben ohne doppelten oder verlorenen Zyklus; Fristen am Ticket nur mit Leserecht und ohne verborgene Felder; Migration, Vertrag, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests, Demodaten mit einem Kalender und einer Regel.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 bestätigt, Klärung von OPEN-008):
+1. Neues Ticketfeld `priority` mit den Werten Niedrig, Normal, Hoch, Kritisch, Vorgabe Normal, mit Feldregeln und Historie.
+2. Budgets ohne Produktvorgabe: Erstreaktion und Lösung in Geschäftsminuten je Regel und Priorität; 120 und 480 Minuten nur in den Demodaten.
+3. Zuordnung der Regel in der Reihenfolge Projekt mit Kunde und Tickettyp, Projekt mit Kunde, Standard des Projekts; zwei gleich passende Regeln werden beim Speichern abgelehnt; ohne Regel zeigt das Ticket „Keine SLA zugeordnet“.
+4. Fristen nur für Tickets mit gesetztem Feld `customer`; ein später gesetzter Kunde startet mit dem Zeitpunkt aus Regel 7.
+5. Neues Unternehmensrecht `sla.manage` für Kalender, Regeln und deren Zuordnung; Lesen der Fristen folgt der Leseregel des Tickets.
+6. Kalender mit IANA Zeitzone, je Wochentag einem oder mehreren offenen Zeiträumen und datierten Ausnahmen; Zeitumstellung wie in docs/HELPDESK_SLA.md (nicht existierende Uhrzeit auf die nächste gültige, doppelte Startzeit auf das frühere, doppelte Endzeit auf das spätere Vorkommen). Ein laufender Zyklus behält die Fassung von Regel und Kalender, mit der er begann.
+7. Start ist der erste dauerhafte Eingang: bei einer Mail der Zeitpunkt der Speicherung durch den Abruf, auch bei späterer Übernahme aus der Prüfwarteschlange (S-12); sonst die Anlage des Tickets. Der Date Header zählt nicht.
+8. Qualifizierte Erstreaktion ist eine Antwort über SMTP im Zustand „gesendet“, zum Zeitpunkt der Annahme durch den Mailserver.
+9. Jeder Status eines Ablaufs bekommt in der Projektkonfiguration eine SLA Art: offen (Vorgabe), wartet auf Kunde, gelöst, verworfen.
+10. Kundenpause (DEC-032) beginnt mit dem Wechsel in „wartet auf Kunde“ und endet mit einer dem Ticket zugeordneten Kundenantwort oder dem nächsten Statuswechsel; eine Antwort des Supports beendet sie nicht.
+11. Lösung ist erfüllt, wenn das Ticket in „gelöst“ steht und im Zyklus mindestens eine Antwort gesendet wurde, zum späteren der beiden Zeitpunkte (H-09); „verworfen“ beendet den Zyklus als Abbruch.
+12. Rückkehr aus „gelöst“ in einen offenen Status beginnt einen neuen Zyklus mit neuem Budget (S-10); eine Kundenmail allein öffnet nicht wieder.
+13. Prioritätswechsel: neues Budget minus verbrauchte Zeit, bei negativem Rest ab diesem Moment verletzt (S-09); erfüllte Uhren bleiben erfüllt.
+14. Das Ticket zeigt je Uhr Zustand (läuft, pausiert, erfüllt, verletzt, abgebrochen), Fälligkeit mit Zeitzone, verbleibende Geschäftszeit, Regel und Kalender; während einer Pause nur das Restbudget.
+
+**Ergebnis:** DEC-098, Migration V0030. Modul `sla` mit Kalendern, Regeln, Priorität und Zyklen mit je einer Uhr für Erstreaktion und Lösung, Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml), Beschreibung in [backend/README.md](backend/README.md#servicefristen-task-068). Der Helpdesk meldet `TicketCustomerChanged`, `ReplySent` und `CustomerAnswered` und stellt `CustomerDirectory` bereit; Tickets haben das Feld `priority`, die Projektkonfiguration je Status die SLA Art. Oberfläche: Seite „Servicefristen“, Abschnitt „Priorität und Fristen“ am Ticket, SLA Art in den Projekteinstellungen. Demodaten mit Kalender „Bürozeiten“ und Regel „Helpdesk Standard“.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (54 Testklassen, 443 Tests), darunter `SlaCalculationTest` mit 24 Tests, `SlaApiTest` mit 10 Tests, `SlaContractTest` mit 11 Routen und ein Test über den echten Mailweg in `HelpdeskApiTest`. Frontend `tsc`, 77 Einheitentests und 135 Browsertests grün. CI auf PR #222 grün, Bildprüfung mit Demodaten, Lifecycle Skript und Abbild nur in der CI.
+
+**Review:** Keine eigene getrennte Prüfung. Die Codex Prüfung von TASK-070 und die Nachprüfung von TASK-071 haben die Fristuhren nur dort gelesen, wo die Eskalationen sie nutzen; die Nachprüfung weist ausdrücklich darauf hin, dass für TASK-068 keine eigene Prüfung vorliegt. Holger hat auf diese Frage hin ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“, zusammen mit TASK-070 und TASK-071; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Eine geänderte SLA Art wirkt erst beim nächsten Statuswechsel eines Tickets; eine später angelegte Regel gilt nicht für Tickets, deren Kunde schon gesetzt war; ein Kundenwechsel von A nach B behält den laufenden Zyklus; laufende Zyklen werden nicht neu bewertet. Eine getrennte technische Prüfung von TASK-068 kann später nachgeholt werden.
+
+**Referenz:** Reservierung #220 (f55568c), Ergebnis #222 (9f0abba); verknüpft mit TASK-070 und DEC-098.
 
 ## TASK-066 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben
 
