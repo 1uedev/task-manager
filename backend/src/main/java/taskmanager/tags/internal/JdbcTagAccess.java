@@ -23,7 +23,7 @@ class JdbcTagAccess implements TagAccess {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public List<TagChanged> tags(UUID companyId) {
-        return jdbc.sql("select id, company_id, project_id, name from tag where company_id = ? order by id").param(companyId)
+        return jdbc.sql("select id, company_id, project_id, name from tag where company_id = ? and merged_into is null order by id").param(companyId)
             .query((rs, row) -> new TagChanged(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class),
                 rs.getObject("project_id", UUID.class), rs.getString("name")))
             .list();

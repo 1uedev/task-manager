@@ -104,6 +104,24 @@ class SearchRepository {
         refreshProjects(List.of(projectId));
     }
 
+    /**
+     * The tag {@code source} was merged into {@code target} (TASK-072): its assignments move to the target, duplicates go, the
+     * source leaves the projection, and the tag names of every ticket and project that carried the source are written again.
+     */
+    void mergeTag(UUID source, UUID target) {
+        List<UUID> tickets = jdbc.sql("select ticket_id from search_ticket_tag where tag_id = ?").param(source).query(UUID.class).list();
+        List<UUID> projects = jdbc.sql("select project_id from search_project_tag where tag_id = ?").param(source).query(UUID.class).list();
+        jdbc.sql("insert into search_ticket_tag (ticket_id, tag_id) select ticket_id, ? from search_ticket_tag where tag_id = ? on conflict do nothing")
+            .params(target, source).update();
+        jdbc.sql("delete from search_ticket_tag where tag_id = ?").param(source).update();
+        jdbc.sql("insert into search_project_tag (project_id, tag_id) select project_id, ? from search_project_tag where tag_id = ? on conflict do nothing")
+            .params(target, source).update();
+        jdbc.sql("delete from search_project_tag where tag_id = ?").param(source).update();
+        jdbc.sql("delete from search_tag where tag_id = ?").param(source).update();
+        refreshTickets(tickets);
+        refreshProjects(projects);
+    }
+
     private void refreshTickets(Collection<UUID> ids) {
         if (ids.isEmpty()) {
             return;

@@ -24,3 +24,4 @@ export const KeyIcon = () => <svg {...base}><circle cx="8" cy="15" r="4" /><path
 export const LogoutIcon = () => <svg {...base}><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" /><path d="M14 16l4-4-4-4M18 12H9" /></svg>;
 export const InboxIcon = () => <svg {...base}><path d="M3 13h5l1.5 3h5L16 13h5" /><path d="M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-8Z" /></svg>;
 export const MailIcon = () => <svg {...base}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" /></svg>;
+export const TagIcon = () => <svg {...base}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>;

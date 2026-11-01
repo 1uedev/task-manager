@@ -10,6 +10,7 @@ import taskmanager.projects.ProjectChanged;
 import taskmanager.tags.ProjectTagChanged;
 import taskmanager.tags.TagAccess;
 import taskmanager.tags.TagChanged;
+import taskmanager.tags.TagMerged;
 import taskmanager.tags.TicketTagChanged;
 import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.TicketChanged;
@@ -52,6 +53,13 @@ public class SearchProjection {
     public void on(TagChanged tag) {
         search.enterWrite();
         search.upsertTag(tag);
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void on(TagMerged merged) {
+        search.enterWrite();
+        search.mergeTag(merged.sourceId(), merged.targetId());
     }
 
     @EventListener

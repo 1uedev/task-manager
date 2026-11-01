@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  assignTicketTag, companyTags, listMembers, projectTags, readHistory, readProject, readTicket, removeTicketTag, SLA_PRIORITIES, ticketTags, updateTicket,
-  type CustomValues, type Project, type Tag, type Ticket, type TicketChange,
+  assignTicketTag, assignTicketTagByName, listMembers, lookupTags, readHistory, readProject, readTicket, removeTicketTag, SLA_PRIORITIES, ticketTags, updateTicket,
+  type CustomValues, type Project, type Result, type Tag, type Ticket, type TicketChange,
 } from '../api/product.ts';
 import {
   CUSTOM_PREFIX, customFieldsOf, formText, nextStatuses, parseViolation, requiredFor, sendValue, statusKeysOf, type CustomField,
@@ -18,6 +18,7 @@ import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInpu
 import { TicketAttachments } from './TicketAttachments.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
 import { TicketSla } from './TicketSla.tsx';
+import { TagLabel, TagPicker, useTagProblemText } from './TagParts.tsx';
 import { statusName, typeName } from './ProjectPage.tsx';
 
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'] as const;
@@ -296,29 +297,30 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
 function TicketTags({ project, ticket, round }: { readonly project: Project; readonly ticket: Ticket; readonly round: number }) {
   const { t } = useI18n();
   const { api } = useBrand();
-  const text = useProblemText();
+  const problemText = useTagProblemText();
   const [assigned, reload] = useLoad(() => ticketTags(api, project.id, ticket.number), [api, project.id, ticket.number, round]);
-  const [own] = useLoad(() => projectTags(api, project.id), [api, project.id]);
-  const [shared] = useLoad(() => companyTags(api), [api]);
-  const [choice, setChoice] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
 
   // Without the read rule for tags the section is not shown at all.
   if (assigned.state === 'problem' && (assigned.problem.status === 403 || assigned.problem.status === 404)) return null;
   // The server names tags among the writable fields exactly when it accepts assigning and removing them (review F1 of TASK-051).
   const editable = ticket.writableFields.includes('tags');
-  const catalog: Tag[] = [...(own.state === 'ok' ? own.value : []), ...(shared.state === 'ok' ? shared.value : [])].filter((tag) => !tag.archived);
+
+  async function settle(result: Result<true>) {
+    if (result.kind === 'ok') return reload();
+    // Without the read rule any more the section disappears on reload; the session reads its rights again on its own.
+    if (result.problem.status === 403) reload();
+    setNotice({ kind: 'info', text: problemText(result.problem) });
+  }
 
   async function change(tagId: string, add: boolean) {
     setNotice(null);
-    const result = add ? await assignTicketTag(api, project.id, ticket.number, tagId) : await removeTicketTag(api, project.id, ticket.number, tagId);
-    if (result.kind === 'ok') {
-      setChoice('');
-      return reload();
-    }
-    // Without the read rule any more the section disappears on reload; the session reads its rights again on its own.
-    if (result.problem.status === 403) reload();
-    setNotice({ kind: 'info', text: text(result.problem, { 'tag.archived': 'tags.error.archived', 'auth.forbidden': 'tags.error.forbidden' }) });
+    await settle(add ? await assignTicketTag(api, project.id, ticket.number, tagId) : await removeTicketTag(api, project.id, ticket.number, tagId));
+  }
+
+  async function create(name: string, catalog: 'company' | 'project') {
+    setNotice(null);
+    await settle(await assignTicketTagByName(api, project.id, ticket.number, name, catalog));
   }
 
   return (
@@ -326,33 +328,22 @@ function TicketTags({ project, ticket, round }: { readonly project: Project; rea
       <h2 id="ticket-tags">{t('field.tags')}</h2>
       <NoticeView notice={notice} />
       <LoadedView loaded={assigned} retry={reload}>
-        {(items) => {
-          const ids = new Set(items.map((tag) => tag.id));
-          return (
-            <>
-              {items.length === 0 ? <EmptyText text={t('tags.none')} /> : (
-                <ul className="chips" data-testid="ticket-tags">
-                  {items.map((tag) => (
-                    <li key={tag.id}>
-                      {tag.name}
-                      {editable && <button type="button" className="chip-remove" aria-label={t('tags.remove', { name: tag.name })} onClick={() => void change(tag.id, false)}>×</button>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {editable && <form className="inline-form" onSubmit={(event) => {
-                event.preventDefault();
-                if (choice !== '') void change(choice, true);
-              }}>
-                <SelectField label={t('tags.assign')} value={choice} onChange={setChoice}
-                  options={[{ value: '', label: t('tags.choose') }, ...catalog.filter((tag) => !ids.has(tag.id)).map((tag) => ({
-                    value: tag.id, label: tag.catalog === 'company' ? t('tags.companyLabel', { name: tag.name }) : tag.name,
-                  }))]} />
-                <button type="submit" disabled={choice === ''}>{t('tags.assignSubmit')}</button>
-              </form>}
-            </>
-          );
-        }}
+        {(items) => (
+          <>
+            {items.length === 0 ? <EmptyText text={t('tags.none')} /> : (
+              <ul className="chips" data-testid="ticket-tags">
+                {items.map((tag) => (
+                  <li key={tag.id} className={tag.archived ? 'archived' : undefined} title={tag.description ?? undefined}>
+                    <TagLabel tag={tag} />
+                    {editable && <button type="button" className="chip-remove" aria-label={t('tags.remove', { name: tag.name })} onClick={() => void change(tag.id, false)}>×</button>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {editable && <TagPicker label={t('tags.assign')} projectId={project.id} exclude={new Set(items.map((tag) => tag.id))}
+              onPick={(tag) => void change(tag.id, true)} onCreate={(name, catalog) => void create(name, catalog)} />}
+          </>
+        )}
       </LoadedView>
     </section>
   );
@@ -399,9 +390,16 @@ function History({ project, ticket, round }: { readonly project: Project; readon
   const { api } = useBrand();
   const name = useAccountName();
   const [history, reload] = useLoad(() => readHistory(api, project.id, ticket.number), [api, project.id, ticket.number, round, ticket.version]);
-  const [own] = useLoad(() => projectTags(api, project.id), [api, project.id]);
-  const [shared] = useLoad(() => companyTags(api), [api]);
-  const tagNames = new Map([...(own.state === 'ok' ? own.value : []), ...(shared.state === 'ok' ? shared.value : [])].map((tag) => [tag.id, tag.name]));
+  // The tags the history names, looked up by identifier, so archived and merged tags keep their names (TASK-072).
+  const tagIds = history.state === 'ok'
+    ? [...new Set(history.value.flatMap((entry) => entry.changes.filter((change) => change.field === 'tags').flatMap((change) => [change.from, change.to])
+      .filter((id): id is string => typeof id === 'string' && id !== '')))].slice(0, 100).sort()
+    : [];
+  const tagKey = tagIds.join(',');
+  const [named] = useLoad(() => (tagIds.length === 0 ? Promise.resolve({ kind: 'ok' as const, data: { value: [] as Tag[], etag: null } }) : lookupTags(api, project.id, tagIds)),
+    [api, project.id, tagKey]);
+  const tagNames = new Map((named.state === 'ok' ? named.value : []).map((tag) => [tag.id, tag.mergedInto === null
+    ? tag.name : t('history.tagMerged', { name: tag.name, target: tag.mergedInto.name })]));
 
   const customText = useCustomText();
   const custom = customFieldsOf(project.configuration);

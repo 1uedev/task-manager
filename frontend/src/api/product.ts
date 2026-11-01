@@ -30,6 +30,10 @@ export type ConfigurationUsage = ProjectTypes['schemas']['Usage'];
 export type Ticket = TicketTypes['schemas']['Ticket'];
 export type HistoryEntry = TicketTypes['schemas']['HistoryEntry'];
 export type Tag = TagTypes['schemas']['Tag'];
+export type TagColor = TagTypes['schemas']['Color'];
+export type TagUsage = TagTypes['schemas']['Usage'];
+export type TagMergePreview = TagTypes['schemas']['MergePreview'];
+export type TagSuggestions = TagTypes['schemas']['Suggestions'];
 export type Attachment = FileTypes['schemas']['Attachment'];
 export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
@@ -110,6 +114,9 @@ export const isTicket = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key') 
 export const isHistoryEntry = (v: unknown) => record(v) && typeof v.version === 'number' && Array.isArray(v.changes);
 export const isAttachment = (v: unknown) => hasStrings(v, 'id', 'name', 'sha256', 'uploadedAt', 'uploadedBy') && typeof (v as Attachment).size === 'number';
 export const isTag = (v: unknown) => hasStrings(v, 'id', 'name', 'catalog') && typeof (v as Tag).archived === 'boolean';
+const isSuggestions = (v: unknown) => record(v) && Array.isArray(v.items) && v.items.every(isTag) && typeof v.createCompany === 'boolean'
+  && typeof v.createProject === 'boolean';
+const isMergePreview = (v: unknown) => record(v) && isTag(v.source) && isTag(v.target) && record(v.usage);
 export const isGroup = (v: unknown) => hasStrings(v, 'id', 'name');
 export const isGroupDetail = (v: unknown) => isGroup(v) && Array.isArray((v as GroupDetail).members)
   && Array.isArray((v as GroupDetail).actions) && Array.isArray((v as GroupDetail).fields);
@@ -274,8 +281,72 @@ export const ticketTags = (api: ServerApi, projectId: string, number: number) =>
 export const assignTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
   run(() => api.tags.POST('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, // The default catalog is not sent; the server reads it only together with a name.
     body: { tagId } as { tagId: string; catalog: 'project' } }), nothing);
+// A name the catalog does not hold yet is created there in the same request (TASK-028).
+export const assignTicketTagByName = (api: ServerApi, projectId: string, number: number, name: string, catalog: 'company' | 'project') =>
+  run(() => api.tags.POST('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, body: { name, catalog } }), nothing);
 export const removeTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
   run(() => api.tags.DELETE('/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
+
+// The catalog a page maintains: the company catalog, or the catalog of one project (TASK-072).
+export type TagScope = { readonly kind: 'company' } | { readonly kind: 'project'; readonly projectId: string };
+
+export interface CatalogQuery {
+  readonly q: string;
+  readonly archived: boolean;
+  readonly after: string | null;
+}
+
+export const CATALOG_PAGE = 50;
+
+export const catalogTags = (api: ServerApi, scope: TagScope, query: CatalogQuery) => {
+  const params = { ...(query.q.trim() === '' ? {} : { q: query.q.trim() }), archived: query.archived, usage: true, limit: CATALOG_PAGE,
+    ...(query.after === null ? {} : { after: query.after }) };
+  return scope.kind === 'company'
+    ? run(() => api.tags.GET('/tags', { params: { query: params } }), listOf<Tag>(isTag))
+    : run(() => api.tags.GET('/projects/{projectId}/catalog/tags', { params: { path: { projectId: scope.projectId }, query: params } }), listOf<Tag>(isTag));
+};
+
+export interface TagChange {
+  readonly name?: string;
+  readonly description?: string | null;
+  readonly color?: TagColor | null;
+  readonly archived?: boolean;
+}
+
+export const changeTag = (api: ServerApi, scope: TagScope, id: string, etag: string, change: TagChange) => scope.kind === 'company'
+  ? run(() => api.tags.PATCH('/tags/{tagId}', { params: { path: { tagId: id }, ...ifMatch(etag) }, body: change }), one<Tag>(isTag))
+  : run(() => api.tags.PATCH('/projects/{projectId}/catalog/tags/{tagId}', { params: { path: { projectId: scope.projectId, tagId: id }, ...ifMatch(etag) },
+    body: change }), one<Tag>(isTag));
+
+export const previewMerge = (api: ServerApi, scope: TagScope, id: string, into: string) => scope.kind === 'company'
+  ? run(() => api.tags.GET('/tags/{tagId}/merge', { params: { path: { tagId: id }, query: { into } } }), one<TagMergePreview>(isMergePreview))
+  : run(() => api.tags.GET('/projects/{projectId}/catalog/tags/{tagId}/merge', { params: { path: { projectId: scope.projectId, tagId: id }, query: { into } } }),
+    one<TagMergePreview>(isMergePreview));
+
+// The version of the source goes along as If-Match; the answer is the target.
+export const mergeTag = (api: ServerApi, scope: TagScope, id: string, version: number, into: string) => scope.kind === 'company'
+  ? run(() => api.tags.POST('/tags/{tagId}/merge', { params: { path: { tagId: id }, ...ifMatch(`"${version}"`) }, body: { into } }), one<Tag>(isTag))
+  : run(() => api.tags.POST('/projects/{projectId}/catalog/tags/{tagId}/merge', { params: { path: { projectId: scope.projectId, tagId: id },
+    ...ifMatch(`"${version}"`) }, body: { into } }), one<Tag>(isTag));
+
+// Suggestions while typing: from the company catalog for projects, with the catalog of the project for its tickets.
+export const tagSuggestions = (api: ServerApi, projectId: string | null, q: string) => {
+  const query = q.trim() === '' ? {} : { q: q.trim() };
+  return projectId === null
+    ? run(() => api.tags.GET('/tags/suggestions', { params: { query } }), one<TagSuggestions>(isSuggestions))
+    : run(() => api.tags.GET('/projects/{projectId}/catalog/suggestions', { params: { path: { projectId }, query } }), one<TagSuggestions>(isSuggestions));
+};
+
+// Tags by identifier, archived and merged ones included, so a history names tags that left the catalog.
+export const lookupTags = (api: ServerApi, projectId: string, ids: readonly string[]) =>
+  run(() => api.tags.GET('/projects/{projectId}/catalog/lookup', { params: { path: { projectId }, query: { id: [...ids] } } }), listOf<Tag>(isTag));
+
+export const assignedProjectTags = (api: ServerApi, projectId: string) =>
+  run(() => api.tags.GET('/projects/{projectId}/tags', { params: { path: { projectId } } }), listOf<Tag>(isTag));
+export const assignProjectTag = (api: ServerApi, projectId: string, target: { readonly tagId: string } | { readonly name: string }) =>
+  run(() => api.tags.POST('/projects/{projectId}/tags', { params: { path: { projectId } }, body: target as { tagId: string } }), nothing);
+export const removeProjectTag = (api: ServerApi, projectId: string, tagId: string) =>
+  run(() => api.tags.DELETE('/projects/{projectId}/tags/{tagId}', { params: { path: { projectId, tagId } } }), nothing);
 
 // ---------------------------------------------------------------- attachments (TASK-051)
 

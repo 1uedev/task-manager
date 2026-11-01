@@ -2,7 +2,13 @@ package taskmanager.tags.internal;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +27,7 @@ import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.tags.ProjectTagChanged;
 import taskmanager.tags.TagChanged;
+import taskmanager.tags.TagMerged;
 import taskmanager.tags.TicketTagChanged;
 import taskmanager.tickets.TicketAccess;
 
@@ -47,6 +54,13 @@ import taskmanager.tickets.TicketAccess;
  * until the commit), then the tag row ({@code FOR SHARE} to assign it, {@code FOR UPDATE} to change it). Archiving thus
  * waits for an assignment that already holds the tag, and an assignment that waits sees the archived tag. A change at a
  * ticket finally locks the ticket row ({@code FOR SHARE}) to record it in the history.
+ *
+ * <p>Catalog care (TASK-072, DEC-102): {@code tags.manage} also sets the description and the color and merges a tag into
+ * another of the same catalog. Merging moves every assignment of the source to the target, drops duplicates, frees the name
+ * of the source and keeps the source as a pointer to the target, without entries in the ticket history and without
+ * changing ticket versions. Both tags are locked {@code FOR UPDATE}, the one with the smaller identifier first, so two merges
+ * of the same pair cannot deadlock and an assignment that waits for the source sees it merged. A ticket or project holds at
+ * most {@value #MAX_PER_OBJECT} tags; an advisory lock per object, taken after the locks above, serializes the check.
  */
 @Service
 public class TagService {
@@ -59,6 +73,12 @@ public class TagService {
     private static final List<String> PROJECT_READERS = List.of("project.read", "project.manage");
     private static final String TICKET_READ = "ticket.read";
     private static final String TICKET_EDIT = "ticket.edit";
+    /** The most tags a ticket or a project holds (rule 12 of TASK-072). */
+    public static final int MAX_PER_OBJECT = 30;
+    /** The most assignments one merge moves in its transaction (rule 9 of TASK-072). */
+    public static final int MERGE_MAX = 20_000;
+    public static final int SUGGESTIONS_MAX = 20;
+    public static final int LOOKUP_MAX = 100;
 
     private final TagRepository tags;
     private final ProjectAccess projects;
@@ -84,70 +104,148 @@ public class TagService {
     public record Target(UUID tagId, String name, Catalog catalog) {
     }
 
-    /** A change of a tag; {@code null} keeps the name or the archive state. */
-    public record Change(String name, Boolean archived) {
+    /**
+     * A change of a tag; {@code null} keeps the name or the archive state. Description and color change only when they are
+     * given, and a given {@code null} removes them.
+     */
+    public record Change(String name, Boolean archived, boolean descriptionGiven, String description, boolean colorGiven, String color) {
+        public Change(String name, Boolean archived) {
+            this(name, archived, false, null, false, null);
+        }
+    }
+
+    /** How many tickets and projects that the caller may read carry a tag. */
+    public record Usage(long tickets, long projects) {
+    }
+
+    /**
+     * A tag as the caller sees it: whether they may maintain its catalog, the tag a merged tag points to, and, when asked
+     * for, its usage.
+     */
+    public record TagView(Tag tag, boolean manageable, Tag mergedInto, Usage usage) {
+    }
+
+    /** The preview of a merge: both tags and the usage of the source among the tickets and projects the caller may read. */
+    public record MergePreview(TagView source, TagView target, Usage usage) {
+    }
+
+    /** Suggestions for an assignment and whether the caller may create a tag in the company or the project catalog. */
+    public record Suggestions(List<TagView> items, boolean createCompany, boolean createProject) {
     }
 
     // ------------------------------------------------------------------------------------------------ company catalog
 
     @Transactional
-    public List<Tag> companyCatalog(AccessContext actor, String search, boolean includeArchived, String after, int limit) {
+    public List<TagView> companyCatalog(AccessContext actor, String search, boolean includeArchived, String after, int limit, boolean usage) {
         internal(actor);
-        return tags.catalog(actor.companyId(), null, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit);
+        return views(actor, tags.catalog(actor.companyId(), null, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit), usage);
     }
 
     @Transactional
-    public Tag companyTag(AccessContext actor, UUID id) {
+    public TagView companyTag(AccessContext actor, UUID id) {
         internal(actor);
-        return tags.find(actor.companyId(), id).filter(Tag::inCompanyCatalog).orElseThrow(TagService::tagNotFound);
+        return view(actor, tags.find(actor.companyId(), id).filter(Tag::inCompanyCatalog).orElseThrow(TagService::tagNotFound));
     }
 
     @Transactional
-    public Tag createCompanyTag(AccessContext actor, String name) {
+    public TagView createCompanyTag(AccessContext actor, String name) {
         requireAny(actor, company(actor), CREATE, MANAGE);
-        return create(actor, null, name);
+        return view(actor, create(actor, null, name));
     }
 
     @Transactional
-    public Tag changeCompanyTag(AccessContext actor, UUID id, long expectedVersion, Change change) {
+    public TagView changeCompanyTag(AccessContext actor, UUID id, long expectedVersion, Change change) {
         requireAny(actor, company(actor), MANAGE);
-        return change(actor, null, id, expectedVersion, change);
+        return view(actor, change(actor, null, id, expectedVersion, change));
+    }
+
+    @Transactional
+    public MergePreview previewCompanyMerge(AccessContext actor, UUID source, UUID target) {
+        requireAny(actor, company(actor), MANAGE);
+        return preview(actor, null, source, target);
+    }
+
+    @Transactional
+    public TagView mergeCompanyTag(AccessContext actor, UUID source, long expectedVersion, UUID target) {
+        requireAny(actor, company(actor), MANAGE);
+        return view(actor, merge(actor, null, source, expectedVersion, target));
+    }
+
+    /** Suggestions from the company catalog, for the tags of projects. */
+    @Transactional
+    public Suggestions companySuggestions(AccessContext actor, String search, int limit) {
+        internal(actor);
+        List<Tag> found = tags.suggestions(actor.companyId(), null, TagName.searchKey(search), limit);
+        return new Suggestions(views(actor, found, false), allowedAny(actor, company(actor), CREATE, MANAGE), false);
     }
 
     // ------------------------------------------------------------------------------------------------ project catalog
 
     @Transactional
-    public List<Tag> projectCatalog(AccessContext actor, UUID projectId, String search, boolean includeArchived, String after, int limit) {
+    public List<TagView> projectCatalog(AccessContext actor, UUID projectId, String search, boolean includeArchived, String after, int limit,
+            boolean usage) {
         catalogVisible(actor, projectId);
-        return tags.catalog(actor.companyId(), projectId, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit);
+        return views(actor, tags.catalog(actor.companyId(), projectId, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit), usage);
     }
 
     @Transactional
-    public Tag projectTag(AccessContext actor, UUID projectId, UUID id) {
+    public TagView projectTag(AccessContext actor, UUID projectId, UUID id) {
         catalogVisible(actor, projectId);
-        return tags.find(actor.companyId(), id).filter(tag -> projectId.equals(tag.projectId())).orElseThrow(TagService::tagNotFound);
+        return view(actor, tags.find(actor.companyId(), id).filter(tag -> projectId.equals(tag.projectId())).orElseThrow(TagService::tagNotFound));
     }
 
     @Transactional
-    public Tag createProjectTag(AccessContext actor, UUID projectId, String name) {
+    public TagView createProjectTag(AccessContext actor, UUID projectId, String name) {
         Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
         requireAny(actor, resource, CREATE, MANAGE);
-        return create(actor, projectId, name);
+        return view(actor, create(actor, projectId, name));
     }
 
     @Transactional
-    public Tag changeProjectTag(AccessContext actor, UUID projectId, UUID id, long expectedVersion, Change change) {
+    public TagView changeProjectTag(AccessContext actor, UUID projectId, UUID id, long expectedVersion, Change change) {
         Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
         requireAny(actor, resource, MANAGE);
-        return change(actor, projectId, id, expectedVersion, change);
+        return view(actor, change(actor, projectId, id, expectedVersion, change));
+    }
+
+    @Transactional
+    public MergePreview previewProjectMerge(AccessContext actor, UUID projectId, UUID source, UUID target) {
+        Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
+        requireAny(actor, resource, MANAGE);
+        return preview(actor, projectId, source, target);
+    }
+
+    @Transactional
+    public TagView mergeProjectTag(AccessContext actor, UUID projectId, UUID source, long expectedVersion, UUID target) {
+        Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
+        requireAny(actor, resource, MANAGE);
+        return view(actor, merge(actor, projectId, source, expectedVersion, target));
+    }
+
+    /** Suggestions from the company catalog and the catalog of the project, for the tags of its tickets. */
+    @Transactional
+    public Suggestions projectSuggestions(AccessContext actor, UUID projectId, String search, int limit) {
+        Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
+        List<Tag> found = tags.suggestions(actor.companyId(), projectId, TagName.searchKey(search), limit);
+        return new Suggestions(views(actor, found, false), allowedAny(actor, company(actor), CREATE, MANAGE), allowedAny(actor, resource, CREATE, MANAGE));
+    }
+
+    /**
+     * The tags among {@code ids} in the company catalog and the catalog of the project, archived and merged ones included,
+     * so a history can name tags that left the catalog. Identifiers of other catalogs are left out without a hint.
+     */
+    @Transactional
+    public List<TagView> lookup(AccessContext actor, UUID projectId, Collection<UUID> ids) {
+        catalogVisible(actor, projectId);
+        return views(actor, tags.lookup(actor.companyId(), projectId, new LinkedHashSet<>(ids)), false);
     }
 
     // ------------------------------------------------------------------------------------------------ project tags
 
     @Transactional
-    public List<Tag> projectTags(AccessContext actor, UUID projectId) {
+    public List<TagView> projectTags(AccessContext actor, UUID projectId) {
         projectAccess(actor, projectId, false);
-        return tags.projectTags(projectId);
+        return views(actor, tags.projectTags(projectId), false);
     }
 
     /** Assigns a tag of the company catalog to the project; an existing assignment stays as it is. */
@@ -155,6 +253,10 @@ public class TagService {
     public void assignProject(AccessContext actor, UUID projectId, Target target) {
         projectAccess(actor, projectId, true);
         Tag tag = resolve(actor, projectId, new Target(target.tagId(), target.name(), Catalog.COMPANY), true);
+        tags.lockObject(PROJECT_RESOURCE, projectId);
+        if (!tags.projectHas(projectId, tag.id()) && tags.projectCount(projectId) >= MAX_PER_OBJECT) {
+            throw ApiProblemException.of(409, "tag.limit_reached");
+        }
         if (tags.assignProject(projectId, tag.id(), clock.instant(), actor.userId())) {
             tags.audit(actor.companyId(), tag.id(), "tag.assigned", PROJECT_RESOURCE, projectId, null, actor.userId(), clock.instant());
             events.publishEvent(new ProjectTagChanged(projectId, tag.id(), true));
@@ -173,7 +275,7 @@ public class TagService {
     // ------------------------------------------------------------------------------------------------ ticket tags
 
     @Transactional
-    public List<Tag> ticketTags(AccessContext actor, UUID projectId, long number) {
+    public List<TagView> ticketTags(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = ticketResource(actor, projectId);
         Decision read = permissions.inspect(actor, resource, TICKET_READ, Set.of(FIELD));
         if (!read.allowed()) {
@@ -187,7 +289,7 @@ public class TagService {
         } catch (PermissionDenied denied) {
             throw forbidden();
         }
-        return tags.ticketTags(ticket(actor, projectId, number));
+        return views(actor, tags.ticketTags(ticket(actor, projectId, number)), false);
     }
 
     /** Assigns a tag of the company catalog or of the catalog of the project; an existing assignment stays as it is. */
@@ -197,6 +299,10 @@ public class TagService {
         Tag tag = resolve(actor, projectId, target, false);
         // Ticket after tag, as DEC-068 orders the locks; the time is read only once the ticket row is held (TASK-043).
         tickets.lockForTagChange(ticket);
+        tags.lockObject(TicketAccess.RESOURCE_TYPE, ticket);
+        if (!tags.ticketHas(ticket, tag.id()) && tags.ticketCount(ticket) >= MAX_PER_OBJECT) {
+            throw ApiProblemException.of(409, "tag.limit_reached");
+        }
         Instant now = clock.instant();
         if (tags.assignTicket(ticket, tag.id(), projectId, now, actor.userId())) {
             tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), now);
@@ -235,14 +341,28 @@ public class TagService {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("name.invalid"));
         }
         Instant now = clock.instant();
-        return new Tag(UUID.randomUUID(), actor.companyId(), projectId, name, TagName.normalized(name), false, 1, now,
+        return new Tag(UUID.randomUUID(), actor.companyId(), projectId, name, TagName.normalized(name), null, null, false, null, 1, now,
             actor.userId(), now, actor.userId());
     }
 
     private Tag change(AccessContext actor, UUID projectId, UUID id, long expectedVersion, Change change) {
+        String description = null;
+        if (change.descriptionGiven()) {
+            try {
+                description = TagLook.description(change.description());
+            } catch (IllegalArgumentException invalid) {
+                throw ApiProblemException.withViolations(400, "request.invalid", List.of("description.invalid"));
+            }
+        }
+        if (change.colorGiven() && !TagLook.color(change.color())) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("color.invalid"));
+        }
         Tag tag = tags.lockForChange(actor.companyId(), id, projectId).orElseThrow(TagService::tagNotFound);
         if (tag.version() != expectedVersion) {
             throw ApiProblemException.of(412, "tag.version_conflict");
+        }
+        if (tag.merged()) {
+            throw ApiProblemException.of(409, "tag.merged");
         }
         String name = tag.name();
         if (change.name() != null) {
@@ -252,8 +372,12 @@ public class TagService {
             }
         }
         boolean archived = change.archived() == null ? tag.archived() : change.archived();
+        String newDescription = change.descriptionGiven() ? description : tag.description();
+        String color = change.colorGiven() ? change.color() : tag.color();
         boolean renamed = !name.equals(tag.name());
-        if (!renamed && archived == tag.archived()) {
+        boolean described = !Objects.equals(newDescription, tag.description());
+        boolean colored = !Objects.equals(color, tag.color());
+        if (!renamed && archived == tag.archived() && !described && !colored) {
             return tag;
         }
         String normalized = TagName.normalized(name);
@@ -261,8 +385,8 @@ public class TagService {
             throw ApiProblemException.of(409, "tag.name_taken");
         }
         Instant now = clock.instant();
-        Tag changed = new Tag(id, tag.companyId(), projectId, name, normalized, archived, tag.version() + 1, tag.createdAt(),
-            tag.createdBy(), now, actor.userId());
+        Tag changed = new Tag(id, tag.companyId(), projectId, name, normalized, newDescription, color, archived, null, tag.version() + 1,
+            tag.createdAt(), tag.createdBy(), now, actor.userId());
         try {
             tags.update(changed);
         } catch (DuplicateKeyException race) {
@@ -271,11 +395,138 @@ public class TagService {
         if (renamed) {
             tags.audit(actor.companyId(), id, "tag.renamed", catalogTarget(projectId), projectId, tag.name(), actor.userId(), now);
         }
+        if (described) {
+            tags.audit(actor.companyId(), id, "tag.described", catalogTarget(projectId), projectId, null, actor.userId(), now);
+        }
+        if (colored) {
+            tags.audit(actor.companyId(), id, "tag.colored", catalogTarget(projectId), projectId, color, actor.userId(), now);
+        }
         if (archived != tag.archived()) {
             tags.audit(actor.companyId(), id, archived ? "tag.archived" : "tag.restored", catalogTarget(projectId), projectId, null, actor.userId(), now);
         }
         events.publishEvent(changed(changed));
         return changed;
+    }
+
+    // ------------------------------------------------------------------------------------------------ merging
+
+    /** Both tags of one catalog, locked exclusively, the smaller identifier first; 404 when either is not in the catalog. */
+    private Tag[] lockPair(AccessContext actor, UUID projectId, UUID source, UUID target) {
+        if (source.equals(target)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("into.invalid"));
+        }
+        boolean sourceFirst = source.compareTo(target) < 0;
+        Tag first = tags.lockForChange(actor.companyId(), sourceFirst ? source : target, projectId).orElseThrow(TagService::tagNotFound);
+        Tag second = tags.lockForChange(actor.companyId(), sourceFirst ? target : source, projectId).orElseThrow(TagService::tagNotFound);
+        return sourceFirst ? new Tag[] {first, second} : new Tag[] {second, first};
+    }
+
+    private static void mergeable(Tag source, Tag target) {
+        if (source.merged() || target.merged()) {
+            throw ApiProblemException.of(409, "tag.merged");
+        }
+        if (target.archived()) {
+            throw ApiProblemException.of(409, "tag.archived");
+        }
+    }
+
+    private MergePreview preview(AccessContext actor, UUID projectId, UUID sourceId, UUID targetId) {
+        if (sourceId.equals(targetId)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("into.invalid"));
+        }
+        Tag source = tags.find(actor.companyId(), sourceId).filter(tag -> Objects.equals(tag.projectId(), projectId)).orElseThrow(TagService::tagNotFound);
+        Tag target = tags.find(actor.companyId(), targetId).filter(tag -> Objects.equals(tag.projectId(), projectId)).orElseThrow(TagService::tagNotFound);
+        mergeable(source, target);
+        List<TagView> both = views(actor, List.of(source, target), true);
+        return new MergePreview(both.get(0), both.get(1), both.get(0).usage());
+    }
+
+    private Tag merge(AccessContext actor, UUID projectId, UUID sourceId, long expectedVersion, UUID targetId) {
+        Tag[] pair = lockPair(actor, projectId, sourceId, targetId);
+        Tag source = pair[0];
+        Tag target = pair[1];
+        // A source that a concurrent merge took already answers as merged, not as an old version.
+        mergeable(source, target);
+        if (source.version() != expectedVersion) {
+            throw ApiProblemException.of(412, "tag.version_conflict");
+        }
+        if (tags.assignments(sourceId) > MERGE_MAX) {
+            throw ApiProblemException.of(409, "tag.merge_too_large");
+        }
+        Instant now = clock.instant();
+        tags.moveAssignments(sourceId, targetId);
+        tags.markMerged(sourceId, targetId, source.version() + 1, now, actor.userId());
+        tags.audit(actor.companyId(), sourceId, "tag.merged", catalogTarget(projectId), projectId, targetId.toString(), actor.userId(), now);
+        tags.audit(actor.companyId(), targetId, "tag.merged_in", catalogTarget(projectId), projectId, sourceId.toString(), actor.userId(), now);
+        events.publishEvent(new TagMerged(actor.companyId(), sourceId, targetId));
+        return target;
+    }
+
+    // ------------------------------------------------------------------------------------------------ views
+
+    private TagView view(AccessContext actor, Tag tag) {
+        return views(actor, List.of(tag), false).get(0);
+    }
+
+    /**
+     * The tags as the caller sees them. Whether a catalog may be maintained is checked once per catalog; the usage counts
+     * only tickets of projects where the caller reads tickets with the field {@code tags}, and projects the caller may read.
+     */
+    private List<TagView> views(AccessContext actor, List<Tag> found, boolean usage) {
+        Map<UUID, Boolean> manageable = new HashMap<>();
+        Map<UUID, Tag> targets = new HashMap<>();
+        for (Tag tag : found) {
+            UUID catalog = tag.projectId();
+            if (!manageable.containsKey(catalog)) {
+                Supplier<ResourceContext> resource = catalog == null ? company(actor)
+                    : projects.resource(actor.companyId(), catalog, actor.userId(), TAG_RESOURCE, false);
+                manageable.put(catalog, !actor.external() && permissions.inspect(actor, resource, MANAGE, Set.of()).allowed());
+            }
+            if (tag.merged() && !targets.containsKey(tag.mergedInto())) {
+                tags.find(actor.companyId(), tag.mergedInto()).ifPresent(target -> targets.put(target.id(), target));
+            }
+        }
+        Map<UUID, Long> tickets = Map.of();
+        Map<UUID, Long> projectCounts = Map.of();
+        if (usage && !found.isEmpty()) {
+            List<UUID> ids = found.stream().map(Tag::id).toList();
+            tickets = tags.ticketUsage(ids, ticketReadableProjects(actor));
+            List<UUID> companyTags = found.stream().filter(Tag::inCompanyCatalog).map(Tag::id).toList();
+            projectCounts = tags.projectUsage(companyTags, readableProjects(actor));
+        }
+        List<TagView> views = new ArrayList<>();
+        for (Tag tag : found) {
+            Usage counted = usage ? new Usage(tickets.getOrDefault(tag.id(), 0L), projectCounts.getOrDefault(tag.id(), 0L)) : null;
+            views.add(new TagView(tag, manageable.get(tag.projectId()), tag.merged() ? targets.get(tag.mergedInto()) : null, counted));
+        }
+        return views;
+    }
+
+    /** The member projects where the caller reads tickets together with their field {@code tags}. */
+    private List<UUID> ticketReadableProjects(AccessContext actor) {
+        List<UUID> readable = new ArrayList<>();
+        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
+            Decision read = permissions.inspect(actor, ticketResource(actor, project), TICKET_READ, Set.of(FIELD));
+            if (read.allowed() && read.readableFields().contains(FIELD)) {
+                readable.add(project);
+            }
+        }
+        return readable;
+    }
+
+    /** The projects the caller may read: {@code null} for all with {@code projects.manage}, else the member projects. */
+    private List<UUID> readableProjects(AccessContext actor) {
+        if (permissions.inspect(actor, company(actor), AdministrationRight.PROJECTS_MANAGE.key(), Set.of()).allowed()) {
+            return null;
+        }
+        List<UUID> readable = new ArrayList<>();
+        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
+            Supplier<ResourceContext> resource = projects.resource(actor.companyId(), project, actor.userId(), PROJECT_RESOURCE, false);
+            if (firstAllowed(actor, resource, PROJECT_READERS).isPresent()) {
+                readable.add(project);
+            }
+        }
+        return readable;
     }
 
     /**
@@ -329,6 +580,9 @@ public class TagService {
     }
 
     private static Tag assignable(Tag tag) {
+        if (tag.merged()) {
+            throw ApiProblemException.of(409, "tag.merged");
+        }
         if (tag.archived()) {
             throw ApiProblemException.of(409, "tag.archived");
         }
@@ -401,6 +655,10 @@ public class TagService {
 
     private Optional<String> firstAllowed(AccessContext actor, Supplier<ResourceContext> resource, List<String> actions) {
         return actions.stream().filter(action -> permissions.inspect(actor, resource, action, Set.of()).allowed()).findFirst();
+    }
+
+    private boolean allowedAny(AccessContext actor, Supplier<ResourceContext> resource, String... actions) {
+        return !actor.external() && firstAllowed(actor, resource, List.of(actions)).isPresent();
     }
 
     /** Requires the first of the actions the caller holds; without any of them 403. */

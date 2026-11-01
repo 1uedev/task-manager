@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import {
-  addMember, companyTags, createProjectTag, createTicket, listMembers, listTickets, projectTags, readProject, readProjectRights,
+  addMember, assignedProjectTags, assignProjectTag, createProjectTag, createTicket, listMembers, listTickets, readProject, readProjectRights, removeProjectTag,
   removeMember, updateProject, type Member, type Project, type Ticket,
 } from '../api/product.ts';
 import { CUSTOM_PREFIX, customFieldsOf, sendValue } from '../app/configuration.ts';
@@ -9,6 +9,7 @@ import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate, type ProjectTab } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import { TagCatalog, TagLabel, TagPicker, useTagProblemText } from './TagParts.tsx';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
@@ -267,11 +268,12 @@ function MembersTab({ project }: { readonly project: Project }) {
 function TagsTab({ project }: { readonly project: Project }) {
   const { t } = useI18n();
   const { api } = useBrand();
-  const text = useProblemText();
-  const [own, reload] = useLoad(() => projectTags(api, project.id), [api, project.id]);
-  const [shared, reloadShared] = useLoad(() => companyTags(api), [api]);
+  const problemText = useTagProblemText();
   const [tagName, setTagName] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [round, setRound] = useState(0);
+  const [assigned, reloadAssigned] = useLoad(() => assignedProjectTags(api, project.id), [api, project.id]);
+  const [assignNotice, setAssignNotice] = useState<Notice | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -280,35 +282,57 @@ function TagsTab({ project }: { readonly project: Project }) {
     if (result.kind === 'ok') {
       setTagName('');
       setNotice({ kind: 'success', text: t('tags.created', { name: result.data.value.name }) });
-      return reload();
+      setRound((value) => value + 1);
+      return;
     }
-    setNotice({ kind: 'info', text: text(result.problem, { 'tag.name_taken': 'tags.error.taken', 'request.invalid': 'tags.error.name' }) });
+    setNotice({ kind: 'info', text: result.problem.code === 'request.invalid' ? t('tags.error.name') : problemText(result.problem) });
+  }
+
+  // Tags of the project itself come from the company catalog; changing them follows the project rights.
+  async function change(target: { readonly tagId: string } | { readonly name: string }, add: boolean) {
+    setAssignNotice(null);
+    const result = add ? await assignProjectTag(api, project.id, target)
+      : await removeProjectTag(api, project.id, 'tagId' in target ? target.tagId : '');
+    if (result.kind === 'ok') return reloadAssigned();
+    setAssignNotice({ kind: 'info', text: problemText(result.problem) });
   }
 
   return (
     <>
+      <section aria-labelledby="project-own-tags">
+        <h2 id="project-own-tags">{t('tags.ofProject')}</h2>
+        <p className="hint">{t('tags.ofProjectHint')}</p>
+        <NoticeView notice={assignNotice} />
+        <LoadedView loaded={assigned} retry={reloadAssigned}>
+          {(items) => (
+            <>
+              {items.length === 0 ? <EmptyText text={t('tags.none')} /> : (
+                <ul className="chips" data-testid="project-assigned-tags">
+                  {items.map((tag) => (
+                    <li key={tag.id} className={tag.archived ? 'archived' : undefined}>
+                      <TagLabel tag={tag} />
+                      {project.manageable && <button type="button" className="chip-remove" aria-label={t('tags.remove', { name: tag.name })}
+                        onClick={() => void change({ tagId: tag.id }, false)}>×</button>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {project.manageable && (
+                <TagPicker label={t('tags.assign')} projectId={null} exclude={new Set(items.map((tag) => tag.id))}
+                  onPick={(tag) => void change({ tagId: tag.id }, true)} onCreate={(name) => void change({ name }, true)} />
+              )}
+            </>
+          )}
+        </LoadedView>
+      </section>
       <section aria-labelledby="project-tags">
         <h2 id="project-tags">{t('tags.project')}</h2>
         <NoticeView notice={notice} />
-        <LoadedView loaded={own} retry={reload}>
-          {(items) => items.length === 0
-            ? <EmptyText text={t('tags.empty')} /> : (
-            <ul className="chips" data-testid="project-tags">{items.map((tag) => <li key={tag.id} className={tag.archived ? 'archived' : undefined}>{tag.name}</li>)}</ul>
-          )}
-        </LoadedView>
         <form className="inline-form" onSubmit={(event) => void submit(event)}>
           <TextField label={t('tags.new')} value={tagName} onChange={setTagName} maxLength={50} />
           <button type="submit" disabled={tagName.trim() === ''}>{t('tags.createSubmit')}</button>
         </form>
-      </section>
-      <section aria-labelledby="company-tags">
-        <h2 id="company-tags">{t('tags.company')}</h2>
-        <LoadedView loaded={shared} retry={reloadShared}>
-          {(items) => items.length === 0
-            ? <EmptyText text={t('tags.empty')} /> : (
-            <ul className="chips">{items.map((tag) => <li key={tag.id} className={tag.archived ? 'archived' : undefined}>{tag.name}</li>)}</ul>
-          )}
-        </LoadedView>
+        <TagCatalog scope={{ kind: 'project', projectId: project.id }} round={round} />
       </section>
     </>
   );
