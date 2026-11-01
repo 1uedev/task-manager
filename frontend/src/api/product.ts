@@ -341,6 +341,13 @@ export const tagSuggestions = (api: ServerApi, projectId: string | null, q: stri
 export const lookupTags = (api: ServerApi, projectId: string, ids: readonly string[]) =>
   run(() => api.tags.GET('/projects/{projectId}/catalog/lookup', { params: { path: { projectId }, query: { id: [...ids] } } }), listOf<Tag>(isTag));
 
+// Bulk change (TASK-073): each ticket is checked and changed for itself; the answer counts and names what was readable.
+export type TagBulkResult = TagTypes['schemas']['BulkResult'];
+export const TAG_BULK_TICKETS = 500;
+export const bulkTicketTags = (api: ServerApi, action: 'add' | 'remove', tags: readonly string[], tickets: readonly string[]) =>
+  run(() => api.tags.POST('/tags/bulk', { body: { action, tags: [...tags], tickets: [...tickets] } }),
+    one<TagBulkResult>((v) => record(v) && typeof v.changed === 'number' && Array.isArray(v.items)));
+
 export const assignedProjectTags = (api: ServerApi, projectId: string) =>
   run(() => api.tags.GET('/projects/{projectId}/tags', { params: { path: { projectId } } }), listOf<Tag>(isTag));
 export const assignProjectTag = (api: ServerApi, projectId: string, target: { readonly tagId: string } | { readonly name: string }) =>
@@ -389,19 +396,28 @@ export const checkAttachment = (api: ServerApi, projectId: string, number: numbe
 
 // ---------------------------------------------------------------- search
 
+// How the chosen tags filter (TASK-073): all of them, at least one, none of them, or tickets without any tag.
+export type TagMatch = 'all' | 'any' | 'none' | 'untagged';
+export const TAG_FILTER_MAX = 10;
+
 export interface TicketQuery {
   readonly q?: string;
   readonly project?: readonly string[];
   readonly status?: readonly string[];
   readonly tag?: readonly string[];
+  readonly tagMatch?: TagMatch;
+  readonly limit?: number;
   readonly offset?: number;
 }
 
 export const searchTickets = (api: ServerApi, query: TicketQuery) =>
   run(() => api.search.GET('/search/tickets', {
     params: { query: { ...(query.q ? { q: query.q } : {}), ...(query.project?.length ? { project: [...query.project] } : {}),
-      ...(query.status?.length ? { status: [...query.status] } : {}), ...(query.tag?.length ? { tag: [...query.tag] } : {}),
-      limit: 20, offset: query.offset ?? 0 } },
+      ...(query.status?.length ? { status: [...query.status] } : {}),
+      ...(query.tagMatch !== 'untagged' && query.tag?.length ? { tag: [...query.tag] } : {}),
+      // Any or none without a tag asks nothing, as all without a tag does.
+      ...(query.tagMatch === 'untagged' || ((query.tagMatch === 'any' || query.tagMatch === 'none') && query.tag?.length) ? { tagMatch: query.tagMatch } : {}),
+      limit: query.limit ?? 20, offset: query.offset ?? 0 } },
     querySerializer: { array: { style: 'form', explode: true } },
   }), one<{ total: number; items: TicketHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'projectId'))));
 export const searchProjects = (api: ServerApi, q: string) =>

@@ -119,6 +119,63 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const createTags = (account, projectId) => manageTags(account, projectId)
     || (projectId === null ? groupsOf(account).some((group) => group.actions.some((rule) => rule.action === 'tag.create' && rule.projectId === null)) : may(account, 'tag.create', projectId));
   const catalogVisible = (account, projectId) => ['project.read', 'project.manage', 'ticket.read', 'tag.create', 'tags.manage'].some((action) => may(account, action, projectId));
+  // As the search (TASK-073): the given tags filter after tagMatch; without the read rule for tags no tag filter matches.
+  const tagFilterMatches = (account, ticket, query) => {
+    const match = query.get('tagMatch') ?? 'all';
+    const wanted = query.getAll('tag');
+    if (match === 'all' && wanted.length === 0) return true;
+    if (!field(account, ticket.projectId, TAG_FIELD, 'read')) return false;
+    const held = new Set(state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => entry.tag));
+    if (match === 'untagged') return held.size === 0;
+    if (match === 'any') return wanted.some((id) => held.has(id));
+    if (match === 'none') return !wanted.some((id) => held.has(id));
+    return wanted.every((id) => held.has(id));
+  };
+  // As POST /tags/bulk (TASK-073): tags checked first, then every ticket for itself; keys only for readable tickets.
+  const bulkTags = (account, body) => {
+    const add = body?.action === 'add';
+    if (!add && body?.action !== 'remove') return problem(400, 'request.invalid', { violations: ['action.invalid'] });
+    const chosen = [];
+    for (const id of new Set(body.tags ?? [])) {
+      const tag = state.tags.find((candidate) => candidate.id === id);
+      if (!tag || (tag.projectId !== null && !catalogVisible(account, tag.projectId))) return problem(404, 'tag.not_found');
+      if (tag.mergedInto) return problem(409, 'tag.merged');
+      if (add && tag.archived) return problem(409, 'tag.archived');
+      chosen.push(tag);
+    }
+    const result = { changed: 0, unchanged: 0, notMatching: 0, refused: 0, items: [] };
+    for (const id of new Set(body.tickets ?? [])) {
+      const ticket = state.tickets.find((candidate) => candidate.id === id);
+      const readable = ticket !== undefined && may(account, 'ticket.read', ticket.projectId);
+      let outcome;
+      let code = null;
+      if (!ticket || !may(account, 'ticket.edit', ticket.projectId) || !field(account, ticket.projectId, TAG_FIELD, 'write')) {
+        outcome = 'refused';
+        code = ticket && readable ? 'auth.forbidden' : null;
+      } else {
+        const fitting = chosen.filter((tag) => tag.projectId === null || tag.projectId === ticket.projectId);
+        const held = state.ticketTags.filter((entry) => entry.ticket === ticket.id);
+        const missing = fitting.filter((tag) => !held.some((entry) => entry.tag === tag.id));
+        const present = fitting.filter((tag) => held.some((entry) => entry.tag === tag.id));
+        if (fitting.length === 0) outcome = 'not_matching';
+        else if (add && missing.length > 0 && held.length + missing.length > TAG_LIMIT) {
+          outcome = 'refused';
+          code = 'tag.limit_reached';
+        } else if (add ? missing.length === 0 : present.length === 0) outcome = 'unchanged';
+        else {
+          outcome = 'changed';
+          for (const tag of add ? missing : present) {
+            if (add) state.ticketTags.push({ ticket: ticket.id, tag: tag.id });
+            else state.ticketTags.splice(state.ticketTags.findIndex((entry) => entry.ticket === ticket.id && entry.tag === tag.id), 1);
+            state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: TAG_FIELD, from: add ? null : tag.id, to: add ? tag.id : null }] });
+          }
+        }
+      }
+      result[{ changed: 'changed', unchanged: 'unchanged', not_matching: 'notMatching', refused: 'refused' }[outcome]] += 1;
+      result.items.push({ ticketId: id, key: readable ? ticket.key : null, outcome, code: readable ? code : null });
+    }
+    return ok(result);
+  };
   const tagKey = (name) => name.trim().replace(/\s+/g, ' ').toUpperCase().toLowerCase();
   const tagView = (account, tag, usage = false) => {
     const target = tag.mergedInto === null ? null : state.tags.find((entry) => entry.id === tag.mergedInto);
@@ -382,6 +439,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!item || !projectVisible(account, item)) return problem(404, 'project.not_found');
       return projectRoute(account, item, method, match[2] ?? '', query, headers, body);
     }
+    if (p === '/tags/bulk' && method === 'POST') return bulkTags(account, body);
     if (p === '/tags' && method === 'GET') return ok(catalogList(account, null, query));
     if (p === '/tags' && method === 'POST') {
       if (!createTags(account, null)) return problem(403, 'auth.forbidden');
@@ -396,8 +454,21 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
       const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
         .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
-        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields, tags: [] }));
-      return ok({ total: items.length, items });
+        .filter((ticket) => tagFilterMatches(account, ticket, query))
+        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields,
+          tags: field(account, ticket.projectId, TAG_FIELD, 'read') ? state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => {
+            const tag = state.tags.find((candidate) => candidate.id === entry.tag);
+            return { id: tag.id, name: tag.name };
+          }) : null }));
+      const tagMatch = query.get('tagMatch') ?? 'all';
+      const tags = query.getAll('tag');
+      if (!['all', 'any', 'none', 'untagged'].includes(tagMatch) || (tagMatch === 'untagged') !== (tags.length === 0) && query.has('tagMatch')) {
+        return problem(400, 'request.invalid', { violations: ['tagMatch.invalid'] });
+      }
+      if (tags.length > 10) return problem(400, 'request.invalid', { violations: ['tag.invalid'] });
+      const offset = Number(query.get('offset') ?? 0);
+      const limit = Number(query.get('limit') ?? 20);
+      return ok({ total: items.length, items: items.slice(offset, offset + limit) });
     }
     if (p === '/search/projects') {
       const q = (query.get('q') ?? '').toLowerCase();
@@ -1190,7 +1261,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const headers = request.headers();
       const raw = request.postDataBuffer();
       const json = raw && (headers['content-type'] ?? '').includes('json') ? JSON.parse(raw.toString('utf8')) : raw;
-      state.requests.push({ method: request.method(), path: url.pathname, ifMatch: headers['if-match'] ?? null, csrf: headers['x-csrf-token'] ?? null, type: headers['content-type'] ?? null, body: raw, user: session.account?.username ?? null });
+      state.requests.push({ method: request.method(), path: url.pathname, query: url.search, ifMatch: headers['if-match'] ?? null, csrf: headers['x-csrf-token'] ?? null, type: headers['content-type'] ?? null, body: raw, user: session.account?.username ?? null });
       const unsafe = !['GET', 'HEAD'].includes(request.method());
       const answer = unsafe && headers['x-csrf-token'] !== TOKEN ? problem(403, 'auth.csrf_invalid')
         : anonymousAppearance && url.pathname === '/api/v1/session' ? ok({ authenticated: false })

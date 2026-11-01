@@ -72,6 +72,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tags/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tags an vielen Tickets hinzufügen oder entfernen
+         * @description Antwortet mit Zahlen je Ergebnis und einem Eintrag je genanntem Ticket (eine wiederholte Kennung zählt einmal).
+         *     `key` und bei einer Ablehnung `code` stehen nur bei Tickets, die die anfragende Person jetzt lesen darf
+         *     (`ticket.read`); sonst sind beide `null`.
+         */
+        post: operations["bulkTicketTags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags/suggestions": {
         parameters: {
             query?: never;
@@ -327,6 +349,30 @@ export interface components {
              * @description Kennung des Ziels im selben Katalog
              */
             into: string;
+        };
+        BulkRequest: {
+            /** @enum {string} */
+            action: "add" | "remove";
+            tags: string[];
+            tickets: string[];
+        };
+        BulkResult: {
+            changed: number;
+            /** @description Alle passenden Tags waren schon so. */
+            unchanged: number;
+            /** @description Keiner der Tags passt zum Projekt des Tickets. */
+            notMatching: number;
+            refused: number;
+            items: {
+                /** Format: uuid */
+                ticketId: string;
+                /** @description Schlüssel des Tickets */
+                key: string | null;
+                /** @enum {string} */
+                outcome: "changed" | "unchanged" | "not_matching" | "refused";
+                /** @description Grund einer Ablehnung */
+                code: string | null;
+            }[];
         };
         /**
          * @description Farbe der festen Palette; die Oberfläche zeigt sie in heller und dunkler Darstellung lesbar.
@@ -615,6 +661,36 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    bulkTicketTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Ergebnis der Massenänderung */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

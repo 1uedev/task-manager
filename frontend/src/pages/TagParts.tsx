@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import {
-  CATALOG_PAGE, catalogTags, changeTag, mergeTag, previewMerge, tagSuggestions, type Tag, type TagColor, type TagMergePreview, type TagScope,
-  type TagSuggestions,
+  bulkTicketTags, CATALOG_PAGE, catalogTags, changeTag, mergeTag, previewMerge, TAG_BULK_TICKETS, TAG_FILTER_MAX, tagSuggestions, type Tag, type TagBulkResult,
+  type TagColor, type TagMatch, type TagMergePreview, type TagScope, type TagSuggestions,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -354,5 +354,212 @@ function TagMerge({ scope, tag, onDone, onCancel }: {
       )}
       <p className="actions"><button type="button" className="secondary" onClick={onCancel}>{t('tags.cancel')}</button></p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- filter and bulk change (TASK-073)
+
+export interface TagFilterValue {
+  readonly match: TagMatch;
+  readonly tags: readonly Tag[];
+}
+
+export const NO_TAG_FILTER: TagFilterValue = { match: 'all', tags: [] };
+
+// True when the filter asks something of the tags; "all" without tags asks nothing.
+export const tagFilterActive = (filter: TagFilterValue) => filter.match === 'untagged' || filter.tags.length > 0;
+
+// Chooses how up to ten tags filter: all of them, at least one, none of them, or tickets without any tag.
+export function TagFilter({ projectId, value, onChange }: {
+  readonly projectId: string | null;
+  readonly value: TagFilterValue;
+  readonly onChange: (value: TagFilterValue) => void;
+}) {
+  const { t } = useI18n();
+  const untagged = value.match === 'untagged';
+  return (
+    <fieldset className="tag-filter" data-testid="tag-filter">
+      <legend>{t('tagFilter.legend')}</legend>
+      <SelectField label={t('tagFilter.match')} value={value.match} onChange={(match) => onChange({ match: match as TagMatch, tags: match === 'untagged' ? [] : value.tags })}
+        options={(['all', 'any', 'none', 'untagged'] as const).map((match) => ({ value: match, label: t(`tagFilter.match.${match}`) }))} />
+      {!untagged && value.tags.length > 0 && (
+        <ul className="chips" aria-label={t('tagFilter.chosen')}>
+          {value.tags.map((tag) => (
+            <li key={tag.id}>
+              <TagLabel tag={tag} />
+              <button type="button" className="chip-remove" aria-label={t('tagFilter.remove', { name: tag.name })}
+                onClick={() => onChange({ ...value, tags: value.tags.filter((item) => item.id !== tag.id) })}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!untagged && value.tags.length < TAG_FILTER_MAX && (
+        <TagPicker label={t('tagFilter.add')} projectId={projectId} exclude={new Set(value.tags.map((tag) => tag.id))}
+          onPick={(tag) => onChange({ ...value, tags: [...value.tags, tag] })} />
+      )}
+      {!untagged && TAG_FILTER_MAX <= value.tags.length && <p className="hint">{t('tagFilter.full', { count: TAG_FILTER_MAX })}</p>}
+    </fieldset>
+  );
+}
+
+// Adds or removes up to ten existing tags at the selected tickets. A check names what will happen before anything changes;
+// the server then checks and changes every ticket for itself and the result counts each outcome.
+export function TagBulk({ selected, projectId, onDone }: {
+  readonly selected: readonly string[];
+  readonly projectId: string | null;
+  readonly onDone: (result: TagBulkResult) => void;
+}) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const problemText = useTagProblemText();
+  const [action, setAction] = useState<'add' | 'remove'>('add');
+  const [chosen, setChosen] = useState<readonly Tag[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [result, setResult] = useState<TagBulkResult | null>(null);
+  const names = chosen.map((tag) => `„${tag.name}“`).join(', ');
+
+  async function apply() {
+    setBusy(true);
+    setNotice(null);
+    const answer = await bulkTicketTags(api, action, chosen.map((tag) => tag.id), selected);
+    setBusy(false);
+    setConfirming(false);
+    if (answer.kind !== 'ok') return setNotice({ kind: 'info', text: problemText(answer.problem) });
+    setResult(answer.data.value);
+    onDone(answer.data.value);
+  }
+
+  return (
+    <section aria-labelledby="tag-bulk" className="panel tag-bulk" data-testid="tag-bulk">
+      <h2 id="tag-bulk">{t('tagBulk.title', { count: selected.length })}</h2>
+      <NoticeView notice={notice} />
+      {result !== null && <TagBulkSummary result={result} />}
+      <SelectField label={t('tagBulk.action')} value={action} onChange={(value) => { setAction(value as 'add' | 'remove'); setConfirming(false); }}
+        options={[{ value: 'add', label: t('tagBulk.add') }, { value: 'remove', label: t('tagBulk.remove') }]} />
+      {chosen.length > 0 && (
+        <ul className="chips" aria-label={t('tagBulk.chosen')}>
+          {chosen.map((tag) => (
+            <li key={tag.id}>
+              <TagLabel tag={tag} />
+              <button type="button" className="chip-remove" aria-label={t('tagFilter.remove', { name: tag.name })}
+                onClick={() => { setChosen(chosen.filter((item) => item.id !== tag.id)); setConfirming(false); }}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {chosen.length < TAG_FILTER_MAX && (
+        <TagPicker label={t('tagBulk.tag')} projectId={projectId} exclude={new Set(chosen.map((tag) => tag.id))}
+          onPick={(tag) => { setChosen([...chosen, tag]); setConfirming(false); }} />
+      )}
+      {!confirming ? (
+        <p className="actions">
+          <button type="button" disabled={chosen.length === 0 || selected.length === 0} onClick={() => setConfirming(true)}>{t('tagBulk.check')}</button>
+        </p>
+      ) : (
+        <div className="confirm" data-testid="tag-bulk-preview">
+          <p>{t(action === 'add' ? 'tagBulk.previewAdd' : 'tagBulk.previewRemove', { tags: names, count: selected.length })}</p>
+          <p className="hint">{t('tagBulk.previewHint')}</p>
+          <p className="actions">
+            <button type="button" disabled={busy} onClick={() => void apply()}>{t('tagBulk.confirm')}</button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setConfirming(false)}>{t('tags.cancel')}</button>
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const BULK_REASONS: Readonly<Record<string, MessageKey>> = {
+  'auth.forbidden': 'tagBulk.reason.forbidden',
+  'tag.limit_reached': 'tagBulk.reason.limit',
+  'tag.archived': 'tagBulk.reason.archived',
+  'tag.merged': 'tagBulk.reason.archived',
+  'tag.busy': 'tagBulk.reason.busy',
+};
+
+function TagBulkSummary({ result }: { readonly result: TagBulkResult }) {
+  const { t } = useI18n();
+  const named = result.items.filter((item) => item.outcome === 'refused' && item.key !== null);
+  return (
+    <div className="notice info" role="status" data-testid="tag-bulk-result">
+      <p>{t('tagBulk.result', { changed: result.changed, unchanged: result.unchanged, notMatching: result.notMatching, refused: result.refused })}</p>
+      {named.length > 0 && (
+        <ul>
+          {named.map((item) => (
+            <li key={item.ticketId}>{item.key}: {t((item.code !== null ? BULK_REASONS[item.code] : undefined) ?? 'tagBulk.reason.other')}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// The tickets chosen for a bulk change, kept across pages and filters up to the limit of the server.
+export function useTicketSelection() {
+  const [selected, setSelected] = useState<ReadonlyMap<string, string>>(new Map());
+  const full = selected.size >= TAG_BULK_TICKETS;
+  return {
+    selected,
+    full,
+    toggle(id: string, key: string, on: boolean) {
+      setSelected((current) => {
+        const next = new Map(current);
+        if (!on) next.delete(id);
+        else if (next.size < TAG_BULK_TICKETS) next.set(id, key);
+        return next;
+      });
+    },
+    setMany(items: readonly { readonly id: string; readonly key: string }[], on: boolean) {
+      setSelected((current) => {
+        const next = new Map(current);
+        for (const item of items) {
+          if (!on) next.delete(item.id);
+          else if (next.size < TAG_BULK_TICKETS) next.set(item.id, item.key);
+        }
+        return next;
+      });
+    },
+    clear() {
+      setSelected(new Map());
+    },
+  };
+}
+
+export type TicketSelection = ReturnType<typeof useTicketSelection>;
+
+// The checkbox of one ticket row; the label names the ticket for screen readers.
+export function SelectTicket({ selection, id, ticketKey }: { readonly selection: TicketSelection; readonly id: string; readonly ticketKey: string }) {
+  const { t } = useI18n();
+  const on = selection.selected.has(id);
+  return <input type="checkbox" checked={on} disabled={!on && selection.full} aria-label={t('tickets.select', { key: ticketKey })}
+    onChange={(event) => selection.toggle(id, ticketKey, event.target.checked)} />;
+}
+
+// Selects or clears all shown tickets at once.
+export function SelectPage({ selection, items }: { readonly selection: TicketSelection; readonly items: readonly { readonly id: string; readonly key: string }[] }) {
+  const { t } = useI18n();
+  const all = items.length > 0 && items.every((item) => selection.selected.has(item.id));
+  return <input type="checkbox" checked={all} aria-label={t('tickets.selectPage')} onChange={(event) => selection.setMany(items, event.target.checked)} />;
+}
+
+// The count of the selection with the way to clear it, and the bulk change for it.
+export function SelectionBar({ selection, projectId, onDone }: {
+  readonly selection: TicketSelection;
+  readonly projectId: string | null;
+  readonly onDone: () => void;
+}) {
+  const { t } = useI18n();
+  if (selection.selected.size === 0) return null;
+  return (
+    <>
+      <p className="selection-bar" role="status">
+        {t('tickets.selected', { count: selection.selected.size })}
+        {selection.full && <> · {t('tickets.selectionFull', { count: TAG_BULK_TICKETS })}</>}
+        {' '}<button type="button" className="secondary" onClick={selection.clear}>{t('tickets.clearSelection')}</button>
+      </p>
+      <TagBulk selected={[...selection.selected.keys()]} projectId={projectId} onDone={onDone} />
+    </>
   );
 }
