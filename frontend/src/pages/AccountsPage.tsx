@@ -10,6 +10,7 @@ import { useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import { de } from '../i18n/de.ts';
 import { LdapPanel } from './LdapPanel.tsx';
+import { PortalAccountsPanel } from './PortalAccountsPanel.tsx';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
@@ -94,7 +95,7 @@ export function AccountsPage() {
   // What became of the one time password, without ever showing it.
   const stateText = (account: Account): string => {
     if (!account.active) return t('accounts.inactive');
-    const parts: string[] = [];
+    const parts: string[] = account.kind === 'portal' ? [t('accounts.portal')] : [];
     if (account.authKind === 'ldap') {
       parts.push(t('accounts.fromDirectory'));
       if (account.loginDelayedUntil) parts.push(t('accounts.delayed', { date: formatDateTime(account.loginDelayedUntil, language) }));
@@ -145,6 +146,7 @@ export function AccountsPage() {
         </form>
       </details>
       <LdapPanel onChanged={() => setAuditTick((tick) => tick + 1)} />
+      <PortalAccountsPanel onChanged={() => { reload(); reloadDirectory(); setAuditTick((tick) => tick + 1); }} />
       <NoticeView notice={notice} />
       <LoadedView loaded={accounts} retry={reload}>
         {(list) => (

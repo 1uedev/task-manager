@@ -48,6 +48,18 @@ class TicketRepository {
             .params(companyId, projectId, before == null ? Long.MAX_VALUE : before, limit).query(TicketRepository::map).list();
     }
 
+    /** The given tickets of the project, newest first, below the number {@code before} if given (TASK-075). */
+    List<Ticket> listAmong(UUID companyId, UUID projectId, java.util.Collection<UUID> ids, int limit, Long before) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("select " + SELECT + " from ticket where company_id = :company and project_id = :project and id in (:ids)"
+                + " and number < :before order by number desc limit :limit")
+            .param("company", companyId).param("project", projectId).param("ids", ids)
+            .param("before", before == null ? Long.MAX_VALUE : before).param("limit", limit)
+            .query(TicketRepository::map).list();
+    }
+
     /** Every ticket of the company, for a rebuild of the search projection. */
     List<Ticket> all(UUID companyId) {
         return jdbc.sql("select " + SELECT + " from ticket where company_id = ? order by id").param(companyId)

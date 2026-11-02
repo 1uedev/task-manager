@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-072](#task-072-tag-katalogpflege-und-zusammenführen-a3-teil-1) | Tag Katalogpflege und Zusammenführen (A3 Teil 1) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
+| [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -136,9 +136,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-075 Portalkonten, Sicht und Rechte (A11 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
 
-**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001, REQ-API-001; DEC-027, DEC-031, DEC-053; docs/PERMISSIONS.md (Organisationssicht, Fälle 1 bis 8), docs/HELPDESK_SLA.md (Kundenportal). **Abhängigkeiten:** TASK-024, TASK-025, TASK-026, TASK-027, TASK-045, TASK-057, abgenommen. **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A11 nach A3 bestätigt und am selben Tag die 20 Vorschläge mit „passt so“ übernommen (Punkte unten). Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-houava; Ergebnis mit der nächsten freien Entscheidungsnummer (voraussichtlich DEC-105, DEC-104 bleibt für die Korrekturen aus A3 frei) und der beim Ergebnis nächsten freien Migrationsnummer auf main.
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001, REQ-API-001; DEC-027, DEC-031, DEC-053; docs/PERMISSIONS.md (Organisationssicht, Fälle 1 bis 8), docs/HELPDESK_SLA.md (Kundenportal). **Abhängigkeiten:** TASK-024, TASK-025, TASK-026, TASK-027, TASK-045, TASK-057, abgenommen. **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A11 nach A3 bestätigt und am selben Tag die 20 Vorschläge mit „passt so“ übernommen (Punkte unten). Reservierung mit PR #232 gemergt. Ergebnis auf Branch claude/project-thread-houava mit DEC-105 (DEC-104 bleibt für die Korrekturen aus A3 frei) und den Migrationen V0034 bis V0036; Beschreibung in backend/README.md (Abschnitt TASK-075).
 
 **Umfang:** Portalkonten mit fester Kundenorganisation, Projektfreigabe, Standardgruppe „Portal“, Organisationssicht im Rechtekern für Tickets und ihre Daten, Lesen der Anfragen über die API und die Kontenverwaltung dafür. Nicht Teil: Gespräch und Portalseiten (TASK-076), Tags im Portal (TASK-077), Wissen im Portal (A12), Selbstregistrierung, anonyme Webformulare, Passwort vergessen per Mail, zweiter Faktor, KI im Portal (DEC-035), Mailbenachrichtigungen, eigene Portalformulare, Sicht über die eigene Organisation hinaus, eigenes Portalbranding (A17).
 
@@ -157,7 +157,12 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Entzug der Projektfreigabe oder Deaktivierung wirkt sofort auf Lesen, Suche und Anhänge.
 4. Migration, Vertrag gegen Routen, Backend Tests für Rechte und Nebenläufigkeit, Browser Tests für die Kontenverwaltung.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: Portalkonten über `/api/v1/portal-accounts` mit fester Organisation, optionalem Kontakt und den freigegebenen Projekten; Gruppe „Portal“ mit Zweck `portal` und den Standardregeln; Ablehnung von Unternehmensrechten im Rechtekern (409 `permissions.portal_company_right`); Organisationssicht über `/api/v1/portal/projects` und `/api/v1/portal/projects/{projectId}/tickets`; interne Pfade, Historie, Anhänge, Suche und Kontoverzeichnis bleiben verschlossen; Bearbeiter nur interne Konten. Oberfläche: Abschnitt „Portalkonten“ in der Kontenverwaltung und eine Lesesicht „Ihre Anfragen“ für Portalkonten ohne interne Navigation.
+2. Nachweise: `PortalAccountsApiTest` (Fälle 1 bis 7 aus docs/PERMISSIONS.md, Pflichtwechsel, Gruppe und Unternehmensrechte, Prüfung von Organisation, Kontakt und Projekten, Entzug und Deaktivierung), `PortalContractTest` und die angepassten Vertragstests, voller Backendlauf mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich `portal.test.mjs`.
+3. Grenzen: Anlegen und Beantworten im Portal, Portalseiten mit Statusnamen und kundensichtbare Anhänge folgen mit TASK-076, Tags mit TASK-077; die Aktion zum Beantworten kommt mit TASK-076 in die Gruppe „Portal“. Ein Kontakt, der später die Organisation wechselt, und ein im Helpdesk wieder entzogenes Projekt bleiben am Konto, bis die Verwaltung es ändert. Ein eigener Test gleichzeitiger Änderungen fehlt; die Sperrreihenfolge ist in backend/README.md beschrieben. Fall 8 (Antworten des Supports) gehört zu TASK-076.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger; danach TASK-076 in derselben Sitzung.
 
 ## TASK-076 Portalgespräch, Anhänge und Portalseiten (A11 Teil 2)
 

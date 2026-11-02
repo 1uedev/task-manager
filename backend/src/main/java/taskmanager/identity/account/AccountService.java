@@ -121,6 +121,47 @@ public class AccountService {
 
     @Transactional
     public Issued create(String actor, String rawUsername, String displayName) {
+        return create(actor, rawUsername, displayName, AccountRecord.INTERNAL, null, null);
+    }
+
+    /**
+     * Creates a portal account of the customer organization with a one time password (TASK-075, DEC-105). The caller joins its
+     * transaction and has checked the right, the organization and the contact already; the identity module does not know them.
+     */
+    @Transactional
+    public Issued createPortal(String actor, String rawUsername, String displayName, UUID organizationId, UUID contactId) {
+        if (organizationId == null) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("organizationId.required"));
+        }
+        return create(actor, rawUsername, displayName, AccountRecord.PORTAL, organizationId, contactId);
+    }
+
+    /**
+     * Links the portal account to a contact of its organization or removes the link (TASK-075). The caller checked the right
+     * and that the contact belongs to the organization; {@code verify} receives the locked account to do that against it.
+     */
+    @Transactional
+    public AccountRecord setContact(String actor, UUID id, UUID contactId, java.util.function.Consumer<AccountRecord> verify) {
+        AccountRecord account = lock(id);
+        if (!account.portal()) {
+            throw ApiProblemException.of(409, "account.not_portal");
+        }
+        verify.accept(account);
+        if (!java.util.Objects.equals(account.contactId(), contactId)) {
+            Instant now = clock.instant();
+            accounts.setContact(id, contactId, now);
+            accounts.audit(actor, "account.contact_changed", id, contactId == null ? null : contactId.toString(), now);
+        }
+        return accounts.findById(id).orElseThrow();
+    }
+
+    /** An account by its identifier, without a lock. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<AccountRecord> find(UUID id) {
+        return id == null ? java.util.Optional.empty() : accounts.findById(id);
+    }
+
+    private Issued create(String actor, String rawUsername, String displayName, String kind, UUID organizationId, UUID contactId) {
         String username = UsernameRules.normalize(rawUsername);
         if (!UsernameRules.isValid(username)) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("username.invalid"));
@@ -133,7 +174,7 @@ public class AccountService {
         String oneTime = oneTimePasswords.next();
         Instant expires = now.plus(properties.oneTimePasswordValidity());
         AccountRecord account = new AccountRecord(UUID.randomUUID(), username, name, hasher.hash(oneTime), true, expires, null,
-            true, now, now, AccountRecord.LOCAL, null);
+            true, now, now, AccountRecord.LOCAL, null, kind, organizationId, contactId);
         if (accounts.findByUsername(username).isPresent()) {
             throw ApiProblemException.of(409, "account.username_taken");
         }
@@ -142,7 +183,7 @@ public class AccountService {
         } catch (DuplicateKeyException race) {
             throw ApiProblemException.of(409, "account.username_taken");
         }
-        accounts.audit(actor, "account.created", account.id(), null, now);
+        accounts.audit(actor, "account.created", account.id(), account.portal() ? "portal" : null, now);
         return new Issued(account, oneTime, expires);
     }
 

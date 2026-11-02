@@ -286,7 +286,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
   // An account as the administration sees it (TASK-045): the state of the one time password and a running waiting time.
-  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', ...rest,
+  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', kind: 'internal', organizationId: null, contactId: null, ...rest,
     oneTimePasswordState: rest.passwordChangeRequired ? 'open' : 'none', oneTimePasswordExpiresAt: rest.passwordChangeRequired ? '2026-10-24T08:00:00Z' : null,
     loginDelayedUntil: delayedUntil ?? null });
   const logAccount = (actor, event, target) => state.accountAudit.push({ id: state.accountAudit.length + 1, occurredAt: now(), actor: actor.username, event, accountId: target?.id ?? null, detail: null });
@@ -359,7 +359,79 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         return ok({ ok: true, reason: null });
       }
     }
-    if (p === '/directory/accounts') return ok(state.accounts.map(({ id, username, displayName, active }) => ({ id, username, displayName, active })).sort((a, b) => a.username.localeCompare(b.username)));
+    // Portal accounts (TASK-075): one customer organization each, the group "Portal" and the projects released to the organization.
+    const portalOf = (item) => item.kind === 'portal';
+    if (p === '/portal/projects' && method === 'GET') {
+      if (!portalOf(account)) return problem(404, 'project.not_found');
+      return ok(state.projects.filter((item) => isMember(account, item.id)).map(({ id, key, name }) => ({ id, key, name })));
+    }
+    let portalMatch = p.match(/^\/portal\/projects\/([^/]+)\/tickets(?:\/(\d+))?$/);
+    if (portalMatch && method === 'GET') {
+      const [, projectId, number] = portalMatch;
+      if (!portalOf(account) || !isMember(account, projectId) || !may(account, 'ticket.read', projectId)) return problem(404, 'project.not_found');
+      const own = state.tickets.filter((item) => item.projectId === projectId && hd.ticketCustomers.get(item.id)?.customerId === account.organizationId);
+      const view = (item) => ({ ...ticketView(account, item), writableFields: [] });
+      if (number === undefined) return ok(own.map(view).reverse());
+      const ticket = own.find((item) => item.number === Number(number));
+      return ticket ? ok(view(ticket)) : problem(404, 'ticket.not_found');
+    }
+    if (p.startsWith('/portal-accounts')) {
+      if (portalOf(account) || !may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
+      const released = (customer) => state.projects.filter((item) => customer.projects.includes(item.id)).map(({ id, key, name }) => ({ id, key, name }));
+      const portalView = (item) => ({ id: item.id, username: item.username, displayName: item.displayName, active: item.active, organizationId: item.organizationId,
+        contactId: item.contactId, projectIds: state.projects.filter((entry) => isMember(item, entry.id)).map((entry) => entry.id) });
+      const setProjects = (item, ids) => {
+        for (const entry of state.projects) {
+          const members = state.members.get(entry.id) ?? [];
+          const rest = members.filter((member) => member.accountId !== item.id);
+          state.members.set(entry.id, ids.includes(entry.id) ? [...rest, { accountId: item.id, addedAt: now() }] : rest);
+        }
+      };
+      const check = (customer, contactId, ids) => {
+        if (!customer) return problem(400, 'request.invalid', { violations: ['organizationId.unknown'] });
+        if (contactId && hd.contacts.find((entry) => entry.id === contactId)?.customerId !== customer.id) return problem(400, 'request.invalid', { violations: ['contactId.not_of_organization'] });
+        if (!(ids ?? []).every((id) => customer.projects.includes(id))) return problem(400, 'request.invalid', { violations: ['projectIds.not_released'] });
+        return null;
+      };
+      if (p === '/portal-accounts' && method === 'GET') return ok(state.accounts.filter(portalOf).map(portalView));
+      if (p === '/portal-accounts/options' && method === 'GET') {
+        return ok(hd.customers.map((customer) => ({ id: customer.id, name: customer.name, projects: released(customer),
+          contacts: hd.contacts.filter((entry) => entry.customerId === customer.id).map(({ id, name }) => ({ id, name })) })));
+      }
+      if (p === '/portal-accounts' && method === 'POST') {
+        const refused = check(hd.customers.find((entry) => entry.id === body.organizationId), body.contactId, body.projectIds);
+        if (refused) return refused;
+        if (state.accounts.some((item) => item.username === body.username)) return problem(409, 'account.username_taken');
+        let group = state.groups.find((entry) => entry.purpose === 'portal');
+        if (!group) {
+          group = { id: uuid(), name: 'Portal', purpose: 'portal', members: [], actions: ['ticket.read', 'ticket.create'].map((action) => ({ action, projectId: null })),
+            fields: ['title', 'description', 'type', 'status'].map((name) => ({ resourceType: 'ticket', field: name, projectId: null, operation: 'read', effect: 'allow' })) };
+          state.groups.push(group);
+        }
+        const created = { id: uuid(), username: body.username, displayName: body.displayName ?? null, password: `Einmal${counter}Portal`, active: true, passwordChangeRequired: true,
+          createdAt: now(), kind: 'portal', organizationId: body.organizationId, contactId: body.contactId ?? null };
+        state.accounts.push(created);
+        group.members.push(created.id);
+        setProjects(created, body.projectIds ?? []);
+        logAccount(account, 'account.created', created);
+        return ok({ account: portalView(created), oneTimePassword: created.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
+      }
+      const single = p.match(/^\/portal-accounts\/([^/]+)$/);
+      if (single && method === 'PUT') {
+        const target = state.accounts.find((item) => item.id === single[1]);
+        if (!target) return problem(404, 'account.not_found');
+        if (!portalOf(target)) return problem(409, 'account.not_portal');
+        const refused = check(hd.customers.find((entry) => entry.id === target.organizationId), body.contactId, body.projectIds);
+        if (refused) return refused;
+        target.contactId = body.contactId ?? null;
+        setProjects(target, body.projectIds ?? []);
+        return ok(portalView(target));
+      }
+    }
+    if (p === '/directory/accounts') {
+      if (portalOf(account)) return problem(403, 'auth.forbidden');
+      return ok(state.accounts.map(({ id, username, displayName, active, kind }) => ({ id, username, displayName, active, kind: kind ?? 'internal' })).sort((a, b) => a.username.localeCompare(b.username)));
+    }
     if (p.startsWith('/accounts')) {
       if (!may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
       if (p === '/accounts' && method === 'GET') return ok(state.accounts.map(accountView));
@@ -1243,7 +1315,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   function sessionBody(session) {
     const account = session.account;
     if (!account) return { authenticated: false, username: null, displayName: null, level: null, expiresAt: null, passwordChangeBy: null, csrfToken: TOKEN };
-    return { authenticated: true, username: account.username, displayName: account.displayName, level: account.passwordChangeRequired ? 'password_change_required' : 'full',
+    return { authenticated: true, username: account.username, displayName: account.displayName, kind: account.kind ?? 'internal', level: account.passwordChangeRequired ? 'password_change_required' : 'full',
       expiresAt: '2026-10-22T08:00:00Z', passwordChangeBy: account.passwordChangeRequired ? '2026-10-21T08:30:00Z' : null, csrfToken: TOKEN,
       rights: account.passwordChangeRequired ? [] : companyRights(account) };
   }

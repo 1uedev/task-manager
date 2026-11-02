@@ -87,8 +87,31 @@ class JdbcIdentityVerification implements IdentityVerification {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean accountIsActiveLocal(UUID accountId) {
-        return accountId != null && jdbc.sql("select active and auth_kind = 'local' from identity_account where id = ? for share")
+        return accountId != null && jdbc.sql("select active and auth_kind = 'local' and kind = 'internal' from identity_account where id = ? for share")
             .param(accountId).query(Boolean.class).optional().orElse(false);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean accountIsActiveInternal(UUID accountId) {
+        return accountId != null && jdbc.sql("select active and kind = 'internal' from identity_account where id = ? for share")
+            .param(accountId).query(Boolean.class).optional().orElse(false);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<UUID> portalOrganization(UUID accountId) {
+        if (accountId == null) {
+            return Optional.empty();
+        }
+        return jdbc.sql("select organization_id from identity_account where id = ? and kind = 'portal' for share")
+            .param(accountId).query((rs, row) -> rs.getObject(1, UUID.class)).optional();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean accountIsPortal(UUID accountId) {
+        return portalOrganization(accountId).isPresent();
     }
 
     private Optional<AccountState> lockAccount(UUID accountId) {

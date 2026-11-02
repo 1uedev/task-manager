@@ -54,4 +54,22 @@ public interface ProjectAccess {
 
     /** Every project of the company with key, name and description, to rebuild a projection (TASK-029). Needs a transaction. */
     List<ProjectChanged> searchSources(UUID companyId);
+
+    /**
+     * Adds the account to the project as the administration of portal accounts does it (TASK-075, DEC-105), with the project
+     * row locked {@code FOR UPDATE} until the commit, the version moved and an audit entry for the actor, as for a member added
+     * through the project. The caller checked its right and that the account may join; nothing is checked here. Returns false
+     * for a project that does not exist in the company; an account that is a member already changes nothing.
+     */
+    boolean admit(UUID companyId, UUID projectId, UUID accountId, UUID actor);
+
+    /** Removes the account from the project like {@link #admit} adds it. Returns false for an unknown project. */
+    boolean dismiss(UUID companyId, UUID projectId, UUID accountId, UUID actor);
+
+    /** A project as a portal account sees it (TASK-075): identifier, key and name. */
+    record Summary(UUID id, String key, String name) {
+    }
+
+    /** The project of the company with key and name, without a lock. */
+    Optional<Summary> summary(UUID companyId, UUID projectId);
 }

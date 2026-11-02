@@ -4,6 +4,7 @@ import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
 import type { components as JobTypes } from './generated/jobs';
 import type { components as PermissionTypes } from './generated/permissions';
+import type { components as PortalTypes } from './generated/portal';
 import type { components as ProjectTypes } from './generated/projects';
 import type { components as SearchTypes } from './generated/search';
 import type { components as SlaTypes } from './generated/sla';
@@ -75,6 +76,14 @@ export type SlaStage = SlaTypes['schemas']['Stage'];
 export type SlaReachedStage = SlaTypes['schemas']['ReachedStage'];
 export type SlaEscalation = SlaTypes['schemas']['EscalationItem'];
 export type TicketSla = SlaTypes['schemas']['TicketSla'];
+export type PortalAccount = PortalTypes['schemas']['PortalAccount'];
+export type IssuedPortalAccount = PortalTypes['schemas']['IssuedPortalAccount'];
+export type PortalOption = PortalTypes['schemas']['Option'];
+export interface PortalProject {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+}
 
 export interface Versioned<T> {
   readonly value: T;
@@ -199,6 +208,25 @@ export const saveLdapSettings = (api: ServerApi, body: LdapSettingsRequest) =>
 export const testLdapSettings = (api: ServerApi, settings: LdapSettingsRequest | null, username: string | null) =>
   run(() => api.identity.POST('/settings/ldap/test', { body: { ...(settings === null ? {} : { settings }), ...(username === null ? {} : { username }) } }),
     one<LdapTestResult>((v) => record(v) && typeof v.ok === 'boolean'));
+// Portal accounts of customers (TASK-075): one organization each, optionally a contact, and the projects released to it.
+const isPortalAccount = (v: unknown) => hasStrings(v, 'id', 'username', 'organizationId') && typeof (v as PortalAccount).active === 'boolean'
+  && Array.isArray((v as PortalAccount).projectIds);
+const isPortalOption = (v: unknown) => hasStrings(v, 'id', 'name') && Array.isArray((v as PortalOption).projects) && Array.isArray((v as PortalOption).contacts);
+export const listPortalAccounts = (api: ServerApi) => run(() => api.portal.GET('/portal-accounts'), listOf<PortalAccount>(isPortalAccount));
+export const listPortalOptions = (api: ServerApi) => run(() => api.portal.GET('/portal-accounts/options'), listOf<PortalOption>(isPortalOption));
+export const createPortalAccount = (api: ServerApi, body: { username: string; displayName: string | null; organizationId: string; contactId: string | null; projectIds: string[] }) =>
+  run(() => api.portal.POST('/portal-accounts', { body }),
+    one<IssuedPortalAccount>((v) => record(v) && isPortalAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const updatePortalAccount = (api: ServerApi, id: string, contactId: string | null, projectIds: string[]) =>
+  run(() => api.portal.PUT('/portal-accounts/{accountId}', { params: { path: { accountId: id } }, body: { contactId, projectIds } }),
+    one<PortalAccount>(isPortalAccount));
+// What a portal account itself reads: its projects and the requests of its organization there.
+export const listPortalProjects = (api: ServerApi) =>
+  run(() => api.projects.GET('/portal/projects'), listOf<PortalProject>((v) => hasStrings(v, 'id', 'key', 'name')));
+export const listPortalTickets = (api: ServerApi, projectId: string) =>
+  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId } } }), listOf<Ticket>(isTicket));
+export const readPortalTicket = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }), one<Ticket>(isTicket));
 export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
 
 // ---------------------------------------------------------------- projects

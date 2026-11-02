@@ -239,7 +239,7 @@ class TicketController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503 (P4 of TASK-025). */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {
@@ -260,7 +260,7 @@ class TicketController {
         return false;
     }
 
-    private static ResponseEntity<TicketBody> ticket(HttpStatus status, TicketView view) {
+    static ResponseEntity<TicketBody> ticket(HttpStatus status, TicketView view) {
         return ResponseEntity.status(status).eTag("\"" + view.ticket().version() + "\"").body(TicketBody.of(view));
     }
 

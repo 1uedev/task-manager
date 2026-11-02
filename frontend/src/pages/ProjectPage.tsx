@@ -308,7 +308,7 @@ function MembersTab({ project }: { readonly project: Project }) {
       <LoadedView loaded={members} retry={reload}>
         {(items, etag) => {
           const ids = new Set(items.map((member) => member.accountId));
-          const candidates = [...directory.values()].filter((entry) => entry.active && !ids.has(entry.id));
+          const candidates = [...directory.values()].filter((entry) => entry.active && entry.kind !== 'portal' && !ids.has(entry.id));
           return (
             <>
               {items.length === 0 ? <EmptyText text={t('members.empty')} /> : (

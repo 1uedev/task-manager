@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import taskmanager.permissions.AccessContext;
+import taskmanager.permissions.CompanyActions;
 import taskmanager.permissions.CompanyAdministration;
 import taskmanager.permissions.Decision;
 import taskmanager.permissions.GroupNameTaken;
@@ -30,24 +31,31 @@ import taskmanager.permissions.LastLocalAdministration;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionDenied;
 import taskmanager.permissions.Permissions;
+import taskmanager.permissions.PortalAdministration;
+import taskmanager.permissions.PortalCompanyRight;
 import taskmanager.permissions.ResourceContext;
 
 /** Only reads permissions-owned tables. The revision row orders revocations and business commits. */
 @Service
 @Transactional(isolation = Isolation.READ_COMMITTED)
-public class JdbcPermissions implements Permissions, PermissionAdministration, CompanyAdministration {
+public class JdbcPermissions implements Permissions, PermissionAdministration, CompanyAdministration, PortalAdministration {
     private static final String MANAGE = "permissions.manage";
     private static final String ACCOUNTS_MANAGE = "accounts.manage";
     private static final String AUDIT = "permissions.audit.read";
     private static final String COMPANY_GROUP = "Unternehmensverwaltung";
+    private static final String PORTAL_GROUP = "Portal";
+    private static final String PORTAL_PURPOSE = "portal";
     private static final String LOCK_TIMEOUT = "5s";
     private final JdbcTemplate jdbc;
     private final ObjectProvider<IdentityAccess> identity;
+    private final ObjectProvider<CompanyActions> companyActions;
     private final Clock clock;
 
-    public JdbcPermissions(JdbcTemplate jdbc, ObjectProvider<IdentityAccess> identity, Clock clock) {
+    public JdbcPermissions(JdbcTemplate jdbc, ObjectProvider<IdentityAccess> identity, ObjectProvider<CompanyActions> companyActions,
+            Clock clock) {
         this.jdbc = jdbc;
         this.identity = identity;
+        this.companyActions = companyActions;
         this.clock = clock;
     }
 
@@ -110,6 +118,9 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             if (userId == null || !adapter().userExists(actor.companyId(), userId)) throw new PermissionDenied();
             return null;
         });
+        // A portal account never joins a group with a company right (TASK-075).
+        if (enabled && adapter().userPortal(actor.companyId(), userId) && holdsCompanyAction(actor.companyId(), groupId))
+            throw new PortalCompanyRight();
         boolean hadLocal = !enabled && !localAdministrators(actor.companyId()).isEmpty();
         int rows = enabled
             ? jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?) on conflict do nothing",
@@ -142,6 +153,9 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
         boolean held = jdbc.queryForObject("select count(*) from permissions_action where company_id = ? and group_id = ? and project_id is not distinct from ? and action_key = ?",
             Integer.class, actor.companyId(), groupId, resource.projectId(), action) > 0;
         if (held == enabled) return;
+        // A group with a portal member never receives a company right (TASK-075).
+        if (enabled && resource.projectId() == null && isCompanyAction(action) && hasPortalMember(actor.companyId(), groupId))
+            throw new PortalCompanyRight();
         boolean companyRight = resource.projectId() == null && (MANAGE.equals(action) || ACCOUNTS_MANAGE.equals(action));
         boolean hadLocal = !enabled && companyRight && !localAdministrators(actor.companyId()).isEmpty();
         if (enabled) jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
@@ -235,6 +249,88 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
             if (!holders.contains(userId)) return true;
             return holders.stream().filter(holder -> !holder.equals(userId)).anyMatch(holder -> adapter().userActive(companyId, holder));
         });
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForPortalAccounts(AccessContext actor) {
+        bounded(() -> {
+            Policy policy = lock(actor, true).policy();
+            if (actor.external() || !policy.decide(actor, ResourceContext.company(actor.companyId()), ACCOUNTS_MANAGE, Set.of()).allowed())
+                throw new PermissionDenied();
+            return null;
+        });
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID admitToPortalGroup(AccessContext actor, UUID accountId, Set<String> actions, Set<FieldGrant> fields) {
+        bounded(() -> {
+            // Again under the exclusive lock: a second call in the same transaction holds it already and waits for nothing.
+            Policy policy = lock(actor, true).policy();
+            if (actor.external() || !policy.decide(actor, ResourceContext.company(actor.companyId()), ACCOUNTS_MANAGE, Set.of()).allowed())
+                throw new PermissionDenied();
+            if (accountId == null || !adapter().userPortal(actor.companyId(), accountId)) throw new PermissionDenied();
+            return null;
+        });
+        var existing = jdbc.queryForList("select id from permissions_group where company_id = ? and purpose = ?", UUID.class,
+            actor.companyId(), PORTAL_PURPOSE);
+        UUID group;
+        if (existing.isEmpty()) {
+            group = UUID.randomUUID();
+            jdbc.update("insert into permissions_group(company_id, id, name, purpose) values (?, ?, ?, ?)", actor.companyId(), group,
+                freeName(actor.companyId()), PORTAL_PURPOSE);
+            changed(actor, "group.created", group, null, null, null, null, null, null, null);
+            for (String action : new java.util.TreeSet<>(keys(actions))) {
+                if (isCompanyAction(action)) throw new PortalCompanyRight();
+                jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, null, ?)",
+                    actor.companyId(), group, action);
+                changed(actor, "action.changed", group, null, null, action, null, null, "ALLOW", null);
+            }
+            var sorted = fields.stream().sorted(java.util.Comparator.comparing(FieldGrant::resourceType)
+                .thenComparing(FieldGrant::field).thenComparing(FieldGrant::operation)).toList();
+            for (FieldGrant grant : sorted) {
+                key(grant.resourceType());
+                key(grant.field());
+                jdbc.update("insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect, set_by, set_by_company) values (?, ?, null, ?, ?, ?, 'ALLOW', ?, true)",
+                    actor.companyId(), group, grant.resourceType(), grant.field(), grant.operation().name(), actor.userId());
+                changed(actor, "field." + grant.operation().name().toLowerCase(java.util.Locale.ROOT), group, null, null, null,
+                    grant.resourceType(), grant.field(), "ALLOW", null);
+            }
+        } else {
+            group = existing.getFirst();
+            if (holdsCompanyAction(actor.companyId(), group)) throw new PortalCompanyRight();
+        }
+        if (jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?) on conflict do nothing",
+                actor.companyId(), group, accountId) > 0) {
+            changed(actor, "membership.changed", group, accountId, null, null, null, null, "ALLOW", null);
+        }
+        return group;
+    }
+
+    /** "Portal", or the first free "Portal 2", "Portal 3" and so on when an administration already uses the name. */
+    private String freeName(UUID companyId) {
+        for (int number = 1; ; number++) {
+            String name = number == 1 ? PORTAL_GROUP : PORTAL_GROUP + " " + number;
+            if (jdbc.queryForObject("select count(*) from permissions_group where company_id = ? and lower(name) = lower(?)",
+                    Integer.class, companyId, name) == 0) return name;
+        }
+    }
+
+    /** Without exactly one catalog every action counts as a company right, which keeps portal accounts out (fail closed). */
+    private boolean isCompanyAction(String action) {
+        var candidates = companyActions.stream().limit(2).toList();
+        return candidates.size() != 1 || candidates.getFirst().isCompanyAction(action);
+    }
+
+    private boolean holdsCompanyAction(UUID companyId, UUID groupId) {
+        return jdbc.queryForList("select action_key from permissions_action where company_id = ? and group_id = ? and project_id is null",
+            String.class, companyId, groupId).stream().anyMatch(this::isCompanyAction);
+    }
+
+    private boolean hasPortalMember(UUID companyId, UUID groupId) {
+        return jdbc.queryForList("select user_id from permissions_membership where company_id = ? and group_id = ?", UUID.class,
+            companyId, groupId).stream().anyMatch(user -> adapter().userPortal(companyId, user));
     }
 
     @Override

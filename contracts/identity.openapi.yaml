@@ -285,7 +285,8 @@ paths:
       description: |
         Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
         sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
-        Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+        Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht. Ein Portalkonto (TASK-075) erhält 403 `auth.forbidden`, weil es
+        sonst die Konten anderer Kunden erführe.
       responses:
         '200':
           description: Verzeichnis
@@ -484,6 +485,12 @@ components:
         csrfToken:
           type: [string, 'null']
           description: Nur gesetzt, wenn der Server gerade ein Token ausgegeben hat.
+        kind:
+          type: [string, 'null']
+          enum: [internal, portal, null]
+          description: |
+            `portal`: ein Portalkonto einer Kundenorganisation (TASK-075, DEC-105); die Oberfläche zeigt das Portal. Ein
+            Portalkonto hält nie Unternehmensrechte, `rights` ist für es leer.
     LoginRequest:
       type: object
       additionalProperties: false
@@ -532,6 +539,12 @@ components:
             `local`: das Passwort der Anwendung entscheidet. `ldap`: das Konto entstand bei der ersten Anmeldung über das Verzeichnis, wird
             über dessen unveränderliche Kennung zugeordnet und hat kein Passwort der Anwendung; Zurücksetzen und Umbenennen gibt es dafür nicht,
             Deaktivieren schon.
+        kind:
+          type: string
+          enum: [internal, portal]
+          description: '`portal`: ein lokales Konto einer Kundenorganisation (TASK-075); angelegt und zugeordnet über `/portal-accounts`.'
+        organizationId: {type: [string, 'null'], format: uuid, description: 'Kundenorganisation eines Portalkontos; ändert sich nie'}
+        contactId: {type: [string, 'null'], format: uuid, description: 'Kontakt eines Portalkontos, falls verbunden'}
     AuditEntry:
       type: object
       required: [id, occurredAt, actor, event, accountId, detail]
@@ -544,12 +557,16 @@ components:
         detail: {type: [string, 'null'], description: 'Feste Kurzangabe, nie ein Geheimnis'}
     DirectoryEntry:
       type: object
-      required: [id, username, active]
+      required: [id, username, active, kind]
       properties:
         id: {type: string, format: uuid}
         username: {type: string}
         displayName: {type: [string, 'null']}
         active: {type: boolean}
+        kind:
+          type: string
+          enum: [internal, portal]
+          description: 'Ein Portalkonto wird als Mitglied und Autor angezeigt, aber nie als Zuständige Person angeboten (TASK-075).'
     IssuedAccount:
       type: object
       required: [account, oneTimePassword, oneTimePasswordExpiresAt]

@@ -457,7 +457,7 @@ class PermissionsApiTest {
         ok(directory);
         JsonNode entry = StreamSupport.stream(directory.json().spliterator(), false)
             .filter(node -> node.get("id").asString().equals(other.id().toString())).findFirst().orElseThrow();
-        assertEquals(List.of("active", "displayName", "id", "username"),
+        assertEquals(List.of("active", "displayName", "id", "kind", "username"),
             StreamSupport.stream(((Iterable<String>) () -> entry.propertyNames().iterator()).spliterator(), false).sorted().toList());
         assertTrue(entry.get("active").asBoolean());
         assertEquals(401, anonymous().get("/api/v1/directory/accounts").status());

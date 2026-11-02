@@ -64,12 +64,14 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
 
   // The company appearance needs a complete login; it is loaded again whenever the login changes.
   const ready = view.state === 'ready';
+  // A portal account may not read the account directory of the staff (TASK-075); it never needs names of other accounts.
+  const portal = view.state === 'ready' && view.session.portal;
   useEffect(() => {
     reload();
   }, [ready, reload]);
 
   useEffect(() => {
-    if (!ready) {
+    if (!ready || portal) {
       setDirectory(new Map());
       return;
     }
@@ -78,7 +80,7 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
       if (!abort.signal.aborted && result.kind === 'ok') setDirectory(new Map(result.data.value.map((entry) => [entry.id, entry])));
     });
     return () => abort.abort();
-  }, [api, ready, directoryRound]);
+  }, [api, ready, portal, directoryRound]);
 
   // Logging out also removes the CSRF cookie. GET /session issues a new one for the anonymous session before the login
   // form is shown again, whatever stage the login had reached; otherwise the next login would be refused.

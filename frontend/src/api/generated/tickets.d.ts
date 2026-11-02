@@ -67,6 +67,52 @@ export interface paths {
         patch: operations["updateTicket"];
         trace?: never;
     };
+    "/portal/projects/{projectId}/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Anfragen der eigenen Organisation im Projekt, neueste zuerst (nur Portalkonten, TASK-075)
+         * @description Nur Tickets, deren Kunde die Organisation des Portalkontos ist. `writableFields` ist leer. Ein internes Konto, ein
+         *     Projekt ohne Mitgliedschaft oder ohne `ticket.read` antwortet mit 404 `project.not_found`.
+         */
+        get: operations["listPortalTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Eine Anfrage der eigenen Organisation (nur Portalkonten, TASK-075)
+         * @description Eine Anfrage einer anderen Organisation, ohne Kunde oder in einem fremden Projekt antwortet mit 404 `ticket.not_found`.
+         */
+        get: operations["getPortalTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/tickets/{number}/history": {
         parameters: {
             query?: never;
@@ -352,6 +398,64 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalTickets: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anfragen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getPortalTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anfrage */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

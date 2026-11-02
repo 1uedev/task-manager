@@ -125,7 +125,8 @@ class PermissionsIntegrationTest {
     @Test
     void absentOrAmbiguousIdentityAdapterDeniesWithoutTestFallback() {
         var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
-        var isolated = new taskmanager.permissions.internal.JdbcPermissions(jdbc, beans.getBeanProvider(IdentityAccess.class), java.time.Clock.systemUTC());
+        var isolated = new taskmanager.permissions.internal.JdbcPermissions(jdbc, beans.getBeanProvider(IdentityAccess.class),
+            beans.getBeanProvider(taskmanager.permissions.CompanyActions.class), java.time.Clock.systemUTC());
         assertFalse(inTransaction(() -> isolated.inspect(actor(USER), scope(), "ticket.read", Set.of())).allowed());
         beans.registerSingleton("one", (IdentityAccess) actor -> true);
         beans.registerSingleton("two", (IdentityAccess) actor -> true);
