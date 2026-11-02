@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -31,10 +31,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-082](#task-082-mailvorlage-für-antworten-an-kunden-a17-teil-2) | Mailvorlage für Antworten an Kunden (A17 Teil 2) | claude-20261102-branding-01 | 2026-11-02 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -303,3 +306,57 @@ Nicht Teil: weitere Funktionen.
 3. Grenzen: Bestandsdaten ohne sichere Quelle bleiben verborgen, nur Dateien lassen sich freigeben; das Fenster von einer Minute ist eine gewählte Sicherheitsspanne; `until` entfällt zugunsten von `position`; H4 bleibt offen.
 
 **Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-080 durch Holger.
+
+## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; OPEN-015; DEC-060, DEC-064; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffall W14). **Abhängigkeiten:** TASK-036, TASK-040, TASK-075, TASK-076, geliefert. **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A17 nach A11 bestätigt und am selben Tag die 20 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-082). Geplanter Branch claude/project-thread-tzp0cw, Entscheidung DEC-111, Migration ab V0046.
+
+**Umfang:** Einstellbarer Name im Auftritt, öffentlicher Lesepfad für Name, Akzentfarbe und Logo vor der Anmeldung, Auftritt auf Anmeldeseite, Pflichtwechsel des Passworts, Seite nach dem Abmelden und im Portal, „Alles zurücksetzen“, Vorschau aller Bereiche auf der Seite „Erscheinungsbild“, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Mailvorlagen (TASK-082), PDFs, weitere Farben, SVG Logos, Entwurf und Freigabe des Auftritts, eigener Auftritt nur für das Portal, Mandanten.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
+1. Der Auftritt erhält einen Namen mit 1 bis 80 Zeichen, Vorgabe „Task Manager“. Er erscheint im Seitenkopf, im Fenstertitel, auf der Anmeldeseite, im Portal und in Mails.
+2. Ein öffentlicher Lesepfad liefert ohne Anmeldung nur Name, Akzentfarbe und Logo, ohne Version, Zeitpunkt oder bearbeitende Person. Er gilt für die Installation und wird nicht über Eingaben des Besuchers gewählt. Fällt er aus, zeigt die Seite den Standard.
+3. Anmeldung, Pflichtwechsel des Passworts und die Seite nach dem Abmelden zeigen Logo, Name und Akzentfarbe; Hell und Dunkel bleiben wählbar.
+4. Das Portal nutzt denselben Auftritt wie die Anwendung, im Kopf mit dem Zusatz „Kundenportal“.
+5. Es bleibt bei Akzentfarbe und Logo; die Schrift auf Akzentflächen wird automatisch schwarz oder weiß gewählt. Fehler, Status und Fokus hängen nie allein an der Akzentfarbe.
+6. Logo als PNG, JPEG oder WebP bis 512 KB, keine SVG Dateien; dasselbe Logo dient Anwendung, Anmeldung, Portal und Mails.
+7. Änderungen wirken sofort, ohne Entwurf; Version mit If-Match und Audit bleiben. „Alles zurücksetzen“ setzt Name, Farbe und Logo in einem Schritt auf den Standard.
+8. Die Seite „Erscheinungsbild“ zeigt die ungespeicherte Wahl in Anwendung, Anmeldeseite, Portal und einer Beispielmail in Deutsch und Englisch mit synthetischen Daten. Die Beispielmail zeigt bis TASK-082 den Kopf mit Logo und Name.
+9. Das Recht bleibt `appearance.manage`.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Eine Änderung von Name, Farbe und Logo wirkt auf Anwendung, Anmeldeseite und Portal und lässt sich zurücksetzen (W14).
+2. Der öffentliche Lesepfad gibt nur Name, Farbe und Logo preis; ungültige Namen werden mit 400 abgelehnt; Änderungen ohne `appearance.manage` oder mit veralteter Version werden abgelehnt.
+3. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anmeldeseite, Portal und Vorschau in Hell und Dunkel.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-082 in derselben Sitzung, sobald das Ergebnis auf main ist.
+
+## TASK-082 Mailvorlage für Antworten an Kunden (A17 Teil 2)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffälle W15 und W16). **Abhängigkeiten:** TASK-081 auf main, TASK-058 geliefert. **Arbeitsstand:** Mit TASK-081 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-081 auf main ist. Geplanter Branch claude/project-thread-tzp0cw, Entscheidung DEC-112, eigene Migration nach der von TASK-081.
+
+**Umfang:** Vorlage „Antwort an Kunden“ als Rahmen um den Antworttext in Deutsch und Englisch, Platzhalterkatalog, Adresse der Anwendung, Sprache am Kontakt, Versand als HTML und Klartext mit eingebettetem Logo, eingebaute Rückfallvorlage, Festhalten der fertigen Mail bei der Bestätigung, Vorschau, Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: PDFs, weitere Mailarten wie Benachrichtigungen, Vorlagen je Projekt oder Postfach, freies HTML, CSS oder Skripte, Änderung des Betreffs durch die Vorlage.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
+1. Die Vorlage „Antwort an Kunden“ umfasst Kopf mit Logo und Name, Anrede, den Antworttext des Supports, Signatur und Fußzeile. Der Betreff bleibt im Antwortformular.
+2. Bearbeitbar sind Anrede, Signatur und Fußzeile je Sprache als einfacher Text mit Platzhaltern und Zeilenumbrüchen, je Teil höchstens 2 000 Zeichen. Das HTML entsteht aus einem festen Layout.
+3. Platzhalter sind nur `{{company.name}}`, `{{contact.name}}`, `{{ticket.number}}`, `{{ticket.title}}`, `{{sender.name}}`, `{{mailbox.address}}` und `{{portal.url}}`. Ein unbekannter Platzhalter wird beim Speichern mit 400 und benanntem Platzhalter abgelehnt. Werte werden für HTML maskiert.
+4. Ein optionales Feld „Adresse der Anwendung“ (nur https) liefert `{{portal.url}}`; ohne Adresse entfällt der Link.
+5. Kontakte haben die Sprache Deutsch oder Englisch, Vorgabe Deutsch, änderbar in der Kundenpflege. Die Mail folgt der Sprache des Kontakts, sonst Deutsch, unabhängig von der Oberflächensprache der antwortenden Person.
+6. Jede Antwort geht als HTML und Klartext derselben Nachricht. Das Logo ist eingebettet, nicht nachgeladen; ohne Logo steht dort der Name. Der Antworttext wird maskiert, Zeilenumbrüche bleiben erhalten.
+7. Eine eingebaute Vorlage in Deutsch und Englisch gilt, solange nichts gespeichert ist; „Zurücksetzen“ kehrt zu ihr zurück. Gespeicherte Vorlagen sind beim Speichern geprüft.
+8. Die Prüfung vor dem Senden zeigt die fertige Mail; beim Bestätigen wird sie mit der dann gültigen Vorlage festgehalten. Spätere Änderungen von Vorlage oder Auftritt ändern wartende oder erneut versuchte Sendungen nicht.
+9. Die Vorlage pflegt, wer `appearance.manage` hat; die Vorschau nutzt nur synthetische Daten. Version mit If-Match und Audit wie beim Auftritt.
+10. Das Vorführimage erhält eine Beispielsignatur, der Kontakt von Südtechnik spricht Englisch.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Eine Antwort an einen deutschen und einen englischen Kontakt geht als HTML und Klartext mit Logo, Name und gespeicherter Vorlage in der jeweiligen Sprache; ohne gespeicherte Vorlage gilt die Rückfallvorlage.
+2. Unbekannte Platzhalter werden abgelehnt (W15); Werte mit HTML Zeichen erscheinen maskiert; die Vorschau zeigt keine echten Daten.
+3. Eine nach der Bestätigung geänderte Vorlage ändert eine wartende oder erneut versuchte Sendung nicht.
+4. Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-081 auf main die Blockade aufheben und umsetzen.
