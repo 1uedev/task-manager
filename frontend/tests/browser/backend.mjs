@@ -36,7 +36,7 @@ export const ANNA = { username: 'anna', password: 'Anna Passwort 2026', displayN
 export const BEN = { username: 'ben', password: 'Ben Passwort 2026', displayName: 'Ben Leser' };
 export const NORA = { username: 'nora', password: 'EinmalNora0001', displayName: 'Nora Neu' };
 
-export function createBackend({ accent = '#f97316', anonymousAppearance = false } = {}) {
+export function createBackend({ accent = '#f97316', anonymousAppearance = false, brandName = 'Task Manager' } = {}) {
   const accounts = [ANNA, BEN, NORA].map((item) => ({
     id: uuid(), username: item.username, displayName: item.displayName, password: item.password, active: true,
     passwordChangeRequired: item === NORA, createdAt: now(),
@@ -64,7 +64,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       { id: uuid(), name: 'Lesen', members: [ben.id, nora.id], actions: ['project.read', 'ticket.read'].map((action) => ({ action, projectId: null })),
         fields: ['title', 'type', 'status', 'assignee', TAG_FIELD, ATTACHMENT_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
-    appearance: { version: 3, accent, logo: null },
+    appearance: { version: 3, accent, name: brandName, logo: null },
     // The LDAP connection (TASK-046): null until stored; `directoryDown` makes a sign in of an unknown name fail like an outage.
     ldap: null,
     ldapBindPasswordSet: true,
@@ -326,6 +326,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       session.account = null;
       return empty();
     }
+    // What the login page reads without a session (TASK-081).
+    if (p === '/appearance/public' && method === 'GET') {
+      if (state.publicAppearanceDown) return problem(503, 'server.unavailable');
+      return ok({ name: state.appearance.name, accentColor: state.appearance.accent, logoUrl: state.appearance.logo ? '/api/v1/appearance/public/logo' : null });
+    }
+    if (p === '/appearance/public/logo' && method === 'GET') {
+      return state.appearance.logo ? { status: 200, raw: PNG, type: 'image/png' } : problem(404, 'appearance.logo_not_found');
+    }
     const account = session.account;
     if (!account || !account.active) {
       session.account = null;
@@ -346,8 +354,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
       if (headers['if-match'] !== `"${state.appearance.version}"`) return problem(412, 'appearance.version_conflict');
       state.appearance.version += 1;
-      if (p === '/appearance') state.appearance.accent = body.accentColor;
-      else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
+      if (p === '/appearance' && method === 'DELETE') Object.assign(state.appearance, { accent: '#f97316', name: 'Task Manager', logo: null });
+      else if (p === '/appearance') {
+        if (body.accentColor !== undefined) state.appearance.accent = body.accentColor.toLowerCase();
+        if (body.name !== undefined) state.appearance.name = body.name.trim();
+      } else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
       else state.appearance.logo = null;
       return ok(appearanceBody(), `"${state.appearance.version}"`);
     }
@@ -1527,7 +1538,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       rights: account.passwordChangeRequired ? [] : companyRights(account) };
   }
   function appearanceBody() {
-    return { accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
+    return { name: state.appearance.name, defaultName: 'Task Manager', accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
   }
 
   // Installs the backend for one browser context. `as` starts the context signed in.

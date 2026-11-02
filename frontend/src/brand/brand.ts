@@ -59,9 +59,11 @@ export function textOn(accent: string): string {
   return contrastRatio('#000000', accent) >= contrastRatio('#ffffff', accent) ? '#000000' : '#ffffff';
 }
 
-export function accentBrand(accent: string, logoUrl: string | null, surface: Surface): Brand {
+export const DEFAULT_NAME = 'Task Manager';
+
+export function accentBrand(accent: string, logoUrl: string | null, surface: Surface, name: string = DEFAULT_NAME): Brand {
   const primary = isAccentColor(accent) ? accent.toLowerCase() : DEFAULT_ACCENT;
-  return { name: 'Task Manager', logoUrl, colors: { primary, onPrimary: textOn(primary), ...SURFACES[surface] } };
+  return { name: name.trim() === '' ? DEFAULT_NAME : name, logoUrl, colors: { primary, onPrimary: textOn(primary), ...SURFACES[surface] } };
 }
 
 export const defaultBrand: Brand = accentBrand(DEFAULT_ACCENT, null, 'light');

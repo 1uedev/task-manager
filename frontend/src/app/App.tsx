@@ -74,15 +74,18 @@ function Preferences() {
   );
 }
 
-function BrandMark() {
+// The portal carries the same appearance with the addition "Kundenportal" (TASK-081).
+function BrandMark({ addition }: { readonly addition?: MessageKey }) {
   const { brand } = useBrand();
+  const { t } = useI18n();
   return (
     <div className="brand">
       {brand.logoUrl !== null
         // The name beside it is read out, so the logo itself stays silent instead of announcing a generic label.
         ? <img src={brand.logoUrl} alt="" className="brand-logo" />
-        : <span className="brand-mark" aria-hidden="true">{brand.name.slice(0, 1)}</span>}
+        : <span className="brand-mark" aria-hidden="true">{[...brand.name][0]}</span>}
       <span className="brand-name" data-testid="brand-name">{brand.name}</span>
+      {addition !== undefined && <span className="brand-addition" data-testid="brand-addition">{t(addition)}</span>}
     </div>
   );
 }
@@ -169,7 +172,7 @@ function PortalShell() {
   return (
     <div className="gate portal">
       <header className="gate-head">
-        <BrandMark />
+        <BrandMark addition="portal.brandAddition" />
         <div className="portal-session">
           <p className="who" data-testid="who">{who}</p>
           <button type="button" className="link-button logout" onClick={() => void signOut()}><LogoutIcon />{t('session.logout')}</button>

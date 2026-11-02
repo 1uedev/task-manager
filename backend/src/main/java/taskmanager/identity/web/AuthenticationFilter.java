@@ -23,7 +23,7 @@ import taskmanager.platform.ProblemWriter;
 
 /**
  * Default deny for the whole API. Every request below {@code /api/} needs a valid session, except the session
- * endpoint itself (state, login, logout). A session whose password change is still pending may only change the
+ * endpoint itself (state, login, logout) and the public reads of the appearance (TASK-081). A session whose password change is still pending may only change the
  * password. Server side expiry, deactivation and revocation are decided here for every request, so a stale
  * browser tab and a direct API call with the cookie are treated alike. Unsafe methods additionally need a CSRF
  * token (see {@link #csrfProblem}).
@@ -35,6 +35,11 @@ class AuthenticationFilter extends OncePerRequestFilter {
     private static final String SESSION_PATH = "/api/v1/session";
     private static final String PASSWORD_PATH = "/api/v1/session/password";
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
+    /**
+     * Reads without a session (TASK-081): the name, accent color and logo the login page shows. Only reading methods; a
+     * session that must still change its password reads them too.
+     */
+    private static final Set<String> PUBLIC_READS = Set.of("/api/v1/appearance/public", "/api/v1/appearance/public/logo");
 
     private final SessionService sessions;
     private final ProblemWriter problems;
@@ -90,6 +95,9 @@ class AuthenticationFilter extends OncePerRequestFilter {
 
     private static ApiProblemException authorizationProblem(String method, String path, boolean hadToken, Optional<Resolved> resolved) {
         if (path.equals(SESSION_PATH)) {
+            return null;
+        }
+        if (PUBLIC_READS.contains(path) && (method.equals("GET") || method.equals("HEAD"))) {
             return null;
         }
         if (resolved.isEmpty()) {

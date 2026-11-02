@@ -140,6 +140,24 @@ function withLea(backend) {
   return lea;
 }
 
+// TASK-081: the portal shows the company appearance with the addition "Kundenportal".
+describe('portal appearance', () => {
+  test('the portal head carries the company name, color and logo with the addition Kundenportal', async () => {
+    const backend = createBackend({ accent: '#7c3aed', brandName: 'Nordlicht Service' });
+    backend.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
+    withLea(backend);
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByRole('heading', { name: 'Ihre Anfragen' }).waitFor();
+    assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+    assert.equal(await page.getByTestId('brand-addition').innerText(), 'Kundenportal');
+    assert.equal(await page.locator('header img.brand-logo').getAttribute('src'), '/api/v1/appearance/logo?v=3');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim()), '#7c3aed');
+    assert.equal(await page.title(), 'Ihre Anfragen · Nordlicht Service');
+    await finish(portal);
+  });
+});
+
 describe('portal conversation', () => {
   test('a portal account creates a request with a file and writes in its conversation', async () => {
     const backend = createBackend();
