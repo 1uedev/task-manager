@@ -93,15 +93,58 @@ public class TicketService {
      */
     @Transactional
     public List<TicketView> portalList(AccessContext actor, UUID projectId, int limit, Long before) {
+        return portalList(actor, projectId, limit, before, PortalFilter.NONE);
+    }
+
+    /**
+     * What the portal list filters by (TASK-076): a status key, {@code open} or {@code done} after the category of the status, and
+     * a text that title or description contain, ignoring case. A filter by status needs the read rule of the field
+     * {@code status}; the text searches only the fields of the two the caller may read. {@code null} filters nothing.
+     */
+    public record PortalFilter(String status, String state, String text) {
+        public static final PortalFilter NONE = new PortalFilter(null, null, null);
+
+        public PortalFilter {
+            status = status == null || status.isBlank() ? null : status.strip();
+            state = state == null || state.isBlank() ? null : state.strip();
+            text = text == null || text.isBlank() ? null : text.strip().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** The list of {@link #portalList(AccessContext, UUID, int, Long)} with the filters of the portal start page (TASK-076). */
+    @Transactional
+    public List<TicketView> portalList(AccessContext actor, UUID projectId, int limit, Long before, PortalFilter filter) {
         portalOnly(actor);
+        if (filter.state() != null && !filter.state().equals("open") && !filter.state().equals("done")) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("state.invalid"));
+        }
         Supplier<ResourceContext> project = resource(actor, projectId);
         Supplier<ResourceContext> resource = () -> withOrganization(project.get(), actor.organizationId());
         Decision read = readable(actor, resource, projectId);
+        Set<String> readable = read.readableFields();
+        if ((filter.status() != null || filter.state() != null) && !readable.contains("status")) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("status.not_readable"));
+        }
         String key = projects.key(projectId).orElseThrow(TicketService::projectNotFound);
         ProjectConfiguration configuration = configuration(projectId);
         List<UUID> own = organizations.lockTicketsOf(projectId, actor.organizationId());
-        return tickets.listAmong(actor.companyId(), projectId, own, limit, before).stream()
-            .map(ticket -> new TicketView(ticket, key, read.readableFields(), Set.of(), configuration)).toList();
+        return tickets.listAmong(actor.companyId(), projectId, own, Integer.MAX_VALUE, before).stream()
+            .filter(ticket -> filter.status() == null || filter.status().equals(ticket.status()))
+            .filter(ticket -> filter.state() == null
+                || filter.state().equals("done") == ProjectConfiguration.CATEGORY_DONE.equals(category(configuration, ticket.status())))
+            .filter(ticket -> filter.text() == null || contains(readable, "title", ticket.title(), filter.text())
+                || contains(readable, "description", ticket.description(), filter.text()))
+            .limit(limit)
+            .map(ticket -> new TicketView(ticket, key, readable, Set.of(), configuration)).toList();
+    }
+
+    private static String category(ProjectConfiguration configuration, String status) {
+        return configuration.statuses().stream().filter(s -> s.key().equals(status)).findFirst()
+            .map(ProjectConfiguration.Status::category).orElse(null);
+    }
+
+    private static boolean contains(Set<String> readable, String field, String value, String text) {
+        return readable.contains(field) && value != null && value.toLowerCase(java.util.Locale.ROOT).contains(text);
     }
 
     /**

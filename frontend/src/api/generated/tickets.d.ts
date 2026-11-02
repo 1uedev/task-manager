@@ -80,6 +80,11 @@ export interface paths {
          * Anfragen der eigenen Organisation im Projekt, neueste zuerst (nur Portalkonten, TASK-075)
          * @description Nur Tickets, deren Kunde die Organisation des Portalkontos ist. `writableFields` ist leer. Ein internes Konto, ein
          *     Projekt ohne Mitgliedschaft oder ohne `ticket.read` antwortet mit 404 `project.not_found`.
+         *
+         *     Filter (TASK-076): `status` nach dem Schlüssel eines Status, `state` nach offen oder erledigt (Kategorie `done` des Status),
+         *     `q` nach Text in Titel oder Beschreibung ohne Rücksicht auf Groß und Kleinschreibung, nur in den lesbaren der beiden
+         *     Felder. Ein Filter nach Status oder Zustand ohne Leserecht auf `status` antwortet mit 400 `request.invalid` und
+         *     `status.not_readable`, ein unbekannter Zustand mit `state.invalid`.
          */
         get: operations["listPortalTickets"];
         put?: never;
@@ -406,6 +411,9 @@ export interface operations {
             query?: {
                 limit?: number;
                 before?: number;
+                status?: string;
+                state?: "open" | "done";
+                q?: string;
             };
             header?: never;
             path: {

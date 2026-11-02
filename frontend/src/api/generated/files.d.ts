@@ -44,6 +44,49 @@ export interface paths {
         delete: operations["removeAttachment"];
         options?: never;
         head?: never;
+        /** Sichtbarkeit setzen (ticket.edit und Schreibregel für attachments, TASK-076) */
+        patch: operations["setAttachmentVisibility"];
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /** Kundensichtbare Anhänge einer Anfrage (nur Portalkonten, TASK-076) */
+        get: operations["listPortalAttachments"];
+        put?: never;
+        /** Datei aus dem Portal anhängen, immer kundensichtbar (portal.answer und Schreibregel für attachments) */
+        post: operations["uploadPortalAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                id: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        /** Inhalt eines kundensichtbaren Anhangs laden; ein interner antwortet mit 404 (TASK-076) */
+        get: operations["downloadPortalAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -61,6 +104,20 @@ export interface components {
             correlationId: string;
             violations?: string[];
         };
+        /**
+         * @description internal nur für interne Konten, customer auch im Portal (TASK-076).
+         * @enum {string}
+         */
+        Visibility: "internal" | "customer";
+        PortalAttachment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            uploadedAt: string;
+        };
         Attachment: {
             /** Format: uuid */
             id: string;
@@ -77,6 +134,7 @@ export interface components {
             uploadedAt: string;
             /** Format: uuid */
             uploadedBy: string;
+            visibility: components["schemas"]["Visibility"];
         };
     };
     responses: {
@@ -84,7 +142,7 @@ export interface components {
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found,
          *     attachment.not_found, attachment.empty, attachment.incomplete, attachment.too_large, attachment.type_blocked,
          *     attachment.storage_unavailable, attachment.busy, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
-         *     auth.password_change_required. Grund in `violations`: name.invalid.
+         *     auth.password_change_required. Gründe in `violations`: name.invalid, visibility.invalid.
          */
         Problem: {
             headers: {
@@ -227,6 +285,140 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setAttachmentVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                id: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    visibility: components["schemas"]["Visibility"];
+                };
+            };
+        };
+        responses: {
+            /** @description Der Anhang mit der neuen Sichtbarkeit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Die kundensichtbaren, nicht entfernten Anhänge, älteste zuerst */
+            200: {
+                headers: {
+                    /** @description Größte angenommene Datei in Bytes. */
+                    "X-Attachment-Max-Bytes"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalAttachment"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    uploadPortalAttachment: {
+        parameters: {
+            query: {
+                /** @description Name der Datei, URL kodiert. */
+                name: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Angehängt */
+            201: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalAttachment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            415: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    downloadPortalAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                id: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Der Inhalt, immer als Datei zum Speichern */
+            200: {
+                headers: {
+                    /** @description attachment mit dem Namen als filename* */
+                    "Content-Disposition"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Content-Security-Policy"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];

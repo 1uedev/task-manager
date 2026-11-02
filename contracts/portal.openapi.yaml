@@ -12,7 +12,7 @@ info:
     `Cache-Control: no-store` gelten wie im Identitätsvertrag. Deaktivieren, Reaktivieren, Zurücksetzen des Passworts,
     Anzeigename und Wartezeit nach Fehlversuchen laufen über `/accounts/{accountId}` wie bei internen Konten.
 
-    Die Gruppe „Portal“ entsteht mit dem ersten Portalkonto: Aktionen `ticket.read` und `ticket.create` für alle Projekte,
+    Die Gruppe „Portal“ entsteht mit dem ersten Portalkonto: Aktionen `ticket.read`, `ticket.create` und `portal.answer` (seit TASK-076) für alle Projekte,
     Leseregeln für `title`, `description`, `type`, `status`, `priority`, `tags` und `attachments`, Schreibregeln für `title`,
     `description` und `attachments`, alles für den Ressourcentyp `ticket`. Die Verwaltung kann sie in der Rechteverwaltung
     ändern; die Gruppe wird über ihren Zweck gefunden, nicht über ihren Namen. Ein Portalkonto hält nie ein Unternehmensrecht:

@@ -110,6 +110,16 @@ class JdbcIdentityVerification implements IdentityVerification {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<UUID> portalContact(UUID accountId) {
+        if (accountId == null) {
+            return Optional.empty();
+        }
+        return jdbc.sql("select contact_id from identity_account where id = ? and kind = 'portal' and contact_id is not null for share")
+            .param(accountId).query((rs, row) -> rs.getObject(1, UUID.class)).optional();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public boolean accountIsPortal(UUID accountId) {
         return portalOrganization(accountId).isPresent();
     }

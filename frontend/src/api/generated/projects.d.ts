@@ -12,8 +12,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Projekte eines Portalkontos mit Schlüssel und Name (TASK-075)
+         * Projekte eines Portalkontos mit Schlüssel, Name, angebotenen Tickettypen und Status (TASK-075, TASK-076)
          * @description Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`.
+         *     `ticketTypes` sind die im Portal angebotenen Tickettypen der geltenden Konfiguration, `statuses` alle Status mit Name
+         *     und Kategorie, damit das Portal den Status mit seinem Namen zeigt und nach offen oder erledigt filtert (TASK-076).
          */
         get: operations["listPortalProjects"];
         put?: never;
@@ -348,6 +350,11 @@ export interface components {
             ticketTypes: {
                 key: string;
                 name: string;
+                /**
+                 * @description Im Kundenportal für neue Anfragen angeboten (TASK-076); fehlt die Angabe, gilt false. Ohne markierten Typ legt
+                 *     niemand im Portal an.
+                 */
+                portal?: boolean;
             }[];
             statuses: {
                 key: string;
@@ -485,6 +492,16 @@ export interface operations {
                         id: string;
                         key: string;
                         name: string;
+                        ticketTypes: {
+                            key: string;
+                            name: string;
+                        }[];
+                        statuses: {
+                            key: string;
+                            name: string;
+                            /** @enum {string} */
+                            category: "open" | "in_progress" | "done";
+                        }[];
                     }[];
                 };
             };

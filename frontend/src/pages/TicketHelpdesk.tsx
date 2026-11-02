@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply,
+  answerInPortal, listPortalPosts, readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply,
   type Ticket, type TicketHelpdesk as HelpdeskView,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -28,6 +28,7 @@ export function TicketHelpdesk({ project, ticket, round, onChanged }: {
   const [view, reload, replace] = useLoad(() => readTicketHelpdesk(api, project.id, ticket.number), [api, project.id, ticket.number, round]);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [answers, setAnswers] = useState(0);
 
   if (view.state !== 'ok') return null;
   const value = view.value;
@@ -71,6 +72,14 @@ export function TicketHelpdesk({ project, ticket, round, onChanged }: {
           onChanged();
         }} />
       )}
+      {readable.has('mail') && <PortalThread project={project} ticket={ticket} round={round + answers} />}
+      {value.portalAnswerAllowed && (
+        <PortalAnswer project={project} ticket={ticket} onSent={() => {
+          setAnswers((count) => count + 1);
+          reload();
+          onChanged();
+        }} />
+      )}
       {value.replyAllowed && value.contact && (
         <ReplyComposer project={project} ticket={ticket} onSent={() => {
           reload();
@@ -78,6 +87,82 @@ export function TicketHelpdesk({ project, ticket, round, onChanged }: {
         }} />
       )}
     </section>
+  );
+}
+
+// The posts of the customer portal (TASK-076): posts of portal accounts and answers of the support through the portal, oldest
+// first, with the files a post carries. Shown with the read rule of the mails.
+function PortalThread({ project, ticket, round }: { readonly project: Project; readonly ticket: Ticket; readonly round: number }) {
+  const { t, language } = useI18n();
+  const { api } = useBrand();
+  const [posts] = useLoad(() => listPortalPosts(api, project.id, ticket.number), [api, project.id, ticket.number, round]);
+  if (posts.state !== 'ok' || posts.value.length === 0) return null;
+  return (
+    <>
+      <h3>{t('ticketHelpdesk.portal')}</h3>
+      <ul className="plain-list" data-testid="ticket-portal-posts">
+        {posts.value.map((post) => (
+          <li key={post.id} data-author={post.authorKind}>
+            <p className="label-small">{t(post.authorKind === 'support' ? 'ticketHelpdesk.portalSupport' : 'ticketHelpdesk.portalCustomer',
+              { date: formatDateTime(post.createdAt, language) })}</p>
+            <p className="prewrap mail-body">{post.body}</p>
+            {post.attachments.map((file) => (
+              <p key={file.id} className="hint">{t('inbox.file', { name: file.name, size: formatBytes(file.size, language) })}</p>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// An answer through the portal (TASK-076): it appears at once in the portal and counts as first response; no mail is sent.
+function PortalAnswer({ project, ticket, onSent }: { readonly project: Project; readonly ticket: Ticket; readonly onSent: () => void }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  useUnsavedGuard(open && body.trim() !== '');
+
+  if (!open) {
+    return (
+      <>
+        <p className="actions"><button type="button" onClick={() => { setNotice(null); setOpen(true); }}>{t('ticketHelpdesk.portalCompose')}</button></p>
+        <NoticeView notice={notice} />
+      </>
+    );
+  }
+
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    setNotice(null);
+    if (body.trim() === '') return setNotice({ kind: 'info', text: t('ticketHelpdesk.error.replyInvalid') });
+    setBusy(true);
+    const result = await answerInPortal(api, project.id, ticket.number, body);
+    setBusy(false);
+    if (result.kind !== 'ok') {
+      return setNotice({ kind: 'info', text: text(result.problem, { ...REPLY_PROBLEMS, 'helpdesk.portal_no_customer': 'ticketHelpdesk.error.portalNoCustomer' }) });
+    }
+    setBody('');
+    setOpen(false);
+    setNotice({ kind: 'success', text: t('ticketHelpdesk.portalSent') });
+    onSent();
+  }
+
+  return (
+    <form className="inline-form" onSubmit={(event) => void send(event)} noValidate data-testid="portal-answer">
+      <h3>{t('ticketHelpdesk.portalCompose')}</h3>
+      <p className="hint">{t('ticketHelpdesk.portalHint')}</p>
+      <TextField label={t('ticketHelpdesk.body')} value={body} onChange={setBody} required multiline maxLength={100000} />
+      <p className="actions">
+        <button type="submit" disabled={busy}>{t('ticketHelpdesk.portalSend')}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => { setOpen(false); setNotice(null); }}>{t('helpdesk.cancel')}</button>
+      </p>
+      <NoticeView notice={notice} />
+    </form>
   );
 }
 

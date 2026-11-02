@@ -303,7 +303,7 @@ public class ReplyService {
      * Without {@code ticket.read} the project does not exist for the caller (404); without {@code helpdesk.reply} or the read
      * rules of {@code mail} and {@code contact} the reply is refused (403).
      */
-    private void requireReply(AccessContext actor, UUID projectId) {
+    void requireReply(AccessContext actor, UUID projectId) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
         if (!permissions.inspect(actor, resource, READ, Set.of()).allowed()) {
             throw ApiProblemException.of(404, "project.not_found");
