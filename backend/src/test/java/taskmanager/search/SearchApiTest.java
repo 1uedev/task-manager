@@ -401,6 +401,70 @@ class SearchApiTest {
     }
 
     @Test
+    void tagFiltersFindAllAnyNoneAndUntaggedOnlyWhereTheTagsAreReadable() {
+        Person worker = person();
+        Person blind = person();
+        Project project = project(worker, blind);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        grant(blind.id(), project.id(), "ticket.read", "READ:*");
+        String token = word();
+        long both = ticket(worker, project, token + " beide");
+        long onlyRed = ticket(worker, project, token + " rot");
+        long onlyBlue = ticket(worker, project, token + " blau");
+        long none = ticket(worker, project, token + " ohne");
+        String catalog = "/api/v1/projects/" + project.id() + "/catalog/tags";
+        UUID red = tag(worker, catalog, "Rot " + token);
+        UUID blue = tag(worker, catalog, "Blau " + token);
+        assertEquals(204, post(worker, ticketTags(project, both), Map.of("tagId", red.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, both), Map.of("tagId", blue.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, onlyRed), Map.of("tagId", red.toString())).status());
+        assertEquals(204, post(worker, ticketTags(project, onlyBlue), Map.of("tagId", blue.toString())).status());
+        String p = project.key() + "-";
+        String base = "q=" + token + "&tag=" + red + "&tag=" + blue;
+
+        assertEquals(List.of(p + both), keys(worker, base));
+        assertEquals(List.of(p + both), keys(worker, base + "&tagMatch=all"));
+        assertEquals(java.util.Set.of(p + onlyBlue, p + onlyRed, p + both), java.util.Set.copyOf(keys(worker, base + "&tagMatch=any")));
+        assertEquals(List.of(p + none), keys(worker, base + "&tagMatch=none"));
+        assertEquals(java.util.Set.of(p + onlyBlue, p + none), java.util.Set.copyOf(keys(worker, "q=" + token + "&tag=" + red + "&tagMatch=none")));
+        assertEquals(List.of(p + none), keys(worker, "q=" + token + "&tagMatch=untagged"));
+        assertEquals(List.of(p + none), keys(worker, "project=" + project.id() + "&tagMatch=untagged"),
+            "the tag filter combines with the other filters and works without a text");
+        assertEquals(List.of(), keys(worker, base + "&tagMatch=any&assignee=" + worker.id()), "no ticket is assigned to the worker");
+
+        // Without the read rule for tags there is no tag filter: no ticket of the project matches, also not "untagged".
+        assertEquals(4, keys(blind, "q=" + token).size());
+        assertEquals(List.of(), keys(blind, "q=" + token + "&tagMatch=untagged"));
+        assertEquals(List.of(), keys(blind, "q=" + token + "&tag=" + red + "&tagMatch=none"));
+
+        assertInvalid(tickets(worker, "tagMatch=any"), "tagMatch.invalid");
+        assertInvalid(tickets(worker, "tagMatch=untagged&tag=" + red), "tagMatch.invalid");
+        assertInvalid(tickets(worker, "tagMatch=some&tag=" + red), "tagMatch.invalid");
+        StringBuilder eleven = new StringBuilder("q=" + token);
+        for (int i = 0; i < 11; i++) {
+            eleven.append("&tag=").append(UUID.randomUUID());
+        }
+        assertInvalid(tickets(worker, eleven.toString()), "tag.invalid");
+    }
+
+    @Test
+    void projectsFollowTheSameTagFilters() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person reader = person();
+        String token = word();
+        Project tagged = project(token + " markiert", reader);
+        Project plain = project(token + " schlicht", reader);
+        grant(reader.id(), null, "project.read");
+        UUID label = tag(admin, "/api/v1/tags", "Marke " + token);
+        assertEquals(204, post(tagged.manager(), "/api/v1/projects/" + tagged.id() + "/tags", Map.of("tagId", label.toString())).status());
+
+        assertEquals(List.of(tagged.key()), projectKeys(reader, "q=" + token + "&tag=" + label + "&tagMatch=any"));
+        assertEquals(List.of(plain.key()), projectKeys(reader, "q=" + token + "&tag=" + label + "&tagMatch=none"));
+        assertEquals(List.of(plain.key()), projectKeys(reader, "q=" + token + "&tagMatch=untagged"));
+    }
+
+    @Test
     void wordsOfHiddenFieldsNeitherMatchNorCountNorRank() {
         Person worker = person();
         Person viewer = person();

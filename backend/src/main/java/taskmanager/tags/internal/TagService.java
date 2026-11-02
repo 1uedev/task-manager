@@ -323,6 +323,104 @@ public class TagService {
         }
     }
 
+    // ------------------------------------------------------------------------------------------------ bulk change
+
+    /** What a bulk change did to one ticket (TASK-073, DEC-103). */
+    public enum BulkOutcome { CHANGED, UNCHANGED, NOT_MATCHING, REFUSED }
+
+    /**
+     * The tags of a bulk change, checked once before the tickets: each must exist in a catalog the caller sees and must not be
+     * merged; to add, it must not be archived either. An unknown tag and one of a hidden project catalog answer alike.
+     */
+    @Transactional
+    public List<Tag> bulkTags(AccessContext actor, Collection<UUID> ids, boolean add) {
+        internal(actor);
+        List<Tag> found = new ArrayList<>();
+        for (UUID id : ids) {
+            Tag tag = tags.find(actor.companyId(), id).orElseThrow(TagService::tagNotFound);
+            if (tag.projectId() != null) {
+                Supplier<ResourceContext> resource = projects.resource(actor.companyId(), tag.projectId(), actor.userId(), TAG_RESOURCE, false);
+                if (firstAllowed(actor, resource, CATALOG_READERS).isEmpty()) {
+                    throw tagNotFound();
+                }
+            }
+            if (tag.merged()) {
+                throw ApiProblemException.of(409, "tag.merged");
+            }
+            if (add && tag.archived()) {
+                throw ApiProblemException.of(409, "tag.archived");
+            }
+            found.add(tag);
+        }
+        return found;
+    }
+
+    /**
+     * Adds or removes the given tags at one ticket in a transaction of its own, checked with the current rights as a single
+     * change ({@code ticket.edit} and the write rule for tags). Tags of the catalog of another project do not fit and are
+     * left out; when none fits, nothing changes. A refusal (rights, a tag archived meanwhile, the limit) is thrown and rolls
+     * back the whole ticket, so a ticket never keeps half of a bulk change.
+     */
+    @Transactional
+    public BulkOutcome bulkTicket(AccessContext actor, UUID ticketId, List<Tag> chosen, boolean add) {
+        TicketAccess.Location location = tickets.locate(ticketId).filter(found -> found.companyId().equals(actor.companyId()))
+            .orElseThrow(() -> ApiProblemException.of(404, "ticket.not_found"));
+        UUID ticket = changeableTicket(actor, location.projectId(), location.number());
+        List<Tag> fitting = chosen.stream().filter(tag -> tag.projectId() == null || tag.projectId().equals(location.projectId()))
+            .sorted(java.util.Comparator.comparing(Tag::id)).toList();
+        if (fitting.isEmpty()) {
+            return BulkOutcome.NOT_MATCHING;
+        }
+        boolean changed = false;
+        if (add) {
+            List<Tag> locked = new ArrayList<>();
+            for (Tag tag : fitting) {
+                locked.add(assignable(tags.lockForAssignment(actor.companyId(), tag.id(), location.projectId())
+                    .orElseThrow(TagService::tagNotFound)));
+            }
+            tickets.lockForTagChange(ticket);
+            tags.lockObject(TicketAccess.RESOURCE_TYPE, ticket);
+            long missing = locked.stream().filter(tag -> !tags.ticketHas(ticket, tag.id())).count();
+            if (missing > 0 && tags.ticketCount(ticket) + missing > MAX_PER_OBJECT) {
+                throw ApiProblemException.of(409, "tag.limit_reached");
+            }
+            Instant now = clock.instant();
+            for (Tag tag : locked) {
+                if (tags.assignTicket(ticket, tag.id(), location.projectId(), now, actor.userId())) {
+                    tags.audit(actor.companyId(), tag.id(), "tag.assigned", "ticket", ticket, null, actor.userId(), now);
+                    tickets.recordTagChange(ticket, now, actor.userId(), null, tag.id());
+                    events.publishEvent(new TicketTagChanged(ticket, tag.id(), true));
+                    changed = true;
+                }
+            }
+        } else {
+            tickets.lockForTagChange(ticket);
+            Instant now = clock.instant();
+            for (Tag tag : fitting) {
+                if (tags.unassignTicket(ticket, tag.id())) {
+                    tags.audit(actor.companyId(), tag.id(), "tag.unassigned", "ticket", ticket, null, actor.userId(), now);
+                    tickets.recordTagChange(ticket, now, actor.userId(), tag.id(), null);
+                    events.publishEvent(new TicketTagChanged(ticket, tag.id(), false));
+                    changed = true;
+                }
+            }
+        }
+        return changed ? BulkOutcome.CHANGED : BulkOutcome.UNCHANGED;
+    }
+
+    /** The key of the ticket when the caller may read it now ({@code ticket.read}), so a result names only what they see. */
+    @Transactional
+    public Optional<String> readableKey(AccessContext actor, UUID ticketId) {
+        Optional<TicketAccess.Location> location = tickets.locate(ticketId).filter(found -> found.companyId().equals(actor.companyId()));
+        if (location.isEmpty() || actor.external()) {
+            return Optional.empty();
+        }
+        if (!permissions.inspect(actor, ticketResource(actor, location.get().projectId()), TICKET_READ, Set.of()).allowed()) {
+            return Optional.empty();
+        }
+        return projects.key(location.get().projectId()).map(key -> key + "-" + location.get().number());
+    }
+
     // ------------------------------------------------------------------------------------------------ catalog changes
 
     private Tag create(AccessContext actor, UUID projectId, String rawName) {

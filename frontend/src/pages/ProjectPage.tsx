@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import {
   addMember, assignedProjectTags, assignProjectTag, createProjectTag, createTicket, listMembers, listTickets, readProject, readProjectRights, removeProjectTag,
-  removeMember, updateProject, type Member, type Project, type Ticket,
+  removeMember, searchTickets, updateProject, type Member, type Project, type Ticket, type TicketHit,
 } from '../api/product.ts';
 import { CUSTOM_PREFIX, customFieldsOf, sendValue } from '../app/configuration.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -9,7 +9,10 @@ import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate, type ProjectTab } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
-import { TagCatalog, TagLabel, TagPicker, useTagProblemText } from './TagParts.tsx';
+import {
+  NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagCatalog, TagFilter, tagFilterActive, TagLabel, TagPicker, useTagProblemText, useTicketSelection,
+  type TagFilterValue, type TicketSelection,
+} from './TagParts.tsx';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
@@ -64,10 +67,42 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
   );
 }
 
+// One row of the ticket list, from the list of the project or from the search when a tag filter is set.
+interface TicketRow {
+  readonly id: string;
+  readonly key: string;
+  readonly number: number;
+  readonly fields: Readonly<Record<string, string | null | undefined>>;
+  readonly updatedAt: string | null;
+}
+
+const PAGE = 50;
+
 function TicketsTab({ project }: { readonly project: Project }) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
+  const [filter, setFilter] = useState<TagFilterValue>(NO_TAG_FILTER);
+  const [round, setRound] = useState(0);
+  const selection = useTicketSelection();
+  const active = tagFilterActive(filter);
+  const filterKey = `${filter.match}:${filter.tags.map((tag) => tag.id).join(',')}:${round}`;
+
+  return (
+    <>
+      <CreateTicket project={project} />
+      <section aria-labelledby="ticket-list">
+        <h2 id="ticket-list">{t('tickets.list')}</h2>
+        <TagFilter projectId={project.id} value={filter} onChange={setFilter} />
+        <SelectionBar selection={selection} projectId={project.id} onDone={() => setRound((value) => value + 1)} />
+        {active
+          ? <FilteredTickets key={filterKey} project={project} filter={filter} selection={selection} />
+          : <AllTickets key={round} project={project} selection={selection} />}
+      </section>
+    </>
+  );
+}
+
+function AllTickets({ project, selection }: { readonly project: Project; readonly selection: TicketSelection }) {
   const { api } = useBrand();
-  const name = useAccountName();
   const [extra, setExtra] = useState<Ticket[]>([]);
   const [more, setMore] = useState(true);
   const [tickets, reload] = useLoad(() => listTickets(api, project.id), [api, project.id]);
@@ -77,45 +112,89 @@ function TicketsTab({ project }: { readonly project: Project }) {
     const result = await listTickets(api, project.id, smallest);
     if (result.kind === 'ok') {
       setExtra((previous) => [...previous, ...result.data.value]);
-      setMore(result.data.value.length === 50);
+      setMore(result.data.value.length === PAGE);
     }
   }
 
   return (
+    <LoadedView loaded={tickets} retry={reload}>
+      {(first) => {
+        const all = [...first, ...extra];
+        return <TicketTable project={project} rows={all} selection={selection} withUpdated
+          onMore={more && first.length === PAGE ? () => void loadMore(all) : null} />;
+      }}
+    </LoadedView>
+  );
+}
+
+// With a tag filter the list comes from the search in this project, so list and search show the same tickets.
+function FilteredTickets({ project, filter, selection }: { readonly project: Project; readonly filter: TagFilterValue; readonly selection: TicketSelection }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const query = { project: [project.id], tag: filter.tags.map((tag) => tag.id), tagMatch: filter.match, limit: PAGE };
+  const [found, reload] = useLoad(() => searchTickets(api, query), [api, project.id]);
+  const [extra, setExtra] = useState<TicketRow[]>([]);
+
+  async function loadMore(offset: number) {
+    const result = await searchTickets(api, { ...query, offset });
+    if (result.kind === 'ok') setExtra((previous) => [...previous, ...result.data.value.items.map(hitRow)]);
+  }
+
+  return (
+    <LoadedView loaded={found} retry={reload}>
+      {(page) => {
+        const rows = [...page.items.map(hitRow), ...extra];
+        return (
+          <>
+            <p className="hint">{t('tickets.filtered')}</p>
+            <TicketTable project={project} rows={rows} selection={selection} withUpdated={false}
+              onMore={rows.length < page.total && rows.length + PAGE <= 1000 ? () => void loadMore(rows.length) : null} />
+          </>
+        );
+      }}
+    </LoadedView>
+  );
+}
+
+const hitRow = (hit: TicketHit): TicketRow => ({ id: hit.id, key: hit.key, number: hit.number, fields: hit.fields, updatedAt: null });
+
+function TicketTable({ project, rows, selection, withUpdated, onMore }: {
+  readonly project: Project;
+  readonly rows: readonly (Ticket | TicketRow)[];
+  readonly selection: TicketSelection;
+  readonly withUpdated: boolean;
+  readonly onMore: (() => void) | null;
+}) {
+  const { t, language } = useI18n();
+  const name = useAccountName();
+  if (rows.length === 0) return <EmptyText text={t('tickets.empty')} />;
+  const hidden = <span className="hidden-field">{t('field.hidden')}</span>;
+  return (
     <>
-      <CreateTicket project={project} />
-      <section aria-labelledby="ticket-list">
-        <h2 id="ticket-list">{t('tickets.list')}</h2>
-        <LoadedView loaded={tickets} retry={reload}>
-          {(first) => {
-            const all = [...first, ...extra];
-            if (all.length === 0) return <EmptyText text={t('tickets.empty')} />;
-            return (
-              <>
-                <div className="table-scroll">
-                  <table data-testid="ticket-table">
-                    <thead>
-                      <tr><th scope="col">{t('tickets.key')}</th><th scope="col">{t('field.title')}</th><th scope="col">{t('field.status')}</th><th scope="col">{t('field.assignee')}</th><th scope="col">{t('tickets.updated')}</th></tr>
-                    </thead>
-                    <tbody>
-                      {all.map((ticket) => (
-                        <tr key={ticket.id}>
-                          <td><a href={hrefFor({ name: 'ticket', projectId: project.id, number: ticket.number })}>{ticket.key}</a></td>
-                          <td>{'title' in ticket.fields ? ticket.fields.title : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td>{'status' in ticket.fields ? statusName(project, ticket.fields.status) : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td>{'assignee' in ticket.fields ? name(ticket.fields.assignee) || t('field.nobody') : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td><time dateTime={ticket.updatedAt}>{formatDateTime(ticket.updatedAt, language)}</time></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {more && first.length === 50 && <button type="button" className="secondary" onClick={() => void loadMore(all)}>{t('tickets.more')}</button>}
-              </>
-            );
-          }}
-        </LoadedView>
-      </section>
+      <div className="table-scroll">
+        <table data-testid="ticket-table">
+          <thead>
+            <tr>
+              <th scope="col"><SelectPage selection={selection} items={rows} /></th>
+              <th scope="col">{t('tickets.key')}</th><th scope="col">{t('field.title')}</th><th scope="col">{t('field.status')}</th>
+              <th scope="col">{t('field.assignee')}</th>{withUpdated && <th scope="col">{t('tickets.updated')}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((ticket) => (
+              <tr key={ticket.id}>
+                <td><SelectTicket selection={selection} id={ticket.id} ticketKey={ticket.key} /></td>
+                <td><a href={hrefFor({ name: 'ticket', projectId: project.id, number: ticket.number })}>{ticket.key}</a></td>
+                <td>{'title' in ticket.fields ? ticket.fields.title : hidden}</td>
+                <td>{'status' in ticket.fields ? statusName(project, ticket.fields.status) : hidden}</td>
+                <td>{'assignee' in ticket.fields ? name(ticket.fields.assignee) || t('field.nobody') : hidden}</td>
+                {withUpdated && <td>{ticket.updatedAt !== null && <time dateTime={ticket.updatedAt}>{formatDateTime(ticket.updatedAt, language)}</time>}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {onMore !== null && <button type="button" className="secondary" onClick={onMore}>{t('tickets.more')}</button>}
     </>
   );
 }

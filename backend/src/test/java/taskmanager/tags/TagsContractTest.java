@@ -65,7 +65,7 @@ class TagsContractTest {
     @Test
     void everyMappedRouteIsDocumentedAndEveryDocumentedRouteExists() throws IOException {
         Set<String> mapped = mapped();
-        assertEquals(21, mapped.size(), mapped.toString());
+        assertEquals(22, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
     }
 }

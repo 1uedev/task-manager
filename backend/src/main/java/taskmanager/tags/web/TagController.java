@@ -27,6 +27,7 @@ import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.PermissionContexts;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.tags.internal.Tag;
+import taskmanager.tags.internal.TagBulk;
 import taskmanager.tags.internal.TagService;
 import taskmanager.tags.internal.TagService.MergePreview;
 import taskmanager.tags.internal.TagService.Suggestions;
@@ -50,11 +51,13 @@ class TagController {
     private static final int MAX_LIMIT = 200;
 
     private final TagService tags;
+    private final TagBulk bulk;
     private final AccessContexts identity;
     private final PermissionContexts contexts;
 
-    TagController(TagService tags, AccessContexts identity, PermissionContexts contexts) {
+    TagController(TagService tags, TagBulk bulk, AccessContexts identity, PermissionContexts contexts) {
         this.tags = tags;
+        this.bulk = bulk;
         this.identity = identity;
         this.contexts = contexts;
     }
@@ -138,6 +141,63 @@ class TagController {
         long expected = expectedVersion(ifMatch);
         UUID target = into(body);
         return tag(HttpStatus.OK, retrying(() -> tags.mergeCompanyTag(actor, id, expected, target)));
+    }
+
+    // ------------------------------------------------------------------------------------------------ bulk change
+
+    record BulkItemBody(UUID ticketId, String key, String outcome, String code) {
+    }
+
+    record BulkBody(int changed, int unchanged, int notMatching, int refused, List<BulkItemBody> items) {
+        static BulkBody of(TagBulk.Result result) {
+            return new BulkBody(result.changed(), result.unchanged(), result.notMatching(), result.refused(), result.items().stream()
+                .map(item -> new BulkItemBody(item.ticketId(), item.key(), item.outcome().name().toLowerCase(java.util.Locale.ROOT), item.code()))
+                .toList());
+        }
+    }
+
+    /** {@code {"action": "add"|"remove", "tags": [...], "tickets": [...]}}: one bulk change, each ticket for itself (TASK-073). */
+    @PostMapping("/api/v1/tags/bulk")
+    BulkBody bulk(@RequestBody(required = false) JsonNode body) {
+        AccessContext actor = actor();
+        List<String> violations = new ArrayList<>();
+        if (body == null || !body.isObject()) {
+            throw invalid(List.of("action.invalid", "tags.invalid", "tickets.invalid"));
+        }
+        for (var entry : body.properties()) {
+            if (!Set.of("action", "tags", "tickets").contains(entry.getKey())) {
+                violations.add("fields.unknown");
+            }
+        }
+        JsonNode action = body.get("action");
+        boolean add = action != null && action.isString() && action.asString().equals("add");
+        if (!add && !(action != null && action.isString() && action.asString().equals("remove"))) {
+            violations.add("action.invalid");
+        }
+        List<UUID> tagIds = uuidList(body.get("tags"), TagBulk.MAX_TAGS, "tags.invalid", violations);
+        List<UUID> tickets = uuidList(body.get("tickets"), TagBulk.MAX_TICKETS, "tickets.invalid", violations);
+        if (!violations.isEmpty()) {
+            throw invalid(violations.stream().distinct().toList());
+        }
+        return BulkBody.of(retrying(() -> bulk.apply(actor, tickets, tagIds, add)));
+    }
+
+    /** A list of 1 to {@code max} identifiers; a repeated one counts once. */
+    private static List<UUID> uuidList(JsonNode node, int max, String violation, List<String> violations) {
+        if (node == null || !node.isArray() || node.isEmpty() || node.size() > max) {
+            violations.add(violation);
+            return List.of();
+        }
+        java.util.LinkedHashSet<UUID> ids = new java.util.LinkedHashSet<>();
+        for (JsonNode item : node) {
+            UUID id = uuid(item);
+            if (id == null) {
+                violations.add(violation);
+                return List.of();
+            }
+            ids.add(id);
+        }
+        return List.copyOf(ids);
     }
 
     // ------------------------------------------------------------------------------------------------ project catalog
