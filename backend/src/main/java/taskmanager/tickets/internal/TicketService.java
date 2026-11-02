@@ -161,7 +161,7 @@ public class TicketService {
                 return base;
             }
             UUID organization = tickets.find(actor.companyId(), projectId, number)
-                .flatMap(ticket -> organizations.lockOrganization(ticket.id())).orElse(null);
+                .flatMap(ticket -> organizations.lockOrganization(ticket.id(), actor.organizationId())).orElse(null);
             return withOrganization(base, organization);
         };
         Decision read = inspect(actor, resource, READ, projectId, FIELDS);

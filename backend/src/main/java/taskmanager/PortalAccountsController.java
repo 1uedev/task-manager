@@ -111,8 +111,8 @@ class PortalAccountsController {
     /** Sets the contact and the projects of the portal account; the organization never changes. */
     @PutMapping("/{id}")
     PortalAccountBody update(@PathVariable UUID id, @RequestBody(required = false) UpdateRequest body) {
-        if (body == null) {
-            throw ApiProblemException.withViolations(400, "request.invalid", List.of("projectIds.invalid"));
+        if (body == null || body.projectIds() == null) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("projectIds.required"));
         }
         String actorName = identity.require().username();
         return run(actor -> {

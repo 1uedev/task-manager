@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -22,6 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -544,5 +549,177 @@ class PortalAccountsApiTest {
         JsonNode account = StreamSupport.stream(all.json().spliterator(), false)
             .filter(node -> node.get("id").asString().equals(portal.id().toString())).findFirst().orElseThrow();
         assertEquals("portal", account.get("kind").asString());
+    }
+
+    // ---------------------------------------------------------------- TASK-078: findings of the review of TASK-075
+
+    /** F1: while the customer row of a request of another organization is held, it still answers 404 at once like an unknown one. */
+    @Test
+    void aHeldRowOfAnotherOrganizationAnswersLikeAnUnknownNumber() throws Exception {
+        Setup setup = setup();
+        request(setup, setup.shared(), "Eigene Anfrage", setup.nordwerk());
+        long foreign = request(setup, setup.shared(), "Fremde Anfrage", setup.suedtechnik());
+        Browser lea = portalSession(createPortal(setup, setup.nordwerk(), null, List.of(setup.shared())));
+        String path = "/api/v1/portal/projects/" + setup.shared() + "/tickets/";
+        try (Connection holder = jdbc.getDataSource().getConnection()) {
+            holder.setAutoCommit(false);
+            try (var statement = holder.prepareStatement("""
+                    select 1 from helpdesk_ticket_customer c join ticket t on t.id = c.ticket_id
+                    where t.project_id = ? and t.number = ? for update of c
+                    """)) {
+                statement.setObject(1, setup.shared());
+                statement.setLong(2, foreign);
+                statement.executeQuery().close();
+            }
+            long started = System.nanoTime();
+            Response held = lea.get(path + foreign);
+            long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+            Response unknown = lea.get(path + 99_999);
+            holder.rollback();
+            assertEquals(404, held.status(), held.body());
+            assertEquals(unknown.status(), held.status());
+            assertEquals(unknown.code(), held.code());
+            assertTrue(millis < 3_000, "answered without waiting for the held row: " + millis + " ms");
+        }
+    }
+
+    /** F2: the project rows are locked in the order of the database, also for identifiers on both sides of the highest bit. */
+    @Test
+    void projectsAreSortedInTheOrderOfTheDatabase() {
+        List<UUID> ids = List.of(UUID.fromString("80000000-0000-4000-8000-000000000001"), UUID.fromString("7fffffff-0000-4000-8000-000000000002"),
+            UUID.fromString("ffffffff-0000-4000-8000-000000000003"), UUID.fromString("00000000-0000-4000-8000-000000000004"),
+            UUID.fromString("00000000-0000-4000-c000-000000000005"), UUID.fromString("00000000-0000-4000-8000-000000000005"));
+        List<UUID> database = jdbc.queryForList("select id from unnest(?::uuid[]) as t(id) order by id", UUID.class,
+            (Object) ids.stream().map(UUID::toString).toArray(String[]::new));
+        assertEquals(database, ids.stream().sorted(PortalAccounts.PROJECT_ORDER).toList());
+        assertFalse(database.equals(ids.stream().sorted().toList()), "the signed order of Java differs, which is the point");
+    }
+
+    /** F3: a deactivation never completes while a waiting list of projects can still answer with data. */
+    @Test
+    void theProjectListSeesADeactivationThatEndedWhileItWaited() throws Exception {
+        Setup setup = setup();
+        Portal portal = createPortal(setup, setup.nordwerk(), null, List.of(setup.shared()));
+        Browser lea = portalSession(portal);
+        assertEquals(200, lea.get("/api/v1/portal/projects").status());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try (Connection holder = jdbc.getDataSource().getConnection()) {
+            holder.setAutoCommit(false);
+            try (var statement = holder.prepareStatement("select 1 from project where id = ? for update")) {
+                statement.setObject(1, setup.shared());
+                statement.executeQuery().close();
+            }
+            Future<long[]> list = pool.submit(() -> {
+                int status = lea.get("/api/v1/portal/projects").status();
+                return new long[] {status, System.nanoTime()};
+            });
+            assertTrue(waiting("%from project where%for share%"), "the list waits for the project row");
+            Future<long[]> deactivation = pool.submit(() -> {
+                int status = setup.admin().send("POST", "/api/v1/accounts/" + portal.id() + "/deactivate", null, null).status();
+                return new long[] {status, System.nanoTime()};
+            });
+            Thread.sleep(1_000);
+            holder.rollback();
+            long[] listed = list.get(20, TimeUnit.SECONDS);
+            long[] deactivated = deactivation.get(20, TimeUnit.SECONDS);
+            if (listed[0] == 200 && deactivated[0] == 200) {
+                assertTrue(listed[1] <= deactivated[1], "the list answered with data after the deactivation had completed");
+            } else {
+                assertTrue(listed[0] == 403 || deactivated[0] != 200, listed[0] + " " + deactivated[0]);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        if (Boolean.FALSE.equals(jdbc.queryForObject("select active from identity_account where id = ?", Boolean.class, portal.id()))) {
+            int status = lea.get("/api/v1/portal/projects").status();
+            assertTrue(status == 401 || status == 403, String.valueOf(status));
+        }
+    }
+
+    /** F4: a missing or null list of projects is refused and changes nothing; an empty list removes every project. */
+    @Test
+    void aMissingListOfProjectsChangesNothing() {
+        Setup setup = setup();
+        Portal portal = createPortal(setup, setup.nordwerk(), null, List.of(setup.shared()));
+        String path = "/api/v1/portal-accounts/" + portal.id();
+        Response missing = setup.admin().send("PUT", path, Map.of("contactId", setup.nordwerkContact()), null);
+        assertEquals(400, missing.status(), missing.body());
+        assertEquals(List.of("projectIds.required"), missing.violations());
+        Map<String, Object> change = new HashMap<>();
+        change.put("contactId", setup.nordwerkContact());
+        change.put("projectIds", null);
+        Response nothing = setup.admin().send("PUT", path, change, null);
+        assertEquals(400, nothing.status(), nothing.body());
+        assertEquals(List.of("projectIds.required"), nothing.violations());
+        assertEquals(List.of(setup.shared()), memberships(portal.id()));
+        assertEquals(0, jdbc.queryForList("select 1 from identity_account where id = ? and contact_id is not null", portal.id()).size());
+
+        List<UUID> many = new ArrayList<>();
+        for (int i = 0; i < 101; i++) {
+            many.add(UUID.randomUUID());
+        }
+        change.put("projectIds", many);
+        Response tooMany = setup.admin().send("PUT", path, change, null);
+        assertEquals(400, tooMany.status(), tooMany.body());
+        assertEquals(List.of("projectIds.invalid"), tooMany.violations());
+        change.put("projectIds", many.subList(0, 100));
+        Response notReleased = setup.admin().send("PUT", path, change, null);
+        assertEquals(400, notReleased.status(), notReleased.body());
+        assertEquals(List.of("projectIds.not_released"), notReleased.violations());
+        assertEquals(List.of(setup.shared()), memberships(portal.id()));
+
+        change.put("projectIds", List.of());
+        Response empty = setup.admin().send("PUT", path, change, null);
+        assertEquals(200, empty.status(), empty.body());
+        assertEquals(List.of(), memberships(portal.id()));
+    }
+
+    /** H5 after Holger's choice: a project the helpdesk takes from the organization ends the sight of its portal accounts at once. */
+    @Test
+    void withdrawingAProjectInTheHelpdeskEndsTheSightAtOnce() {
+        Setup setup = setup();
+        long own = request(setup, setup.shared(), "Drucker defekt", setup.nordwerk());
+        long second = request(setup, setup.second(), "Zweites Projekt", setup.nordwerk());
+        Portal portal = createPortal(setup, setup.nordwerk(), null, List.of(setup.shared(), setup.second()));
+        Portal other = createPortal(setup, setup.suedtechnik(), null, List.of(setup.shared()));
+        Browser lea = portalSession(portal);
+        String shared = "/api/v1/portal/projects/" + setup.shared() + "/tickets/" + own;
+        assertEquals(200, lea.get(shared).status());
+
+        JsonNode customer = StreamSupport.stream(setup.admin().get("/api/v1/helpdesk/customers").json().spliterator(), false)
+            .filter(node -> node.get("id").asString().equals(setup.nordwerk().toString())).findFirst().orElseThrow();
+        Response changed = setup.admin().send("PUT", "/api/v1/helpdesk/customers/" + setup.nordwerk(),
+            Map.of("name", customer.get("name").asString(), "projects", List.of(setup.second())), "\"" + customer.get("version").asLong() + "\"");
+        assertEquals(200, changed.status(), changed.body());
+
+        assertEquals(404, lea.get(shared).status());
+        assertEquals(404, lea.get("/api/v1/portal/projects/" + setup.shared() + "/tickets").status());
+        assertEquals(200, lea.get("/api/v1/portal/projects/" + setup.second() + "/tickets/" + second).status());
+        Response projects = lea.get("/api/v1/portal/projects");
+        assertEquals(200, projects.status(), projects.body());
+        assertFalse(projects.body().contains(setup.shared().toString()));
+        assertEquals(List.of(setup.second()), memberships(portal.id()));
+        // Südtechnik keeps the project, the change concerns Nordwerk only.
+        assertEquals(List.of(setup.shared()), memberships(other.id()));
+    }
+
+    private List<UUID> memberships(UUID account) {
+        return jdbc.queryForList("select project_id from project_member where account_id = ? order by project_id::text", UUID.class, account);
+    }
+
+    private boolean waiting(String query) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            boolean waits = Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from pg_stat_activity
+                where datname = current_database() and pid <> pg_backend_pid()
+                and query ilike ? and cardinality(pg_blocking_pids(pid)) > 0)
+                """, Boolean.class, query));
+            if (waits) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
     }
 }

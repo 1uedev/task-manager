@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   createPortalRequest, listPortalActivity, listPortalAttachments, listPortalProjects, listPortalTickets, markPortalSeen, portalAttachmentUrl,
-  postInPortal, readPortalConversation, readPortalTicket, uploadPortalAttachment, type PortalEntry, type PortalFile, type PortalFilter,
+  PORTAL_PAGE, postInPortal, readPortalConversation, readPortalTicket, uploadPortalAttachment, type PortalEntry, type PortalFile, type PortalFilter,
   type PortalProject, type Ticket,
 } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
@@ -111,6 +111,14 @@ function PortalProjectTickets({ project, filter, onOpen }: {
   const { t, language } = useI18n();
   const { api } = useBrand();
   const [tickets, reload] = useLoad(() => listPortalTickets(api, project.id, filter), [api, project.id, filter.status, filter.state, filter.q]);
+  // Further pages below the first (TASK-078, F6); a new filter or a reload starts again with the first page only.
+  const [further, setFurther] = useState<{ readonly list: readonly Ticket[]; readonly full: boolean } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  useEffect(() => {
+    setFurther(null);
+    setMoreFailed(false);
+  }, [tickets]);
   const [activity] = useLoad(() => listPortalActivity(api, project.id), [api, project.id]);
   const rows = new Map((activity.state === 'ok' ? activity.value : []).map((row) => [row.number, row]));
   const statusName = (key: string | null | undefined) => project.statuses.find((item) => item.key === key)?.name ?? key ?? '';
@@ -119,7 +127,21 @@ function PortalProjectTickets({ project, filter, onOpen }: {
     <section aria-labelledby={headingId} className="panel" data-testid="portal-project">
       <h2 id={headingId}>{`${project.key} ${project.name}`}</h2>
       <LoadedView loaded={tickets} retry={reload}>
-        {(list) => list.length === 0
+        {(first) => {
+          const list = [...first, ...(further?.list ?? [])];
+          const hasMore = further === null ? first.length >= PORTAL_PAGE : further.full;
+          async function loadMore() {
+            const last = list[list.length - 1];
+            if (last === undefined) return;
+            setLoadingMore(true);
+            setMoreFailed(false);
+            const result = await listPortalTickets(api, project.id, filter, last.number);
+            setLoadingMore(false);
+            if (result.kind !== 'ok') return setMoreFailed(true);
+            const page = result.data.value;
+            setFurther((current) => ({ list: [...(current?.list ?? []), ...page], full: page.length >= PORTAL_PAGE }));
+          }
+          return list.length === 0
           ? <EmptyText text={t('portal.noTickets')} />
           : (
             <div className="table-scroll">
@@ -138,7 +160,7 @@ function PortalProjectTickets({ project, filter, onOpen }: {
                     const last = row?.lastActivityAt && row.lastActivityAt > ticket.updatedAt ? row.lastActivityAt : ticket.updatedAt;
                     return (
                       <tr key={ticket.id} data-unread={row?.unread || undefined}>
-                        <td>{`${ticket.key}-${ticket.number}`}</td>
+                        <td>{ticket.key}</td>
                         <td>
                           <button type="button" className="link-button" onClick={() => onOpen(ticket.number)}>{ticket.fields.title ?? ''}</button>
                           {row?.unread && <span className="badge" data-testid="portal-unread">{` ${t('portal.unread')}`}</span>}
@@ -150,8 +172,15 @@ function PortalProjectTickets({ project, filter, onOpen }: {
                   })}
                 </tbody>
               </table>
+              {hasMore && (
+                <p className="actions">
+                  <button type="button" disabled={loadingMore} onClick={() => void loadMore()} data-testid="portal-more">{t('portal.more')}</button>
+                </p>
+              )}
+              {moreFailed && <p role="alert" className="field-error">{t('portal.moreFailed')}</p>}
             </div>
-          )}
+          );
+        }}
       </LoadedView>
     </section>
   );
@@ -313,7 +342,7 @@ function PortalTicket({ project, number, notice, onBack }: {
           const fields = value.fields as Readonly<Record<string, string | null | undefined>>;
           return (
             <article data-testid="portal-ticket">
-              <PageHead title={`${value.key}-${value.number} ${value.fields.title ?? ''}`} />
+              <PageHead title={`${value.key} ${value.fields.title ?? ''}`} />
               <dl className="facts">
                 {SHOWN.filter((field) => fields[field] !== undefined).map((field) => (
                   <Fragment key={field}><dt>{t(`portal.field.${field}`)}</dt><dd data-field={field}>{name(field, fields[field])}</dd></Fragment>

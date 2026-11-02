@@ -395,7 +395,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         return ok(own.filter((item) => !query.get('status') || item.values.status === query.get('status'))
           .filter((item) => !query.get('state') || (query.get('state') === 'done') === (category(item.values.status) === 'done'))
           .filter((item) => !q || [item.values.title, item.values.description].some((text) => text?.toLowerCase().includes(q)))
-          .map(view).reverse());
+          // Newest first and paged like the server: at most `limit` (default 50) below `before` (TASK-078, F6).
+          .filter((item) => !query.get('before') || item.number < Number(query.get('before')))
+          .sort((a, b) => b.number - a.number).slice(0, Number(query.get('limit') ?? 50)).map(view));
       }
       if (number === undefined && method === 'POST') {
         if (!may(account, 'ticket.create', projectId)) return problem(403, 'auth.forbidden');
@@ -511,6 +513,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         const target = state.accounts.find((item) => item.id === single[1]);
         if (!target) return problem(404, 'account.not_found');
         if (!portalOf(target)) return problem(409, 'account.not_portal');
+        if (!Array.isArray(body?.projectIds)) return problem(400, 'request.invalid', { violations: ['projectIds.required'] });
         const refused = check(hd.customers.find((entry) => entry.id === target.organizationId), body.contactId, body.projectIds);
         if (refused) return refused;
         target.contactId = body.contactId ?? null;

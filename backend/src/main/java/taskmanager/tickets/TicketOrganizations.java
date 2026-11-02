@@ -12,8 +12,11 @@ import java.util.UUID;
  * run after the project lock of the permissions check.
  */
 public interface TicketOrganizations {
-    /** The organization of the ticket, empty for a ticket without customer. */
-    Optional<UUID> lockOrganization(UUID ticketId);
+    /**
+     * The organization of the ticket when it is the given one, empty for a ticket of another organization or without customer.
+     * Only a matching link row is locked, so a held row of another organization never delays the answer (TASK-078, F1).
+     */
+    Optional<UUID> lockOrganization(UUID ticketId, UUID organizationId);
 
     /** The tickets of the organization in the project. */
     List<UUID> lockTicketsOf(UUID projectId, UUID organizationId);

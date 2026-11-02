@@ -346,7 +346,7 @@ public class AttachmentService {
             if (!base.projectMember()) {
                 return base;
             }
-            UUID organization = tickets.find(actor.companyId(), projectId, number).flatMap(ports::lockOrganization).orElse(null);
+            UUID organization = tickets.find(actor.companyId(), projectId, number).flatMap(ticket -> ports.lockOrganization(ticket, actor.organizationId())).orElse(null);
             return new ResourceContext(base.companyId(), base.projectId(), organization, base.projectMember(), base.resourceType());
         };
         Decision read = permissions.inspect(actor, resource, TICKET_READ, reads);

@@ -126,6 +126,10 @@ class PortalAccounts {
     /** Sets contact and projects of a portal account; the organization stays. Projects left out lose the membership. */
     @Transactional
     public Detail update(AccessContext actor, String actorName, UUID accountId, UUID contactId, List<UUID> projectIds) {
+        if (projectIds == null) {
+            // The full new list is required; a missing one must not read as the removal of every project (TASK-078, F4).
+            throw invalid("projectIds.required");
+        }
         portal.lockForPortalAccounts(actor);
         List<UUID> chosen = projects(projectIds);
         PortalAccount account = accounts.setContact(actorName, accountId, contactId,
@@ -137,7 +141,7 @@ class PortalAccounts {
         List<UUID> current = projects.memberships(actor.companyId(), accountId);
         List<UUID> touched = new ArrayList<>(current);
         chosen.stream().filter(id -> !touched.contains(id)).forEach(touched::add);
-        touched.sort(Comparator.naturalOrder());
+        touched.sort(PROJECT_ORDER);
         for (UUID project : touched) {
             if (chosen.contains(project) && !current.contains(project)) {
                 projects.admit(actor.companyId(), project, accountId, actor.userId());
@@ -165,6 +169,12 @@ class PortalAccounts {
         }
     }
 
+    /**
+     * The order of the database for identifiers: their bytes without sign, as the text compares. {@link UUID#compareTo} compares
+     * with sign and would lock two projects on different sides of the highest bit the other way round (TASK-078, F2).
+     */
+    static final Comparator<UUID> PROJECT_ORDER = Comparator.comparing(UUID::toString);
+
     /** Distinct and sorted, so the project rows are always locked in the same order. */
     private static List<UUID> projects(List<UUID> projectIds) {
         if (projectIds == null) {
@@ -173,7 +183,7 @@ class PortalAccounts {
         if (projectIds.size() > MAX_PROJECTS || projectIds.contains(null)) {
             throw invalid("projectIds.invalid");
         }
-        return projectIds.stream().distinct().sorted().toList();
+        return projectIds.stream().distinct().sorted(PROJECT_ORDER).toList();
     }
 
     private static ApiProblemException invalid(String violation) {

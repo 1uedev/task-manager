@@ -86,7 +86,8 @@ paths:
       summary: Kontakt und Projekte eines Portalkontos setzen
       description: |
         `projectIds` ist die vollständige neue Liste; ausgelassene Projekte verlieren die Mitgliedschaft sofort, auch für laufende
-        Sitzungen. Jedes genannte Projekt muss der Organisation zugeordnet sein. `contactId` null löst den Kontakt. Ein internes
+        Sitzungen. Fehlt das Feld oder ist es null, antwortet der Server mit 400 `projectIds.required` und ändert nichts; eine
+        leere Liste entfernt alle Projekte. Jedes genannte Projekt muss der Organisation zugeordnet sein. `contactId` null löst den Kontakt. Ein internes
         Konto antwortet mit 409 `account.not_portal`, ein unbekanntes mit 404 `account.not_found`.
       requestBody:
         required: true

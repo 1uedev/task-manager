@@ -9,7 +9,7 @@ import {
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor } from '../app/route.ts';
-import { useAccountName, useSession } from '../app/session.tsx';
+import { useAccountName, useChoosable, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -88,6 +88,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
   const { t, language } = useI18n();
   const { api } = useBrand();
   const name = useAccountName();
+  const choosable = useChoosable();
   const { directory, refresh } = useSession();
   const text = useProblemText();
   const customFields = customFieldsOf(project.configuration);
@@ -129,7 +130,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
   const fieldName = (id: string) => id.startsWith(CUSTOM_PREFIX)
     ? customFields.find((field) => `${CUSTOM_PREFIX}${field.key}` === id)?.name ?? id : t(FIELD_LABEL[id as Field] ?? 'field.title');
   const people = members.state === 'ok'
-    ? members.value.map((member) => member.accountId)
+    ? members.value.map((member) => member.accountId).filter(choosable)
     : [...directory.values()].filter((entry) => entry.active && entry.kind !== 'portal').map((entry) => entry.id);
   const persons = people.map((id) => ({ id, name: name(id) }));
 

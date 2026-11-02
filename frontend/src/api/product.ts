@@ -243,8 +243,11 @@ export const updatePortalAccount = (api: ServerApi, id: string, contactId: strin
 export const listPortalProjects = (api: ServerApi) =>
   run(() => api.projects.GET('/portal/projects'), listOf<PortalProject>((v) => hasStrings(v, 'id', 'key', 'name')
     && Array.isArray((v as PortalProject).ticketTypes) && Array.isArray((v as PortalProject).statuses)));
-export const listPortalTickets = (api: ServerApi, projectId: string, filter?: PortalFilter) =>
+// One page of the portal list, the newest first; a further page starts below the smallest number shown (TASK-078, F6).
+export const PORTAL_PAGE = 50;
+export const listPortalTickets = (api: ServerApi, projectId: string, filter?: PortalFilter, before?: number) =>
   run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId }, query: {
+    limit: PORTAL_PAGE, ...(before !== undefined ? { before } : {}),
     ...(filter?.status ? { status: filter.status } : {}), ...(filter?.state ? { state: filter.state } : {}), ...(filter?.q ? { q: filter.q } : {}),
   } } }), listOf<Ticket>(isTicket));
 // The conversation of the portal (TASK-076): creating, the entries of a request, posts, the marker of new answers and files.

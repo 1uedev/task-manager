@@ -80,6 +80,19 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean current(AccessContext actor) {
+        Instant until;
+        try {
+            until = bounded(() -> lock(actor, false).currentUntil());
+        } catch (PermissionDenied denied) {
+            return false;
+        }
+        checkAgainBeforeCommit(until);
+        return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void require(AccessContext actor, Supplier<ResourceContext> resource, String action,
             Set<String> readFields, Set<String> writeFields) {
         Set<String> read = keys(readFields), write = keys(writeFields), all = new HashSet<>(read);

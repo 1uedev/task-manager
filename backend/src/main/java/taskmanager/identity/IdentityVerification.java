@@ -56,4 +56,10 @@ public interface IdentityVerification {
 
     /** True if the account exists and is a portal account, active or not (TASK-075). Row locked until the commit. */
     boolean accountIsPortal(UUID accountId);
+
+    /**
+     * The portal accounts of the organization, active or not, in the order of their identifiers (TASK-078). The rows stay locked
+     * until the commit; a new portal account is created under the exclusive rights lock and so never joins meanwhile.
+     */
+    java.util.List<UUID> portalAccountsOf(UUID organizationId);
 }

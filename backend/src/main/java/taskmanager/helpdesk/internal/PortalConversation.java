@@ -348,7 +348,7 @@ public class PortalConversation {
             if (!base.projectMember()) {
                 return base;
             }
-            UUID organization = tickets.find(actor.companyId(), projectId, number).flatMap(organizations::lockOrganization).orElse(null);
+            UUID organization = tickets.find(actor.companyId(), projectId, number).flatMap(ticket -> organizations.lockOrganization(ticket, actor.organizationId())).orElse(null);
             return withOrganization(base, organization);
         };
         Decision read = permissions.inspect(actor, resource, READ, Set.of(TicketAccess.ATTACHMENTS_FIELD));

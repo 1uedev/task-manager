@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -47,6 +46,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
+| [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -217,9 +217,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-078 Befunde der Prüfung von TASK-075 beheben (A11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
 
-**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001; DEC-027, DEC-105, DEC-106; docs/REVIEW_TASK-075_PR-233.md. **Abhängigkeiten:** TASK-075 und TASK-076 geliefert (PR #233, PR #234). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch per Auswahl „Beheben, Entzug wirkt sofort“ beauftragt, die Befunde der Codex Prüfung von TASK-075 zu beheben, und festgelegt, dass ein im Helpdesk entzogenes Projekt den Portalzugang sofort beendet. Geplanter Branch claude/project-thread-houava, Ergebnis mit DEC-107; TASK-077 erhält danach die nächste freie Entscheidungsnummer.
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001; DEC-027, DEC-105, DEC-106; docs/REVIEW_TASK-075_PR-233.md. **Abhängigkeiten:** TASK-075 und TASK-076 geliefert (PR #233, PR #234). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch per Auswahl „Beheben, Entzug wirkt sofort“ beauftragt, die Befunde der Codex Prüfung von TASK-075 zu beheben, und festgelegt, dass ein im Helpdesk entzogenes Projekt den Portalzugang sofort beendet. Reservierung mit PR #235 gemergt. Ergebnis auf Branch claude/project-thread-houava mit DEC-107, ohne Migration; Beschreibung in backend/README.md (Abschnitt TASK-078). TASK-077 erhält danach die nächste freie Entscheidungsnummer.
 
 **Umfang:** Befunde F1 bis F6 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-075_PR-233.md sowie Hinweis H5 nach Holgers Wahl:
 1. F1: Detailabfrage einer fremden Anfrage antwortet auch bei gesperrter Kundenzuordnung wie eine unbekannte Nummer.
@@ -237,4 +237,9 @@ Nicht Teil: Tags im Portal (TASK-077) und weitere Funktionen.
 1. Jeder Befund und Hinweis aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: F1 sperrende Abfrage nur für die eigene Organisation, eine gehaltene fremde Zeile antwortet sofort 404; F2 und F3 neue Prüfung `Permissions.current` mit geteilter Rechtesperre und sperrender Kontoprüfung vor den Projektsperren der Portal Projektliste, Projektreihenfolge der Datenbank in Kontenverwaltung und Helpdesk; F4 400 `projectIds.required`; F5 Portalkonten nicht in „Zuständig“ und Personenfeldern; F6 und H1 weitere Seiten der Portalliste und Schlüssel einmal; H2 503 im Vertrag; H3 einzelne Gründe im Formular; H5 entzieht der Helpdesk einer Organisation ein Projekt, verlieren ihre Portalkonten dort in derselben Transaktion die Mitgliedschaft.
+2. Nachweise: fünf neue Tests in `PortalAccountsApiTest` (gehaltene fremde Zeile, Sortierung gegen PostgreSQL, Deaktivierung während wartender Projektliste, fehlendes, null, leeres und 100 oder 101 Projekte, Entzug im Helpdesk); die Tests zu F1 und F3 schlagen mit dem alten Verhalten fehl. Zwei neue Browsertests in `portal.test.mjs` (51 Anfragen mit zweiter Seite und einfachem Schlüssel, keine Portalkonten in Bearbeiter und Personenfeld) und ein geschärfter (Grund bei verschobenem Kontakt). Voller Backendlauf, `npm run verify` und alle Browsertests.
+3. Grenzen: Die Portal Projektliste antwortet bei abgelaufener Sitzung innerhalb des Aufrufs mit 403 `auth.forbidden`. Fall 4 bis 6 aus docs/PERMISSIONS.md als Portal Schreibfälle und der direkte Download eines internen Anhangs wurden mit TASK-076 ergänzt (Fall 8), nicht hier. Ein Kontakt, der die Organisation wechselt, bleibt wie bisher am Konto.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger; danach TASK-077 in derselben Sitzung.

@@ -13,7 +13,10 @@ export interface paths {
         };
         /**
          * Projekte eines Portalkontos mit Schlüssel, Name, angebotenen Tickettypen und Status (TASK-075, TASK-076)
-         * @description Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`.
+         * @description Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`. Konto und
+         *     Sitzung werden in derselben Transaktion erneut geprüft; endet die Sitzung oder wird das Konto deaktiviert, während der
+         *     Aufruf wartet, antwortet er mit 403 `auth.forbidden` (TASK-078). Gesperrte Zeilen ergeben 503 `project.busy` mit
+         *     `Retry-After`.
          *     `ticketTypes` sind die im Portal angebotenen Tickettypen der geltenden Konfiguration, `statuses` alle Status mit Name
          *     und Kategorie, damit das Portal den Status mit seinem Namen zeigt und nach offen oder erledigt filtert (TASK-076).
          */
@@ -508,6 +511,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listProjects: {

@@ -7,7 +7,7 @@ import { CUSTOM_PREFIX, customFieldsOf, sendValue } from '../app/configuration.t
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate, type ProjectTab } from '../app/route.ts';
-import { useAccountName, useSession } from '../app/session.tsx';
+import { useAccountName, useChoosable, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import {
   NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagCatalog, TagFilter, tagFilterActive, TagLabel, TagPicker, useTagProblemText, useTicketSelection,
@@ -216,7 +216,10 @@ function CreateTicket({ project }: { readonly project: Project }) {
   const [busy, setBusy] = useState(false);
   const required = (key: string) => config.fields.find((field) => field.key === key)?.required ?? false;
   const fields = customFieldsOf(config).filter((field) => field.active);
-  const persons = members.state === 'ok' ? members.value.map((member: Member) => ({ id: member.accountId, name: name(member.accountId) })) : [];
+  const choosable = useChoosable();
+  const persons = members.state === 'ok'
+    ? members.value.filter((member: Member) => choosable(member.accountId)).map((member: Member) => ({ id: member.accountId, name: name(member.accountId) }))
+    : [];
   useUnsavedGuard(title !== '' || description !== '' || Object.values(custom).some((value) => value !== ''));
 
   async function submit(event: FormEvent) {
@@ -258,7 +261,7 @@ function CreateTicket({ project }: { readonly project: Project }) {
     setError(reasons.length > 0 ? `${base} ${reasons.join(' ')}` : base);
   }
 
-  const people = members.state === 'ok' ? members.value : [];
+  const people = members.state === 'ok' ? members.value.filter((member: Member) => choosable(member.accountId)) : [];
   return (
     <details className="panel" open={false}>
       <summary>{t('tickets.create')}</summary>
