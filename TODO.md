@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -277,3 +278,23 @@ Nicht Teil: H4 (Seitengröße begrenzt die Arbeit am Backend noch nicht, dokumen
 3. Grenzen: Bestandsantworten des Supports im Portal zählen zum heutigen Kunden des Tickets; Beiträge und Mailantworten lassen sich nicht für eine andere Organisation freigeben; der Lesestand vergleicht Zeitpunkte; H4 bleibt offen.
 
 **Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-079 durch Holger.
+
+## TASK-080 Befunde der Prüfung von TASK-079 beheben (A11)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-03 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109; docs/REVIEW_TASK-079_PR-239.md. **Abhängigkeiten:** TASK-079 geliefert (PR #239). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch per Auswahl „Beheben, unklare Altdaten verbergen“ beauftragt, die Befunde F1 bis F3 der Codex Prüfung von TASK-079 als eine Aufgabe zu beheben: Wo die frühere Organisation alter Beiträge, Antworten oder Dateien nicht sicher feststeht, bleiben sie im Portal verborgen, bis jemand sie ausdrücklich freigibt. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-110.
+
+**Umfang:** Befunde F1 bis F3 und der Zusatz zu H3 aus docs/REVIEW_TASK-079_PR-239.md:
+1. F1: die Zielgruppe vorhandener Beiträge des Supports, gesendeter Antworten und kundensichtbarer Dateien wird nur aus belastbaren historischen Quellen bestimmt; wo das nicht sicher geht, bleibt sie leer und der Eintrag im Portal verborgen. Bereits mit V0041 und V0042 migrierte Installationen werden über eine neue Migration berichtigt, ohne angewendete Migrationen zu ändern. Der Migrationstest deckt Ticket und Kontaktwechsel vor dem Upgrade ab.
+2. F2: eine Antwort des Supports, die beim Lesen noch nicht sichtbar war, bleibt nach dem Quittieren neu, auch wenn ihr Zeitpunkt vor dem quittierten liegt.
+3. F3: eine verspätete Folgeseite der Portalliste wird schon ab dem Filterwechsel verworfen, auch während die neue erste Seite noch lädt.
+4. H3 Zusatz: der Testersatz des Browsers hält den Kunden einer gesendeten Antwort bei ihrer Erzeugung fest.
+
+Nicht Teil: weitere Funktionen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
