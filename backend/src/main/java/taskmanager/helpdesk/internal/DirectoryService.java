@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.identity.IdentityVerification;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import tools.jackson.databind.json.JsonMapper;
@@ -34,12 +35,15 @@ public class DirectoryService {
     private final HelpdeskRepository repository;
     private final HelpdeskAccess access;
     private final ProjectAccess projects;
+    private final IdentityVerification identity;
     private final Clock clock;
 
-    DirectoryService(HelpdeskRepository repository, HelpdeskAccess access, ProjectAccess projects, Clock clock) {
+    DirectoryService(HelpdeskRepository repository, HelpdeskAccess access, ProjectAccess projects, IdentityVerification identity,
+            Clock clock) {
         this.repository = repository;
         this.access = access;
         this.projects = projects;
+        this.identity = identity;
         this.clock = clock;
     }
 
@@ -82,7 +86,26 @@ public class DirectoryService {
         Customer changed = new Customer(id, companyId, name, released, current.version() + 1, current.createdAt(), current.createdBy(), now, actor);
         repository.updateCustomer(changed);
         repository.audit(companyId, "customer", id, "customer.changed", describe(changed), actor, now);
+        withdraw(companyId, id, current.projects(), released, actor);
         return repository.customer(companyId, id).orElseThrow();
+    }
+
+    /**
+     * A project the customer loses also ends the access of its portal accounts there, in the same transaction (TASK-078, H5):
+     * they leave the project as if the administration of portal accounts had removed it. Projects in the order of the database,
+     * so their rows are locked like everywhere else.
+     */
+    private void withdraw(UUID companyId, UUID customerId, List<UUID> before, List<UUID> after, UUID actor) {
+        List<UUID> lost = before.stream().filter(project -> !after.contains(project)).sorted(java.util.Comparator.comparing(UUID::toString)).toList();
+        if (lost.isEmpty()) {
+            return;
+        }
+        List<UUID> accounts = identity.portalAccountsOf(customerId);
+        for (UUID project : lost) {
+            for (UUID account : accounts) {
+                projects.dismiss(companyId, project, account, actor);
+            }
+        }
     }
 
     @Transactional

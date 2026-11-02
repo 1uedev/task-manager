@@ -23,4 +23,12 @@ public interface Permissions {
      * between makes the commit throw PermissionDenied and roll back (TASK-043). */
     void require(AccessContext actor, Supplier<ResourceContext> resource, String action,
         Set<String> readFields, Set<String> writeFields);
+
+    /**
+     * The checks of {@link #require} without an action (TASK-078): takes the shared rights lock and the locking identity check
+     * and holds both until the commit, so a deactivation or end of session that finished while the caller waited is seen.
+     * False when the context is no longer current; lock timeouts and deadlocks end in a database error like {@link #require}.
+     * For lists whose entries need no action of their own, such as the projects of a portal account.
+     */
+    boolean current(AccessContext actor);
 }

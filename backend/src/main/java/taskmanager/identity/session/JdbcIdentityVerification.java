@@ -124,6 +124,16 @@ class JdbcIdentityVerification implements IdentityVerification {
         return portalOrganization(accountId).isPresent();
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public java.util.List<UUID> portalAccountsOf(UUID organizationId) {
+        if (organizationId == null) {
+            return java.util.List.of();
+        }
+        return jdbc.sql("select id from identity_account where kind = 'portal' and organization_id = ? order by id for share")
+            .param(organizationId).query(UUID.class).list();
+    }
+
     private Optional<AccountState> lockAccount(UUID accountId) {
         return jdbc.sql("select active, password_change_required from identity_account where id = ? for share")
             .param(accountId)

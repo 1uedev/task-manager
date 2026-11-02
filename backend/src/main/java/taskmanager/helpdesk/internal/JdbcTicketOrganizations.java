@@ -24,12 +24,12 @@ class JdbcTicketOrganizations implements TicketOrganizations {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<UUID> lockOrganization(UUID ticketId) {
-        if (ticketId == null) {
+    public Optional<UUID> lockOrganization(UUID ticketId, UUID organizationId) {
+        if (ticketId == null || organizationId == null) {
             return Optional.empty();
         }
-        return jdbc.sql("select customer_id from helpdesk_ticket_customer where ticket_id = ? and customer_id is not null for share")
-            .param(ticketId).query((rs, row) -> rs.getObject(1, UUID.class)).optional();
+        return jdbc.sql("select customer_id from helpdesk_ticket_customer where ticket_id = ? and customer_id = ? for share")
+            .params(ticketId, organizationId).query((rs, row) -> rs.getObject(1, UUID.class)).optional();
     }
 
     @Override

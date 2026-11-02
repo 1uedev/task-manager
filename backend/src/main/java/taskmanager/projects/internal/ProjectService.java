@@ -391,6 +391,12 @@ public class ProjectService {
         if (!actor.external()) {
             throw notFound();
         }
+        // Rights and identity first, in the order of every other check (TASK-078, F2 and F3): a deactivation or a change of the
+        // memberships that ended while this call waited is seen, and the exclusive rights lock of the account administration
+        // serializes both, so their project locks never cross.
+        if (!permissions.current(actor)) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
         List<PortalProject> own = new ArrayList<>();
         for (UUID id : projects.memberships(actor.companyId(), actor.userId())) {
             projects.lock(actor.companyId(), id, false).filter(project -> projects.isMember(id, actor.userId()))

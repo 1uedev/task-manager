@@ -82,7 +82,8 @@ describe('portal accounts', () => {
     // The contact moved to another organization in the meantime.
     backend.state.helpdesk.contacts.find((entry) => entry.name === 'Alter Kontakt').customerId = SUEDTECHNIK;
     await form.getByRole('button', { name: 'Portalkonto anlegen' }).click();
-    await form.getByRole('alert').waitFor();
+    // The reason is named for itself (TASK-078, H3).
+    await form.getByRole('alert').filter({ hasText: 'Der gewählte Kontakt gehört nicht mehr zu dieser Organisation.' }).waitFor();
     assert.equal(backend.state.accounts.some((item) => item.username === 'kunde.zwei'), false);
     await finish(admin);
   });
@@ -226,5 +227,55 @@ describe('portal conversation', () => {
     await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
     assert.match(await page.getByTestId('portal-attachments').innerText(), /handbuch\.pdf/);
     await finish(portal);
+  });
+});
+
+// TASK-078: findings of the review of TASK-075.
+describe('portal review findings', () => {
+  test('the portal reaches more than one page of requests and shows each key once', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    for (let index = 0; index < 50; index += 1) {
+      const ticket = backend.addTicket(`Anfrage ${index + 3}`, null, backend.anna);
+      backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: NORDWERK, contactId: null });
+    }
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    const rows = page.getByTestId('portal-tickets').locator('tbody tr');
+    await rows.first().waitFor();
+    assert.equal(await rows.count(), 50, 'the first page');
+    assert.match(await rows.first().innerText(), /^PLAT-52\b/);
+    assert.doesNotMatch(await page.getByTestId('portal-tickets').innerText(), /PLAT-\d+-\d+/, 'no number twice');
+    await page.getByTestId('portal-more').click();
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).waitFor();
+    assert.equal(await rows.count(), 51, 'the oldest request on the second page');
+    assert.equal(await page.getByTestId('portal-more').count(), 0, 'no further page');
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    await page.getByTestId('portal-ticket').waitFor();
+    assert.match(await page.locator('main h1').innerText(), /^PLAT-1 Anmeldung prüfen$/);
+    await finish(portal);
+  });
+
+  test('a portal account is never offered as assignee or person', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    backend.state.configurations.get(backend.project.id).configuration.customFields = [
+      { key: 'reviewer', name: 'Prüfer', type: 'user', required: false, active: true }];
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tickets/1`);
+    const page = admin.page;
+    const assignee = page.getByLabel('Zuständig');
+    await assignee.waitFor();
+    const offered = await assignee.locator('option').allInnerTexts();
+    assert.ok(offered.length > 1, 'staff is offered');
+    assert.equal(offered.some((text) => /Lea Lang/.test(text)), false, 'not on the ticket');
+    await page.goto(`${base()}#/projects/${backend.project.id}/tickets`);
+    await page.locator('summary', { hasText: 'Neues Ticket' }).click();
+    const create = page.getByLabel('Zuständig');
+    await create.waitFor();
+    assert.equal((await create.locator('option').allInnerTexts()).some((text) => /Lea Lang/.test(text)), false, 'not in a new ticket');
+    const reviewer = page.getByLabel(/^Prüfer/);
+    assert.ok((await reviewer.locator('option').count()) > 1, 'staff is offered for the person field');
+    assert.equal((await reviewer.locator('option').allInnerTexts()).some((text) => /Lea Lang/.test(text)), false, 'not for a person field');
+    await finish(admin);
   });
 });

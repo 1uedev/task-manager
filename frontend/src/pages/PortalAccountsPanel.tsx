@@ -6,6 +6,8 @@ import {
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { EmptyText, LoadedView, NoticeView, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import type { ProblemInfo } from '../api/problem.ts';
+import type { MessageKey } from '../i18n/index.ts';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
@@ -14,7 +16,22 @@ const PROBLEMS = {
   'account.username_taken': 'accounts.error.taken',
   'permissions.portal_company_right': 'portalAccounts.error.companyRight',
   'account.not_portal': 'portalAccounts.error.notPortal',
+  'account.organization_unknown': 'portalAccounts.error.organizationUnknown',
 } as const;
+// The reasons of a refused input, each named for itself so the administration sees what to change (TASK-078, H3).
+const VIOLATIONS: Readonly<Record<string, MessageKey>> = {
+  'organizationId.required': 'portalAccounts.error.organizationRequired',
+  'organizationId.unknown': 'portalAccounts.error.organizationUnknown',
+  'contactId.not_of_organization': 'portalAccounts.error.contactMoved',
+  'projectIds.not_released': 'portalAccounts.error.projectNotReleased',
+  'projectIds.invalid': 'portalAccounts.error.projectsInvalid',
+  'projectIds.required': 'portalAccounts.error.projectsInvalid',
+};
+
+function reasons(problem: ProblemInfo, t: (key: MessageKey) => string): string | null {
+  const known = (problem.violations ?? []).map((code) => VIOLATIONS[code]).filter((key): key is MessageKey => key !== undefined);
+  return known.length === 0 ? null : [...new Set(known)].map((key) => t(key)).join(' ');
+}
 
 // Accounts of customers for the portal (TASK-075, DEC-105). Each belongs to one customer organization of the helpdesk, which
 // never changes, optionally to one of its contacts, and is a member of the projects released to the organization that the
@@ -152,7 +169,7 @@ function PortalAccountForm({ options: list, account, onDone }: {
         contactId: contactId === '' ? null : contactId, projectIds,
       });
       setBusy(false);
-      if (result.kind !== 'ok') return setError(text(result.problem, PROBLEMS));
+      if (result.kind !== 'ok') return setError(reasons(result.problem, t) ?? text(result.problem, PROBLEMS));
       setUsername('');
       setDisplayName('');
       setProjectIds([]);
@@ -161,7 +178,7 @@ function PortalAccountForm({ options: list, account, onDone }: {
     setBusy(true);
     const result = await updatePortalAccount(api, account.id, contactId === '' ? null : contactId, projectIds);
     setBusy(false);
-    if (result.kind !== 'ok') return setError(text(result.problem, PROBLEMS));
+    if (result.kind !== 'ok') return setError(reasons(result.problem, t) ?? text(result.problem, PROBLEMS));
     onDone(result.data.value);
   }
 

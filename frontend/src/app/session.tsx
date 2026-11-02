@@ -117,6 +117,13 @@ export function useSession(): SessionContext {
 // The fixed actor of tickets the mail intake opened without a person (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 
+// Whether an account may be chosen as assignee or for a person field: never a portal account (TASK-078, F5). An account the
+// directory does not know stays choosable; the server checks the choice anyway.
+export function useChoosable(): (id: string) => boolean {
+  const { directory } = useSession();
+  return useCallback((id) => directory.get(id)?.kind !== 'portal', [directory]);
+}
+
 export function useAccountName(): (id: string | null | undefined) => string {
   const { directory } = useSession();
   const { t } = useI18n();
