@@ -36,8 +36,8 @@ import taskmanager.projects.ProjectAccess;
 @Service
 class PortalAccounts {
     static final int MAX_PROJECTS = 100;
-    /** The actions of the group "Portal" when it is created: read and create requests. Answering follows with TASK-076. */
-    static final Set<String> DEFAULT_ACTIONS = Set.of("ticket.read", "ticket.create");
+    /** The actions of the group "Portal" when it is created: read, create and answer requests (answering since TASK-076). */
+    static final Set<String> DEFAULT_ACTIONS = Set.of("ticket.read", "ticket.create", "portal.answer");
     /** The field rules of the group "Portal" when it is created; everything else of a ticket stays hidden. */
     static final Set<FieldGrant> DEFAULT_FIELDS;
 

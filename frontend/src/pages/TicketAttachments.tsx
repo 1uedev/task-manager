@@ -1,5 +1,5 @@
 import { useRef, useState, type DragEvent, type MouseEvent } from 'react';
-import { attachmentUrl, checkAttachment, listAttachments, removeAttachment, uploadAttachment, type Project, type Ticket } from '../api/product.ts';
+import { attachmentUrl, checkAttachment, listAttachments, removeAttachment, setAttachmentVisibility, uploadAttachment, type Attachment, type Project, type Ticket } from '../api/product.ts';
 import { UploadIcon } from '../app/Icons.tsx';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad } from '../app/hooks.ts';
@@ -114,6 +114,19 @@ export function TicketAttachments({ project, ticket, round, onChanged }: {
     onChanged();
   }
 
+  // Internal attachments are for the staff only; switched to the customer, the portal shows them too (TASK-076).
+  async function toggle(item: Attachment) {
+    setNotice(null);
+    const next = item.visibility === 'customer' ? 'internal' : 'customer';
+    const result = await setAttachmentVisibility(api, project.id, ticket.number, item.id, next);
+    if (result.kind !== 'ok') {
+      reload();
+      return setNotice({ kind: 'info', text: problemText(result.problem) });
+    }
+    setNotice({ kind: 'success', text: t(next === 'customer' ? 'attachments.nowCustomer' : 'attachments.nowInternal', { name: item.name }) });
+    reload();
+  }
+
   function onDrop(event: DragEvent) {
     event.preventDefault();
     setDropping(false);
@@ -136,6 +149,14 @@ export function TicketAttachments({ project, ticket, round, onChanged }: {
                     <a href={attachmentUrl(project.id, ticket.number, item.id)} download={item.name} aria-label={t('attachments.download', { name: item.name })}
                       onClick={(event) => void download(event, item.id, item.name)}>{item.name}</a>
                     <span className="hint">{t('attachments.meta', { size: formatBytes(item.size, language), by: name(item.uploadedBy), date: formatDateTime(item.uploadedAt, language) })}</span>
+                    <span className={`badge visibility-${item.visibility}`} data-testid="attachment-visibility">
+                      {t(item.visibility === 'customer' ? 'attachments.customer' : 'attachments.internal')}
+                    </span>
+                    {editable && (
+                      <button type="button" className="secondary" onClick={() => void toggle(item)}>
+                        {t(item.visibility === 'customer' ? 'attachments.makeInternal' : 'attachments.makeCustomer', { name: item.name })}
+                      </button>
+                    )}
                     {mayCarryMacros(item.name) && (
                       <p className="attachment-warning" data-testid="attachment-macro-warning">
                         <span aria-hidden="true">⚠</span> {t('attachments.macroWarning')}

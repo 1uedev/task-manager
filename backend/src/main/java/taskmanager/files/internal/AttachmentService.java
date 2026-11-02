@@ -27,6 +27,8 @@ import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.tickets.TicketAccess;
+import taskmanager.tickets.TicketOrganizations;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -52,6 +54,8 @@ public class AttachmentService {
     static final String FIELD = TicketAccess.ATTACHMENTS_FIELD;
     private static final String TICKET_READ = "ticket.read";
     private static final String TICKET_EDIT = "ticket.edit";
+    /** The project action with which a portal account answers a request and adds files to it (TASK-076). */
+    static final String PORTAL_ANSWER = "portal.answer";
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Logger LOG = LoggerFactory.getLogger(AttachmentService.class);
 
@@ -63,9 +67,12 @@ public class AttachmentService {
     private final Clock clock;
     private final UploadRules rules;
     private final TransactionTemplate transaction;
+    private final ObjectProvider<TicketOrganizations> organizations;
 
     AttachmentService(AttachmentRepository attachments, FileStorage storage, ProjectAccess projects, TicketAccess tickets,
-            Permissions permissions, Clock clock, FilesProperties properties, PlatformTransactionManager transactions) {
+            Permissions permissions, Clock clock, FilesProperties properties, PlatformTransactionManager transactions,
+            ObjectProvider<TicketOrganizations> organizations) {
+        this.organizations = organizations;
         this.attachments = attachments;
         this.storage = storage;
         this.projects = projects;
@@ -116,6 +123,34 @@ public class AttachmentService {
 
     /** Checks the name and reads the upload into the file store, then adds the attachment in one transaction. */
     public Attachment upload(AccessContext actor, UUID projectId, long number, String rawName, long declaredLength, InputStream body) {
+        return store(rawName, declaredLength, body, projectId, (id, name, size, sha256) -> {
+            UUID ticket = changeableTicket(actor, projectId, number);
+            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.INTERNAL);
+        });
+    }
+
+    /**
+     * A file a portal account adds to a request of its organization (TASK-076): {@code portal.answer} with the write rule for
+     * the attachments, checked like an upload of the staff; the attachment is visible to the customer from the start.
+     */
+    public Attachment portalUpload(AccessContext actor, UUID projectId, long number, String rawName, long declaredLength, InputStream body) {
+        return store(rawName, declaredLength, body, projectId, (id, name, size, sha256) -> {
+            UUID ticket = portalTicket(actor, projectId, number, PORTAL_ANSWER, Set.of(), Set.of(FIELD));
+            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.CUSTOMER);
+        });
+    }
+
+    /** Checks before a body is read that a portal account may add files to the request; it holds nothing after it returns. */
+    @Transactional
+    public void portalMayAdd(AccessContext actor, UUID projectId, long number) {
+        portalTicket(actor, projectId, number, PORTAL_ANSWER, Set.of(), Set.of(FIELD));
+    }
+
+    private interface Adder {
+        Attachment add(UUID id, String name, long size, String sha256);
+    }
+
+    private Attachment store(String rawName, long declaredLength, InputStream body, UUID projectId, Adder adder) {
         String name = UploadRules.clean(rawName);
         rules.checkName(name);
         if (declaredLength > rules.maxBytes()) {
@@ -150,7 +185,7 @@ public class AttachmentService {
             throw refused;
         }
         try {
-            return transaction.execute(status -> add(actor, projectId, number, id, name, staged.size(), staged.sha256()));
+            return transaction.execute(status -> adder.add(id, name, staged.size(), staged.sha256()));
         } catch (ApiProblemException | PermissionDenied refused) {
             // Definitely not committed: the content has no row and can go at once. Any other failure may have committed.
             deleteQuietly(id);
@@ -159,12 +194,12 @@ public class AttachmentService {
     }
 
     /** Runs inside the transaction of {@link #upload}. */
-    private Attachment add(AccessContext actor, UUID projectId, long number, UUID id, String name, long size, String sha256) {
-        UUID ticket = changeableTicket(actor, projectId, number);
+    private Attachment add(AccessContext actor, UUID projectId, UUID ticket, UUID id, String name, long size, String sha256, String visibility) {
         // The ticket row is held before the time is read, so a change that waited for another one carries a later time.
         tickets.lockForAttachmentChange(ticket);
         Instant now = clock.instant();
-        Attachment attachment = new Attachment(id, actor.companyId(), ticket, projectId, name, size, sha256, now, actor.userId(), null, null, null);
+        Attachment attachment = new Attachment(id, actor.companyId(), ticket, projectId, name, size, sha256, now, actor.userId(), null, null, null,
+            visibility);
         attachments.insert(attachment);
         attachments.audit(actor.companyId(), id, ticket, "attachment.added", describe(attachment), actor.userId(), now);
         tickets.recordAttachmentChange(ticket, now, actor.userId(), null, describe(attachment));
@@ -218,7 +253,9 @@ public class AttachmentService {
         }
         tickets.lockForAttachmentChange(ticketId);
         Instant now = clock.instant();
-        Attachment attachment = new Attachment(id, companyId, ticketId, projectId, name, staged.size(), staged.sha256(), now, actor, null, null, null);
+        // Files of a mail of the customer are visible to the customer: they sent them (TASK-076).
+        Attachment attachment = new Attachment(id, companyId, ticketId, projectId, name, staged.size(), staged.sha256(), now, actor, null, null, null,
+            Attachment.CUSTOMER);
         attachments.insert(attachment);
         attachments.audit(companyId, id, ticketId, "attachment.added", describe(attachment), actor, now);
         tickets.recordAttachmentChange(ticketId, now, actor, null, describe(attachment));
@@ -240,6 +277,88 @@ public class AttachmentService {
         attachments.markRemoved(id, now, actor.userId());
         attachments.audit(actor.companyId(), id, ticket, "attachment.removed", describe(attachment), actor.userId(), now);
         tickets.recordAttachmentChange(ticket, now, actor.userId(), describe(attachment), null);
+    }
+
+    // ------------------------------------------------------------------------------------------------ visibility (TASK-076)
+
+    /**
+     * Makes an attachment internal or visible to the customer; needs what removing needs ({@code ticket.edit} with the write
+     * rule for the attachments). Setting the visibility it already has changes nothing and writes no audit entry.
+     */
+    @Transactional
+    public Attachment setVisibility(AccessContext actor, UUID projectId, long number, UUID id, String visibility) {
+        if (!Attachment.INTERNAL.equals(visibility) && !Attachment.CUSTOMER.equals(visibility)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("visibility.invalid"));
+        }
+        UUID ticket = changeableTicket(actor, projectId, number);
+        tickets.lockForAttachmentChange(ticket);
+        Attachment attachment = attachments.lock(ticket, id).filter(found -> !found.removed()).orElseThrow(AttachmentService::notFound);
+        if (attachment.visibility().equals(visibility)) {
+            return attachment;
+        }
+        Instant now = clock.instant();
+        attachments.setVisibility(id, visibility);
+        attachments.audit(actor.companyId(), id, ticket, "attachment.visibility", visibility, actor.userId(), now);
+        return attachments.find(ticket, id).orElseThrow();
+    }
+
+    // ------------------------------------------------------------------------------------------------ portal (TASK-076)
+
+    /** The attachments of a request a portal account may see: only those visible to the customer. */
+    @Transactional
+    public List<Attachment> portalList(AccessContext actor, UUID projectId, long number) {
+        UUID ticket = portalTicket(actor, projectId, number, TICKET_READ, Set.of(FIELD), Set.of());
+        return attachments.visible(ticket).stream().filter(Attachment::customer).toList();
+    }
+
+    /** One attachment for a portal account; an internal one answers 404 like an unknown one. */
+    @Transactional
+    public Download portalDownload(AccessContext actor, UUID projectId, long number, UUID id) {
+        UUID ticket = portalTicket(actor, projectId, number, TICKET_READ, Set.of(FIELD), Set.of());
+        Attachment attachment = attachments.find(ticket, id).filter(found -> !found.removed() && found.customer())
+            .orElseThrow(AttachmentService::notFound);
+        try {
+            return new Download(attachment, storage.open(attachment.id()));
+        } catch (NoSuchFileException missing) {
+            LOG.warn("The content of attachment {} is missing from the file store", attachment.id());
+            throw notFound();
+        } catch (IOException unavailable) {
+            throw storageUnavailable("open the content of attachment " + attachment.id(), unavailable);
+        }
+    }
+
+    /**
+     * Checks a request of the organization of a portal account (TASK-076): the organization of the resource is the customer
+     * of the ticket, so a request of another organization or without customer answers 404 like an unknown one, as does a
+     * request the account may not read at all. The action and the field rules then decide; a refusal there answers 403.
+     */
+    private UUID portalTicket(AccessContext actor, UUID projectId, long number, String action, Set<String> reads, Set<String> writes) {
+        if (!actor.external()) {
+            throw projectNotFound();
+        }
+        TicketOrganizations ports = organizations.getIfUnique();
+        if (ports == null) {
+            throw ApiProblemException.of(404, "ticket.not_found");
+        }
+        Supplier<ResourceContext> project = ticketResource(actor, projectId);
+        Supplier<ResourceContext> resource = () -> {
+            ResourceContext base = project.get();
+            if (!base.projectMember()) {
+                return base;
+            }
+            UUID organization = tickets.find(actor.companyId(), projectId, number).flatMap(ports::lockOrganization).orElse(null);
+            return new ResourceContext(base.companyId(), base.projectId(), organization, base.projectMember(), base.resourceType());
+        };
+        Decision read = permissions.inspect(actor, resource, TICKET_READ, reads);
+        if (!read.allowed() || !read.readableFields().containsAll(reads)) {
+            throw ApiProblemException.of(404, "ticket.not_found");
+        }
+        try {
+            permissions.require(actor, resource, action, reads, writes);
+        } catch (PermissionDenied denied) {
+            throw forbidden();
+        }
+        return ticket(actor, projectId, number);
     }
 
     // ------------------------------------------------------------------------------------------------ rights

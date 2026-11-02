@@ -120,3 +120,111 @@ describe('portal accounts', () => {
     await finish(portal);
   });
 });
+
+// TASK-076: the conversation of the portal. Lea Lang of Nordwerk is a portal account in the group "Portal"; the type "Aufgabe"
+// of the project is offered in the portal; Anna answers as support.
+function withLea(backend) {
+  withCustomers(backend);
+  const lea = { id: '00000000-0000-4000-8000-0000000000e1', username: 'lea.lang', displayName: 'Lea Lang', password: 'Portal-Passwort-1', active: true,
+    passwordChangeRequired: false, createdAt: '2026-11-02T08:00:00Z', kind: 'portal', organizationId: NORDWERK, contactId: '00000000-0000-4000-8000-00000000c002' };
+  backend.state.accounts.push(lea);
+  backend.state.members.get(backend.project.id).push({ accountId: lea.id, addedAt: '2026-11-02T08:00:00Z' });
+  const rule = (field, operation) => ({ resourceType: 'ticket', field, projectId: null, operation, effect: 'allow' });
+  backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000000e2', name: 'Portal', purpose: 'portal', members: [lea.id],
+    actions: ['ticket.read', 'ticket.create', 'portal.answer'].map((action) => ({ action, projectId: null })),
+    fields: [...['title', 'description', 'type', 'status', 'attachments'].map((field) => rule(field, 'read')), ...['title', 'description', 'attachments'].map((field) => rule(field, 'write'))] });
+  backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000000e3', name: 'Support', members: [backend.anna.id],
+    actions: [{ action: 'helpdesk.reply', projectId: null }], fields: ['customer', 'contact', 'mail'].map((field) => rule(field, 'read')) });
+  backend.state.configurations.get(backend.project.id).configuration.ticketTypes[0].portal = true;
+  return lea;
+}
+
+describe('portal conversation', () => {
+  test('a portal account creates a request with a file and writes in its conversation', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByRole('button', { name: 'Neue Anfrage' }).click();
+    const form = page.getByTestId('portal-create');
+    // Only the offered type is in the choice.
+    assert.deepEqual(await form.getByLabel('Typ').locator('option').allInnerTexts(), ['Aufgabe']);
+    await form.getByLabel('Titel').fill('Drucker defekt');
+    await form.getByLabel('Beschreibung').fill('Seit heute Morgen');
+    await form.getByTestId('portal-files').setInputFiles({ name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from('bild') });
+    await form.getByRole('button', { name: 'Anfrage senden' }).click();
+    await page.getByTestId('portal-ticket').waitFor();
+    assert.match(await page.locator('[data-field="status"]').innerText(), /Neu/);
+    assert.match(await page.getByTestId('portal-attachments').innerText(), /foto\.png/);
+    const created = backend.state.tickets.at(-1);
+    assert.deepEqual(backend.state.helpdesk.ticketCustomers.get(created.id), { customerId: NORDWERK, contactId: '00000000-0000-4000-8000-00000000c002' });
+
+    const post = page.getByTestId('portal-post');
+    await post.getByLabel('Nachricht').fill('Hier noch ein Foto.');
+    await post.getByTestId('portal-files').setInputFiles({ name: 'zweites.png', mimeType: 'image/png', buffer: Buffer.from('bild2') });
+    await post.getByRole('button', { name: 'Nachricht senden' }).click();
+    await post.getByText('Ihre Nachricht ist angekommen.').waitFor();
+    const entry = page.getByTestId('portal-conversation').locator(':scope > li').last();
+    assert.match(await entry.innerText(), /Sie[\s\S]*Hier noch ein Foto\.[\s\S]*zweites\.png/);
+    assert.equal(backend.state.helpdesk.posts.at(-1).attachmentIds.length, 1);
+    await finish(portal);
+  });
+
+  test('the support answers in the portal and the start page marks the new answer until it is opened', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const ticket = backend.state.tickets[0];
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tickets/${ticket.number}`);
+    const helpdesk = admin.page.getByTestId('ticket-helpdesk');
+    await helpdesk.getByRole('button', { name: 'Im Portal antworten' }).click();
+    await helpdesk.getByTestId('portal-answer').getByLabel('Text').fill('Ein Techniker kommt morgen.');
+    await helpdesk.getByRole('button', { name: 'Im Portal veröffentlichen' }).click();
+    await helpdesk.getByText('Die Antwort steht im Portal.').waitFor();
+    assert.match(await helpdesk.getByTestId('ticket-portal-posts').innerText(), /Support im Portal[\s\S]*Ein Techniker kommt morgen\./);
+    await finish(admin);
+
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    const row = page.getByTestId('portal-tickets').locator('tr', { hasText: 'Anmeldung prüfen' });
+    await row.getByTestId('portal-unread').waitFor();
+    await row.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    const conversation = page.getByTestId('portal-conversation');
+    await conversation.waitFor();
+    assert.match(await conversation.innerText(), /Support[\s\S]*Ein Techniker kommt morgen\./);
+    await page.getByRole('button', { name: 'Zurück zur Übersicht' }).click();
+    await page.getByTestId('portal-tickets').waitFor();
+    assert.equal(await page.getByTestId('portal-unread').count(), 0, 'opened, so no longer new');
+    await finish(portal);
+  });
+
+  test('an internal attachment reaches the portal only after it is released, and the list filters', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const ticket = backend.state.tickets[0];
+    backend.state.attachments.push({ id: '00000000-0000-4000-8000-0000000000f1', ticket: ticket.id, name: 'handbuch.pdf', size: 4, sha256: 'a'.repeat(64),
+      uploadedAt: '2026-11-02T08:00:00Z', uploadedBy: backend.anna.id, content: Buffer.from('%PDF'), removed: false, visibility: 'internal' });
+    const portalBefore = await session(backend, { username: 'lea.lang' }, '#/');
+    await portalBefore.page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    await portalBefore.page.getByTestId('portal-conversation').or(portalBefore.page.getByText('Noch keine Nachrichten.')).first().waitFor();
+    assert.equal(await portalBefore.page.getByTestId('portal-attachments').count(), 0);
+    await finish(portalBefore);
+
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tickets/${ticket.number}`);
+    await admin.page.getByTestId('attachment-visibility').filter({ hasText: 'Intern' }).waitFor();
+    await admin.page.getByRole('button', { name: 'handbuch.pdf für Kunden freigeben' }).click();
+    await admin.page.getByText('handbuch.pdf ist jetzt im Portal sichtbar.').waitFor();
+    await finish(admin);
+
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByLabel('Offen oder erledigt').selectOption({ label: 'Erledigt' });
+    await page.getByRole('button', { name: 'Suchen' }).click();
+    await page.getByText('Noch keine Anfragen.').waitFor();
+    await page.getByLabel('Offen oder erledigt').selectOption({ label: 'Offen' });
+    await page.getByLabel('Text').fill('anmeldung');
+    await page.getByRole('button', { name: 'Suchen' }).click();
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    assert.match(await page.getByTestId('portal-attachments').innerText(), /handbuch\.pdf/);
+    await finish(portal);
+  });
+});

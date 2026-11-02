@@ -22,7 +22,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,11 +58,14 @@ class AttachmentController {
         this.contexts = contexts;
     }
 
-    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy) {
+    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy, String visibility) {
         static AttachmentBody of(Attachment attachment) {
             return new AttachmentBody(attachment.id(), attachment.name(), attachment.size(), attachment.sha256(), attachment.uploadedAt(),
-                attachment.uploadedBy());
+                attachment.uploadedBy(), attachment.visibility());
         }
+    }
+
+    record VisibilityRequest(String visibility) {
     }
 
     /** The header that names the largest accepted file, so an interface shows the limit the server is set to (review F8 of TASK-051). */
@@ -107,6 +112,15 @@ class AttachmentController {
             .body(new InputStreamResource(download.content()));
     }
 
+    /** Makes the attachment internal or visible to the customer (TASK-076); needs what removing needs. */
+    @PatchMapping("/{id}")
+    AttachmentBody setVisibility(@PathVariable UUID projectId, @PathVariable long number, @PathVariable UUID id,
+            @RequestBody(required = false) VisibilityRequest body) {
+        AccessContext actor = actor();
+        String visibility = body == null ? null : body.visibility();
+        return AttachmentBody.of(retrying(() -> attachments.setVisibility(actor, projectId, number, id, visibility)));
+    }
+
     @DeleteMapping("/{id}")
     ResponseEntity<Void> remove(@PathVariable UUID projectId, @PathVariable long number, @PathVariable UUID id) {
         AccessContext actor = actor();
@@ -118,7 +132,7 @@ class AttachmentController {
     }
 
     /** The permissions context of a complete login; a login that still has to change its password is refused. */
-    private AccessContext actor() {
+    AccessContext actor() {
         var request = identity.require();
         if (request.level() != AuthenticationLevel.FULL) {
             throw ApiProblemException.of(403, "auth.password_change_required");
@@ -127,7 +141,7 @@ class AttachmentController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503. */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {

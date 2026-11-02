@@ -26,7 +26,17 @@ class PortalProjectController {
         this.contexts = contexts;
     }
 
-    record PortalProjectBody(UUID id, String key, String name) {
+    /**
+     * A project of the portal with the ticket types offered for new requests and the statuses with name and category, so that
+     * the portal shows the status by its name (TASK-076).
+     */
+    record PortalProjectBody(UUID id, String key, String name, List<TypeBody> ticketTypes, List<StatusBody> statuses) {
+    }
+
+    record TypeBody(String key, String name) {
+    }
+
+    record StatusBody(String key, String name, String category) {
     }
 
     @GetMapping
@@ -35,7 +45,10 @@ class PortalProjectController {
             throw ApiProblemException.of(403, "auth.password_change_required");
         }
         AccessContext actor = contexts.current().orElseThrow(() -> ApiProblemException.of(403, "auth.forbidden"));
-        return ProjectController.retrying(() -> projects.portalProjects(actor)).stream()
-            .map(project -> new PortalProjectBody(project.id(), project.key(), project.name())).toList();
+        return ProjectController.retrying(() -> projects.portalProjectsWithConfiguration(actor)).stream()
+            .map(entry -> new PortalProjectBody(entry.project().id(), entry.project().key(), entry.project().name(),
+                entry.configuration().portalTypes().stream().map(type -> new TypeBody(type.key(), type.name())).toList(),
+                entry.configuration().statuses().stream().map(status -> new StatusBody(status.key(), status.name(), status.category())).toList()))
+            .toList();
     }
 }

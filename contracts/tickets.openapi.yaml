@@ -164,6 +164,11 @@ paths:
       description: |
         Nur Tickets, deren Kunde die Organisation des Portalkontos ist. `writableFields` ist leer. Ein internes Konto, ein
         Projekt ohne Mitgliedschaft oder ohne `ticket.read` antwortet mit 404 `project.not_found`.
+
+        Filter (TASK-076): `status` nach dem Schlüssel eines Status, `state` nach offen oder erledigt (Kategorie `done` des Status),
+        `q` nach Text in Titel oder Beschreibung ohne Rücksicht auf Groß und Kleinschreibung, nur in den lesbaren der beiden
+        Felder. Ein Filter nach Status oder Zustand ohne Leserecht auf `status` antwortet mit 400 `request.invalid` und
+        `status.not_readable`, ein unbekannter Zustand mit `state.invalid`.
       parameters:
         - name: limit
           in: query
@@ -171,6 +176,15 @@ paths:
         - name: before
           in: query
           schema: {type: integer, minimum: 1}
+        - name: status
+          in: query
+          schema: {type: string}
+        - name: state
+          in: query
+          schema: {type: string, enum: [open, done]}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 200}
       responses:
         '200':
           description: Anfragen

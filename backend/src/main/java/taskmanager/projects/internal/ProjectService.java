@@ -379,14 +379,25 @@ public class ProjectService {
      */
     @Transactional
     public List<Project> portalProjects(AccessContext actor) {
+        return portalProjectsWithConfiguration(actor).stream().map(PortalProject::project).toList();
+    }
+
+    /** A project of a portal account with its configuration in force, for the ticket types it offers and the names of its statuses (TASK-076). */
+    public record PortalProject(Project project, ProjectConfiguration configuration) {
+    }
+
+    @Transactional
+    public List<PortalProject> portalProjectsWithConfiguration(AccessContext actor) {
         if (!actor.external()) {
             throw notFound();
         }
-        List<Project> own = new ArrayList<>();
+        List<PortalProject> own = new ArrayList<>();
         for (UUID id : projects.memberships(actor.companyId(), actor.userId())) {
-            projects.lock(actor.companyId(), id, false).filter(project -> projects.isMember(id, actor.userId())).ifPresent(own::add);
+            projects.lock(actor.companyId(), id, false).filter(project -> projects.isMember(id, actor.userId()))
+                .ifPresent(project -> own.add(new PortalProject(project,
+                    projects.configuration(id, project.configurationVersion()).orElseThrow())));
         }
-        own.sort(Comparator.comparing(Project::key));
+        own.sort(Comparator.comparing(entry -> entry.project().key()));
         return own;
     }
 

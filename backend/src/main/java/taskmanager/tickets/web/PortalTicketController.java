@@ -41,13 +41,18 @@ class PortalTicketController {
 
     @GetMapping
     List<TicketBody> list(@PathVariable UUID projectId, @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) Long before) {
+            @RequestParam(required = false) Long before, @RequestParam(required = false) String status,
+            @RequestParam(required = false) String state, @RequestParam(required = false) String q) {
         AccessContext actor = actor();
         int size = limit == null ? DEFAULT_LIMIT : limit;
         if (size < 1 || size > MAX_LIMIT || (before != null && before < 1)) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("paging.invalid"));
         }
-        return TicketController.retrying(() -> tickets.portalList(actor, projectId, size, before)).stream().map(TicketBody::of).toList();
+        if (q != null && q.length() > 200) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("q.invalid"));
+        }
+        return TicketController.retrying(() -> tickets.portalList(actor, projectId, size, before,
+            new TicketService.PortalFilter(status, state, q))).stream().map(TicketBody::of).toList();
     }
 
     @GetMapping("/{number}")

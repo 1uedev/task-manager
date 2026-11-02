@@ -140,6 +140,7 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'helpdesk.manage': 'right.helpdesk.manage',
   'helpdesk.reply': 'right.helpdesk.reply',
   'helpdesk.review': 'right.helpdesk.review',
+  'portal.answer': 'right.portal.answer',
   'jobs.manage': 'right.jobs.manage',
   'permissions.audit.read': 'right.permissions.audit.read',
   'permissions.manage': 'right.permissions.manage',

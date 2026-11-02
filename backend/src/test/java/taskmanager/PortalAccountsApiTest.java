@@ -401,7 +401,7 @@ class PortalAccountsApiTest {
         assertEquals(1, groups.size(), groups.toString());
         UUID group = (UUID) groups.get(0).get("id");
         assertTrue(((String) groups.get(0).get("name")).startsWith("Portal"));
-        assertEquals(Set.of("ticket.read", "ticket.create"),
+        assertEquals(Set.of("ticket.read", "ticket.create", "portal.answer"),
             Set.copyOf(jdbc.queryForList("select action_key from permissions_action where group_id = ?", String.class, group)));
         assertEquals(Set.of("READ:title", "READ:description", "READ:type", "READ:status", "READ:priority", "READ:tags",
                 "READ:attachments", "WRITE:title", "WRITE:description", "WRITE:attachments"),

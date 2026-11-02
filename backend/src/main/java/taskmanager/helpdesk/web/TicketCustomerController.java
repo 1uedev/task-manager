@@ -67,14 +67,15 @@ class TicketCustomerController {
     }
 
     record ViewBody(List<String> readable, List<String> writable, NamedBody customer, ContactBody contact, List<MailBody> mails,
-            List<ReplyBody> replies, boolean replyAllowed) {
+            List<ReplyBody> replies, boolean replyAllowed, boolean portalAnswerAllowed) {
         static ViewBody of(TicketCustomerService.View view) {
             boolean mails = view.readable().contains("mail");
             return new ViewBody(view.readable().stream().sorted().toList(), view.writable().stream().sorted().toList(),
                 view.customer() == null ? null : new NamedBody(view.customer().id(), view.customer().name()),
                 view.contact() == null ? null : ContactBody.of(view.contact()),
                 mails ? view.mails().stream().map(MailBody::of).toList() : null,
-                mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed());
+                mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed(),
+                view.portalAnswerAllowed());
         }
     }
 

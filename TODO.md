@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -36,7 +36,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
@@ -46,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-072](#task-072-tag-katalogpflege-und-zusammenführen-a3-teil-1) | Tag Katalogpflege und Zusammenführen (A3 Teil 1) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
+| [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -166,9 +166,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-076 Portalgespräch, Anhänge und Portalseiten (A11 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
 
-**Bezug:** REQ-PORTAL-001, REQ-HD-002, REQ-HD-003, REQ-TKT-004, REQ-ACL-003; DEC-027, DEC-035, DEC-091, DEC-098; docs/HELPDESK_SLA.md, docs/PERMISSIONS.md (Fall 8). **Abhängigkeiten:** TASK-075 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 10 bis 16 und 20 bestätigt. Blockiert, bis das Ergebnis von TASK-075 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit der nächsten freien Entscheidungsnummer.
+**Bezug:** REQ-PORTAL-001, REQ-HD-002, REQ-HD-003, REQ-TKT-004, REQ-ACL-003; DEC-027, DEC-035, DEC-091, DEC-098; docs/HELPDESK_SLA.md, docs/PERMISSIONS.md (Fall 8). **Abhängigkeiten:** TASK-075 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 10 bis 16 und 20 bestätigt. Nach dem Ergebnis von TASK-075 auf main (PR #233) ohne neue Reservierung in derselben Sitzung begonnen. Ergebnis auf Branch claude/project-thread-houava mit DEC-106 und den Migrationen V0037 bis V0039; Beschreibung in backend/README.md (Abschnitt TASK-076).
 
 **Umfang:** Anlegen und Beantworten von Anfragen im Portal, Portalantworten des Supports, Kundenverlauf, kundensichtbare Anhänge, Portalseiten und Demodaten. Nicht Teil: interne Notizen und Kommentare, Statusänderung durch den Kunden, Mailbenachrichtigungen, Tags im Portal (TASK-077).
 
@@ -187,7 +187,12 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Portalbeitrag und Portalantwort wirken auf Kundenantworten und Servicefristen wie die Mailwege.
 3. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Liste, Anlage, Verlauf, Antworten und Anhänge in Portal und interner Ansicht.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-075 umsetzen.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: Tickettypen mit der Markierung `portal` in der Projektkonfiguration (Kästchen im Editor); Anlage im Portal mit Kunde und Kontakt aus dem Konto; Gespräch je Anfrage aus Mails der Organisation, gesendeten Mailantworten und Beiträgen; Beiträge des Kunden mit eigenen Dateien und der neuen Aktion `portal.answer` in der Gruppe „Portal“ (`CustomerAnswered`); „Im Portal antworten“ am Ticket mit den Rechten einer Mailantwort (`ReplySent`, Erstreaktion); Sichtbarkeit `internal` oder `customer` je Anhang mit Umschalter in der Ticketansicht und Portalanhängen, ein interner antwortet im Portal mit 404; Portalliste mit Filtern nach Projekt, Status, offen oder erledigt und Text, Statusnamen und Markierung neuer Antworten; Demodaten mit Nordwerk und Südtechnik und den Konten `lea.nordwerk` und `tom.suedtechnik`.
+2. Nachweise: `PortalConversationApiTest` (Anlage nur mit angebotenem Typ, Verlauf ohne Internes, Fall 8 mit internem und kundensichtbarem Anhang, Umschalten, eigene Dateien je Beitrag, Filter, Markierung, gleichzeitige Beiträge mit derselben Datei, Ereignisse für die Servicefristen), angepasste Vertragstests, voller Backendlauf mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich `portal.test.mjs` (Anlage mit Datei, Beitrag, Portalantwort und Markierung, Freigabe eines Anhangs, Filter).
+3. Grenzen: Ein Beitrag ändert die Version des Tickets nicht; die Portalliste zeigt als letzte Änderung den jüngeren Wert aus Ticket und Gespräch. Anhänge aus der Zeit vor TASK-076, auch aus Mails, bleiben intern, bis jemand sie umschaltet. Die Wirkung auf die Fristen ist über dieselben Ereignisse wie bei Mails nachgewiesen, nicht mit einer eigenen Fristregel im Test. Die Portalliste filtert in der Anwendung; für sehr viele Anfragen einer Organisation ist das nicht gemessen.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger; danach TASK-077 in derselben Sitzung.
 
 ## TASK-077 Tags im Portal (A11 Teil 3)
 

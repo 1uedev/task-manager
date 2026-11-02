@@ -83,6 +83,25 @@ export interface PortalProject {
   readonly id: string;
   readonly key: string;
   readonly name: string;
+  // The ticket types offered for new requests and every status with name and category (TASK-076).
+  readonly ticketTypes: readonly { readonly key: string; readonly name: string }[];
+  readonly statuses: readonly { readonly key: string; readonly name: string; readonly category: 'open' | 'in_progress' | 'done' }[];
+}
+export type PortalEntry = HelpdeskTypes['schemas']['ConversationEntry'];
+export type PortalPost = HelpdeskTypes['schemas']['PortalPost'];
+export type PortalFile = HelpdeskTypes['schemas']['PortalFile'];
+export type AttachmentVisibility = FileTypes['schemas']['Visibility'];
+export interface PortalActivity {
+  readonly number: number;
+  readonly lastActivityAt?: string | null;
+  readonly lastSupportAt?: string | null;
+  readonly seenAt?: string | null;
+  readonly unread: boolean;
+}
+export interface PortalFilter {
+  readonly status: string | null;
+  readonly state: 'open' | 'done' | null;
+  readonly q: string | null;
 }
 
 export interface Versioned<T> {
@@ -222,9 +241,48 @@ export const updatePortalAccount = (api: ServerApi, id: string, contactId: strin
     one<PortalAccount>(isPortalAccount));
 // What a portal account itself reads: its projects and the requests of its organization there.
 export const listPortalProjects = (api: ServerApi) =>
-  run(() => api.projects.GET('/portal/projects'), listOf<PortalProject>((v) => hasStrings(v, 'id', 'key', 'name')));
-export const listPortalTickets = (api: ServerApi, projectId: string) =>
-  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId } } }), listOf<Ticket>(isTicket));
+  run(() => api.projects.GET('/portal/projects'), listOf<PortalProject>((v) => hasStrings(v, 'id', 'key', 'name')
+    && Array.isArray((v as PortalProject).ticketTypes) && Array.isArray((v as PortalProject).statuses)));
+export const listPortalTickets = (api: ServerApi, projectId: string, filter?: PortalFilter) =>
+  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId }, query: {
+    ...(filter?.status ? { status: filter.status } : {}), ...(filter?.state ? { state: filter.state } : {}), ...(filter?.q ? { q: filter.q } : {}),
+  } } }), listOf<Ticket>(isTicket));
+// The conversation of the portal (TASK-076): creating, the entries of a request, posts, the marker of new answers and files.
+const isPortalFile = (v: unknown) => hasStrings(v, 'id', 'name', 'uploadedAt') && typeof (v as PortalFile).size === 'number';
+const isPortalEntry = (v: unknown) => hasStrings(v, 'kind', 'id', 'at', 'author') && Array.isArray((v as PortalEntry).attachments);
+const isPortalPost = (v: unknown) => hasStrings(v, 'id', 'authorKind', 'authorId', 'createdAt') && Array.isArray((v as PortalPost).attachments);
+export const createPortalRequest = (api: ServerApi, projectId: string, body: { type: string; title: string; description: string | null }) =>
+  run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets', { params: { path: { projectId } }, body }),
+    one<{ readonly id: string; readonly number: number }>((v) => hasStrings(v, 'id') && typeof (v as { number: unknown }).number === 'number'));
+export const listPortalActivity = (api: ServerApi, projectId: string) =>
+  run(() => api.helpdesk.GET('/portal/projects/{projectId}/activity', { params: { path: { projectId } } }),
+    listOf<PortalActivity>((v) => record(v) && typeof v.number === 'number' && typeof v.unread === 'boolean'));
+export const readPortalConversation = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } } }),
+    listOf<PortalEntry>(isPortalEntry));
+export const postInPortal = (api: ServerApi, projectId: string, number: number, body: string, attachmentIds: readonly string[]) =>
+  run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } },
+    body: { body, attachmentIds: [...attachmentIds] } }), one<PortalEntry>(isPortalEntry));
+export const markPortalSeen = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } } }), nothing);
+export const listPortalAttachments = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.files.GET('/portal/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
+    listOf<PortalFile>(isPortalFile));
+export const uploadPortalAttachment = (api: ServerApi, projectId: string, number: number, file: File) =>
+  run(() => api.files.POST('/portal/projects/{projectId}/tickets/{number}/attachments', {
+    params: { path: { projectId, number }, query: { name: file.name } },
+    body: file as unknown as string,
+    bodySerializer: (body) => body as unknown as BodyInit,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  }), one<PortalFile>(isPortalFile));
+export const portalAttachmentUrl = (projectId: string, number: number, id: string) =>
+  `/api/v1/portal/projects/${projectId}/tickets/${number}/attachments/${id}`;
+export const listPortalPosts = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/portal-posts', { params: { path: { projectId, number } } }),
+    listOf<PortalPost>(isPortalPost));
+export const answerInPortal = (api: ServerApi, projectId: string, number: number, body: string) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/portal-posts', { params: { path: { projectId, number } }, body: { body } }),
+    one<PortalPost>(isPortalPost));
 export const readPortalTicket = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.tickets.GET('/portal/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }), one<Ticket>(isTicket));
 export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
@@ -406,6 +464,9 @@ export const uploadAttachment = (api: ServerApi, projectId: string, number: numb
     bodySerializer: (body) => body as unknown as BodyInit,
     headers: { 'Content-Type': 'application/octet-stream' },
   }), one<Attachment>(isAttachment));
+export const setAttachmentVisibility = (api: ServerApi, projectId: string, number: number, id: string, visibility: AttachmentVisibility) =>
+  run(() => api.files.PATCH('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } }, body: { visibility } }),
+    one<Attachment>(isAttachment));
 export const removeAttachment = (api: ServerApi, projectId: string, number: number, id: string) =>
   run(() => api.files.DELETE('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } } }), nothing);
 // A link, not a request: the browser saves the file itself, with the session cookie and the headers of the download.
