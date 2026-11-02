@@ -26,6 +26,7 @@ import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.TicketAccess;
+import taskmanager.tickets.TicketOrganizations;
 
 /**
  * Tickets of a project with history and conflict detection (TASK-027, DEC-067), with the custom fields, the workflows of the
@@ -69,15 +70,73 @@ public class TicketService {
     private final IdentityVerification identity;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final TicketOrganizations organizations;
 
     TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, TicketOrganizations organizations) {
         this.tickets = tickets;
         this.projects = projects;
         this.permissions = permissions;
         this.identity = identity;
         this.clock = clock;
         this.events = events;
+        this.organizations = organizations;
+    }
+
+    // ------------------------------------------------------------------------------------------------ portal (TASK-075)
+
+    /**
+     * The tickets of the organization of a portal account in one project, newest first (TASK-075, DEC-105). The permissions
+     * module checks {@code ticket.read} with the organization of the caller as the organization of the resource; only tickets
+     * whose customer is that organization are listed, and their link rows stay locked until the commit. An internal account,
+     * a project without membership or without the right answer 404 like an unknown project.
+     */
+    @Transactional
+    public List<TicketView> portalList(AccessContext actor, UUID projectId, int limit, Long before) {
+        portalOnly(actor);
+        Supplier<ResourceContext> project = resource(actor, projectId);
+        Supplier<ResourceContext> resource = () -> withOrganization(project.get(), actor.organizationId());
+        Decision read = readable(actor, resource, projectId);
+        String key = projects.key(projectId).orElseThrow(TicketService::projectNotFound);
+        ProjectConfiguration configuration = configuration(projectId);
+        List<UUID> own = organizations.lockTicketsOf(projectId, actor.organizationId());
+        return tickets.listAmong(actor.companyId(), projectId, own, limit, before).stream()
+            .map(ticket -> new TicketView(ticket, key, read.readableFields(), Set.of(), configuration)).toList();
+    }
+
+    /**
+     * One ticket for a portal account (TASK-075): the organization of the resource is the customer of this ticket, so a ticket
+     * of another organization or without customer answers 404 like an unknown one. The answer names no writable field.
+     */
+    @Transactional
+    public TicketView portalGet(AccessContext actor, UUID projectId, long number) {
+        portalOnly(actor);
+        Supplier<ResourceContext> project = resource(actor, projectId);
+        Supplier<ResourceContext> resource = () -> {
+            ResourceContext base = project.get();
+            if (!base.projectMember()) {
+                return base;
+            }
+            UUID organization = tickets.find(actor.companyId(), projectId, number)
+                .flatMap(ticket -> organizations.lockOrganization(ticket.id())).orElse(null);
+            return withOrganization(base, organization);
+        };
+        Decision read = inspect(actor, resource, READ, projectId, FIELDS);
+        if (!read.allowed()) {
+            throw notFound();
+        }
+        Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
+        return view(ticket, read.readableFields(), Set.of());
+    }
+
+    private static ResourceContext withOrganization(ResourceContext base, UUID organization) {
+        return new ResourceContext(base.companyId(), base.projectId(), organization, base.projectMember(), base.resourceType());
+    }
+
+    private static void portalOnly(AccessContext actor) {
+        if (!actor.external()) {
+            throw projectNotFound();
+        }
     }
 
     /** A ticket with the key of its project, the fields the caller may read and write and the configuration they refer to. */
@@ -405,7 +464,7 @@ public class TicketService {
             violations.add("assignee.not_member");
             return null;
         }
-        if (!projects.isMember(projectId, account) || !identity.accountIsActive(account)) {
+        if (!projects.isMember(projectId, account) || !identity.accountIsActiveInternal(account)) {
             violations.add("assignee.not_member");
             return null;
         }
@@ -435,7 +494,7 @@ public class TicketService {
             return null;
         }
         if (ProjectConfiguration.USER.equals(field.type()) && (!projects.isMember(projectId, UUID.fromString(value))
-                || !identity.accountIsActive(UUID.fromString(value)))) {
+                || !identity.accountIsActiveInternal(UUID.fromString(value)))) {
             violations.add(field.id() + ".not_member");
             return null;
         }

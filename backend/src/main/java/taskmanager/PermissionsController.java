@@ -30,6 +30,7 @@ import taskmanager.permissions.AccessContext;
 import taskmanager.permissions.GroupNameTaken;
 import taskmanager.permissions.LastAdministration;
 import taskmanager.permissions.LastLocalAdministration;
+import taskmanager.permissions.PortalCompanyRight;
 import taskmanager.permissions.PermissionAdministration;
 import taskmanager.permissions.PermissionAdministration.Effect;
 import taskmanager.permissions.PermissionAdministration.GroupDetail;
@@ -375,6 +376,8 @@ class PermissionsController {
                 throw ApiProblemException.of(409, "permissions.last_local_administrator");
             } catch (GroupNameTaken taken) {
                 throw ApiProblemException.of(409, "permissions.group_name_taken");
+            } catch (PortalCompanyRight companyRight) {
+                throw ApiProblemException.of(409, "permissions.portal_company_right");
             } catch (PermissionDenied denied) {
                 AccessContext fresh = attempt == 1 ? contexts.current().orElse(null) : null;
                 if (fresh == null || fresh.rightsVersion() == actor.rightsVersion()) {

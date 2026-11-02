@@ -10,6 +10,7 @@ import { HELPDESK_RIGHT, HelpdeskPage } from '../pages/HelpdeskPage.tsx';
 import { InboxPage } from '../pages/InboxPage.tsx';
 import { JOBS_RIGHT, JobsPage } from '../pages/JobsPage.tsx';
 import { LoginPage, PasswordPage } from '../pages/LoginPage.tsx';
+import { PortalPage } from '../pages/PortalPage.tsx';
 import { ProjectPage } from '../pages/ProjectPage.tsx';
 import { ProjectsPage } from '../pages/ProjectsPage.tsx';
 import { SearchPage } from '../pages/SearchPage.tsx';
@@ -111,6 +112,7 @@ export function App() {
       </div>
     );
   }
+  if (view.state === 'ready' && view.session.portal) return <PortalShell />;
   if (view.state === 'ready') return <Shell />;
   return (
     <div className="gate">
@@ -152,6 +154,30 @@ function HandoverPage() {
         <button type="button" onClick={() => { release(); void refresh(); }}>{t('accounts.toLogin')}</button>
       </p>
     </>
+  );
+}
+
+// A portal account sees only its requests: no navigation of the staff, no administration (TASK-075, DEC-105).
+function PortalShell() {
+  const { t, language } = useI18n();
+  const { brand } = useBrand();
+  const { view, signOut } = useSession();
+  const who = view.state === 'ready' ? view.session.displayName ?? view.session.username ?? '' : '';
+  useEffect(() => {
+    document.title = `${t('portal.title')} · ${brand.name}`;
+  }, [language, brand.name, t]);
+  return (
+    <div className="gate portal">
+      <header className="gate-head">
+        <BrandMark />
+        <div className="portal-session">
+          <p className="who" data-testid="who">{who}</p>
+          <button type="button" className="link-button logout" onClick={() => void signOut()}><LogoutIcon />{t('session.logout')}</button>
+          <Preferences />
+        </div>
+      </header>
+      <main id="main" tabIndex={-1}><PortalPage /></main>
+    </div>
   );
 }
 

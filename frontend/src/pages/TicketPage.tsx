@@ -130,7 +130,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
     ? customFields.find((field) => `${CUSTOM_PREFIX}${field.key}` === id)?.name ?? id : t(FIELD_LABEL[id as Field] ?? 'field.title');
   const people = members.state === 'ok'
     ? members.value.map((member) => member.accountId)
-    : [...directory.values()].filter((entry) => entry.active).map((entry) => entry.id);
+    : [...directory.values()].filter((entry) => entry.active && entry.kind !== 'portal').map((entry) => entry.id);
   const persons = people.map((id) => ({ id, name: name(id) }));
 
   async function save(event: FormEvent) {

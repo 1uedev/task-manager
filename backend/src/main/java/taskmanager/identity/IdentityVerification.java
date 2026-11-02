@@ -38,4 +38,16 @@ public interface IdentityVerification {
      * exclusively and therefore waits for it.
      */
     boolean accountIsActiveLocal(UUID accountId);
+
+    /** True if the account exists, is active and is an internal account, not one of the portal (TASK-075). Row locked until the commit. */
+    boolean accountIsActiveInternal(UUID accountId);
+
+    /**
+     * The customer organization of a portal account, empty for an internal or unknown account (TASK-075). The row stays locked
+     * until the commit; the organization of an account never changes.
+     */
+    Optional<UUID> portalOrganization(UUID accountId);
+
+    /** True if the account exists and is a portal account, active or not (TASK-075). Row locked until the commit. */
+    boolean accountIsPortal(UUID accountId);
 }

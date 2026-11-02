@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/portal/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Projekte eines Portalkontos mit Schlüssel und Name (TASK-075)
+         * @description Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`.
+         */
+        get: operations["listPortalProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects": {
         parameters: {
             query?: never;
@@ -227,7 +247,9 @@ export interface paths {
         get?: never;
         /**
          * Mitglied hinzufügen (project.manage oder projects.manage)
-         * @description Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein vorhandenes Mitglied bleibt unverändert.
+         * @description Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein Portalkonto (TASK-075) kommt nur in ein
+         *     Projekt, das der Helpdesk seiner Kundenorganisation zugeordnet hat, sonst 400 mit `accountId.not_released`. Ein
+         *     vorhandenes Mitglied bleibt unverändert.
          */
         put: operations["addProjectMember"];
         post?: never;
@@ -443,6 +465,34 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPortalProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projekte */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        key: string;
+                        name: string;
+                    }[];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     listProjects: {
         parameters: {
             query?: never;

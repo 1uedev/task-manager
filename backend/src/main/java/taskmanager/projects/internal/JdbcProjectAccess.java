@@ -16,9 +16,46 @@ import taskmanager.projects.ProjectConfiguration;
 @Service
 class JdbcProjectAccess implements ProjectAccess {
     private final ProjectRepository projects;
+    private final java.time.Clock clock;
 
-    JdbcProjectAccess(ProjectRepository projects) {
+    JdbcProjectAccess(ProjectRepository projects, java.time.Clock clock) {
         this.projects = projects;
+        this.clock = clock;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean admit(UUID companyId, UUID projectId, UUID accountId, UUID actor) {
+        if (projectId == null || projects.lock(companyId, projectId, true).isEmpty()) {
+            return false;
+        }
+        java.time.Instant now = clock.instant();
+        if (projects.addMember(projectId, accountId, now, actor)) {
+            projects.touch(projectId, now, actor);
+            projects.audit(projectId, actor, "project.member_added", accountId.toString(), now);
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean dismiss(UUID companyId, UUID projectId, UUID accountId, UUID actor) {
+        if (projectId == null || projects.lock(companyId, projectId, true).isEmpty()) {
+            return false;
+        }
+        java.time.Instant now = clock.instant();
+        if (projects.removeMember(projectId, accountId)) {
+            projects.touch(projectId, now, actor);
+            projects.audit(projectId, actor, "project.member_removed", accountId.toString(), now);
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Summary> summary(UUID companyId, UUID projectId) {
+        return projects.all(companyId).stream().filter(project -> project.id().equals(projectId)).findFirst()
+            .map(project -> new Summary(project.id(), project.key(), project.name()));
     }
 
     @Override

@@ -225,7 +225,7 @@ class ProjectController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503 (P4 of TASK-025). */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {

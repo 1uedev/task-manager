@@ -1,6 +1,7 @@
 package taskmanager;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -38,12 +39,20 @@ class IdentityPermissionsAdapter implements IdentityAccess {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Instant> currentUntil(AccessContext context) {
-        // No portal accounts exist yet, so a context that claims to be external or to belong to an organization is not ours.
-        if (context == null || !ofThisCompany(context.companyId())
-                || context.passwordChangeRequired() || context.external() || context.organizationId() != null) {
+        if (context == null || !ofThisCompany(context.companyId()) || context.passwordChangeRequired()) {
             return Optional.empty();
         }
-        return identity.currentFullSessionEnd(context.userId(), context.sessionId());
+        Optional<Instant> end = identity.currentFullSessionEnd(context.userId(), context.sessionId());
+        if (end.isEmpty()) {
+            return end;
+        }
+        // A portal account is external with the organization of its account (TASK-075); an internal one is neither. A context
+        // that claims anything else is not ours. The organization of an account never changes, and its row is locked already.
+        Optional<UUID> organization = identity.portalOrganization(context.userId());
+        if (context.external() != organization.isPresent() || !Objects.equals(context.organizationId(), organization.orElse(null))) {
+            return Optional.empty();
+        }
+        return end;
     }
 
     @Override
@@ -55,14 +64,20 @@ class IdentityPermissionsAdapter implements IdentityAccess {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean userActive(UUID companyId, UUID userId) {
-        // Every account is an internal one until portal accounts exist.
-        return ofThisCompany(companyId) && identity.accountIsActive(userId);
+        // Only internal accounts (TASK-075): a portal account never counts for an administration, an assignment or a sending.
+        return ofThisCompany(companyId) && identity.accountIsActiveInternal(userId);
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean userActiveLocal(UUID companyId, UUID userId) {
         return ofThisCompany(companyId) && identity.accountIsActiveLocal(userId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean userPortal(UUID companyId, UUID userId) {
+        return ofThisCompany(companyId) && identity.accountIsPortal(userId);
     }
 
     private boolean ofThisCompany(UUID companyId) {

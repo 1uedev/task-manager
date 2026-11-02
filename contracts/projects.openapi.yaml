@@ -25,6 +25,28 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /portal/projects:
+    get:
+      operationId: listPortalProjects
+      summary: Projekte eines Portalkontos mit Schlüssel und Name (TASK-075)
+      description: Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`.
+      responses:
+        '200':
+          description: Projekte
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, key, name]
+                  properties:
+                    id: {type: string, format: uuid}
+                    key: {type: string}
+                    name: {type: string}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
   /projects:
     get:
       operationId: listProjects
@@ -326,7 +348,10 @@ paths:
     put:
       operationId: addProjectMember
       summary: Mitglied hinzufügen (project.manage oder projects.manage)
-      description: Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein vorhandenes Mitglied bleibt unverändert.
+      description: |
+        Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein Portalkonto (TASK-075) kommt nur in ein
+        Projekt, das der Helpdesk seiner Kundenorganisation zugeordnet hat, sonst 400 mit `accountId.not_released`. Ein
+        vorhandenes Mitglied bleibt unverändert.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:

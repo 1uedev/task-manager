@@ -38,9 +38,9 @@ class RequestPermissionContexts implements PermissionContexts {
         try {
             long version = permissions.currentVersion(companyId.get());
             var who = request.get();
-            // No portal accounts yet: never external, without organization.
+            // A portal account is external with its organization (TASK-075); the adapter checks the claim again with locks.
             return Optional.of(new AccessContext(companyId.get(), who.accountId(), who.sessionId(), version,
-                false, false, null));
+                false, who.portal(), who.organizationId()));
         } catch (PermissionDenied unknownCompany) {
             return Optional.empty();
         }
