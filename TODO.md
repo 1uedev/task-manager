@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -247,3 +248,27 @@ Nicht Teil: Tags im Portal (TASK-077) und weitere Funktionen.
 3. Grenzen: Die Portal Projektliste antwortet bei abgelaufener Sitzung innerhalb des Aufrufs mit 403 `auth.forbidden`. Fall 4 bis 6 aus docs/PERMISSIONS.md als Portal Schreibfälle und der direkte Download eines internen Anhangs wurden mit TASK-076 ergänzt (Fall 8), nicht hier. Ein Kontakt, der die Organisation wechselt, bleibt wie bisher am Konto.
 
 **Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger; danach TASK-077 in derselben Sitzung.
+
+## TASK-079 Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-02 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-TAG-001, REQ-ACL-002; DEC-049, DEC-106, DEC-107, DEC-108; docs/REVIEW_TASK-076-078_A11.md. **Abhängigkeiten:** TASK-076, TASK-077 und TASK-078 geliefert (PR #234, PR #237, PR #236). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch beauftragt, die Befunde der Codex Prüfung von TASK-076 bis TASK-078 als eine Aufgabe zu beheben, und zu F1 per Auswahl „Nur neue Einträge“ festgelegt: Beiträge, Antworten und Dateien bleiben der Organisation zugeordnet, für die sie geschrieben wurden; nach einem Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel entsteht. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-109.
+
+**Umfang:** Befunde F1 bis F5 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-076-078_A11.md:
+1. F1: nach einem Kundenwechsel sieht die neue Organisation im Portal keine Beiträge, Antworten des Supports, gesendeten Antworten und Kundendateien, die für die bisherige Organisation entstanden sind; was ab dem Wechsel entsteht, sieht sie.
+2. F2: die Gelesen-Markierung quittiert nur die Antworten, die die Anzeige tatsächlich geladen hat.
+3. F3: eine verspätete Folgeseite der Portalliste wird nach einem Filterwechsel verworfen.
+4. F4: die Katalogliste der Tags erreicht auch gleichnamige Tags verschiedener Organisationen vollständig.
+5. F5: der Tagfilter der Portalliste erreicht alle sichtbaren Tags, nicht nur die ersten 20.
+6. H1: die bestätigte Grenze von 30 Tags je Anfrage zählt verborgene Tags mit; das wird dokumentiert.
+7. H2: Tests mit gehaltenen Sperren für Sichtbarkeitswechsel, Archivieren und Zusammenführen während einer Portalzuordnung.
+8. H3: der Testersatz des Browsers behält nach einer abgelehnten Anlage keinen Tag und prüft die Grenze wie der Server.
+
+Nicht Teil: H4 (Seitengröße begrenzt die Arbeit am Backend noch nicht, dokumentiert) und weitere Funktionen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund und Hinweis aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
