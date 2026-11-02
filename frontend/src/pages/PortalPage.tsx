@@ -148,19 +148,32 @@ function PortalProjectTickets({ project, filter, onOpen }: {
 }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
-  const [tickets, reload] = useLoad(() => listPortalTickets(api, project.id, filter), [api, project.id, filter.status, filter.state, filter.q, filter.tag]);
+  const [tickets, reloadTickets] = useLoad(() => listPortalTickets(api, project.id, filter), [api, project.id, filter.status, filter.state, filter.q, filter.tag]);
   // Further pages below the first (TASK-078, F6); a new filter or a reload starts again with the first page only.
   const [further, setFurther] = useState<{ readonly list: readonly Ticket[]; readonly full: boolean } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
-  // Every new first page starts a generation; a further page that arrives for an older one is dropped (TASK-079, F3).
+  // Every new query starts a generation; a further page that arrives for an older one is dropped (TASK-079, F3). The
+  // generation changes as soon as the filter changes or the list is loaded again, not only when the new first page arrives,
+  // so a late further page of the former filter is dropped also while the new first page is still loading (TASK-080, F3).
   const generation = useRef(0);
-  useEffect(() => {
+  const query = JSON.stringify([project.id, filter.status, filter.state, filter.q, filter.tag]);
+  const queried = useRef(query);
+  if (queried.current !== query) {
+    queried.current = query;
+    generation.current += 1;
+  }
+  const restart = () => {
     generation.current += 1;
     setFurther(null);
     setLoadingMore(false);
     setMoreFailed(false);
-  }, [tickets]);
+  };
+  useEffect(restart, [query, tickets]);
+  const reload = () => {
+    restart();
+    reloadTickets();
+  };
   const [activity] = useLoad(() => listPortalActivity(api, project.id), [api, project.id]);
   const rows = new Map((activity.state === 'ok' ? activity.value : []).map((row) => [row.number, row]));
   const statusName = (key: string | null | undefined) => project.statuses.find((item) => item.key === key)?.name ?? key ?? '';
@@ -360,21 +373,20 @@ function PortalTicket({ project, number, notice, onBack }: {
   const [ticket, reload] = useLoad(() => readPortalTicket(api, project.id, number), [api, project.id, number]);
   const [conversation, reloadConversation] = useLoad(() => readPortalConversation(api, project.id, number), [api, project.id, number, round]);
   const [files, reloadFiles] = useLoad(() => listPortalAttachments(api, project.id, number), [api, project.id, number, round]);
-  // The newest entry acknowledged so far; null while nothing was acknowledged.
-  const seen = useRef<string | null>(null);
+  // The highest position acknowledged so far; null while nothing was acknowledged.
+  const seen = useRef<number | null>(null);
 
-  // Showing the conversation clears the marker of new answers up to the newest entry shown, never further (TASK-079, F2): an
-  // answer that arrives later stays new. A failed acknowledgement is tried again with the next conversation that is shown.
+  // Showing the conversation clears the marker of new answers up to the highest position of an answer of the support it shows,
+  // never further (TASK-080, F2): an answer that was not shown stays new, whatever its time. A failed acknowledgement is tried
+  // again with the next conversation that is shown.
   useEffect(() => {
     if (conversation.state !== 'ok') return;
-    // Times compare as instants: the server may write them with a different number of fraction digits.
-    const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
-    const newest = conversation.value.reduce<string | null>((latest, entry) => (latest === null || later(entry.at, latest) ? entry.at : latest), null);
-    if (newest === null || (seen.current !== null && !later(newest, seen.current))) return;
+    const highest = conversation.value.reduce((top, entry) => Math.max(top, entry.position ?? 0), 0);
+    if (seen.current !== null && highest <= seen.current) return;
     const previous = seen.current;
-    seen.current = newest;
-    void markPortalSeen(api, project.id, number, newest).then((result) => {
-      if (result.kind !== 'ok' && seen.current === newest) seen.current = previous;
+    seen.current = highest;
+    void markPortalSeen(api, project.id, number, highest).then((result) => {
+      if (result.kind !== 'ok' && seen.current === highest) seen.current = previous;
     });
   }, [conversation, api, project.id, number]);
 

@@ -287,8 +287,8 @@ export const postInPortal = (api: ServerApi, projectId: string, number: number, 
   run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } },
     body: { body, attachmentIds: [...attachmentIds] } }), one<PortalEntry>(isPortalEntry));
 /** Acknowledges the conversation up to {@code until}, the time of the newest entry shown (TASK-079, F2). */
-export const markPortalSeen = (api: ServerApi, projectId: string, number: number, until: string) =>
-  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } }, body: { until } }), nothing);
+export const markPortalSeen = (api: ServerApi, projectId: string, number: number, position: number) =>
+  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } }, body: { position } }), nothing);
 export const listPortalAttachments = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.files.GET('/portal/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
     listOf<PortalFile>(isPortalFile));

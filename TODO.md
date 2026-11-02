@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -48,6 +47,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
+| [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -281,7 +281,7 @@ Nicht Teil: H4 (Seitengröße begrenzt die Arbeit am Backend noch nicht, dokumen
 
 ## TASK-080 Befunde der Prüfung von TASK-079 beheben (A11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-03 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-03 · **Aktualisiert:** 2026-11-02
 
 **Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109; docs/REVIEW_TASK-079_PR-239.md. **Abhängigkeiten:** TASK-079 geliefert (PR #239). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch per Auswahl „Beheben, unklare Altdaten verbergen“ beauftragt, die Befunde F1 bis F3 der Codex Prüfung von TASK-079 als eine Aufgabe zu beheben: Wo die frühere Organisation alter Beiträge, Antworten oder Dateien nicht sicher feststeht, bleiben sie im Portal verborgen, bis jemand sie ausdrücklich freigibt. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-110.
 
@@ -297,4 +297,9 @@ Nicht Teil: weitere Funktionen.
 1. Jeder Befund aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: F1 V0043 und V0044 berechnen die Zielgruppe vorhandener Portalantworten, Mailantworten und kundensichtbarer Anhänge nur aus der Historie (Kundenänderungen in `ticket_change`, Änderungen des Kontakts im Prüfprotokoll, `attachment.audience` und `attachment.visibility`); ohne sichere Quelle, bei gleichem Zeitpunkt oder bei einer Änderung innerhalb einer Minute um nicht gesperrte Vorgänge bleibt sie leer. Jede Zeile wird neu berechnet, auch nach V0041 und V0042. F2 Positionen der Antworten des Supports aus `helpdesk_portal_position` (V0045), gesperrt bis zum Commit; das Gespräch zeigt `position`, `PUT .../seen` verlangt `position`, neu ist eine Anfrage mit höherer Position als vermerkt. F3 Generation der Portalliste wechselt schon mit Projekt, Filter und erneutem Laden. H3 Zusatz: Testersatz hält den Kunden einer Mailantwort und vergibt Positionen.
+2. Nachweise: `PortalAudienceMigrationTest` (Upgrade von V0040 und Korrektur nach V0042 mit Ticket und Kontaktwechsel, Positionen), `PortalConversationApiTest` (per Trigger gehaltene Portalantwort mit früherer Zeit bleibt neu, Quittieren nach Position), `HelpdeskApiTest` (Position beim Senden und Vermerken), drei neue Browsertests in `portal.test.mjs`, der F3 Test schlägt auf dem Stand von TASK-079 fehl. Voller Backendlauf, `npm run verify` und alle Browsertests.
+3. Grenzen: Bestandsdaten ohne sichere Quelle bleiben verborgen, nur Dateien lassen sich freigeben; das Fenster von einer Minute ist eine gewählte Sicherheitsspanne; `until` entfällt zugunsten von `position`; H4 bleibt offen.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-080 durch Holger.

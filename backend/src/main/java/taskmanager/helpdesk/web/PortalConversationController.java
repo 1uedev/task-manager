@@ -49,9 +49,10 @@ class PortalConversationController {
     }
 
     /** An entry of the conversation; {@code author} is {@code customer} or {@code support}, {@code own} marks posts of the caller. */
-    record EntryBody(String kind, UUID id, Instant at, String author, boolean own, String subject, String body, List<FileBody> attachments) {
+    record EntryBody(String kind, UUID id, Instant at, String author, boolean own, String subject, String body, List<FileBody> attachments,
+            Long position) {
         static EntryBody of(PortalConversation.Entry e) {
-            return new EntryBody(e.kind(), e.id(), e.at(), e.author(), e.own(), e.subject(), e.body(), FileBody.of(e.attachments()));
+            return new EntryBody(e.kind(), e.id(), e.at(), e.author(), e.own(), e.subject(), e.body(), FileBody.of(e.attachments()), e.position());
         }
     }
 
@@ -87,18 +88,18 @@ class PortalConversationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(EntryBody.of(entry));
     }
 
-    /** Up to which entry the portal showed the conversation: the time of its newest entry (TASK-079, F2). */
-    record SeenRequest(Instant until) {
+    /** Up to which answer of the support the portal showed the conversation: its highest position (TASK-080, F2). */
+    record SeenRequest(Long position) {
     }
 
     @PutMapping("/tickets/{number}/seen")
     ResponseEntity<Void> seen(@PathVariable UUID projectId, @PathVariable long number, @RequestBody(required = false) SeenRequest request) {
         AccessContext actor = requests.actor();
-        if (request == null || request.until() == null) {
-            throw ApiProblemException.withViolations(400, "request.invalid", List.of("until.required"));
+        if (request == null || request.position() == null || request.position() < 0) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("position.invalid"));
         }
         Requests.retrying(() -> {
-            conversation.seen(actor, projectId, number, request.until());
+            conversation.seen(actor, projectId, number, request.position());
             return null;
         });
         return ResponseEntity.noContent().build();

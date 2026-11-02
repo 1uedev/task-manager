@@ -1010,6 +1010,14 @@ class HelpdeskApiTest {
         }
     }
 
+    /** A sent reply takes the next position of its ticket in the portal conversation (TASK-080, F2). */
+    private void assertPortalPosition(UUID reply) {
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                select r.portal_position is not null and r.portal_position <= p.position
+                from helpdesk_reply r join helpdesk_portal_position p on p.ticket_id = r.ticket_id where r.id = ?
+                """, Boolean.class, reply));
+    }
+
     private String replyState(UUID reply) {
         return jdbc.queryForObject("select state from helpdesk_reply where id = ?", String.class, reply);
     }
@@ -1055,6 +1063,7 @@ class HelpdeskApiTest {
 
         assertNull(runReplyJob(reply, 1));
         assertEquals("sent", replyState(reply));
+        assertPortalPosition(reply);
         List<jakarta.mail.internet.MimeMessage> received = receivedBy(setup.contactAddress());
         assertEquals(1, received.size());
         jakarta.mail.internet.MimeMessage mail = received.get(0);
@@ -1322,6 +1331,7 @@ class HelpdeskApiTest {
             Response settled = replier.send("POST", ticketPath(setup, number) + "/replies/" + lost + "/settle", null, etag);
             assertEquals(200, settled.status(), settled.body());
             assertEquals("sent", settled.json().get("state").asString());
+            assertPortalPosition(lost);
             assertEquals(0, server.connections());
 
             // The contact lost the address between the confirmation and the send: nothing is sent.

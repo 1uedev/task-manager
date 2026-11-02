@@ -29,8 +29,12 @@ class PortalRepository {
      * {@code organizationId} is the organization it was written for (TASK-079, DEC-109): of the portal account, or the customer
      * of the ticket when the support answered. Only the portal of that organization shows it.
      */
+    /**
+     * A post of the conversation. An answer of the support carries its position (TASK-080, F2), see
+     * {@link HelpdeskRepository#nextPortalPosition}; a post of the customer has none.
+     */
     record Post(UUID id, UUID companyId, UUID projectId, UUID ticketId, String authorKind, UUID authorId, String body, Instant createdAt,
-            UUID organizationId) {
+            UUID organizationId, Long position) {
         static final String CUSTOMER = "customer";
         static final String SUPPORT = "support";
     }
@@ -38,10 +42,10 @@ class PortalRepository {
     void insert(Post post) {
         jdbc.sql("""
                 insert into helpdesk_portal_post (id, company_id, project_id, ticket_id, author_kind, author_id, body, created_at,
-                    organization_id)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    organization_id, position)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(post.id(), post.companyId(), post.projectId(), post.ticketId(), post.authorKind(), post.authorId(), post.body(),
-                Timestamp.from(post.createdAt()), post.organizationId()).update();
+                Timestamp.from(post.createdAt()), post.organizationId(), post.position()).update();
     }
 
     /**
@@ -93,21 +97,26 @@ class PortalRepository {
             .param(attachmentIds.toArray(UUID[]::new)).query(UUID.class).list());
     }
 
-    /** Records that the account saw the conversation of the request up to the given time; an earlier mark never wins. */
-    void seen(UUID accountId, UUID ticketId, Instant now) {
+    /**
+     * Records that the account saw the conversation of the request up to the given position of the answers of the support
+     * (TASK-080, F2), at the given time; an earlier mark never wins.
+     */
+    void seen(UUID accountId, UUID ticketId, long position, Instant now) {
         jdbc.sql("""
-                insert into helpdesk_portal_seen (account_id, ticket_id, seen_at) values (?, ?, ?)
-                on conflict (account_id, ticket_id) do update set seen_at = greatest(helpdesk_portal_seen.seen_at, excluded.seen_at)
-                """).params(accountId, ticketId, Timestamp.from(now)).update();
+                insert into helpdesk_portal_seen (account_id, ticket_id, seen_at, seen_position) values (?, ?, ?, ?)
+                on conflict (account_id, ticket_id) do update set seen_at = greatest(helpdesk_portal_seen.seen_at, excluded.seen_at),
+                    seen_position = greatest(helpdesk_portal_seen.seen_position, excluded.seen_position)
+                """).params(accountId, ticketId, Timestamp.from(now), position).update();
     }
 
     /** What the portal list shows of the conversation of a request. */
-    record Activity(UUID ticketId, Instant lastActivityAt, Instant lastSupportAt, Instant seenAt) {
+    record Activity(UUID ticketId, Instant lastActivityAt, Instant lastSupportAt, Instant seenAt, long lastSupportPosition, long seenPosition) {
     }
 
     /**
      * For each ticket: the time of the last entry the customer sees (mail of the organization, sent mail answer or post), of the
-     * last answer of the support (sent mail answer or support post), and when the account last opened it.
+     * last answer of the support (sent mail answer or support post), and when the account last opened it; and the highest
+     * position of an answer of the support for the organization and the one the account acknowledged (TASK-080, F2).
      */
     List<Activity> activity(UUID accountId, UUID organizationId, Collection<UUID> ticketIds) {
         if (ticketIds.isEmpty()) {
@@ -121,17 +130,22 @@ class PortalRepository {
                     greatest((select max(r.sent_at) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent' and r.customer_id = o.id),
                              (select max(p.created_at) from helpdesk_portal_post p where p.ticket_id = t.id and p.author_kind = 'support'
                                  and p.organization_id = o.id)) as last_support,
-                    (select s.seen_at from helpdesk_portal_seen s where s.account_id = ? and s.ticket_id = t.id) as seen
-                from unnest(?) as t(id), (select ?::uuid as id) as o
-                """).params(accountId, ticketIds.toArray(UUID[]::new), organizationId)
+                    coalesce(greatest((select max(r.portal_position) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent'
+                                           and r.customer_id = o.id),
+                                      (select max(p.position) from helpdesk_portal_post p where p.ticket_id = t.id and p.author_kind = 'support'
+                                           and p.organization_id = o.id)), 0) as last_support_position,
+                    s.seen_at as seen, coalesce(s.seen_position, 0) as seen_position
+                from unnest(?) as t(id) cross join (select ?::uuid as id) as o
+                    left join helpdesk_portal_seen s on s.account_id = ? and s.ticket_id = t.id
+                """).params(ticketIds.toArray(UUID[]::new), organizationId, accountId)
             .query((rs, row) -> new Activity(rs.getObject("id", UUID.class), instant(rs, "last_activity"), instant(rs, "last_support"),
-                instant(rs, "seen"))).list();
+                instant(rs, "seen"), rs.getLong("last_support_position"), rs.getLong("seen_position"))).list();
     }
 
     private static Post post(ResultSet rs, int row) throws SQLException {
         return new Post(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
             rs.getObject("ticket_id", UUID.class), rs.getString("author_kind"), rs.getObject("author_id", UUID.class), rs.getString("body"),
-            instant(rs, "created_at"), rs.getObject("organization_id", UUID.class));
+            instant(rs, "created_at"), rs.getObject("organization_id", UUID.class), rs.getObject("position", Long.class));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

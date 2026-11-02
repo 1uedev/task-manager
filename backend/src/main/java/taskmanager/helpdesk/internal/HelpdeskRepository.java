@@ -6,7 +6,9 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -409,6 +411,39 @@ class HelpdeskRepository {
     void lockTicketCustomer(UUID ticketId) {
         jdbc.sql("select pg_advisory_xact_lock(hashtextextended('helpdesk.ticket_customer:' || ?::text, 0))").param(ticketId.toString())
             .query((rs, row) -> 1).list();
+    }
+
+    /**
+     * The next position of an answer of the support in the portal conversation of the ticket (TASK-080, F2). The counter row
+     * stays locked until the transaction ends, so a later answer gets its position only after the earlier one committed:
+     * whoever reads the counter sees every answer up to it.
+     */
+    long nextPortalPosition(UUID ticketId) {
+        return jdbc.sql("""
+                insert into helpdesk_portal_position (ticket_id, position) values (?, 1)
+                on conflict (ticket_id) do update set position = helpdesk_portal_position.position + 1
+                returning position
+                """).param(ticketId).query(Long.class).single();
+    }
+
+    /** The highest position of an answer of the support of the ticket that has committed, 0 without any. */
+    long portalPosition(UUID ticketId) {
+        return jdbc.sql("select position from helpdesk_portal_position where ticket_id = ?").param(ticketId).query(Long.class)
+            .optional().orElse(0L);
+    }
+
+    void replyPortalPosition(UUID replyId, long position) {
+        jdbc.sql("update helpdesk_reply set portal_position = ? where id = ?").params(position, replyId).update();
+    }
+
+    /** The positions of the sent mail answers of the ticket in the portal conversation. */
+    Map<UUID, Long> replyPortalPositions(UUID ticketId) {
+        Map<UUID, Long> positions = new HashMap<>();
+        jdbc.sql("select id, portal_position from helpdesk_reply where ticket_id = ? and portal_position is not null").param(ticketId)
+            .query(rs -> {
+                positions.put(rs.getObject("id", UUID.class), rs.getLong("portal_position"));
+            });
+        return positions;
     }
 
     /** Locks the contact {@code FOR SHARE}, so that it keeps its customer until the transaction ends; then reads it. */
