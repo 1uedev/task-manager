@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * Migration V0041 (TASK-079, DEC-109): existing posts, sent mail answers and attachments visible to the customer get the
+ * Migrations V0041 and V0042 (TASK-079, DEC-109): existing posts, sent mail answers and attachments visible to the customer get the
  * organization they were most likely written for. Synthetic rows only.
  */
 class PortalAudienceMigrationTest {

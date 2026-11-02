@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -47,6 +46,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
+| [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -251,9 +251,9 @@ Nicht Teil: Tags im Portal (TASK-077) und weitere Funktionen.
 
 ## TASK-079 Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-02 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-02 · **Aktualisiert:** 2026-11-02
 
-**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-TAG-001, REQ-ACL-002; DEC-049, DEC-106, DEC-107, DEC-108; docs/REVIEW_TASK-076-078_A11.md. **Abhängigkeiten:** TASK-076, TASK-077 und TASK-078 geliefert (PR #234, PR #237, PR #236). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch beauftragt, die Befunde der Codex Prüfung von TASK-076 bis TASK-078 als eine Aufgabe zu beheben, und zu F1 per Auswahl „Nur neue Einträge“ festgelegt: Beiträge, Antworten und Dateien bleiben der Organisation zugeordnet, für die sie geschrieben wurden; nach einem Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel entsteht. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-109.
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-TAG-001, REQ-ACL-002; DEC-049, DEC-106, DEC-107, DEC-108; docs/REVIEW_TASK-076-078_A11.md. **Abhängigkeiten:** TASK-076, TASK-077 und TASK-078 geliefert (PR #234, PR #237, PR #236). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch beauftragt, die Befunde der Codex Prüfung von TASK-076 bis TASK-078 als eine Aufgabe zu beheben, und zu F1 per Auswahl „Nur neue Einträge“ festgelegt: Beiträge, Antworten und Dateien bleiben der Organisation zugeordnet, für die sie geschrieben wurden; nach einem Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel entsteht. Reservierung mit PR #238 gemergt. Ergebnis auf Branch claude/project-thread-houava mit DEC-109 und den Migrationen V0041 und V0042; Beschreibung in backend/README.md (Abschnitt TASK-079).
 
 **Umfang:** Befunde F1 bis F5 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-076-078_A11.md:
 1. F1: nach einem Kundenwechsel sieht die neue Organisation im Portal keine Beiträge, Antworten des Supports, gesendeten Antworten und Kundendateien, die für die bisherige Organisation entstanden sind; was ab dem Wechsel entsteht, sieht sie.
@@ -271,4 +271,9 @@ Nicht Teil: H4 (Seitengröße begrenzt die Arbeit am Backend noch nicht, dokumen
 1. Jeder Befund und Hinweis aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: F1 Beiträge, gesendete Mailantworten und kundensichtbare Anhänge tragen die Organisation, für die sie geschrieben wurden (V0041 und V0042 mit Übernahme der Bestandsdaten); Gespräch, Aktivität und Portalanhänge zeigen nur diese, eine Datei eines früheren Kunden gibt der Support durch erneutes Umschalten auf „Kunde“ frei, die interne Liste zeigt das mit `customerCurrent`. F2 `PUT .../seen` mit `until`, dem neuesten gezeigten Eintrag. F3 Generation je erster Seite der Portalliste. F4 Katalogcursor `after` und `afterId`. F5 Suchfeld im Tagfilter der Portalliste. H1 in backend/README.md unter TASK-077 dokumentiert. H2 Tests mit gehaltenen Änderungen der Tagzeile, Entfernen eines zusammengeführten Tags antwortet 404. H3 Testersatz prüft die Obergrenze vor dem Anlegen und beachtet `limit`.
+2. Nachweise: `PortalConversationApiTest` (Kundenwechsel mit allen Eintragsarten und ausdrücklicher Freigabe, Antwort zwischen Lesen und Quittieren), `PortalAudienceMigrationTest` (Bestandsdaten), `PortalTagsApiTest` (gehaltene Änderungen, Seitengrenze in gleichen Namen), sechs neue Browsertests in `portal.test.mjs`. Voller Backendlauf, `npm run verify` und alle Browsertests.
+3. Grenzen: Bestandsantworten des Supports im Portal zählen zum heutigen Kunden des Tickets; Beiträge und Mailantworten lassen sich nicht für eine andere Organisation freigeben; der Lesestand vergleicht Zeitpunkte; H4 bleibt offen.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-079 durch Holger.

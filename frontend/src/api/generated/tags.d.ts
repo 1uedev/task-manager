@@ -594,6 +594,8 @@ export interface components {
         Archived: boolean;
         /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
         After: string;
+        /** @description Kennung des letzten Tags der vorigen Seite (TASK-079). Ein Katalog kann denselben Namen für mehrere Organisationen enthalten; mit afterId setzt die nächste Seite genau nach diesem Tag fort, ohne sie nach allen Tags dieses Namens. */
+        AfterId: string;
         /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
         Usage: boolean;
         SuggestionLimit: number;
@@ -618,6 +620,8 @@ export interface operations {
                 archived?: components["parameters"]["Archived"];
                 /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
                 after?: components["parameters"]["After"];
+                /** @description Kennung des letzten Tags der vorigen Seite (TASK-079). Ein Katalog kann denselben Namen für mehrere Organisationen enthalten; mit afterId setzt die nächste Seite genau nach diesem Tag fort, ohne sie nach allen Tags dieses Namens. */
+                afterId?: components["parameters"]["AfterId"];
                 limit?: components["parameters"]["Limit"];
                 /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
                 usage?: components["parameters"]["Usage"];
@@ -838,6 +842,8 @@ export interface operations {
                 archived?: components["parameters"]["Archived"];
                 /** @description Name des letzten Tags der vorigen Seite, zum Weiterblättern. */
                 after?: components["parameters"]["After"];
+                /** @description Kennung des letzten Tags der vorigen Seite (TASK-079). Ein Katalog kann denselben Namen für mehrere Organisationen enthalten; mit afterId setzt die nächste Seite genau nach diesem Tag fort, ohne sie nach allen Tags dieses Namens. */
+                afterId?: components["parameters"]["AfterId"];
                 limit?: components["parameters"]["Limit"];
                 /** @description Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte. */
                 usage?: components["parameters"]["Usage"];

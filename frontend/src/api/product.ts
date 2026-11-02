@@ -286,8 +286,9 @@ export const readPortalConversation = (api: ServerApi, projectId: string, number
 export const postInPortal = (api: ServerApi, projectId: string, number: number, body: string, attachmentIds: readonly string[]) =>
   run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } },
     body: { body, attachmentIds: [...attachmentIds] } }), one<PortalEntry>(isPortalEntry));
-export const markPortalSeen = (api: ServerApi, projectId: string, number: number) =>
-  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } } }), nothing);
+/** Acknowledges the conversation up to {@code until}, the time of the newest entry shown (TASK-079, F2). */
+export const markPortalSeen = (api: ServerApi, projectId: string, number: number, until: string) =>
+  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } }, body: { until } }), nothing);
 export const listPortalAttachments = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.files.GET('/portal/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
     listOf<PortalFile>(isPortalFile));
@@ -402,14 +403,15 @@ export type TagScope = { readonly kind: 'company' } | { readonly kind: 'project'
 export interface CatalogQuery {
   readonly q: string;
   readonly archived: boolean;
-  readonly after: string | null;
+  // The last tag of the previous page: its name and identifier, since one catalog holds a name once per audience (TASK-079, F4).
+  readonly after: { readonly name: string; readonly id: string } | null;
 }
 
 export const CATALOG_PAGE = 50;
 
 export const catalogTags = (api: ServerApi, scope: TagScope, query: CatalogQuery) => {
   const params = { ...(query.q.trim() === '' ? {} : { q: query.q.trim() }), archived: query.archived, usage: true, limit: CATALOG_PAGE,
-    ...(query.after === null ? {} : { after: query.after }) };
+    ...(query.after === null ? {} : { after: query.after.name, afterId: query.after.id }) };
   return scope.kind === 'company'
     ? run(() => api.tags.GET('/tags', { params: { query: params } }), listOf<Tag>(isTag))
     : run(() => api.tags.GET('/projects/{projectId}/catalog/tags', { params: { path: { projectId: scope.projectId }, query: params } }), listOf<Tag>(isTag));

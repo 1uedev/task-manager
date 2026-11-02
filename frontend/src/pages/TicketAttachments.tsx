@@ -115,9 +115,11 @@ export function TicketAttachments({ project, ticket, round, onChanged }: {
   }
 
   // Internal attachments are for the staff only; switched to the customer, the portal shows them too (TASK-076).
-  async function toggle(item: Attachment) {
+  // A file visible to a former customer of the ticket is released for the current one by switching it to the customer again
+  // (TASK-079, DEC-109).
+  async function toggle(item: Attachment, release = false) {
     setNotice(null);
-    const next = item.visibility === 'customer' ? 'internal' : 'customer';
+    const next = release || item.visibility !== 'customer' ? 'customer' : 'internal';
     const result = await setAttachmentVisibility(api, project.id, ticket.number, item.id, next);
     if (result.kind !== 'ok') {
       reload();
@@ -150,11 +152,16 @@ export function TicketAttachments({ project, ticket, round, onChanged }: {
                       onClick={(event) => void download(event, item.id, item.name)}>{item.name}</a>
                     <span className="hint">{t('attachments.meta', { size: formatBytes(item.size, language), by: name(item.uploadedBy), date: formatDateTime(item.uploadedAt, language) })}</span>
                     <span className={`badge visibility-${item.visibility}`} data-testid="attachment-visibility">
-                      {t(item.visibility === 'customer' ? 'attachments.customer' : 'attachments.internal')}
+                      {t(item.visibility !== 'customer' ? 'attachments.internal' : item.customerCurrent === false ? 'attachments.formerCustomer' : 'attachments.customer')}
                     </span>
                     {editable && (
                       <button type="button" className="secondary" onClick={() => void toggle(item)}>
                         {t(item.visibility === 'customer' ? 'attachments.makeInternal' : 'attachments.makeCustomer', { name: item.name })}
+                      </button>
+                    )}
+                    {editable && item.visibility === 'customer' && item.customerCurrent === false && (
+                      <button type="button" className="secondary" onClick={() => void toggle(item, true)} data-testid="attachment-release-current">
+                        {t('attachments.releaseCurrent', { name: item.name })}
                       </button>
                     )}
                     {mayCarryMacros(item.name) && (

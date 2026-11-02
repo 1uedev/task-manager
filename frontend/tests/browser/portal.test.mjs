@@ -384,3 +384,154 @@ describe('portal tags', () => {
     await finish(admin);
   });
 });
+
+// TASK-079: findings of the review of TASK-076 to TASK-078 (docs/REVIEW_TASK-076-078_A11.md).
+describe('portal review findings of TASK-076 to TASK-078', () => {
+  test('F3: a further page that arrives after the filter changed is dropped', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    for (let index = 0; index < 50; index += 1) {
+      const ticket = backend.addTicket(`Anfrage ${index + 3}`, null, backend.anna);
+      backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: NORDWERK, contactId: null });
+    }
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    let arrived;
+    const moreArrived = new Promise((resolve) => { arrived = resolve; });
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route('**/api/v1/portal/projects/*/tickets?*', async (route) => {
+      if (new URL(route.request().url()).searchParams.has('before')) {
+        arrived();
+        await held;
+      }
+      await route.fallback();
+    });
+    const rows = page.getByTestId('portal-tickets').locator('tbody tr');
+    await rows.first().waitFor();
+    await page.getByTestId('portal-more').click();
+    await moreArrived;
+    await page.getByLabel('Offen oder erledigt').selectOption({ label: 'Erledigt' });
+    await page.getByText('Noch keine Anfragen.').waitFor();
+    release();
+    // The late page of the open requests would show PLAT-1; give it the time to arrive and be dropped.
+    await page.waitForTimeout(300);
+    assert.equal(await page.getByTestId('portal-tickets').count(), 0, 'no request of the former filter');
+    await page.getByText('Noch keine Anfragen.').waitFor();
+    await finish(portal);
+  });
+
+  test('F5: the tag filter reaches every visible tag through its search', async () => {
+    const backend = createBackend();
+    const { first } = withLeaTags(backend);
+    const many = [];
+    for (let index = 1; index <= 21; index += 1) {
+      const tag = newTag(`A11 Tag ${String(index).padStart(2, '0')}`, backend.project.id, backend.anna, { visibility: 'customer' });
+      backend.state.tags.push(tag);
+      many.push(tag);
+    }
+    backend.state.ticketTags.push({ ticket: first.id, tag: many.at(-1).id });
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    const rows = page.getByTestId('portal-tickets').locator('tbody tr');
+    await rows.first().waitFor();
+    const filter = page.getByLabel('Tag', { exact: true });
+    assert.equal(await filter.locator('option').count(), 21, 'all tags and the first twenty suggestions');
+    assert.equal((await filter.locator('option').allInnerTexts()).includes('A11 Tag 21'), false);
+    await page.getByLabel('Tag suchen').fill('tag 21');
+    await filter.locator('option', { hasText: 'A11 Tag 21' }).waitFor({ state: 'attached' });
+    await filter.selectOption({ label: 'A11 Tag 21' });
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="portal-tickets"] tbody tr').length === 1);
+    assert.match(await rows.first().innerText(), /Anmeldung prüfen/);
+    // Another search keeps the chosen tag in the choice.
+    await page.getByLabel('Tag suchen').fill('wartung');
+    await filter.locator('option', { hasText: 'Wartung' }).waitFor({ state: 'attached' });
+    assert.equal(await filter.inputValue(), many.at(-1).id);
+    assert.ok((await filter.locator('option').allInnerTexts()).includes('A11 Tag 21'));
+    await finish(portal);
+  });
+
+  test('F2: an answer that arrives while the conversation is shown stays new', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const ticket = backend.state.tickets[0];
+    const answer = (body, createdAt) => backend.state.helpdesk.posts.push({ id: `p-${createdAt}`, ticketId: ticket.id, authorKind: 'support', authorId: backend.anna.id,
+      body, createdAt, attachmentIds: [], organizationId: NORDWERK });
+    answer('Erste Antwort', '2026-11-02T09:00:00.000Z');
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    // The second answer arrives after the conversation was read and before it is marked as seen.
+    let marked;
+    const seen = new Promise((resolve) => { marked = resolve; });
+    await page.route('**/api/v1/portal/projects/*/tickets/*/seen', async (route) => {
+      answer('Zweite Antwort', '2026-11-02T09:05:00.000Z');
+      marked(JSON.parse(route.request().postData() ?? '{}'));
+      await route.fallback();
+    });
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    await page.getByTestId('portal-conversation').getByText('Erste Antwort').waitFor();
+    const sent = await seen;
+    assert.equal(Date.parse(sent.until), Date.parse('2026-11-02T09:00:00.000Z'), 'the newest entry shown');
+    await page.getByRole('button', { name: 'Zurück zur Übersicht' }).click();
+    const row = page.getByTestId('portal-tickets').locator('tr', { hasText: 'Anmeldung prüfen' });
+    await row.getByTestId('portal-unread').waitFor();
+    await finish(portal);
+  });
+
+  test('H3: a refused new tag leaves nothing behind', async () => {
+    const backend = createBackend();
+    const { first } = withLeaTags(backend, { write: true });
+    for (let index = backend.state.ticketTags.filter((entry) => entry.ticket === first.id).length; index < 30; index += 1) {
+      const tag = newTag(`Voll ${index}`, backend.project.id, backend.anna, { visibility: 'internal' });
+      backend.state.tags.push(tag);
+      backend.state.ticketTags.push({ ticket: first.id, tag: tag.id });
+    }
+    const before = backend.state.tags.length;
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    const tags = page.getByTestId('portal-tags');
+    const form = tags.getByTestId('portal-tag-form');
+    await form.getByLabel('Tag hinzufügen').fill('Neuer Name');
+    await form.getByRole('button', { name: '„Neuer Name“ anlegen' }).click();
+    await tags.getByText('Die Anfrage hat bereits die höchste Zahl an Tags.').waitFor();
+    assert.equal(backend.state.tags.length, before, 'no tag was created');
+    await finish(portal);
+  });
+
+  test('F1: a file of a former customer is marked and released for the current one', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const second = backend.state.tickets[1];
+    backend.state.attachments.push({ id: '00000000-0000-4000-8000-0000000000f2', ticket: second.id, name: 'alt.pdf', size: 4, sha256: 'a'.repeat(64),
+      uploadedAt: '2026-11-02T08:00:00Z', uploadedBy: backend.anna.id, content: Buffer.from('%PDF'), removed: false, visibility: 'customer', organizationId: NORDWERK });
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tickets/${second.number}`);
+    const page = admin.page;
+    await page.getByTestId('attachment-visibility').filter({ hasText: 'Nur für früheren Kunden sichtbar' }).waitFor();
+    await page.getByRole('button', { name: 'alt.pdf für den aktuellen Kunden freigeben' }).click();
+    await page.getByTestId('attachment-visibility').filter({ hasText: 'Für Kunden sichtbar' }).waitFor();
+    assert.equal(backend.state.attachments.find((entry) => entry.name === 'alt.pdf').organizationId, SUEDTECHNIK);
+    assert.equal(await page.getByTestId('attachment-release-current').count(), 0);
+    await finish(admin);
+  });
+
+  test('F4: the tag care pages through tags of the same name', async () => {
+    const backend = createBackend();
+    withLeaTags(backend);
+    backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000000e5', name: 'Tagpflege', members: [backend.anna.id], actions: [{ action: 'tags.manage', projectId: null }], fields: [] });
+    for (let index = 0; index < 52; index += 1) {
+      backend.state.tags.push(newTag('Gleich', backend.project.id, backend.anna, { visibility: 'customer', organizationId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}` }));
+    }
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tags`);
+    const page = admin.page;
+    const catalog = page.getByTestId('catalog-project');
+    await catalog.waitFor();
+    // 52 tags of the same name and the few of the setting; the first page of 50 ends inside the same name.
+    const total = backend.state.tags.filter((tag) => tag.projectId === backend.project.id).length;
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="catalog-project"] > li').length === 50);
+    await page.getByRole('button', { name: 'Weitere laden' }).click();
+    await page.waitForFunction((count) => document.querySelectorAll('[data-testid="catalog-project"] > li').length === count, total);
+    assert.equal(await catalog.locator('li', { hasText: 'Gleich' }).count(), 52, 'every tag of the same name once');
+    await finish(admin);
+  });
+});

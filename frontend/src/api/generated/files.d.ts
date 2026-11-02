@@ -135,6 +135,8 @@ export interface components {
             /** Format: uuid */
             uploadedBy: string;
             visibility: components["schemas"]["Visibility"];
+            /** @description Der aktuelle Kunde des Tickets sieht den Anhang im Portal (TASK-079). */
+            customerCurrent: boolean;
         };
     };
     responses: {
