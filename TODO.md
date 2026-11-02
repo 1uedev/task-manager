@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -31,10 +31,14 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
+| [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -129,3 +133,73 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** `POST /api/v1/tags/bulk` mit Prüfung der Tags vorab und je Ticket in eigener Transaktion, Ergebnis mit vier Zahlen und Schlüsseln nur lesbarer Tickets; `tagMatch` mit `all`, `any`, `none` und `untagged` in Ticket und Projektsuche; Oberfläche mit Tagfilter, Auswahl, Prüfung vor dem Ausführen und Ergebnis in Suche und Ticketliste, die mit Tagfilter die Suche nutzt. Nachweise im Ergebnis PR. Grenzen: kein Hintergrundauftrag, eine abgebrochene Anfrage lässt bis dahin geänderte Tickets geändert; Prüfung zum Sperrzeitpunkt.
 
 **Nächster Schritt:** Unabhängige Prüfung von TASK-072 und TASK-073 und Abnahme durch Holger.
+
+## TASK-075 Portalkonten, Sicht und Rechte (A11 Teil 1)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001, REQ-API-001; DEC-027, DEC-031, DEC-053; docs/PERMISSIONS.md (Organisationssicht, Fälle 1 bis 8), docs/HELPDESK_SLA.md (Kundenportal). **Abhängigkeiten:** TASK-024, TASK-025, TASK-026, TASK-027, TASK-045, TASK-057, abgenommen. **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A11 nach A3 bestätigt und am selben Tag die 20 Vorschläge mit „passt so“ übernommen (Punkte unten). Arbeit beginnt nach dem Merge dieser Reservierung. Branch claude/project-thread-houava; Ergebnis mit der nächsten freien Entscheidungsnummer (voraussichtlich DEC-105, DEC-104 bleibt für die Korrekturen aus A3 frei) und der beim Ergebnis nächsten freien Migrationsnummer auf main.
+
+**Umfang:** Portalkonten mit fester Kundenorganisation, Projektfreigabe, Standardgruppe „Portal“, Organisationssicht im Rechtekern für Tickets und ihre Daten, Lesen der Anfragen über die API und die Kontenverwaltung dafür. Nicht Teil: Gespräch und Portalseiten (TASK-076), Tags im Portal (TASK-077), Wissen im Portal (A12), Selbstregistrierung, anonyme Webformulare, Passwort vergessen per Mail, zweiter Faktor, KI im Portal (DEC-035), Mailbenachrichtigungen, eigene Portalformulare, Sicht über die eigene Organisation hinaus, eigenes Portalbranding (A17).
+
+**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
+1. Ein Portalkonto ist ein lokales Konto der Art „Portal“ mit genau einer Kundenorganisation, angelegt mit `accounts.manage` mit Einmalpasswort und Pflichtwechsel; Gültigkeit und Erneuerung des Einmalpassworts, Sperre nach Fehlversuchen und Sitzungsdauer wie bei internen Konten.
+2. Die Organisation eines Portalkontos ist unveränderlich; ein Portalkonto wird nie zu einem internen Konto oder Verzeichniskonto und umgekehrt.
+3. Ein Portalkonto kann mit einem Kontakt derselben Organisation verbunden werden; dann setzt eine Portalanfrage diesen Kontakt, ohne Kontakt bleibt das Feld leer.
+4. Portalkonten erhalten nie Unternehmensrechte; der Server lehnt solche Zuweisungen auch über die API ab. Portalkonten erscheinen nicht in der Auswahl für Bearbeiter.
+5. Wählbar sind nur Projekte, die der Organisation zugeordnet sind; das Konto wird dort Mitglied der Gruppe „Portal“.
+6. Beim ersten Portalkonto entsteht die Unternehmensgruppe „Portal“: Anfragen lesen, anlegen und beantworten; Titel, Beschreibung, Typ, Status, Priorität, Tags und Anhänge lesen; Titel, Beschreibung und Anhänge beim Anlegen schreiben. Kunde, Kontakt, Bearbeiter, eigene Felder und Fristen bleiben unsichtbar, bis die Verwaltung sie gezielt freigibt. Weitere Gruppen für Portalkonten sind möglich.
+7. Ein Portalkonto sieht alle Anfragen seiner Organisation in seinen Projekten (DEC-027), auch die von Kollegen und per Mail eingegangene; andere Anfragen antworten mit 404 wie eine unbekannte Kennung, auch bei Historie, Anhängen und Suche.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Fälle 1 bis 8 aus docs/PERMISSIONS.md als automatische Tests, soweit ihre Daten in V1 bestehen; ein Portalkonto vor dem Pflichtwechsel hat keinen Fachzugriff.
+2. Unternehmensrechte, fremde Organisation oder nicht zugeordnete Projekte werden für Portalkonten abgelehnt, auch bei gleichzeitiger Änderung.
+3. Entzug der Projektfreigabe oder Deaktivierung wirkt sofort auf Lesen, Suche und Anhänge.
+4. Migration, Vertrag gegen Routen, Backend Tests für Rechte und Nebenläufigkeit, Browser Tests für die Kontenverwaltung.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis-PR mit Nachweisen.
+
+## TASK-076 Portalgespräch, Anhänge und Portalseiten (A11 Teil 2)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-PORTAL-001, REQ-HD-002, REQ-HD-003, REQ-TKT-004, REQ-ACL-003; DEC-027, DEC-035, DEC-091, DEC-098; docs/HELPDESK_SLA.md, docs/PERMISSIONS.md (Fall 8). **Abhängigkeiten:** TASK-075 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 10 bis 16 und 20 bestätigt. Blockiert, bis das Ergebnis von TASK-075 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit der nächsten freien Entscheidungsnummer.
+
+**Umfang:** Anlegen und Beantworten von Anfragen im Portal, Portalantworten des Supports, Kundenverlauf, kundensichtbare Anhänge, Portalseiten und Demodaten. Nicht Teil: interne Notizen und Kommentare, Statusänderung durch den Kunden, Mailbenachrichtigungen, Tags im Portal (TASK-077).
+
+**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
+1. Anlegen mit Titel, Beschreibung, Typ und Anhängen; Kunde und Kontakt setzt der Server aus dem Konto. Die Projektverwaltung markiert in der Projektkonfiguration die im Portal angebotenen Tickettypen; ohne markierten Typ keine Anlage.
+2. Kundenverlauf je Anfrage aus Beschreibung, eingegangenen Mails der Organisation, gesendeten Mailantworten, Portalbeiträgen des Kunden und Portalantworten des Supports; interne Historie, Prüfwarteschlange, fehlgeschlagene oder unklare Mails und übrige interne Daten bleiben unsichtbar.
+3. Ein Portalbeitrag des Kunden ist Text bis 100 000 Zeichen mit optionalen Anhängen und zählt wie eine Kundenantwort per Mail, auch für die Servicefristen.
+4. Der Support wählt beim Antworten „Portal“ oder „Mail“; eine Portalantwort braucht `helpdesk.reply`, erscheint sofort und zählt als Erstreaktion; eine Mailantwort erscheint nach erfolgreichem Versand ebenfalls im Portal.
+5. Der Kunde sieht den Status mit seinem Namen aus dem Ablauf, ändert ihn aber nicht.
+6. Portalstartseite mit Nummer, Titel, Status und letzter Änderung, Filter nach Projekt, Status und offen oder erledigt, Textsuche über lesbare Felder, Markierung neuer Supportantworten seit dem letzten Öffnen.
+7. Jeder Anhang ist „intern“ oder „Kunde“; Portalanhänge immer „Kunde“, interne zunächst „intern“ und mit Schreibrecht auf Anhänge umschaltbar; ein interner Anhang antwortet im Portal mit 404. Grenzen für Größe und Dateiarten wie bisher.
+8. Das Vorführimage erhält Nordwerk und Südtechnik mit je einem Portalkonto.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Der Verlauf zeigt nur die genannten Teile; ein interner Anhang ist über seinen direkten Link nicht erreichbar, ein kundensichtbarer derselben Anfrage schon (Fall 8).
+2. Portalbeitrag und Portalantwort wirken auf Kundenantworten und Servicefristen wie die Mailwege.
+3. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Liste, Anlage, Verlauf, Antworten und Anhänge in Portal und interner Ansicht.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-075 umsetzen.
+
+## TASK-077 Tags im Portal (A11 Teil 3)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-TAG-001, REQ-PORTAL-001, REQ-ACL-002; DEC-049, DEC-068, DEC-102; docs/TAGS_SEARCH.md (T04, T10, T18, T19). **Abhängigkeiten:** TASK-076 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 17 bis 19 bestätigt. Blockiert, bis das Ergebnis von TASK-076 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit der nächsten freien Entscheidungsnummer.
+
+**Umfang:** Sichtbarkeit von Tags, kundensichtbare Tags im Portal, Anlage und Zuordnung durch berechtigte Portalnutzer. Nicht Teil: Katalogpflege im Portal, Massenänderung im Portal.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
+1. Tags sind „intern“ (Vorgabe) oder „Kunde“, gesetzt mit `tags.manage`; das Portal zeigt nur kundensichtbare Tags, auch in Vorschlägen, Filtern und Zählern, ohne Hinweis auf interne.
+2. Anlage im Portal nur mit `tag.create` in einer Gruppe des Portalkontos, nicht in der Standardgruppe; der Tag kommt in den Projektkatalog, ist an die eigene Organisation gebunden und nur für diese und intern sichtbar; intern mit `tags.manage` für alle Kunden freigebbar, umbenennbar und zusammenführbar.
+3. Portalnutzer setzen und entfernen kundensichtbare Tags an Anfragen ihrer Organisation, wenn ihre Gruppe das Feld Tags schreiben darf (Standardgruppe nicht); interne Tags derselben Anfrage bleiben unberührt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. T04, T10, T18 und T19 als automatische Tests.
+2. Zuordnung durch Portalnutzer lässt interne Tags unverändert, auch bei gleichzeitiger interner Änderung.
+3. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anzeige, Anlage und Zuordnung im Portal und die Sichtbarkeit in der Tagpflege.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-076 umsetzen.
