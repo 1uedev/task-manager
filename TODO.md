@@ -225,7 +225,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 1. F1: Detailabfrage einer fremden Anfrage antwortet auch bei gesperrter Kundenzuordnung wie eine unbekannte Nummer.
 2. F2: einheitliche Sperrreihenfolge der Projekte zwischen Portal Projektliste und Kontenverwaltung, Test mit Kennungen auf beiden Seiten des Vorzeichenbits.
 3. F3: die Portal Projektliste prüft Konto und Sitzung in ihrer Transaktion erneut.
-4. F4: fehlendes oder leeres Feld `projectIds` beim Ändern eines Portalkontos antwortet mit 400; eine ausdrücklich leere Liste entfernt weiter alle Projekte.
+4. F4: fehlendes oder auf null gesetztes Feld `projectIds` beim Ändern eines Portalkontos antwortet mit 400; eine ausdrücklich leere Liste entfernt weiter alle Projekte.
 5. F5: Portalkonten erscheinen nicht in den Auswahlen für Bearbeiter und eigene Personenfelder.
 6. F6: die Portalliste erreicht alle Anfragen über weitere Seiten.
 7. H1 doppelte Nummer in der Portalansicht, H2 Antwort 503 im Vertrag der Portal Projektliste, H3 verständliche Gründe im Formular der Portalkonten.
