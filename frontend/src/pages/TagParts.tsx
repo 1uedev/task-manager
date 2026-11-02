@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import {
   bulkTicketTags, CATALOG_PAGE, catalogTags, changeTag, mergeTag, previewMerge, TAG_BULK_TICKETS, TAG_FILTER_MAX, tagSuggestions, type Tag, type TagBulkResult,
-  type TagColor, type TagMatch, type TagMergePreview, type TagScope, type TagSuggestions,
+  type TagColor, type TagMatch, type TagMergePreview, type TagScope, type TagSuggestions, type TagVisibility,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -217,6 +217,11 @@ export function TagCatalog({ scope, round }: { readonly scope: TagScope; readonl
                 <div>
                   <TagLabel tag={tag} />
                   {tag.archived && <span className="badge">{t('tags.archivedBadge')}</span>}
+                  {tag.visibility === 'customer' && (
+                    <span className="badge" data-testid="tag-customer">
+                      {t(tag.organizationId === null ? 'tags.visibility.customerBadge' : 'tags.visibility.organizationBadge')}
+                    </span>
+                  )}
                   {tag.description !== null && <p className="hint tag-description">{tag.description}</p>}
                 </div>
                 <p className="hint usage">{t('tags.usage', { tickets: tag.usage?.tickets ?? 0, projects: tag.usage?.projects ?? 0 })}</p>
@@ -261,9 +266,13 @@ function TagEditor({ scope, tag, onDone, onCancel }: {
   const [description, setDescription] = useState(tag.description ?? '');
   const [color, setColor] = useState<string>(tag.color ?? '');
   const [archived, setArchived] = useState(tag.archived);
+  const [visibility, setVisibility] = useState<string>(tag.visibility);
+  const [release, setRelease] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
-  const dirty = name !== tag.name || description !== (tag.description ?? '') || color !== (tag.color ?? '') || archived !== tag.archived;
+  const bound = tag.organizationId !== null && visibility === 'customer';
+  const dirty = name !== tag.name || description !== (tag.description ?? '') || color !== (tag.color ?? '') || archived !== tag.archived
+    || visibility !== tag.visibility || (bound && release);
   useUnsavedGuard(dirty);
 
   async function submit(event: FormEvent) {
@@ -276,6 +285,8 @@ function TagEditor({ scope, tag, onDone, onCancel }: {
       ...(description !== (tag.description ?? '') ? { description: description.trim() === '' ? null : description } : {}),
       ...(color !== (tag.color ?? '') ? { color: color === '' ? null : color as TagColor } : {}),
       ...(archived !== tag.archived ? { archived } : {}),
+      ...(visibility !== tag.visibility ? { visibility: visibility as TagVisibility } : {}),
+      ...(bound && release ? { forAllCustomers: true as const } : {}),
     });
     setBusy(false);
     if (result.kind === 'ok') return onDone({ kind: 'success', text: t('tags.saved', { name: result.data.value.name }) });
@@ -296,6 +307,15 @@ function TagEditor({ scope, tag, onDone, onCancel }: {
         {t('tags.archived')}
       </label>
       <p className="hint">{t('tags.archivedHint')}</p>
+      <SelectField label={t('tags.visibility')} value={visibility} onChange={setVisibility}
+        options={[{ value: 'internal', label: t('tags.visibility.internal') }, { value: 'customer', label: t('tags.visibility.customer') }]} />
+      <p className="hint">{t(tag.organizationId === null ? 'tags.visibilityHint' : 'tags.visibility.organizationHint')}</p>
+      {bound && (
+        <label className="check">
+          <input type="checkbox" checked={release} onChange={(event) => setRelease(event.target.checked)} data-testid="tag-release" />
+          {t('tags.visibility.release')}
+        </label>
+      )}
       <p className="actions">
         <button type="submit" disabled={busy}>{t('tags.save')}</button>
         <button type="button" className="secondary" onClick={onCancel}>{t('tags.cancel')}</button>

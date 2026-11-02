@@ -35,6 +35,10 @@ export type TagColor = TagTypes['schemas']['Color'];
 export type TagUsage = TagTypes['schemas']['Usage'];
 export type TagMergePreview = TagTypes['schemas']['MergePreview'];
 export type TagSuggestions = TagTypes['schemas']['Suggestions'];
+export type TagVisibility = TagTypes['schemas']['Visibility'];
+export type PortalTag = TagTypes['schemas']['PortalTag'];
+export type PortalTicketTags = TagTypes['schemas']['PortalTicketTags'];
+export type PortalTagSuggestions = TagTypes['schemas']['PortalSuggestions'];
 export type Attachment = FileTypes['schemas']['Attachment'];
 export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
@@ -102,6 +106,8 @@ export interface PortalFilter {
   readonly status: string | null;
   readonly state: 'open' | 'done' | null;
   readonly q: string | null;
+  // A tag the portal shows to the organization (TASK-077).
+  readonly tag?: string | null;
 }
 
 export interface Versioned<T> {
@@ -249,7 +255,21 @@ export const listPortalTickets = (api: ServerApi, projectId: string, filter?: Po
   run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId }, query: {
     limit: PORTAL_PAGE, ...(before !== undefined ? { before } : {}),
     ...(filter?.status ? { status: filter.status } : {}), ...(filter?.state ? { state: filter.state } : {}), ...(filter?.q ? { q: filter.q } : {}),
+    ...(filter?.tag ? { tag: filter.tag } : {}),
   } } }), listOf<Ticket>(isTicket));
+// Tags in the portal (TASK-077): only tags visible to the organization, setting and removing them, creating one by name.
+const isPortalTag = (v: unknown) => hasStrings(v, 'id', 'name') && typeof (v as PortalTag).own === 'boolean';
+export const portalTicketTags = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tags.GET('/portal/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } } }),
+    one<PortalTicketTags>((v) => record(v) && Array.isArray(v.items) && v.items.every(isPortalTag) && typeof v.writable === 'boolean'));
+export const portalTagSuggestions = (api: ServerApi, projectId: string, q: string) =>
+  run(() => api.tags.GET('/portal/projects/{projectId}/tags', { params: { path: { projectId }, query: q.trim() === '' ? {} : { q: q.trim() } } }),
+    one<PortalTagSuggestions>((v) => record(v) && Array.isArray(v.items) && v.items.every(isPortalTag) && typeof v.create === 'boolean'));
+export const assignPortalTag = (api: ServerApi, projectId: string, number: number, target: { readonly tagId: string } | { readonly name: string }) =>
+  run(() => api.tags.POST('/portal/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, body: target }),
+    one<PortalTag>(isPortalTag));
+export const removePortalTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
+  run(() => api.tags.DELETE('/portal/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
 // The conversation of the portal (TASK-076): creating, the entries of a request, posts, the marker of new answers and files.
 const isPortalFile = (v: unknown) => hasStrings(v, 'id', 'name', 'uploadedAt') && typeof (v as PortalFile).size === 'number';
 const isPortalEntry = (v: unknown) => hasStrings(v, 'kind', 'id', 'at', 'author') && Array.isArray((v as PortalEntry).attachments);
@@ -400,6 +420,8 @@ export interface TagChange {
   readonly description?: string | null;
   readonly color?: TagColor | null;
   readonly archived?: boolean;
+  readonly visibility?: TagVisibility;
+  readonly forAllCustomers?: true;
 }
 
 export const changeTag = (api: ServerApi, scope: TagScope, id: string, etag: string, change: TagChange) => scope.kind === 'company'

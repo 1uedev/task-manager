@@ -28,7 +28,8 @@ const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0'
 const now = () => new Date(Date.UTC(2026, 9, 21, 8, 0, counter)).toISOString();
 // A tag as stored (TASK-028, TASK-072); `mergedInto` names the identifier of the tag that took its assignments.
 export const newTag = (name, projectId, by, extra = {}) => ({ id: uuid(), name, catalog: projectId === null ? 'company' : 'project', projectId, description: null,
-  color: null, archived: false, mergedInto: null, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id, ...extra });
+  color: null, archived: false, mergedInto: null, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id,
+  visibility: 'internal', organizationId: null, ...extra });
 const TAG_LIMIT = 30;
 
 export const ANNA = { username: 'anna', password: 'Anna Passwort 2026', displayName: 'Anna Admin' };
@@ -242,13 +243,19 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return problem(400, 'request.invalid', { violations: ['color.invalid'] });
     }
     if (typeof body.description === 'string' && body.description.trim().length > 500) return problem(400, 'request.invalid', { violations: ['description.invalid'] });
-    if (body.name !== undefined && state.tags.some((entry) => entry !== tag && entry.projectId === projectId && entry.mergedInto === null && tagKey(entry.name) === tagKey(body.name))) {
+    if (body.visibility !== undefined && !['internal', 'customer'].includes(body.visibility)) return problem(400, 'request.invalid', { violations: ['visibility.invalid'] });
+    // Tags in the portal (TASK-077): a tag of one organization becomes one for every customer when released or made internal.
+    const visibility = body.visibility ?? tag.visibility;
+    const organizationId = body.forAllCustomers === true || visibility === 'internal' ? null : tag.organizationId;
+    const name = body.name !== undefined ? body.name : tag.name;
+    if ((body.name !== undefined || organizationId !== tag.organizationId) && state.tags.some((entry) => entry !== tag && entry.projectId === projectId
+      && entry.mergedInto === null && entry.organizationId === organizationId && tagKey(entry.name) === tagKey(name))) {
       return problem(409, 'tag.name_taken');
     }
     const next = { ...tag, ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.archived !== undefined ? { archived: body.archived } : {}),
       ...(body.description !== undefined ? { description: body.description === null || body.description.trim() === '' ? null : body.description.trim() } : {}),
-      ...(body.color !== undefined ? { color: body.color } : {}) };
-    const changed = ['name', 'archived', 'description', 'color'].some((key) => next[key] !== tag[key]);
+      ...(body.color !== undefined ? { color: body.color } : {}), visibility, organizationId };
+    const changed = ['name', 'archived', 'description', 'color', 'visibility', 'organizationId'].some((key) => next[key] !== tag[key]);
     if (changed) Object.assign(tag, next, { version: tag.version + 1, updatedAt: now(), updatedBy: account.id });
     return ok(tagView(account, tag), `"${tag.version}"`);
   };
@@ -262,7 +269,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return { tag };
     }
     const catalog = companyOnly || body.catalog === 'company' ? null : projectId;
-    const existing = state.tags.find((entry) => entry.projectId === catalog && entry.mergedInto === null && tagKey(entry.name) === tagKey(body.name));
+    const existing = state.tags.find((entry) => entry.projectId === catalog && entry.mergedInto === null && entry.organizationId === null && tagKey(entry.name) === tagKey(body.name));
     if (existing) return existing.archived ? { problem: problem(409, 'tag.archived') } : { tag: existing };
     if (!createTags(account, catalog)) return { problem: problem(403, 'auth.forbidden') };
     return { tag: newTag(body.name.trim(), catalog, account), created: true };
@@ -373,6 +380,53 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     const portalHd = state.helpdesk;
     const ownTickets = (projectId) => state.tickets.filter((item) => item.projectId === projectId && portalHd.ticketCustomers.get(item.id)?.customerId === account.organizationId);
     const portalFile = ({ id, name, size, uploadedAt }) => ({ id, name, size, uploadedAt });
+    // Tags in the portal (TASK-077): only tags visible to the organization; changing needs ticket.edit and the write rule for tags.
+    const visibleTag = (tag) => tag.visibility === 'customer' && tag.mergedInto === null && (tag.organizationId === null || tag.organizationId === account.organizationId);
+    const portalTag = ({ id, name, description, color, archived, organizationId }) => ({ id, name, description, color, archived, own: organizationId !== null });
+    const portalTagMatch = p.match(/^\/portal\/projects\/([^/]+)\/(?:tags|tickets\/(\d+)\/tags(?:\/([^/]+))?)$/);
+    if (portalTagMatch) {
+      const [, projectId, number, tagId] = portalTagMatch;
+      if (!portalOf(account) || !isMember(account, projectId) || !may(account, 'ticket.read', projectId) || !field(account, projectId, TAG_FIELD, 'read')) {
+        return problem(404, number === undefined ? 'project.not_found' : 'ticket.not_found');
+      }
+      const inProject = (tag) => visibleTag(tag) && (tag.projectId === null || tag.projectId === projectId);
+      if (number === undefined) {
+        const q = tagKey(query.get('q') ?? '');
+        return ok({ items: state.tags.filter((tag) => inProject(tag) && !tag.archived && (q === '' || tagKey(tag.name).includes(q)))
+          .sort((a, b) => tagKey(a.name).localeCompare(tagKey(b.name))).slice(0, 20).map(portalTag), create: may(account, 'tag.create', projectId) });
+      }
+      const ticket = ownTickets(projectId).find((item) => item.number === Number(number));
+      if (!ticket) return problem(404, 'ticket.not_found');
+      const writes = may(account, 'ticket.edit', projectId) && field(account, projectId, TAG_FIELD, 'write');
+      const held = () => state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => state.tags.find((tag) => tag.id === entry.tag));
+      if (method === 'GET') return ok({ items: held().filter(visibleTag).sort((a, b) => tagKey(a.name).localeCompare(tagKey(b.name))).map(portalTag), writable: writes });
+      if (!writes) return problem(403, 'auth.forbidden');
+      if (method === 'DELETE') {
+        const tag = state.tags.find((entry) => entry.id === tagId && inProject(entry));
+        if (!tag) return problem(404, 'tag.not_found');
+        const index = state.ticketTags.findIndex((entry) => entry.ticket === ticket.id && entry.tag === tag.id);
+        if (index >= 0) state.ticketTags.splice(index, 1);
+        return empty();
+      }
+      if (method !== 'POST') return problem(405, 'request.method');
+      if (Object.keys(body ?? {}).some((key) => !['tagId', 'name'].includes(key))) return problem(400, 'request.invalid', { violations: ['fields.unknown'] });
+      let tag = body.tagId !== undefined ? state.tags.find((entry) => entry.id === body.tagId && inProject(entry))
+        : state.tags.filter((entry) => inProject(entry) && tagKey(entry.name) === tagKey(body.name ?? ''))
+          .sort((a, b) => (a.organizationId === null) - (b.organizationId === null) || (a.projectId === null) - (b.projectId === null))[0];
+      if (!tag && body.tagId !== undefined) return problem(404, 'tag.not_found');
+      if (!tag) {
+        if (!body.name?.trim()) return problem(400, 'request.invalid', { violations: ['name.invalid'] });
+        if (!may(account, 'tag.create', projectId)) return problem(403, 'auth.forbidden');
+        tag = newTag(body.name.trim(), projectId, account, { visibility: 'customer', organizationId: account.organizationId });
+        state.tags.push(tag);
+      }
+      if (tag.archived) return problem(409, 'tag.archived');
+      if (!held().some((entry) => entry.id === tag.id)) {
+        if (held().length >= TAG_LIMIT) return problem(409, 'tag.limit_reached');
+        state.ticketTags.push({ ticket: ticket.id, tag: tag.id });
+      }
+      return ok(portalTag(tag));
+    }
     let portalMatch = p.match(/^\/portal\/projects\/([^/]+)\/(tickets|activity)(?:\/(\d+))?(\/[a-z]+)?(?:\/([^/]+))?$/);
     if (portalMatch) {
       const [, projectId, kind, number, tail, id] = portalMatch;
@@ -395,6 +449,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         return ok(own.filter((item) => !query.get('status') || item.values.status === query.get('status'))
           .filter((item) => !query.get('state') || (query.get('state') === 'done') === (category(item.values.status) === 'done'))
           .filter((item) => !q || [item.values.title, item.values.description].some((text) => text?.toLowerCase().includes(q)))
+          .filter((item) => !query.get('tag') || state.ticketTags.some((entry) => entry.ticket === item.id && entry.tag === query.get('tag')
+            && visibleTag(state.tags.find((tag) => tag.id === entry.tag))))
           // Newest first and paged like the server: at most `limit` (default 50) below `before` (TASK-078, F6).
           .filter((item) => !query.get('before') || item.number < Number(query.get('before')))
           .sort((a, b) => b.number - a.number).slice(0, Number(query.get('limit') ?? 50)).map(view));
@@ -681,7 +737,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (rest === '/catalog/tags' && method === 'GET') return ok(catalogList(account, item.id, query));
     if (rest === '/catalog/tags' && method === 'POST') {
       if (!createTags(account, item.id)) return problem(403, 'auth.forbidden');
-      if (state.tags.some((tag) => tag.projectId === item.id && tag.mergedInto === null && tagKey(tag.name) === tagKey(body.name))) return problem(409, 'tag.name_taken');
+      if (state.tags.some((tag) => tag.projectId === item.id && tag.mergedInto === null && tag.organizationId === null && tagKey(tag.name) === tagKey(body.name))) return problem(409, 'tag.name_taken');
       const tag = newTag(body.name.trim(), item.id, account);
       state.tags.push(tag);
       return ok(tagView(account, tag), '"1"');

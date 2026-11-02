@@ -108,9 +108,14 @@ public class TagService {
      * A change of a tag; {@code null} keeps the name or the archive state. Description and color change only when they are
      * given, and a given {@code null} removes them.
      */
-    public record Change(String name, Boolean archived, boolean descriptionGiven, String description, boolean colorGiven, String color) {
+    public record Change(String name, Boolean archived, boolean descriptionGiven, String description, boolean colorGiven, String color,
+            String visibility, boolean forAllCustomers) {
         public Change(String name, Boolean archived) {
-            this(name, archived, false, null, false, null);
+            this(name, archived, false, null, false, null, null, false);
+        }
+
+        public Change(String name, Boolean archived, boolean descriptionGiven, String description, boolean colorGiven, String color) {
+            this(name, archived, descriptionGiven, description, colorGiven, color, null, false);
         }
     }
 
@@ -440,7 +445,7 @@ public class TagService {
         }
         Instant now = clock.instant();
         return new Tag(UUID.randomUUID(), actor.companyId(), projectId, name, TagName.normalized(name), null, null, false, null, 1, now,
-            actor.userId(), now, actor.userId());
+            actor.userId(), now, actor.userId(), Tag.INTERNAL, null);
     }
 
     private Tag change(AccessContext actor, UUID projectId, UUID id, long expectedVersion, Change change) {
@@ -454,6 +459,9 @@ public class TagService {
         }
         if (change.colorGiven() && !TagLook.color(change.color())) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("color.invalid"));
+        }
+        if (change.visibility() != null && !Tag.INTERNAL.equals(change.visibility()) && !Tag.CUSTOMER.equals(change.visibility())) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("visibility.invalid"));
         }
         Tag tag = tags.lockForChange(actor.companyId(), id, projectId).orElseThrow(TagService::tagNotFound);
         if (tag.version() != expectedVersion) {
@@ -472,19 +480,24 @@ public class TagService {
         boolean archived = change.archived() == null ? tag.archived() : change.archived();
         String newDescription = change.descriptionGiven() ? description : tag.description();
         String color = change.colorGiven() ? change.color() : tag.color();
+        String visibility = change.visibility() == null ? tag.visibility() : change.visibility();
+        // A tag of one organization becomes a tag for every customer when it is released or made internal (TASK-077).
+        UUID organization = change.forAllCustomers() || Tag.INTERNAL.equals(visibility) ? null : tag.organizationId();
         boolean renamed = !name.equals(tag.name());
         boolean described = !Objects.equals(newDescription, tag.description());
         boolean colored = !Objects.equals(color, tag.color());
-        if (!renamed && archived == tag.archived() && !described && !colored) {
+        boolean shown = !visibility.equals(tag.visibility());
+        boolean released = tag.organizationId() != null && organization == null;
+        if (!renamed && archived == tag.archived() && !described && !colored && !shown && !released) {
             return tag;
         }
         String normalized = TagName.normalized(name);
-        if (!normalized.equals(tag.normalized()) && tags.nameTaken(actor.companyId(), projectId, normalized, id)) {
+        if ((!normalized.equals(tag.normalized()) || released) && tags.nameTaken(actor.companyId(), projectId, organization, normalized, id)) {
             throw ApiProblemException.of(409, "tag.name_taken");
         }
         Instant now = clock.instant();
         Tag changed = new Tag(id, tag.companyId(), projectId, name, normalized, newDescription, color, archived, null, tag.version() + 1,
-            tag.createdAt(), tag.createdBy(), now, actor.userId());
+            tag.createdAt(), tag.createdBy(), now, actor.userId(), visibility, organization);
         try {
             tags.update(changed);
         } catch (DuplicateKeyException race) {
@@ -498,6 +511,12 @@ public class TagService {
         }
         if (colored) {
             tags.audit(actor.companyId(), id, "tag.colored", catalogTarget(projectId), projectId, color, actor.userId(), now);
+        }
+        if (shown) {
+            tags.audit(actor.companyId(), id, "tag.visibility", catalogTarget(projectId), projectId, visibility, actor.userId(), now);
+        }
+        if (released) {
+            tags.audit(actor.companyId(), id, "tag.released", catalogTarget(projectId), projectId, null, actor.userId(), now);
         }
         if (archived != tag.archived()) {
             tags.audit(actor.companyId(), id, archived ? "tag.archived" : "tag.restored", catalogTarget(projectId), projectId, null, actor.userId(), now);
@@ -648,7 +667,8 @@ public class TagService {
         if (name == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("name.invalid"));
         }
-        Optional<Tag> existing = tags.lockByName(actor.companyId(), catalog, TagName.normalized(name));
+        // Internal names are the names for every customer; a tag of one organization is assigned by its identifier (TASK-077).
+        Optional<Tag> existing = tags.lockByName(actor.companyId(), catalog, null, TagName.normalized(name));
         if (existing.isPresent()) {
             return assignable(existing.get());
         }
@@ -658,7 +678,7 @@ public class TagService {
         Tag tag = newTag(actor, catalog, name);
         if (!tags.insert(tag)) {
             // Created concurrently: the insert waited for that commit, so the tag is visible now.
-            return assignable(tags.lockByName(actor.companyId(), catalog, tag.normalized()).orElseThrow(TagService::tagNotFound));
+            return assignable(tags.lockByName(actor.companyId(), catalog, null, tag.normalized()).orElseThrow(TagService::tagNotFound));
         }
         tags.audit(actor.companyId(), tag.id(), "tag.created", catalogTarget(catalog), catalog, tag.name(), actor.userId(), tag.createdAt());
         events.publishEvent(changed(tag));

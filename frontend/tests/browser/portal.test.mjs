@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { ANNA, createBackend } from './backend.mjs';
+import { ANNA, createBackend, newTag } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-075: portal accounts in the account administration and the reading view of a portal account, against the in-memory
@@ -276,6 +276,111 @@ describe('portal review findings', () => {
     const reviewer = page.getByLabel(/^Prüfer/);
     assert.ok((await reviewer.locator('option').count()) > 1, 'staff is offered for the person field');
     assert.equal((await reviewer.locator('option').allInnerTexts()).some((text) => /Lea Lang/.test(text)), false, 'not for a person field');
+    await finish(admin);
+  });
+});
+
+// TASK-077: tags in the portal. Lea sees only tags visible to customers; with ticket.edit, the write rule for tags and tag.create
+// in a group of her own she sets, removes and creates tags; the support releases a tag of Nordwerk for all customers.
+function withLeaTags(backend, { write = false } = {}) {
+  const lea = withLea(backend);
+  const portal = backend.state.groups.find((group) => group.purpose === 'portal');
+  portal.fields.push({ resourceType: 'ticket', field: 'tags', projectId: null, operation: 'read', effect: 'allow' });
+  if (write) {
+    backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000000e4', name: 'Portal Tags', members: [lea.id],
+      actions: ['ticket.edit', 'tag.create'].map((action) => ({ action, projectId: null })),
+      fields: [{ resourceType: 'ticket', field: 'tags', projectId: null, operation: 'write', effect: 'allow' }] });
+  }
+  const tag = (name, visibility, extra = {}) => {
+    const created = newTag(name, backend.project.id, backend.anna, { visibility, ...extra });
+    backend.state.tags.push(created);
+    return created;
+  };
+  const internal = tag('Eskalation intern', 'internal');
+  const shown = tag('Wartung', 'customer');
+  const [first] = backend.state.tickets;
+  backend.state.ticketTags.push({ ticket: first.id, tag: internal.id }, { ticket: first.id, tag: shown.id });
+  const other = backend.addTicket('Zweite Anfrage', null, backend.anna);
+  backend.state.helpdesk.ticketCustomers.set(other.id, { customerId: NORDWERK, contactId: null });
+  return { lea, internal, shown, first };
+}
+
+describe('portal tags', () => {
+  test('the portal shows only tags visible to customers and filters by them', async () => {
+    const backend = createBackend();
+    withLeaTags(backend);
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    const rows = page.getByTestId('portal-tickets').locator('tbody tr');
+    await rows.first().waitFor();
+    assert.equal(await rows.count(), 2);
+    const filter = page.getByLabel('Tag', { exact: true });
+    assert.deepEqual(await filter.locator('option').allInnerTexts(), ['Alle Tags', 'Wartung'], 'no internal tag offered');
+    await filter.selectOption({ label: 'Wartung' });
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="portal-tickets"] tbody tr').length === 1);
+    assert.match(await rows.first().innerText(), /Anmeldung prüfen/);
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    const tags = page.getByTestId('portal-tags');
+    await tags.getByText('Wartung').waitFor();
+    assert.doesNotMatch(await tags.innerText(), /Eskalation/, 'the internal tag stays hidden');
+    assert.equal(await page.getByTestId('portal-tag-form').count(), 0, 'the group "Portal" writes no tags');
+    await finish(portal);
+  });
+
+  test('an authorized portal account creates, sets and removes tags, internal ones stay', async () => {
+    const backend = createBackend();
+    const { internal, first } = withLeaTags(backend, { write: true });
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    const tags = page.getByTestId('portal-tags');
+    const form = tags.getByTestId('portal-tag-form');
+    await form.getByLabel('Tag hinzufügen').fill('Rückruf');
+    await form.getByRole('button', { name: '„Rückruf“ anlegen' }).click();
+    await tags.getByText('Tag „Rückruf“ hinzugefügt.').waitFor();
+    await tags.getByTestId('portal-tag-list').getByText('Rückruf').waitFor();
+    const created = backend.state.tags.find((tag) => tag.name === 'Rückruf');
+    assert.equal(created.visibility, 'customer');
+    assert.equal(created.organizationId, NORDWERK);
+    await tags.getByRole('button', { name: 'Tag Wartung entfernen' }).click();
+    await tags.getByText('Tag „Wartung“ entfernt.').waitFor();
+    // A suggestion sets an existing tag with one click.
+    await form.getByRole('button', { name: 'Wartung' }).click();
+    await tags.getByText('Tag „Wartung“ hinzugefügt.').waitFor();
+    const held = backend.state.ticketTags.filter((entry) => entry.ticket === first.id).map((entry) => entry.tag);
+    assert.ok(held.includes(internal.id), 'the internal tag stays at the request');
+    assert.equal(held.length, 3);
+    assert.doesNotMatch(await tags.innerText(), /Eskalation/);
+    await finish(portal);
+  });
+
+  test('the tag care shows the visibility and releases a tag of one organization for all customers', async () => {
+    const backend = createBackend();
+    withLeaTags(backend);
+    backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000000e5', name: 'Tagpflege', members: [backend.anna.id], actions: [{ action: 'tags.manage', projectId: null }], fields: [] });
+    const own = newTag('Rückruf', backend.project.id, backend.anna, { visibility: 'customer', organizationId: NORDWERK });
+    backend.state.tags.push(own);
+    const admin = await session(backend, ANNA, `#/projects/${backend.project.id}/tags`);
+    const page = admin.page;
+    const catalog = page.getByTestId('catalog-project');
+    await catalog.waitFor();
+    assert.match(await catalog.locator('li', { hasText: 'Rückruf' }).innerText(), /Kunde, eine Organisation/);
+    assert.match(await catalog.locator('li', { hasText: 'Wartung' }).innerText(), /Kunde/);
+    assert.doesNotMatch(await catalog.locator('li', { hasText: 'Eskalation intern' }).innerText(), /Kunde/);
+    await page.getByRole('button', { name: 'Rückruf bearbeiten' }).click();
+    const form = page.getByRole('form', { name: 'Tag Rückruf bearbeiten' });
+    await form.getByTestId('tag-release').check();
+    await form.getByRole('button', { name: 'Speichern' }).click();
+    await page.getByText('Tag Rückruf gespeichert.').waitFor();
+    assert.equal(own.organizationId, null);
+    assert.equal(own.visibility, 'customer');
+    // An internal tag becomes visible to customers.
+    await page.getByRole('button', { name: 'Eskalation intern bearbeiten' }).click();
+    const second = page.getByRole('form', { name: 'Tag Eskalation intern bearbeiten' });
+    await second.getByLabel('Sichtbarkeit').selectOption({ label: 'Kunde (im Portal sichtbar)' });
+    await second.getByRole('button', { name: 'Speichern' }).click();
+    await page.getByText('Tag Eskalation intern gespeichert.').waitFor();
+    assert.equal(backend.state.tags.find((tag) => tag.name === 'Eskalation intern').visibility, 'customer');
     await finish(admin);
   });
 });

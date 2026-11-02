@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.TicketOrganizations;
+import taskmanager.tickets.TicketTagFilter;
 
 /**
  * Tickets of a project with history and conflict detection (TASK-027, DEC-067), with the custom fields, the workflows of the
@@ -71,9 +73,11 @@ public class TicketService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final TicketOrganizations organizations;
+    private final ObjectProvider<TicketTagFilter> tagFilter;
 
     TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
-            ApplicationEventPublisher events, TicketOrganizations organizations) {
+            ApplicationEventPublisher events, TicketOrganizations organizations, ObjectProvider<TicketTagFilter> tagFilter) {
+        this.tagFilter = tagFilter;
         this.tickets = tickets;
         this.projects = projects;
         this.permissions = permissions;
@@ -99,10 +103,15 @@ public class TicketService {
     /**
      * What the portal list filters by (TASK-076): a status key, {@code open} or {@code done} after the category of the status, and
      * a text that title or description contain, ignoring case. A filter by status needs the read rule of the field
-     * {@code status}; the text searches only the fields of the two the caller may read. {@code null} filters nothing.
+     * {@code status}; the text searches only the fields of the two the caller may read. {@code null} filters nothing. A tag
+     * (TASK-077) needs the read rule of the field {@code tags}; a tag the portal does not show to the organization finds nothing.
      */
-    public record PortalFilter(String status, String state, String text) {
-        public static final PortalFilter NONE = new PortalFilter(null, null, null);
+    public record PortalFilter(String status, String state, String text, UUID tag) {
+        public static final PortalFilter NONE = new PortalFilter(null, null, null, null);
+
+        public PortalFilter(String status, String state, String text) {
+            this(status, state, text, null);
+        }
 
         public PortalFilter {
             status = status == null || status.isBlank() ? null : status.strip();
@@ -125,9 +134,18 @@ public class TicketService {
         if ((filter.status() != null || filter.state() != null) && !readable.contains("status")) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("status.not_readable"));
         }
+        if (filter.tag() != null && !permissions.inspect(actor, resource, READ, Set.of(TicketAccess.TAGS_FIELD)).readableFields()
+                .contains(TicketAccess.TAGS_FIELD)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("tag.not_readable"));
+        }
         String key = projects.key(projectId).orElseThrow(TicketService::projectNotFound);
         ProjectConfiguration configuration = configuration(projectId);
         List<UUID> own = organizations.lockTicketsOf(projectId, actor.organizationId());
+        if (filter.tag() != null) {
+            TicketTagFilter tagged = tagFilter.getIfUnique();
+            Set<UUID> carrying = tagged == null ? Set.of() : tagged.ticketsWith(actor.companyId(), projectId, actor.organizationId(), filter.tag());
+            own = own.stream().filter(carrying::contains).toList();
+        }
         return tickets.listAmong(actor.companyId(), projectId, own, Integer.MAX_VALUE, before).stream()
             .filter(ticket -> filter.status() == null || filter.status().equals(ticket.status()))
             .filter(ticket -> filter.state() == null
