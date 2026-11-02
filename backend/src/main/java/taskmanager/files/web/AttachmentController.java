@@ -58,10 +58,19 @@ class AttachmentController {
         this.contexts = contexts;
     }
 
-    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy, String visibility) {
+    /**
+     * An attachment; {@code customerCurrent} says whether the current customer of the ticket sees it (TASK-079): a file visible
+     * to a former customer is not. Right after an upload or a switch the organization written is the current one.
+     */
+    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy, String visibility,
+            boolean customerCurrent) {
         static AttachmentBody of(Attachment attachment) {
+            return of(attachment, attachment.organizationId());
+        }
+
+        static AttachmentBody of(Attachment attachment, UUID currentCustomer) {
             return new AttachmentBody(attachment.id(), attachment.name(), attachment.size(), attachment.sha256(), attachment.uploadedAt(),
-                attachment.uploadedBy(), attachment.visibility());
+                attachment.uploadedBy(), attachment.visibility(), attachment.visibleTo(currentCustomer));
         }
     }
 
@@ -74,7 +83,8 @@ class AttachmentController {
     @GetMapping
     ResponseEntity<List<AttachmentBody>> list(@PathVariable UUID projectId, @PathVariable long number) {
         AccessContext actor = actor();
-        List<AttachmentBody> body = retrying(() -> attachments.list(actor, projectId, number)).stream().map(AttachmentBody::of).toList();
+        AttachmentService.Listing listing = retrying(() -> attachments.list(actor, projectId, number));
+        List<AttachmentBody> body = listing.items().stream().map(a -> AttachmentBody.of(a, listing.customer())).toList();
         return ResponseEntity.ok().header(MAX_BYTES_HEADER, Long.toString(attachments.maxBytes())).body(body);
     }
 

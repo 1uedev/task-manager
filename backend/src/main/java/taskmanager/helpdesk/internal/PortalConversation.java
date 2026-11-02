@@ -42,7 +42,9 @@ import tools.jackson.databind.json.JsonMapper;
  * the first response like a sent mail (event {@link ReplySent}).
  *
  * <p>The portal shows per request the conversation: the mails of the organization that became part of the ticket, the sent mail
- * answers, and the posts in both directions. The internal history, the review queue, failed or uncertain mails and every other
+ * answers, and the posts in both directions. Every entry and every file keeps the organization it was written for (TASK-079,
+ * DEC-109): after a change of the customer of a request the new organization sees only what is written for it from then on,
+ * and the former one nothing of the request. The internal history, the review queue, failed or uncertain mails and every other
  * internal data stay out. Attachments appear only when the caller may read the field {@code attachments} and the attachment is
  * visible to the customer.
  *
@@ -194,7 +196,7 @@ public class PortalConversation {
             }
             carried = attachments.find(portal.ticketId(), files, true);
             Set<UUID> linked = posts.linked(files);
-            boolean usable = carried.size() == files.size() && carried.stream().allMatch(a -> a.customerVisible() && !a.removed()
+            boolean usable = carried.size() == files.size() && carried.stream().allMatch(a -> a.visibleTo(actor.organizationId())
                 && actor.userId().equals(a.uploadedBy()) && !linked.contains(a.id()));
             if (!usable) {
                 throw ApiProblemException.withViolations(400, "request.invalid", List.of("attachmentIds.invalid"));
@@ -202,7 +204,7 @@ public class PortalConversation {
         }
         Instant now = clock.instant();
         PortalRepository.Post post = new PortalRepository.Post(UUID.randomUUID(), actor.companyId(), projectId, portal.ticketId(),
-            PortalRepository.Post.CUSTOMER, actor.userId(), body, now);
+            PortalRepository.Post.CUSTOMER, actor.userId(), body, now, actor.organizationId());
         posts.insert(post);
         carried.forEach(file -> posts.link(post.id(), file.id()));
         events.publishEvent(new CustomerAnswered(actor.companyId(), projectId, portal.ticketId(), now));
@@ -211,7 +213,10 @@ public class PortalConversation {
         return new Entry("post", post.id(), now, PortalRepository.Post.CUSTOMER, true, null, body, carried);
     }
 
-    /** The conversation of a request of the organization, oldest first; {@code ticket.read} is enough. */
+    /**
+     * The conversation of a request of the organization, oldest first; {@code ticket.read} is enough. Only the entries and files
+     * written for the organization of the caller appear (TASK-079).
+     */
     @Transactional
     public List<Entry> timeline(AccessContext actor, UUID projectId, long number) {
         Portal portal = portalTicket(actor, projectId, number, null);
@@ -220,11 +225,11 @@ public class PortalConversation {
         List<Message> mails = repository.messagesOfTicket(portal.ticketId()).stream()
             .filter(m -> m.state().equals("ticket") && actor.organizationId().equals(m.customerId())).toList();
         mails.forEach(m -> m.attachments().stream().map(Message.AttachmentNote::attachmentId).filter(java.util.Objects::nonNull).forEach(files::add));
-        List<PortalRepository.Post> own = posts.posts(portal.ticketId());
+        List<PortalRepository.Post> own = posts.postsFor(portal.ticketId(), actor.organizationId());
         Map<UUID, List<UUID>> carried = posts.attachmentsOf(own.stream().map(PortalRepository.Post::id).toList());
         carried.values().forEach(files::addAll);
         Map<UUID, AttachmentLookup.Summary> visible = portal.attachmentsReadable() && !files.isEmpty()
-            ? attachments.find(portal.ticketId(), files, false).stream().filter(a -> a.customerVisible() && !a.removed())
+            ? attachments.find(portal.ticketId(), files, false).stream().filter(a -> a.visibleTo(actor.organizationId()))
                 .collect(Collectors.toMap(AttachmentLookup.Summary::id, Function.identity()))
             : Map.of();
         for (Message mail : mails) {
@@ -232,7 +237,7 @@ public class PortalConversation {
                 pick(visible, mail.attachments().stream().map(Message.AttachmentNote::attachmentId).toList())));
         }
         for (Reply reply : repository.repliesOfTicket(portal.ticketId())) {
-            if (reply.state().equals("sent")) {
+            if (reply.state().equals("sent") && actor.organizationId().equals(reply.customerId())) {
                 entries.add(new Entry("reply", reply.id(), reply.sentAt() == null ? reply.createdAt() : reply.sentAt(),
                     PortalRepository.Post.SUPPORT, false, reply.subject(), reply.body(), List.of()));
             }
@@ -246,11 +251,16 @@ public class PortalConversation {
         return entries;
     }
 
-    /** Records that the caller opened the request now, for the marker of new answers. */
+    /**
+     * Records that the caller saw the conversation up to {@code until}, the time of the newest entry the portal showed (TASK-079,
+     * F2): an answer of the support that arrived after the conversation was read stays new. A time in the future counts as now,
+     * an earlier mark than the stored one changes nothing.
+     */
     @Transactional
-    public void seen(AccessContext actor, UUID projectId, long number) {
+    public void seen(AccessContext actor, UUID projectId, long number, Instant until) {
         Portal portal = portalTicket(actor, projectId, number, null);
-        posts.seen(actor.userId(), portal.ticketId(), clock.instant());
+        Instant now = clock.instant();
+        posts.seen(actor.userId(), portal.ticketId(), until.isAfter(now) ? now : until);
     }
 
     /** The requests of the organization in the project with their last entry and the marker of new answers of the support. */
@@ -290,12 +300,12 @@ public class PortalConversation {
         // The order of a change of the customer (TASK-062): the lock of the customer link first, then the ticket row.
         repository.lockTicketCustomer(ticket);
         tickets.lockForHelpdeskChange(ticket);
-        if (repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::customerId).isEmpty()) {
-            throw ApiProblemException.of(409, "helpdesk.portal_no_customer");
-        }
+        // The answer is written for the current customer and stays with it (TASK-079).
+        UUID customer = repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::customerId)
+            .orElseThrow(() -> ApiProblemException.of(409, "helpdesk.portal_no_customer"));
         Instant now = clock.instant();
         PortalRepository.Post post = new PortalRepository.Post(UUID.randomUUID(), actor.companyId(), projectId, ticket,
-            PortalRepository.Post.SUPPORT, actor.userId(), body, now);
+            PortalRepository.Post.SUPPORT, actor.userId(), body, now, customer);
         posts.insert(post);
         events.publishEvent(new ReplySent(actor.companyId(), projectId, ticket, post.id(), now));
         repository.audit(actor.companyId(), "ticket", ticket, "portal.answered", JSON.writeValueAsString(new PostDetail(post.id(), 0)),

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 class AttachmentRepository {
     private static final String COLUMNS = "id, company_id, ticket_id, project_id, name, size_bytes, sha256, uploaded_at, uploaded_by, "
-        + "removed_at, removed_by, purged_at, visibility";
+        + "removed_at, removed_by, purged_at, visibility, organization_id";
 
     private final JdbcClient jdbc;
 
@@ -29,7 +29,8 @@ class AttachmentRepository {
         return new Attachment(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("ticket_id", UUID.class),
             rs.getObject("project_id", UUID.class), rs.getString("name"), rs.getLong("size_bytes"), rs.getString("sha256"),
             instant(rs, "uploaded_at"), rs.getObject("uploaded_by", UUID.class), instant(rs, "removed_at"),
-            rs.getObject("removed_by", UUID.class), instant(rs, "purged_at"), rs.getString("visibility"));
+            rs.getObject("removed_by", UUID.class), instant(rs, "purged_at"), rs.getString("visibility"),
+            rs.getObject("organization_id", UUID.class));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {
@@ -38,10 +39,11 @@ class AttachmentRepository {
     }
 
     void insert(Attachment attachment) {
-        jdbc.sql("insert into file_attachment (id, company_id, ticket_id, project_id, name, size_bytes, sha256, uploaded_at, uploaded_by, visibility) "
-                + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into file_attachment (id, company_id, ticket_id, project_id, name, size_bytes, sha256, uploaded_at, uploaded_by, visibility, "
+                + "organization_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(attachment.id(), attachment.companyId(), attachment.ticketId(), attachment.projectId(), attachment.name(),
-                attachment.size(), attachment.sha256(), Timestamp.from(attachment.uploadedAt()), attachment.uploadedBy(), attachment.visibility())
+                attachment.size(), attachment.sha256(), Timestamp.from(attachment.uploadedAt()), attachment.uploadedBy(), attachment.visibility(),
+                attachment.organizationId())
             .update();
     }
 
@@ -62,8 +64,9 @@ class AttachmentRepository {
             .params(ticketId, id).query(AttachmentRepository::map).optional();
     }
 
-    void setVisibility(UUID id, String visibility) {
-        jdbc.sql("update file_attachment set visibility = ? where id = ?").params(visibility, id).update();
+    /** Sets the visibility and the organization it is visible for; an internal attachment has none. */
+    void setVisibility(UUID id, String visibility, UUID organizationId) {
+        jdbc.sql("update file_attachment set visibility = ?, organization_id = ? where id = ?").params(visibility, organizationId, id).update();
     }
 
     void markRemoved(UUID id, Instant at, UUID actor) {

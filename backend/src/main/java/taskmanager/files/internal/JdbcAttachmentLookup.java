@@ -25,14 +25,14 @@ class JdbcAttachmentLookup implements AttachmentLookup {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return jdbc.sql("select id, name, size_bytes, uploaded_at, uploaded_by, visibility, removed_at from file_attachment "
+        return jdbc.sql("select id, name, size_bytes, uploaded_at, uploaded_by, visibility, removed_at, organization_id from file_attachment "
                 + "where ticket_id = ? and id = any (?) order by uploaded_at, id" + (lock ? " for share" : ""))
             .params(ticketId, ids.toArray(UUID[]::new))
             .query((rs, row) -> {
                 Timestamp uploaded = rs.getTimestamp("uploaded_at");
                 return new Summary(rs.getObject("id", UUID.class), rs.getString("name"), rs.getLong("size_bytes"), uploaded.toInstant(),
                     rs.getObject("uploaded_by", UUID.class), Attachment.CUSTOMER.equals(rs.getString("visibility")),
-                    rs.getTimestamp("removed_at") != null);
+                    rs.getTimestamp("removed_at") != null, rs.getObject("organization_id", UUID.class));
             }).list();
     }
 }

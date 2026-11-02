@@ -58,15 +58,18 @@ class TagRepository {
     }
 
     /**
-     * One page of a catalog, ordered by the normalized name: the company catalog for {@code projectId == null}. Merged tags
-     * are not part of a catalog. The search text is found anywhere in the normalized name, through the trigram index
-     * (TASK-072); {@code after} is the normalized name of the last tag of the previous page.
+     * One page of a catalog, ordered by the normalized name and the identifier: the company catalog for {@code projectId == null}.
+     * Merged tags are not part of a catalog. The search text is found anywhere in the normalized name, through the trigram index
+     * (TASK-072); {@code after} and {@code afterId} are the normalized name and the identifier of the last tag of the previous
+     * page. Since TASK-077 one catalog holds the same name once per audience, so the identifier is part of the cursor (TASK-079,
+     * F4); without it the page starts after every tag of that name.
      */
-    List<Tag> catalog(UUID companyId, UUID projectId, String search, boolean includeArchived, String after, int limit) {
+    List<Tag> catalog(UUID companyId, UUID projectId, String search, boolean includeArchived, String after, UUID afterId, int limit) {
         return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and " + IN_CATALOG + " and merged_into is null"
                 + " and (? or not archived) and (cast(? as text) is null or normalized like cast(? as text) escape '\\')"
-                + " and (cast(? as text) is null or normalized > cast(? as text)) order by normalized limit ?")
-            .params(companyId, projectId, includeArchived, contains(search), contains(search), after, after, limit)
+                + " and (cast(? as text) is null or (cast(? as uuid) is null and normalized > cast(? as text))"
+                + " or (normalized, id) > (cast(? as text), cast(? as uuid))) order by normalized, id limit ?")
+            .params(companyId, projectId, includeArchived, contains(search), contains(search), after, afterId, after, after, afterId, limit)
             .query(TagRepository::map).list();
     }
 

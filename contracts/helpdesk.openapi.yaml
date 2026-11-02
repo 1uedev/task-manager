@@ -751,6 +751,9 @@ paths:
     get:
       operationId: getPortalConversation
       summary: Gespräch einer Anfrage, älteste Einträge zuerst (nur Portalkonten, TASK-076)
+      description: >-
+        Jeder Eintrag und jede Datei gehört zur Organisation, für die er geschrieben wurde (TASK-079, DEC-109). Nach einem
+        Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel für sie entsteht.
       responses:
         '200':
           description: Einträge
@@ -796,9 +799,23 @@ paths:
       - $ref: '#/components/parameters/Number'
     put:
       operationId: markPortalRequestSeen
-      summary: Anfrage als geöffnet vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076)
+      summary: Gespräch bis zu einem gezeigten Eintrag als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-079)
+      description: >-
+        until ist der Zeitpunkt des neuesten Eintrags, den das Portal aus dem Gespräch angezeigt hat. Eine Antwort des Supports,
+        die danach kam, bleibt neu. Ein Zeitpunkt in der Zukunft gilt als jetzt, ein früherer als der gespeicherte ändert nichts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [until]
+              properties:
+                until: {type: string, format: date-time}
       responses:
         '204': {description: Vermerkt}
+        '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}

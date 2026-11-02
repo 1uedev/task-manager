@@ -436,17 +436,18 @@ class HelpdeskRepository {
 
     private static final String REPLY_COLUMNS = "id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, "
         + "subject, body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at, "
-        + "created_by, updated_at, updated_by, version";
+        + "created_by, updated_at, updated_by, version, customer_id";
 
     void insertReply(Reply r) {
         jdbc.sql("""
                 insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject,
                     body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at,
-                    created_by, updated_at, updated_by, version)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_by, updated_at, updated_by, version, customer_id)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(r.id(), r.companyId(), r.projectId(), r.ticketId(), r.mailboxId(), r.contactId(), r.fromAddress(), r.toAddress(),
                 r.subject(), r.body(), r.messageId(), r.inReplyTo(), r.references(), r.state(), r.errorCode(), r.jobId(), r.sends(),
-                ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version()).update();
+                ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version(),
+                r.customerId()).update();
     }
 
     Optional<Reply> reply(UUID companyId, UUID id) {
@@ -525,7 +526,7 @@ class HelpdeskRepository {
             rs.getString("message_id"), rs.getString("in_reply_to"), rs.getString("references_header"), rs.getString("state"),
             rs.getString("error_code"), rs.getObject("job_id", UUID.class), rs.getInt("sends"), instant(rs, "attempted_at"),
             instant(rs, "sent_at"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
-            rs.getObject("updated_by", UUID.class), rs.getLong("version"));
+            rs.getObject("updated_by", UUID.class), rs.getLong("version"), rs.getObject("customer_id", UUID.class));
     }
 
     // ------------------------------------------------------------------------------------------------ customer of a ticket

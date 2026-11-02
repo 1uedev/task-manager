@@ -144,7 +144,8 @@ public class ReplyService {
         UUID job = enqueue(actor.companyId(), id, 1, actor.userId());
         Reply reply = new Reply(id, actor.companyId(), projectId, ticket, mailbox.id(), contact.id(), mailbox.address(), to, subject, body,
             "<" + id + "@" + ParsedMail.domain(mailbox.address()) + ">", thread.isEmpty() ? null : thread.get(thread.size() - 1),
-            thread.isEmpty() ? null : String.join(" ", thread), "pending", null, job, 1, null, null, now, actor.userId(), now, actor.userId(), 1);
+            thread.isEmpty() ? null : String.join(" ", thread), "pending", null, job, 1, null, null, now, actor.userId(), now, actor.userId(), 1,
+            contact.customerId());
         repository.insertReply(reply);
         tickets.recordHelpdeskChange(ticket, now, actor.userId(), TicketAccess.MAIL_FIELD, null,
             JSON.writeValueAsString(new ReplyReference(id.toString(), to, subject)));

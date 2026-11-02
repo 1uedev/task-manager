@@ -17,6 +17,12 @@ info:
     Schreibregel für `attachments`; es erscheint im Prüfprotokoll, nicht in der Tickethistorie, und ändert die Version des
     Tickets nicht. Anhänge aus der Zeit vor TASK-076 sind `internal`.
 
+    Zielgruppe (TASK-079, DEC-109): Ein kundensichtbarer Anhang gehört zur Organisation, für die er sichtbar wurde: Portaldateien
+    zur Organisation des Kontos, Dateien einer Mail zu deren Kunde, umgeschaltete Anhänge zum Kunden, den das Ticket in diesem
+    Moment hat. Nach einem Kundenwechsel bleiben sie beim bisherigen Kunden. Erneutes Umschalten auf `customer` gibt einen
+    solchen Anhang ausdrücklich für den aktuellen Kunden frei (Prüfprotokoll `attachment.audience`). `customerCurrent` sagt, ob
+    der aktuelle Kunde des Tickets den Anhang sieht.
+
     Portal: Unter `/portal/projects/{projectId}/tickets/{number}/attachments` sieht ein Portalkonto nur die kundensichtbaren
     Anhänge einer Anfrage seiner Organisation (`ticket.read` mit der Leseregel für `attachments`). Ein interner Anhang
     antwortet beim Herunterladen mit 404 `attachment.not_found` wie ein unbekannter, eine Anfrage einer anderen Organisation
@@ -293,7 +299,7 @@ components:
         uploadedAt: {type: string, format: date-time}
     Attachment:
       type: object
-      required: [id, name, size, sha256, uploadedAt, uploadedBy, visibility]
+      required: [id, name, size, sha256, uploadedAt, uploadedBy, visibility, customerCurrent]
       properties:
         id: {type: string, format: uuid}
         name: {type: string, minLength: 1, maxLength: 255, description: Der bereinigte Name.}
@@ -302,3 +308,4 @@ components:
         uploadedAt: {type: string, format: date-time}
         uploadedBy: {type: string, format: uuid}
         visibility: {$ref: '#/components/schemas/Visibility'}
+        customerCurrent: {type: boolean, description: Der aktuelle Kunde des Tickets sieht den Anhang im Portal (TASK-079).}

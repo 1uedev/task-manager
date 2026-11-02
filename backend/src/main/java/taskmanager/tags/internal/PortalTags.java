@@ -140,7 +140,8 @@ public class PortalTags implements TicketTagFilter {
     @Transactional
     public void unassign(AccessContext actor, UUID projectId, long number, UUID tagId) {
         UUID ticket = changeableTicket(actor, projectId, number);
-        Tag tag = tags.lockForAssignment(actor.companyId(), tagId, projectId).filter(found -> found.visibleTo(actor.organizationId()))
+        // A merged tag no longer exists for the portal (TASK-079, H2), like for setting it.
+        Tag tag = tags.lockForAssignment(actor.companyId(), tagId, projectId).filter(found -> found.visibleTo(actor.organizationId()) && !found.merged())
             .orElseThrow(PortalTags::tagNotFound);
         tickets.lockForTagChange(ticket);
         if (tags.unassignTicket(ticket, tag.id())) {

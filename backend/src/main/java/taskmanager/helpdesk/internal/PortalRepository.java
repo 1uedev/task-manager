@@ -24,18 +24,24 @@ class PortalRepository {
         this.jdbc = jdbc;
     }
 
-    /** A post of the conversation: {@code customer} from a portal account, {@code support} as answer of an internal account. */
-    record Post(UUID id, UUID companyId, UUID projectId, UUID ticketId, String authorKind, UUID authorId, String body, Instant createdAt) {
+    /**
+     * A post of the conversation: {@code customer} from a portal account, {@code support} as answer of an internal account.
+     * {@code organizationId} is the organization it was written for (TASK-079, DEC-109): of the portal account, or the customer
+     * of the ticket when the support answered. Only the portal of that organization shows it.
+     */
+    record Post(UUID id, UUID companyId, UUID projectId, UUID ticketId, String authorKind, UUID authorId, String body, Instant createdAt,
+            UUID organizationId) {
         static final String CUSTOMER = "customer";
         static final String SUPPORT = "support";
     }
 
     void insert(Post post) {
         jdbc.sql("""
-                insert into helpdesk_portal_post (id, company_id, project_id, ticket_id, author_kind, author_id, body, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
+                insert into helpdesk_portal_post (id, company_id, project_id, ticket_id, author_kind, author_id, body, created_at,
+                    organization_id)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(post.id(), post.companyId(), post.projectId(), post.ticketId(), post.authorKind(), post.authorId(), post.body(),
-                Timestamp.from(post.createdAt())).update();
+                Timestamp.from(post.createdAt()), post.organizationId()).update();
     }
 
     /**
@@ -55,6 +61,12 @@ class PortalRepository {
     List<Post> posts(UUID ticketId) {
         return jdbc.sql("select * from helpdesk_portal_post where ticket_id = ? order by created_at, id").param(ticketId)
             .query(PortalRepository::post).list();
+    }
+
+    /** The posts of the ticket written for the organization, oldest first. */
+    List<Post> postsFor(UUID ticketId, UUID organizationId) {
+        return jdbc.sql("select * from helpdesk_portal_post where ticket_id = ? and organization_id = ? order by created_at, id")
+            .params(ticketId, organizationId).query(PortalRepository::post).list();
     }
 
     /** The attachments of the posts, in the order they were linked. */
@@ -81,7 +93,7 @@ class PortalRepository {
             .param(attachmentIds.toArray(UUID[]::new)).query(UUID.class).list());
     }
 
-    /** Records that the account opened the request now. */
+    /** Records that the account saw the conversation of the request up to the given time; an earlier mark never wins. */
     void seen(UUID accountId, UUID ticketId, Instant now) {
         jdbc.sql("""
                 insert into helpdesk_portal_seen (account_id, ticket_id, seen_at) values (?, ?, ?)
@@ -103,14 +115,15 @@ class PortalRepository {
         }
         return jdbc.sql("""
                 select t.id,
-                    greatest((select max(m.received_at) from helpdesk_message m where m.ticket_id = t.id and m.state = 'ticket' and m.customer_id = ?),
-                             (select max(r.sent_at) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent'),
-                             (select max(p.created_at) from helpdesk_portal_post p where p.ticket_id = t.id)) as last_activity,
-                    greatest((select max(r.sent_at) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent'),
-                             (select max(p.created_at) from helpdesk_portal_post p where p.ticket_id = t.id and p.author_kind = 'support')) as last_support,
+                    greatest((select max(m.received_at) from helpdesk_message m where m.ticket_id = t.id and m.state = 'ticket' and m.customer_id = o.id),
+                             (select max(r.sent_at) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent' and r.customer_id = o.id),
+                             (select max(p.created_at) from helpdesk_portal_post p where p.ticket_id = t.id and p.organization_id = o.id)) as last_activity,
+                    greatest((select max(r.sent_at) from helpdesk_reply r where r.ticket_id = t.id and r.state = 'sent' and r.customer_id = o.id),
+                             (select max(p.created_at) from helpdesk_portal_post p where p.ticket_id = t.id and p.author_kind = 'support'
+                                 and p.organization_id = o.id)) as last_support,
                     (select s.seen_at from helpdesk_portal_seen s where s.account_id = ? and s.ticket_id = t.id) as seen
-                from unnest(?) as t(id)
-                """).params(organizationId, accountId, ticketIds.toArray(UUID[]::new))
+                from unnest(?) as t(id), (select ?::uuid as id) as o
+                """).params(accountId, ticketIds.toArray(UUID[]::new), organizationId)
             .query((rs, row) -> new Activity(rs.getObject("id", UUID.class), instant(rs, "last_activity"), instant(rs, "last_support"),
                 instant(rs, "seen"))).list();
     }
@@ -118,7 +131,7 @@ class PortalRepository {
     private static Post post(ResultSet rs, int row) throws SQLException {
         return new Post(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
             rs.getObject("ticket_id", UUID.class), rs.getString("author_kind"), rs.getObject("author_id", UUID.class), rs.getString("body"),
-            instant(rs, "created_at"));
+            instant(rs, "created_at"), rs.getObject("organization_id", UUID.class));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {
