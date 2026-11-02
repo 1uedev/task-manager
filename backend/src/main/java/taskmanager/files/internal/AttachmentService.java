@@ -94,9 +94,13 @@ public class AttachmentService {
     // ------------------------------------------------------------------------------------------------ reading
 
     @Transactional
-    public List<Attachment> list(AccessContext actor, UUID projectId, long number) {
+    public Listing list(AccessContext actor, UUID projectId, long number) {
         UUID ticket = readableTicket(actor, projectId, number);
-        return attachments.visible(ticket);
+        return new Listing(attachments.visible(ticket), currentCustomer(ticket));
+    }
+
+    /** The attachments of a ticket and its current customer, so the list can show who sees a file now (TASK-079). */
+    public record Listing(List<Attachment> items, UUID customer) {
     }
 
     @Transactional
@@ -125,7 +129,7 @@ public class AttachmentService {
     public Attachment upload(AccessContext actor, UUID projectId, long number, String rawName, long declaredLength, InputStream body) {
         return store(rawName, declaredLength, body, projectId, (id, name, size, sha256) -> {
             UUID ticket = changeableTicket(actor, projectId, number);
-            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.INTERNAL);
+            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.INTERNAL, null);
         });
     }
 
@@ -136,7 +140,7 @@ public class AttachmentService {
     public Attachment portalUpload(AccessContext actor, UUID projectId, long number, String rawName, long declaredLength, InputStream body) {
         return store(rawName, declaredLength, body, projectId, (id, name, size, sha256) -> {
             UUID ticket = portalTicket(actor, projectId, number, PORTAL_ANSWER, Set.of(), Set.of(FIELD));
-            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.CUSTOMER);
+            return add(actor, projectId, ticket, id, name, size, sha256, Attachment.CUSTOMER, actor.organizationId());
         });
     }
 
@@ -194,12 +198,13 @@ public class AttachmentService {
     }
 
     /** Runs inside the transaction of {@link #upload}. */
-    private Attachment add(AccessContext actor, UUID projectId, UUID ticket, UUID id, String name, long size, String sha256, String visibility) {
+    private Attachment add(AccessContext actor, UUID projectId, UUID ticket, UUID id, String name, long size, String sha256, String visibility,
+            UUID organization) {
         // The ticket row is held before the time is read, so a change that waited for another one carries a later time.
         tickets.lockForAttachmentChange(ticket);
         Instant now = clock.instant();
         Attachment attachment = new Attachment(id, actor.companyId(), ticket, projectId, name, size, sha256, now, actor.userId(), null, null, null,
-            visibility);
+            visibility, organization);
         attachments.insert(attachment);
         attachments.audit(actor.companyId(), id, ticket, "attachment.added", describe(attachment), actor.userId(), now);
         tickets.recordAttachmentChange(ticket, now, actor.userId(), null, describe(attachment));
@@ -214,7 +219,7 @@ public class AttachmentService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AttachmentIntake.Outcome attachFromMail(UUID companyId, UUID projectId, UUID ticketId, String rawName, byte[] content,
-            UUID actor) {
+            UUID actor, UUID organization) {
         String name;
         try {
             name = UploadRules.clean(rawName);
@@ -253,9 +258,10 @@ public class AttachmentService {
         }
         tickets.lockForAttachmentChange(ticketId);
         Instant now = clock.instant();
-        // Files of a mail of the customer are visible to the customer: they sent them (TASK-076).
+        // Files of a mail of the customer are visible to the customer: they sent them (TASK-076); to the customer of the mail
+        // only (TASK-079).
         Attachment attachment = new Attachment(id, companyId, ticketId, projectId, name, staged.size(), staged.sha256(), now, actor, null, null, null,
-            Attachment.CUSTOMER);
+            Attachment.CUSTOMER, organization);
         attachments.insert(attachment);
         attachments.audit(companyId, id, ticketId, "attachment.added", describe(attachment), actor, now);
         tickets.recordAttachmentChange(ticketId, now, actor, null, describe(attachment));
@@ -284,6 +290,11 @@ public class AttachmentService {
     /**
      * Makes an attachment internal or visible to the customer; needs what removing needs ({@code ticket.edit} with the write
      * rule for the attachments). Setting the visibility it already has changes nothing and writes no audit entry.
+     *
+     * <p>Visible to the customer means visible to the current customer of the ticket (TASK-079, DEC-109): the attachment keeps
+     * that organization when the customer of the ticket changes later. Setting {@code customer} again on an attachment of a
+     * former customer is the deliberate release for the current one; it is audited as {@code attachment.audience}. Without a
+     * customer the attachment reaches no portal until it is released again.
      */
     @Transactional
     public Attachment setVisibility(AccessContext actor, UUID projectId, long number, UUID id, String visibility) {
@@ -291,14 +302,21 @@ public class AttachmentService {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("visibility.invalid"));
         }
         UUID ticket = changeableTicket(actor, projectId, number);
+        // The link row of the customer before the ticket row, in the order of the portal (TASK-079).
+        UUID audience = Attachment.CUSTOMER.equals(visibility) ? currentCustomer(ticket) : null;
         tickets.lockForAttachmentChange(ticket);
         Attachment attachment = attachments.lock(ticket, id).filter(found -> !found.removed()).orElseThrow(AttachmentService::notFound);
-        if (attachment.visibility().equals(visibility)) {
+        if (attachment.visibility().equals(visibility) && java.util.Objects.equals(attachment.organizationId(), audience)) {
             return attachment;
         }
         Instant now = clock.instant();
-        attachments.setVisibility(id, visibility);
-        attachments.audit(actor.companyId(), id, ticket, "attachment.visibility", visibility, actor.userId(), now);
+        attachments.setVisibility(id, visibility, audience);
+        if (!attachment.visibility().equals(visibility)) {
+            attachments.audit(actor.companyId(), id, ticket, "attachment.visibility", visibility, actor.userId(), now);
+        }
+        if (audience != null) {
+            attachments.audit(actor.companyId(), id, ticket, "attachment.audience", audience.toString(), actor.userId(), now);
+        }
         return attachments.find(ticket, id).orElseThrow();
     }
 
@@ -308,14 +326,14 @@ public class AttachmentService {
     @Transactional
     public List<Attachment> portalList(AccessContext actor, UUID projectId, long number) {
         UUID ticket = portalTicket(actor, projectId, number, TICKET_READ, Set.of(FIELD), Set.of());
-        return attachments.visible(ticket).stream().filter(Attachment::customer).toList();
+        return attachments.visible(ticket).stream().filter(a -> a.visibleTo(actor.organizationId())).toList();
     }
 
     /** One attachment for a portal account; an internal one answers 404 like an unknown one. */
     @Transactional
     public Download portalDownload(AccessContext actor, UUID projectId, long number, UUID id) {
         UUID ticket = portalTicket(actor, projectId, number, TICKET_READ, Set.of(FIELD), Set.of());
-        Attachment attachment = attachments.find(ticket, id).filter(found -> !found.removed() && found.customer())
+        Attachment attachment = attachments.find(ticket, id).filter(found -> found.visibleTo(actor.organizationId()))
             .orElseThrow(AttachmentService::notFound);
         try {
             return new Download(attachment, storage.open(attachment.id()));
@@ -325,6 +343,12 @@ public class AttachmentService {
         } catch (IOException unavailable) {
             throw storageUnavailable("open the content of attachment " + attachment.id(), unavailable);
         }
+    }
+
+    /** The current customer of the ticket, held {@code FOR SHARE}; null without one or without the helpdesk. */
+    private UUID currentCustomer(UUID ticket) {
+        TicketOrganizations ports = organizations.getIfUnique();
+        return ports == null ? null : ports.lockCustomer(ticket).orElse(null);
     }
 
     /**

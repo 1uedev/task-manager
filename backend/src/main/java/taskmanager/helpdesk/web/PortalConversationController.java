@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import taskmanager.files.AttachmentLookup;
 import taskmanager.helpdesk.internal.PortalConversation;
 import taskmanager.permissions.AccessContext;
+import taskmanager.platform.ApiProblemException;
 
 /**
  * The conversation of the customer portal for portal accounts (TASK-076, DEC-106): creating a request, its conversation, a post,
@@ -86,11 +87,18 @@ class PortalConversationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(EntryBody.of(entry));
     }
 
+    /** Up to which entry the portal showed the conversation: the time of its newest entry (TASK-079, F2). */
+    record SeenRequest(Instant until) {
+    }
+
     @PutMapping("/tickets/{number}/seen")
-    ResponseEntity<Void> seen(@PathVariable UUID projectId, @PathVariable long number) {
+    ResponseEntity<Void> seen(@PathVariable UUID projectId, @PathVariable long number, @RequestBody(required = false) SeenRequest request) {
         AccessContext actor = requests.actor();
+        if (request == null || request.until() == null) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("until.required"));
+        }
         Requests.retrying(() -> {
-            conversation.seen(actor, projectId, number);
+            conversation.seen(actor, projectId, number, request.until());
             return null;
         });
         return ResponseEntity.noContent().build();

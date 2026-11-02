@@ -115,15 +115,29 @@ function PortalOverview({ projects, onOpen }: {
   );
 }
 
+// The tag filter searches the visible tags through the suggestions, so every tag is reachable and not only the first page
+// (TASK-079, F5). The chosen tag stays in the choice while other suggestions are shown.
 function TagFilter({ project, value, onChange }: { readonly project: PortalProject; readonly value: string; readonly onChange: (value: string) => void }) {
   const { t } = useI18n();
   const { api } = useBrand();
-  const [tags] = useLoad(() => portalTagSuggestions(api, project.id, ''), [api, project.id]);
-  const items = tags.state === 'ok' ? tags.value.items : [];
-  if (items.length === 0 && value === '') return null;
+  const [search, setSearch] = useState('');
+  const [chosen, setChosen] = useState<{ readonly id: string; readonly name: string } | null>(null);
+  const [tags] = useLoad(() => portalTagSuggestions(api, project.id, search.trim()), [api, project.id, search]);
+  const items: readonly { readonly id: string; readonly name: string }[] = tags.state === 'ok' ? tags.value.items : [];
+  const kept = chosen !== null && chosen.id === value && !items.some((item) => item.id === value) ? [chosen] : [];
+  const options = [...kept, ...items];
+  if (items.length === 0 && value === '' && search === '') return null;
   return (
-    <SelectField label={t('portal.filter.tag')} value={value} onChange={onChange}
-      options={[{ value: '', label: t('portal.filter.allTags') }, ...items.map((item) => ({ value: item.id, label: item.name }))]} />
+    <>
+      <TextField label={t('portal.filter.tagSearch')} value={search} onChange={setSearch} maxLength={50} />
+      <SelectField label={t('portal.filter.tag')} value={value}
+        onChange={(next) => {
+          const found = options.find((item) => item.id === next);
+          setChosen(found === undefined ? null : { id: found.id, name: found.name });
+          onChange(next);
+        }}
+        options={[{ value: '', label: t('portal.filter.allTags') }, ...options.map((item) => ({ value: item.id, label: item.name }))]} />
+    </>
   );
 }
 
@@ -139,8 +153,12 @@ function PortalProjectTickets({ project, filter, onOpen }: {
   const [further, setFurther] = useState<{ readonly list: readonly Ticket[]; readonly full: boolean } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
+  // Every new first page starts a generation; a further page that arrives for an older one is dropped (TASK-079, F3).
+  const generation = useRef(0);
   useEffect(() => {
+    generation.current += 1;
     setFurther(null);
+    setLoadingMore(false);
     setMoreFailed(false);
   }, [tickets]);
   const [activity] = useLoad(() => listPortalActivity(api, project.id), [api, project.id]);
@@ -157,9 +175,11 @@ function PortalProjectTickets({ project, filter, onOpen }: {
           async function loadMore() {
             const last = list[list.length - 1];
             if (last === undefined) return;
+            const started = generation.current;
             setLoadingMore(true);
             setMoreFailed(false);
             const result = await listPortalTickets(api, project.id, filter, last.number);
+            if (started !== generation.current) return;
             setLoadingMore(false);
             if (result.kind !== 'ok') return setMoreFailed(true);
             const page = result.data.value;
@@ -340,15 +360,23 @@ function PortalTicket({ project, number, notice, onBack }: {
   const [ticket, reload] = useLoad(() => readPortalTicket(api, project.id, number), [api, project.id, number]);
   const [conversation, reloadConversation] = useLoad(() => readPortalConversation(api, project.id, number), [api, project.id, number, round]);
   const [files, reloadFiles] = useLoad(() => listPortalAttachments(api, project.id, number), [api, project.id, number, round]);
-  const seen = useRef(false);
+  // The newest entry acknowledged so far; null while nothing was acknowledged.
+  const seen = useRef<string | null>(null);
 
-  // Opening the request clears its marker of new answers once the conversation was shown.
+  // Showing the conversation clears the marker of new answers up to the newest entry shown, never further (TASK-079, F2): an
+  // answer that arrives later stays new. A failed acknowledgement is tried again with the next conversation that is shown.
   useEffect(() => {
-    if (conversation.state === 'ok' && !seen.current) {
-      seen.current = true;
-      void markPortalSeen(api, project.id, number);
-    }
-  }, [conversation.state, api, project.id, number]);
+    if (conversation.state !== 'ok') return;
+    // Times compare as instants: the server may write them with a different number of fraction digits.
+    const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
+    const newest = conversation.value.reduce<string | null>((latest, entry) => (latest === null || later(entry.at, latest) ? entry.at : latest), null);
+    if (newest === null || (seen.current !== null && !later(newest, seen.current))) return;
+    const previous = seen.current;
+    seen.current = newest;
+    void markPortalSeen(api, project.id, number, newest).then((result) => {
+      if (result.kind !== 'ok' && seen.current === newest) seen.current = previous;
+    });
+  }, [conversation, api, project.id, number]);
 
   const name = (field: string, value: string | null | undefined) => {
     if (value === null || value === undefined) return '';

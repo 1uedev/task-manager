@@ -524,7 +524,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Gespräch einer Anfrage, älteste Einträge zuerst (nur Portalkonten, TASK-076) */
+        /**
+         * Gespräch einer Anfrage, älteste Einträge zuerst (nur Portalkonten, TASK-076)
+         * @description Jeder Eintrag und jede Datei gehört zur Organisation, für die er geschrieben wurde (TASK-079, DEC-109). Nach einem Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel für sie entsteht.
+         */
         get: operations["getPortalConversation"];
         put?: never;
         /** Beitrag zur Anfrage schreiben (portal.answer, TASK-076) */
@@ -546,7 +549,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Anfrage als geöffnet vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076) */
+        /**
+         * Gespräch bis zu einem gezeigten Eintrag als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-079)
+         * @description until ist der Zeitpunkt des neuesten Eintrags, den das Portal aus dem Gespräch angezeigt hat. Eine Antwort des Supports, die danach kam, bleibt neu. Ein Zeitpunkt in der Zukunft gilt als jetzt, ein früherer als der gespeicherte ändert nichts.
+         */
         put: operations["markPortalRequestSeen"];
         post?: never;
         delete?: never;
@@ -1980,7 +1986,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date-time */
+                    until: string;
+                };
+            };
+        };
         responses: {
             /** @description Vermerkt */
             204: {
@@ -1989,6 +2002,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

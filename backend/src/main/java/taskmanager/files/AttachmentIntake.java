@@ -12,9 +12,11 @@ public interface AttachmentIntake {
      * Needs the current transaction. Puts the content in the file store first and then writes the attachment and its entry
      * in the history of the ticket in that transaction; if it rolls back, the clean up removes the content later.
      *
+     * @param organizationId the customer of the mail: the file is visible to the portal of this organization only (TASK-079), null
+     *     reaches no portal
      * @throws java.io.UncheckedIOException when the file store fails, so the caller can try again later
      */
-    Outcome attach(UUID companyId, UUID projectId, UUID ticketId, String name, byte[] content, UUID actor);
+    Outcome attach(UUID companyId, UUID projectId, UUID ticketId, String name, byte[] content, UUID actor, UUID organizationId);
 
     /**
      * What became of one file: the new attachment, or the code of the refusal such as {@code attachment.type_blocked},

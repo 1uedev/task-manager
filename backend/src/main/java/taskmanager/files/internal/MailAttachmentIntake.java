@@ -14,7 +14,7 @@ class MailAttachmentIntake implements AttachmentIntake {
     }
 
     @Override
-    public Outcome attach(UUID companyId, UUID projectId, UUID ticketId, String name, byte[] content, UUID actor) {
-        return attachments.attachFromMail(companyId, projectId, ticketId, name, content, actor);
+    public Outcome attach(UUID companyId, UUID projectId, UUID ticketId, String name, byte[] content, UUID actor, UUID organizationId) {
+        return attachments.attachFromMail(companyId, projectId, ticketId, name, content, actor, organizationId);
     }
 }

@@ -393,11 +393,12 @@ class PortalConversationApiTest {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject, body,
-                    message_id, state, job_id, sends, sent_at, created_at, created_by, updated_at, updated_by, version)
+                    message_id, state, job_id, sends, sent_at, created_at, created_by, updated_at, updated_by, version, customer_id)
                 values (?, ?, ?, ?, ?, ?, 'support@firma.example', 'lea@nordwerk.example', ?, 'Antwort', ?, ?, ?, 1,
-                    case when ? = 'sent' then now() - interval '30 minutes' end, now() - interval '40 minutes', ?, now(), ?, 1)
+                    case when ? = 'sent' then now() - interval '30 minutes' end, now() - interval '40 minutes', ?, now(), ?, 1,
+                    (select customer_id from helpdesk_contact where id = ?))
                 """, id, companies.find().orElseThrow(), project, ticket, mailbox, contact, subject, "<" + id + "@firma.example>", state,
-                UUID.randomUUID(), state, by, by);
+                UUID.randomUUID(), state, by, by, contact);
     }
 
     // ---------------------------------------------------------------- tests
@@ -584,9 +585,130 @@ class PortalConversationApiTest {
         JsonNode row = StreamSupport.stream(rows.spliterator(), false).filter(r -> r.get("number").asLong() == open).findFirst().orElseThrow();
         assertTrue(row.get("unread").asBoolean(), rows.toString());
         assertNotNull(row.get("lastActivityAt").asString());
-        assertEquals(204, portal.send("PUT", base(setup.shared(), open) + "/seen", null, null).status());
+        assertEquals(400, portal.send("PUT", base(setup.shared(), open) + "/seen", null, null).status(), "the mark names what was shown");
+        assertEquals(204, portal.send("PUT", base(setup.shared(), open) + "/seen", Map.of("until", newest(portal, setup.shared(), open)), null).status());
         row = StreamSupport.stream(portal.get(activity).json().spliterator(), false).filter(r -> r.get("number").asLong() == open).findFirst().orElseThrow();
         assertFalse(row.get("unread").asBoolean());
+    }
+
+    /** The time of the newest entry of the conversation as the portal shows it. */
+    private String newest(Browser portal, UUID project, long number) {
+        Response conversation = portal.get(base(project, number) + "/conversation");
+        assertEquals(200, conversation.status(), conversation.body());
+        JsonNode entries = conversation.json();
+        return entries.get(entries.size() - 1).get("at").asString();
+    }
+
+    private boolean unread(Browser portal, UUID project, long number) {
+        Response rows = portal.get("/api/v1/portal/projects/" + project + "/activity");
+        assertEquals(200, rows.status(), rows.body());
+        return StreamSupport.stream(rows.json().spliterator(), false).filter(r -> r.get("number").asLong() == number).findFirst()
+            .orElseThrow().get("unread").asBoolean();
+    }
+
+    /**
+     * Finding F2 of docs/REVIEW_TASK-076-078_A11.md: an answer that arrives between reading the conversation and marking it seen
+     * stays new, because the mark names the newest entry the portal showed.
+     */
+    @Test
+    void anAnswerAfterTheConversationWasReadStaysNew() {
+        Setup setup = setup();
+        grant(setup.agent().id, setup.shared(), "helpdesk.reply");
+        Portal lea = createPortal(setup, setup.nordwerk(), setup.nordwerkContact(), List.of(setup.shared()));
+        Browser portal = portalSession(lea);
+        long number = request(setup, setup.shared(), "Gelesen", setup.nordwerk());
+        String internal = "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/helpdesk/portal-posts";
+        assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Erste Antwort"), null).status());
+        String shown = newest(portal, setup.shared(), number);
+        assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Zweite Antwort"), null).status());
+        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", shown), null).status());
+        assertTrue(unread(portal, setup.shared(), number), "the second answer was not shown yet");
+        // An older mark changes nothing, a mark in the future counts as now.
+        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", "2000-01-01T00:00:00Z"), null).status());
+        assertTrue(unread(portal, setup.shared(), number));
+        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", newest(portal, setup.shared(), number)), null).status());
+        assertFalse(unread(portal, setup.shared(), number));
+        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", "2999-01-01T00:00:00Z"), null).status());
+        assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Dritte Antwort"), null).status());
+        assertTrue(unread(portal, setup.shared(), number), "a mark in the future does not hide later answers");
+    }
+
+    /**
+     * Finding F1 of docs/REVIEW_TASK-076-078_A11.md with Holger's rule "Nur neue Einträge" (DEC-109): after a change of the customer
+     * the entries and files written for the former organization stay with it; the new one sees what is written for it from then
+     * on. A file released again by the support reaches the new organization.
+     */
+    @Test
+    void aChangeOfTheCustomerShowsTheNewOrganizationOnlyNewEntries() {
+        Setup setup = setup();
+        grant(setup.agent().id, setup.shared(), "helpdesk.reply");
+        Portal lea = createPortal(setup, setup.nordwerk(), setup.nordwerkContact(), List.of(setup.shared()));
+        Portal tom = createPortal(setup, setup.suedtechnik(), setup.suedtechnikContact(), List.of(setup.shared()));
+        Browser nordwerk = portalSession(lea);
+        Browser suedtechnik = portalSession(tom);
+        long number = request(setup, setup.shared(), "Kundenwechsel", setup.nordwerk());
+        jdbc.update("update helpdesk_ticket_customer set contact_id = ? where ticket_id = ?", setup.nordwerkContact(), ticketId(setup.shared(), number));
+        UUID ticket = ticketId(setup.shared(), number);
+        String conversation = base(setup.shared(), number) + "/conversation";
+        String files = base(setup.shared(), number) + "/attachments";
+        String internalFiles = "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/attachments";
+        String internalPosts = "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/helpdesk/portal-posts";
+
+        // Everything a customer can see, written while Nordwerk is the customer.
+        Response upload = nordwerk.upload(files, "plan.pdf", "%PDF-1.4 Plan".getBytes(StandardCharsets.UTF_8));
+        assertEquals(201, upload.status(), upload.body());
+        UUID file = UUID.fromString(upload.json().get("id").asString());
+        assertEquals(201, nordwerk.send("POST", conversation, Map.of("body", "Plan von Nordwerk", "attachmentIds", List.of(file)), null).status());
+        assertEquals(201, setup.agent().send("POST", internalPosts, Map.of("body", "Antwort an Nordwerk"), null).status());
+        UUID mailbox = mailbox(setup, setup.shared());
+        mail(mailbox, setup.shared(), ticket, setup.nordwerk(), "Mail von Nordwerk", 1);
+        reply(mailbox, setup.shared(), ticket, setup.nordwerkContact(), "Mailantwort an Nordwerk", "sent", setup.agent().id);
+        Response note = setup.agent().upload(internalFiles, "notiz.txt", "Notiz".getBytes(StandardCharsets.UTF_8));
+        UUID noteId = UUID.fromString(note.json().get("id").asString());
+        assertEquals(200, setup.agent().send("PATCH", internalFiles + "/" + noteId, Map.of("visibility", "customer"), null).status());
+        assertEquals(List.of("mail:customer", "reply:support", "post:customer", "post:support"), kinds(nordwerk.get(conversation)));
+        assertEquals(2, nordwerk.get(files).json().size());
+        assertEquals(404, suedtechnik.get(conversation).status());
+
+        Response changed = setup.agent().send("PUT", "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/helpdesk/customer",
+            Map.of("customerId", setup.suedtechnik()), null);
+        assertEquals(200, changed.status(), changed.body());
+
+        // The former customer loses the request, the new one sees nothing of the former one.
+        assertEquals(404, nordwerk.get(conversation).status());
+        Response empty = suedtechnik.get(conversation);
+        assertEquals(List.of(), kinds(empty));
+        Response noFiles = suedtechnik.get(files);
+        assertEquals(200, noFiles.status(), noFiles.body());
+        assertEquals(0, noFiles.json().size());
+        assertEquals(404, suedtechnik.get(files + "/" + file).status());
+        assertEquals(404, suedtechnik.get(files + "/" + noteId).status());
+        assertFalse(unread(suedtechnik, setup.shared(), number), "an answer to the former customer is no new answer");
+        Response refused = suedtechnik.send("POST", conversation, Map.of("body", "Alter Plan", "attachmentIds", List.of(file)), null);
+        assertEquals(400, refused.status(), "a file of the former customer is not usable");
+
+        // What is written from now on reaches the new organization.
+        assertEquals(201, setup.agent().send("POST", internalPosts, Map.of("body", "Antwort an Südtechnik"), null).status());
+        assertEquals(201, suedtechnik.send("POST", conversation, Map.of("body", "Danke"), null).status());
+        Response fresh = suedtechnik.get(conversation);
+        assertEquals(List.of("post:support", "post:customer"), kinds(fresh));
+        assertFalse(fresh.body().contains("Nordwerk"), fresh.body());
+        assertTrue(unread(suedtechnik, setup.shared(), number));
+        // The internal view keeps every post.
+        assertEquals(4, setup.agent().get(internalPosts).json().size());
+
+        // The internal list shows that the new customer does not see the file yet; releasing it again is the deliberate release.
+        JsonNode before = StreamSupport.stream(setup.agent().get(internalFiles).json().spliterator(), false)
+            .filter(f -> f.get("id").asString().equals(noteId.toString())).findFirst().orElseThrow();
+        assertEquals("customer", before.get("visibility").asString());
+        assertFalse(before.get("customerCurrent").asBoolean());
+        Response released = setup.agent().send("PATCH", internalFiles + "/" + noteId, Map.of("visibility", "customer"), null);
+        assertEquals(200, released.status(), released.body());
+        assertTrue(released.json().get("customerCurrent").asBoolean());
+        assertEquals(200, suedtechnik.get(files + "/" + noteId).status());
+        assertEquals(1, suedtechnik.get(files).json().size());
+        assertEquals(1, jdbc.queryForObject("select count(*) from file_audit_event where attachment_id = ? and operation = 'attachment.audience' and detail = ?",
+            Integer.class, noteId, setup.suedtechnik().toString()));
     }
 
     /** Two posts with the same file at the same time: exactly one carries it. */

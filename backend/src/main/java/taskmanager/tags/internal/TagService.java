@@ -141,9 +141,11 @@ public class TagService {
     // ------------------------------------------------------------------------------------------------ company catalog
 
     @Transactional
-    public List<TagView> companyCatalog(AccessContext actor, String search, boolean includeArchived, String after, int limit, boolean usage) {
+    public List<TagView> companyCatalog(AccessContext actor, String search, boolean includeArchived, String after, UUID afterId, int limit,
+            boolean usage) {
         internal(actor);
-        return views(actor, tags.catalog(actor.companyId(), null, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit), usage);
+        return views(actor, tags.catalog(actor.companyId(), null, TagName.searchKey(search), includeArchived, TagName.searchKey(after), afterId,
+            limit), usage);
     }
 
     @Transactional
@@ -187,10 +189,11 @@ public class TagService {
     // ------------------------------------------------------------------------------------------------ project catalog
 
     @Transactional
-    public List<TagView> projectCatalog(AccessContext actor, UUID projectId, String search, boolean includeArchived, String after, int limit,
-            boolean usage) {
+    public List<TagView> projectCatalog(AccessContext actor, UUID projectId, String search, boolean includeArchived, String after, UUID afterId,
+            int limit, boolean usage) {
         catalogVisible(actor, projectId);
-        return views(actor, tags.catalog(actor.companyId(), projectId, TagName.searchKey(search), includeArchived, TagName.searchKey(after), limit), usage);
+        return views(actor, tags.catalog(actor.companyId(), projectId, TagName.searchKey(search), includeArchived, TagName.searchKey(after),
+            afterId, limit), usage);
     }
 
     @Transactional

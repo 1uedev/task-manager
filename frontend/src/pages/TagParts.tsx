@@ -172,7 +172,7 @@ export function TagCatalog({ scope, round }: { readonly scope: TagScope; readonl
   const latest = useRef(0);
   const scopeKey = scope.kind === 'company' ? 'company' : scope.projectId;
 
-  async function load(after: string | null, current: Tag[]) {
+  async function load(after: { readonly name: string; readonly id: string } | null, current: Tag[]) {
     const ticket = ++latest.current;
     const result = await catalogTags(api, scope, { q, archived, after });
     if (ticket !== latest.current) return;
@@ -246,7 +246,7 @@ export function TagCatalog({ scope, round }: { readonly scope: TagScope; readonl
       ))}
       {problem === null && pages !== null && more && (
         <p className="actions">
-          <button type="button" className="secondary" onClick={() => void load(pages[pages.length - 1]?.name ?? null, pages)}>{t('tags.more')}</button>
+          <button type="button" className="secondary" onClick={() => { const last = pages[pages.length - 1]; void load(last === undefined ? null : { name: last.name, id: last.id }, pages); }}>{t('tags.more')}</button>
         </p>
       )}
     </div>

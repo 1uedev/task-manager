@@ -91,11 +91,11 @@ class TagController {
 
     @GetMapping("/api/v1/tags")
     List<TagBody> companyCatalog(@RequestParam(required = false) String q, @RequestParam(defaultValue = "false") boolean archived,
-            @RequestParam(required = false) String after, @RequestParam(required = false) Integer limit,
-            @RequestParam(defaultValue = "false") boolean usage) {
+            @RequestParam(required = false) String after, @RequestParam(required = false) UUID afterId,
+            @RequestParam(required = false) Integer limit, @RequestParam(defaultValue = "false") boolean usage) {
         AccessContext actor = actor();
         int size = limit(limit);
-        return bodies(retrying(() -> tags.companyCatalog(actor, q, archived, after, size, usage)));
+        return bodies(retrying(() -> tags.companyCatalog(actor, q, archived, after, afterId, size, usage)));
     }
 
     @GetMapping("/api/v1/tags/suggestions")
@@ -205,10 +205,11 @@ class TagController {
     @GetMapping("/api/v1/projects/{projectId}/catalog/tags")
     List<TagBody> projectCatalog(@PathVariable UUID projectId, @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "false") boolean archived, @RequestParam(required = false) String after,
-            @RequestParam(required = false) Integer limit, @RequestParam(defaultValue = "false") boolean usage) {
+            @RequestParam(required = false) UUID afterId, @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "false") boolean usage) {
         AccessContext actor = actor();
         int size = limit(limit);
-        return bodies(retrying(() -> tags.projectCatalog(actor, projectId, q, archived, after, size, usage)));
+        return bodies(retrying(() -> tags.projectCatalog(actor, projectId, q, archived, after, afterId, size, usage)));
     }
 
     @GetMapping("/api/v1/projects/{projectId}/catalog/suggestions")

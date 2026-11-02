@@ -12,7 +12,15 @@ import java.util.UUID;
  */
 public interface AttachmentLookup {
     /** An attachment of the ticket as the conversation needs it. */
-    record Summary(UUID id, String name, long size, Instant uploadedAt, UUID uploadedBy, boolean customerVisible, boolean removed) {
+    record Summary(UUID id, String name, long size, Instant uploadedAt, UUID uploadedBy, boolean customerVisible, boolean removed,
+            UUID organizationId) {
+        /**
+         * Whether the portal of the organization shows the attachment: visible to the customer, not removed and written for this
+         * organization (TASK-079, DEC-109). After a change of the customer the files of the former customer stay with it.
+         */
+        public boolean visibleTo(UUID organization) {
+            return customerVisible && !removed && organization != null && organization.equals(organizationId);
+        }
     }
 
     /**

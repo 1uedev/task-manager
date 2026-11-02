@@ -548,7 +548,7 @@ class PortalTagsApiTest {
         assertEquals(204, removed.status(), removed.body());
         assertEquals(List.of("Vertrag geprüft"), internalTagNames(setup, setup.shared(), number));
 
-        // The portal sets customer tags while the support sets internal ones and changes the visibility of another tag.
+        // The portal sets customer tags while the support sets internal ones; held changes of a tag follow in their own tests.
         var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
         try {
             var portal = pool.submit(() -> {
@@ -585,5 +585,146 @@ class PortalTagsApiTest {
         assertEquals(List.of("Intern 0", "Intern 1", "Intern 2", "Intern 3", "Kunde 0", "Kunde 1", "Kunde 2", "Kunde 3", "Vertrag geprüft"), all);
         assertEquals(List.of("Kunde 0", "Kunde 1", "Kunde 2", "Kunde 3"), names(lea.get(tags(setup.shared(), number)).json().get("items")));
         assertEquals(1L, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ?", Long.class, internal));
+    }
+
+    // ---------------------------------------------------------------- TASK-079
+
+    /**
+     * Holds a change of the tag row the way a change of the support does ({@code FOR UPDATE}, then the change), runs the portal
+     * call until it waits for that row, commits the change and returns what the portal call answered.
+     */
+    private Response whileTagChangeIsHeld(UUID tag, java.util.function.Consumer<JdbcTemplate> change,
+            java.util.concurrent.Callable<Response> call) throws Exception {
+        var locked = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var holder = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.queryForObject("select id from tag where id = ? for update", UUID.class, tag);
+                change.accept(jdbc);
+                locked.countDown();
+                try {
+                    release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertTrue(locked.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            var result = pool.submit(call);
+            assertTrue(waitsForTheTagRow(), "the portal call waits for the held tag row");
+            release.countDown();
+            holder.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            return result.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    private boolean waitsForTheTagRow() throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists(select 1 from pg_stat_activity
+                    where datname = current_database() and pid <> pg_backend_pid()
+                    and query ilike '%from tag where company_id%for share%' and cardinality(pg_blocking_pids(pid)) > 0)
+                    """, Boolean.class))) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
+    }
+
+    /**
+     * Hint H2 of docs/REVIEW_TASK-076-078_A11.md: a change of the visibility to internal, an archiving or a merge that the support
+     * holds while a portal account sets or removes the tag decides the portal call once it is committed.
+     */
+    @Test
+    void heldChangesOfATagDecideTheWaitingPortalCall() throws Exception {
+        Setup setup = setup();
+        tagAgent(setup, setup.shared());
+        long number = request(setup, setup.shared(), "Gehaltene Änderung", setup.nordwerk());
+        UUID ticket = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, setup.shared(), number);
+        Browser lea = writer(setup, setup.nordwerk(), setup.nordwerkContact(), false);
+        String path = tags(setup.shared(), number);
+
+        // Internal while setting: unknown, nothing set.
+        UUID hidden = projectTag(setup, setup.shared(), "Wird intern", "customer");
+        Response set = whileTagChangeIsHeld(hidden, db -> db.update("update tag set visibility = 'internal' where id = ?", hidden),
+            () -> lea.send("POST", path, Map.of("tagId", hidden), null));
+        assertEquals(404, set.status(), set.body());
+        assertEquals(0L, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ?", Long.class, hidden));
+
+        // Internal while removing: unknown, the now internal assignment stays.
+        UUID kept = projectTag(setup, setup.shared(), "Bleibt dran", "customer");
+        assignInternally(setup, setup.shared(), number, kept);
+        Response removed = whileTagChangeIsHeld(kept, db -> db.update("update tag set visibility = 'internal' where id = ?", kept),
+            () -> lea.send("DELETE", path + "/" + kept, null, null));
+        assertEquals(404, removed.status(), removed.body());
+        assertEquals(1L, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ? and ticket_id = ?", Long.class, kept, ticket));
+
+        // Archived while setting: refused as archived.
+        UUID archived = projectTag(setup, setup.shared(), "Wird archiviert", "customer");
+        Response late = whileTagChangeIsHeld(archived, db -> db.update("update tag set archived = true where id = ?", archived),
+            () -> lea.send("POST", path, Map.of("tagId", archived), null));
+        assertEquals(409, late.status(), late.body());
+        assertEquals("tag.archived", late.json().get("code").asString());
+
+        // Merged while setting or removing: the merged tag is unknown; the assignment moved to the target stays.
+        UUID target = projectTag(setup, setup.shared(), "Ziel", "customer");
+        UUID merged = projectTag(setup, setup.shared(), "Wird zusammengeführt", "customer");
+        Response mergedSet = whileTagChangeIsHeld(merged, db -> db.update("update tag set merged_into = ?, merged_at = now() where id = ?", target, merged),
+            () -> lea.send("POST", path, Map.of("tagId", merged), null));
+        assertEquals(404, mergedSet.status(), mergedSet.body());
+        UUID moved = projectTag(setup, setup.shared(), "Wird verschoben", "customer");
+        assignInternally(setup, setup.shared(), number, moved);
+        Response mergedRemove = whileTagChangeIsHeld(moved, db -> {
+            db.update("update tag set merged_into = ?, merged_at = now() where id = ?", target, moved);
+            db.update("update tag_ticket set tag_id = ? where tag_id = ?", target, moved);
+        }, () -> lea.send("DELETE", path + "/" + moved, null, null));
+        assertEquals(404, mergedRemove.status(), mergedRemove.body());
+        assertEquals(1L, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ? and ticket_id = ?", Long.class, target, ticket));
+        assertEquals(List.of("Bleibt dran", "Ziel"), internalTagNames(setup, setup.shared(), number));
+    }
+
+    /**
+     * Finding F4 of docs/REVIEW_TASK-076-078_A11.md: a page boundary inside tags of the same name for different organizations
+     * still reaches every tag of the catalog.
+     */
+    @Test
+    void theCatalogPagesThroughTagsOfTheSameName() {
+        Setup setup = setup();
+        tagAgent(setup, setup.shared());
+        UUID company = jdbc.queryForObject("select company_id from project where id = ?", UUID.class, setup.shared());
+        List<UUID> expected = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("""
+                    insert into tag (id, company_id, project_id, name, normalized, version, created_at, created_by, updated_at, updated_by,
+                        visibility, organization_id)
+                    values (?, ?, ?, 'Gleicher Name', 'gleicher name', 1, now(), ?, now(), ?, 'customer', ?)
+                    """, id, company, setup.shared(), setup.agent().id, setup.agent().id, UUID.randomUUID());
+            expected.add(id);
+        }
+        String path = "/api/v1/projects/" + setup.shared() + "/catalog/tags?q=gleicher&limit=2";
+        List<String> seen = new ArrayList<>();
+        String next = path;
+        for (int page = 0; page < 5; page++) {
+            Response response = setup.agent().get(next);
+            assertEquals(200, response.status(), response.body());
+            JsonNode items = response.json();
+            if (items.isEmpty()) {
+                break;
+            }
+            items.forEach(tag -> seen.add(tag.get("id").asString()));
+            JsonNode last = items.get(items.size() - 1);
+            next = path + "&after=" + java.net.URLEncoder.encode(last.get("name").asString(), StandardCharsets.UTF_8)
+                + "&afterId=" + last.get("id").asString();
+        }
+        assertEquals(expected.stream().map(UUID::toString).sorted().toList(), seen, "every tag once, in the order of the identifiers");
+        // Without the identifier the page starts after every tag of the name, as before.
+        Response byName = setup.agent().get(path + "&after=Gleicher%20Name");
+        assertEquals(0, byName.json().size());
     }
 }

@@ -18,6 +18,12 @@ public interface TicketOrganizations {
      */
     Optional<UUID> lockOrganization(UUID ticketId, UUID organizationId);
 
+    /**
+     * The current customer of the ticket, empty without one (TASK-079, DEC-109): the organization a file made visible to the
+     * customer is written for. Holds the link row {@code FOR SHARE} like the other methods.
+     */
+    Optional<UUID> lockCustomer(UUID ticketId);
+
     /** The tickets of the organization in the project. */
     List<UUID> lockTicketsOf(UUID projectId, UUID organizationId);
 }

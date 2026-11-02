@@ -81,6 +81,7 @@ paths:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Archived'
         - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/AfterId'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Usage'
       responses:
@@ -243,6 +244,7 @@ paths:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Archived'
         - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/AfterId'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Usage'
       responses:
@@ -614,6 +616,13 @@ components:
       in: query
       description: Name des letzten Tags der vorigen Seite, zum Weiterblättern.
       schema: {type: string}
+    AfterId:
+      name: afterId
+      in: query
+      description: >-
+        Kennung des letzten Tags der vorigen Seite (TASK-079). Ein Katalog kann denselben Namen für mehrere Organisationen
+        enthalten; mit afterId setzt die nächste Seite genau nach diesem Tag fort, ohne sie nach allen Tags dieses Namens.
+      schema: {type: string, format: uuid}
     Usage:
       name: usage
       in: query
