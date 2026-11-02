@@ -317,6 +317,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/projects/{projectId}/tags": {
+        parameters: {
+            query?: {
+                /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
+                q?: components["parameters"]["Search"];
+                limit?: components["parameters"]["SuggestionLimit"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /** Vorschläge des Portals, nur der Organisation sichtbare Tags (ticket.read und Leseregel für tags) */
+        get: operations["listPortalTagSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /** Sichtbare Tags einer Anfrage der Organisation */
+        get: operations["listPortalTicketTags"];
+        put?: never;
+        /** Sichtbaren Tag setzen oder über den Namen anlegen (ticket.edit und Schreibregel für tags, zum Anlegen tag.create) */
+        post: operations["assignPortalTicketTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/tags/{tagId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sichtbaren Tag von einer Anfrage der Organisation entfernen */
+        delete: operations["unassignPortalTicketTag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -342,7 +407,43 @@ export interface components {
             /** @description Reiner Text; Zeilenumbrüche und Tabulatoren erlaubt. Leer oder null entfernt die Beschreibung. */
             description?: string | null;
             color?: components["schemas"]["Color"] | null;
+            visibility?: components["schemas"]["Visibility"];
+            /**
+             * @description Gibt einen Tag einer Organisation für alle Kunden frei.
+             * @enum {boolean}
+             */
+            forAllCustomers?: true;
         };
+        /**
+         * @description Intern oder im Portal sichtbar (TASK-077).
+         * @enum {string}
+         */
+        Visibility: "internal" | "customer";
+        PortalTag: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string | null;
+            color: components["schemas"]["Color"] | null;
+            archived: boolean;
+            /** @description Ein Tag der eigenen Organisation */
+            own: boolean;
+        };
+        PortalTicketTags: {
+            items: components["schemas"]["PortalTag"][];
+            writable: boolean;
+        };
+        PortalSuggestions: {
+            items: components["schemas"]["PortalTag"][];
+            /** @description Ob das Konto mit tag.create einen Tag seiner Organisation anlegen darf. */
+            create: boolean;
+        };
+        /** @description Ein sichtbarer Tag über `tagId` oder ein Name. */
+        PortalAssignment: {
+            /** Format: uuid */
+            tagId?: string;
+            name?: string;
+        } & (unknown | unknown);
         MergeRequest: {
             /**
              * Format: uuid
@@ -443,6 +544,12 @@ export interface components {
             updatedAt: string;
             /** Format: uuid */
             updatedBy: string;
+            visibility: components["schemas"]["Visibility"];
+            /**
+             * Format: uuid
+             * @description Organisation, die einen im Portal angelegten Tag allein sieht; null für alle Kunden.
+             */
+            organizationId: string | null;
         };
     };
     responses: {
@@ -463,7 +570,7 @@ export interface components {
          *     tag.precondition_required, tag.busy, auth.required, auth.forbidden, auth.csrf_invalid,
          *     auth.password_change_required. Gründe in `violations`: name.invalid, archived.invalid, description.invalid,
          *     color.invalid, into.invalid, ids.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous,
-         *     fields.required, fields.unknown, paging.invalid.
+         *     fields.required, fields.unknown, paging.invalid, visibility.invalid, forAllCustomers.invalid.
          */
         Problem: {
             headers: {
@@ -1095,6 +1202,123 @@ export interface operations {
         };
     };
     unassignTicketTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                tagId: components["parameters"]["TagId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entfernt oder nicht zugeordnet */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalTagSuggestions: {
+        parameters: {
+            query?: {
+                /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
+                q?: components["parameters"]["Search"];
+                limit?: components["parameters"]["SuggestionLimit"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vorschläge und ob das Konto einen Tag anlegen darf */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSuggestions"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalTicketTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sichtbare Tags, nach Namen geordnet, und ob das Konto sie ändern darf */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalTicketTags"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    assignPortalTicketTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalAssignment"];
+            };
+        };
+        responses: {
+            /** @description Der gesetzte Tag, auch wenn er schon gesetzt war */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalTag"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    unassignPortalTicketTag: {
         parameters: {
             query?: never;
             header?: never;

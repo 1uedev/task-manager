@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  createPortalRequest, listPortalActivity, listPortalAttachments, listPortalProjects, listPortalTickets, markPortalSeen, portalAttachmentUrl,
+  assignPortalTag, createPortalRequest, listPortalActivity, portalTagSuggestions, portalTicketTags, removePortalTag, type PortalTag, type Result, listPortalAttachments, listPortalProjects, listPortalTickets, markPortalSeen, portalAttachmentUrl,
   PORTAL_PAGE, postInPortal, readPortalConversation, readPortalTicket, uploadPortalAttachment, type PortalEntry, type PortalFile, type PortalFilter,
   type PortalProject, type Ticket,
 } from '../api/product.ts';
@@ -10,11 +10,13 @@ import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
+import { TagLabel } from './TagParts.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 
 // The customer portal (TASK-075, TASK-076, DEC-105, DEC-106): the requests of the organization of a portal account with filters
 // and the marker of new answers of the support, creating a request with one of the offered types, and per request the
 // conversation with posts and the files visible to the customer. The status is shown by its name and never changed here.
+// Tags (TASK-077, DEC-108): only tags visible to the organization; set, removed or created when the groups of the account allow it.
 
 type View =
   | { readonly kind: 'list' }
@@ -29,6 +31,9 @@ const PROBLEMS: Readonly<Record<string, MessageKey>> = {
   'attachment.too_large': 'attachments.error.tooLarge',
   'attachment.type_blocked': 'attachments.error.blocked',
   'attachment.empty': 'attachments.error.empty',
+  'tag.not_found': 'portal.tags.error.notFound',
+  'tag.archived': 'portal.tags.error.archived',
+  'tag.limit_reached': 'portal.tags.error.limit',
 };
 
 export function PortalPage() {
@@ -72,10 +77,16 @@ function PortalOverview({ projects, onOpen }: {
   const [state, setState] = useState<'' | 'open' | 'done'>('');
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
+  const [tag, setTag] = useState('');
   const shown = projectId === '' ? projects : projects.filter((project) => project.id === projectId);
+  // The tag filter offers the tags of one project, the one chosen or the only one (TASK-077).
+  const single = shown.length === 1 ? shown[0] : undefined;
   const statuses = new Map<string, string>();
   shown.forEach((project) => project.statuses.forEach((item) => statuses.set(item.key, item.name)));
-  const filter: PortalFilter = { status: status === '' ? null : status, state: state === '' ? null : state, q: query === '' ? null : query };
+  const filter: PortalFilter = {
+    status: status === '' ? null : status, state: state === '' ? null : state, q: query === '' ? null : query,
+    tag: single !== undefined && tag !== '' ? tag : null,
+  };
 
   function search(event: FormEvent) {
     event.preventDefault();
@@ -86,13 +97,14 @@ function PortalOverview({ projects, onOpen }: {
     <>
       <form className="filters" role="search" aria-label={t('portal.filters')} onSubmit={search} data-testid="portal-filters">
         {projects.length > 1 && (
-          <SelectField label={t('portal.filter.project')} value={projectId} onChange={(value) => { setProjectId(value); setStatus(''); }}
+          <SelectField label={t('portal.filter.project')} value={projectId} onChange={(value) => { setProjectId(value); setStatus(''); setTag(''); }}
             options={[{ value: '', label: t('portal.filter.allProjects') }, ...projects.map((project) => ({ value: project.id, label: `${project.key} ${project.name}` }))]} />
         )}
         <SelectField label={t('portal.filter.status')} value={status} onChange={setStatus}
           options={[{ value: '', label: t('portal.filter.allStatuses') }, ...[...statuses].map(([key, name]) => ({ value: key, label: name }))]} />
         <SelectField label={t('portal.filter.state')} value={state} onChange={(value) => setState(value as '' | 'open' | 'done')}
           options={[{ value: '', label: t('portal.filter.allStates') }, { value: 'open', label: t('portal.filter.open') }, { value: 'done', label: t('portal.filter.done') }]} />
+        {single !== undefined && <TagFilter project={single} value={tag} onChange={setTag} />}
         <TextField label={t('portal.filter.text')} value={text} onChange={setText} maxLength={200} />
         <p className="actions"><button type="submit">{t('portal.filter.search')}</button></p>
       </form>
@@ -103,6 +115,18 @@ function PortalOverview({ projects, onOpen }: {
   );
 }
 
+function TagFilter({ project, value, onChange }: { readonly project: PortalProject; readonly value: string; readonly onChange: (value: string) => void }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const [tags] = useLoad(() => portalTagSuggestions(api, project.id, ''), [api, project.id]);
+  const items = tags.state === 'ok' ? tags.value.items : [];
+  if (items.length === 0 && value === '') return null;
+  return (
+    <SelectField label={t('portal.filter.tag')} value={value} onChange={onChange}
+      options={[{ value: '', label: t('portal.filter.allTags') }, ...items.map((item) => ({ value: item.id, label: item.name }))]} />
+  );
+}
+
 function PortalProjectTickets({ project, filter, onOpen }: {
   readonly project: PortalProject;
   readonly filter: PortalFilter;
@@ -110,7 +134,7 @@ function PortalProjectTickets({ project, filter, onOpen }: {
 }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
-  const [tickets, reload] = useLoad(() => listPortalTickets(api, project.id, filter), [api, project.id, filter.status, filter.state, filter.q]);
+  const [tickets, reload] = useLoad(() => listPortalTickets(api, project.id, filter), [api, project.id, filter.status, filter.state, filter.q, filter.tag]);
   // Further pages below the first (TASK-078, F6); a new filter or a reload starts again with the first page only.
   const [further, setFurther] = useState<{ readonly list: readonly Ticket[]; readonly full: boolean } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -352,6 +376,7 @@ function PortalTicket({ project, number, notice, onBack }: {
               {value.fields.description !== undefined && value.fields.description !== null && (
                 <section aria-label={t('portal.field.description')}><p className="prewrap">{value.fields.description}</p></section>
               )}
+              <PortalTags project={project} number={number} />
             </article>
           );
         }}
@@ -379,6 +404,106 @@ function PortalTicket({ project, number, notice, onBack }: {
         }} />
       </section>
     </>
+  );
+}
+
+// ---------------------------------------------------------------- the tags of a request (TASK-077)
+
+function PortalTags({ project, number }: { readonly project: PortalProject; readonly number: number }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [tags, reload] = useLoad(() => portalTicketTags(api, project.id, number), [api, project.id, number]);
+  const [name, setName] = useState('');
+  const [suggestions, setSuggestions] = useState<readonly PortalTag[]>([]);
+  const [create, setCreate] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  // Suggestions while typing; only tags visible to the organization come back.
+  useEffect(() => {
+    if (tags.state !== 'ok' || !tags.value.writable) return;
+    let current = true;
+    void portalTagSuggestions(api, project.id, name).then((result) => {
+      if (!current || result.kind !== 'ok') return;
+      setSuggestions(result.data.value.items);
+      setCreate(result.data.value.create);
+    });
+    return () => { current = false; };
+  }, [api, project.id, name, tags.state, tags.state === 'ok' && tags.value.writable]);
+
+  if (tags.state !== 'ok') return null;
+  const { items, writable } = tags.value;
+  if (items.length === 0 && !writable) return null;
+  const assigned = new Set(items.map((item) => item.id));
+  const offered = suggestions.filter((item) => !assigned.has(item.id) && !item.archived);
+  const exact = name.trim() !== '' && suggestions.some((item) => item.name.toLocaleLowerCase() === name.trim().toLocaleLowerCase());
+
+  async function change(pending: Promise<Result<unknown>>, done: string) {
+    setBusy(true);
+    setNotice(null);
+    const result = await pending;
+    setBusy(false);
+    if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, PROBLEMS) });
+    setName('');
+    setNotice({ kind: 'success', text: done });
+    reload();
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const typed = name.trim();
+    if (typed === '') return;
+    const known = suggestions.find((item) => item.name.toLocaleLowerCase() === typed.toLocaleLowerCase());
+    void change(assignPortalTag(api, project.id, number, known === undefined ? { name: typed } : { tagId: known.id }),
+      t('portal.tags.added', { name: known?.name ?? typed }));
+  }
+
+  return (
+    <section aria-labelledby="portal-tags-heading" data-testid="portal-tags">
+      <h2 id="portal-tags-heading">{t('portal.tags')}</h2>
+      {items.length === 0
+        ? <EmptyText text={t('portal.tags.none')} />
+        : (
+          <ul className="plain-list" data-testid="portal-tag-list">
+            {items.map((item) => (
+              <li key={item.id}>
+                <TagLabel tag={item} />
+                {writable && (
+                  <button type="button" className="link-button" disabled={busy} aria-label={t('portal.tags.remove', { name: item.name })}
+                    onClick={() => void change(removePortalTag(api, project.id, number, item.id), t('portal.tags.removed', { name: item.name }))}>
+                    {t('portal.tags.removeShort')}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      {writable && (
+        <form className="inline-form" onSubmit={submit} noValidate data-testid="portal-tag-form">
+          <TextField label={t('portal.tags.add')} value={name} onChange={setName} maxLength={50} />
+          {offered.length > 0 && (
+            <ul className="plain-list tag-suggestions" aria-label={t('portal.tags.suggestions')}>
+              {offered.map((item) => (
+                <li key={item.id}>
+                  <button type="button" className="secondary" disabled={busy}
+                    onClick={() => void change(assignPortalTag(api, project.id, number, { tagId: item.id }), t('portal.tags.added', { name: item.name }))}>
+                    {item.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="actions">
+            <button type="submit" disabled={busy || name.trim() === '' || (!exact && !create)}>
+              {exact || !create ? t('portal.tags.assign') : t('portal.tags.create', { name: name.trim() })}
+            </button>
+          </p>
+          {!create && <p className="hint">{t('portal.tags.noCreate')}</p>}
+        </form>
+      )}
+      <NoticeView notice={notice} />
+    </section>
   );
 }
 

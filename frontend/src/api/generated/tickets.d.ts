@@ -85,6 +85,9 @@ export interface paths {
          *     `q` nach Text in Titel oder Beschreibung ohne Rücksicht auf Groß und Kleinschreibung, nur in den lesbaren der beiden
          *     Felder. Ein Filter nach Status oder Zustand ohne Leserecht auf `status` antwortet mit 400 `request.invalid` und
          *     `status.not_readable`, ein unbekannter Zustand mit `state.invalid`.
+         *
+         *     Tagfilter (TASK-077): `tag` nennt einen Tag, den das Portal der Organisation zeigt; ohne Leserecht auf `tags` antwortet
+         *     der Server mit 400 `tag.not_readable`. Ein interner, fremder oder unbekannter Tag findet nichts, ohne Hinweis darauf.
          */
         get: operations["listPortalTickets"];
         put?: never;
@@ -414,6 +417,7 @@ export interface operations {
                 status?: string;
                 state?: "open" | "done";
                 q?: string;
+                tag?: string;
             };
             header?: never;
             path: {

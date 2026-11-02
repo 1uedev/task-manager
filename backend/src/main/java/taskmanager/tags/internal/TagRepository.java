@@ -17,15 +17,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 class TagRepository {
     private static final String COLUMNS = "id, company_id, project_id, name, normalized, description, color, archived, merged_into, "
-        + "version, created_at, created_by, updated_at, updated_by";
+        + "version, created_at, created_by, updated_at, updated_by, visibility, organization_id";
     private static final String TAG_COLUMNS = "t.id, t.company_id, t.project_id, t.name, t.normalized, t.description, t.color, "
-        + "t.archived, t.merged_into, t.version, t.created_at, t.created_by, t.updated_at, t.updated_by";
+        + "t.archived, t.merged_into, t.version, t.created_at, t.created_by, t.updated_at, t.updated_by, t.visibility, t.organization_id";
 
     /**
      * The catalog condition in the form of the unique index {@code tag_name_per_catalog}, so PostgreSQL can use it with a
      * parameter (hint H5 of the TASK-028 review); the parameter is {@code null} for the company catalog. Since TASK-072 the
      * index holds only tags that are not merged, so every query that should use it also says {@code merged_into is null}.
      */
+    /** The audience of a name: the tags of the organization, or the tags for everyone for {@code null} (TASK-077). */
+    private static final String OF_ORGANIZATION = "coalesce(organization_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+        + " = coalesce(cast(? as uuid), '00000000-0000-0000-0000-000000000000'::uuid)";
+
     private static final String IN_CATALOG = "coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)"
         + " = coalesce(cast(? as uuid), '00000000-0000-0000-0000-000000000000'::uuid)";
 
@@ -40,7 +44,8 @@ class TagRepository {
             rs.getString("name"), rs.getString("normalized"), rs.getString("description"), rs.getString("color"),
             rs.getBoolean("archived"), rs.getObject("merged_into", UUID.class), rs.getLong("version"),
             rs.getTimestamp("created_at").toInstant(), rs.getObject("created_by", UUID.class),
-            rs.getTimestamp("updated_at").toInstant(), rs.getObject("updated_by", UUID.class));
+            rs.getTimestamp("updated_at").toInstant(), rs.getObject("updated_by", UUID.class), rs.getString("visibility"),
+            rs.getObject("organization_id", UUID.class));
     }
 
     /** A {@code like} pattern that finds the text anywhere in a normalized name; {@code null} for no search. */
@@ -115,17 +120,56 @@ class TagRepository {
             .params(companyId, id, projectId).query(TagRepository::map).optional();
     }
 
-    /** Finds the tag of the catalog with this normalized name and locks it shared. Merged tags have no name any more. */
-    Optional<Tag> lockByName(UUID companyId, UUID projectId, String normalized) {
+    /**
+     * Finds the tag of the catalog with this normalized name among the tags of the given organization, or among the tags for
+     * everyone for {@code null}, and locks it shared. Merged tags have no name any more.
+     */
+    Optional<Tag> lockByName(UUID companyId, UUID projectId, UUID organizationId, String normalized) {
         return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and " + IN_CATALOG + " and merged_into is null"
-                + " and normalized = ? for share")
-            .params(companyId, projectId, normalized).query(TagRepository::map).optional();
+                + " and " + OF_ORGANIZATION + " and normalized = ? for share")
+            .params(companyId, projectId, organizationId, normalized).query(TagRepository::map).optional();
     }
 
-    boolean nameTaken(UUID companyId, UUID projectId, String normalized, UUID except) {
+    boolean nameTaken(UUID companyId, UUID projectId, UUID organizationId, String normalized, UUID except) {
         return jdbc.sql("select exists (select 1 from tag where company_id = ? and " + IN_CATALOG + " and merged_into is null"
-                + " and normalized = ? and id <> ?)")
-            .params(companyId, projectId, normalized, except).query(Boolean.class).single();
+                + " and " + OF_ORGANIZATION + " and normalized = ? and id <> ?)")
+            .params(companyId, projectId, organizationId, normalized, except).query(Boolean.class).single();
+    }
+
+    // ------------------------------------------------------------------------------------------------ portal (TASK-077)
+
+    /** The condition of the portal: visible to customers, for everyone or for the organization (one parameter). */
+    private static final String FOR_CUSTOMER = "visibility = 'customer' and (organization_id is null or organization_id = cast(? as uuid))";
+
+    /**
+     * Up to {@code limit} tags the portal suggests to the organization in the project: visible to it, not archived, not merged,
+     * from the company catalog and the catalog of the project, ordered like {@link #suggestions}.
+     */
+    List<Tag> portalSuggestions(UUID companyId, UUID projectId, UUID organizationId, String search, int limit) {
+        String starts = search == null ? null : escape(search) + "%";
+        String word = search == null ? null : "% " + escape(search) + "%";
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and (project_id is null or project_id = ?) and " + FOR_CUSTOMER
+                + " and merged_into is null and not archived and (cast(? as text) is null or normalized like cast(? as text) escape '\\')"
+                + " order by case when cast(? as text) is null or normalized like cast(? as text) escape '\\' then 0"
+                + " when normalized like cast(? as text) escape '\\' then 1 else 2 end, normalized, project_id nulls first, id limit ?")
+            .params(companyId, projectId, organizationId, contains(search), contains(search), starts, starts, word, limit)
+            .query(TagRepository::map).list();
+    }
+
+    /**
+     * The tag the portal means with a name, locked shared: of the organization first, then of the catalog of the project for
+     * everyone, then of the company catalog; only tags visible to the organization, never a merged one.
+     */
+    Optional<Tag> lockVisibleByName(UUID companyId, UUID projectId, UUID organizationId, String normalized) {
+        return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and (project_id is null or project_id = ?) and " + FOR_CUSTOMER
+                + " and merged_into is null and normalized = ? order by organization_id nulls last, project_id nulls last limit 1 for share")
+            .params(companyId, projectId, organizationId, normalized).query(TagRepository::map).optional();
+    }
+
+    /** The tickets of the project that carry the tag, for the tag filter of the portal list. */
+    List<UUID> ticketsWith(UUID projectId, UUID tagId) {
+        return jdbc.sql("select ticket_id from tag_ticket where project_id = ? and tag_id = ?").params(projectId, tagId)
+            .query(UUID.class).list();
     }
 
     /**
@@ -133,17 +177,18 @@ class TagRepository {
      * its commit; {@code false} then means the name is taken.
      */
     boolean insert(Tag tag) {
-        return jdbc.sql("insert into tag (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict do nothing")
+        return jdbc.sql("insert into tag (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict do nothing")
             .params(tag.id(), tag.companyId(), tag.projectId(), tag.name(), tag.normalized(), tag.description(), tag.color(),
-                tag.archived(), tag.mergedInto(), tag.version(), ts(tag.createdAt()), tag.createdBy(), ts(tag.updatedAt()), tag.updatedBy())
+                tag.archived(), tag.mergedInto(), tag.version(), ts(tag.createdAt()), tag.createdBy(), ts(tag.updatedAt()), tag.updatedBy(),
+                tag.visibility(), tag.organizationId())
             .update() == 1;
     }
 
     void update(Tag tag) {
         jdbc.sql("update tag set name = ?, normalized = ?, description = ?, color = ?, archived = ?, version = ?, updated_at = ?,"
-                + " updated_by = ? where id = ?")
+                + " updated_by = ?, visibility = ?, organization_id = ? where id = ?")
             .params(tag.name(), tag.normalized(), tag.description(), tag.color(), tag.archived(), tag.version(), ts(tag.updatedAt()),
-                tag.updatedBy(), tag.id())
+                tag.updatedBy(), tag.visibility(), tag.organizationId(), tag.id())
             .update();
     }
 

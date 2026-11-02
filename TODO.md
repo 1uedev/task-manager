@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -34,9 +34,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-075](#task-075-portalkonten-sicht-und-rechte-a11-teil-1) | Portalkonten, Sicht und Rechte (A11 Teil 1) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-076](#task-076-portalgespräch-anhänge-und-portalseiten-a11-teil-2) | Portalgespräch, Anhänge und Portalseiten (A11 Teil 2) | claude-20261102-portal-01 | 2026-11-02 |
+| [TASK-077](#task-077-tags-im-portal-a11-teil-3) | Tags im Portal (A11 Teil 3) | claude-20261102-portal-01 | 2026-11-02 |
 | [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -197,9 +196,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-077 Tags im Portal (A11 Teil 3)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
 
-**Bezug:** REQ-TAG-001, REQ-PORTAL-001, REQ-ACL-002; DEC-049, DEC-068, DEC-102; docs/TAGS_SEARCH.md (T04, T10, T18, T19). **Abhängigkeiten:** TASK-076 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 17 bis 19 bestätigt. Blockiert, bis das Ergebnis von TASK-076 auf main ist; dann ohne neue Reservierung weiter in derselben Sitzung, Ergebnis mit der nächsten freien Entscheidungsnummer.
+**Bezug:** REQ-TAG-001, REQ-PORTAL-001, REQ-ACL-002; DEC-049, DEC-068, DEC-102; docs/TAGS_SEARCH.md (T04, T10, T18, T19). **Abhängigkeiten:** TASK-076 geliefert. **Arbeitsstand:** Mit TASK-075 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen 17 bis 19 bestätigt. Nach dem Ergebnis von TASK-076 auf main (PR #234) und der Behebung aus TASK-078 (PR #236) ohne neue Reservierung in derselben Sitzung begonnen. Ergebnis auf Branch claude/project-thread-houava mit DEC-108 und der Migration V0040; Beschreibung in backend/README.md (Abschnitt TASK-077).
 
 **Umfang:** Sichtbarkeit von Tags, kundensichtbare Tags im Portal, Anlage und Zuordnung durch berechtigte Portalnutzer. Nicht Teil: Katalogpflege im Portal, Massenänderung im Portal.
 
@@ -213,7 +212,12 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Zuordnung durch Portalnutzer lässt interne Tags unverändert, auch bei gleichzeitiger interner Änderung.
 3. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anzeige, Anlage und Zuordnung im Portal und die Sichtbarkeit in der Tagpflege.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-076 umsetzen.
+**Übergabe zur Prüfung (2026-11-02):**
+1. Ergebnis: Sichtbarkeit `internal` oder `customer` je Tag mit `tags.manage`, Bindung eines im Portal angelegten Tags an die Organisation und Freigabe für alle Kunden (`forAllCustomers`), Namen je Katalog und Zielgruppe; Portalpfade `/api/v1/portal/projects/{projectId}/tags` und `.../tickets/{number}/tags` zum Lesen, Setzen, Anlegen und Entfernen sichtbarer Tags; Tagfilter `tag` der Portalliste über den Port `TicketTagFilter`. Oberfläche: Tags an der Anfrage im Portal mit Vorschlägen, Anlage und Entfernen bei Schreibrecht, Tagfilter auf der Startseite, Sichtbarkeit und Freigabe in der Tagpflege.
+2. Nachweise: `PortalTagsApiTest` mit T04 (interne Tags weder an der Anfrage noch in Vorschlägen), T10 (Filter nur eigene Anfragen, interner oder unbekannter Tag findet nichts), T18 (Anlage und Zuordnung, gebunden an Nordwerk, für Südtechnik unsichtbar, Freigabe mit Namenskonflikt), T19 (ohne `tag.create`, ohne Schreibregel, nach Entzug der Mitgliedschaft und mit manipulierter Organisation nichts angelegt oder geändert) und Abnahmekriterium 2 (interne Tags bleiben, auch bei gleichzeitigen Zuordnungen von Portal und Support); `TagsContractTest` mit 26 Routen; voller Backendlauf mit PostgreSQL 16; `npm run verify`; alle Browsertests einschließlich `portal.test.mjs` mit drei neuen Fällen.
+3. Grenzen: Die Obergrenze von 30 Tags zählt auch interne Tags der Anfrage. Der Tagfilter der Startseite erscheint nur bei einem gewählten oder einzigen Projekt. Katalogpflege und Massenänderung im Portal fehlen wie vereinbart; die Suche bleibt für Portalkonten verschlossen.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger.
 
 ## TASK-078 Befunde der Prüfung von TASK-075 beheben (A11)
 

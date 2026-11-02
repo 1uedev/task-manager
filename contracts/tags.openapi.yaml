@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Tags (TASK-028, TASK-072, TASK-073)
-  version: 0.3.0
+  title: Task Manager API, Tags (TASK-028, TASK-072, TASK-073, TASK-077)
+  version: 0.4.0
   description: |
     Tag Kataloge und Tag Zuordnungen (DEC-068). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
     `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -12,7 +12,7 @@ info:
     mit 404 `project.not_found`. `tag.create` legt Tags an, `tags.manage` legt an, benennt um, archiviert und stellt wieder
     her. Beide gelten für den Unternehmenskatalog als Unternehmensrecht und für einen Projektkatalog im Projekt, wo sie die
     Mitgliedschaft verlangen. `tags.manage` ist ein Verwaltungsrecht des Unternehmens; die Ersteinrichtung vergibt es.
-    Portalkonten erhalten bis zur Entscheidung über das Portal keinen Katalog (403).
+    Portalkonten erhalten keinen Katalog (403); ihre Tags laufen über die Portalpfade unten.
 
     Namen: Unicode NFKC, äußere Leerzeichen entfernt, innerer Leerraum jeder Unicode Art zu einem Leerzeichen
     zusammengefasst, 1 bis 50 Zeichen, keine Steuer oder Formatzeichen. Ein Name kommt je Katalog einmal vor, ohne
@@ -48,6 +48,22 @@ info:
     einer einzelnen Zuordnung; es gibt keine Gesamttransaktion. Ein Projekttag passt nur zu Tickets seines Projekts; passt
     keiner der Tags, zählt das Ticket als `not_matching`. Eine Ablehnung (Rechte, Obergrenze, inzwischen archivierter Tag,
     Sperre) lässt das Ticket ganz unverändert. Wiederholen erzeugt keine doppelten Zuordnungen.
+
+    Tags im Portal (TASK-077, DEC-108): Jeder Tag hat die Sichtbarkeit `internal` (Vorgabe) oder `customer`, gesetzt mit
+    `tags.manage` über `visibility`. Ein Tag, den ein Portalkonto anlegt, steht im Projektkatalog, ist `customer` und an die
+    Organisation des Kontos gebunden (`organizationId`); nur diese Organisation sieht ihn im Portal. `forAllCustomers: true`
+    gibt ihn für alle Kunden frei, `visibility: internal` macht ihn intern und löst ebenfalls die Bindung. Namen gelten je
+    Katalog und Zielgruppe: Tags einer Organisation haben eigene Namen, sodass ein Name im Portal nie verrät, dass ein
+    interner Tag oder ein Tag einer anderen Organisation ihn trägt; beim Freigeben kann deshalb 409 `tag.name_taken` kommen.
+    Interne Zuordnungen über den Namen finden nur Tags ohne Organisation; Tags einer Organisation werden über `tagId`
+    zugeordnet.
+
+    Unter `/portal/projects/{projectId}` sieht ein Portalkonto nur Tags, die seiner Organisation sichtbar sind, und nur an
+    Anfragen seiner Organisation. Lesen verlangt `ticket.read` mit der Leseregel für `tags`, Setzen und Entfernen
+    `ticket.edit` mit der Schreibregel für `tags`, was die Gruppe „Portal“ nicht vergibt. Ein Name ohne sichtbaren Tag legt
+    mit `tag.create` im Projekt einen Tag der Organisation an, sonst 403. Interne Tags derselben Anfrage bleiben unberührt
+    und erscheinen nirgends; ein interner oder fremder Tag antwortet wie ein unbekannter mit 404 `tag.not_found`. Die
+    Obergrenze von 30 Tags je Ticket zählt alle Tags der Anfrage.
 
     Der `ETag` ist die Version des Tags; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
     Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `tag.busy` und `Retry-After`; die
@@ -491,6 +507,76 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/SuggestionLimit'
+    get:
+      operationId: listPortalTagSuggestions
+      summary: Vorschläge des Portals, nur der Organisation sichtbare Tags (ticket.read und Leseregel für tags)
+      responses:
+        '200':
+          description: Vorschläge und ob das Konto einen Tag anlegen darf
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalSuggestions'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: listPortalTicketTags
+      summary: Sichtbare Tags einer Anfrage der Organisation
+      responses:
+        '200':
+          description: Sichtbare Tags, nach Namen geordnet, und ob das Konto sie ändern darf
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalTicketTags'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: assignPortalTicketTag
+      summary: Sichtbaren Tag setzen oder über den Namen anlegen (ticket.edit und Schreibregel für tags, zum Anlegen tag.create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PortalAssignment'}
+      responses:
+        '200':
+          description: Der gesetzte Tag, auch wenn er schon gesetzt war
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalTag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+      - $ref: '#/components/parameters/TagId'
+    delete:
+      operationId: unassignPortalTicketTag
+      summary: Sichtbaren Tag von einer Anfrage der Organisation entfernen
+      responses:
+        '204': {description: Entfernt oder nicht zugeordnet}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -568,7 +654,7 @@ components:
         tag.precondition_required, tag.busy, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required. Gründe in `violations`: name.invalid, archived.invalid, description.invalid,
         color.invalid, into.invalid, ids.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous,
-        fields.required, fields.unknown, paging.invalid.
+        fields.required, fields.unknown, paging.invalid, visibility.invalid, forAllCustomers.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -611,6 +697,55 @@ components:
           oneOf:
             - {$ref: '#/components/schemas/Color'}
             - {type: 'null'}
+        visibility: {$ref: '#/components/schemas/Visibility'}
+        forAllCustomers:
+          type: boolean
+          enum: [true]
+          description: Gibt einen Tag einer Organisation für alle Kunden frei.
+    Visibility:
+      type: string
+      enum: [internal, customer]
+      description: Intern oder im Portal sichtbar (TASK-077).
+    PortalTag:
+      type: object
+      required: [id, name, description, color, archived, own]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        color:
+          oneOf:
+            - {$ref: '#/components/schemas/Color'}
+            - {type: 'null'}
+        archived: {type: boolean}
+        own: {type: boolean, description: Ein Tag der eigenen Organisation, noch nicht für alle Kunden freigegeben.}
+    PortalTicketTags:
+      type: object
+      required: [items, writable]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PortalTag'}
+        writable: {type: boolean}
+    PortalSuggestions:
+      type: object
+      required: [items, create]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/PortalTag'}
+        create: {type: boolean, description: Ob das Konto mit tag.create einen Tag seiner Organisation anlegen darf.}
+    PortalAssignment:
+      description: Ein sichtbarer Tag über `tagId` oder ein Name.
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required: [tagId]
+        - required: [name]
+      properties:
+        tagId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 50}
     MergeRequest:
       type: object
       additionalProperties: false
@@ -702,7 +837,7 @@ components:
     Tag:
       type: object
       required: [id, name, catalog, projectId, description, color, archived, mergedInto, manageable, usage, version, createdAt,
-        createdBy, updatedAt, updatedBy]
+        createdBy, updatedAt, updatedBy, visibility, organizationId]
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
@@ -734,3 +869,8 @@ components:
         createdBy: {type: string, format: uuid}
         updatedAt: {type: string, format: date-time}
         updatedBy: {type: string, format: uuid}
+        visibility: {$ref: '#/components/schemas/Visibility'}
+        organizationId:
+          type: [string, 'null']
+          format: uuid
+          description: Organisation, die einen im Portal angelegten Tag allein sieht; null für alle Kunden.

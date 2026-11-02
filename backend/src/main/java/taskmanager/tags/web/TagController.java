@@ -68,13 +68,13 @@ class TagController {
 
     record TagBody(UUID id, String name, String catalog, UUID projectId, String description, String color, boolean archived,
             TagRef mergedInto, boolean manageable, Usage usage, long version, Instant createdAt, UUID createdBy, Instant updatedAt,
-            UUID updatedBy) {
+            UUID updatedBy, String visibility, UUID organizationId) {
         static TagBody of(TagView view) {
             Tag tag = view.tag();
             TagRef merged = view.mergedInto() == null ? null : new TagRef(view.mergedInto().id(), view.mergedInto().name());
             return new TagBody(tag.id(), tag.name(), tag.inCompanyCatalog() ? "company" : "project", tag.projectId(), tag.description(),
                 tag.color(), tag.archived(), merged, view.manageable(), view.usage(), tag.version(), tag.createdAt(), tag.createdBy(),
-                tag.updatedAt(), tag.updatedBy());
+                tag.updatedAt(), tag.updatedBy(), tag.visibility(), tag.organizationId());
         }
     }
 
@@ -348,7 +348,9 @@ class TagController {
 
     /**
      * A change of a tag, at least one of: {@code name} as a string, {@code archived} as a boolean, {@code description} as a
-     * string or {@code null} to remove it, {@code color} as a color of the palette or {@code null} to remove it.
+     * string or {@code null} to remove it, {@code color} as a color of the palette or {@code null} to remove it,
+     * {@code visibility} as {@code internal} or {@code customer}, {@code forAllCustomers} as {@code true} to release a tag of
+     * one organization for every customer (TASK-077).
      */
     private static Change change(JsonNode body) {
         if (body == null || !body.isObject() || body.isEmpty()) {
@@ -360,6 +362,8 @@ class TagController {
         String description = null;
         boolean colorGiven = false;
         String color = null;
+        String visibility = null;
+        boolean forAllCustomers = false;
         List<String> violations = new ArrayList<>();
         for (var entry : body.properties()) {
             JsonNode value = entry.getValue();
@@ -394,13 +398,27 @@ class TagController {
                         violations.add("color.invalid");
                     }
                 }
+                case "visibility" -> {
+                    if (value.isString()) {
+                        visibility = value.asString();
+                    } else {
+                        violations.add("visibility.invalid");
+                    }
+                }
+                case "forAllCustomers" -> {
+                    if (value.isBoolean() && value.asBoolean()) {
+                        forAllCustomers = true;
+                    } else {
+                        violations.add("forAllCustomers.invalid");
+                    }
+                }
                 default -> violations.add("fields.unknown");
             }
         }
         if (!violations.isEmpty()) {
             throw invalid(violations.stream().distinct().toList());
         }
-        return new Change(name, archived, descriptionGiven, description, colorGiven, color);
+        return new Change(name, archived, descriptionGiven, description, colorGiven, color, visibility, forAllCustomers);
     }
 
     /** The target of a merge in a request body: an object with exactly the identifier {@code into}. */
@@ -444,7 +462,7 @@ class TagController {
         }
     }
 
-    private static int suggestionLimit(Integer limit) {
+    static int suggestionLimit(Integer limit) {
         int size = limit == null ? TagService.SUGGESTIONS_MAX : limit;
         if (size < 1 || size > TagService.SUGGESTIONS_MAX) {
             throw invalid(List.of("paging.invalid"));
@@ -511,7 +529,7 @@ class TagController {
         return new Target(tagId, name, catalog);
     }
 
-    private static UUID uuid(JsonNode value) {
+    static UUID uuid(JsonNode value) {
         if (!value.isString()) {
             return null;
         }
@@ -530,7 +548,7 @@ class TagController {
         return size;
     }
 
-    private static ApiProblemException invalid(List<String> violations) {
+    static ApiProblemException invalid(List<String> violations) {
         return ApiProblemException.withViolations(400, "request.invalid", violations);
     }
 
@@ -552,7 +570,7 @@ class TagController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503 (P4 of TASK-025). */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {
