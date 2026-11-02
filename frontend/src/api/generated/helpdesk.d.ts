@@ -550,8 +550,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Gespräch bis zu einem gezeigten Eintrag als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-079)
-         * @description until ist der Zeitpunkt des neuesten Eintrags, den das Portal aus dem Gespräch angezeigt hat. Eine Antwort des Supports, die danach kam, bleibt neu. Ein Zeitpunkt in der Zukunft gilt als jetzt, ein früherer als der gespeicherte ändert nichts.
+         * Gespräch bis zu einer gezeigten Antwort des Supports als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-080)
+         * @description position ist die höchste Position einer Antwort des Supports, die das Portal aus dem Gespräch angezeigt hat (Feld position der Einträge, 0 ohne solche Antwort). Eine Antwort, die nicht angezeigt wurde, bleibt neu, auch wenn ihr Zeitpunkt früher liegt (TASK-080, DEC-110). Eine Position hinter den gespeicherten Antworten gilt als die letzte von ihnen, eine kleinere als die vermerkte ändert nichts.
          */
         put: operations["markPortalRequestSeen"];
         post?: never;
@@ -603,6 +603,11 @@ export interface components {
             subject?: string | null;
             body: string | null;
             attachments: components["schemas"]["PortalFile"][];
+            /**
+             * Format: int64
+             * @description Position einer Antwort des Supports im Gespräch (TASK-080). Das Portal vermerkt die höchste gezeigte Position als gelesen. Andere Einträge und eine Antwort, die beim Lesen noch nicht sicher feststand, haben keine.
+             */
+            position?: number | null;
         };
         Problem: {
             type?: string;
@@ -1903,7 +1908,7 @@ export interface operations {
                         lastSupportAt?: string | null;
                         /** Format: date-time */
                         seenAt?: string | null;
-                        /** @description Eine Antwort des Supports kam nach dem letzten Öffnen. */
+                        /** @description Eine Antwort des Supports liegt hinter der zuletzt vermerkten Position (TASK-080). */
                         unread: boolean;
                     }[];
                 };
@@ -1989,8 +1994,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** Format: date-time */
-                    until: string;
+                    /** Format: int64 */
+                    position: number;
                 };
             };
         };

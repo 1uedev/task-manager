@@ -200,6 +200,8 @@ class ReplySender implements JobHandler {
             if (reply.state().equals("sending") && reply.jobId().equals(job)) {
                 repository.replyState(replyId, state, code, null, sentAt, clock.instant(), by);
                 if (state.equals("sent")) {
+                    // The answer reaches the portal at its position (TASK-080, F2).
+                    repository.replyPortalPosition(replyId, repository.nextPortalPosition(reply.ticketId()));
                     events.publishEvent(new ReplySent(reply.companyId(), reply.projectId(), reply.ticketId(), replyId, sentAt));
                 }
             } else {

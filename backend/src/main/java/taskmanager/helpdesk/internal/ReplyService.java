@@ -193,6 +193,7 @@ public class ReplyService {
         Instant now = clock.instant();
         Instant sentAt = reply.attemptedAt() == null ? now : reply.attemptedAt();
         repository.replyState(reply.id(), "sent", null, null, sentAt, now, actor.userId());
+        repository.replyPortalPosition(reply.id(), repository.nextPortalPosition(reply.ticketId()));
         events.publishEvent(new ReplySent(reply.companyId(), reply.projectId(), reply.ticketId(), reply.id(), sentAt));
         repository.audit(actor.companyId(), "reply", reply.id(), "reply.settled", null, actor.userId(), now);
         return repository.reply(actor.companyId(), reply.id()).orElseThrow();

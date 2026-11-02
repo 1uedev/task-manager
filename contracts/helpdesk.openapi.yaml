@@ -739,7 +739,7 @@ paths:
                     lastActivityAt: {type: [string, 'null'], format: date-time}
                     lastSupportAt: {type: [string, 'null'], format: date-time}
                     seenAt: {type: [string, 'null'], format: date-time}
-                    unread: {type: boolean, description: Eine Antwort des Supports kam nach dem letzten Öffnen.}
+                    unread: {type: boolean, description: 'Eine Antwort des Supports liegt hinter der zuletzt vermerkten Position (TASK-080).'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
@@ -799,10 +799,12 @@ paths:
       - $ref: '#/components/parameters/Number'
     put:
       operationId: markPortalRequestSeen
-      summary: Gespräch bis zu einem gezeigten Eintrag als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-079)
+      summary: Gespräch bis zu einer gezeigten Antwort des Supports als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-080)
       description: >-
-        until ist der Zeitpunkt des neuesten Eintrags, den das Portal aus dem Gespräch angezeigt hat. Eine Antwort des Supports,
-        die danach kam, bleibt neu. Ein Zeitpunkt in der Zukunft gilt als jetzt, ein früherer als der gespeicherte ändert nichts.
+        position ist die höchste Position einer Antwort des Supports, die das Portal aus dem Gespräch angezeigt hat (Feld
+        position der Einträge, 0 ohne solche Antwort). Eine Antwort, die nicht angezeigt wurde, bleibt neu, auch wenn ihr
+        Zeitpunkt früher liegt (TASK-080, DEC-110). Eine Position hinter den gespeicherten Antworten gilt als die letzte von
+        ihnen, eine kleinere als die vermerkte ändert nichts.
       requestBody:
         required: true
         content:
@@ -810,9 +812,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [until]
+              required: [position]
               properties:
-                until: {type: string, format: date-time}
+                position: {type: integer, format: int64, minimum: 0}
       responses:
         '204': {description: Vermerkt}
         '400': {$ref: '#/components/responses/Problem'}
@@ -907,6 +909,12 @@ components:
         attachments:
           type: array
           items: {$ref: '#/components/schemas/PortalFile'}
+        position:
+          type: [integer, 'null']
+          format: int64
+          description: >-
+            Position einer Antwort des Supports im Gespräch (TASK-080). Das Portal vermerkt die höchste gezeigte Position als
+            gelesen. Andere Einträge und eine Antwort, die beim Lesen noch nicht sicher feststand, haben keine.
     Problem:
       type: object
       required: [title, status, instance, code, correlationId]

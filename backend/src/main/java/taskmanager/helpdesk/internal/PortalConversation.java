@@ -97,19 +97,26 @@ public class PortalConversation {
     public record Created(UUID ticketId, long number) {
     }
 
-    /** An entry of the conversation: {@code mail}, {@code reply} (sent mail answer) or {@code post}. */
+    /**
+     * An entry of the conversation: {@code mail}, {@code reply} (sent mail answer) or {@code post}. An answer of the support
+     * carries the position the portal acknowledges once it showed it (TASK-080, F2), other entries none.
+     */
     public record Entry(String kind, UUID id, Instant at, String author, boolean own, String subject, String body,
-            List<AttachmentLookup.Summary> attachments) {
+            List<AttachmentLookup.Summary> attachments, Long position) {
     }
 
     /** A post as the internal ticket view shows it, with its author. */
     public record PostView(UUID id, String authorKind, UUID authorId, String body, Instant createdAt, List<AttachmentLookup.Summary> attachments) {
     }
 
-    /** A request of the portal list with its last entry, the last answer of the support and when the caller last opened it. */
-    public record Activity(long number, Instant lastActivityAt, Instant lastSupportAt, Instant seenAt) {
+    /**
+     * A request of the portal list with its last entry, the last answer of the support and when the caller last opened it. New
+     * is an answer of the support whose position lies beyond the one the caller acknowledged (TASK-080, F2).
+     */
+    public record Activity(long number, Instant lastActivityAt, Instant lastSupportAt, Instant seenAt, long lastSupportPosition,
+            long seenPosition) {
         public boolean unread() {
-            return lastSupportAt != null && (seenAt == null || lastSupportAt.isAfter(seenAt));
+            return lastSupportPosition > seenPosition;
         }
     }
 
@@ -204,13 +211,13 @@ public class PortalConversation {
         }
         Instant now = clock.instant();
         PortalRepository.Post post = new PortalRepository.Post(UUID.randomUUID(), actor.companyId(), projectId, portal.ticketId(),
-            PortalRepository.Post.CUSTOMER, actor.userId(), body, now, actor.organizationId());
+            PortalRepository.Post.CUSTOMER, actor.userId(), body, now, actor.organizationId(), null);
         posts.insert(post);
         carried.forEach(file -> posts.link(post.id(), file.id()));
         events.publishEvent(new CustomerAnswered(actor.companyId(), projectId, portal.ticketId(), now));
         repository.audit(actor.companyId(), "ticket", portal.ticketId(), "portal.posted",
             JSON.writeValueAsString(new PostDetail(post.id(), carried.size())), actor.userId(), now);
-        return new Entry("post", post.id(), now, PortalRepository.Post.CUSTOMER, true, null, body, carried);
+        return new Entry("post", post.id(), now, PortalRepository.Post.CUSTOMER, true, null, body, carried, null);
     }
 
     /**
@@ -220,6 +227,10 @@ public class PortalConversation {
     @Transactional
     public List<Entry> timeline(AccessContext actor, UUID projectId, long number) {
         Portal portal = portalTicket(actor, projectId, number, null);
+        // The counter first (TASK-080, F2): every answer up to it has committed and so appears in the reads below. An answer
+        // read below with a higher position shows without one, so the mark never covers an answer that was still being written
+        // when the counter was read; it stays new until the next reading.
+        long reached = repository.portalPosition(portal.ticketId());
         List<Entry> entries = new ArrayList<>();
         List<UUID> files = new ArrayList<>();
         List<Message> mails = repository.messagesOfTicket(portal.ticketId()).stream()
@@ -234,33 +245,40 @@ public class PortalConversation {
             : Map.of();
         for (Message mail : mails) {
             entries.add(new Entry("mail", mail.id(), mail.receivedAt(), PortalRepository.Post.CUSTOMER, false, mail.subject(), mail.body(),
-                pick(visible, mail.attachments().stream().map(Message.AttachmentNote::attachmentId).toList())));
+                pick(visible, mail.attachments().stream().map(Message.AttachmentNote::attachmentId).toList()), null));
         }
+        Map<UUID, Long> positions = repository.replyPortalPositions(portal.ticketId());
         for (Reply reply : repository.repliesOfTicket(portal.ticketId())) {
             if (reply.state().equals("sent") && actor.organizationId().equals(reply.customerId())) {
                 entries.add(new Entry("reply", reply.id(), reply.sentAt() == null ? reply.createdAt() : reply.sentAt(),
-                    PortalRepository.Post.SUPPORT, false, reply.subject(), reply.body(), List.of()));
+                    PortalRepository.Post.SUPPORT, false, reply.subject(), reply.body(), List.of(), shown(positions.get(reply.id()), reached)));
             }
         }
         for (PortalRepository.Post post : own) {
             boolean customer = post.authorKind().equals(PortalRepository.Post.CUSTOMER);
             entries.add(new Entry("post", post.id(), post.createdAt(), post.authorKind(), customer && post.authorId().equals(actor.userId()),
-                null, post.body(), pick(visible, carried.getOrDefault(post.id(), List.of()))));
+                null, post.body(), pick(visible, carried.getOrDefault(post.id(), List.of())), shown(post.position(), reached)));
         }
         entries.sort(Comparator.comparing(Entry::at).thenComparing(Entry::id));
         return entries;
     }
 
     /**
-     * Records that the caller saw the conversation up to {@code until}, the time of the newest entry the portal showed (TASK-079,
-     * F2): an answer of the support that arrived after the conversation was read stays new. A time in the future counts as now,
-     * an earlier mark than the stored one changes nothing.
+     * Records that the caller saw the conversation up to {@code position}, the highest position of an answer of the support the
+     * portal showed (TASK-080, F2 of docs/REVIEW_TASK-079_PR-239.md): an answer that was not shown yet stays new, also when it
+     * carries an earlier time. A position beyond the answers that have committed counts as the last of them, an earlier mark
+     * than the stored one changes nothing.
      */
     @Transactional
-    public void seen(AccessContext actor, UUID projectId, long number, Instant until) {
+    public void seen(AccessContext actor, UUID projectId, long number, long position) {
         Portal portal = portalTicket(actor, projectId, number, null);
-        Instant now = clock.instant();
-        posts.seen(actor.userId(), portal.ticketId(), until.isAfter(now) ? now : until);
+        long reached = repository.portalPosition(portal.ticketId());
+        posts.seen(actor.userId(), portal.ticketId(), Math.min(position, reached), clock.instant());
+    }
+
+    /** The position an entry shows: only one the counter read before the entries covers (TASK-080, F2). */
+    private static Long shown(Long position, long reached) {
+        return position != null && position <= reached ? position : null;
     }
 
     /** The requests of the organization in the project with their last entry and the marker of new answers of the support. */
@@ -276,7 +294,8 @@ public class PortalConversation {
         List<Activity> result = new ArrayList<>();
         for (PortalRepository.Activity entry : posts.activity(actor.userId(), actor.organizationId(), own)) {
             tickets.locate(entry.ticketId()).ifPresent(location ->
-                result.add(new Activity(location.number(), entry.lastActivityAt(), entry.lastSupportAt(), entry.seenAt())));
+                result.add(new Activity(location.number(), entry.lastActivityAt(), entry.lastSupportAt(), entry.seenAt(),
+                    entry.lastSupportPosition(), entry.seenPosition())));
         }
         result.sort(Comparator.comparingLong(Activity::number).reversed());
         return result;
@@ -305,7 +324,7 @@ public class PortalConversation {
             .orElseThrow(() -> ApiProblemException.of(409, "helpdesk.portal_no_customer"));
         Instant now = clock.instant();
         PortalRepository.Post post = new PortalRepository.Post(UUID.randomUUID(), actor.companyId(), projectId, ticket,
-            PortalRepository.Post.SUPPORT, actor.userId(), body, now, customer);
+            PortalRepository.Post.SUPPORT, actor.userId(), body, now, customer, repository.nextPortalPosition(ticket));
         posts.insert(post);
         events.publishEvent(new ReplySent(actor.companyId(), projectId, ticket, post.id(), now));
         repository.audit(actor.companyId(), "ticket", ticket, "portal.answered", JSON.writeValueAsString(new PostDetail(post.id(), 0)),

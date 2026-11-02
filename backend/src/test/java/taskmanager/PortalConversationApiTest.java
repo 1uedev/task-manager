@@ -399,6 +399,14 @@ class PortalConversationApiTest {
                     (select customer_id from helpdesk_contact where id = ?))
                 """, id, companies.find().orElseThrow(), project, ticket, mailbox, contact, subject, "<" + id + "@firma.example>", state,
                 UUID.randomUUID(), state, by, by, contact);
+        if (state.equals("sent")) {
+            // As the sender does it: the next position of the ticket (TASK-080).
+            jdbc.update("""
+                    with next as (insert into helpdesk_portal_position (ticket_id, position) values (?, 1)
+                                  on conflict (ticket_id) do update set position = helpdesk_portal_position.position + 1 returning position)
+                    update helpdesk_reply set portal_position = (select position from next) where id = ?
+                    """, ticket, id);
+        }
     }
 
     // ---------------------------------------------------------------- tests
@@ -586,17 +594,22 @@ class PortalConversationApiTest {
         assertTrue(row.get("unread").asBoolean(), rows.toString());
         assertNotNull(row.get("lastActivityAt").asString());
         assertEquals(400, portal.send("PUT", base(setup.shared(), open) + "/seen", null, null).status(), "the mark names what was shown");
-        assertEquals(204, portal.send("PUT", base(setup.shared(), open) + "/seen", Map.of("until", newest(portal, setup.shared(), open)), null).status());
+        assertEquals(204, portal.send("PUT", base(setup.shared(), open) + "/seen", Map.of("position", shown(portal, setup.shared(), open)), null).status());
         row = StreamSupport.stream(portal.get(activity).json().spliterator(), false).filter(r -> r.get("number").asLong() == open).findFirst().orElseThrow();
         assertFalse(row.get("unread").asBoolean());
     }
 
-    /** The time of the newest entry of the conversation as the portal shows it. */
-    private String newest(Browser portal, UUID project, long number) {
+    /** The highest position of an answer of the support the conversation shows, as the portal acknowledges it (TASK-080). */
+    private long shown(Browser portal, UUID project, long number) {
         Response conversation = portal.get(base(project, number) + "/conversation");
         assertEquals(200, conversation.status(), conversation.body());
-        JsonNode entries = conversation.json();
-        return entries.get(entries.size() - 1).get("at").asString();
+        long highest = 0;
+        for (JsonNode entry : conversation.json()) {
+            if (entry.hasNonNull("position")) {
+                highest = Math.max(highest, entry.get("position").asLong());
+            }
+        }
+        return highest;
     }
 
     private boolean unread(Browser portal, UUID project, long number) {
@@ -607,8 +620,8 @@ class PortalConversationApiTest {
     }
 
     /**
-     * Finding F2 of docs/REVIEW_TASK-076-078_A11.md: an answer that arrives between reading the conversation and marking it seen
-     * stays new, because the mark names the newest entry the portal showed.
+     * Finding F2 of docs/REVIEW_TASK-076-078_A11.md and docs/REVIEW_TASK-079_PR-239.md: the mark names the highest position of an
+     * answer of the support the portal showed; an answer that arrives between reading the conversation and marking it stays new.
      */
     @Test
     void anAnswerAfterTheConversationWasReadStaysNew() {
@@ -618,19 +631,85 @@ class PortalConversationApiTest {
         Browser portal = portalSession(lea);
         long number = request(setup, setup.shared(), "Gelesen", setup.nordwerk());
         String internal = "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/helpdesk/portal-posts";
+        String seen = base(setup.shared(), number) + "/seen";
         assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Erste Antwort"), null).status());
-        String shown = newest(portal, setup.shared(), number);
+        long shown = shown(portal, setup.shared(), number);
+        assertEquals(1, shown);
         assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Zweite Antwort"), null).status());
-        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", shown), null).status());
+        assertEquals(204, portal.send("PUT", seen, Map.of("position", shown), null).status());
         assertTrue(unread(portal, setup.shared(), number), "the second answer was not shown yet");
-        // An older mark changes nothing, a mark in the future counts as now.
-        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", "2000-01-01T00:00:00Z"), null).status());
+        // A lower mark changes nothing, a negative or missing one is refused.
+        assertEquals(204, portal.send("PUT", seen, Map.of("position", 0), null).status());
         assertTrue(unread(portal, setup.shared(), number));
-        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", newest(portal, setup.shared(), number)), null).status());
+        assertEquals(400, portal.send("PUT", seen, Map.of("position", -1), null).status());
+        assertEquals(400, portal.send("PUT", seen, Map.of("until", "2026-11-02T18:00:00Z"), null).status());
+        assertEquals(204, portal.send("PUT", seen, Map.of("position", shown(portal, setup.shared(), number)), null).status());
         assertFalse(unread(portal, setup.shared(), number));
-        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("until", "2999-01-01T00:00:00Z"), null).status());
+        // A mark beyond the answers counts as the last of them and does not hide later ones.
+        assertEquals(204, portal.send("PUT", seen, Map.of("position", 999), null).status());
         assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Dritte Antwort"), null).status());
-        assertTrue(unread(portal, setup.shared(), number), "a mark in the future does not hide later answers");
+        assertTrue(unread(portal, setup.shared(), number), "a mark beyond the answers does not hide later answers");
+    }
+
+    /**
+     * Finding F2 of docs/REVIEW_TASK-079_PR-239.md: an answer of the support that took its time before a post of the customer but
+     * commits only after the portal read and acknowledged the conversation stays new. The answer is held inside its insert by a
+     * trigger that waits for a lock of the test.
+     */
+    @Test
+    void anAnswerStillBeingWrittenStaysNewThoughItsTimeIsEarlier() throws Exception {
+        Setup setup = setup();
+        grant(setup.agent().id, setup.shared(), "helpdesk.reply");
+        Portal lea = createPortal(setup, setup.nordwerk(), setup.nordwerkContact(), List.of(setup.shared()));
+        Browser portal = portalSession(lea);
+        long number = request(setup, setup.shared(), "Überholt", setup.nordwerk());
+        String internal = "/api/v1/projects/" + setup.shared() + "/tickets/" + number + "/helpdesk/portal-posts";
+        assertEquals(201, setup.agent().send("POST", internal, Map.of("body", "Erste Antwort"), null).status());
+        jdbc.execute("""
+                create or replace function test_hold_portal_answer() returns trigger language plpgsql as $$
+                begin
+                    if new.body = 'Gehaltene Antwort' then
+                        perform pg_advisory_xact_lock(80080);
+                    end if;
+                    return new;
+                end $$
+                """);
+        jdbc.execute("create trigger test_hold_portal_answer before insert on helpdesk_portal_post for each row execute function test_hold_portal_answer()");
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (java.sql.Connection holder = java.sql.DriverManager.getConnection(DATABASE, TestDatabase.username(), TestDatabase.password())) {
+            try (var statement = holder.createStatement()) {
+                statement.execute("select pg_advisory_lock(80080)");
+            }
+            java.util.concurrent.Future<Integer> held = pool.submit(() ->
+                setup.agent().send("POST", internal, Map.of("body", "Gehaltene Antwort"), null).status());
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+            while (jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and objid = 80080 and not granted and database = (select oid from pg_database where datname = current_database())", Integer.class) == 0) {
+                assertTrue(System.nanoTime() < deadline, "the answer did not reach its insert");
+                Thread.sleep(20);
+            }
+            Thread.sleep(50);
+            assertEquals(201, portal.send("POST", base(setup.shared(), number) + "/conversation", Map.of("body", "Noch offen?"), null).status());
+            Response before = portal.get(base(setup.shared(), number) + "/conversation");
+            assertEquals(2, before.json().size(), before.body());
+            assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("position", shown(portal, setup.shared(), number)), null).status());
+            assertFalse(unread(portal, setup.shared(), number));
+            try (var statement = holder.createStatement()) {
+                statement.execute("select pg_advisory_unlock(80080)");
+            }
+            assertEquals(201, held.get(20, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+            jdbc.execute("drop trigger if exists test_hold_portal_answer on helpdesk_portal_post");
+            jdbc.execute("drop function if exists test_hold_portal_answer()");
+        }
+        UUID ticket = ticketId(setup.shared(), number);
+        assertTrue(jdbc.queryForObject("""
+                select a.created_at < c.created_at from helpdesk_portal_post a, helpdesk_portal_post c
+                where a.ticket_id = ? and a.body = 'Gehaltene Antwort' and c.ticket_id = ? and c.body = 'Noch offen?'
+                """, Boolean.class, ticket, ticket), "the held answer carries the earlier time");
+        assertTrue(unread(portal, setup.shared(), number), "the answer was not shown, so it stays new");
+        assertEquals(204, portal.send("PUT", base(setup.shared(), number) + "/seen", Map.of("position", shown(portal, setup.shared(), number)), null).status());
+        assertFalse(unread(portal, setup.shared(), number));
     }
 
     /**

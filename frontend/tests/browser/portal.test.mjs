@@ -455,8 +455,7 @@ describe('portal review findings of TASK-076 to TASK-078', () => {
     const backend = createBackend();
     withLea(backend);
     const ticket = backend.state.tickets[0];
-    const answer = (body, createdAt) => backend.state.helpdesk.posts.push({ id: `p-${createdAt}`, ticketId: ticket.id, authorKind: 'support', authorId: backend.anna.id,
-      body, createdAt, attachmentIds: [], organizationId: NORDWERK });
+    const answer = (body, createdAt) => backend.addPortalAnswer(ticket, body, { createdAt });
     answer('Erste Antwort', '2026-11-02T09:00:00.000Z');
     const portal = await session(backend, { username: 'lea.lang' }, '#/');
     const page = portal.page;
@@ -471,7 +470,7 @@ describe('portal review findings of TASK-076 to TASK-078', () => {
     await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
     await page.getByTestId('portal-conversation').getByText('Erste Antwort').waitFor();
     const sent = await seen;
-    assert.equal(Date.parse(sent.until), Date.parse('2026-11-02T09:00:00.000Z'), 'the newest entry shown');
+    assert.equal(sent.position, 1, 'the highest answer shown');
     await page.getByRole('button', { name: 'Zurück zur Übersicht' }).click();
     const row = page.getByTestId('portal-tickets').locator('tr', { hasText: 'Anmeldung prüfen' });
     await row.getByTestId('portal-unread').waitFor();
@@ -533,5 +532,97 @@ describe('portal review findings of TASK-076 to TASK-078', () => {
     await page.waitForFunction((count) => document.querySelectorAll('[data-testid="catalog-project"] > li').length === count, total);
     assert.equal(await catalog.locator('li', { hasText: 'Gleich' }).count(), 52, 'every tag of the same name once');
     await finish(admin);
+  });
+});
+
+// TASK-080: findings of the review of TASK-079 (docs/REVIEW_TASK-079_PR-239.md).
+describe('portal review findings of TASK-079', () => {
+  test('F3: a late further page of the former filter is dropped while the new first page still loads', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    for (let index = 0; index < 50; index += 1) {
+      const ticket = backend.addTicket(`Anfrage ${index + 3}`, null, backend.anna);
+      backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: NORDWERK, contactId: null });
+    }
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    // Both answers are held: the further page of the open requests and the first page of the done ones.
+    let moreArrived;
+    const more = new Promise((resolve) => { moreArrived = resolve; });
+    let doneArrived;
+    const done = new Promise((resolve) => { doneArrived = resolve; });
+    let releaseMore;
+    const moreHeld = new Promise((resolve) => { releaseMore = resolve; });
+    let releaseDone;
+    const doneHeld = new Promise((resolve) => { releaseDone = resolve; });
+    await page.route('**/api/v1/portal/projects/*/tickets?*', async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.has('before')) {
+        moreArrived();
+        await moreHeld;
+      } else if (params.get('state') === 'done') {
+        doneArrived();
+        await doneHeld;
+      }
+      await route.fallback();
+    });
+    const rows = page.getByTestId('portal-tickets').locator('tbody tr');
+    await rows.first().waitFor();
+    assert.equal(await rows.count(), 50);
+    await page.getByTestId('portal-more').click();
+    await more;
+    await page.getByLabel('Offen oder erledigt').selectOption({ label: 'Erledigt' });
+    await done;
+    // The late further page of the open requests arrives first and would add PLAT-1.
+    releaseMore();
+    await page.waitForTimeout(300);
+    assert.equal(await rows.count(), 50, 'no row of the former filter is added');
+    assert.equal(await rows.filter({ hasText: 'Anmeldung prüfen' }).count(), 0, 'the oldest open request is not appended');
+    releaseDone();
+    await page.getByText('Noch keine Anfragen.').waitFor();
+    await finish(portal);
+  });
+
+  test('F2: an answer that was not shown stays new although its time is earlier', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const ticket = backend.state.tickets[0];
+    backend.addPortalAnswer(ticket, 'Erste Antwort', { createdAt: '2026-11-02T09:00:00.000Z' });
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    // An answer that was still being written when the conversation was read: an earlier time, the next position.
+    let marked;
+    const seen = new Promise((resolve) => { marked = resolve; });
+    await page.route('**/api/v1/portal/projects/*/tickets/*/seen', async (route) => {
+      backend.addPortalAnswer(ticket, 'Spätere Antwort mit früherer Zeit', { createdAt: '2026-11-02T08:30:00.000Z' });
+      marked(JSON.parse(route.request().postData() ?? '{}'));
+      await route.fallback();
+    });
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    await page.getByTestId('portal-conversation').getByText('Erste Antwort').waitFor();
+    assert.deepEqual(await seen, { position: 1 }, 'the highest position shown, not a time');
+    await page.getByRole('button', { name: 'Zurück zur Übersicht' }).click();
+    const row = page.getByTestId('portal-tickets').locator('tr', { hasText: 'Anmeldung prüfen' });
+    await row.getByTestId('portal-unread').waitFor();
+    await finish(portal);
+  });
+
+  test('H3: a sent mail answer stays with the organization its contact had when it was written', async () => {
+    const backend = createBackend();
+    withLea(backend);
+    const ticket = backend.state.tickets[0];
+    const contact = backend.state.helpdesk.contacts.find((entry) => entry.name === 'Lea Lang');
+    backend.state.helpdesk.ticketCustomers.set(ticket.id, { customerId: NORDWERK, contactId: contact.id });
+    backend.addReply(ticket, { subject: 'Re: Für Nordwerk', state: 'sent', sentAt: '2026-11-02T09:00:00.000Z' });
+    // The contact moves to Südtechnik; an answer written now belongs to Südtechnik.
+    contact.customerId = SUEDTECHNIK;
+    backend.addReply(ticket, { subject: 'Re: Für Südtechnik', state: 'sent', sentAt: '2026-11-02T10:00:00.000Z' });
+    const portal = await session(backend, { username: 'lea.lang' }, '#/');
+    const page = portal.page;
+    await page.getByRole('button', { name: 'Anmeldung prüfen' }).click();
+    const conversation = page.getByTestId('portal-conversation');
+    await conversation.getByText('Re: Für Nordwerk').waitFor();
+    assert.equal(await conversation.getByText('Re: Für Südtechnik').count(), 0, 'not written for Nordwerk');
+    await finish(portal);
   });
 });

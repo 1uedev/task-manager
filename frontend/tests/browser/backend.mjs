@@ -80,8 +80,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     // Service deadlines (TASK-068): calendars, rules and the priority per ticket; `cycles` holds prepared cycles per ticket.
     sla: { calendars: [], rules: [], priorities: new Map(), cycles: new Map() },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
-      // The portal conversation (TASK-076): posts of portal accounts and of the support, and when an account last opened a request.
-      posts: [], seen: new Map() },
+      // The portal conversation (TASK-076): posts of portal accounts and of the support, and when an account last opened a request
+      // with the highest position of an answer of the support it acknowledged (TASK-080); `positions` counts the answers per ticket.
+      posts: [], seen: new Map(), positions: new Map() },
     requests: [],
   };
 
@@ -444,10 +445,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (kind === 'activity' && method === 'GET') {
         return ok(own.map((item) => {
           const posts = portalHd.posts.filter((post) => post.ticketId === item.id && post.organizationId === account.organizationId);
-          const support = posts.filter((post) => post.authorKind === 'support').map((post) => post.createdAt).sort().at(-1) ?? null;
-          const seenAt = portalHd.seen.get(`${account.id}:${item.id}`) ?? null;
-          return { number: item.number, lastActivityAt: posts.map((post) => post.createdAt).sort().at(-1) ?? null, lastSupportAt: support, seenAt,
-            unread: support !== null && (seenAt === null || support > seenAt) };
+          const replies = portalHd.replies.filter((reply) => reply.ticketId === item.id && reply.state === 'sent' && reply.customerId === account.organizationId);
+          const answers = [...posts.filter((post) => post.authorKind === 'support').map((post) => ({ at: post.createdAt, position: post.position })),
+            ...replies.map((reply) => ({ at: reply.sentAt, position: reply.portalPosition }))];
+          const support = answers.map((answer) => answer.at).sort().at(-1) ?? null;
+          const highest = Math.max(0, ...answers.map((answer) => answer.position ?? 0));
+          const mark = portalHd.seen.get(`${account.id}:${item.id}`);
+          return { number: item.number, lastActivityAt: [...posts.map((post) => post.createdAt), ...replies.map((reply) => reply.sentAt)].sort().at(-1) ?? null,
+            lastSupportAt: support, seenAt: mark?.at ?? null, unread: highest > (mark?.position ?? 0) };
         }));
       }
       if (number === undefined && method === 'GET') {
@@ -481,12 +486,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!ticket) return problem(404, 'ticket.not_found');
       if (tail === undefined && method === 'GET') return ok(view(ticket));
       if (tail === '/seen' && method === 'PUT') {
-        // The mark names the newest entry shown (TASK-079, F2); a later one stays new, an earlier mark changes nothing.
-        if (typeof body?.until !== 'string' || Number.isNaN(Date.parse(body.until))) return problem(400, 'request.invalid', { violations: ['until.required'] });
+        // The mark names the highest position of an answer of the support shown (TASK-080, F2); an answer not shown stays new,
+        // a mark beyond the answers counts as the last of them, an earlier mark changes nothing.
+        if (!Number.isInteger(body?.position) || body.position < 0) return problem(400, 'request.invalid', { violations: ['position.invalid'] });
         const key = `${account.id}:${ticket.id}`;
-        const until = Date.parse(body.until) > Date.parse(now()) ? now() : new Date(Date.parse(body.until)).toISOString();
-        const previous = portalHd.seen.get(key);
-        if (previous === undefined || until > previous) portalHd.seen.set(key, until);
+        const position = Math.min(body.position, portalHd.positions.get(ticket.id) ?? 0);
+        portalHd.seen.set(key, { position: Math.max(position, portalHd.seen.get(key)?.position ?? 0), at: now() });
         return empty();
       }
       // Entries and files keep the organization they were written for (TASK-079, F1).
@@ -495,12 +500,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (tail === '/conversation' && method === 'GET') {
         const entries = [
           ...portalHd.messages.filter((message) => message.ticketId === ticket.id && message.customerId === account.organizationId)
-            .map((message) => ({ kind: 'mail', id: message.id, at: message.receivedAt, author: 'customer', own: false, subject: message.subject, body: message.body, attachments: [] })),
-          ...portalHd.replies.filter((reply) => reply.ticketId === ticket.id && reply.state === 'sent'
-            && portalHd.contacts.find((contact) => contact.id === reply.contactId)?.customerId === account.organizationId)
-            .map((reply) => ({ kind: 'reply', id: reply.id, at: reply.sentAt ?? reply.createdAt, author: 'support', own: false, subject: reply.subject, body: reply.body, attachments: [] })),
+            .map((message) => ({ kind: 'mail', id: message.id, at: message.receivedAt, author: 'customer', own: false, subject: message.subject, body: message.body, attachments: [], position: null })),
+          // A sent mail answer belongs to the organization its contact had when it was written (TASK-079, F1; TASK-080, H3).
+          ...portalHd.replies.filter((reply) => reply.ticketId === ticket.id && reply.state === 'sent' && reply.customerId === account.organizationId)
+            .map((reply) => ({ kind: 'reply', id: reply.id, at: reply.sentAt ?? reply.createdAt, author: 'support', own: false, subject: reply.subject, body: reply.body, attachments: [],
+              position: reply.portalPosition ?? null })),
           ...portalHd.posts.filter((post) => post.ticketId === ticket.id && post.organizationId === account.organizationId).map((post) => ({ kind: 'post', id: post.id, at: post.createdAt, author: post.authorKind,
-            own: post.authorId === account.id, subject: null, body: post.body, attachments: files.filter((file) => post.attachmentIds.includes(file.id)).map(portalFile) })),
+            own: post.authorId === account.id, subject: null, body: post.body, attachments: files.filter((file) => post.attachmentIds.includes(file.id)).map(portalFile),
+            position: post.position ?? null })),
         ].sort((a, b) => a.at.localeCompare(b.at));
         return ok(entries);
       }
@@ -516,7 +523,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           organizationId: account.organizationId };
         portalHd.posts.push(post);
         return { status: 201, body: { kind: 'post', id: post.id, at: post.createdAt, author: 'customer', own: true, subject: null, body: post.body,
-          attachments: files.filter((file) => ids.includes(file.id)).map(portalFile) } };
+          attachments: files.filter((file) => ids.includes(file.id)).map(portalFile), position: null } };
       }
       if (tail === '/attachments') {
         if (!field(account, projectId, ATTACHMENT_FIELD, 'read')) return problem(404, 'ticket.not_found');
@@ -1121,6 +1128,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
 
   // ------------------------------------------------------------------ helpdesk (TASK-057)
   const hd = state.helpdesk;
+  // The next position of an answer of the support of the ticket in the portal conversation (TASK-080, F2).
+  const nextPosition = (ticketId) => {
+    const position = (hd.positions.get(ticketId) ?? 0) + 1;
+    hd.positions.set(ticketId, position);
+    return position;
+  };
   const versioned = (headers, entry, prefix) => {
     if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
     if (headers['if-match'] !== `"${entry.version}"`) return problem(412, `${prefix}.version_conflict`);
@@ -1426,7 +1439,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!hd.ticketCustomers.get(ticket.id)?.customerId) return problem(409, 'helpdesk.portal_no_customer');
       if (!body.body?.trim()) return problem(400, 'request.invalid', { violations: ['body.invalid'] });
       const post = { id: uuid(), ticketId: ticket.id, authorKind: 'support', authorId: account.id, body: body.body.trim(), createdAt: now(), attachmentIds: [],
-        organizationId: hd.ticketCustomers.get(ticket.id).customerId };
+        organizationId: hd.ticketCustomers.get(ticket.id).customerId, position: nextPosition(ticket.id) };
       hd.posts.push(post);
       return { status: 201, body: postView(post) };
     }
@@ -1450,7 +1463,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         if (!body.body?.trim()) violations.push('body.invalid');
         if (violations.length > 0) return problem(400, 'request.invalid', { violations });
         const reply = { id: uuid(), ticketId: ticket.id, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
-          subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1 };
+          subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1,
+          customerId: contact.customerId, portalPosition: null };
         hd.replies.push(reply);
         state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
           changes: [{ field: 'mail', from: null, to: JSON.stringify({ reply: reply.id, to: reply.toAddress, subject: reply.subject }) }] });
@@ -1464,7 +1478,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (headers['if-match'] !== `"${reply.version}"`) return problem(412, 'helpdesk.version_conflict');
       if (match[2] === 'settle') {
         if (reply.state !== 'uncertain') return problem(409, 'helpdesk.reply_not_uncertain');
-        Object.assign(reply, { state: 'sent', sentAt: now(), version: reply.version + 1 });
+        Object.assign(reply, { state: 'sent', sentAt: now(), version: reply.version + 1, portalPosition: nextPosition(ticket.id) });
         return ok(replyView(reply), `"${reply.version}"`);
       }
       if (!['failed', 'uncertain'].includes(reply.state)) return problem(409, 'helpdesk.reply_not_failed');
@@ -1566,9 +1580,19 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const contact = hd.contacts.find((entry) => entry.id === link?.contactId);
       const reply = { id: uuid(), ticketId: ticket.id, projectId: ticket.projectId, contactId: contact?.id ?? null, mailboxId: hd.mailboxes[0]?.id ?? uuid(),
         fromAddress: hd.mailboxes[0]?.address ?? 'support@firma.example', toAddress: contact?.addresses[0] ?? 'lea@nordwerk.example', subject: 'Re: Drucker defekt',
-        body: 'Wir kümmern uns.', state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: anna.id, attemptedAt: null, sentAt: null, version: 1, ...extra };
+        body: 'Wir kümmern uns.', state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: anna.id, attemptedAt: null, sentAt: null, version: 1,
+        // The customer of the contact when the reply is written, as the server keeps it (TASK-079, F1; TASK-080, H3).
+        customerId: contact?.customerId ?? null, portalPosition: null, ...extra };
+      if (reply.state === 'sent' && reply.portalPosition === null) reply.portalPosition = nextPosition(ticket.id);
       hd.replies.push(reply);
       return reply;
+    },
+    // An answer of the support through the portal at the next position of its ticket (TASK-080).
+    addPortalAnswer: (ticket, body, extra = {}) => {
+      const post = { id: uuid(), ticketId: ticket.id, authorKind: 'support', authorId: anna.id, body, createdAt: now(), attachmentIds: [],
+        organizationId: hd.ticketCustomers.get(ticket.id)?.customerId ?? null, position: nextPosition(ticket.id), ...extra };
+      hd.posts.push(post);
+      return post;
     },
     deactivate: (account) => { account.active = false; },
   };
