@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-078](#task-078-befunde-der-prüfung-von-task-075-beheben-a11) | Befunde der Prüfung von TASK-075 beheben (A11) | claude-20261102-portal-01 | 2026-11-02 |
 
 ### Blockiert – BLOCKIERT
 
@@ -213,3 +214,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anzeige, Anlage und Zuordnung im Portal und die Sichtbarkeit in der Tagpflege.
 
 **Nächster Schritt:** Nach dem Ergebnis von TASK-076 umsetzen.
+
+## TASK-078 Befunde der Prüfung von TASK-075 beheben (A11)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-portal-01 · **Aktualisiert:** 2026-11-02
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001; DEC-027, DEC-105, DEC-106; docs/REVIEW_TASK-075_PR-233.md. **Abhängigkeiten:** TASK-075 und TASK-076 geliefert (PR #233, PR #234). **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch per Auswahl „Beheben, Entzug wirkt sofort“ beauftragt, die Befunde der Codex Prüfung von TASK-075 zu beheben, und festgelegt, dass ein im Helpdesk entzogenes Projekt den Portalzugang sofort beendet. Geplanter Branch claude/project-thread-houava, Ergebnis mit DEC-107; TASK-077 erhält danach die nächste freie Entscheidungsnummer.
+
+**Umfang:** Befunde F1 bis F6 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-075_PR-233.md sowie Hinweis H5 nach Holgers Wahl:
+1. F1: Detailabfrage einer fremden Anfrage antwortet auch bei gesperrter Kundenzuordnung wie eine unbekannte Nummer.
+2. F2: einheitliche Sperrreihenfolge der Projekte zwischen Portal Projektliste und Kontenverwaltung, Test mit Kennungen auf beiden Seiten des Vorzeichenbits.
+3. F3: die Portal Projektliste prüft Konto und Sitzung in ihrer Transaktion erneut.
+4. F4: fehlendes oder leeres Feld `projectIds` beim Ändern eines Portalkontos antwortet mit 400; eine ausdrücklich leere Liste entfernt weiter alle Projekte.
+5. F5: Portalkonten erscheinen nicht in den Auswahlen für Bearbeiter und eigene Personenfelder.
+6. F6: die Portalliste erreicht alle Anfragen über weitere Seiten.
+7. H1 doppelte Nummer in der Portalansicht, H2 Antwort 503 im Vertrag der Portal Projektliste, H3 verständliche Gründe im Formular der Portalkonten.
+8. H5: wird einer Organisation im Helpdesk ein Projekt entzogen, verlieren ihre Portalkonten den Zugang zu diesem Projekt sofort.
+
+Nicht Teil: Tags im Portal (TASK-077) und weitere Funktionen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund und Hinweis aus dem Umfang ist behoben und mit einem automatischen Test belegt, soweit testbar.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
