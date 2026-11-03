@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 3 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -32,6 +32,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-084](#task-084-befund-der-prüfung-von-task-083-beheben-a11) | Befund der Prüfung von TASK-083 beheben (A11) | claude-20261103-portal-05 | 2026-11-03 |
+| [TASK-085](#task-085-befunde-der-prüfung-von-task-082-beheben-a17) | Befunde der Prüfung von TASK-082 beheben (A17) | claude-20261102-branding-01 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -371,6 +372,27 @@ Nicht Teil: weitere Funktionen.
 3. Grenzen: Das HTML der Mail erscheint in der Anwendung nicht selbst, weil die Inhaltsrichtlinie Stile im Element verbietet; die Vorschau zeigt dieselben gefüllten Teile als Text und den Klartext. Eine zwischen Prüfung und Bestätigung geänderte Vorlage gilt mit der Bestätigung. Antworten vor V0050 gehen weiter als reiner Text. Ohne Leserecht auf den Titel bleibt `{{ticket.title}}` leer.
 
 **Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger.
+
+## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
+
+**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112; docs/REVIEW_TASK-082_PR-247.md. **Abhängigkeiten:** TASK-082 geliefert (PR #247). **Arbeitsstand:** Holger hat am 3. November 2026 den Codex Prüfbericht zu TASK-082 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; die Behebung wurde dort angekündigt, PR #247 wurde vorher gemergt. Geplanter Branch claude/project-thread-tzp0cw, Entscheidung DEC-115, keine Migration. Die Reservierung gilt erst mit Holgers Merge.
+
+**Umfang:** Befunde F1 und F2 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-082_PR-247.md:
+1. F1: die Bestätigung einer Antwort sendet genau die geprüfte Fassung (Postfach, Empfänger, Betreff, Text); eine Prüfung, die nach einer Änderung, einem Abbruch oder einer neuen Prüfung antwortet, wird verworfen.
+2. F2: das Schema der Adresse der Anwendung gilt in jeder Schreibweise und wird kleingeschrieben gespeichert, damit Vorschau, Speichern und die Prüfung von V0049 übereinstimmen; V0049 bleibt unverändert.
+3. H1: der Fokus geht nach dem Speichern der Vorlage auf die Bestätigung, beim Prüfen einer Antwort auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“.
+4. H2: die Vorlagenvorschau lehnt eine fehlende oder andere Sprache als `de` oder `en` mit 400 `mail_template.languages_missing` ab, im Vertrag und im Testersatz ebenso.
+5. H3: der Browsertest des Portalkopfs aus TASK-081 wartet auf den geladenen Auftritt statt den Standard zu lesen.
+
+Nicht Teil: weitere Funktionen der Mailvorlage.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 ist mit einem Browsertest mit gehaltener Prüfung und zwischenzeitlicher Eingabe belegt, F2 und H2 mit Backendtests, H1 mit Fokusprüfungen im Browser.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
 
 ## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
 
