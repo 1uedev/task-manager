@@ -186,6 +186,9 @@ export function AppearancePage() {
                   aria-invalid={!hexValid || undefined} aria-describedby={hexValid ? undefined : ids.hexError}
                   onChange={(event) => {
                     const value = event.target.value.trim();
+                    // Typing counts as an edit even before the value is complete, so the saved color arriving late does not
+                    // overwrite it (TASK-085).
+                    edited.current = true;
                     setHex(value.toUpperCase());
                     if (isAccentColor(value)) choose(value);
                   }} />

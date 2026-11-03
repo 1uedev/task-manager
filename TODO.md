@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 3 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 12 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -32,7 +32,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-084](#task-084-befund-der-prüfung-von-task-083-beheben-a11) | Befund der Prüfung von TASK-083 beheben (A11) | claude-20261103-portal-05 | 2026-11-03 |
-| [TASK-085](#task-085-befunde-der-prüfung-von-task-082-beheben-a17) | Befunde der Prüfung von TASK-082 beheben (A17) | claude-20261102-branding-01 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -53,6 +52,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
 | [TASK-082](#task-082-mailvorlage-für-antworten-an-kunden-a17-teil-2) | Mailvorlage für Antworten an Kunden (A17 Teil 2) | claude-20261102-branding-01 | 2026-11-03 |
 | [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
+| [TASK-085](#task-085-befunde-der-prüfung-von-task-082-beheben-a17) | Befunde der Prüfung von TASK-082 beheben (A17) | claude-20261102-branding-01 | 2026-11-03 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -375,9 +375,9 @@ Nicht Teil: weitere Funktionen.
 
 ## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
 
-**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112; docs/REVIEW_TASK-082_PR-247.md. **Abhängigkeiten:** TASK-082 geliefert (PR #247). **Arbeitsstand:** Holger hat am 3. November 2026 den Codex Prüfbericht zu TASK-082 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; die Behebung wurde dort angekündigt, PR #247 wurde vorher gemergt. Geplanter Branch claude/project-thread-tzp0cw, Entscheidung DEC-115, keine Migration. Die Reservierung gilt erst mit Holgers Merge.
+**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112; docs/REVIEW_TASK-082_PR-247.md. **Abhängigkeiten:** TASK-082 geliefert (PR #247). **Arbeitsstand:** Holger hat am 3. November 2026 den Codex Prüfbericht zu TASK-082 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; die Behebung wurde dort angekündigt, PR #247 wurde vorher gemergt. Reservierung mit PR #248 gemergt. Ergebnis auf Branch claude/project-thread-tzp0cw mit DEC-115, ohne Migration.
 
 **Umfang:** Befunde F1 und F2 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-082_PR-247.md:
 1. F1: die Bestätigung einer Antwort sendet genau die geprüfte Fassung (Postfach, Empfänger, Betreff, Text); eine Prüfung, die nach einer Änderung, einem Abbruch oder einer neuen Prüfung antwortet, wird verworfen.
@@ -385,6 +385,7 @@ Nicht Teil: weitere Funktionen.
 3. H1: der Fokus geht nach dem Speichern der Vorlage auf die Bestätigung, beim Prüfen einer Antwort auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“.
 4. H2: die Vorlagenvorschau lehnt eine fehlende oder andere Sprache als `de` oder `en` mit 400 `mail_template.languages_missing` ab, im Vertrag und im Testersatz ebenso.
 5. H3: der Browsertest des Portalkopfs aus TASK-081 wartet auf den geladenen Auftritt statt den Standard zu lesen.
+6. Nachtrag aus dem Faden zu A11: die auf main wackelnden Farbtests der Seite „Erscheinungsbild“ warten auf den geladenen Stand; dabei gefunden, dass eine halb eingetippte Farbe vom spät geladenen gespeicherten Auftritt überschrieben wurde, das ist mitbehoben.
 
 Nicht Teil: weitere Funktionen der Mailvorlage.
 
@@ -392,7 +393,12 @@ Nicht Teil: weitere Funktionen der Mailvorlage.
 1. F1 ist mit einem Browsertest mit gehaltener Prüfung und zwischenzeitlicher Eingabe belegt, F2 und H2 mit Backendtests, H1 mit Fokusprüfungen im Browser.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
+**Übergabe zur Prüfung (2026-11-03):**
+1. Ergebnis: `TicketHelpdesk.tsx` hält den geprüften Entwurf fest, die Bestätigung sendet genau ihn, jede Änderung, jeder Abbruch und jede neue Prüfung zählt eine Runde hoch und eine ältere Antwort der Prüfung wird verworfen; der Fokus geht auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“. `MailTemplateService.address` liefert das Schema kleingeschrieben, Pfad und Abfrage bleiben; `preview` lehnt eine fehlende oder fremde Sprache mit 400 `mail_template.languages_missing` ab (Vertrag appearance ergänzt, Testersatz ebenso). `MailTemplateSection.tsx` setzt den Fokus nach dem Speichern auf die Bestätigung. `AppearancePage.tsx` zählt jede Eingabe im Farbwert als Änderung. Browsertests für Portalkopf und Farbwert warten auf den geladenen Auftritt.
+2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw verify` 515 Tests ohne Fehler, `AppearanceApiTest` prüft `HTTPS://` und `Https://` in Vorschau und Speichern und die abgelehnte Sprache. Frontend `npm run verify` 79 Tests, `npm run test:browser` 181 von 181; neu sind der Test mit gehaltener Prüfung und zwischenzeitlicher Eingabe samt Fokus, der Fokus nach dem Speichern der Vorlage und die vor dem gespeicherten Auftritt eingetippte Farbe (ohne die Behebung rot). In weiteren Läufen fiel einmal ein Test der Hintergrundaufträge aus, unabhängig von dieser Änderung. Repositoryprüfungen grün.
+3. Grenzen: V0049 bleibt unverändert; eine schon gespeicherte Adresse ist immer kleingeschrieben, weil die Datenbank anderes nie angenommen hat.
+
+**Nächster Schritt:** Nachprüfung durch eine zweite KI und Abnahme durch Holger.
 
 ## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
 

@@ -151,7 +151,10 @@ public class MailTemplateService implements MailTemplates {
     @Transactional
     public RenderedMail preview(String language, String rawAddress, Draft draft, String name, String accentColor) {
         requireRight();
-        String code = ENGLISH.equals(language) ? ENGLISH : GERMAN;
+        if (!GERMAN.equals(language) && !ENGLISH.equals(language)) {
+            throw ApiProblemException.of(400, "mail_template.languages_missing");
+        }
+        String code = language;
         if (draft == null) {
             throw ApiProblemException.of(400, "mail_template.languages_missing");
         }
@@ -240,10 +243,11 @@ public class MailTemplateService implements MailTemplates {
                 || uri.getHost().isEmpty() || uri.getRawUserInfo() != null || uri.isOpaque()) {
                 throw ApiProblemException.of(400, "mail_template.address_invalid");
             }
+            // The scheme is case insensitive; it is stored in lower case so that the database check and every mail agree.
+            return "https" + address.substring(uri.getScheme().length());
         } catch (URISyntaxException invalid) {
             throw ApiProblemException.of(400, "mail_template.address_invalid");
         }
-        return address;
     }
 
     private void requireRight() {

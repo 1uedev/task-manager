@@ -605,6 +605,17 @@ class AppearanceApiTest {
         missing.put("de", fine);
         assertProblem(admin.json("PUT", "/api/v1/appearance/mail-template", missing, "\"2\""), 400, "mail_template.languages_missing");
         assertEquals(2, jdbc.queryForObject("select version from appearance_mail_template", Long.class), "nothing refused was stored");
+        // The scheme counts in any case and is kept in lower case; path and query keep theirs (F2 of the review).
+        for (String address : List.of("HTTPS://support.example.com/Portal?Q=1", "Https://support.example.com/Portal?Q=1")) {
+            Response previewed = admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "de", "applicationUrl", address,
+                "texts", texts("", "", "{{portal.url}}")), null);
+            assertEquals(200, previewed.status(), previewed.body());
+            assertTrue(previewed.json().get("text").asString().contains("https://support.example.com/Portal?Q=1"), previewed.body());
+        }
+        Response upper = admin.json("PUT", "/api/v1/appearance/mail-template", template("HTTPS://support.example.com/Portal?Q=1", fine, fine), "\"2\"");
+        assertEquals(200, upper.status(), upper.body());
+        assertEquals("https://support.example.com/Portal?Q=1", upper.json().get("applicationUrl").asString());
+        assertEquals("https://support.example.com/Portal?Q=1", jdbc.queryForObject("select application_url from appearance_mail_template", String.class));
     }
 
     @Test
@@ -631,6 +642,11 @@ class AppearanceApiTest {
         assertTrue(german.json().get("text").asString().endsWith("Nordlicht\n\n-- \nTicket HELP-42\n"), german.body());
         assertProblem(admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "de", "texts", texts("{{x}}", "", "")), null),
             400, "mail_template.placeholder_unknown");
+        // Only German and English are languages of the template; nothing falls back silently (H2 of the review).
+        assertProblem(admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "fr", "texts", texts("", "", "")), null),
+            400, "mail_template.languages_missing");
+        assertProblem(admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("texts", texts("", "", "")), null),
+            400, "mail_template.languages_missing");
         assertEquals(1, jdbc.queryForObject("select version from appearance_mail_template", Long.class), "a preview stores nothing");
     }
 

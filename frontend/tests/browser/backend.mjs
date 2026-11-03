@@ -415,7 +415,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const template = state.mailTemplate;
       if (p === '/appearance/mail-template' && method === 'GET') return ok(mailTemplateBody(), `"${template.version}"`);
       if (p === '/appearance/mail-template/preview' && method === 'POST') {
-        const code = body.language === 'en' ? 'en' : 'de';
+        if (body.language !== 'de' && body.language !== 'en') return problem(400, 'mail_template.languages_missing');
+        const code = body.language;
         const refused = checkTexts(code, body.texts) ?? checkAddress(body.applicationUrl);
         if (refused) return refused;
         const sample = code === 'en'
@@ -423,7 +424,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
             body: 'Thank you for your message.\nWe have restarted the printer; it works again.\nPlease let us know if anything is still wrong.' }
           : { contact: 'Erika Beispiel', number: 'HELP-42', title: 'Drucker in Halle 2 startet nicht', sender: 'Max Support', mailbox: 'support@example.com',
             body: 'Vielen Dank für Ihre Nachricht.\nWir haben den Drucker neu gestartet, er läuft wieder.\nBitte melden Sie sich, falls noch etwas nicht stimmt.' };
-        return ok(renderMail(code, body.texts, body.applicationUrl?.trim() || null, body.name ?? state.appearance.name,
+        return ok(renderMail(code, body.texts, (body.applicationUrl?.trim().replace(/^https:/i, 'https:') || null), body.name ?? state.appearance.name,
           (body.accentColor ?? state.appearance.accent).toLowerCase(), state.appearance.logo !== null, sample));
       }
       if (!headers['if-match']) return problem(428, 'mail_template.precondition_required');
@@ -432,7 +433,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         if (!body.de || !body.en) return problem(400, 'mail_template.languages_missing');
         const refused = checkAddress(body.applicationUrl) ?? checkTexts('de', body.de) ?? checkTexts('en', body.en);
         if (refused) return refused;
-        Object.assign(template, { applicationUrl: body.applicationUrl?.trim() || null, de: { ...body.de }, en: { ...body.en }, version: template.version + 1 });
+        Object.assign(template, { applicationUrl: (body.applicationUrl?.trim().replace(/^https:/i, 'https:') || null), de: { ...body.de }, en: { ...body.en }, version: template.version + 1 });
         return ok(mailTemplateBody(), `"${template.version}"`);
       }
       if (p === '/appearance/mail-template' && method === 'DELETE') {

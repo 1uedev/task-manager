@@ -161,6 +161,7 @@ export const en: Record<MessageKey, Message> = {
   'helpdesk.languageEn': 'English',
   'ticketHelpdesk.mailLanguageDe': 'This is how the mail goes out, in German.',
   'ticketHelpdesk.mailLanguageEn': 'This is how the mail goes out, in English.',
+  'ticketHelpdesk.checkRegion': 'Check of the reply before sending',
   'appearance.preview.hint': 'This is how the application, the login page, the portal and mails look with your choice. All content is sample content.',
   'appearance.preview.app': 'Application',
   'appearance.preview.login': 'Login page',
