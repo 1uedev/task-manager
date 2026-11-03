@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-084](#task-084-befund-der-prüfung-von-task-083-beheben-a11) | Befund der Prüfung von TASK-083 beheben (A11) | claude-20261103-portal-05 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -395,3 +396,22 @@ Nicht Teil: weitere Funktionen, Beiträge des Supports (Regel aus V0043 bleibt),
 3. Grenzen: Mailantworten an einen Kontakt, der vorher die Organisation gewechselt hat, bleiben verborgen; die Grenze aus `flyway_schema_history` setzt dieselbe Zeitzone der Datenbanksitzung wie bei V0043 voraus; H2 bleibt. V0046 gehört TASK-081 (PR #243, schon auf main).
 
 **Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-080 und TASK-083 durch Holger.
+
+## TASK-084 Befund der Prüfung von TASK-083 beheben (A11)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261103-portal-05 · **Aktualisiert:** 2026-11-03
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113; docs/REVIEW_TASK-083_PR-245.md. **Abhängigkeiten:** TASK-083 geliefert (PR #245). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, den Befund F1 der Codex Prüfung von TASK-083 mit einer von der Zeitzone unabhängigen, vorsichtigen Grenze zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-114, Migration V0051 (V0049 und V0050 gehören TASK-082, dessen Ergebnis daher zuerst auf main kommt).
+
+**Umfang:** Befund F1 und Hinweise H1 und H3 aus docs/REVIEW_TASK-083_PR-245.md:
+1. F1: eine neue Migration bestimmt die Grenze zwischen alten Mailantworten und den von der Anwendung nach V0043 gespeicherten ohne Annahme über die Zeitzone der Datenbanksitzung: der späteste mögliche Zeitpunkt, 12 Stunden nach dem gespeicherten Installationswert von V0043 in UTC gelesen. Alle Antworten davor werden nach der Regel aus TASK-083 neu berechnet; V0047 bleibt unverändert.
+2. H1: der Migrationstest deckt beide Richtungen eines Zeitzonenwechsels zwischen V0043 und der neuen Migration ab.
+3. H3: Testbeschreibung und README sagen genau, dass der Migrationstest eine modellierte Historie prüft.
+
+Nicht Teil: weitere Funktionen, H2 (Reihenfolge mit V0046 ist integriert).
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Der Befund ist behoben und mit automatischen Tests für beide Zeitzonenrichtungen belegt.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
