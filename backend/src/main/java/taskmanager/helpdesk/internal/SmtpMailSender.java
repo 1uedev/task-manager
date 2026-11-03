@@ -187,7 +187,11 @@ class SmtpMailSender implements MailSender {
         message.setFrom(address(mail.fromAddress(), mail.fromName()));
         message.setRecipient(Message.RecipientType.TO, address(mail.toAddress(), mail.toName()));
         message.setHeader("Subject", subject(mail.subject()));
-        message.setText(mail.body(), StandardCharsets.UTF_8.name());
+        if (mail.rendered() == null) {
+            message.setText(mail.body(), StandardCharsets.UTF_8.name());
+        } else {
+            message.setContent(content(mail.rendered()));
+        }
         message.setSentDate(Date.from(mail.date()));
         if (mail.inReplyTo() != null) {
             message.setHeader("In-Reply-To", mail.inReplyTo());
@@ -206,6 +210,36 @@ class SmtpMailSender implements MailSender {
             }
         }
         return message;
+    }
+
+    /**
+     * The finished mail of TASK-082 as {@code multipart/alternative}: the plain text first, then the HTML, which carries the logo
+     * as a related part with the Content-ID {@code logo} when there is one. Mail programs show the last part they can.
+     */
+    static jakarta.mail.internet.MimeMultipart content(Rendered rendered) throws MessagingException {
+        jakarta.mail.internet.MimeMultipart alternative = new jakarta.mail.internet.MimeMultipart("alternative");
+        jakarta.mail.internet.MimeBodyPart text = new jakarta.mail.internet.MimeBodyPart();
+        text.setText(rendered.text(), StandardCharsets.UTF_8.name());
+        alternative.addBodyPart(text);
+        jakarta.mail.internet.MimeBodyPart html = new jakarta.mail.internet.MimeBodyPart();
+        html.setText(rendered.html(), StandardCharsets.UTF_8.name(), "html");
+        if (rendered.logo() == null) {
+            alternative.addBodyPart(html);
+            return alternative;
+        }
+        jakarta.mail.internet.MimeMultipart related = new jakarta.mail.internet.MimeMultipart("related");
+        related.addBodyPart(html);
+        jakarta.mail.internet.MimeBodyPart logo = new jakarta.mail.internet.MimeBodyPart();
+        logo.setDataHandler(new jakarta.activation.DataHandler(new jakarta.mail.util.ByteArrayDataSource(rendered.logo(), rendered.logoType())));
+        logo.setHeader("Content-Type", rendered.logoType());
+        logo.setContentID("<logo>");
+        logo.setDisposition(jakarta.mail.Part.INLINE);
+        logo.setFileName("logo." + rendered.logoType().substring("image/".length()));
+        related.addBodyPart(logo);
+        jakarta.mail.internet.MimeBodyPart wrapper = new jakarta.mail.internet.MimeBodyPart();
+        wrapper.setContent(related);
+        alternative.addBodyPart(wrapper);
+        return alternative;
     }
 
     /** The longest line of a header that RFC 5322 allows, without its line break. */

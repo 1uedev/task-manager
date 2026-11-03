@@ -37,7 +37,8 @@ import taskmanager.projects.ProjectAccess;
  * limit or the stop interrupted it) and records {@code uncertain} without sending: nothing is ever sent twice by itself. An
  * outcome is recorded only while the reply still belongs to the job of the attempt, so a late attempt never changes a send
  * a person started since (TASK-062, X-F1); when the last attempt ends without an outcome, {@code ReplyWatch} settles the
- * reply. The log names the reply and the code, never the text of the mail server.
+ * reply. The log names the reply and the code, never the text of the mail server. A reply sends the finished mail kept at
+ * its confirmation (TASK-082), whatever the template is now.
  */
 @Component
 class ReplySender implements JobHandler {
@@ -156,7 +157,8 @@ class ReplySender implements JobHandler {
         repository.replyState(replyId, "sending", reply.errorCode(), now, null, now, by);
         String toName = repository.contact(reply.companyId(), reply.contactId()).map(Contact::name).orElse(null);
         return Optional.of(new Prepared(mailbox, password, new MailSender.Outgoing(reply.messageId(), reply.fromAddress(), mailbox.name(),
-            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now), by));
+            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now,
+            repository.replyMail(replyId).orElse(null)), by));
     }
 
     /**

@@ -81,6 +81,12 @@ public interface TicketAccess {
     Optional<State> state(UUID ticketId);
 
     /**
+     * The title of the ticket, or empty for an unknown identifier (TASK-082). Needs no lock; the caller must not show it without
+     * the read rule of the field {@code title} for the reader.
+     */
+    Optional<String> title(UUID ticketId);
+
+    /**
      * Every ticket of the company with its five fields, to rebuild a projection (TASK-029). Needs a transaction; the fields
      * must not be shown without the read rules of the reader.
      */

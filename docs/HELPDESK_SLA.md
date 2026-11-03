@@ -89,6 +89,10 @@ Die Antworten sind mit TASK-058 umgesetzt, zur Prüfung und Abnahme. Gegenüber 
 
 - Ein Betreff kommt beim Kunden immer so an, wie er eingegeben wurde, auch wenn er Zeichenfolgen enthält, die wie eine Mailkodierung aussehen.
 
+### Nachtrag TASK-082 (DEC-112): Mailvorlage für Antworten an Kunden
+
+Jede Antwort an einen Kontakt geht seit TASK-082 in der Vorlage „Antwort an Kunden“ als HTML und Klartext derselben Nachricht, in der Sprache des Kontakts (Deutsch oder Englisch, Vorgabe Deutsch, änderbar in der Kundenpflege). Die Prüfung vor dem Senden zeigt die fertige Mail; die Bestätigung hält sie fest, und ein wartender, wiederholter oder erneut gesendeter Versand nutzt genau diese Mail. Pflege, Platzhalter und Grenzen beschreibt backend/README.md im Abschnitt „Erscheinungsbild“.
+
 ## Kundenportal und Antworten
 
 Bestätigt für V1: Administratoren legen lokale Portalzugänge mit Einmalpasswort an; bei erster Anmeldung ist der Passwortwechsel verpflichtend (DEC-053). Der vorgeschlagene Einladungslink ist damit ersetzt. Vor dem Pflichtwechsel ist regulärer Fachzugriff über Portal und API gesperrt; danach gelten die aktuellen Organisations-/Projektfreigaben. Gültigkeit, sichere Übergabe, erneute Ausgabe und Wiederherstellung werden gemäß [PERMISSIONS.md](PERMISSIONS.md) noch ausgestaltet. Ein E-Mail-Eingang erzeugt kein automatisches Konto. Offene Selbstregistrierung gehört nicht zum gewählten Kontoanlageweg; anonyme Webformulare bleiben unbestätigt.

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  answerInPortal, listPortalPosts, readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply,
+  answerInPortal, listPortalPosts, previewReply, readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply, type ReplyMail,
   type Ticket, type TicketHelpdesk as HelpdeskView,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -11,6 +11,7 @@ import type { MessageKey } from '../i18n/index.ts';
 import { formatBytes, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { useHelpdeskCode } from './HelpdeskPage.tsx';
+import { MailView } from './MailView.tsx';
 
 // Customer, contact and the mails of a ticket (TASK-057). Each part follows the rules of its ticket field, which only the
 // server knows: a part without the read rule is not shown, and the choice is offered only with the write rules.
@@ -119,7 +120,7 @@ function PortalThread({ project, ticket, round }: { readonly project: Project; r
 // An answer through the portal (TASK-076): it appears at once in the portal and counts as first response; no mail is sent.
 function PortalAnswer({ project, ticket, onSent }: { readonly project: Project; readonly ticket: Ticket; readonly onSent: () => void }) {
   const { t } = useI18n();
-  const { api } = useBrand();
+  const { api, brand } = useBrand();
   const text = useProblemText();
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
@@ -274,7 +275,7 @@ const REPLY_PROBLEMS: Readonly<Record<string, MessageKey>> = {
 // then confirmed. The server sends it in the background; the thread shows where it stands.
 function ReplyComposer({ project, ticket, onSent }: { readonly project: Project; readonly ticket: Ticket; readonly onSent: () => void }) {
   const { t } = useI18n();
-  const { api } = useBrand();
+  const { api, brand } = useBrand();
   const text = useProblemText();
   const [open, setOpen] = useState(false);
   const [form] = useLoad(() => (open ? readReplyForm(api, project.id, ticket.number) : Promise.resolve({ kind: 'ok' as const, data: { value: null, etag: null } })),
@@ -284,6 +285,8 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   const [subject, setSubject] = useState<string | null>(null);
   const [body, setBody] = useState('');
   const [checking, setChecking] = useState(false);
+  // The finished mail as the server sets it in the template and the language of the contact (TASK-082).
+  const [mail, setMail] = useState<ReplyMail | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   useUnsavedGuard(open && body.trim() !== '');
@@ -308,12 +311,17 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   const chosenSubject = subject ?? options.subject ?? '';
   const sender = options.mailboxes.find((item) => item.id === chosenMailbox);
 
-  function check(event: FormEvent) {
+  async function check(event: FormEvent) {
     event.preventDefault();
     setNotice(null);
     if (chosenSubject.trim() === '' || body.trim() === '') {
       return setNotice({ kind: 'info', text: t('ticketHelpdesk.error.replyInvalid') });
     }
+    setBusy(true);
+    const result = await previewReply(api, project.id, ticket.number, chosenMailbox, chosenTo, chosenSubject.trim(), body);
+    setBusy(false);
+    if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, REPLY_PROBLEMS) });
+    setMail(result.data.value);
     setChecking(true);
   }
 
@@ -334,7 +342,7 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   }
 
   return (
-    <form className="inline-form" onSubmit={check} noValidate data-testid="reply-form">
+    <form className="inline-form" onSubmit={(event) => void check(event)} noValidate data-testid="reply-form">
       <h3>{t('ticketHelpdesk.compose')}</h3>
       {!checking ? (
         <>
@@ -345,7 +353,7 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
           <TextField label={t('ticketHelpdesk.subject')} value={chosenSubject} onChange={setSubject} required maxLength={998} />
           <TextField label={t('ticketHelpdesk.body')} value={body} onChange={setBody} required multiline maxLength={100000} />
           <p className="actions">
-            <button type="submit">{t('ticketHelpdesk.check')}</button>
+            <button type="submit" disabled={busy}>{t('ticketHelpdesk.check')}</button>
             <button type="button" className="secondary" onClick={() => { setOpen(false); setNotice(null); }}>{t('helpdesk.cancel')}</button>
           </p>
         </>
@@ -353,7 +361,12 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
         <div data-testid="reply-check">
           <p>{t('ticketHelpdesk.confirmText', { to: `${options.contactName} <${chosenTo}>`, from: sender ? `${sender.name} <${sender.address}>` : '' })}</p>
           <p><strong>{chosenSubject}</strong></p>
-          <p className="prewrap mail-body">{body}</p>
+          {mail !== null && (
+            <>
+              <p className="hint" data-testid="reply-language">{t(mail.language === 'en' ? 'ticketHelpdesk.mailLanguageEn' : 'ticketHelpdesk.mailLanguageDe')}</p>
+              <MailView mail={mail} logoUrl={brand.logoUrl} testId="reply-mail" />
+            </>
+          )}
           <p className="actions">
             <button type="button" disabled={busy} onClick={() => void confirm()}>{t('ticketHelpdesk.confirm')}</button>
             <button type="button" className="secondary" disabled={busy} onClick={() => setChecking(false)}>{t('ticketHelpdesk.back')}</button>

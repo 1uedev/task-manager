@@ -136,16 +136,17 @@ class HelpdeskRepository {
 
     void insertContact(Contact contact) {
         jdbc.sql("""
-                insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by, language)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(contact.id(), contact.companyId(), contact.customerId(), contact.name(), contact.version(),
-                ts(contact.createdAt()), contact.createdBy(), ts(contact.updatedAt()), contact.updatedBy()).update();
+                ts(contact.createdAt()), contact.createdBy(), ts(contact.updatedAt()), contact.updatedBy(), contact.language()).update();
         replaceAddresses(contact);
     }
 
     void updateContact(Contact contact) {
-        jdbc.sql("update helpdesk_contact set customer_id = ?, name = ?, version = ?, updated_at = ?, updated_by = ? where id = ?")
-            .params(contact.customerId(), contact.name(), contact.version(), ts(contact.updatedAt()), contact.updatedBy(), contact.id())
+        jdbc.sql("update helpdesk_contact set customer_id = ?, name = ?, language = ?, version = ?, updated_at = ?, updated_by = ? where id = ?")
+            .params(contact.customerId(), contact.name(), contact.language(), contact.version(), ts(contact.updatedAt()), contact.updatedBy(),
+                contact.id())
             .update();
         replaceAddresses(contact);
     }
@@ -164,7 +165,7 @@ class HelpdeskRepository {
             .param(id).query(String.class).list();
         return new Contact(id, rs.getObject("company_id", UUID.class), rs.getObject("customer_id", UUID.class), rs.getString("name"),
             addresses, rs.getLong("version"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
-            rs.getObject("updated_by", UUID.class));
+            rs.getObject("updated_by", UUID.class), rs.getString("language"));
     }
 
     // ------------------------------------------------------------------------------------------------ mailboxes
@@ -483,6 +484,35 @@ class HelpdeskRepository {
                 r.subject(), r.body(), r.messageId(), r.inReplyTo(), r.references(), r.state(), r.errorCode(), r.jobId(), r.sends(),
                 ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version(),
                 r.customerId()).update();
+    }
+
+    /** The finished mail of a reply as it was confirmed (TASK-082); a logo is kept once per content. */
+    void insertReplyMail(UUID replyId, taskmanager.appearance.MailTemplates.RenderedMail mail) {
+        String digest = null;
+        if (mail.logo() != null) {
+            digest = java.util.HexFormat.of().formatHex(sha256(mail.logo().content()));
+            jdbc.sql("insert into helpdesk_reply_image (digest, content_type, content) values (?, ?, ?) on conflict (digest) do nothing")
+                .params(digest, mail.logo().contentType(), mail.logo().content()).update();
+        }
+        jdbc.sql("insert into helpdesk_reply_mail (reply_id, language, text_body, html_body, logo_digest) values (?, ?, ?, ?, ?)")
+            .params(replyId, mail.language(), mail.text(), mail.html(), digest).update();
+    }
+
+    /** The finished mail of a reply, or empty for one confirmed before TASK-082. */
+    Optional<MailSender.Rendered> replyMail(UUID replyId) {
+        return jdbc.sql("""
+                select m.text_body, m.html_body, i.content_type, i.content from helpdesk_reply_mail m
+                left join helpdesk_reply_image i on i.digest = m.logo_digest where m.reply_id = ?
+                """).param(replyId).query((rs, row) -> new MailSender.Rendered(rs.getString("text_body"), rs.getString("html_body"),
+                rs.getString("content_type"), rs.getBytes("content"))).optional();
+    }
+
+    private static byte[] sha256(byte[] content) {
+        try {
+            return java.security.MessageDigest.getInstance("SHA-256").digest(content);
+        } catch (java.security.NoSuchAlgorithmException missing) {
+            throw new IllegalStateException(missing);
+        }
     }
 
     Optional<Reply> reply(UUID companyId, UUID id) {
