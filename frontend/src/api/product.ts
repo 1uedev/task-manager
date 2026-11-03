@@ -286,7 +286,7 @@ export const readPortalConversation = (api: ServerApi, projectId: string, number
 export const postInPortal = (api: ServerApi, projectId: string, number: number, body: string, attachmentIds: readonly string[]) =>
   run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } },
     body: { body, attachmentIds: [...attachmentIds] } }), one<PortalEntry>(isPortalEntry));
-/** Acknowledges the conversation up to {@code until}, the time of the newest entry shown (TASK-079, F2). */
+/** Acknowledges the conversation up to {@code position}, the highest position of an answer of the support shown (TASK-080, F2). */
 export const markPortalSeen = (api: ServerApi, projectId: string, number: number, position: number) =>
   run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } }, body: { position } }), nothing);
 export const listPortalAttachments = (api: ServerApi, projectId: string, number: number) =>

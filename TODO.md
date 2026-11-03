@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 10 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -52,6 +51,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
 | [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
+| [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -369,7 +369,7 @@ Nicht Teil: weitere Funktionen.
 
 ## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261103-portal-04 · **Aktualisiert:** 2026-11-03
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261103-portal-04 · **Aktualisiert:** 2026-11-03
 
 **Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109, DEC-110; docs/REVIEW_TASK-080_PR-241.md. **Abhängigkeiten:** TASK-080 geliefert (PR #241). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, die Befunde F1 und F2 der Codex Prüfung von TASK-080 ohne Zeitfenster zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-113, neue Migrationen mit den nächsten freien Nummern auf main zum Zeitpunkt der Umsetzung (TASK-081 belegt V0046).
 
@@ -385,4 +385,9 @@ Nicht Teil: weitere Funktionen, Beiträge des Supports (Regel aus V0043 bleibt),
 1. Jeder Befund aus dem Umfang ist behoben und mit einem automatischen Test belegt.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
+**Übergabe zur Prüfung (2026-11-03):**
+1. Ergebnis: V0047 gibt alten Mailantworten nur dann eine Organisation, wenn jede Anlage und Änderung des Kontakts bis zum Zeitpunkt der Antwort dieselbe Organisation nennt; V0048 gibt Anhängen, deren jüngste Handlung ein Umschalten auf „Kunde“ vor TASK-079 ist, nur dann einen Kunden, wenn jede Kundenänderung des Tickets bis dahin denselben nennt. Sonst bleibt die Zielgruppe leer; kein Zeitfenster mehr (F1). Name, Adressen und Anlage des Kontakts zählen nicht; Mailantworten nach der Installation von V0043 behalten den Wert der Anwendung, ältere werden nach der Regel neu berechnet (F2). Kommentar zu `position` in `frontend/src/api/product.ts` berichtigt.
+2. Nachweise: `PortalAudienceMigrationTest` mit drei Fällen (Upgrade von V0040, Korrektur nach V0042, Korrektur nach V0045 mit Zeilen der Anwendung), darin 70 Sekunden gehaltene Änderung von Kontakt und Kunde, kurz vorher angelegter Kontakt, reine Namensänderung; auf dem Stand von V0045 belegt der Test die alten Fehler. Voller Backendlauf, `npm run verify`.
+3. Grenzen: Mailantworten an einen Kontakt, der vorher die Organisation gewechselt hat, bleiben verborgen; die Grenze aus `flyway_schema_history` setzt dieselbe Zeitzone der Datenbanksitzung wie bei V0043 voraus; H2 bleibt. V0046 gehört TASK-081 (PR #243, schon auf main).
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme von TASK-075 bis TASK-080 und TASK-083 durch Holger.
