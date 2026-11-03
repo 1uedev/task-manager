@@ -447,4 +447,4 @@ Nicht Teil: weitere Funktionen, H2 (Reihenfolge mit V0046 ist integriert).
 2. Nachweise: `PortalAudienceMigrationTest` mit vier Zeitzonenpaaren (UTC und Europe/Berlin, UTC-12 und UTC+14, jeweils beide Richtungen); ohne V0051 schlägt er für UTC nach Europe/Berlin fehl. Der Fall „Korrektur nach V0045“ prüft die Neuberechnung innerhalb der Grenze. Voller Backendlauf.
 3. Grenzen: Mailantworten aus den ersten 12 Stunden (bei östlichen Zonen bis 26 Stunden) nach dem Update auf V0043 an zuvor umgezogene Kontakte bleiben verborgen; die Uhr der Datenbank muss damals gestimmt haben.
 
-**Nächster Schritt:** Prüfung durch eine zweite KI und Abnahme von TASK-075 bis TASK-080, TASK-083 und TASK-084 durch Holger.
+**Nächster Schritt:** Die Codex Prüfung (codex-20261103-portal-review-06, docs/REVIEW_TASK-084.md) empfiehlt die Abnahme ohne neuen Befund. Abnahme von TASK-075 bis TASK-080, TASK-083 und TASK-084 durch Holger.
