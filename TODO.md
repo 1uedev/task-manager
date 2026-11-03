@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
+| [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -365,3 +366,23 @@ Nicht Teil: weitere Funktionen.
 4. Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
 
 **Nächster Schritt:** Nach dem Ergebnis von TASK-081 auf main die Blockade aufheben und umsetzen.
+
+## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261103-portal-04 · **Aktualisiert:** 2026-11-03
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109, DEC-110; docs/REVIEW_TASK-080_PR-241.md. **Abhängigkeiten:** TASK-080 geliefert (PR #241). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, die Befunde F1 und F2 der Codex Prüfung von TASK-080 ohne Zeitfenster zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-113, neue Migrationen mit den nächsten freien Nummern auf main zum Zeitpunkt der Umsetzung (TASK-081 belegt V0046).
+
+**Umfang:** Befunde F1 und F2 und Hinweis H1 aus docs/REVIEW_TASK-080_PR-241.md:
+1. F1: eine alte Mailantwort behält ihre Organisation nur, wenn der Kontakt vor ihrem Zeitpunkt nie die Organisation gewechselt hat; eine alte Freigabe einer Datei für Kunden behält ihre Organisation nur, wenn das Ticket vor der Freigabe nie den Kunden gewechselt hat. Sonst bleibt die Zielgruppe leer und der Eintrag verborgen. Das Fenster von einer Minute entfällt.
+2. F2: Änderungen von Name oder Adresse und das Anlegen des Kontakts machen eine Antwort nicht mehr unsicher; Zielgruppen, die die Anwendung seit TASK-079 selbst gespeichert hat, bleiben unverändert oder werden wiederhergestellt.
+3. H1: der Migrationstest deckt eine länger als eine Minute gehaltene Änderung, einen frisch angelegten Kontakt, eine reine Namensänderung und Zeilen nach V0042 ab.
+4. Der veraltete Kommentar zu `until` in `frontend/src/product.ts` wird berichtigt.
+
+Nicht Teil: weitere Funktionen, Beiträge des Supports (Regel aus V0043 bleibt), H2 (Lesestand alter Zeitpunkte bleibt dokumentierte Grenze).
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund aus dem Umfang ist behoben und mit einem automatischen Test belegt.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
