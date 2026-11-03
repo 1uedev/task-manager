@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { auditContrast } from './audit.mjs';
-import { ANNA, BEN, TOKEN, createBackend } from './backend.mjs';
+import { ANNA, BEN, NORA, TOKEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-036: light and dark surfaces, the company accent from the server, and drag and drop with its keyboard
@@ -141,11 +141,50 @@ describe('company appearance', () => {
     });
   });
 
-  test('before the login the default orange is used and nothing of the company is read', async () => {
-    const backend = fake();
+  test('before the login the login page shows the company name, color and logo and reads nothing else', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    backend.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
     await withPage({ backend, as: null }, async (page) => {
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      await accentBecomes(page, '#2563eb', 'the login page carries the company color');
+      await page.waitForSelector('header img.brand-logo');
+      assert.equal(await page.locator('header img.brand-logo').getAttribute('src'), '/api/v1/appearance/public/logo');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      assert.equal(await page.title(), 'Anmelden · Nordlicht Service');
+      assert.deepEqual([...new Set(backend.state.requests.map((item) => item.path))].sort(),
+        ['/api/v1/appearance/public', '/api/v1/appearance/public/logo', '/api/v1/session']);
+    });
+  });
+
+  test('when the public appearance cannot be read the login page keeps the default', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    backend.state.publicAppearanceDown = true;
+    await withPage({ backend, as: null }, async (page) => {
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      await page.waitForFunction(() => performance.getEntriesByType('resource').some((entry) => entry.name.endsWith('/api/v1/appearance/public')));
       assert.equal(await accent(page), '#f97316');
-      assert.deepEqual([...new Set(backend.state.requests.map((item) => item.path))], ['/api/v1/session']);
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
+    });
+  });
+
+  test('the password change and the page after logging out show the company appearance', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    await withPage({ backend, as: null }, async (page) => {
+      await page.getByLabel(/^Anmeldename/).fill(NORA.username);
+      await page.getByLabel(/^Passwort/).fill(NORA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('h1:has-text("Eigenes Passwort festlegen")');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      await accentBecomes(page, '#2563eb', 'the password change carries the company color');
+      await page.getByLabel(/^Einmalpasswort/).fill(NORA.password);
+      await page.getByLabel(/^Neues Passwort \(/).fill('Nora Passwort 2026');
+      await page.getByLabel(/^Neues Passwort wiederholen/).fill('Nora Passwort 2026');
+      await page.getByRole('button', { name: 'Passwort speichern' }).click();
+      await page.waitForSelector('.shell main h1');
+      await page.getByRole('button', { name: 'Abmelden' }).click();
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      await accentBecomes(page, '#2563eb', 'the page after logging out carries the company color');
     });
   });
 
@@ -308,6 +347,75 @@ describe('drag and drop', () => {
       assert.deepEqual(await page.locator('[data-column="doing"] [data-card]').evaluateAll((cards) => cards.map((card) => card.dataset.card)), ['c2', 'c1', 'c5']);
       await page.dragAndDrop('[data-card="c6"]', '[data-column="review"] header');
       assert.equal(await column('c6'), 'review');
+    });
+  });
+});
+
+// TASK-081: the name of the company, resetting everything and the preview of every area.
+describe('company name and preview', () => {
+  test('a holder of the right previews and saves the name, which reaches the head and every preview', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Task Manager');
+      await field.fill('  Nordlicht Service  ');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name"]')?.textContent === 'Nordlicht Service');
+      for (const area of ['preview-app', 'preview-login', 'preview-portal', 'preview-mail-de', 'preview-mail-en']) {
+        assert.match(await page.getByTestId(area).innerText(), /Nordlicht Service/, area);
+      }
+      assert.match(await page.getByTestId('preview-portal').innerText(), /Kundenportal/);
+      assert.match(await page.getByTestId('preview-mail-de').innerText(), /Guten Tag Erika Musterfrau/);
+      assert.match(await page.getByTestId('preview-mail-en').innerText(), /Hello Jane Example/);
+      assert.equal(await page.getByTestId('preview-mail-en').getAttribute('lang'), 'en');
+      assert.deepEqual(server.writes(), [], 'nothing is sent while typing');
+
+      await field.fill('');
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+      await page.getByText('Bitte 1 bis 80 Zeichen ohne Zeilenumbruch eingeben.').waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name"]')?.textContent === 'Task Manager');
+
+      await field.fill('Nordlicht Service');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      const [write] = server.writes();
+      assert.deepEqual({ method: write.method, path: write.path, ifMatch: write.ifMatch, csrf: write.csrf }, { method: 'PUT', path: '/api/v1/appearance', ifMatch: '"3"', csrf: TOKEN });
+      assert.deepEqual(JSON.parse(write.body.toString()), { name: 'Nordlicht Service' });
+      await page.getByRole('link', { name: 'Start' }).click();
+      await page.waitForSelector('h1:has-text("Willkommen")');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      assert.match(await page.title(), / · Nordlicht Service$/);
+    });
+  });
+
+  test('resetting everything asks once more and puts name, color and logo back', async () => {
+    const server = fake({ brandName: 'Nordlicht Service' });
+    server.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      await page.getByRole('heading', { name: 'Alles zurücksetzen' }).waitFor();
+      await page.getByRole('button', { name: 'Alles zurücksetzen' }).click();
+      assert.deepEqual(server.writes(), [], 'the first click only asks');
+      await page.getByRole('button', { name: 'Abbrechen' }).click();
+      await page.getByRole('button', { name: 'Alles zurücksetzen' }).click();
+      await page.getByRole('button', { name: 'Ja, alles zurücksetzen' }).click();
+      await page.getByText('Name, Akzentfarbe und Logo sind auf den Standard zurückgesetzt.').waitFor();
+      const [write] = server.writes();
+      assert.deepEqual({ method: write.method, path: write.path, ifMatch: write.ifMatch, csrf: write.csrf }, { method: 'DELETE', path: '/api/v1/appearance', ifMatch: '"3"', csrf: TOKEN });
+      await accentBecomes(page, '#f97316');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
+      assert.equal(await page.locator('header img.brand-logo').count(), 0);
+      assert.equal(await page.getByLabel('Name des Unternehmens').inputValue(), 'Task Manager');
+    });
+  });
+
+  test('a person without the right sees no reset and cannot save a name', async () => {
+    const server = fake();
+    await withPage({ backend: server, as: BEN, hash: '#/appearance' }, async (page) => {
+      await page.getByTestId('appearance-mode').waitFor();
+      assert.equal(await page.getByRole('heading', { name: 'Alles zurücksetzen' }).count(), 0);
+      await page.getByLabel('Name des Unternehmens').fill('Vorschau');
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
+      assert.deepEqual(server.writes(), []);
     });
   });
 });

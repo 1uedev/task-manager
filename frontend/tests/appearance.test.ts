@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { changeAccentColor, createServerApi, parseAppearance, parseSession, readAppearance, readSession, removeLogo, replaceLogo } from '../src/api/client.ts';
+import { changeAccentColor, changeAppearance, createServerApi, isBrandName, parseAppearance, parsePublicAppearance, parseSession, readAppearance, readPublicAppearance, readSession, removeLogo, replaceLogo, resetAppearance } from '../src/api/client.ts';
 import { readCsrfToken } from '../src/api/csrf.ts';
 import { restoreOrder } from '../src/app/preferences.ts';
 import { move } from '../src/app/useReorder.ts';
 import { COLUMNS, moveCard, type Board } from '../src/pages/board.ts';
 
 const TOKEN = 'abcdefghijklmnopqrstuvwxyz012345';
-const APPEARANCE = { accentColor: '#F97316', defaultAccentColor: '#f97316', logo: null, version: 3, updatedAt: '2026-10-19T06:00:00Z' };
+const APPEARANCE = { name: 'Task Manager', defaultName: 'Task Manager', accentColor: '#F97316', defaultAccentColor: '#f97316', logo: null, version: 3, updatedAt: '2026-10-19T06:00:00Z' };
 
 test('a stored order keeps known entries only, once each, and adds new ones at the end', () => {
   const known = ['start', 'board', 'states', 'form'] as const;
@@ -90,11 +90,16 @@ test('changes carry If-Match and the CSRF token, and a logo is sent as raw image
     await changeAccentColor(api, '"3"', '#1d4ed8');
     await replaceLogo(api, '"4"', new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'image/png');
     await removeLogo(api, '"5"');
+    await changeAppearance(api, '"6"', { name: 'Nordlicht' });
+    await resetAppearance(api, '"7"');
     assert.deepEqual(seen.map((request) => [request.method, new URL(request.url).pathname, request.headers.get('If-Match'), request.headers.get('X-CSRF-Token')]), [
       ['PUT', '/api/v1/appearance', '"3"', TOKEN],
       ['PUT', '/api/v1/appearance/logo', '"4"', TOKEN],
       ['DELETE', '/api/v1/appearance/logo', '"5"', TOKEN],
+      ['PUT', '/api/v1/appearance', '"6"', TOKEN],
+      ['DELETE', '/api/v1/appearance', '"7"', TOKEN],
     ]);
+    assert.deepEqual(await seen[3]?.json(), { name: 'Nordlicht' });
     assert.deepEqual(await seen[0]?.json(), { accentColor: '#1d4ed8' });
     assert.equal(seen[1]?.headers.get('Content-Type'), 'image/png');
     assert.deepEqual([...new Uint8Array(await seen[1]!.arrayBuffer())], [0x89, 0x50, 0x4e, 0x47]);
@@ -110,4 +115,24 @@ test('a refused change is a classified problem, not a crash', async () => {
   assert.equal(outcome.kind === 'problem' && outcome.problem.code, 'appearance.version_conflict');
   const invalid = await changeAccentColor(recorder(200, { accentColor: 'x' }).api, '"1"', '#123456');
   assert.equal(invalid.kind, 'problem');
+});
+
+test('the name of the appearance is checked like the server checks it', () => {
+  for (const good of ['Task Manager', 'N', 'x'.repeat(80), '\u{1F680}'.repeat(80), 'Südtechnik & Söhne']) assert.equal(isBrandName(good), true, good);
+  for (const bad of ['', ' Nordlicht', 'Nordlicht ', 'x'.repeat(81), 'Zeile\nUmbruch', 'Rechts\u202ELinks', 7, null]) assert.equal(isBrandName(bad), false, String(bad));
+  assert.equal(parseAppearance({ ...APPEARANCE, name: '' }), null);
+  assert.equal(parseAppearance({ ...APPEARANCE, name: 'Nordlicht' })?.name, 'Nordlicht');
+});
+
+test('the login page reads only name, color and the public logo, and refuses anything else', async () => {
+  assert.deepEqual(parsePublicAppearance({ name: 'Nordlicht', accentColor: '#16A34A', logoUrl: null }), { name: 'Nordlicht', accentColor: '#16a34a', logoUrl: null });
+  assert.equal(parsePublicAppearance({ name: 'Nordlicht', accentColor: '#16a34a', logoUrl: '/api/v1/appearance/public/logo' })?.logoUrl, '/api/v1/appearance/public/logo');
+  for (const broken of [null, {}, { name: 'N', accentColor: 'red', logoUrl: null }, { name: '', accentColor: '#16a34a', logoUrl: null },
+    { name: 'N', accentColor: '#16a34a', logoUrl: 'https://example.invalid/logo.png' }, { name: 'N', accentColor: '#16a34a', logoUrl: '/\\example.invalid/x' },
+    { name: 'N', accentColor: '#16a34a' }]) assert.equal(parsePublicAppearance(broken), null, JSON.stringify(broken));
+  const { api, seen } = recorder(200, { name: 'Nordlicht', accentColor: '#16a34a', logoUrl: null });
+  const outcome = await readPublicAppearance(api);
+  assert.equal(outcome.kind === 'ok' && outcome.data.name, 'Nordlicht');
+  assert.equal(seen[0]?.url, 'http://localhost/api/v1/appearance/public');
+  assert.equal((await readPublicAppearance(recorder(500, { code: 'x', status: 500 }).api)).kind, 'problem');
 });
