@@ -161,6 +161,7 @@ export const de = {
   'helpdesk.languageEn': 'Englisch',
   'ticketHelpdesk.mailLanguageDe': 'So geht die Mail raus, auf Deutsch.',
   'ticketHelpdesk.mailLanguageEn': 'So geht die Mail raus, auf Englisch.',
+  'ticketHelpdesk.checkRegion': 'Prüfung der Antwort vor dem Senden',
   'appearance.preview.hint': 'So sehen Anwendung, Anmeldeseite, Portal und Mails mit Ihrer Auswahl aus. Alle Inhalte sind Beispiele.',
   'appearance.preview.app': 'Anwendung',
   'appearance.preview.login': 'Anmeldeseite',

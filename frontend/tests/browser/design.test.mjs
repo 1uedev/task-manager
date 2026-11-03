@@ -241,9 +241,37 @@ describe('company appearance', () => {
     });
   });
 
+  test('a color typed before the saved one arrives is kept', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      let arrived;
+      const requested = new Promise((resolve) => { arrived = resolve; });
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      await page.route((url) => url.pathname === '/api/v1/appearance', async (route) => {
+        if (route.request().method() === 'GET') {
+          arrived();
+          await held;
+        }
+        await route.fallback();
+      });
+      await page.reload();
+      await requested;
+      const field = page.getByLabel('Farbwert');
+      await field.fill('#12');
+      release();
+      await page.waitForTimeout(300);
+      assert.equal(await field.inputValue(), '#12', 'the late saved color does not overwrite what was typed');
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+    });
+  });
+
   test('an invalid typed color cannot save the last valid one', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      // Saving opens once the session and the saved appearance are loaded; wait for them instead of racing the load.
+      await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
+      await page.getByRole('button', { name: 'Für alle speichern' }).waitFor();
       const field = page.getByLabel('Farbwert');
       const save = page.getByRole('button', { name: 'Für alle speichern' });
       await field.fill('#7C3AED');
@@ -437,6 +465,7 @@ describe('company name and preview', () => {
       assert.match(await preview.locator('[data-part="footer"]').textContent(), /customer portal: https:\/\/support\.example\.com$/);
       await section.getByRole('button', { name: 'Vorlage speichern' }).click();
       await section.getByTestId('mail-template-saved').getByText('Die Mailvorlage ist gespeichert. Neue Antworten nutzen sie ab jetzt.').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'mail-template-saved', 'the focus is not lost after a save');
       const saved = server.writes().at(-1);
       assert.deepEqual({ method: saved.method, path: saved.path, ifMatch: saved.ifMatch, csrf: saved.csrf },
         { method: 'PUT', path: '/api/v1/appearance/mail-template', ifMatch: '"1"', csrf: TOKEN });

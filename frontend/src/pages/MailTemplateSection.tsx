@@ -51,6 +51,11 @@ export function MailTemplateSection({ name, accentColor }: { readonly name: stri
   const [loaded, reload, replace] = useLoad(() => readMailTemplate(api), [api]);
   // The editor starts again from each saved version; the confirmation of the save stays above it.
   const [done, setDone] = useState<MessageKey | null>(null);
+  // The editor is replaced after a save; the focus moves to the confirmation so it is not lost (H1 of the review).
+  const doneRef = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    if (done !== null) doneRef.current?.focus();
+  }, [done]);
   return (
     <section className="card mail-template" aria-labelledby="mail-template-heading" data-testid="mail-template">
       <h2 id="mail-template-heading">{t('mailTemplate.title')}</h2>
@@ -64,7 +69,7 @@ export function MailTemplateSection({ name, accentColor }: { readonly name: stri
             }} />
         )}
       </LoadedView>
-      <div aria-live="polite">{done !== null && <p className="success" role="status" data-testid="mail-template-saved">{t(done)}</p>}</div>
+      <div aria-live="polite">{done !== null && <p className="success" role="status" tabIndex={-1} ref={doneRef} data-testid="mail-template-saved">{t(done)}</p>}</div>
     </section>
   );
 }
