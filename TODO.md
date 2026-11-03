@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -43,8 +43,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-072](#task-072-tag-katalogpflege-und-zusammenführen-a3-teil-1) | Tag Katalogpflege und Zusammenführen (A3 Teil 1) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
-| [TASK-082](#task-082-mailvorlage-für-antworten-an-kunden-a17-teil-2) | Mailvorlage für Antworten an Kunden (A17 Teil 2) | claude-20261102-branding-01 | 2026-11-03 |
-| [TASK-085](#task-085-befunde-der-prüfung-von-task-082-beheben-a17) | Befunde der Prüfung von TASK-082 beheben (A17) | claude-20261102-branding-01 | 2026-11-03 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -162,66 +160,4 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Nachweise: `AppearanceApiTest` (Name, Kürzen, Grenzen in Codepunkten, Steuer- und Richtungszeichen, Audit je Teil, Zurücksetzen mit Version, öffentlicher Lesepfad ohne Cookie, mit abgelaufenem Cookie und bei ausstehendem Passwortwechsel, nichts sonst geöffnet), `AppearanceContractTest` mit acht Routen, `DatabaseFoundationTest`, `ApplicationLifecycleTest` und `lifecycle-check.sh` mit V0046, voller Backendlauf mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich neuer Fälle in `design.test.mjs` und `portal.test.mjs` sowie 320 px und Kontrast hell und dunkel.
 3. Grenzen: Die Beispielmail zeigt bis TASK-082 nur Kopf, Beispieltext und Name; echte Mails bleiben bis dahin reiner Text. Mit Logo bleibt der Name im Kopf wie bisher nur für Screenreader sichtbar. Ein geändertes Logo erscheint auf geöffneten Anmeldeseiten erst beim nächsten Laden.
 
-**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger; danach TASK-082 in derselben Sitzung, sobald das Ergebnis auf main ist.
-
-## TASK-082 Mailvorlage für Antworten an Kunden (A17 Teil 2)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
-
-**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffälle W15 und W16). **Abhängigkeiten:** TASK-081 auf main, TASK-058 geliefert. **Arbeitsstand:** Mit TASK-081 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen bestätigt; begonnen am 3. November 2026, nachdem das Ergebnis von TASK-081 auf main war (PR #243). Branch claude/project-thread-tzp0cw, Entscheidung DEC-112, Migration V0049 (V0047 und V0048 belegt TASK-083).
-
-**Umfang:** Vorlage „Antwort an Kunden“ als Rahmen um den Antworttext in Deutsch und Englisch, Platzhalterkatalog, Adresse der Anwendung, Sprache am Kontakt, Versand als HTML und Klartext mit eingebettetem Logo, eingebaute Rückfallvorlage, Festhalten der fertigen Mail bei der Bestätigung, Vorschau, Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: PDFs, weitere Mailarten wie Benachrichtigungen, Vorlagen je Projekt oder Postfach, freies HTML, CSS oder Skripte, Änderung des Betreffs durch die Vorlage.
-
-**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
-1. Die Vorlage „Antwort an Kunden“ umfasst Kopf mit Logo und Name, Anrede, den Antworttext des Supports, Signatur und Fußzeile. Der Betreff bleibt im Antwortformular.
-2. Bearbeitbar sind Anrede, Signatur und Fußzeile je Sprache als einfacher Text mit Platzhaltern und Zeilenumbrüchen, je Teil höchstens 2 000 Zeichen. Das HTML entsteht aus einem festen Layout.
-3. Platzhalter sind nur `{{company.name}}`, `{{contact.name}}`, `{{ticket.number}}`, `{{ticket.title}}`, `{{sender.name}}`, `{{mailbox.address}}` und `{{portal.url}}`. Ein unbekannter Platzhalter wird beim Speichern mit 400 und benanntem Platzhalter abgelehnt. Werte werden für HTML maskiert.
-4. Ein optionales Feld „Adresse der Anwendung“ (nur https) liefert `{{portal.url}}`; ohne Adresse entfällt der Link.
-5. Kontakte haben die Sprache Deutsch oder Englisch, Vorgabe Deutsch, änderbar in der Kundenpflege. Die Mail folgt der Sprache des Kontakts, sonst Deutsch, unabhängig von der Oberflächensprache der antwortenden Person.
-6. Jede Antwort geht als HTML und Klartext derselben Nachricht. Das Logo ist eingebettet, nicht nachgeladen; ohne Logo steht dort der Name. Der Antworttext wird maskiert, Zeilenumbrüche bleiben erhalten.
-7. Eine eingebaute Vorlage in Deutsch und Englisch gilt, solange nichts gespeichert ist; „Zurücksetzen“ kehrt zu ihr zurück. Gespeicherte Vorlagen sind beim Speichern geprüft.
-8. Die Prüfung vor dem Senden zeigt die fertige Mail; beim Bestätigen wird sie mit der dann gültigen Vorlage festgehalten. Spätere Änderungen von Vorlage oder Auftritt ändern wartende oder erneut versuchte Sendungen nicht.
-9. Die Vorlage pflegt, wer `appearance.manage` hat; die Vorschau nutzt nur synthetische Daten. Version mit If-Match und Audit wie beim Auftritt.
-10. Das Vorführimage erhält eine Beispielsignatur, der Kontakt von Südtechnik spricht Englisch.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Eine Antwort an einen deutschen und einen englischen Kontakt geht als HTML und Klartext mit Logo, Name und gespeicherter Vorlage in der jeweiligen Sprache; ohne gespeicherte Vorlage gilt die Rückfallvorlage.
-2. Unbekannte Platzhalter werden abgelehnt (W15); Werte mit HTML Zeichen erscheinen maskiert; die Vorschau zeigt keine echten Daten.
-3. Eine nach der Bestätigung geänderte Vorlage ändert eine wartende oder erneut versuchte Sendung nicht.
-4. Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
-
-**Übergabe zur Prüfung (2026-11-03):**
-1. Ergebnis: V0049 mit `appearance_mail_template`, V0050 mit der Sprache am Kontakt, `helpdesk_reply_mail` und `helpdesk_reply_image`. `GET`, `PUT`, `DELETE /api/v1/appearance/mail-template` und `POST /api/v1/appearance/mail-template/preview` mit `appearance.manage`, Version und Audit; Prüfung von Länge, Steuerzeichen, Platzhaltern (400 `mail_template.placeholder_unknown` mit Sprache, Teil und dem Geschriebenen) und Adresse. Port `MailTemplates` im Erscheinungsbild, Port `AccountNames` in der Identität, `TicketAccess.title`. `POST /api/v1/projects/{id}/tickets/{n}/helpdesk/reply/preview` zeigt die fertige Mail vor der Bestätigung; die Bestätigung hält Klartext, HTML und Logo fest; `SmtpMailSender` sendet `multipart/alternative` mit dem Logo als `cid:logo`. Oberfläche: Abschnitt „Mailvorlage“ auf der Seite „Erscheinungsbild“ mit Sprachwahl, drei Feldern mit Zeichenzähler, Adresse, Platzhalterliste, Vorschau mit synthetischen Daten im ungespeicherten Namen und Farbton, Speichern und Rückkehr zur eingebauten Vorlage mit Rückfrage; Sprache in der Kontaktpflege; die Prüfung einer Antwort zeigt die fertige Mail mit Sprache und Klartext. Demo: Signatur je Sprache, Kontakt von Südtechnik auf Englisch.
-2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw verify` 515 Tests ohne Fehler, darunter neu in `AppearanceApiTest` vier Tests zur Vorlage (eingebaute Vorlage, Speichern, Zurücksetzen, Ablehnungen, Vorschau, Recht) und in `HelpdeskApiTest` zwei Tests (Antwort als HTML und Klartext mit Logo über den SMTP Testserver, festgehaltene Mail nach Vorlagenänderung und beim erneuten Senden, englischer Kontakt, Sprache am Kontakt). Frontend `npm run verify` mit 79 Tests, `npm run test:browser` 179 von 179. Repositoryprüfungen grün. Nicht lokal: `lifecycle-check.sh` mit Docker (läuft in CI).
-3. Grenzen: Das HTML der Mail erscheint in der Anwendung nicht selbst, weil die Inhaltsrichtlinie Stile im Element verbietet; die Vorschau zeigt dieselben gefüllten Teile als Text und den Klartext. Eine zwischen Prüfung und Bestätigung geänderte Vorlage gilt mit der Bestätigung. Antworten vor V0050 gehen weiter als reiner Text. Ohne Leserecht auf den Titel bleibt `{{ticket.title}}` leer.
-
-**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger.
-
-## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
-
-**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112; docs/REVIEW_TASK-082_PR-247.md. **Abhängigkeiten:** TASK-082 geliefert (PR #247). **Arbeitsstand:** Holger hat am 3. November 2026 den Codex Prüfbericht zu TASK-082 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; die Behebung wurde dort angekündigt, PR #247 wurde vorher gemergt. Reservierung mit PR #248 gemergt. Ergebnis auf Branch claude/project-thread-tzp0cw mit DEC-115, ohne Migration.
-
-**Umfang:** Befunde F1 und F2 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-082_PR-247.md:
-1. F1: die Bestätigung einer Antwort sendet genau die geprüfte Fassung (Postfach, Empfänger, Betreff, Text); eine Prüfung, die nach einer Änderung, einem Abbruch oder einer neuen Prüfung antwortet, wird verworfen.
-2. F2: das Schema der Adresse der Anwendung gilt in jeder Schreibweise und wird kleingeschrieben gespeichert, damit Vorschau, Speichern und die Prüfung von V0049 übereinstimmen; V0049 bleibt unverändert.
-3. H1: der Fokus geht nach dem Speichern der Vorlage auf die Bestätigung, beim Prüfen einer Antwort auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“.
-4. H2: die Vorlagenvorschau lehnt eine fehlende oder andere Sprache als `de` oder `en` mit 400 `mail_template.languages_missing` ab, im Vertrag und im Testersatz ebenso.
-5. H3: der Browsertest des Portalkopfs aus TASK-081 wartet auf den geladenen Auftritt statt den Standard zu lesen.
-6. Nachtrag aus dem Faden zu A11: die auf main wackelnden Farbtests der Seite „Erscheinungsbild“ warten auf den geladenen Stand; dabei gefunden, dass eine halb eingetippte Farbe vom spät geladenen gespeicherten Auftritt überschrieben wurde, das ist mitbehoben.
-
-Nicht Teil: weitere Funktionen der Mailvorlage.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. F1 ist mit einem Browsertest mit gehaltener Prüfung und zwischenzeitlicher Eingabe belegt, F2 und H2 mit Backendtests, H1 mit Fokusprüfungen im Browser.
-2. Bestehende Backend und Browser Tests bleiben grün.
-
-**Übergabe zur Prüfung (2026-11-03):**
-1. Ergebnis: `TicketHelpdesk.tsx` hält den geprüften Entwurf fest, die Bestätigung sendet genau ihn, jede Änderung, jeder Abbruch und jede neue Prüfung zählt eine Runde hoch und eine ältere Antwort der Prüfung wird verworfen; der Fokus geht auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“. `MailTemplateService.address` liefert das Schema kleingeschrieben, Pfad und Abfrage bleiben; `preview` lehnt eine fehlende oder fremde Sprache mit 400 `mail_template.languages_missing` ab (Vertrag appearance ergänzt, Testersatz ebenso). `MailTemplateSection.tsx` setzt den Fokus nach dem Speichern auf die Bestätigung. `AppearancePage.tsx` zählt jede Eingabe im Farbwert als Änderung. Browsertests für Portalkopf und Farbwert warten auf den geladenen Auftritt.
-2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw verify` 515 Tests ohne Fehler, `AppearanceApiTest` prüft `HTTPS://` und `Https://` in der Vorschau und `HTTPS://` beim Speichern und die abgelehnte Sprache. Frontend `npm run verify` 79 Tests, `npm run test:browser` 181 von 181; neu sind der Test mit gehaltener Prüfung und zwischenzeitlicher Eingabe samt Fokus, der Fokus nach dem Speichern der Vorlage und die vor dem gespeicherten Auftritt eingetippte Farbe (ohne die Behebung rot). In weiteren Läufen fiel einmal ein Test der Hintergrundaufträge aus, unabhängig von dieser Änderung. Repositoryprüfungen grün.
-3. Grenzen: V0049 bleibt unverändert; eine schon gespeicherte Adresse ist immer kleingeschrieben, weil die Datenbank anderes nie angenommen hat.
-
-4. Nachprüfung (2026-11-03): docs/REVIEW_TASK-085_PR-250.md von Codex empfiehlt „abnehmen“. F1, F2, H1 bis H3 und der Nachtrag sind wirksam; N1 bis N3 betreffen nur Testpflege (Login Test, Verzögerungstests, Tag Testvorbereitung) und begründen keine Überarbeitung. Die Beschreibung des Backendnachweises in Punkt 2 ist nach N2 enger gefasst.
-
-**Nächster Schritt:** Abnahme durch Holger; N1 bis N3 als eigene Testpflege bei Gelegenheit.
+**Nächster Schritt:** Eigene Prüfung des Ergebnis PR #243 durch eine zweite KI und danach Abnahme durch Holger. TASK-082 und TASK-085 sind am 3. November 2026 abgenommen (DONE.md); Holger hat dort festgelegt, dass TASK-081 erst nach dieser Prüfung abgenommen wird.
