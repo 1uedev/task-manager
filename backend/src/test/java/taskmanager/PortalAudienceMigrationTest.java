@@ -13,10 +13,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * Migrations V0041 to V0045 (TASK-079, DEC-109; TASK-080, DEC-110): existing posts, sent mail answers and attachments visible to
- * the customer get the organization they were written for, as far as their history tells it for certain, and none otherwise
- * (Holger's choice "Beheben, unklare Altdaten verbergen"). Both an upgrade from V0040 and an installation that already applied
- * V0041 and V0042 end with the same audience. Synthetic rows only.
+ * Migrations V0041 to V0048 (TASK-079, DEC-109; TASK-080, DEC-110; TASK-083, DEC-113): existing posts, sent mail answers and
+ * attachments visible to the customer get the organization they were written for, as far as their history tells it for
+ * certain, and none otherwise (Holger's choice "Beheben, unklare Altdaten verbergen"), without a time window (Holger's choice
+ * "Ja, so beheben"). An upgrade from V0040, an installation that already applied V0041 and V0042 and one that already applied
+ * V0043 to V0045 end with the same audience; what the application stored itself since V0043 stays. Synthetic rows only.
  */
 class PortalAudienceMigrationTest {
     private static final Instant T0 = Instant.parse("2026-10-01T10:00:00Z");
@@ -44,6 +45,35 @@ class PortalAudienceMigrationTest {
         rows.assertAudience();
     }
 
+    @Test
+    void anInstallationThatAppliedTheWindowIsCorrectedAndKeepsWhatTheApplicationStored() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+        migrate(url, "0040");
+        Scenario rows = new Scenario(db(url));
+        migrate(url, "0042");
+        // An answer of TASK-079 to a contact created a moment before: the application stored its organization, V0043 took it
+        // away because of the window (finding F2 of docs/REVIEW_TASK-080_PR-241.md).
+        Instant recently = Instant.now().minusSeconds(30);
+        UUID kim = rows.contact("Kim", rows.nordwerk, recently.minusSeconds(10));
+        UUID beforeWindow = rows.reply(kim, recently, rows.nordwerk);
+        rows.db.update("update helpdesk_reply set ticket_id = ? where id = ?", rows.loose, beforeWindow);
+        migrate(url, "0045");
+        // The window of V0043 and V0044 (finding F1): a change held longer than a minute counted as seen, a creation next to an
+        // answer as unclear.
+        assertEquals(rows.suedtechnik, rows.customer(rows.replyHeld));
+        assertEquals(rows.suedtechnik, organization(rows.db, "file_attachment", rows.switchedHeld));
+        assertNull(rows.customer(rows.replyFreshContact));
+        assertNull(rows.customer(beforeWindow));
+        // Answers the application of TASK-080 writes keep what it stored, also when the contact had moved before.
+        UUID stored = rows.reply(rows.contact, Instant.now().plusSeconds(1), rows.suedtechnik);
+        UUID storedWithout = rows.reply(rows.contact, Instant.now().plusSeconds(2), null);
+        migrate(url, null);
+        rows.assertAudience();
+        assertEquals(rows.nordwerk, rows.customer(beforeWindow), "an answer of TASK-079 is computed again");
+        assertEquals(rows.suedtechnik, rows.customer(stored), "an answer stored by the application since V0043 stays");
+        assertNull(rows.customer(storedWithout), "also when the application stored none");
+    }
+
     /** One ticket that belonged to Nordwerk and moved to Südtechnik at {@code T0 + 2h}, together with its contact Lea. */
     private static final class Scenario {
         final JdbcTemplate db;
@@ -51,8 +81,9 @@ class PortalAudienceMigrationTest {
         final UUID nordwerk = UUID.randomUUID(), suedtechnik = UUID.randomUUID(), agent = UUID.randomUUID(), contact = UUID.randomUUID();
         final UUID mailbox = UUID.randomUUID(), lea = UUID.randomUUID();
         final UUID customerPost, supportBefore, supportAfter, supportAtChange, loosePost;
-        final UUID replyBefore, replyAfter, replyNearChange;
-        final UUID upload, mailed, switchedBefore, switchedAfter, switchedNearChange, neverSwitched, released, internal;
+        final UUID max = UUID.randomUUID();
+        final UUID replyBefore, replyAfter, replyNearChange, replyHeld, replyFreshContact, replyRenamed;
+        final UUID upload, mailed, switchedBefore, switchedAfter, switchedNearChange, switchedHeld, neverSwitched, released, internal;
 
         Scenario(JdbcTemplate db) {
             this.db = db;
@@ -60,10 +91,13 @@ class PortalAudienceMigrationTest {
                 db.update("insert into helpdesk_customer (id, company_id, name, version, created_at, created_by, updated_at, updated_by) "
                     + "values (?, ?, ?, 1, now(), ?, now(), ?)", customer, company, "Kunde " + customer, agent, agent);
             }
-            db.update("insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by) "
-                + "values (?, ?, ?, 'Lea', 2, now(), ?, now(), ?)", contact, company, suedtechnik, agent, agent);
-            contactEvent("contact.created", nordwerk, T0);
-            contactEvent("contact.changed", suedtechnik, at(120));
+            insertContact(contact, "Lea", suedtechnik);
+            contactEvent(contact, "contact.created", nordwerk, T0);
+            contactEvent(contact, "contact.changed", suedtechnik, at(120));
+            // Max of Nordwerk is created at T0 + 59 min and only renamed at T0 + 100 min.
+            insertContact(max, "Max", nordwerk);
+            contactEvent(max, "contact.created", nordwerk, at(59));
+            contactEvent(max, "contact.changed", nordwerk, at(100));
             db.update("insert into identity_account (id, username, password_hash, password_change_required, created_at, updated_at, kind, organization_id) "
                 + "values (?, 'lea.migration', 'x', false, now(), now(), 'portal', ?)", lea, nordwerk);
             for (UUID id : new UUID[] { ticket, loose }) {
@@ -91,6 +125,10 @@ class PortalAudienceMigrationTest {
             replyBefore = reply(at(60));
             replyAfter = reply(at(180));
             replyNearChange = reply(at(120).plusSeconds(20));
+            // The move of Lea took its time at T0 + 2h but was held for 70 seconds; the answer still read Nordwerk (F1).
+            replyHeld = reply(at(120).plusSeconds(70));
+            replyFreshContact = reply(max, at(59).plusSeconds(20), null);
+            replyRenamed = reply(max, at(100).plusSeconds(10), null);
 
             upload = file(lea, "customer");
             mailed = file(agent, "customer");
@@ -107,6 +145,8 @@ class PortalAudienceMigrationTest {
             fileEvent(switchedAfter, "attachment.visibility", "customer", at(180));
             switchedNearChange = file(agent, "customer");
             fileEvent(switchedNearChange, "attachment.visibility", "customer", at(120).minusSeconds(30));
+            switchedHeld = file(agent, "customer");
+            fileEvent(switchedHeld, "attachment.visibility", "customer", at(120).plusSeconds(70));
             neverSwitched = file(agent, "customer");
             released = file(agent, "customer");
             fileEvent(released, "attachment.visibility", "customer", at(60));
@@ -122,24 +162,29 @@ class PortalAudienceMigrationTest {
             assertNull(organization(db, "helpdesk_portal_post", supportAtChange), "an answer at the time of the change is unclear");
             assertNull(organization(db, "helpdesk_portal_post", loosePost), "no customer, no portal");
             assertEquals(nordwerk, customer(replyBefore), "a mail answer before the contact moved: the organization then");
-            assertEquals(suedtechnik, customer(replyAfter), "a mail answer after the contact moved: the organization then");
-            assertNull(customer(replyNearChange), "a mail answer within a minute of the move is unclear");
+            assertNull(customer(replyAfter), "a mail answer after the contact moved is unclear");
+            assertNull(customer(replyNearChange), "so is one shortly after the move");
+            assertNull(customer(replyHeld), "and one after a move that was held longer than a minute");
+            assertEquals(nordwerk, customer(replyFreshContact), "a mail answer to a contact created just before: its organization");
+            assertEquals(nordwerk, customer(replyRenamed), "a change of the name keeps the organization");
             assertEquals(nordwerk, organization(db, "file_attachment", upload), "an upload of a portal account: its organization");
             assertEquals(nordwerk, organization(db, "file_attachment", mailed), "a file of a mail: the organization of the mail");
             assertEquals(nordwerk, organization(db, "file_attachment", switchedBefore), "switched before the change: the customer then");
-            assertEquals(suedtechnik, organization(db, "file_attachment", switchedAfter), "the newest switch decides");
-            assertNull(organization(db, "file_attachment", switchedNearChange), "switched within a minute of the change is unclear");
+            assertNull(organization(db, "file_attachment", switchedAfter), "switched after the customer changed is unclear");
+            assertEquals(nordwerk, organization(db, "file_attachment", switchedNearChange), "switched before the change: the customer then");
+            assertNull(organization(db, "file_attachment", switchedHeld), "switched after a change that was held is unclear");
             assertNull(organization(db, "file_attachment", neverSwitched), "no source, no portal until a release");
             assertEquals(suedtechnik, organization(db, "file_attachment", released), "an explicit release names its organization");
             assertNull(organization(db, "file_attachment", internal), "an internal file has none");
             // V0045 (TASK-080, F2): the answers of the support take positions in the order of their times; a mark covers what was
             // before its time.
-            assertEquals(List.of(1L, 2L, 3L, 4L, 5L, 6L), List.of(position(supportBefore), replyPosition(replyBefore), position(supportAtChange),
-                replyPosition(replyNearChange), position(supportAfter), replyPosition(replyAfter)));
+            assertEquals(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L), List.of(replyPosition(replyFreshContact), position(supportBefore),
+                replyPosition(replyBefore), replyPosition(replyRenamed), position(supportAtChange), replyPosition(replyNearChange),
+                replyPosition(replyHeld), position(supportAfter), replyPosition(replyAfter)));
             assertNull(position(customerPost), "a post of the customer has none");
             assertEquals(1L, position(loosePost));
-            assertEquals(6L, db.queryForObject("select position from helpdesk_portal_position where ticket_id = ?", Long.class, ticket));
-            assertEquals(4L, db.queryForObject("select seen_position from helpdesk_portal_seen where ticket_id = ?", Long.class, ticket));
+            assertEquals(9L, db.queryForObject("select position from helpdesk_portal_position where ticket_id = ?", Long.class, ticket));
+            assertEquals(7L, db.queryForObject("select seen_position from helpdesk_portal_seen where ticket_id = ?", Long.class, ticket));
         }
 
         private Long position(UUID post) {
@@ -150,7 +195,7 @@ class PortalAudienceMigrationTest {
             return db.queryForObject("select portal_position from helpdesk_reply where id = ?", Long.class, reply);
         }
 
-        private UUID customer(UUID reply) {
+        UUID customer(UUID reply) {
             return db.queryForObject("select customer_id from helpdesk_reply where id = ?", UUID.class, reply);
         }
 
@@ -159,9 +204,21 @@ class PortalAudienceMigrationTest {
                 + "values (?, 1, ?, ?, 'customer', ?, ?)", ticket, Timestamp.from(when), agent, reference(from), reference(to));
         }
 
-        private void contactEvent(String operation, UUID customer, Instant when) {
+        UUID contact(String name, UUID customer, Instant created) {
+            UUID id = UUID.randomUUID();
+            insertContact(id, name, customer);
+            contactEvent(id, "contact.created", customer, created);
+            return id;
+        }
+
+        private void insertContact(UUID id, String name, UUID customer) {
+            db.update("insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by) "
+                + "values (?, ?, ?, ?, 1, now(), ?, now(), ?)", id, company, customer, name, agent, agent);
+        }
+
+        private void contactEvent(UUID target, String operation, UUID customer, Instant when) {
             db.update("insert into helpdesk_audit_event (company_id, target_type, target_id, operation, detail, actor_account_id, occurred_at) "
-                + "values (?, 'contact', ?, ?, ?, ?, ?)", company, contact, operation,
+                + "values (?, 'contact', ?, ?, ?, ?, ?)", company, target, operation,
                 "{\"name\":\"Lea\",\"customerId\":\"" + customer + "\",\"addresses\":[\"lea@nordwerk.example\"]}", agent, Timestamp.from(when));
         }
 
@@ -178,13 +235,23 @@ class PortalAudienceMigrationTest {
         }
 
         private UUID reply(Instant when) {
+            return reply(contact, when, null);
+        }
+
+        /** A sent mail answer; {@code customer} is what the application stored since V0041 and is ignored before. */
+        UUID reply(UUID to, Instant when, UUID customer) {
             UUID id = UUID.randomUUID();
+            boolean stored = db.queryForObject("select count(*) from information_schema.columns where table_name = 'helpdesk_reply' "
+                + "and column_name = 'customer_id'", Integer.class) > 0;
             db.update("""
                     insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject, body,
                         message_id, state, job_id, sends, sent_at, created_at, created_by, updated_at, updated_by, version)
                     values (?, ?, ?, ?, ?, ?, 'support@firma.example', 'lea@nordwerk.example', 'Antwort', 'Text', ?, 'sent', ?, 1, ?, ?, ?, ?, ?, 1)
-                    """, id, company, project, ticket, mailbox, contact, "<" + id + "@firma.example>", UUID.randomUUID(),
+                    """, id, company, project, ticket, mailbox, to, "<" + id + "@firma.example>", UUID.randomUUID(),
                     Timestamp.from(when), Timestamp.from(when), agent, Timestamp.from(when), agent);
+            if (stored) {
+                db.update("update helpdesk_reply set customer_id = ? where id = ?", customer, id);
+            }
             return id;
         }
 
