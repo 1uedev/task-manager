@@ -397,7 +397,7 @@ Nicht Teil: weitere Funktionen, Beiträge des Supports (Regel aus V0043 bleibt),
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261103-portal-05 · **Aktualisiert:** 2026-11-03
 
-**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113; docs/REVIEW_TASK-083_PR-245.md. **Abhängigkeiten:** TASK-083 geliefert (PR #245). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, den Befund F1 der Codex Prüfung von TASK-083 mit einer von der Zeitzone unabhängigen, vorsichtigen Grenze zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-114, Migration V0049.
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113; docs/REVIEW_TASK-083_PR-245.md. **Abhängigkeiten:** TASK-083 geliefert (PR #245). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, den Befund F1 der Codex Prüfung von TASK-083 mit einer von der Zeitzone unabhängigen, vorsichtigen Grenze zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-114, Migration V0051 (V0049 und V0050 gehören TASK-082, dessen Ergebnis daher zuerst auf main kommt).
 
 **Umfang:** Befund F1 und Hinweise H1 und H3 aus docs/REVIEW_TASK-083_PR-245.md:
 1. F1: eine neue Migration bestimmt die Grenze zwischen alten Mailantworten und den von der Anwendung nach V0043 gespeicherten ohne Annahme über die Zeitzone der Datenbanksitzung: der späteste mögliche Zeitpunkt, 12 Stunden nach dem gespeicherten Installationswert von V0043 in UTC gelesen. Alle Antworten davor werden nach der Regel aus TASK-083 neu berechnet; V0047 bleibt unverändert.
