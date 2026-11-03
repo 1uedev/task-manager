@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
   answerInPortal, listPortalPosts, previewReply, readReplyForm, readTicketHelpdesk, sendReply, sendReplyAgain, setTicketCustomer, settleReply, ticketCustomerOptions, type Project, type Reply, type ReplyMail,
@@ -261,6 +261,8 @@ function ReplyRecovery({ project, ticket, reply, onChanged }: {
   );
 }
 
+type ReplyDraft = { readonly mailbox: string; readonly to: string; readonly subject: string; readonly body: string };
+
 const REPLY_PROBLEMS: Readonly<Record<string, MessageKey>> = {
   'request.invalid': 'ticketHelpdesk.error.replyInvalid',
   'auth.forbidden': 'ticketHelpdesk.error.replyForbidden',
@@ -284,12 +286,25 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState<string | null>(null);
   const [body, setBody] = useState('');
-  const [checking, setChecking] = useState(false);
-  // The finished mail as the server sets it in the template and the language of the contact (TASK-082).
-  const [mail, setMail] = useState<ReplyMail | null>(null);
+  // The checked reply: the draft as it went to the check and the finished mail the server set from it in the template and the
+  // language of the contact (TASK-082). The confirmation sends exactly this draft, never the fields as they are later.
+  const [checked, setChecked] = useState<{ readonly draft: ReplyDraft; readonly mail: ReplyMail } | null>(null);
+  // Every edit, cancel and new check counts up; the answer of a check for an older count is dropped (F1 of the review).
+  const round = useRef(0);
+  const checkRegion = useRef<HTMLDivElement | null>(null);
+  const checkButton = useRef<HTMLButtonElement | null>(null);
+  const backToForm = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   useUnsavedGuard(open && body.trim() !== '');
+  // The focus goes to the checked mail and, on the way back, to the button of the check (H1 of the review).
+  useEffect(() => {
+    if (checked !== null) checkRegion.current?.focus();
+    else if (backToForm.current) {
+      backToForm.current = false;
+      checkButton.current?.focus();
+    }
+  }, [checked]);
 
   if (!open) {
     return (
@@ -309,7 +324,15 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   const chosenMailbox = mailbox || options.suggestedMailbox || options.mailboxes[0]?.id || '';
   const chosenTo = to || options.recipients[0] || '';
   const chosenSubject = subject ?? options.subject ?? '';
-  const sender = options.mailboxes.find((item) => item.id === chosenMailbox);
+  const sender = options.mailboxes.find((item) => item.id === (checked?.draft.mailbox ?? chosenMailbox));
+
+  function edited<T>(set: (value: T) => void): (value: T) => void {
+    return (value) => {
+      round.current += 1;
+      setBusy(false);
+      set(value);
+    };
+  }
 
   async function check(event: FormEvent) {
     event.preventDefault();
@@ -317,24 +340,28 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
     if (chosenSubject.trim() === '' || body.trim() === '') {
       return setNotice({ kind: 'info', text: t('ticketHelpdesk.error.replyInvalid') });
     }
+    const mine = ++round.current;
+    const draft: ReplyDraft = { mailbox: chosenMailbox, to: chosenTo, subject: chosenSubject.trim(), body };
     setBusy(true);
-    const result = await previewReply(api, project.id, ticket.number, chosenMailbox, chosenTo, chosenSubject.trim(), body);
+    const result = await previewReply(api, project.id, ticket.number, draft.mailbox, draft.to, draft.subject, draft.body);
+    if (mine !== round.current) return;
     setBusy(false);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: text(result.problem, REPLY_PROBLEMS) });
-    setMail(result.data.value);
-    setChecking(true);
+    setChecked({ draft, mail: result.data.value });
   }
 
-  async function confirm() {
+  async function confirm(draft: ReplyDraft) {
     setBusy(true);
-    const result = await sendReply(api, project.id, ticket.number, chosenMailbox, chosenTo, chosenSubject.trim(), body);
+    const result = await sendReply(api, project.id, ticket.number, draft.mailbox, draft.to, draft.subject, draft.body);
     setBusy(false);
     if (result.kind !== 'ok') {
-      setChecking(false);
+      backToForm.current = true;
+      setChecked(null);
       return setNotice({ kind: 'info', text: text(result.problem, REPLY_PROBLEMS) });
     }
+    round.current += 1;
     setOpen(false);
-    setChecking(false);
+    setChecked(null);
     setBody('');
     setSubject(null);
     setNotice({ kind: 'success', text: t('ticketHelpdesk.replyQueued') });
@@ -344,32 +371,32 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   return (
     <form className="inline-form" onSubmit={(event) => void check(event)} noValidate data-testid="reply-form">
       <h3>{t('ticketHelpdesk.compose')}</h3>
-      {!checking ? (
+      {checked === null ? (
         <>
-          <SelectField label={t('ticketHelpdesk.from')} value={chosenMailbox} onChange={setMailbox}
+          <SelectField label={t('ticketHelpdesk.from')} value={chosenMailbox} onChange={edited(setMailbox)}
             options={options.mailboxes.map((item) => ({ value: item.id, label: `${item.name} <${item.address}>` }))} />
-          <SelectField label={t('ticketHelpdesk.to')} value={chosenTo} onChange={setTo}
+          <SelectField label={t('ticketHelpdesk.to')} value={chosenTo} onChange={edited(setTo)}
             options={options.recipients.map((address) => ({ value: address, label: `${options.contactName} <${address}>` }))} />
-          <TextField label={t('ticketHelpdesk.subject')} value={chosenSubject} onChange={setSubject} required maxLength={998} />
-          <TextField label={t('ticketHelpdesk.body')} value={body} onChange={setBody} required multiline maxLength={100000} />
+          <TextField label={t('ticketHelpdesk.subject')} value={chosenSubject} onChange={edited(setSubject)} required maxLength={998} />
+          <TextField label={t('ticketHelpdesk.body')} value={body} onChange={edited(setBody)} required multiline maxLength={100000} />
           <p className="actions">
-            <button type="submit" disabled={busy}>{t('ticketHelpdesk.check')}</button>
-            <button type="button" className="secondary" onClick={() => { setOpen(false); setNotice(null); }}>{t('helpdesk.cancel')}</button>
+            <button type="submit" ref={checkButton} disabled={busy}>{t('ticketHelpdesk.check')}</button>
+            <button type="button" className="secondary" onClick={() => { round.current += 1; setBusy(false); setOpen(false); setNotice(null); }}>
+              {t('helpdesk.cancel')}
+            </button>
           </p>
         </>
       ) : (
-        <div data-testid="reply-check">
-          <p>{t('ticketHelpdesk.confirmText', { to: `${options.contactName} <${chosenTo}>`, from: sender ? `${sender.name} <${sender.address}>` : '' })}</p>
-          <p><strong>{chosenSubject}</strong></p>
-          {mail !== null && (
-            <>
-              <p className="hint" data-testid="reply-language">{t(mail.language === 'en' ? 'ticketHelpdesk.mailLanguageEn' : 'ticketHelpdesk.mailLanguageDe')}</p>
-              <MailView mail={mail} logoUrl={brand.logoUrl} testId="reply-mail" />
-            </>
-          )}
+        <div data-testid="reply-check" ref={checkRegion} tabIndex={-1} aria-label={t('ticketHelpdesk.checkRegion')}>
+          <p>{t('ticketHelpdesk.confirmText', { to: `${options.contactName} <${checked.draft.to}>`, from: sender ? `${sender.name} <${sender.address}>` : '' })}</p>
+          <p><strong>{checked.draft.subject}</strong></p>
+          <p className="hint" data-testid="reply-language">{t(checked.mail.language === 'en' ? 'ticketHelpdesk.mailLanguageEn' : 'ticketHelpdesk.mailLanguageDe')}</p>
+          <MailView mail={checked.mail} logoUrl={brand.logoUrl} testId="reply-mail" />
           <p className="actions">
-            <button type="button" disabled={busy} onClick={() => void confirm()}>{t('ticketHelpdesk.confirm')}</button>
-            <button type="button" className="secondary" disabled={busy} onClick={() => setChecking(false)}>{t('ticketHelpdesk.back')}</button>
+            <button type="button" disabled={busy} onClick={() => void confirm(checked.draft)}>{t('ticketHelpdesk.confirm')}</button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => { backToForm.current = true; setChecked(null); }}>
+              {t('ticketHelpdesk.back')}
+            </button>
           </p>
         </div>
       )}

@@ -149,7 +149,9 @@ describe('portal appearance', () => {
     const portal = await session(backend, { username: 'lea.lang' }, '#/');
     const page = portal.page;
     await page.getByRole('heading', { name: 'Ihre Anfragen' }).waitFor();
-    assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+    // The appearance of the full session arrives on its own request; wait for it instead of reading the default (H3 of the review of TASK-082).
+    await page.getByTestId('brand-name').getByText('Nordlicht Service', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.title === 'Ihre Anfragen · Nordlicht Service');
     assert.equal(await page.getByTestId('brand-addition').innerText(), 'Kundenportal');
     assert.equal(await page.locator('header img.brand-logo').getAttribute('src'), '/api/v1/appearance/logo?v=3');
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim()), '#7c3aed');

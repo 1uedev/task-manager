@@ -111,7 +111,7 @@ export interface paths {
          *     Teil, etwa `de.signature`). Ein Platzhalter außerhalb des Katalogs und eine offene oder schließende Doppelklammer ohne
          *     Platzhalter werden mit 400 `mail_template.placeholder_unknown` abgelehnt; die Liste nennt Sprache, Teil und das
          *     Geschriebene, etwa `en.footer: {{ticket.nummer}}`. Die Adresse ist leer oder eine https Adresse mit Rechnername ohne
-         *     Anmeldedaten (sonst 400 `mail_template.address_invalid`). Fehlt eine Sprache, 400 `mail_template.languages_missing`.
+         *     Anmeldedaten (sonst 400 `mail_template.address_invalid`); das Schema wird kleingeschrieben gespeichert, etwa `HTTPS://` als `https://`. Fehlt eine Sprache, 400 `mail_template.languages_missing`.
          */
         put: operations["changeMailTemplate"];
         post?: never;
@@ -137,7 +137,8 @@ export interface paths {
         /**
          * Beispielmail mit ungespeicherten Texten (Recht appearance.manage)
          * @description Füllt die gesendeten Texte einer Sprache mit synthetischen Werten; Name und Akzentfarbe können ungespeichert
-         *     mitgegeben werden, sonst gelten die gespeicherten. Geprüft wird wie beim Speichern; gespeichert wird nichts.
+         *     mitgegeben werden, sonst gelten die gespeicherten. Geprüft wird wie beim Speichern; gespeichert wird nichts. Eine
+         *     fehlende Sprache oder eine andere als `de` oder `en` wird mit 400 `mail_template.languages_missing` abgelehnt.
          */
         post: operations["previewMailTemplate"];
         delete?: never;
