@@ -95,6 +95,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appearance/mail-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mailvorlage „Antwort an Kunden“ (Recht appearance.manage) */
+        get: operations["getMailTemplate"];
+        /**
+         * Mailvorlage speichern (Recht appearance.manage)
+         * @description Speichert beide Sprachen und die Adresse der Anwendung. Ein Teil darf leer sein und höchstens 2 000 Zeichen haben,
+         *     ohne Steuerzeichen außer Zeilenumbruch und Tabulator (sonst 400 `mail_template.text_invalid` mit der Sprache und dem
+         *     Teil, etwa `de.signature`). Ein Platzhalter außerhalb des Katalogs und eine offene oder schließende Doppelklammer ohne
+         *     Platzhalter werden mit 400 `mail_template.placeholder_unknown` abgelehnt; die Liste nennt Sprache, Teil und das
+         *     Geschriebene, etwa `en.footer: {{ticket.nummer}}`. Die Adresse ist leer oder eine https Adresse mit Rechnername ohne
+         *     Anmeldedaten (sonst 400 `mail_template.address_invalid`). Fehlt eine Sprache, 400 `mail_template.languages_missing`.
+         */
+        put: operations["changeMailTemplate"];
+        post?: never;
+        /**
+         * Zur eingebauten Vorlage zurückkehren (Recht appearance.manage)
+         * @description Beide Sprachen nutzen wieder die eingebaute Vorlage; die Adresse der Anwendung bleibt.
+         */
+        delete: operations["resetMailTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appearance/mail-template/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Beispielmail mit ungespeicherten Texten (Recht appearance.manage)
+         * @description Füllt die gesendeten Texte einer Sprache mit synthetischen Werten; Name und Akzentfarbe können ungespeichert
+         *     mitgegeben werden, sonst gelten die gespeicherten. Geprüft wird wie beim Speichern; gespeichert wird nichts.
+         */
+        post: operations["previewMailTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -138,13 +189,70 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        MailTexts: {
+            greeting: string;
+            signature: string;
+            footer: string;
+        };
+        MailLanguage: {
+            greeting: string;
+            signature: string;
+            footer: string;
+            /** @description false, solange die eingebaute Vorlage gilt */
+            stored: boolean;
+            builtIn: components["schemas"]["MailTexts"];
+        };
+        MailTemplate: {
+            /** @description Adresse der Anwendung für `{{portal.url}}`; ohne Adresse entfällt die Zeile mit dem Link */
+            applicationUrl: string | null;
+            de: components["schemas"]["MailLanguage"];
+            en: components["schemas"]["MailLanguage"];
+            placeholders: ("company.name" | "contact.name" | "ticket.number" | "ticket.title" | "sender.name" | "mailbox.address" | "portal.url")[];
+            version: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MailTemplateChange: {
+            applicationUrl?: string | null;
+            de: components["schemas"]["MailTexts"];
+            en: components["schemas"]["MailTexts"];
+        };
+        MailTemplatePreviewRequest: {
+            /** @enum {string} */
+            language: "de" | "en";
+            applicationUrl?: string | null;
+            texts: components["schemas"]["MailTexts"];
+            name?: string;
+            accentColor?: string;
+        };
+        /** @description Die Teile der Mail im Layout, für eine Vorschau in der Anwendung */
+        MailParts: {
+            name: string;
+            accentColor: string;
+            logo: boolean;
+            greeting: string;
+            body: string;
+            signature: string;
+            footer: string;
+        };
+        MailPreview: {
+            /** @enum {string} */
+            language: "de" | "en";
+            /** @description Der Klartext der Mail */
+            text: string;
+            /** @description Das HTML der Mail; das Logo steht dort als cid:logo */
+            html: string;
+            parts: components["schemas"]["MailParts"];
+        };
     };
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.name_invalid,
          *     appearance.change_empty, appearance.logo_empty,
          *     appearance.logo_type_invalid, appearance.logo_unreadable (415, beschädigte oder unvollständige Bilddatei, TASK-043), appearance.logo_not_found, appearance.version_conflict,
-         *     appearance.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
+         *     appearance.precondition_required, mail_template.text_invalid, mail_template.placeholder_unknown,
+         *     mail_template.address_invalid, mail_template.languages_missing, mail_template.version_conflict,
+         *     mail_template.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
          *     auth.password_change_required.
          */
         Problem: {
@@ -382,6 +490,117 @@ export interface operations {
             403: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+        };
+    };
+    getMailTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Texte je Sprache, eingebaute Vorlage, Platzhalter und Version */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailTemplate"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    changeMailTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailTemplateChange"];
+            };
+        };
+        responses: {
+            /** @description Gespeichert. Neue Version im ETag. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailTemplate"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+        };
+    };
+    resetMailTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Zurückgesetzt. Neue Version im ETag. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailTemplate"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+        };
+    };
+    previewMailTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailTemplatePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Die fertige Beispielmail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

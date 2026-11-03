@@ -1,4 +1,5 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
+import type { components as AppearanceTypes } from './generated/appearance';
 import type { components as FileTypes } from './generated/files';
 import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
@@ -54,6 +55,11 @@ export type JobSummary = JobTypes['schemas']['JobSummary'];
 export type HelpdeskStatus = HelpdeskTypes['schemas']['HelpdeskStatus'];
 export type Customer = HelpdeskTypes['schemas']['Customer'];
 export type Contact = HelpdeskTypes['schemas']['Contact'];
+export type ContactLanguage = HelpdeskTypes['schemas']['ContactLanguage'];
+export type ReplyMail = HelpdeskTypes['schemas']['MailPreview'];
+export type MailTemplate = AppearanceTypes['schemas']['MailTemplate'];
+export type MailTexts = AppearanceTypes['schemas']['MailTexts'];
+export type MailPreview = AppearanceTypes['schemas']['MailPreview'];
 export type Mailbox = HelpdeskTypes['schemas']['Mailbox'];
 export type MailboxRequest = HelpdeskTypes['schemas']['MailboxRequest'];
 export type MailboxTest = HelpdeskTypes['schemas']['MailboxTest'];
@@ -614,10 +620,12 @@ export const updateCustomer = (api: ServerApi, id: string, version: number, name
   run(() => api.helpdesk.PUT('/helpdesk/customers/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { name, projects: [...projects] } }),
     one<Customer>(isCustomer));
 export const listContacts = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/contacts'), listOf<Contact>(isContact));
-export const createContact = (api: ServerApi, customerId: string, name: string, addresses: readonly string[]) =>
-  run(() => api.helpdesk.POST('/helpdesk/contacts', { body: { customerId, name, addresses: [...addresses] } }), one<Contact>(isContact));
-export const updateContact = (api: ServerApi, id: string, version: number, customerId: string, name: string, addresses: readonly string[]) =>
-  run(() => api.helpdesk.PUT('/helpdesk/contacts/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { customerId, name, addresses: [...addresses] } }),
+export const createContact = (api: ServerApi, customerId: string, name: string, addresses: readonly string[], language: ContactLanguage = 'de') =>
+  run(() => api.helpdesk.POST('/helpdesk/contacts', { body: { customerId, name, addresses: [...addresses], language } }), one<Contact>(isContact));
+export const updateContact = (api: ServerApi, id: string, version: number, customerId: string, name: string, addresses: readonly string[],
+  language?: ContactLanguage) =>
+  run(() => api.helpdesk.PUT('/helpdesk/contacts/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) },
+    body: { customerId, name, addresses: [...addresses], ...(language === undefined ? {} : { language }) } }),
     one<Contact>(isContact));
 export const listMailboxes = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/mailboxes'), listOf<Mailbox>(isMailbox));
 export const createMailbox = (api: ServerApi, body: MailboxRequest) =>
@@ -660,6 +668,11 @@ const isReply = (v: unknown) => hasStrings(v, 'id', 'toAddress', 'subject', 'sta
 export const readReplyForm = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/reply', { params: { path: { projectId, number } } }),
     one<ReplyForm>((v) => record(v) && Array.isArray(v.mailboxes) && Array.isArray(v.recipients)));
+// The finished mail of a reply before it is confirmed (TASK-082): in the template and the language of the contact.
+const isMail = (v: unknown) => hasStrings(v, 'language', 'text', 'html') && record((v as ReplyMail).parts);
+export const previewReply = (api: ServerApi, projectId: string, number: number, mailboxId: string, to: string, subject: string, body: string) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/reply/preview', { params: { path: { projectId, number } },
+    body: { mailboxId, to, subject, body } }), one<ReplyMail>(isMail));
 export const sendReply = (api: ServerApi, projectId: string, number: number, mailboxId: string, to: string, subject: string, body: string) =>
   run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/replies', { params: { path: { projectId, number } },
     body: { mailboxId, to, subject, body } }), one<Reply>(isReply));
@@ -706,3 +719,16 @@ export const readTicketSla = (api: ServerApi, projectId: string, number: number)
 export const setTicketPriority = (api: ServerApi, projectId: string, number: number, priority: SlaPriority) =>
   run(() => api.sla.PUT('/projects/{projectId}/tickets/{number}/sla/priority', { params: { path: { projectId, number } }, body: { priority } }),
     one<TicketSla>(isTicketSla));
+
+// ---------------------------------------------------------------- mail template (TASK-082)
+
+const isMailLanguage = (v: unknown) => hasStrings(v, 'greeting', 'signature', 'footer') && typeof (v as { stored?: unknown }).stored === 'boolean';
+const isMailTemplate = (v: unknown) => record(v) && isMailLanguage(v.de) && isMailLanguage(v.en) && Array.isArray(v.placeholders)
+  && typeof v.version === 'number';
+export const readMailTemplate = (api: ServerApi) => run(() => api.appearance.GET('/appearance/mail-template'), one<MailTemplate>(isMailTemplate));
+export const saveMailTemplate = (api: ServerApi, etag: string, applicationUrl: string | null, de: MailTexts, en: MailTexts) =>
+  run(() => api.appearance.PUT('/appearance/mail-template', { params: ifMatch(etag), body: { applicationUrl, de, en } }), one<MailTemplate>(isMailTemplate));
+export const resetMailTemplate = (api: ServerApi, etag: string) =>
+  run(() => api.appearance.DELETE('/appearance/mail-template', { params: ifMatch(etag) }), one<MailTemplate>(isMailTemplate));
+export const previewMailTemplate = (api: ServerApi, body: { language: 'de' | 'en'; applicationUrl: string | null; texts: MailTexts; name?: string; accentColor?: string }) =>
+  run(() => api.appearance.POST('/appearance/mail-template/preview', { body }), one<MailPreview>(isMail));

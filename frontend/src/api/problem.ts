@@ -59,7 +59,9 @@ function text(value: unknown, pattern: RegExp): string | null {
 }
 
 // A reason is a code, optionally followed by the key of what it names (`status.in_use:review`).
-const VIOLATION = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*(:[a-z][a-z0-9_]*)?$/;
+// A reason may also quote what was written, after a colon and a space, as a refused placeholder of the mail template does
+// (`en.footer: {{ticket.nummer}}`, TASK-082); the page shows it as text only.
+const VIOLATION = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*(:[a-z][a-z0-9_]*|: [^\u0000-\u001f\u007f]{1,70})?$/;
 const MAX_VIOLATIONS = 50;
 
 export function readProblem(status: number, body: unknown, headerCorrelationId?: string | null): ProblemInfo {

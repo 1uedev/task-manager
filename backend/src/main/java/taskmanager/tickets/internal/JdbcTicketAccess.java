@@ -148,6 +148,11 @@ class JdbcTicketAccess implements TicketAccess {
             ticket.status(), ticket.createdAt()));
     }
 
+    @Override
+    public Optional<String> title(UUID ticketId) {
+        return tickets.byId(ticketId).map(ticket -> ticket.title());
+    }
+
     /** Without the NUL character, which PostgreSQL cannot store, and without surrounding space; blank is {@code null}. */
     private static String clean(String text) {
         if (text == null) {
