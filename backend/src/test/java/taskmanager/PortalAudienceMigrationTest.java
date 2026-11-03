@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -13,11 +14,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * Migrations V0041 to V0048 (TASK-079, DEC-109; TASK-080, DEC-110; TASK-083, DEC-113): existing posts, sent mail answers and
+ * Migrations V0041 to V0051 (TASK-079, DEC-109; TASK-080, DEC-110; TASK-083, DEC-113; TASK-084, DEC-114): existing posts, sent mail answers and
  * attachments visible to the customer get the organization they were written for, as far as their history tells it for
  * certain, and none otherwise (Holger's choice "Beheben, unklare Altdaten verbergen"), without a time window (Holger's choice
  * "Ja, so beheben"). An upgrade from V0040, an installation that already applied V0041 and V0042 and one that already applied
- * V0043 to V0045 end with the same audience; what the application stored itself since V0043 stays. Synthetic rows only.
+ * V0043 to V0045 end with the same audience; what the application stored itself well after V0043 stays, whatever the time
+ * zone of the sessions. Synthetic rows only: the history is written as it ends up in the tables, so a change "held" for 70
+ * seconds is a change whose recorded time lies 70 seconds before the answer; no transaction is held here. The order of locks
+ * and times in the running application is covered by the API tests of TASK-080 and argued in backend/README.md.
  */
 class PortalAudienceMigrationTest {
     private static final Instant T0 = Instant.parse("2026-10-01T10:00:00Z");
@@ -64,14 +68,53 @@ class PortalAudienceMigrationTest {
         assertEquals(rows.suedtechnik, organization(rows.db, "file_attachment", rows.switchedHeld));
         assertNull(rows.customer(rows.replyFreshContact));
         assertNull(rows.customer(beforeWindow));
-        // Answers the application of TASK-080 writes keep what it stored, also when the contact had moved before.
-        UUID stored = rows.reply(rows.contact, Instant.now().plusSeconds(1), rows.suedtechnik);
-        UUID storedWithout = rows.reply(rows.contact, Instant.now().plusSeconds(2), null);
+        // Answers the application of TASK-080 writes keep what it stored, also when the contact had moved before, once they lie
+        // behind the boundary of V0051 (TASK-084); before it they are computed again by the rule.
+        UUID early = rows.reply(rows.contact, Instant.now().plusSeconds(1), rows.suedtechnik);
+        UUID stored = rows.reply(rows.contact, Instant.now().plus(Duration.ofHours(30)), rows.suedtechnik);
+        UUID storedWithout = rows.reply(rows.contact, Instant.now().plus(Duration.ofHours(31)), null);
         migrate(url, null);
         rows.assertAudience();
         assertEquals(rows.nordwerk, rows.customer(beforeWindow), "an answer of TASK-079 is computed again");
+        assertNull(rows.customer(early), "an answer within the boundary is computed again: the contact had moved before");
         assertEquals(rows.suedtechnik, rows.customer(stored), "an answer stored by the application since V0043 stays");
         assertNull(rows.customer(storedWithout), "also when the application stored none");
+    }
+
+    /**
+     * V0051 (TASK-084, finding F1 of docs/REVIEW_TASK-083_PR-245.md): the time V0043 was installed is stored without time zone.
+     * Whatever zone the session had then and has now, an old answer is computed again and an answer stored well after the
+     * upgrade keeps its organization. Each pair runs V0043 in the first zone and the later migrations in the second.
+     */
+    @Test
+    void theBoundaryHoldsWhateverTheTimeZoneOfTheSessions() throws Exception {
+        String[][] pairs = { { "UTC", "Europe/Berlin" }, { "Europe/Berlin", "UTC" }, { "Etc/GMT+12", "Pacific/Kiritimati" },
+            { "Pacific/Kiritimati", "Etc/GMT+12" } };
+        for (String[] zones : pairs) {
+            String url = TestDatabase.createEmptyDatabase();
+            migrate(url, "0040", zones[0]);
+            Scenario rows = new Scenario(db(url));
+            migrate(url, "0042", zones[0]);
+            Instant now = Instant.now();
+            // Ten minutes before the upgrade: an answer to Lea after she moved, which V0043 gives Südtechnik, and one to a contact
+            // created just before, which V0043 hides.
+            UUID unclear = rows.reply(rows.contact, now.minus(Duration.ofMinutes(10)), rows.suedtechnik);
+            UUID kim = rows.contact("Kim", rows.nordwerk, now.minus(Duration.ofMinutes(11)));
+            UUID safe = rows.reply(kim, now.minus(Duration.ofMinutes(10)).plusSeconds(20), rows.nordwerk);
+            rows.db.update("update helpdesk_reply set ticket_id = ? where id in (?, ?)", rows.loose, unclear, safe);
+            migrate(url, "0043", zones[0]);
+            assertEquals(rows.suedtechnik, rows.customer(unclear), String.join(" to ", zones));
+            UUID wellAfter = rows.reply(rows.contact, Instant.now().plus(Duration.ofHours(27)), rows.suedtechnik);
+            UUID wellAfterWithout = rows.reply(kim, Instant.now().plus(Duration.ofHours(28)), null);
+            rows.db.update("update helpdesk_reply set ticket_id = ? where id in (?, ?)", rows.loose, wellAfter, wellAfterWithout);
+            migrate(url, null, zones[1]);
+            String pair = String.join(" to ", zones);
+            assertNull(rows.customer(unclear), pair + ": an old answer after the move is unclear");
+            assertEquals(rows.nordwerk, rows.customer(safe), pair + ": an old safe answer is restored");
+            assertEquals(rows.suedtechnik, rows.customer(wellAfter), pair + ": an answer stored well after the upgrade stays");
+            assertNull(rows.customer(wellAfterWithout), pair + ": also when the application stored none");
+            rows.assertAudience();
+        }
     }
 
     /** One ticket that belonged to Nordwerk and moved to Südtechnik at {@code T0 + 2h}, together with its contact Lea. */
@@ -272,7 +315,15 @@ class PortalAudienceMigrationTest {
     }
 
     private static void migrate(String url, String target) {
+        migrate(url, target, null);
+    }
+
+    /** Migrates with the session in {@code zone}, which Flyway uses for the time it records in its history. */
+    private static void migrate(String url, String target, String zone) {
         var configuration = Flyway.configure().dataSource(url, TestDatabase.username(), TestDatabase.password());
+        if (zone != null) {
+            configuration = configuration.initSql("set time zone '" + zone + "'");
+        }
         (target == null ? configuration : configuration.target(target)).load().migrate();
     }
 
