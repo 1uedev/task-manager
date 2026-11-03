@@ -663,6 +663,156 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-084 Befund der Prüfung von TASK-083 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-113, DEC-114. **Verantwortlich:** claude-20261103-portal-05. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 und die Hinweise H1 und H3 aus docs/REVIEW_TASK-083_PR-245.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-114, Migration V0051. Die Grenze zwischen alten Mailantworten und den nach V0043 von der Anwendung gespeicherten ist der Installationszeitpunkt von V0043, als UTC gelesen, plus 12 Stunden; sie hängt nicht mehr von der Zeitzone der Datenbanksitzung ab und liegt nie vor der echten Installation. Antworten davor werden nach der Regel aus TASK-083 neu berechnet, spätere behalten den Wert der Anwendung; V0047 bleibt unverändert. Testbeschreibung und backend/README.md präzisiert (H3).
+
+**Prüfungen:** `PortalAudienceMigrationTest` mit vier Zeitzonenpaaren (UTC und Europe/Berlin, UTC−12 und UTC+14, jeweils beide Richtungen); ohne V0051 schlägt er für UTC nach Europe/Berlin fehl. Backend vollständig gegen PostgreSQL 16 lokal grün (516 Tests), CI auf PR #249 grün nach Übernahme von TASK-082 und TASK-085; 48 Migrationen.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-portal-review-06 ([Bericht](docs/REVIEW_TASK-084.md), PR #251): F1, H1 und H3 behoben, kein neuer Befund, Empfehlung zur Abnahme; eigene Gegenproben mit bereits angewendeter V0047, Mikrosekundengrenzen und der Formel über 598 Zeitzonen.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“ auf die Frage, ob er TASK-075 bis TASK-080, TASK-083 und TASK-084 abnimmt; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Mailantworten aus den ersten 12 Stunden (bei östlichen Zonen bis 26 Stunden) nach dem Update auf V0043 an zuvor umgezogene Kontakte bleiben verborgen; die Uhr der Datenbank muss damals gestimmt haben.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-083 #246 (4d10360), Ergebnis #249 (2e714da), Prüfbericht #251 (b416f2b); verknüpft mit TASK-083 und DEC-114.
+
+## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113. **Verantwortlich:** claude-20261103-portal-04. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 und F2 sowie H1 aus docs/REVIEW_TASK-080_PR-241.md ohne Zeitfenster behoben und mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-113, Migrationen V0047 und V0048. Alte Mailantworten erhalten nur dann eine Organisation, wenn jede Anlage und Änderung des Kontakts bis zum Zeitpunkt der Antwort dieselbe nennt; Anhänge, deren jüngste Handlung ein Umschalten auf „Kunde“ vor TASK-079 ist, erhalten nur dann einen Kunden, wenn jede Kundenänderung des Tickets bis dahin denselben nennt. Sonst bleibt die Zielgruppe leer. Mailantworten, die die Anwendung nach V0043 gespeichert hat, behalten ihren Wert (F2).
+
+**Prüfungen:** `PortalAudienceMigrationTest` mit drei Fällen (Upgrade von V0040, Korrektur nach V0042, Korrektur nach V0045 mit Zeilen der Anwendung), darin gehaltene Änderungen von Kontakt und Kunde, kurz vorher angelegter Kontakt und reine Namensänderung; voller Backendlauf, `npm run verify`, CI auf PR #245 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-portal-review-05 ([Bericht](docs/REVIEW_TASK-083_PR-245.md), PR #246): Historienregel bestätigt, F1 (Grenze abhängig von der Zeitzone der Sitzung) mit TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-080 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Mailantworten an einen Kontakt, der vorher die Organisation gewechselt hat, bleiben verborgen; H2 der Prüfung von TASK-080 bleibt als Hinweis.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-080 #244 (8b06bea), Ergebnis #245 (bfff1bc); verknüpft mit TASK-080, TASK-084 und DEC-113.
+
+## TASK-080 Befunde der Prüfung von TASK-079 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109, DEC-110. **Verantwortlich:** claude-20261102-portal-03. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F3 und der Zusatz zu H3 aus docs/REVIEW_TASK-079_PR-239.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-110 nach Holgers Auswahl „Beheben, unklare Altdaten verbergen“, Migrationen V0043 bis V0045. Die Zielgruppe vorhandener Portalantworten, Mailantworten und kundensichtbarer Anhänge kommt nur aus der Historie und bleibt ohne sichere Quelle leer, auch nach V0041 und V0042 (F1). Der Lesestand im Portal richtet sich nach der Position der Antworten des Supports (`helpdesk_portal_position`, F2). Eine verspätete Folgeseite der Portalliste wird ab dem Filterwechsel verworfen (F3). Der Testersatz hält den Kunden einer Mailantwort fest.
+
+**Prüfungen:** `PortalAudienceMigrationTest`, `PortalConversationApiTest` (gehaltene Portalantwort mit früherer Zeit bleibt neu), `HelpdeskApiTest`, drei neue Browsertests in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #241 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-04 ([Bericht](docs/REVIEW_TASK-080_PR-241.md), PR #244): Positionslösung und Portalliste bestätigt, F1 und F2 zur historischen Zielgruppe mit TASK-083 und TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-079, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Bestandsdaten ohne sichere Quelle bleiben verborgen, nur Dateien lassen sich freigeben; H4 der Prüfung von TASK-076 bis TASK-078 (Seitengröße begrenzt die Arbeit im Backend nicht) bleibt offen.
+
+**Referenz:** Reservierung #240 (c0c1d73), Ergebnis #241 (42b1de4), Prüfbericht #244 (8b06bea); verknüpft mit TASK-079, TASK-083 und DEC-110.
+
+## TASK-079 Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-TAG-001, REQ-ACL-002; DEC-049, DEC-106, DEC-107, DEC-108, DEC-109. **Verantwortlich:** claude-20261102-portal-02. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F5 und H1 bis H3 aus docs/REVIEW_TASK-076-078_A11.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-109 nach Holgers Auswahl „Nur neue Einträge“, Migrationen V0041 und V0042. Beiträge, gesendete Mailantworten und kundensichtbare Anhänge behalten die Organisation, für die sie geschrieben wurden; eine Datei eines früheren Kunden gibt der Support ausdrücklich frei (F1). Lesestand bis zum neuesten gezeigten Eintrag (F2), Verwerfen später Folgeseiten (F3), Katalogcursor aus Name und Kennung (F4), durchsuchbarer Tagfilter im Portal (F5), dokumentierte Zählung verborgener Tags (H1), Tests gehaltener Tagänderungen (H2), angeglichener Testersatz (H3).
+
+**Prüfungen:** `PortalConversationApiTest`, `PortalAudienceMigrationTest`, `PortalTagsApiTest`, sechs neue Browsertests in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #239 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-03 ([Bericht](docs/REVIEW_TASK-079_PR-239.md), PR #240): F4, F5 und H1 bis H3 bestätigt, F1 bis F3 mit TASK-080 und den Folgeaufgaben behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-078, TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Beiträge und Mailantworten lassen sich nicht für eine andere Organisation freigeben; H4 bleibt offen.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-076 bis TASK-078 #238 (8f80168), Ergebnis #239 (a5b03ed); verknüpft mit TASK-076, TASK-077, TASK-078, TASK-080 und DEC-109.
+
+## TASK-078 Befunde der Prüfung von TASK-075 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001; DEC-027, DEC-105, DEC-106, DEC-107. **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F6 und H1 bis H3 aus docs/REVIEW_TASK-075_PR-233.md sowie H5 nach Holgers Wahl behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-107 nach Holgers Auswahl „Beheben, Entzug wirkt sofort“, ohne Migration. Fremde Anfrage antwortet auch bei gesperrter Zeile wie eine unbekannte Nummer (F1); `Permissions.current` mit geteilter Rechtesperre, sperrender Kontoprüfung und Projektreihenfolge der Datenbank (F2, F3); 400 bei fehlender Projektliste (F4); keine Portalkonten als Bearbeiter oder Personen (F5); weitere Seiten der Portalliste mit einfachem Schlüssel (F6, H1); 503 im Vertrag (H2); einzelne Gründe im Formular (H3); entzieht der Helpdesk einer Organisation ein Projekt, endet die Mitgliedschaft ihrer Portalkonten sofort (H5).
+
+**Prüfungen:** fünf neue Tests in `PortalAccountsApiTest` (die zu F1 und F3 schlagen mit dem alten Verhalten fehl), zwei neue und ein geschärfter Browsertest in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #236 grün.
+
+**Review:** Die Codex Prüfung von TASK-076 bis TASK-078, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238), bestätigt den sofortigen Entzug; ihre Befunde wurden mit TASK-079 und den Folgeaufgaben behoben.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-077, TASK-079, TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Die Portal Projektliste antwortet bei innerhalb des Aufrufs abgelaufener Sitzung mit 403; ein Kontakt, der die Organisation wechselt, bleibt am Konto.
+
+**Referenz:** Reservierung #235 (f3933c3), Ergebnis #236 (9a9a6aa); verknüpft mit TASK-075 und DEC-107.
+
+## TASK-077 Tags im Portal (A11 Teil 3)
+
+**Bezug:** REQ-TAG-001, REQ-PORTAL-001, REQ-ACL-002; DEC-049, DEC-068, DEC-102, DEC-108; docs/TAGS_SEARCH.md (T04, T10, T18, T19). **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** T04, T10, T18 und T19 als automatische Tests; Zuordnung durch Portalnutzer lässt interne Tags unverändert, auch bei gleichzeitiger interner Änderung; Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anzeige, Anlage und Zuordnung im Portal und die Sichtbarkeit in der Tagpflege.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen 17 bis 19 bestätigt): Tags „intern“ oder „Kunde“ mit `tags.manage`; Anlage im Portal nur mit `tag.create` in einer Gruppe des Portalkontos, gebunden an die eigene Organisation bis zur Freigabe für alle Kunden; Setzen und Entfernen kundensichtbarer Tags nur mit Schreibregel für Tags, interne bleiben unberührt.
+
+**Ergebnis:** DEC-108, Migration V0040. Sichtbarkeit je Tag, Bindung an die Organisation und Freigabe (`forAllCustomers`), Namen je Katalog und Zielgruppe; Portalpfade für Tags an Projekten und Anfragen; Tagfilter der Portalliste über den Port `TicketTagFilter`; Oberfläche im Portal und in der Tagpflege.
+
+**Prüfungen:** `PortalTagsApiTest` mit T04, T10, T18, T19 und gleichzeitigen Zuordnungen; `TagsContractTest` mit 26 Routen; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #237 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238): F4, F5 und H1 bis H3 zu den Tags mit TASK-079 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075, TASK-076, TASK-078 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Die Obergrenze von 30 Tags zählt interne Tags mit; Katalogpflege und Massenänderung im Portal fehlen wie vereinbart; die Suche bleibt für Portalkonten verschlossen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #237 (07968e7); verknüpft mit TASK-079 und DEC-108.
+
+## TASK-076 Portalgespräch, Anhänge und Portalseiten (A11 Teil 2)
+
+**Bezug:** REQ-PORTAL-001, REQ-HD-002, REQ-HD-003, REQ-TKT-004, REQ-ACL-003; DEC-027, DEC-035, DEC-091, DEC-098, DEC-106; docs/HELPDESK_SLA.md, docs/PERMISSIONS.md (Fall 8). **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Der Verlauf zeigt nur die vereinbarten Teile; ein interner Anhang ist über seinen direkten Link nicht erreichbar, ein kundensichtbarer derselben Anfrage schon (Fall 8); Portalbeitrag und Portalantwort wirken auf Kundenantworten und Servicefristen wie die Mailwege; Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Liste, Anlage, Verlauf, Antworten und Anhänge.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen 10 bis 16 und 20 bestätigt): Anlage nur mit im Portal angebotenen Tickettypen, Kunde und Kontakt aus dem Konto; Kundenverlauf ohne Internes; Portalbeiträge zählen wie Kundenantworten per Mail; Support antwortet über Portal oder Mail mit `helpdesk.reply`; Status nur lesbar; Portalliste mit Filtern und Markierung neuer Antworten; Anhänge „intern“ oder „Kunde“; Demodaten Nordwerk und Südtechnik.
+
+**Ergebnis:** DEC-106, Migrationen V0037 bis V0039. Tickettypen mit Markierung `portal`, Anlage im Portal, Gespräch je Anfrage, Beiträge mit eigenen Dateien und der Aktion `portal.answer`, „Im Portal antworten“ am Ticket, Sichtbarkeit je Anhang mit Umschalter, Portalliste mit Filtern, Statusnamen und Markierung, Demokonten `lea.nordwerk` und `tom.suedtechnik`.
+
+**Prüfungen:** `PortalConversationApiTest` (Anlage, Verlauf, Fall 8, Umschalten, Filter, Markierung, gleichzeitige Beiträge, Ereignisse für die Servicefristen), angepasste Vertragstests, voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #234 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238): F1 bis F3 zum Gespräch mit TASK-079, TASK-080, TASK-083 und TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075, TASK-077 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein Beitrag ändert die Version des Tickets nicht; Anhänge aus der Zeit vor TASK-076 bleiben intern, bis jemand sie umschaltet; die Portalliste filtert in der Anwendung, für sehr viele Anfragen nicht gemessen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #234 (7b1dc2e); verknüpft mit TASK-075, TASK-079 und DEC-106.
+
+## TASK-075 Portalkonten, Sicht und Rechte (A11 Teil 1)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001, REQ-API-001; DEC-027, DEC-031, DEC-053, DEC-105; docs/PERMISSIONS.md (Organisationssicht, Fälle 1 bis 8), docs/HELPDESK_SLA.md. **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Fälle 1 bis 8 aus docs/PERMISSIONS.md als automatische Tests, soweit ihre Daten in V1 bestehen; ein Portalkonto vor dem Pflichtwechsel hat keinen Fachzugriff; Unternehmensrechte, fremde Organisation oder nicht zugeordnete Projekte werden abgelehnt, auch bei gleichzeitiger Änderung; Entzug der Projektfreigabe oder Deaktivierung wirkt sofort; Migration, Vertrag gegen Routen, Backend Tests für Rechte und Nebenläufigkeit, Browser Tests für die Kontenverwaltung.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit „passt so“ zu den 20 Vorschlägen bestätigt): lokale Portalkonten mit genau einer unveränderlichen Kundenorganisation und optionalem Kontakt, angelegt mit `accounts.manage`; nie Unternehmensrechte; nur Projekte der Organisation; Standardgruppe „Portal“; Sicht auf alle Anfragen der eigenen Organisation in den eigenen Projekten, andere antworten mit 404.
+
+**Ergebnis:** DEC-105, Migrationen V0034 bis V0036. Portalkonten über `/api/v1/portal-accounts`, Gruppe „Portal“ mit Zweck `portal`, Ablehnung von Unternehmensrechten im Rechtekern, Organisationssicht über `/api/v1/portal/projects` und die Anfragen je Projekt; Abschnitt „Portalkonten“ in der Kontenverwaltung und die Sicht „Ihre Anfragen“.
+
+**Prüfungen:** `PortalAccountsApiTest` (Fälle 1 bis 7, Pflichtwechsel, Gruppe und Unternehmensrechte, Entzug und Deaktivierung), `PortalContractTest`, voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #233 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-01 ([Bericht](docs/REVIEW_TASK-075_PR-233.md), PR #234): F1 bis F6 und H1 bis H3 sowie H5 mit TASK-078 behoben; die Nachprüfung in docs/REVIEW_TASK-076-078_A11.md bestätigt den sofortigen Entzug.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-076 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein Kontakt, der später die Organisation wechselt, bleibt am Konto, bis die Verwaltung es ändert; Selbstregistrierung, Passwort vergessen per Mail, zweiter Faktor und Wissen im Portal gehören zu späteren Paketen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #233 (59e8e08); verknüpft mit TASK-078 und DEC-105.
+
 ## TASK-071 Befunde der Codex Prüfung von TASK-070 beheben
 
 **Bezug:** REQ-HD-005, ACC-002. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
