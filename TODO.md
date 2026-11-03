@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 10 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-084](#task-084-befund-der-prüfung-von-task-083-beheben-a11) | Befund der Prüfung von TASK-083 beheben (A11) | claude-20261103-portal-05 | 2026-11-03 |
 
 ### Blockiert – BLOCKIERT
 
@@ -53,6 +52,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
 | [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
+| [TASK-084](#task-084-befund-der-prüfung-von-task-083-beheben-a11) | Befund der Prüfung von TASK-083 beheben (A11) | claude-20261103-portal-05 | 2026-11-03 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -395,7 +395,7 @@ Nicht Teil: weitere Funktionen, Beiträge des Supports (Regel aus V0043 bleibt),
 
 ## TASK-084 Befund der Prüfung von TASK-083 beheben (A11)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261103-portal-05 · **Aktualisiert:** 2026-11-03
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261103-portal-05 · **Aktualisiert:** 2026-11-03
 
 **Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113; docs/REVIEW_TASK-083_PR-245.md. **Abhängigkeiten:** TASK-083 geliefert (PR #245). **Arbeitsstand:** Holger hat am 3. November 2026 im Projektgespräch per Auswahl „Ja, so beheben“ beauftragt, den Befund F1 der Codex Prüfung von TASK-083 mit einer von der Zeitzone unabhängigen, vorsichtigen Grenze zu beheben. Geplanter Branch claude/project-thread-houava, Entscheidung DEC-114, Migration V0051 (V0049 und V0050 gehören TASK-082, dessen Ergebnis daher zuerst auf main kommt).
 
@@ -410,4 +410,9 @@ Nicht Teil: weitere Funktionen, H2 (Reihenfolge mit V0046 ist integriert).
 1. Der Befund ist behoben und mit automatischen Tests für beide Zeitzonenrichtungen belegt.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch.
+**Übergabe zur Prüfung (2026-11-03):**
+1. Ergebnis: V0051 liest den Installationszeitpunkt von V0043 als UTC und legt 12 Stunden drauf; diese Grenze ist nie früher als die echte Installation, gleich in welcher Zeitzone die Sitzungen liefen. Mailantworten davor werden nach der Regel aus TASK-083 neu berechnet, danach bleibt der Wert der Anwendung. V0047 bleibt unverändert. Testbeschreibung und README präzisiert (H3).
+2. Nachweise: `PortalAudienceMigrationTest` mit vier Zeitzonenpaaren (UTC und Europe/Berlin, UTC-12 und UTC+14, jeweils beide Richtungen); ohne V0051 schlägt er für UTC nach Europe/Berlin fehl. Der Fall „Korrektur nach V0045“ prüft die Neuberechnung innerhalb der Grenze. Voller Backendlauf.
+3. Grenzen: Mailantworten aus den ersten 12 Stunden (bei östlichen Zonen bis 26 Stunden) nach dem Update auf V0043 an zuvor umgezogene Kontakte bleiben verborgen; die Uhr der Datenbank muss damals gestimmt haben.
+
+**Nächster Schritt:** Prüfung durch eine zweite KI und Abnahme von TASK-075 bis TASK-080, TASK-083 und TASK-084 durch Holger.

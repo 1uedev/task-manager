@@ -283,6 +283,16 @@ Dritter Teil von Paket A11 (DEC-108, Regeln 1 bis 3 in TODO.md). Migration V0040
 
 **Grenzen.** (1) Die Obergrenze von 30 Tags je Anfrage zählt auch interne Tags (DEC-108 Punkt 5); ein Portalkonto kann daher 409 `tag.limit_reached` sehen, obwohl es weniger Tags sieht. Namen und Kennungen interner Tags bleiben verborgen, dass die Anfrage verborgene Tags trägt, ist damit aber erkennbar (Hinweis H1 der Prüfung von TASK-077, bewusst so belassen). (2) Der Tagfilter der Startseite bietet bei mehreren Projekten ohne Auswahl keine Tags an. (3) Die Suche bleibt für Portalkonten verschlossen; Portaltags erscheinen dort intern wie andere Projekttags. (4) Katalogpflege und Massenänderung im Portal fehlen wie vereinbart.
 
+## Befund der Prüfung von TASK-083 (TASK-084)
+
+Behebung nach docs/REVIEW_TASK-083_PR-245.md (DEC-114) mit der Migration V0051 (Helpdesk). Holger hat am 3. November 2026 „Ja, so beheben“ gewählt. V0049 und V0050 gehören TASK-082.
+
+- **F1 Grenze ohne Zeitzone.** Flyway speichert den Installationszeitpunkt von V0043 als Ortszeit der damaligen Sitzung ohne Zeitzone. V0047 las ihn in der Zeitzone der heutigen Sitzung; wich sie ab, verschob sich die Grenze um Stunden. V0051 liest den Wert als UTC und legt 12 Stunden drauf. Weil keine Zeitzone weiter als UTC-12 hinter UTC liegt, ist diese Grenze nie früher als die echte Installation. Jede Mailantwort davor rechnet V0051 nach der Regel aus TASK-083 neu; danach bleibt, was die Anwendung gespeichert hat. Der Preis: Mailantworten aus den ersten Stunden nach dem Update auf V0043 an einen Kontakt, der vorher die Organisation gewechselt hatte, bleiben im Portal verborgen. V0047 bleibt unverändert.
+- **H1 Tests.** `PortalAudienceMigrationTest` führt V0043 und die späteren Migrationen in verschiedenen Zeitzonen aus (UTC und Europe/Berlin in beiden Richtungen, UTC-12 und UTC+14 in beiden Richtungen). Eine alte Antwort nach einem Umzug des Kontakts wird leer, eine alte sichere Antwort wiederhergestellt, gespeicherte Antworten deutlich nach dem Update bleiben. Ohne V0051 schlägt der Test für UTC nach Europe/Berlin fehl.
+- **H3 Beschreibung.** Der Migrationstest schreibt die Historie so, wie sie am Ende in den Tabellen steht; eine „gehaltene“ Änderung ist dort eine Änderung, deren Zeit 70 Sekunden vor der Antwort liegt. Die Reihenfolge von Sperren und Zeiten in der laufenden Anwendung begründet der Abschnitt zu TASK-083; die Codex Prüfung hat sie mit einer echten gehaltenen Änderung über HTTP nachgestellt.
+
+**Grenzen.** (1) Bis zu 12 Stunden (bei östlichen Zeitzonen bis zu 26 Stunden) nach dem Update auf V0043 gespeicherte Mailantworten an zuvor umgezogene Kontakte bleiben verborgen. (2) Die Grenze setzt voraus, dass die Uhr der Datenbank damals stimmte.
+
 ## Befunde der Prüfung von TASK-080 (TASK-083)
 
 Behebung nach docs/REVIEW_TASK-080_PR-241.md (DEC-113) mit den Migrationen V0047 (Helpdesk) und V0048 (Dateien). Holger hat am 3. November 2026 „Ja, so beheben“ gewählt. V0046 gehört TASK-081.
