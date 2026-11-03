@@ -663,6 +663,44 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
 
+## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
+
+**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112, DEC-115. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 ist mit einem Browsertest mit gehaltener Prüfung und zwischenzeitlicher Eingabe belegt, F2 und H2 mit Backendtests, H1 mit Fokusprüfungen im Browser; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-115, ohne Migration. Die Bestätigung einer Antwort sendet genau die geprüfte Fassung (Postfach, Empfänger, Betreff, Text); eine Prüfung, die nach einer Änderung, einem Abbruch oder einer neuen Prüfung antwortet, wird verworfen. Das Schema der Adresse der Anwendung gilt in jeder Schreibweise und wird kleingeschrieben gespeichert, Pfad und Abfrage bleiben. Der Fokus geht nach dem Speichern der Vorlage auf die Bestätigung, beim Prüfen einer Antwort auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“. Die Vorlagenvorschau lehnt eine fehlende oder fremde Sprache mit 400 `mail_template.languages_missing` ab. Die Browsertests für Portalkopf und Farbwert warten auf den geladenen Auftritt; dabei behoben, dass eine halb eingetippte Farbe vom spät geladenen gespeicherten Auftritt überschrieben wurde.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (515 Tests), `AppearanceApiTest` mit `HTTPS://` und `Https://` in der Vorschau, `HTTPS://` beim Speichern und der abgelehnten Sprache. Frontend `npm run verify` mit 79 Tests, `npm run test:browser` 181 von 181. CI auf PR #250 grün.
+
+**Review:** Getrennte Nachprüfung durch Codex, Sitzung codex-20261103-mailtemplate-review-02 ([Bericht](docs/REVIEW_TASK-085_PR-250.md), PR #253): F1, F2, H1 bis H3 und der Nachtrag wirksam, kein neuer Produktbefund, Empfehlung zur Abnahme; eigene Gegenproben mit gehaltener Prüfung in 14 Fallgruppen, 4 HTTPS Schreibweisen und 15 abgelehnten Adressen gegen die echte API.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch mit „Ok“ auf den Vorschlag, TASK-082 und TASK-085 jetzt abzunehmen und TASK-081 erst nach einer eigenen Prüfung; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Testpflege nach N1 bis N3 der Nachprüfung: der Login Sprachtest wartet nur auf den Ladebildschirm, die neuen Verzögerungstests warten pauschal 300 ms statt auf die verarbeitete Antwort, und die Tag Testvorbereitung legt Tags erst nach dem Öffnen der Seite an.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-082 #248 (86df764), Ergebnis #250 (010ad07), Nachprüfbericht und Abschluss #253; verknüpft mit TASK-082 und DEC-115.
+
+## TASK-082 Mailvorlage für Antworten an Kunden (A17 Teil 2)
+
+**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091, DEC-112. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Eine Antwort an einen deutschen und einen englischen Kontakt geht als HTML und Klartext mit Logo, Name und gespeicherter Vorlage in der jeweiligen Sprache, ohne gespeicherte Vorlage gilt die Rückfallvorlage; unbekannte Platzhalter werden abgelehnt (W15), Werte mit HTML Zeichen erscheinen maskiert, die Vorschau zeigt keine echten Daten; eine nach der Bestätigung geänderte Vorlage ändert eine wartende oder erneut versuchte Sendung nicht; Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen zu A17 bestätigt): Vorlage „Antwort an Kunden“ mit Anrede, Signatur und Fußzeile je Sprache als Klartext mit den festen Platzhaltern `{{company.name}}`, `{{contact.name}}`, `{{ticket.number}}`, `{{ticket.title}}`, `{{sender.name}}`, `{{mailbox.address}}` und `{{portal.url}}`; optionale Adresse der Anwendung nur mit https; Sprache am Kontakt Deutsch oder Englisch; jede Antwort als HTML und Klartext mit eingebettetem Logo; eingebaute Vorlage mit Zurücksetzen; die fertige Mail wird bei der Bestätigung festgehalten; Pflege mit `appearance.manage`, Version und Audit; Demosignatur und englischer Kontakt von Südtechnik.
+
+**Ergebnis:** DEC-112, Migrationen V0049 (`appearance_mail_template`) und V0050 (Sprache am Kontakt, `helpdesk_reply_mail`, `helpdesk_reply_image`). Endpunkte für Vorlage und Vorschau im Erscheinungsbild, Vorschau der fertigen Antwort vor der Bestätigung, `SmtpMailSender` sendet `multipart/alternative` mit dem Logo als `cid:logo`. Oberfläche: Abschnitt „Mailvorlage“ auf der Seite „Erscheinungsbild“, Sprache in der Kontaktpflege, Prüfung einer Antwort mit der fertigen Mail. Verträge appearance und helpdesk ergänzt.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (515 Tests), darunter neue Tests in `AppearanceApiTest` und `HelpdeskApiTest` mit dem SMTP Testserver. Frontend `npm run verify` mit 79 Tests, `npm run test:browser` 179 von 179. CI auf PR #247 grün einschließlich Lifecycle mit 47 Migrationen.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-mailtemplate-review-01 ([Bericht](docs/REVIEW_TASK-082_PR-247.md), PR #248): Empfehlung „nachbessern“ mit F1 (Bestätigung einer ungeprüften Fassung), F2 (HTTPS in Großschreibung), H1 bis H3; alle mit TASK-085 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch mit „Ok“, zusammen mit TASK-085; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Das HTML der Mail erscheint in der Anwendung nicht selbst, die Vorschau zeigt die gefüllten Teile und den Klartext; eine zwischen Prüfung und Bestätigung geänderte Vorlage gilt mit der Bestätigung; Antworten vor V0050 gehen weiter als reiner Text; ohne Leserecht auf den Titel bleibt `{{ticket.title}}` leer.
+
+**Referenz:** Reservierung #242 (e450c14), Ergebnis #247 (c06a8a2), Prüfbericht #248 (86df764); verknüpft mit TASK-081, TASK-085 und DEC-112.
+
 ## TASK-084 Befund der Prüfung von TASK-083 beheben (A11)
 
 **Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-113, DEC-114. **Verantwortlich:** claude-20261103-portal-05. **Abgeschlossen:** 2026-11-03.
