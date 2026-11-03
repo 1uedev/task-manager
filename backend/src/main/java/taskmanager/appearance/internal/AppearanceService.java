@@ -22,6 +22,8 @@ import taskmanager.platform.ApiProblemException;
 @Service
 public class AppearanceService {
     public static final String DEFAULT_ACCENT = "#f97316";
+    public static final String DEFAULT_NAME = "Task Manager";
+    public static final int NAME_MAX = 80;
     private static final Pattern COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
 
     private final JdbcClient jdbc;
@@ -38,8 +40,8 @@ public class AppearanceService {
     }
 
     public Appearance current() {
-        return jdbc.sql("select accent_color, logo_type, coalesce(octet_length(logo), 0) as logo_size, version, updated_at from appearance_setting where id = 1")
-            .query((rs, row) -> new Appearance(rs.getString("accent_color"), rs.getString("logo_type"), rs.getInt("logo_size"),
+        return jdbc.sql("select name, accent_color, logo_type, coalesce(octet_length(logo), 0) as logo_size, version, updated_at from appearance_setting where id = 1")
+            .query((rs, row) -> new Appearance(rs.getString("name"), rs.getString("accent_color"), rs.getString("logo_type"), rs.getInt("logo_size"),
                 rs.getLong("version"), rs.getObject("updated_at", java.time.OffsetDateTime.class).toInstant()))
             .single();
     }
@@ -49,18 +51,57 @@ public class AppearanceService {
             .query((rs, row) -> new LogoContent(rs.getString("logo_type"), rs.getBytes("logo"))).optional();
     }
 
+    /**
+     * Changes the accent color, the name or both in one step (TASK-081). A part that is not sent stays as it is; a request
+     * that sends neither is refused. Each changed part gets its own entry in the audit trail.
+     */
     @Transactional
-    public Appearance changeAccent(AccessContext actor, long expectedVersion, String accentColor) {
+    public Appearance change(AccessContext actor, long expectedVersion, String accentColor, String name) {
         requireRight();
-        if (accentColor == null || !COLOR.matcher(accentColor).matches()) {
+        if (accentColor == null && name == null) {
+            throw ApiProblemException.of(400, "appearance.change_empty");
+        }
+        if (accentColor != null && !COLOR.matcher(accentColor).matches()) {
             throw ApiProblemException.of(400, "appearance.color_invalid");
         }
-        String color = accentColor.toLowerCase(Locale.ROOT);
+        String color = accentColor == null ? null : accentColor.toLowerCase(Locale.ROOT);
+        String shown = name == null ? null : validName(name);
         Appearance before = locked(expectedVersion);
-        jdbc.sql("update appearance_setting set accent_color = ?, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
-            .params(color, ts(), actor.accountId()).update();
-        audit(actor, "appearance.accent_changed", before.accentColor() + " -> " + color);
+        String nextColor = color == null ? before.accentColor() : color;
+        String nextName = shown == null ? before.name() : shown;
+        jdbc.sql("update appearance_setting set accent_color = ?, name = ?, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
+            .params(nextColor, nextName, ts(), actor.accountId()).update();
+        if (color != null) {
+            audit(actor, "appearance.accent_changed", before.accentColor() + " -> " + color);
+        }
+        if (shown != null) {
+            audit(actor, "appearance.name_changed", before.name() + " -> " + shown);
+        }
         return current();
+    }
+
+    /** Puts name, accent color and logo back to the defaults in one step (TASK-081). */
+    @Transactional
+    public Appearance reset(AccessContext actor, long expectedVersion) {
+        requireRight();
+        locked(expectedVersion);
+        jdbc.sql("update appearance_setting set name = ?, accent_color = ?, logo = null, logo_type = null, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
+            .params(DEFAULT_NAME, DEFAULT_ACCENT, ts(), actor.accountId()).update();
+        audit(actor, "appearance.reset", null);
+        return current();
+    }
+
+    /**
+     * The name after surrounding spaces are removed: 1 to 80 characters without control characters or line breaks, so it
+     * fits a page head, a window title and a mail header alike.
+     */
+    static String validName(String raw) {
+        String name = raw.strip();
+        if (name.isEmpty() || name.codePointCount(0, name.length()) > NAME_MAX
+            || name.codePoints().anyMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029 || Character.getType(c) == Character.FORMAT)) {
+            throw ApiProblemException.of(400, "appearance.name_invalid");
+        }
+        return name;
     }
 
     @Transactional

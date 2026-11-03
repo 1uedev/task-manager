@@ -63,7 +63,10 @@ h1:focus-visible, .error-summary:focus-visible, .success:focus-visible { outline
   background: var(--sidebar);
   border-right: 1px solid var(--hairline);
 }
-.brand { display: flex; align-items: center; gap: 0.65rem; padding: 0.25rem 0.5rem; font-weight: 700; font-size: 1.02rem; letter-spacing: -0.015em; }
+.brand { display: flex; align-items: center; gap: 0.65rem; padding: 0.25rem 0.5rem; font-weight: 700; font-size: 1.02rem; letter-spacing: -0.015em; min-width: 0; }
+/* A name of up to 80 characters breaks instead of pushing the head apart (TASK-081). */
+.brand-name { min-width: 0; overflow-wrap: anywhere; }
+.brand-addition { font-weight: 500; font-size: 0.9rem; color: var(--muted); white-space: nowrap; }
 .brand-mark {
   display: grid; place-items: center;
   width: 2rem; height: 2rem; border-radius: 10px;
@@ -311,7 +314,7 @@ main.page-board { max-width: none; }
 .badge-admin { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0 0 0.6rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.78rem; font-weight: 650; background: var(--accent-soft); color: var(--brand-text); }
 .badge-admin svg { width: 14px; height: 14px; }
 .appearance-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 1fr); gap: 1.25rem; align-items: start; }
-.appearance-settings { display: grid; gap: 1.25rem; }
+.appearance-settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
 .appearance-settings .card, .preview { margin: 0; }
 .label-small { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin: 0.9rem 0 0.45rem; }
 .swatches { display: flex; flex-wrap: wrap; gap: 0.6rem; }
@@ -332,10 +335,25 @@ main.page-board { max-width: none; }
 .dropzone-title { font-weight: 650; }
 .link-button { min-height: 0; padding: 0; background: none; border: 0; box-shadow: none; color: var(--brand-text); text-decoration: underline 2px var(--brand-primary); text-underline-offset: 4px; font-weight: 600; }
 .link-button:hover:not(:disabled) { background: none; }
-.preview { position: sticky; top: 2rem; }
+/* Five previews are taller than a screen, so the column scrolls with the page instead of sticking (TASK-081). */
+.preview { position: static; }
+.preview-set { display: grid; gap: 1rem; }
+.preview-set figure { margin: 0; display: grid; gap: 0.35rem; }
 .preview-window { border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: var(--page); }
 .preview-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: var(--surface); border-bottom: 1px solid var(--hairline); }
-.preview-mark { width: 1.2rem; height: 1.2rem; border-radius: 6px; background: var(--brand-primary); }
+.preview-mark { width: 1.2rem; height: 1.2rem; border-radius: 6px; background: var(--brand-primary); color: var(--brand-on-primary); display: grid; place-items: center; font-size: 0.7rem; font-weight: 700; flex: none; }
+.preview-logo { height: 1.2rem; max-width: 4rem; object-fit: contain; flex: none; }
+.preview-name { font-size: 0.8rem; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-addition { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.preview-title { font-size: 0.85rem; font-weight: 700; }
+.preview-form { display: grid; gap: 0.5rem; padding: 0.9rem; max-width: 14rem; margin: 0 auto; }
+.preview-field { height: 1.4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.preview-form .preview-button { justify-self: start; }
+.preview-mail { background: #ffffff; color: #17140f; }
+.preview-subject { margin: 0; padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; border-bottom: 1px solid #e7e2dc; color: #5c544b; }
+.preview-mail-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border-bottom: 3px solid var(--brand-primary); }
+.preview-mail-body { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+.preview-mail-body p { margin: 0.35rem 0; }
 .preview-body { display: grid; grid-template-columns: 5rem 1fr; min-height: 12rem; }
 .preview-nav { display: grid; align-content: start; gap: 0.4rem; padding: 0.75rem 0.5rem; border-right: 1px solid var(--hairline); background: var(--sidebar); }
 .preview-item { height: 0.75rem; border-radius: 4px; background: var(--hairline); }
@@ -349,7 +367,7 @@ main.page-board { max-width: none; }
 .preview-link { font-size: 0.8rem; color: var(--link); text-decoration: underline; }
 .preview-badge { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--accent-soft); color: var(--brand-text); }
 
-@media (max-width: 64rem) { .appearance-grid { grid-template-columns: 1fr; } .preview { position: static; } }
+@media (max-width: 64rem) { .appearance-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 48rem) {
   .nav-section { display: none; }
   .sidebar nav { display: flex; gap: 2px; overflow-x: auto; }

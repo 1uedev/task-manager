@@ -13,8 +13,54 @@ export interface paths {
         };
         /** Aktuelles Erscheinungsbild */
         get: operations["getAppearance"];
-        /** Akzentfarbe ändern (Recht appearance.manage) */
-        put: operations["changeAccentColor"];
+        /**
+         * Akzentfarbe, Name oder beides ändern (Recht appearance.manage)
+         * @description Ein nicht gesendeter Teil bleibt unverändert; ohne beide Teile 400 `appearance.change_empty`. Der Name wird an
+         *     den Rändern gekürzt und muss danach 1 bis 80 Zeichen ohne Steuer- oder Formatzeichen haben (sonst 400
+         *     `appearance.name_invalid`). Jeder geänderte Teil erhält einen eigenen Eintrag im Prüfprotokoll.
+         */
+        put: operations["changeAppearance"];
+        post?: never;
+        /**
+         * Alles zurücksetzen (Recht appearance.manage)
+         * @description Setzt Name, Akzentfarbe und Logo in einem Schritt auf den Standard (TASK-081).
+         */
+        delete: operations["resetAppearance"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appearance/public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auftritt für die Anmeldeseite, ohne Sitzung */
+        get: operations["getPublicAppearance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appearance/public/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Logo für die Anmeldeseite, ohne Sitzung
+         * @description Dieselben Bilddaten und Köpfe wie `/appearance/logo`. Ohne Logo 404 mit `appearance.logo_not_found`.
+         */
+        get: operations["getPublicLogo"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -65,8 +111,15 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        AccentRequest: {
+        AppearanceChange: {
+            accentColor?: string;
+            name?: string;
+        };
+        PublicAppearance: {
+            name: string;
             accentColor: string;
+            /** @description `/api/v1/appearance/public/logo` oder null ohne Logo */
+            logoUrl: string | null;
         };
         Logo: {
             /** @enum {string} */
@@ -76,6 +129,8 @@ export interface components {
             url: string;
         };
         Appearance: {
+            name: string;
+            defaultName: string;
             accentColor: string;
             defaultAccentColor: string;
             logo: components["schemas"]["Logo"] | null;
@@ -86,7 +141,8 @@ export interface components {
     };
     responses: {
         /**
-         * @description Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.logo_empty,
+         * @description Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.name_invalid,
+         *     appearance.change_empty, appearance.logo_empty,
          *     appearance.logo_type_invalid, appearance.logo_unreadable (415, beschädigte oder unvollständige Bilddatei, TASK-043), appearance.logo_not_found, appearance.version_conflict,
          *     appearance.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
          *     auth.password_change_required.
@@ -120,7 +176,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Akzentfarbe, Logo und Version */
+            /** @description Name, Akzentfarbe, Logo und Version */
             200: {
                 headers: {
                     /** @description Version in Anführungszeichen, zum Beispiel "3" */
@@ -135,7 +191,7 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
-    changeAccentColor: {
+    changeAppearance: {
         parameters: {
             query?: never;
             header: {
@@ -147,7 +203,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AccentRequest"];
+                "application/json": components["schemas"]["AppearanceChange"];
             };
         };
         responses: {
@@ -166,6 +222,77 @@ export interface operations {
             403: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+        };
+    };
+    resetAppearance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description ETag der zuletzt gelesenen Fassung. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Zurückgesetzt. Neue Version im ETag. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appearance"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            428: components["responses"]["Problem"];
+        };
+    };
+    getPublicAppearance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nur Name, Akzentfarbe und Adresse des öffentlichen Logos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAppearance"];
+                };
+            };
+        };
+    };
+    getPublicLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bilddaten */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["Problem"];
         };
     };
     getLogo: {

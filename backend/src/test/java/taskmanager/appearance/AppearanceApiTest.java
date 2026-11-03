@@ -93,7 +93,7 @@ class AppearanceApiTest {
 
     @BeforeEach
     void defaults() {
-        jdbc.update("update appearance_setting set accent_color = '#f97316', logo = null, logo_type = null, version = 1 where id = 1");
+        jdbc.update("update appearance_setting set name = 'Task Manager', accent_color = '#f97316', logo = null, logo_type = null, version = 1 where id = 1");
         jdbc.update("delete from appearance_audit_event");
     }
 
@@ -267,7 +267,9 @@ class AppearanceApiTest {
         for (String color : List.of("orange", "#fff", "#12345g", "#1234567", "rgb(1,2,3)", "")) {
             assertProblem(admin.accent(color, "\"1\""), 400, "appearance.color_invalid");
         }
-        assertProblem(admin.json("PUT", "/api/v1/appearance", Map.of(), "\"1\""), 400, "appearance.color_invalid");
+        assertProblem(admin.json("PUT", "/api/v1/appearance", Map.of(), "\"1\""), 400, "appearance.change_empty");
+        // A valid name does not carry an invalid color through.
+        assertProblem(admin.json("PUT", "/api/v1/appearance", Map.of("accentColor", "orange", "name", "Nordlicht"), "\"1\""), 400, "appearance.color_invalid");
         assertEquals(0, auditCount());
     }
 
@@ -392,5 +394,127 @@ class AppearanceApiTest {
         Response read = browser.get("/api/v1/appearance");
         assertEquals(403, read.status(), read.body());
         assertProblem(browser.accent("#123456", "\"1\""), 403, read.code());
+    }
+
+    // ---------------------------------------------------------------- name, reset and public read (TASK-081)
+
+    @Test
+    void aHolderOfTheRightChangesTheNameWhichIsTrimmedVersionedAndAudited() {
+        Browser admin = person(AdministrationRight.APPEARANCE_MANAGE);
+        Response read = admin.get("/api/v1/appearance");
+        assertEquals("Task Manager", read.json().get("name").asString());
+        assertEquals("Task Manager", read.json().get("defaultName").asString());
+
+        Response named = admin.json("PUT", "/api/v1/appearance", Map.of("name", "  Nordlicht Service GmbH  "), "\"1\"");
+        assertEquals(200, named.status(), named.body());
+        assertEquals("Nordlicht Service GmbH", named.json().get("name").asString());
+        // The color stays as it was when only the name is sent.
+        assertEquals("#f97316", named.json().get("accentColor").asString());
+        assertEquals("\"2\"", named.header("ETag"));
+
+        Response both = admin.json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht", "accentColor", "#2563EB"), "\"2\"");
+        assertEquals(200, both.status(), both.body());
+        assertEquals("Nordlicht", both.json().get("name").asString());
+        assertEquals("#2563eb", both.json().get("accentColor").asString());
+        assertEquals(3, both.json().get("version").asInt());
+
+        assertEquals(List.of("appearance.name_changed: Task Manager -> Nordlicht Service GmbH",
+                "appearance.accent_changed: #f97316 -> #2563eb", "appearance.name_changed: Nordlicht Service GmbH -> Nordlicht"),
+            jdbc.queryForList("select event || ': ' || detail from appearance_audit_event order by id", String.class));
+        assertEquals("Nordlicht", person(false).get("/api/v1/appearance").json().get("name").asString());
+    }
+
+    @Test
+    void invalidNamesAreRefused() {
+        Browser admin = person(true);
+        for (String name : List.of("", "   ", "x".repeat(81), "Zeile\nUmbruch", "Tab\there", "Rechts\u202ELinks", "Null\u0000")) {
+            assertProblem(admin.json("PUT", "/api/v1/appearance", Map.of("name", name), "\"1\""), 400, "appearance.name_invalid");
+        }
+        // 80 characters count as characters, not as bytes or UTF-16 units.
+        String longest = "\uD83D\uDE80".repeat(80);
+        Response accepted = admin.json("PUT", "/api/v1/appearance", Map.of("name", longest), "\"1\"");
+        assertEquals(200, accepted.status(), accepted.body());
+        assertEquals(longest, accepted.json().get("name").asString());
+        assertProblem(person(false).json("PUT", "/api/v1/appearance", Map.of("name", "Fremd"), "\"2\""), 403, "auth.forbidden");
+        assertEquals(1, auditCount());
+    }
+
+    @Test
+    void resetPutsNameColorAndLogoBackInOneStep() {
+        Browser admin = person(true);
+        assertEquals(200, admin.json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht", "accentColor", "#7c3aed"), "\"1\"").status());
+        assertEquals(200, admin.logo("image/png", PNG, "\"2\"").status());
+
+        assertProblem(person(false).send("DELETE", "/api/v1/appearance", null, null, "\"3\""), 403, "auth.forbidden");
+        assertProblem(admin.send("DELETE", "/api/v1/appearance", null, null, null), 428, "appearance.precondition_required");
+        assertProblem(admin.send("DELETE", "/api/v1/appearance", null, null, "\"2\""), 412, "appearance.version_conflict");
+
+        Response reset = admin.send("DELETE", "/api/v1/appearance", null, null, "\"3\"");
+        assertEquals(200, reset.status(), reset.body());
+        assertEquals("Task Manager", reset.json().get("name").asString());
+        assertEquals("#f97316", reset.json().get("accentColor").asString());
+        assertTrue(reset.json().get("logo").isNull());
+        assertEquals("\"4\"", reset.header("ETag"));
+        assertProblem(admin.get("/api/v1/appearance/logo"), 404, "appearance.logo_not_found");
+        assertEquals("appearance.reset", jdbc.queryForObject("select event from appearance_audit_event order by id desc limit 1", String.class));
+    }
+
+    @Test
+    void theLoginPageReadsNameColorAndLogoWithoutASessionAndNothingElse() {
+        Browser anonymous = anonymous();
+        Response initial = anonymous.get("/api/v1/appearance/public");
+        assertEquals(200, initial.status(), initial.body());
+        assertEquals("no-store", initial.header("Cache-Control"));
+        assertTrue(initial.json().get("logoUrl").isNull());
+        assertProblem(anonymous.get("/api/v1/appearance/public/logo"), 404, "appearance.logo_not_found");
+
+        Browser admin = person(true);
+        assertEquals(200, admin.json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht", "accentColor", "#16a34a"), "\"1\"").status());
+        assertEquals(200, admin.logo("image/png", PNG, "\"2\"").status());
+
+        // A fresh visitor without any cookie at all.
+        Browser stranger = new Browser();
+        Response shown = stranger.get("/api/v1/appearance/public");
+        assertEquals(200, shown.status(), shown.body());
+        JsonNode body = shown.json();
+        assertEquals(java.util.Set.of("name", "accentColor", "logoUrl"), new java.util.TreeSet<>(body.propertyNames()));
+        assertEquals("Nordlicht", body.get("name").asString());
+        assertEquals("#16a34a", body.get("accentColor").asString());
+        assertEquals("/api/v1/appearance/public/logo", body.get("logoUrl").asString());
+        assertTrue(shown.header("ETag") == null);
+
+        Response logo = stranger.get("/api/v1/appearance/public/logo");
+        assertEquals(200, logo.status());
+        assertArrayEquals(PNG, logo.raw());
+        assertEquals("image/png", logo.header("Content-Type"));
+        assertEquals("nosniff", logo.header("X-Content-Type-Options"));
+        assertEquals("default-src 'none'; sandbox", logo.header("Content-Security-Policy"));
+        assertEquals(200, stranger.send("HEAD", "/api/v1/appearance/public", null, null, null).status());
+
+        // An expired cookie does not keep the login page from its appearance.
+        stranger.cookies.put("__Host-tm-session", "expired-or-forged");
+        assertEquals(200, stranger.get("/api/v1/appearance/public").status());
+
+        // Nothing else opens up: the full setting, its logo and every change still need a session and the right.
+        Browser other = new Browser();
+        assertProblem(other.get("/api/v1/appearance"), 401, "auth.required");
+        assertProblem(other.get("/api/v1/appearance/logo"), 401, "auth.required");
+        assertProblem(anonymous.json("PUT", "/api/v1/appearance/public", Map.of("name", "X"), "\"3\""), 401, "auth.required");
+        assertProblem(anonymous.send("DELETE", "/api/v1/appearance/public/logo", null, null, "\"3\""), 401, "auth.required");
+        assertProblem(anonymous.send("DELETE", "/api/v1/appearance", null, null, "\"3\""), 401, "auth.required");
+        assertEquals("Nordlicht", jdbc.queryForObject("select name from appearance_setting", String.class));
+    }
+
+    @Test
+    void aPersonWhoMustStillChangeThePasswordSeesTheAppearanceOfTheLoginPage() {
+        assertEquals(200, person(true).json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht"), "\"1\"").status());
+        var issued = accounts.create("test", "pending-" + COUNTER.incrementAndGet(), null);
+        Browser browser = anonymous();
+        assertEquals(200, browser.json("POST", "/api/v1/session",
+            Map.of("username", issued.account().username(), "password", issued.oneTimePassword()), null).status());
+        Response shown = browser.get("/api/v1/appearance/public");
+        assertEquals(200, shown.status(), shown.body());
+        assertEquals("Nordlicht", shown.json().get("name").asString());
+        assertProblem(browser.get("/api/v1/appearance"), 403, "auth.password_change_required");
     }
 }
