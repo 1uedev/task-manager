@@ -36,6 +36,66 @@ export const ANNA = { username: 'anna', password: 'Anna Passwort 2026', displayN
 export const BEN = { username: 'ben', password: 'Ben Passwort 2026', displayName: 'Ben Leser' };
 export const NORA = { username: 'nora', password: 'EinmalNora0001', displayName: 'Nora Neu' };
 
+// The mail template "Antwort an Kunden" as the server sets it (TASK-082): plain text parts with placeholders, filled and
+// escaped for the HTML. The browser tests read the parts and the plain text; the HTML follows the same rules.
+const PLACEHOLDERS = ['company.name', 'contact.name', 'ticket.number', 'ticket.title', 'sender.name', 'mailbox.address', 'portal.url'];
+const BUILT_IN = {
+  de: { greeting: 'Guten Tag {{contact.name}},', signature: 'Viele Grüße\n{{sender.name}}\n{{company.name}}',
+    footer: 'Ticket {{ticket.number}}: {{ticket.title}}\nIhre Anfragen im Kundenportal: {{portal.url}}' },
+  en: { greeting: 'Hello {{contact.name}},', signature: 'Kind regards\n{{sender.name}}\n{{company.name}}',
+    footer: 'Ticket {{ticket.number}}: {{ticket.title}}\nYour requests in the customer portal: {{portal.url}}' },
+};
+const PLACEHOLDER_TOKEN = /\{\{([^{}]{0,60})\}\}/g;
+
+function unknownPlaceholders(text) {
+  const unknown = [...text.matchAll(PLACEHOLDER_TOKEN)].map((match) => match[1]).filter((name) => !PLACEHOLDERS.includes(name)).map((name) => `{{${name}}}`);
+  const rest = text.replace(PLACEHOLDER_TOKEN, ' ');
+  const open = rest.indexOf('{{');
+  const close = rest.indexOf('}}');
+  if (open >= 0) unknown.push(rest.slice(open, open + 30).trim());
+  else if (close >= 0) unknown.push(rest.slice(Math.max(0, close - 28), close + 2).trim());
+  return [...new Set(unknown)];
+}
+
+const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const trimLines = (lines) => {
+  let from = 0;
+  let to = lines.length;
+  while (from < to && lines[from].trim() === '') from += 1;
+  while (to > from && lines[to - 1].trim() === '') to -= 1;
+  return lines.slice(from, to).map((line) => line.trimEnd());
+};
+
+function fillTemplate(template, values, html) {
+  const lines = [];
+  for (const line of String(template).replace(/\r\n?/g, '\n').split('\n')) {
+    if (!values['portal.url'] && line.includes('{{portal.url}}')) continue;
+    let out = '';
+    let last = 0;
+    for (const match of line.matchAll(PLACEHOLDER_TOKEN)) {
+      out += html ? escapeHtml(line.slice(last, match.index)) : line.slice(last, match.index);
+      const value = String(values[match[1]] ?? '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').trim();
+      out += html ? escapeHtml(value) : value;
+      last = match.index + match[0].length;
+    }
+    out += html ? escapeHtml(line.slice(last)) : line.slice(last);
+    lines.push(out);
+  }
+  return trimLines(lines).join(html ? '<br>\n' : '\n');
+}
+
+function renderMail(code, texts, address, name, color, logo, sample) {
+  const values = { 'company.name': name, 'contact.name': sample.contact, 'ticket.number': sample.number, 'ticket.title': sample.title,
+    'sender.name': sample.sender, 'mailbox.address': sample.mailbox, 'portal.url': address ?? '' };
+  const parts = { name, accentColor: color, logo, greeting: fillTemplate(texts.greeting, values, false),
+    body: trimLines(sample.body.replace(/\r\n?/g, '\n').split('\n')).join('\n'), signature: fillTemplate(texts.signature, values, false),
+    footer: fillTemplate(texts.footer, values, false) };
+  const sections = [parts.greeting, parts.body, parts.signature].filter((part, index) => index === 1 || part !== '');
+  const text = `${sections.join('\n\n')}${parts.footer === '' ? '\n' : `\n\n-- \n${parts.footer}\n`}`;
+  const html = `<!DOCTYPE html>\n<html lang="${code}"><body><p>${fillTemplate(texts.greeting, values, true)}</p><p>${escapeHtml(parts.body).replace(/\n/g, '<br>\n')}</p></body></html>`;
+  return { language: code, text, html, parts };
+}
+
 export function createBackend({ accent = '#f97316', anonymousAppearance = false, brandName = 'Task Manager' } = {}) {
   const accounts = [ANNA, BEN, NORA].map((item) => ({
     id: uuid(), username: item.username, displayName: item.displayName, password: item.password, active: true,
@@ -65,6 +125,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         fields: ['title', 'type', 'status', 'assignee', TAG_FIELD, ATTACHMENT_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
     appearance: { version: 3, accent, name: brandName, logo: null },
+    // The mail template of TASK-082: null for a language means the built-in one.
+    mailTemplate: { version: 1, applicationUrl: null, de: null, en: null },
     // The LDAP connection (TASK-046): null until stored; `directoryDown` makes a sign in of an unknown name fail like an outage.
     ldap: null,
     ldapBindPasswordSet: true,
@@ -348,6 +410,37 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (account.passwordChangeRequired) return problem(403, 'auth.password_change_required');
 
+    if (p.startsWith('/appearance/mail-template')) {
+      if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
+      const template = state.mailTemplate;
+      if (p === '/appearance/mail-template' && method === 'GET') return ok(mailTemplateBody(), `"${template.version}"`);
+      if (p === '/appearance/mail-template/preview' && method === 'POST') {
+        const code = body.language === 'en' ? 'en' : 'de';
+        const refused = checkTexts(code, body.texts) ?? checkAddress(body.applicationUrl);
+        if (refused) return refused;
+        const sample = code === 'en'
+          ? { contact: 'Alex Example', number: 'HELP-42', title: 'Printer in hall 2 does not start', sender: 'Sam Support', mailbox: 'support@example.com',
+            body: 'Thank you for your message.\nWe have restarted the printer; it works again.\nPlease let us know if anything is still wrong.' }
+          : { contact: 'Erika Beispiel', number: 'HELP-42', title: 'Drucker in Halle 2 startet nicht', sender: 'Max Support', mailbox: 'support@example.com',
+            body: 'Vielen Dank für Ihre Nachricht.\nWir haben den Drucker neu gestartet, er läuft wieder.\nBitte melden Sie sich, falls noch etwas nicht stimmt.' };
+        return ok(renderMail(code, body.texts, body.applicationUrl?.trim() || null, body.name ?? state.appearance.name,
+          (body.accentColor ?? state.appearance.accent).toLowerCase(), state.appearance.logo !== null, sample));
+      }
+      if (!headers['if-match']) return problem(428, 'mail_template.precondition_required');
+      if (headers['if-match'] !== `"${template.version}"`) return problem(412, 'mail_template.version_conflict');
+      if (p === '/appearance/mail-template' && method === 'PUT') {
+        if (!body.de || !body.en) return problem(400, 'mail_template.languages_missing');
+        const refused = checkAddress(body.applicationUrl) ?? checkTexts('de', body.de) ?? checkTexts('en', body.en);
+        if (refused) return refused;
+        Object.assign(template, { applicationUrl: body.applicationUrl?.trim() || null, de: { ...body.de }, en: { ...body.en }, version: template.version + 1 });
+        return ok(mailTemplateBody(), `"${template.version}"`);
+      }
+      if (p === '/appearance/mail-template' && method === 'DELETE') {
+        Object.assign(template, { de: null, en: null, version: template.version + 1 });
+        return ok(mailTemplateBody(), `"${template.version}"`);
+      }
+      return problem(404, 'resource.not_found');
+    }
     if (p === '/appearance' && method === 'GET') return ok(appearanceBody(), `"${state.appearance.version}"`);
     if (p.startsWith('/appearance')) {
       if (p === '/appearance/logo' && method === 'GET') return { status: 200, raw: PNG, type: 'image/png' };
@@ -1177,7 +1270,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const addresses = (body.addresses ?? []).map((value) => value.trim().toLowerCase());
       if (addresses.length === 0 || addresses.some((value) => !/^[^@\s]+@[^@\s]+$/.test(value))) return problem(400, 'request.invalid', { violations: ['addresses.invalid'] });
       if (hd.contacts.some((entry) => entry.addresses.some((value) => addresses.includes(value)))) return problem(409, 'contact.address_taken');
-      const contact = { id: uuid(), customerId: body.customerId, name: body.name.trim(), addresses, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      if (body.language !== undefined && !['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      const contact = { id: uuid(), customerId: body.customerId, name: body.name.trim(), addresses, language: body.language ?? 'de', version: 1, createdAt: now(),
+        createdBy: account.id, updatedAt: now(), updatedBy: account.id };
       hd.contacts.push(contact);
       return { status: 201, body: contact, etag: '"1"' };
     }
@@ -1187,7 +1282,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (!contact) return problem(404, 'contact.not_found');
       const refused = versioned(headers, contact, 'contact');
       if (refused) return refused;
-      Object.assign(contact, { customerId: body.customerId, name: body.name.trim(), addresses: body.addresses.map((value) => value.trim().toLowerCase()), version: contact.version + 1 });
+      if (body.language !== undefined && !['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      Object.assign(contact, { customerId: body.customerId, name: body.name.trim(), addresses: body.addresses.map((value) => value.trim().toLowerCase()),
+        language: body.language ?? contact.language ?? 'de', version: contact.version + 1 });
       return ok(contact, `"${contact.version}"`);
     }
     if (p === '/helpdesk/mailboxes' && method === 'GET') return ok(hd.mailboxes.map(mailboxView));
@@ -1465,7 +1562,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           recipients: contact.addresses, subject: last?.subject ? `Re: ${last.subject}` : null,
           suggestedMailbox: list.find((mailbox) => mailbox.id === last?.mailboxId)?.id ?? list[0]?.id ?? null });
       }
-      if (tail === '/helpdesk/replies' && method === 'POST') {
+      if ((tail === '/helpdesk/replies' || tail === '/helpdesk/reply/preview') && method === 'POST') {
         const mailbox = senders().find((entry) => entry.id === body.mailboxId);
         const violations = [];
         if (!mailbox) violations.push('mailboxId.unavailable');
@@ -1473,7 +1570,13 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         if (!body.subject?.trim() || /[\r\n]/.test(body.subject)) violations.push('subject.invalid');
         if (!body.body?.trim()) violations.push('body.invalid');
         if (violations.length > 0) return problem(400, 'request.invalid', { violations });
-        const reply = { id: uuid(), ticketId: ticket.id, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
+        const code = contact.language === 'en' ? 'en' : 'de';
+        const project = state.projects.find((entry) => entry.id === item.id);
+        const mail = renderMail(code, state.mailTemplate[code] ?? BUILT_IN[code], state.mailTemplate.applicationUrl, state.appearance.name, state.appearance.accent,
+          state.appearance.logo !== null, { contact: contact.name, number: `${project?.key ?? ''}-${ticket.number}`, title: ticket.values?.title ?? '',
+            sender: account.displayName ?? account.username, mailbox: mailbox.address, body: body.body });
+        if (tail === '/helpdesk/reply/preview') return ok(mail);
+        const reply = { id: uuid(), ticketId: ticket.id, mail, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
           subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1,
           customerId: contact.customerId, portalPosition: null };
         hd.replies.push(reply);
@@ -1537,6 +1640,38 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       expiresAt: '2026-10-22T08:00:00Z', passwordChangeBy: account.passwordChangeRequired ? '2026-10-21T08:30:00Z' : null, csrfToken: TOKEN,
       rights: account.passwordChangeRequired ? [] : companyRights(account) };
   }
+  function mailTemplateBody() {
+    const language = (code) => ({ ...(state.mailTemplate[code] ?? BUILT_IN[code]), stored: state.mailTemplate[code] !== null, builtIn: BUILT_IN[code] });
+    return { applicationUrl: state.mailTemplate.applicationUrl, de: language('de'), en: language('en'), placeholders: PLACEHOLDERS,
+      version: state.mailTemplate.version, updatedAt: '2026-11-03T06:00:00Z' };
+  }
+
+  function checkTexts(code, texts) {
+    if (!texts) return problem(400, 'mail_template.languages_missing');
+    const invalid = [];
+    const unknown = [];
+    for (const part of ['greeting', 'signature', 'footer']) {
+      const text = String(texts[part] ?? '');
+      if ([...text].length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/.test(text)) invalid.push(`${code}.${part}`);
+      for (const token of unknownPlaceholders(text)) unknown.push(`${code}.${part}: ${token}`);
+    }
+    if (invalid.length > 0) return problem(400, 'mail_template.text_invalid', { violations: invalid });
+    if (unknown.length > 0) return problem(400, 'mail_template.placeholder_unknown', { violations: unknown });
+    return null;
+  }
+
+  function checkAddress(address) {
+    const value = address?.trim() ?? '';
+    if (value === '') return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && url.hostname !== '' && url.username === '' && !/\s/.test(value)) return null;
+    } catch {
+      // not an address
+    }
+    return problem(400, 'mail_template.address_invalid');
+  }
+
   function appearanceBody() {
     return { name: state.appearance.name, defaultName: 'Task Manager', accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
   }
@@ -1579,7 +1714,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
 
   return {
     state, install, anna, ben, nora, project,
-    writes: () => state.requests.filter((item) => item.method !== 'GET'),
+    // A preview of a mail (TASK-082) is a POST that changes nothing; it is no write.
+    writes: () => state.requests.filter((item) => item.method !== 'GET' && !/\/(mail-template|reply)\/preview$/.test(item.path)),
     group: (name) => state.groups.find((group) => group.name === name),
     addJob,
     addMail,

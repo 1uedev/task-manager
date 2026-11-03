@@ -423,8 +423,18 @@ def seed_demo(args) -> None:
     builder.tickets(jobs, "demo")
     nordwerk = seed_deadlines(admin, project_ids["HELP"])
     seed_portal(admin, project_ids["HELP"], nordwerk, password)
+    seed_mail_template(admin)
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
+
+
+def seed_mail_template(admin: Client) -> None:
+    """The mail template of the replies (TASK-082): the built-in greeting and footer with a demo signature per language."""
+    print("mail template")
+    current = admin.call("GET", "/appearance/mail-template")
+    texts = {code: {"greeting": current.body[code]["builtIn"]["greeting"], "signature": DEMO_SIGNATURE[code],
+                    "footer": current.body[code]["builtIn"]["footer"]} for code in ("de", "en")}
+    admin.call("PUT", "/appearance/mail-template", {"applicationUrl": None, **texts}, headers={"If-Match": current.headers.get("etag")})
 
 
 def seed_deadlines(admin: Client, project: str) -> str:
@@ -458,11 +468,19 @@ def seed_deadlines(admin: Client, project: str) -> str:
     return customer
 
 
-# Portal accounts of two synthetic customers (TASK-076): username, display name, contact address.
+# Portal accounts of two synthetic customers (TASK-076): username, display name, contact address, language of the mails
+# (TASK-082): the contact of Südtechnik reads English, so both languages of the mail template can be shown.
 DEMO_PORTAL = [
-    ("lea.nordwerk", "Lea Lang", "lea@nordwerk.example"),
-    ("tom.suedtechnik", "Tom Tal", "tom@suedtechnik.example"),
+    ("lea.nordwerk", "Lea Lang", "lea@nordwerk.example", "de"),
+    ("tom.suedtechnik", "Tom Tal", "tom@suedtechnik.example", "en"),
 ]
+
+# The mail template "Antwort an Kunden" of the demonstration (TASK-082): an own signature in both languages, the built-in
+# greeting and footer.
+DEMO_SIGNATURE = {
+    "de": "Viele Grüße\n{{sender.name}}\nSupport {{company.name}}\nTelefon 0000 000000 (Beispiel)",
+    "en": "Kind regards\n{{sender.name}}\n{{company.name}} support\nPhone +00 0000 000000 (example)",
+}
 
 
 def seed_portal(admin: Client, project: str, nordwerk: str, password: str) -> None:
@@ -477,8 +495,9 @@ def seed_portal(admin: Client, project: str, nordwerk: str, password: str) -> No
     admin.call("PUT", f"/projects/{project}/configuration", configuration, headers={"If-Match": current.headers.get("etag")})
     suedtechnik = admin.call("POST", "/helpdesk/customers", {"name": "Südtechnik", "projects": [project]}).body["id"]
     base = f"{admin.scheme}://{admin.host}:{admin.port}"
-    for (username, display, address), customer in zip(DEMO_PORTAL, (nordwerk, suedtechnik)):
-        contact = admin.call("POST", "/helpdesk/contacts", {"customerId": customer, "name": display, "addresses": [address]}).body["id"]
+    for (username, display, address, language), customer in zip(DEMO_PORTAL, (nordwerk, suedtechnik)):
+        contact = admin.call("POST", "/helpdesk/contacts", {"customerId": customer, "name": display, "addresses": [address],
+                                                            "language": language}).body["id"]
         issued = admin.call("POST", "/portal-accounts", {"username": username, "displayName": display, "organizationId": customer,
                                                          "contactId": contact, "projectIds": [project]}).body
         person = Client(base)

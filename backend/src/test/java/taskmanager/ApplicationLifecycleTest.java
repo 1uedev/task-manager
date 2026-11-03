@@ -31,7 +31,7 @@ class ApplicationLifecycleTest {
         first.close();
         assertFalse(first.isActive());
         List<Timestamp> installedAfterFirstStart = installedOn(jdbc);
-        assertEquals(45, installedAfterFirstStart.size());
+        assertEquals(47, installedAfterFirstStart.size());
 
         ConfigurableApplicationContext second = startPlain(url);
         assertHealthy(second);

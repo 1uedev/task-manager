@@ -408,11 +408,71 @@ describe('company name and preview', () => {
     });
   });
 
+  test('the mail template is edited per language with a preview of synthetic data, checked by the server and reset', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const section = page.getByTestId('mail-template');
+      await section.getByRole('heading', { name: 'Mailvorlage „Antwort an Kunden“' }).waitFor();
+      await section.getByText('Es gilt die eingebaute Vorlage dieser Sprache.').waitFor();
+      const preview = section.getByTestId('mail-template-preview');
+      await preview.locator('[data-part="greeting"]').getByText('Guten Tag Erika Beispiel,').waitFor();
+      assert.match(await preview.locator('[data-part="signature"]').textContent(), /^Viele Grüße\nMax Support\nNordlicht$/);
+      assert.equal(await preview.getAttribute('lang'), 'de');
+
+      // A mistyped placeholder is named in the preview and refused when saving.
+      await section.getByTestId('mail-part-signature').fill('Gruß\n{{sender.nme}}');
+      await section.getByTestId('mail-preview-problem').getByText('Unbekannter Platzhalter: Deutsch, Signatur: {{sender.nme}}').waitFor();
+      await section.getByRole('button', { name: 'Vorlage speichern' }).click();
+      await section.getByTestId('mail-template-problem').getByText('Unbekannter Platzhalter: Deutsch, Signatur: {{sender.nme}}').waitFor();
+      assert.deepEqual(server.writes().map((write) => write.method), ['PUT']);
+      assert.equal(server.state.mailTemplate.version, 1, 'nothing refused is stored');
+
+      await section.getByTestId('mail-part-signature').fill('Gruß\n{{sender.name}}');
+      await section.getByTestId('mail-language-en').click();
+      assert.equal(await section.getByTestId('mail-language-en').getAttribute('aria-pressed'), 'true');
+      await section.getByTestId('mail-part-greeting').fill('Dear {{contact.name}}');
+      await section.getByTestId('mail-address').fill('https://support.example.com');
+      await preview.locator('[data-part="greeting"]').getByText('Dear Alex Example').waitFor();
+      assert.equal(await preview.getAttribute('lang'), 'en');
+      assert.match(await preview.locator('[data-part="footer"]').textContent(), /customer portal: https:\/\/support\.example\.com$/);
+      await section.getByRole('button', { name: 'Vorlage speichern' }).click();
+      await section.getByTestId('mail-template-saved').getByText('Die Mailvorlage ist gespeichert. Neue Antworten nutzen sie ab jetzt.').waitFor();
+      const saved = server.writes().at(-1);
+      assert.deepEqual({ method: saved.method, path: saved.path, ifMatch: saved.ifMatch, csrf: saved.csrf },
+        { method: 'PUT', path: '/api/v1/appearance/mail-template', ifMatch: '"1"', csrf: TOKEN });
+      const body = JSON.parse(saved.body.toString());
+      assert.equal(body.applicationUrl, 'https://support.example.com');
+      assert.equal(body.de.signature, 'Gruß\n{{sender.name}}');
+      assert.equal(body.en.greeting, 'Dear {{contact.name}}');
+      await section.getByText('Gespeicherte Vorlage dieser Sprache.').waitFor();
+
+      // Back to the built-in template after one more question.
+      await section.getByRole('button', { name: 'Eingebaute Vorlage verwenden' }).click();
+      await section.getByRole('button', { name: 'Ja, eingebaute Vorlage verwenden' }).click();
+      await section.getByText('Beide Sprachen nutzen wieder die eingebaute Vorlage.').waitFor();
+      assert.equal(server.writes().at(-1).method, 'DELETE');
+      assert.equal(await section.getByTestId('mail-part-greeting').inputValue(), 'Guten Tag {{contact.name}},');
+    });
+  });
+
+  test('the mail template follows the unsaved name and color of the page and stays usable at 320 pixels', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance', viewport: { width: 320, height: 900 } }, async (page) => {
+      const preview = page.getByTestId('mail-template-preview');
+      await preview.waitFor();
+      await page.getByLabel('Name des Unternehmens').fill('Südlicht');
+      await preview.locator('.mail-name').getByText('Südlicht').waitFor();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.equal(overflow, 0, 'no horizontal scrolling');
+    });
+  });
+
   test('a person without the right sees no reset and cannot save a name', async () => {
     const server = fake();
     await withPage({ backend: server, as: BEN, hash: '#/appearance' }, async (page) => {
       await page.getByTestId('appearance-mode').waitFor();
       assert.equal(await page.getByRole('heading', { name: 'Alles zurücksetzen' }).count(), 0);
+      assert.equal(await page.getByTestId('mail-template').count(), 0, 'no mail template without the right');
       await page.getByLabel('Name des Unternehmens').fill('Vorschau');
       assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
       assert.deepEqual(server.writes(), []);

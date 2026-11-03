@@ -69,6 +69,9 @@ test('a problem carries the reasons the server named and drops anything of anoth
   const info = readProblem(400, { code: 'request.invalid', violations: ['custom.cause.required', 'status.in_use:review', '<script>', 5, 'x'.repeat(200)] });
   assert.deepEqual(info.violations, ['custom.cause.required', 'status.in_use:review']);
   assert.equal(readProblem(400, { code: 'request.invalid' }).violations, undefined);
+  // A refused placeholder of the mail template is quoted after the part it stands in (TASK-082); control characters are not.
+  assert.deepEqual(readProblem(400, { code: 'mail_template.placeholder_unknown', violations: ['de.signature: {{sender.nme}}', 'de.footer: a\nb'] }).violations,
+    ['de.signature: {{sender.nme}}']);
 });
 
 test('a calendar date has no time zone', () => {

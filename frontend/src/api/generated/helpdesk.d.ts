@@ -393,6 +393,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/tickets/{number}/helpdesk/reply/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Die fertige Mail einer Antwort vor der Bestätigung (TASK-082)
+         * @description Prüft wie `sendReply` und zeigt die Mail in der Vorlage „Antwort an Kunden“ und der Sprache des Kontakts, wie sie jetzt
+         *     ginge; gespeichert wird nichts. Die Bestätigung setzt die Mail mit der dann gültigen Vorlage neu und hält sie fest.
+         */
+        post: operations["previewReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/tickets/{number}/helpdesk/replies": {
         parameters: {
             query?: never;
@@ -406,6 +427,8 @@ export interface paths {
          * Antwort an den Kontakt bestätigen; der Versand folgt im Hintergrund
          * @description Ohne `to` geht die Antwort an die erste Adresse des Kontakts. Verletzungen: `mailboxId.unavailable`,
          *     `to.not_of_contact`, `subject.invalid`, `body.invalid`. Die Antwort ist ein Eintrag des Felds `mail` in der Historie.
+         *     Die Mail wird mit der Vorlage „Antwort an Kunden“ in der Sprache des Kontakts als HTML und Klartext gesetzt und beim
+         *     Bestätigen festgehalten; ein erneuter Versand nutzt sie unverändert (TASK-082).
          */
         post: operations["sendReply"];
         delete?: never;
@@ -660,6 +683,7 @@ export interface components {
             customerId: string;
             name: string;
             addresses: string[];
+            language: components["schemas"]["ContactLanguage"];
             /** Format: int64 */
             version: number;
             /** Format: date-time */
@@ -676,6 +700,28 @@ export interface components {
             customerId: string;
             name: string;
             addresses: string[];
+            /** @description Sprache der Mails an den Kontakt (TASK-082); ohne Angabe beim Anlegen Deutsch, beim Ändern unverändert. Sonst 400 mit `language.invalid`. */
+            language?: components["schemas"]["ContactLanguage"];
+        };
+        /** @enum {string} */
+        ContactLanguage: "de" | "en";
+        /** @description Die fertige Mail einer Antwort (TASK-082) */
+        MailPreview: {
+            language: components["schemas"]["ContactLanguage"];
+            /** @description Der Klartext der Mail */
+            text: string;
+            /** @description Das HTML der Mail; das Logo steht dort als cid:logo */
+            html: string;
+            /** @description Die Teile der Mail im Layout, für die Anzeige in der Anwendung */
+            parts: {
+                name: string;
+                accentColor: string;
+                logo: boolean;
+                greeting: string;
+                body: string;
+                signature: string;
+                footer: string;
+            };
         };
         /** @enum {string} */
         Security: "tls" | "starttls" | "none";
@@ -1655,6 +1701,45 @@ export interface operations {
                     "application/json": components["schemas"]["ReplyForm"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    previewReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    mailboxId: string;
+                    to?: string | null;
+                    subject: string;
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Die fertige Mail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

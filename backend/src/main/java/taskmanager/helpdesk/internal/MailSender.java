@@ -10,9 +10,21 @@ import java.time.Instant;
 interface MailSender {
     void send(Mailbox mailbox, String password, Outgoing mail) throws SendFailure;
 
-    /** One plain text mail with the own Message-ID and the references of the thread. */
+    /**
+     * One mail with the own Message-ID and the references of the thread. With {@code rendered} it goes as plain text and HTML of
+     * the same message with the logo embedded (TASK-082); without, as the plain text {@code body}, as replies confirmed before.
+     */
     record Outgoing(String messageId, String fromAddress, String fromName, String toAddress, String toName, String subject, String body,
-            String inReplyTo, String references, Instant date) {
+            String inReplyTo, String references, Instant date, Rendered rendered) {
+
+        Outgoing(String messageId, String fromAddress, String fromName, String toAddress, String toName, String subject, String body,
+                String inReplyTo, String references, Instant date) {
+            this(messageId, fromAddress, fromName, toAddress, toName, subject, body, inReplyTo, references, date, null);
+        }
+    }
+
+    /** The finished mail of a reply: plain text, HTML and the logo the HTML shows as {@code cid:logo}, or none. */
+    record Rendered(String text, String html, String logoType, byte[] logo) {
     }
 
     /**

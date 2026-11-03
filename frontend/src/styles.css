@@ -580,3 +580,28 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
 .select-page { margin: 0.5rem 0; }
 .selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-weight: 600; }
 .tag-bulk .confirm { border-left: 3px solid var(--brand-primary); padding-left: 0.75rem; margin-top: 0.75rem; }
+
+/* Mail template and finished mails (TASK-082). A mail looks like a mail in both displays: dark text on white, the accent
+   only as the line above the head. */
+.mail-template { margin-top: 1.25rem; }
+.mail-template-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+@media (max-width: 64rem) { .mail-template-grid { grid-template-columns: minmax(0, 1fr); } }
+.mail-template textarea { width: 100%; }
+.segmented { display: inline-flex; gap: 2px; padding: 3px; background: var(--soft); border: 1px solid var(--hairline); border-radius: var(--radius-sm); margin-bottom: 0.5rem; }
+.segmented button { background: transparent; color: var(--brand-text); border: 0; box-shadow: none; min-height: 2.25rem; padding: 0 0.9rem; border-radius: 7px; }
+.segmented button[aria-pressed='true'] { background: var(--surface); box-shadow: 0 1px 3px rgb(15 20 35 / 0.12); font-weight: 600; }
+.placeholders dl { display: grid; gap: 0.35rem; margin: 0.5rem 0 0; }
+.placeholders dl div { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
+.placeholders dt code { font-size: 0.85rem; }
+.placeholders dd { margin: 0; color: var(--muted); }
+.mail-view { min-width: 0; }
+.mail-frame { background: #f4f4f5; border-top: 4px solid #f97316; border-radius: 6px; padding: 0; color: #18181b; font-family: Arial, Helvetica, sans-serif; font-size: 0.95rem; line-height: 1.5; overflow-wrap: anywhere; }
+.mail-head { background: #ffffff; display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid #e4e4e7; }
+.mail-logo { height: 2rem; width: auto; max-width: 10rem; object-fit: contain; }
+.mail-name { font-weight: 700; font-size: 1.05rem; }
+.mail-main { background: #ffffff; padding: 1rem 1.1rem; }
+.mail-main p { margin: 0 0 0.9rem; }
+.mail-main p:last-child { margin-bottom: 0; }
+.mail-foot { background: #ffffff; margin: 0; padding: 0.75rem 1.1rem; border-top: 1px solid #e4e4e7; font-size: 0.82rem; color: #52525b; }
+.mail-plain { margin-top: 0.6rem; }
+.mail-plain pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.82rem; background: var(--soft); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 0.75rem; margin: 0.5rem 0 0; }

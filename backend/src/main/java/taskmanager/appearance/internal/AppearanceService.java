@@ -61,10 +61,7 @@ public class AppearanceService {
         if (accentColor == null && name == null) {
             throw ApiProblemException.of(400, "appearance.change_empty");
         }
-        if (accentColor != null && !COLOR.matcher(accentColor).matches()) {
-            throw ApiProblemException.of(400, "appearance.color_invalid");
-        }
-        String color = accentColor == null ? null : accentColor.toLowerCase(Locale.ROOT);
+        String color = accentColor == null ? null : validColor(accentColor);
         String shown = name == null ? null : validName(name);
         Appearance before = locked(expectedVersion);
         String nextColor = color == null ? before.accentColor() : color;
@@ -89,6 +86,14 @@ public class AppearanceService {
             .params(DEFAULT_NAME, DEFAULT_ACCENT, ts(), actor.accountId()).update();
         audit(actor, "appearance.reset", null);
         return current();
+    }
+
+    /** The accent color in lower case, or 400 {@code appearance.color_invalid}. */
+    static String validColor(String raw) {
+        if (!COLOR.matcher(raw).matches()) {
+            throw ApiProblemException.of(400, "appearance.color_invalid");
+        }
+        return raw.toLowerCase(Locale.ROOT);
     }
 
     /**

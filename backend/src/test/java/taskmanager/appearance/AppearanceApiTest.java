@@ -94,6 +94,10 @@ class AppearanceApiTest {
     @BeforeEach
     void defaults() {
         jdbc.update("update appearance_setting set name = 'Task Manager', accent_color = '#f97316', logo = null, logo_type = null, version = 1 where id = 1");
+        jdbc.update("""
+                update appearance_mail_template set application_url = null, greeting_de = null, signature_de = null, footer_de = null,
+                    greeting_en = null, signature_en = null, footer_en = null, version = 1 where id = 1
+                """);
         jdbc.update("delete from appearance_audit_event");
     }
 
@@ -516,5 +520,130 @@ class AppearanceApiTest {
         assertEquals(200, shown.status(), shown.body());
         assertEquals("Nordlicht", shown.json().get("name").asString());
         assertProblem(browser.get("/api/v1/appearance"), 403, "auth.password_change_required");
+    }
+
+    // ---------------------------------------------------------------- mail template (TASK-082)
+
+    private static Map<String, Object> texts(String greeting, String signature, String footer) {
+        return Map.of("greeting", greeting, "signature", signature, "footer", footer);
+    }
+
+    private static Map<String, Object> template(String address, Map<String, Object> de, Map<String, Object> en) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("applicationUrl", address);
+        body.put("de", de);
+        body.put("en", en);
+        return body;
+    }
+
+    @Test
+    void theBuiltInTemplateCountsUntilOneIsSavedAndResetReturnsToIt() {
+        Browser admin = person(AdministrationRight.APPEARANCE_MANAGE);
+        Response read = admin.get("/api/v1/appearance/mail-template");
+        assertEquals(200, read.status(), read.body());
+        assertEquals("\"1\"", read.header("ETag"));
+        JsonNode de = read.json().get("de");
+        assertEquals(false, de.get("stored").asBoolean());
+        assertEquals("Guten Tag {{contact.name}},", de.get("greeting").asString());
+        assertEquals(de.get("greeting").asString(), de.get("builtIn").get("greeting").asString());
+        assertEquals("Hello {{contact.name}},", read.json().get("en").get("greeting").asString());
+        assertEquals(List.of("company.name", "contact.name", "ticket.number", "ticket.title", "sender.name", "mailbox.address", "portal.url"),
+            JSON.convertValue(read.json().get("placeholders"), List.class));
+        assertTrue(read.json().get("applicationUrl").isNull());
+
+        Response saved = admin.json("PUT", "/api/v1/appearance/mail-template", template(" https://support.example.com/portal ",
+            texts("Hallo {{contact.name}},", "Gruß\r\n{{sender.name}}", ""), texts("Hi {{contact.name}},", "Cheers", "{{portal.url}}")), "\"1\"");
+        assertEquals(200, saved.status(), saved.body());
+        assertEquals("\"2\"", saved.header("ETag"));
+        assertEquals("https://support.example.com/portal", saved.json().get("applicationUrl").asString());
+        assertEquals(true, saved.json().get("de").get("stored").asBoolean());
+        assertEquals("Gruß\n{{sender.name}}", saved.json().get("de").get("signature").asString(), "line breaks are kept as one kind");
+        assertEquals("", saved.json().get("de").get("footer").asString());
+        assertEquals(List.of("mail_template.changed", "mail_template.changed", "mail_template.address_changed"),
+            jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
+
+        // A second save with the same texts records nothing.
+        Response same = admin.json("PUT", "/api/v1/appearance/mail-template", template("https://support.example.com/portal",
+            texts("Hallo {{contact.name}},", "Gruß\n{{sender.name}}", ""), texts("Hi {{contact.name}},", "Cheers", "{{portal.url}}")), "\"2\"");
+        assertEquals(200, same.status(), same.body());
+        assertEquals(3, auditCount());
+
+        assertProblem(admin.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("", "", ""), texts("", "", "")), "\"2\""),
+            412, "mail_template.version_conflict");
+        assertProblem(admin.send("DELETE", "/api/v1/appearance/mail-template", null, null, null), 428, "mail_template.precondition_required");
+        Response reset = admin.send("DELETE", "/api/v1/appearance/mail-template", null, null, "\"3\"");
+        assertEquals(200, reset.status(), reset.body());
+        assertEquals(false, reset.json().get("de").get("stored").asBoolean());
+        assertEquals("Guten Tag {{contact.name}},", reset.json().get("de").get("greeting").asString());
+        assertEquals("https://support.example.com/portal", reset.json().get("applicationUrl").asString(), "the address stays");
+        assertEquals("mail_template.reset", jdbc.queryForObject("select event from appearance_audit_event order by id desc limit 1", String.class));
+    }
+
+    @Test
+    void unknownPlaceholdersInvalidTextsAndAddressesAreRefusedWithThePartNamed() {
+        Browser admin = person(AdministrationRight.APPEARANCE_MANAGE);
+        Map<String, Object> fine = texts("Hallo", "", "");
+        Response unknown = admin.json("PUT", "/api/v1/appearance/mail-template",
+            template(null, fine, texts("Hi", "{{sender.name}} {{sender.nme}}", "{{ticket.number")), "\"1\"");
+        assertProblem(unknown, 400, "mail_template.placeholder_unknown");
+        assertEquals(List.of("en.signature: {{sender.nme}}", "en.footer: {{ticket.number"), JSON.convertValue(unknown.json().get("violations"), List.class));
+        Response spaced = admin.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("{{ contact.name }}", "", "x }}"), fine), "\"1\"");
+        assertProblem(spaced, 400, "mail_template.placeholder_unknown");
+        assertEquals(List.of("de.greeting: {{ contact.name }}", "de.footer: x }}"), JSON.convertValue(spaced.json().get("violations"), List.class));
+        Response control = admin.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("a\u0007b", "", ""), fine), "\"1\"");
+        assertProblem(control, 400, "mail_template.text_invalid");
+        assertEquals(List.of("de.greeting"), JSON.convertValue(control.json().get("violations"), List.class));
+        assertProblem(admin.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("x".repeat(2001), "", ""), fine), "\"1\""),
+            400, "mail_template.text_invalid");
+        assertEquals(200, admin.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("ä".repeat(2000), "", ""), fine), "\"1\"").status());
+        for (String address : List.of("http://support.example.com", "https://", "https://user:pw@support.example.com", "https://a b.example",
+                "javascript:alert(1)", "https://support.example.com/\u00e4")) {
+            assertProblem(admin.json("PUT", "/api/v1/appearance/mail-template", template(address, fine, fine), "\"2\""), 400,
+                "mail_template.address_invalid");
+        }
+        Map<String, Object> missing = new LinkedHashMap<>();
+        missing.put("de", fine);
+        assertProblem(admin.json("PUT", "/api/v1/appearance/mail-template", missing, "\"2\""), 400, "mail_template.languages_missing");
+        assertEquals(2, jdbc.queryForObject("select version from appearance_mail_template", Long.class), "nothing refused was stored");
+    }
+
+    @Test
+    void thePreviewFillsTheUnsavedTextsWithSyntheticValuesAndEscapesThem() {
+        Browser admin = person(AdministrationRight.APPEARANCE_MANAGE);
+        assertEquals(200, admin.json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht"), "\"1\"").status());
+        Response preview = admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "en", "name", "A & <B>",
+            "accentColor", "#00AA11", "applicationUrl", "https://support.example.com", "texts",
+            texts("Hi {{contact.name}} <x>", "{{sender.name}}\n{{company.name}}", "{{ticket.number}} {{ticket.title}}\n{{mailbox.address}} {{portal.url}}")), null);
+        assertEquals(200, preview.status(), preview.body());
+        assertEquals("en", preview.json().get("language").asString());
+        String text = preview.json().get("text").asString();
+        assertTrue(text.startsWith("Hi Alex Example <x>\n\nThank you for your message."), text);
+        assertTrue(text.contains("Sam Support\nA & <B>\n\n-- \nHELP-42 Printer in hall 2 does not start\nsupport@example.com https://support.example.com\n"), text);
+        String html = preview.json().get("html").asString();
+        assertTrue(html.contains("Hi Alex Example &lt;x&gt;") && html.contains("A &amp; &lt;B&gt;") && html.contains("#00aa11"), html);
+        assertTrue(!html.contains("<x>") && !html.contains("cid:logo"), html);
+        assertEquals("A & <B>", preview.json().get("parts").get("name").asString());
+        // Without an address the line with the link is left out; German uses German sample values; the saved name counts.
+        Response german = admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "de", "texts",
+            texts("Guten Tag {{contact.name}},", "{{company.name}}", "Ticket {{ticket.number}}\nPortal: {{portal.url}}")), null);
+        assertEquals(200, german.status(), german.body());
+        assertTrue(german.json().get("text").asString().startsWith("Guten Tag Erika Beispiel,\n\nVielen Dank"), german.body());
+        assertTrue(german.json().get("text").asString().endsWith("Nordlicht\n\n-- \nTicket HELP-42\n"), german.body());
+        assertProblem(admin.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "de", "texts", texts("{{x}}", "", "")), null),
+            400, "mail_template.placeholder_unknown");
+        assertEquals(1, jdbc.queryForObject("select version from appearance_mail_template", Long.class), "a preview stores nothing");
+    }
+
+    @Test
+    void theMailTemplateNeedsTheRightAppearanceManage() {
+        Browser other = person(AdministrationRight.ACCOUNTS_MANAGE);
+        assertProblem(other.get("/api/v1/appearance/mail-template"), 403, "auth.forbidden");
+        assertProblem(other.json("PUT", "/api/v1/appearance/mail-template", template(null, texts("", "", ""), texts("", "", "")), "\"1\""),
+            403, "auth.forbidden");
+        assertProblem(other.send("DELETE", "/api/v1/appearance/mail-template", null, null, "\"1\""), 403, "auth.forbidden");
+        assertProblem(other.json("POST", "/api/v1/appearance/mail-template/preview", Map.of("language", "de", "texts", texts("", "", "")), null),
+            403, "auth.forbidden");
+        assertProblem(anonymous().get("/api/v1/appearance/mail-template"), 401, "auth.required");
+        assertEquals(1, jdbc.queryForObject("select version from appearance_mail_template", Long.class));
     }
 }

@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 10 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -34,9 +34,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-082](#task-082-mailvorlage-für-antworten-an-kunden-a17-teil-2) | Mailvorlage für Antworten an Kunden (A17 Teil 2) | claude-20261102-branding-01 | 2026-11-02 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -51,6 +49,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-079](#task-079-befunde-der-prüfung-von-task-076-bis-task-078-beheben-a11) | Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11) | claude-20261102-portal-02 | 2026-11-02 |
 | [TASK-080](#task-080-befunde-der-prüfung-von-task-079-beheben-a11) | Befunde der Prüfung von TASK-079 beheben (A11) | claude-20261102-portal-03 | 2026-11-02 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
+| [TASK-082](#task-082-mailvorlage-für-antworten-an-kunden-a17-teil-2) | Mailvorlage für Antworten an Kunden (A17 Teil 2) | claude-20261102-branding-01 | 2026-11-03 |
 | [TASK-083](#task-083-befunde-der-prüfung-von-task-080-beheben-a11) | Befunde der Prüfung von TASK-080 beheben (A11) | claude-20261103-portal-04 | 2026-11-03 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -341,9 +340,9 @@ Nicht Teil: weitere Funktionen.
 
 ## TASK-082 Mailvorlage für Antworten an Kunden (A17 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-02
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-03
 
-**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffälle W15 und W16). **Abhängigkeiten:** TASK-081 auf main, TASK-058 geliefert. **Arbeitsstand:** Mit TASK-081 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-081 auf main ist. Geplanter Branch claude/project-thread-tzp0cw, Entscheidung DEC-112, eigene Migration nach der von TASK-081.
+**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffälle W15 und W16). **Abhängigkeiten:** TASK-081 auf main, TASK-058 geliefert. **Arbeitsstand:** Mit TASK-081 von Holger am 2. November 2026 beauftragt und mit den Vorschlägen bestätigt; begonnen am 3. November 2026, nachdem das Ergebnis von TASK-081 auf main war (PR #243). Branch claude/project-thread-tzp0cw, Entscheidung DEC-112, Migration V0049 (V0047 und V0048 belegt TASK-083).
 
 **Umfang:** Vorlage „Antwort an Kunden“ als Rahmen um den Antworttext in Deutsch und Englisch, Platzhalterkatalog, Adresse der Anwendung, Sprache am Kontakt, Versand als HTML und Klartext mit eingebettetem Logo, eingebaute Rückfallvorlage, Festhalten der fertigen Mail bei der Bestätigung, Vorschau, Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: PDFs, weitere Mailarten wie Benachrichtigungen, Vorlagen je Projekt oder Postfach, freies HTML, CSS oder Skripte, Änderung des Betreffs durch die Vorlage.
 
@@ -365,7 +364,12 @@ Nicht Teil: weitere Funktionen.
 3. Eine nach der Bestätigung geänderte Vorlage ändert eine wartende oder erneut versuchte Sendung nicht.
 4. Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-081 auf main die Blockade aufheben und umsetzen.
+**Übergabe zur Prüfung (2026-11-03):**
+1. Ergebnis: V0049 mit `appearance_mail_template`, V0050 mit der Sprache am Kontakt, `helpdesk_reply_mail` und `helpdesk_reply_image`. `GET`, `PUT`, `DELETE /api/v1/appearance/mail-template` und `POST /api/v1/appearance/mail-template/preview` mit `appearance.manage`, Version und Audit; Prüfung von Länge, Steuerzeichen, Platzhaltern (400 `mail_template.placeholder_unknown` mit Sprache, Teil und dem Geschriebenen) und Adresse. Port `MailTemplates` im Erscheinungsbild, Port `AccountNames` in der Identität, `TicketAccess.title`. `POST /api/v1/projects/{id}/tickets/{n}/helpdesk/reply/preview` zeigt die fertige Mail vor der Bestätigung; die Bestätigung hält Klartext, HTML und Logo fest; `SmtpMailSender` sendet `multipart/alternative` mit dem Logo als `cid:logo`. Oberfläche: Abschnitt „Mailvorlage“ auf der Seite „Erscheinungsbild“ mit Sprachwahl, drei Feldern mit Zeichenzähler, Adresse, Platzhalterliste, Vorschau mit synthetischen Daten im ungespeicherten Namen und Farbton, Speichern und Rückkehr zur eingebauten Vorlage mit Rückfrage; Sprache in der Kontaktpflege; die Prüfung einer Antwort zeigt die fertige Mail mit Sprache und Klartext. Demo: Signatur je Sprache, Kontakt von Südtechnik auf Englisch.
+2. Nachweise: siehe Ergebnis PR.
+3. Grenzen: Das HTML der Mail erscheint in der Anwendung nicht selbst, weil die Inhaltsrichtlinie Stile im Element verbietet; die Vorschau zeigt dieselben gefüllten Teile als Text und den Klartext. Eine zwischen Prüfung und Bestätigung geänderte Vorlage gilt mit der Bestätigung. Antworten vor V0050 gehen weiter als reiner Text. Ohne Leserecht auf den Titel bleibt `{{ticket.title}}` leer.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR durch eine zweite KI und Abnahme durch Holger.
 
 ## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
 

@@ -10,10 +10,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.appearance.MailTemplates;
 import taskmanager.helpdesk.ReplySent;
+import taskmanager.identity.AccountNames;
 import taskmanager.jobs.Jobs;
 import taskmanager.jobs.NewJob;
 import taskmanager.permissions.AccessContext;
@@ -38,6 +41,10 @@ import tools.jackson.databind.json.JsonMapper;
  * job has no session to check them with. A failed reply is sent again only by a person, an uncertain one only when the person
  * confirms the risk of a second delivery.
  *
+ * <p>The mail goes in the template "Antwort an Kunden" of the appearance (TASK-082, DEC-112), in the language of the contact.
+ * The check before the confirmation shows the finished mail; the confirmation renders it once more with the template valid
+ * then and keeps it with the reply, so a later change of template or appearance changes no waiting or repeated send.
+ *
  * <p>Locks, in this order: rights, identity, project row ({@code FOR SHARE}), ticket row ({@code FOR SHARE}), the reply.
  */
 @Service
@@ -60,10 +67,14 @@ public class ReplyService {
     private final Permissions permissions;
     private final Jobs jobs;
     private final Clock clock;
+    private final MailTemplates templates;
+    private final ObjectProvider<AccountNames> names;
 
     ReplyService(HelpdeskRepository repository, TicketAccess tickets, ProjectAccess projects, Permissions permissions, Jobs jobs, Clock clock,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, MailTemplates templates, ObjectProvider<AccountNames> names) {
         this.events = events;
+        this.templates = templates;
+        this.names = names;
         this.repository = repository;
         this.tickets = tickets;
         this.projects = projects;
@@ -111,9 +122,49 @@ public class ReplyService {
         return new Compose(senders, contact.id(), contact.name(), contact.addresses(), answerSubject(subject), suggested);
     }
 
-    /** Confirms a reply: it is written with its send job and an entry in the history of the ticket. */
+    /** A checked reply before it is confirmed: where it goes, what it says and the finished mail. */
+    private record Draft(UUID ticket, Contact contact, Mailbox mailbox, String to, String subject, String body, MailTemplates.RenderedMail mail) {
+    }
+
+    /**
+     * The finished mail of a reply as the confirmation would send it now, with the same checks; nothing is written (TASK-082).
+     * The confirmation renders it again, so a template changed in between counts as it is then.
+     */
+    @Transactional
+    public MailTemplates.RenderedMail preview(AccessContext actor, UUID projectId, long number, UUID mailboxId, String rawTo, String rawSubject,
+            String rawBody) {
+        return draft(actor, projectId, number, mailboxId, rawTo, rawSubject, rawBody).mail();
+    }
+
+    /** Confirms a reply: it is written with its send job, its finished mail and an entry in the history of the ticket. */
     @Transactional
     public Reply create(AccessContext actor, UUID projectId, long number, UUID mailboxId, String rawTo, String rawSubject, String rawBody) {
+        Draft draft = draft(actor, projectId, number, mailboxId, rawTo, rawSubject, rawBody);
+        UUID ticket = draft.ticket();
+        Contact contact = draft.contact();
+        Mailbox mailbox = draft.mailbox();
+        String to = draft.to();
+        String subject = draft.subject();
+        tickets.lockForHelpdeskChange(ticket);
+        Instant now = clock.instant();
+        UUID id = UUID.randomUUID();
+        List<String> thread = thread(ticket);
+        UUID job = enqueue(actor.companyId(), id, 1, actor.userId());
+        Reply reply = new Reply(id, actor.companyId(), projectId, ticket, mailbox.id(), contact.id(), mailbox.address(), to, subject, draft.body(),
+            "<" + id + "@" + ParsedMail.domain(mailbox.address()) + ">", thread.isEmpty() ? null : thread.get(thread.size() - 1),
+            thread.isEmpty() ? null : String.join(" ", thread), "pending", null, job, 1, null, null, now, actor.userId(), now, actor.userId(), 1,
+            contact.customerId());
+        repository.insertReply(reply);
+        repository.insertReplyMail(id, draft.mail());
+        tickets.recordHelpdeskChange(ticket, now, actor.userId(), TicketAccess.MAIL_FIELD, null,
+            JSON.writeValueAsString(new ReplyReference(id.toString(), to, subject)));
+        repository.audit(actor.companyId(), "reply", id, "reply.confirmed", JSON.writeValueAsString(new Detail(ticket, mailbox.id(), to)),
+            actor.userId(), now);
+        return reply;
+    }
+
+    /** Checks a reply as the confirmation does and renders its mail. */
+    private Draft draft(AccessContext actor, UUID projectId, long number, UUID mailboxId, String rawTo, String rawSubject, String rawBody) {
         requireReply(actor, projectId);
         UUID ticket = ticket(actor, projectId, number);
         Contact contact = contact(actor, ticket);
@@ -137,21 +188,22 @@ public class ReplyService {
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
-        tickets.lockForHelpdeskChange(ticket);
-        Instant now = clock.instant();
-        UUID id = UUID.randomUUID();
-        List<String> thread = thread(ticket);
-        UUID job = enqueue(actor.companyId(), id, 1, actor.userId());
-        Reply reply = new Reply(id, actor.companyId(), projectId, ticket, mailbox.id(), contact.id(), mailbox.address(), to, subject, body,
-            "<" + id + "@" + ParsedMail.domain(mailbox.address()) + ">", thread.isEmpty() ? null : thread.get(thread.size() - 1),
-            thread.isEmpty() ? null : String.join(" ", thread), "pending", null, job, 1, null, null, now, actor.userId(), now, actor.userId(), 1,
-            contact.customerId());
-        repository.insertReply(reply);
-        tickets.recordHelpdeskChange(ticket, now, actor.userId(), TicketAccess.MAIL_FIELD, null,
-            JSON.writeValueAsString(new ReplyReference(id.toString(), to, subject)));
-        repository.audit(actor.companyId(), "reply", id, "reply.confirmed", JSON.writeValueAsString(new Detail(ticket, mailbox.id(), to)),
-            actor.userId(), now);
-        return reply;
+        MailTemplates.RenderedMail mail = templates.reply(contact.language(), values(actor, projectId, number, ticket, contact, mailbox), body);
+        return new Draft(ticket, contact, mailbox, to, subject, body, mail);
+    }
+
+    /**
+     * The values of the placeholders: only what the customer sees anyway. The title counts only when the person who replies may
+     * read it; otherwise it stays empty.
+     */
+    private MailTemplates.ReplyValues values(AccessContext actor, UUID projectId, long number, UUID ticket, Contact contact, Mailbox mailbox) {
+        String key = projects.summary(actor.companyId(), projectId).map(ProjectAccess.Summary::key).orElse(null);
+        String shown = key == null ? Long.toString(number) : key + "-" + number;
+        Decision title = permissions.inspect(actor, resource(actor, projectId), READ, Set.of("title"));
+        String ticketTitle = title.allowed() && title.readableFields().contains("title") ? tickets.title(ticket).orElse(null) : null;
+        AccountNames accounts = names.getIfUnique();
+        String sender = accounts == null ? null : accounts.shownName(actor.userId()).orElse(null);
+        return new MailTemplates.ReplyValues(contact.name(), shown, ticketTitle, sender, mailbox.address());
     }
 
     /**

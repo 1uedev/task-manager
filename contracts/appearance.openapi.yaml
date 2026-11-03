@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040, TASK-081)
-  version: 0.2.0
+  title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040, TASK-081, TASK-082)
+  version: 0.3.0
   description: |
     Name, Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur, wer das Unternehmensrecht
     `appearance.manage` des Berechtigungsmoduls hält (sonst 403 `auth.forbidden`, TASK-040). Sitzung, CSRF und
@@ -11,6 +11,10 @@ info:
     Unter `/appearance/public` liest die Anmeldeseite ohne Sitzung nur Name, Akzentfarbe und Logo, ohne Version, Zeitpunkt
     oder bearbeitende Person (TASK-081). Sie gelten für die Installation; kein Parameter der Anfrage wählt einen anderen
     Auftritt. Auch eine Sitzung mit ausstehendem Passwortwechsel und ein abgelaufenes Sitzungscookie lesen sie.
+
+    Unter `/appearance/mail-template` pflegt, wer `appearance.manage` hält, die Mailvorlage „Antwort an Kunden“ (TASK-082,
+    DEC-112): Anrede, Signatur und Fußzeile je Sprache als einfacher Text mit Platzhaltern und die Adresse der Anwendung für
+    `{{portal.url}}`. Lesen, Ändern, Zurücksetzen und Vorschau brauchen das Recht; die Vorschau nutzt nur synthetische Werte.
 servers:
   - url: /api/v1
 security:
@@ -162,6 +166,89 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+  /appearance/mail-template:
+    get:
+      operationId: getMailTemplate
+      summary: Mailvorlage „Antwort an Kunden“ (Recht appearance.manage)
+      responses:
+        '200':
+          description: Texte je Sprache, eingebaute Vorlage, Platzhalter und Version
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailTemplate'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: changeMailTemplate
+      summary: Mailvorlage speichern (Recht appearance.manage)
+      description: |
+        Speichert beide Sprachen und die Adresse der Anwendung. Ein Teil darf leer sein und höchstens 2 000 Zeichen haben,
+        ohne Steuerzeichen außer Zeilenumbruch und Tabulator (sonst 400 `mail_template.text_invalid` mit der Sprache und dem
+        Teil, etwa `de.signature`). Ein Platzhalter außerhalb des Katalogs und eine offene oder schließende Doppelklammer ohne
+        Platzhalter werden mit 400 `mail_template.placeholder_unknown` abgelehnt; die Liste nennt Sprache, Teil und das
+        Geschriebene, etwa `en.footer: {{ticket.nummer}}`. Die Adresse ist leer oder eine https Adresse mit Rechnername ohne
+        Anmeldedaten (sonst 400 `mail_template.address_invalid`). Fehlt eine Sprache, 400 `mail_template.languages_missing`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MailTemplateChange'}
+      responses:
+        '200':
+          description: Gespeichert. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailTemplate'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: resetMailTemplate
+      summary: Zur eingebauten Vorlage zurückkehren (Recht appearance.manage)
+      description: Beide Sprachen nutzen wieder die eingebaute Vorlage; die Adresse der Anwendung bleibt.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Zurückgesetzt. Neue Version im ETag.
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailTemplate'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /appearance/mail-template/preview:
+    post:
+      operationId: previewMailTemplate
+      summary: Beispielmail mit ungespeicherten Texten (Recht appearance.manage)
+      description: |
+        Füllt die gesendeten Texte einer Sprache mit synthetischen Werten; Name und Akzentfarbe können ungespeichert
+        mitgegeben werden, sonst gelten die gespeicherten. Geprüft wird wie beim Speichern; gespeichert wird nichts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MailTemplatePreviewRequest'}
+      responses:
+        '200':
+          description: Die fertige Beispielmail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailPreview'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -181,7 +268,9 @@ components:
         Problem nach RFC 9457. Codes dieses Bereichs: appearance.color_invalid, appearance.name_invalid,
         appearance.change_empty, appearance.logo_empty,
         appearance.logo_type_invalid, appearance.logo_unreadable (415, beschädigte oder unvollständige Bilddatei, TASK-043), appearance.logo_not_found, appearance.version_conflict,
-        appearance.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
+        appearance.precondition_required, mail_template.text_invalid, mail_template.placeholder_unknown,
+        mail_template.address_invalid, mail_template.languages_missing, mail_template.version_conflict,
+        mail_template.precondition_required, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
         auth.password_change_required.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
@@ -243,3 +332,79 @@ components:
             - type: 'null'
         version: {type: integer, minimum: 1}
         updatedAt: {type: string, format: date-time}
+    MailTexts:
+      type: object
+      required: [greeting, signature, footer]
+      properties:
+        greeting: {type: string, maxLength: 2000}
+        signature: {type: string, maxLength: 2000}
+        footer: {type: string, maxLength: 2000}
+    MailLanguage:
+      type: object
+      required: [greeting, signature, footer, stored, builtIn]
+      properties:
+        greeting: {type: string, maxLength: 2000}
+        signature: {type: string, maxLength: 2000}
+        footer: {type: string, maxLength: 2000}
+        stored: {type: boolean, description: 'false, solange die eingebaute Vorlage gilt'}
+        builtIn: {$ref: '#/components/schemas/MailTexts'}
+    MailTemplate:
+      type: object
+      required: [applicationUrl, de, en, placeholders, version, updatedAt]
+      properties:
+        applicationUrl:
+          description: Adresse der Anwendung für `{{portal.url}}`; ohne Adresse entfällt die Zeile mit dem Link
+          oneOf:
+            - type: string
+            - type: 'null'
+        de: {$ref: '#/components/schemas/MailLanguage'}
+        en: {$ref: '#/components/schemas/MailLanguage'}
+        placeholders:
+          type: array
+          items: {type: string, enum: [company.name, contact.name, ticket.number, ticket.title, sender.name, mailbox.address, portal.url]}
+        version: {type: integer, minimum: 1}
+        updatedAt: {type: string, format: date-time}
+    MailTemplateChange:
+      type: object
+      additionalProperties: false
+      required: [de, en]
+      properties:
+        applicationUrl:
+          oneOf:
+            - type: string
+            - type: 'null'
+        de: {$ref: '#/components/schemas/MailTexts'}
+        en: {$ref: '#/components/schemas/MailTexts'}
+    MailTemplatePreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [language, texts]
+      properties:
+        language: {type: string, enum: [de, en]}
+        applicationUrl:
+          oneOf:
+            - type: string
+            - type: 'null'
+        texts: {$ref: '#/components/schemas/MailTexts'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        accentColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+    MailParts:
+      type: object
+      description: Die Teile der Mail im Layout, für eine Vorschau in der Anwendung
+      required: [name, accentColor, logo, greeting, body, signature, footer]
+      properties:
+        name: {type: string}
+        accentColor: {type: string}
+        logo: {type: boolean}
+        greeting: {type: string}
+        body: {type: string}
+        signature: {type: string}
+        footer: {type: string}
+    MailPreview:
+      type: object
+      required: [language, text, html, parts]
+      properties:
+        language: {type: string, enum: [de, en]}
+        text: {type: string, description: Der Klartext der Mail}
+        html: {type: string, description: 'Das HTML der Mail; das Logo steht dort als cid:logo'}
+        parts: {$ref: '#/components/schemas/MailParts'}

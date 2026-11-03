@@ -8,12 +8,13 @@ import { formatNumber } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
+import { MailTemplateSection } from './MailTemplateSection.tsx';
 
 type Pending = ReturnType<typeof changeAccentColor>;
 type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo } | { readonly kind: 'invalid'; readonly text: MessageKey };
 
-// Synthetic content of the sample mail, in the language of the mail and not of the interface (TASK-081). The frame around
-// the reply follows with the mail template of TASK-082.
+// Synthetic content of the sample mail, in the language of the mail and not of the interface (TASK-081). The mail template
+// of TASK-082 below shows the real frame around a reply for whoever may change it.
 const MAIL_SAMPLE = {
   de: { subject: 'Antwort auf Anfrage NW-12', greeting: 'Guten Tag Erika Musterfrau,', body: 'vielen Dank für Ihre Nachricht. Die Störung ist behoben.', closing: 'Freundliche Grüße' },
   en: { subject: 'Reply to request NW-12', greeting: 'Hello Jane Example,', body: 'thank you for your message. The problem has been fixed.', closing: 'Kind regards' },
@@ -353,6 +354,7 @@ export function AppearancePage() {
           <p className="hint" data-testid="preview-color">{draft.toUpperCase()}</p>
         </aside>
       </div>
+      {admin && <MailTemplateSection name={nameValid ? trimmedName : null} accentColor={draft} />}
     </>
   );
 }

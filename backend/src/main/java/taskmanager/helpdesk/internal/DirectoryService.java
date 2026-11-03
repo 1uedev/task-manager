@@ -114,11 +114,12 @@ public class DirectoryService {
     }
 
     @Transactional
-    public Contact createContact(UUID actor, UUID customerId, String rawName, List<String> rawAddresses) {
+    public Contact createContact(UUID actor, UUID customerId, String rawName, List<String> rawAddresses, String rawLanguage) {
         UUID companyId = access.requireManage();
         List<String> violations = new ArrayList<>();
         String name = nameOrViolation(rawName, violations);
         List<String> addresses = addresses(rawAddresses, violations);
+        String language = language(rawLanguage, "de", violations);
         if (customerId == null || repository.customer(companyId, customerId).isEmpty()) {
             violations.add("customerId.unknown");
         }
@@ -129,14 +130,15 @@ public class DirectoryService {
             throw ApiProblemException.of(409, "contact.address_taken");
         }
         Instant now = clock.instant();
-        Contact contact = new Contact(UUID.randomUUID(), companyId, customerId, name, addresses, 1, now, actor, now, actor);
+        Contact contact = new Contact(UUID.randomUUID(), companyId, customerId, name, addresses, 1, now, actor, now, actor, language);
         repository.insertContact(contact);
         repository.audit(companyId, "contact", contact.id(), "contact.created", describe(contact), actor, now);
         return repository.contact(companyId, contact.id()).orElseThrow();
     }
 
     @Transactional
-    public Contact updateContact(UUID actor, UUID id, long expectedVersion, UUID customerId, String rawName, List<String> rawAddresses) {
+    public Contact updateContact(UUID actor, UUID id, long expectedVersion, UUID customerId, String rawName, List<String> rawAddresses,
+            String rawLanguage) {
         UUID companyId = access.requireManage();
         Contact current = repository.lockContact(companyId, id).orElseThrow(() -> ApiProblemException.of(404, "contact.not_found"));
         if (current.version() != expectedVersion) {
@@ -145,6 +147,7 @@ public class DirectoryService {
         List<String> violations = new ArrayList<>();
         String name = nameOrViolation(rawName, violations);
         List<String> addresses = addresses(rawAddresses, violations);
+        String language = language(rawLanguage, current.language(), violations);
         if (customerId == null || repository.customer(companyId, customerId).isEmpty()) {
             violations.add("customerId.unknown");
         }
@@ -154,18 +157,31 @@ public class DirectoryService {
         if (!repository.addressesTaken(companyId, addresses, id).isEmpty()) {
             throw ApiProblemException.of(409, "contact.address_taken");
         }
-        if (current.name().equals(name) && current.customerId().equals(customerId) && Set.copyOf(current.addresses()).equals(Set.copyOf(addresses))) {
+        if (current.name().equals(name) && current.customerId().equals(customerId) && Set.copyOf(current.addresses()).equals(Set.copyOf(addresses))
+            && current.language().equals(language)) {
             return current;
         }
         Instant now = clock.instant();
         Contact changed = new Contact(id, companyId, customerId, name, addresses, current.version() + 1, current.createdAt(),
-            current.createdBy(), now, actor);
+            current.createdBy(), now, actor, language);
         repository.updateContact(changed);
         repository.audit(companyId, "contact", id, "contact.changed", describe(changed), actor, now);
         return repository.contact(companyId, id).orElseThrow();
     }
 
     // ------------------------------------------------------------------------------------------------ rules
+
+    /** The language of a contact (TASK-082): {@code de} or {@code en}; none keeps {@code fallback}. */
+    private static String language(String raw, String fallback, List<String> violations) {
+        if (raw == null) {
+            return fallback;
+        }
+        if (!Contact.LANGUAGES.contains(raw)) {
+            violations.add("language.invalid");
+            return fallback;
+        }
+        return raw;
+    }
 
     private static String name(String raw) {
         List<String> violations = new ArrayList<>();
@@ -242,12 +258,12 @@ public class DirectoryService {
     }
 
     private static String describe(Contact contact) {
-        return JSON.writeValueAsString(new ContactDescription(contact.name(), contact.customerId(), contact.addresses()));
+        return JSON.writeValueAsString(new ContactDescription(contact.name(), contact.customerId(), contact.addresses(), contact.language()));
     }
 
     private record CustomerDescription(String name, List<UUID> projects) {
     }
 
-    private record ContactDescription(String name, UUID customerId, List<String> addresses) {
+    private record ContactDescription(String name, UUID customerId, List<String> addresses, String language) {
     }
 }
