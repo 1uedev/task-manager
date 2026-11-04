@@ -7,6 +7,7 @@ import type { paths as FilesPaths } from './generated/files';
 import type { paths as HelpdeskPaths } from './generated/helpdesk';
 import type { paths as JobsPaths } from './generated/jobs';
 import type { paths as SlaPaths } from './generated/sla';
+import type { paths as TimePaths } from './generated/time';
 import type { paths as PortalPaths } from './generated/portal';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as PermissionsPaths } from './generated/permissions';
@@ -145,6 +146,7 @@ export function createServerApi(fetcher: typeof fetch = (...args) => globalThis.
     jobs: createClient<JobsPaths>({ baseUrl, fetch }),
     helpdesk: createClient<HelpdeskPaths>({ baseUrl, fetch }),
     sla: createClient<SlaPaths>({ baseUrl, fetch }),
+    time: createClient<TimePaths>({ baseUrl, fetch }),
     portal: createClient<PortalPaths>({ baseUrl, fetch }),
     // A bare HEAD below the API with the session rules above, for a question the contracts answer without a body (review F4 of TASK-051).
     head: (path: string) => fetch(`${baseUrl}${path}`, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' }),

@@ -18,6 +18,7 @@ import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInpu
 import { TicketAttachments } from './TicketAttachments.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
 import { TicketSla } from './TicketSla.tsx';
+import { TicketTime } from './TimePage.tsx';
 import { TagLabel, TagPicker, useTagProblemText } from './TagParts.tsx';
 import { statusName, typeName } from './ProjectPage.tsx';
 
@@ -286,6 +287,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
         <div>
           <TicketSla key={`sla-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
+          <TicketTime key={`time-${refusals}`} projectId={project.id} ticketNumber={ticket.number} round={round} />
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
           <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <History key={`history-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />

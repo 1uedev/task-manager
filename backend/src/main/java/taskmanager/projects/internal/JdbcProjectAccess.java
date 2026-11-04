@@ -92,6 +92,12 @@ class JdbcProjectAccess implements ProjectAccess {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<UUID> members(UUID projectId) {
+        return projects.members(projectId).stream().map(Member::accountId).toList();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<String> key(UUID projectId) {
         return projects.key(projectId);
