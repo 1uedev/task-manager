@@ -1,0 +1,396 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Zeiterfassung (TASK-069)
+  version: 0.1.0
+  description: |
+    Zeitbuchungen in Projekten, optional auf einem Ticket desselben Projekts (REQ-TIME-001, REQ-TIME-002, DEC-099). Jeder
+    Endpunkt verlangt eine vollständige Anmeldung (vor dem Passwortwechsel 403 `auth.password_change_required`).
+
+    Rechte sind Projektaktionen: `time.book` bucht eigene Zeit und liest, korrigiert und storniert eigene Buchungen;
+    `time.read` liest die Buchungen aller im Projekt mit Summen und Export; `time.manage` bucht für andere aktive Mitglieder
+    und korrigiert oder storniert fremde Buchungen und enthält `time.read`. Ohne eine dieser Aktionen gibt es für die Person
+    keine Zeiten des Projekts (404 `project.not_found`), auch wenn sie Tickets lesen darf. Portalkonten sehen keine Zeiten.
+    Das Ticket einer Buchung erscheint nur mit `ticket.read` im Projekt, sein Titel nur mit der Leseregel `title`; sonst
+    ist `ticket` leer.
+
+    Eine Buchung wird nie gelöscht. Eine Korrektur ersetzt die wirksamen Werte, ein Storno nimmt die Buchung aus allen
+    Summen; beide behalten den vorigen Stand als Revision mit Person, Zeitpunkt und Grund. Der Grund ist bei fremden
+    Buchungen Pflicht. Korrektur und Storno verlangen die Version aus `If-Match` (fehlt sie, 428
+    `time.precondition_required`; passt sie nicht, 412 `time.version_conflict`). Ist die Datenbank kurz belegt, antwortet der
+    Server mit 503 `time.busy` und `Retry-After`. Sitzung, CSRF und `Cache-Control: no-store` gelten wie im
+    Identitätsvertrag.
+
+    Das Leistungsdatum ist ein Kalenderdatum ohne Zeitzone und die Dauer eine ganze Zahl Minuten von 1 bis 1440. Ein
+    Leistungsdatum nach dem heutigen Datum in UTC plus einem Tag wird abgewiesen; rückwirkend gibt es keine Grenze.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /time/projects:
+    get:
+      operationId: listTimeProjects
+      summary: Projekte der Person mit ihren Zeitaktionen
+      responses:
+        '200':
+          description: Projekte, in denen die Person mindestens eine Zeitaktion hat, nach Schlüssel
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/TimeProject'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/projects/{projectId}/people:
+    get:
+      operationId: listTimePeople
+      summary: Mitglieder des Projekts (time.read oder time.manage)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Kennungen der Mitglieder; Namen liefert das Kontenverzeichnis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string, format: uuid}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/projects/{projectId}/entries:
+    post:
+      operationId: bookTime
+      summary: Zeit buchen (time.book für sich, time.manage für andere)
+      description: |
+        Ohne `personId` bucht die Person für sich. Mit der Kennung eines anderen aktiven internen Mitglieds verlangt die Buchung
+        `time.manage`. Ein Ticket verlangt `ticket.read` im Projekt, sonst gilt es als unbekannt. Auf geschlossene Tickets darf
+        gebucht werden; das Ticket bleibt geschlossen.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BookRequest'}
+      responses:
+        '201':
+          description: Die neue Buchung mit ihrer ersten Revision
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EntryDetail'}
+        '400':
+          description: |
+            Ungültige Angaben, `violations` aus date.required, date.invalid, date.future, minutes.invalid,
+            description.required, description.too_long, ticket.unknown, person.not_member.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/entries:
+    get:
+      operationId: listTimeEntries
+      summary: Buchungen mit Summen nach Projekt, Person, Ticket und Zeitraum
+      description: |
+        Ohne `project` gilt die Liste über alle Projekte der Person, in denen sie eine Zeitaktion hat. Ohne `time.read` oder
+        `time.manage` enthält sie in einem Projekt nur die eigenen Buchungen, die Summen ebenso. Höchstens 500 Buchungen,
+        neueste zuerst; `truncated` sagt, dass es mehr gibt. Die Summen umfassen immer alle passenden, nicht stornierten
+        Buchungen. Ein Ticket, das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne Ticket.
+      parameters:
+        - {name: project, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: ticket, in: query, required: false, description: Ticketnummer, nur mit project, schema: {type: integer, format: int64}}
+        - {name: person, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: from, in: query, required: false, description: erster Tag, schema: {type: string, format: date}}
+        - {name: to, in: query, required: false, description: letzter Tag, schema: {type: string, format: date}}
+        - {name: cancelled, in: query, required: false, description: auch stornierte Buchungen auflisten, schema: {type: boolean}}
+      responses:
+        '200':
+          description: Buchungen und Summen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EntryList'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/export:
+    get:
+      operationId: exportTimeEntries
+      summary: Wirksame Buchungen als CSV
+      description: |
+        Dieselben Filter und Rechte wie die Liste, ohne stornierte Buchungen, älteste zuerst. UTF-8 mit Byte Order Mark,
+        Semikolon als Trenner, jede Zelle in Anführungszeichen, Dezimalkomma. Kopfzeilen mit `#` nennen Zeitraum, Filter und
+        Einheit; danach die Spalten Datum, Projekt, Ticket, Person, Minuten, Stunden, Beschreibung und eine Zeile „Summe“.
+        Stunden sind die Minuten geteilt durch 60, kaufmännisch auf zwei Stellen gerundet; die Summe rundet die Summe der
+        Minuten. Eine Zelle, die mit =, +, -, @ oder Tab beginnt, erhält ein vorangestelltes Apostroph. Mehr als 50.000
+        Buchungen ergeben 400 `time.export_too_large`.
+      parameters:
+        - {name: project, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: ticket, in: query, required: false, schema: {type: integer, format: int64}}
+        - {name: person, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: from, in: query, required: false, schema: {type: string, format: date}}
+        - {name: to, in: query, required: false, schema: {type: string, format: date}}
+      responses:
+        '200':
+          description: CSV Datei zum Speichern
+          content:
+            text/csv:
+              schema: {type: string}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/entries/{id}:
+    get:
+      operationId: getTimeEntry
+      summary: Eine Buchung mit ihrer Historie
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Die Buchung
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EntryDetail'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: correctTimeEntry
+      summary: Buchung korrigieren (eigene mit time.book, fremde mit time.manage und Grund)
+      description: |
+        Gleiche Werte ändern nichts und erzeugen keine Revision. Eine stornierte Buchung lässt sich nicht korrigieren (409
+        `time.entry_cancelled`).
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CorrectRequest'}
+      responses:
+        '200':
+          description: Die korrigierte Buchung
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EntryDetail'}
+        '400':
+          description: Wie beim Buchen, dazu reason.required und reason.too_long
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /time/entries/{id}/cancel:
+    post:
+      operationId: cancelTimeEntry
+      summary: Buchung stornieren (eigene mit time.book, fremde mit time.manage und Grund)
+      description: Ein Storno lässt sich nicht zurücknehmen; die Zeit wird neu gebucht.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '200':
+          description: Die stornierte Buchung
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EntryDetail'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Version aus dem ETag
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, time.entry_not_found, time.entry_cancelled,
+        time.version_conflict, time.precondition_required, time.export_too_large, time.busy, project.not_found,
+        ticket.not_found, auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    Access:
+      type: object
+      required: [book, read, manage]
+      properties:
+        book: {type: boolean}
+        read: {type: boolean}
+        manage: {type: boolean}
+    TimeProject:
+      type: object
+      required: [projectId, key, name, access]
+      properties:
+        projectId: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        access: {$ref: '#/components/schemas/Access'}
+    TicketRef:
+      type: [object, 'null']
+      description: Das Ticket, wenn die Person es sehen darf; title nur mit der Leseregel title
+      required: [number, title]
+      properties:
+        number: {type: integer, format: int64}
+        title: {type: [string, 'null']}
+    Entry:
+      type: object
+      required: [id, projectId, projectKey, ticket, personId, date, minutes, description, cancelled, cancelledAt, cancelledBy, createdAt,
+        createdBy, updatedAt, updatedBy, version, own, changeable]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        ticket: {$ref: '#/components/schemas/TicketRef'}
+        personId: {type: string, format: uuid}
+        date: {type: string, format: date}
+        minutes: {type: integer, minimum: 1, maximum: 1440}
+        description: {type: string}
+        cancelled: {type: boolean}
+        cancelledAt: {type: [string, 'null'], format: date-time}
+        cancelledBy: {type: [string, 'null'], format: uuid}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+        own: {type: boolean, description: Die Buchung gehört der Person}
+        changeable: {type: boolean, description: Die Person darf sie korrigieren und stornieren}
+    Revision:
+      type: object
+      required: [revision, kind, occurredAt, actorId, ticket, date, minutes, description, reason]
+      properties:
+        revision: {type: integer}
+        kind: {type: string, enum: [created, corrected, cancelled]}
+        occurredAt: {type: string, format: date-time}
+        actorId: {type: string, format: uuid}
+        ticket: {$ref: '#/components/schemas/TicketRef'}
+        date: {type: string, format: date}
+        minutes: {type: integer}
+        description: {type: string}
+        reason: {type: [string, 'null']}
+    EntryDetail:
+      type: object
+      required: [entry, revisions]
+      properties:
+        entry: {$ref: '#/components/schemas/Entry'}
+        revisions:
+          type: array
+          items: {$ref: '#/components/schemas/Revision'}
+    EntryList:
+      type: object
+      required: [entries, truncated, count, totalMinutes, perPerson, perTicket]
+      properties:
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/Entry'}
+        truncated: {type: boolean}
+        count: {type: integer, format: int64, description: Zahl der passenden Buchungen}
+        totalMinutes: {type: integer, format: int64}
+        perPerson:
+          type: array
+          items:
+            type: object
+            required: [personId, minutes]
+            properties:
+              personId: {type: string, format: uuid}
+              minutes: {type: integer, format: int64}
+        perTicket:
+          type: array
+          items:
+            type: object
+            required: [projectId, projectKey, ticket, minutes]
+            properties:
+              projectId: {type: string, format: uuid}
+              projectKey: {type: string}
+              ticket: {$ref: '#/components/schemas/TicketRef'}
+              minutes: {type: integer, format: int64}
+    BookRequest:
+      type: object
+      required: [date, minutes, description]
+      properties:
+        date: {type: string, format: date}
+        minutes: {type: integer, minimum: 1, maximum: 1440}
+        description: {type: string, maxLength: 1000}
+        ticketNumber: {type: [integer, 'null'], format: int64}
+        personId: {type: [string, 'null'], format: uuid}
+    CorrectRequest:
+      type: object
+      required: [date, minutes, description]
+      properties:
+        date: {type: string, format: date}
+        minutes: {type: integer, minimum: 1, maximum: 1440}
+        description: {type: string, maxLength: 1000}
+        ticketNumber: {type: [integer, 'null'], format: int64}
+        reason: {type: [string, 'null'], maxLength: 500}
