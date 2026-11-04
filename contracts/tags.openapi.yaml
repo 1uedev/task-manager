@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Tags (TASK-028, TASK-072, TASK-073, TASK-077)
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Tag Kataloge und Tag Zuordnungen (DEC-068). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
     `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -220,10 +220,11 @@ paths:
       description: |
         Nicht archivierte, nicht zusammengeführte Tags; Namen, die mit dem Text beginnen, zuerst, dann Namen mit einem Wort,
         das so beginnt, dann Namen, die ihn enthalten, jeweils nach Namen. `createCompany` sagt, ob die anfragende Person
-        im Unternehmenskatalog anlegen darf.
+        im Unternehmenskatalog anlegen darf. Mit `archived=true` auch archivierte Tags, für Filter und Entfernen (TASK-086).
       parameters:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/SuggestionLimit'
+        - $ref: '#/components/parameters/Archived'
       responses:
         '200':
           description: Vorschläge
@@ -368,6 +369,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/SuggestionLimit'
+        - $ref: '#/components/parameters/Archived'
       responses:
         '200':
           description: Vorschläge

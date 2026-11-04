@@ -78,14 +78,14 @@ class TagRepository {
      * {@code projectId} is given, from its catalog. Names that start with the text come first, then names with a word that
      * starts with it, then names that contain it; within each, by name.
      */
-    List<Tag> suggestions(UUID companyId, UUID projectId, String search, int limit) {
+    List<Tag> suggestions(UUID companyId, UUID projectId, String search, boolean includeArchived, int limit) {
         String starts = search == null ? null : escape(search) + "%";
         String word = search == null ? null : "% " + escape(search) + "%";
         return jdbc.sql("select " + COLUMNS + " from tag where company_id = ? and (project_id is null or project_id = ?)"
-                + " and merged_into is null and not archived and (cast(? as text) is null or normalized like cast(? as text) escape '\\')"
+                + " and merged_into is null and (? or not archived) and (cast(? as text) is null or normalized like cast(? as text) escape '\\')"
                 + " order by case when cast(? as text) is null or normalized like cast(? as text) escape '\\' then 0"
                 + " when normalized like cast(? as text) escape '\\' then 1 else 2 end, normalized, project_id nulls first, id limit ?")
-            .params(companyId, projectId, contains(search), contains(search), starts, starts, word, limit)
+            .params(companyId, projectId, includeArchived, contains(search), contains(search), starts, starts, word, limit)
             .query(TagRepository::map).list();
     }
 

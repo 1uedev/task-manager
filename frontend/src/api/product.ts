@@ -457,8 +457,9 @@ export const mergeTag = (api: ServerApi, scope: TagScope, id: string, version: n
     ...ifMatch(`"${version}"`) }, body: { into } }), one<Tag>(isTag));
 
 // Suggestions while typing: from the company catalog for projects, with the catalog of the project for its tickets.
-export const tagSuggestions = (api: ServerApi, projectId: string | null, q: string) => {
-  const query = q.trim() === '' ? {} : { q: q.trim() };
+// Filters and removals also offer archived tags, new assignments never (TASK-086, Codex F3).
+export const tagSuggestions = (api: ServerApi, projectId: string | null, q: string, archived = false) => {
+  const query = { ...(q.trim() === '' ? {} : { q: q.trim() }), ...(archived ? { archived: true } : {}) };
   return projectId === null
     ? run(() => api.tags.GET('/tags/suggestions', { params: { query } }), one<TagSuggestions>(isSuggestions))
     : run(() => api.tags.GET('/projects/{projectId}/catalog/suggestions', { params: { path: { projectId }, query } }), one<TagSuggestions>(isSuggestions));
@@ -467,6 +468,20 @@ export const tagSuggestions = (api: ServerApi, projectId: string | null, q: stri
 // Tags by identifier, archived and merged ones included, so a history names tags that left the catalog.
 export const lookupTags = (api: ServerApi, projectId: string, ids: readonly string[]) =>
   run(() => api.tags.GET('/projects/{projectId}/catalog/lookup', { params: { path: { projectId }, query: { id: [...ids] } } }), listOf<Tag>(isTag));
+
+// The lookup takes up to 100 identifiers; longer lists are asked in parts and joined (TASK-086, Codex H3).
+export const TAG_LOOKUP_MAX = 100;
+export async function lookupAllTags(api: ServerApi, projectId: string, ids: readonly string[]): Promise<Result<Tag[]>> {
+  const parts: (readonly string[])[] = [];
+  for (let start = 0; start < ids.length; start += TAG_LOOKUP_MAX) parts.push(ids.slice(start, start + TAG_LOOKUP_MAX));
+  const answers = await Promise.all(parts.map((part) => lookupTags(api, projectId, part)));
+  const tags: Tag[] = [];
+  for (const answer of answers) {
+    if (answer.kind !== 'ok') return answer;
+    tags.push(...answer.data.value);
+  }
+  return { kind: 'ok', data: { value: tags, etag: null } };
+}
 
 // Bulk change (TASK-073): each ticket is checked and changed for itself; the answer counts and names what was readable.
 export type TagBulkResult = TagTypes['schemas']['BulkResult'];

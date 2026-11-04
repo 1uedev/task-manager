@@ -77,6 +77,8 @@ interface TicketRow {
 }
 
 const PAGE = 50;
+// The search pages through its first 1000 hits; beyond that the filter has to be narrowed (TASK-086, Claude H2).
+const SEARCH_DEPTH = 1000;
 
 function TicketsTab({ project }: { readonly project: Project }) {
   const { t } = useI18n();
@@ -148,7 +150,10 @@ function FilteredTickets({ project, filter, selection }: { readonly project: Pro
           <>
             <p className="hint">{t('tickets.filtered')}</p>
             <TicketTable project={project} rows={rows} selection={selection} withUpdated={false}
-              onMore={rows.length < page.total && rows.length + PAGE <= 1000 ? () => void loadMore(rows.length) : null} />
+              onMore={rows.length < page.total && rows.length + PAGE <= SEARCH_DEPTH ? () => void loadMore(rows.length) : null} />
+            {rows.length < page.total && SEARCH_DEPTH < rows.length + PAGE && (
+              <p className="hint" role="status">{t('tickets.filteredCapped', { shown: rows.length, total: page.total })}</p>
+            )}
           </>
         );
       }}
