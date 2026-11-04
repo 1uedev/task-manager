@@ -87,10 +87,10 @@ class TicketController {
                     writable.add(field.id());
                 }
             }
-            // Tags, attachments, customer and contact are changed through their own endpoints, but follow the same rules; naming them here lets an
+            // Tags, attachments, customer, contact and priority are changed through their own endpoints, but follow the same rules; naming them here lets an
             // interface offer exactly what the server allows (review F1 of TASK-051).
             for (String field : List.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD, TicketAccess.CUSTOMER_FIELD,
-                    TicketAccess.CONTACT_FIELD)) {
+                    TicketAccess.CONTACT_FIELD, TicketAccess.PRIORITY_FIELD)) {
                 if (view.writable().contains(field)) {
                     writable.add(field);
                 }
@@ -239,7 +239,7 @@ class TicketController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503 (P4 of TASK-025). */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {
@@ -260,7 +260,7 @@ class TicketController {
         return false;
     }
 
-    private static ResponseEntity<TicketBody> ticket(HttpStatus status, TicketView view) {
+    static ResponseEntity<TicketBody> ticket(HttpStatus status, TicketView view) {
         return ResponseEntity.status(status).eTag("\"" + view.ticket().version() + "\"").body(TicketBody.of(view));
     }
 

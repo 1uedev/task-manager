@@ -65,7 +65,7 @@ class FilesContractTest {
     @Test
     void everyMappedRouteIsDocumentedAndEveryDocumentedRouteExists() throws IOException {
         Set<String> mapped = mapped();
-        assertEquals(4, mapped.size(), mapped.toString());
+        assertEquals(8, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
     }
 }

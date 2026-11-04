@@ -96,12 +96,12 @@ class AdminCommandTest {
         assertEquals(List.of("Unternehmensverwaltung|accounts.manage|chef", "Unternehmensverwaltung|appearance.manage|chef",
                 "Unternehmensverwaltung|helpdesk.manage|chef", "Unternehmensverwaltung|jobs.manage|chef",
                 "Unternehmensverwaltung|permissions.manage|chef", "Unternehmensverwaltung|projects.manage|chef",
-                "Unternehmensverwaltung|session_duration.manage|chef", "Unternehmensverwaltung|tags.manage|chef"), query(database,
+                "Unternehmensverwaltung|session_duration.manage|chef", "Unternehmensverwaltung|sla.manage|chef", "Unternehmensverwaltung|tags.manage|chef"), query(database,
             "select g.name || '|' || a.action_key || '|' || u.username from permissions_group g "
             + "join permissions_action a on a.group_id = g.id join permissions_membership m on m.group_id = g.id "
             + "join identity_account u on u.id = m.user_id order by a.action_key"));
         assertEquals(List.of("1"), query(database, "select count(*) from permissions_group"));
-        assertEquals(List.of("10"), query(database, "select revision from permissions_revision"));
+        assertEquals(List.of("11"), query(database, "select revision from permissions_revision"));
 
         Result second = run(database, "bootstrap-admin", "someone-else");
         assertEquals(2, second.exitCode());

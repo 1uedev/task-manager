@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Tags (TASK-028)
-  version: 0.1.0
+  title: Task Manager API, Tags (TASK-028, TASK-072, TASK-073, TASK-077)
+  version: 0.4.0
   description: |
     Tag Kataloge und Tag Zuordnungen (DEC-068). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
     `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -12,7 +12,7 @@ info:
     mit 404 `project.not_found`. `tag.create` legt Tags an, `tags.manage` legt an, benennt um, archiviert und stellt wieder
     her. Beide gelten für den Unternehmenskatalog als Unternehmensrecht und für einen Projektkatalog im Projekt, wo sie die
     Mitgliedschaft verlangen. `tags.manage` ist ein Verwaltungsrecht des Unternehmens; die Ersteinrichtung vergibt es.
-    Portalkonten erhalten bis zur Entscheidung über das Portal keinen Katalog (403).
+    Portalkonten erhalten keinen Katalog (403); ihre Tags laufen über die Portalpfade unten.
 
     Namen: Unicode NFKC, äußere Leerzeichen entfernt, innerer Leerraum jeder Unicode Art zu einem Leerzeichen
     zusammengefasst, 1 bis 50 Zeichen, keine Steuer oder Formatzeichen. Ein Name kommt je Katalog einmal vor, ohne
@@ -30,6 +30,41 @@ info:
     Projekts nicht. Wird ein Tag über den Namen zugeordnet und fehlt er im Katalog, legt der Server ihn dort an, wenn die
     anfragende Person `tag.create` oder `tags.manage` für diesen Katalog hat.
 
+    Katalogpflege (TASK-072, DEC-102): `tags.manage` setzt außerdem Beschreibung (reiner Text, 1 bis 500 Zeichen, leer
+    oder `null` entfernt sie) und Farbe (ein Name der festen Palette, `null` entfernt sie) und führt einen Tag in einen
+    anderen desselben Katalogs zusammen. Zusammenführen verschiebt alle Zuordnungen der Quelle auf das Ziel, doppelte
+    entfallen; die Quelle verlässt Katalog und Vorschläge, gibt ihren Namen frei und bleibt als Verweis `mergedInto` auf das
+    Ziel lesbar. Die Tickethistorie bekommt keinen Eintrag, Ticketversionen bleiben gleich. Ein zusammengeführter Tag wird
+    weder geändert noch zugeordnet (409 `tag.merged`); ein archiviertes Ziel geht nicht (409 `tag.archived`), mehr als
+    20.000 Zuordnungen der Quelle auch nicht (409 `tag.merge_too_large`). Ein Ticket und ein Projekt halten höchstens 30
+    Tags (409 `tag.limit_reached`), vorhandene Zuordnungen bleiben. Nutzungszahlen zählen nur Tickets in Projekten, in denen
+    die anfragende Person Tickets mit dem Feld `tags` liest, und Projekte, die sie lesen darf. `manageable` sagt, ob die
+    anfragende Person den Katalog des Tags pflegen darf.
+
+    Massenänderung (TASK-073, DEC-103): `POST /tags/bulk` fügt 1 bis 10 vorhandene Tags an 1 bis 500 Tickets hinzu oder
+    entfernt sie, auch über Projekte hinweg. Die Tags werden vorab geprüft (unbekannt oder in einem nicht sichtbaren
+    Projektkatalog 404 `tag.not_found`, zusammengeführt 409 `tag.merged`, archiviert beim Hinzufügen 409 `tag.archived`).
+    Danach wird jedes Ticket für sich in einer eigenen Transaktion mit den aktuellen Rechten geprüft und geändert wie bei
+    einer einzelnen Zuordnung; es gibt keine Gesamttransaktion. Ein Projekttag passt nur zu Tickets seines Projekts; passt
+    keiner der Tags, zählt das Ticket als `not_matching`. Eine Ablehnung (Rechte, Obergrenze, inzwischen archivierter Tag,
+    Sperre) lässt das Ticket ganz unverändert. Wiederholen erzeugt keine doppelten Zuordnungen.
+
+    Tags im Portal (TASK-077, DEC-108): Jeder Tag hat die Sichtbarkeit `internal` (Vorgabe) oder `customer`, gesetzt mit
+    `tags.manage` über `visibility`. Ein Tag, den ein Portalkonto anlegt, steht im Projektkatalog, ist `customer` und an die
+    Organisation des Kontos gebunden (`organizationId`); nur diese Organisation sieht ihn im Portal. `forAllCustomers: true`
+    gibt ihn für alle Kunden frei, `visibility: internal` macht ihn intern und löst ebenfalls die Bindung. Namen gelten je
+    Katalog und Zielgruppe: Tags einer Organisation haben eigene Namen, sodass ein Name im Portal nie verrät, dass ein
+    interner Tag oder ein Tag einer anderen Organisation ihn trägt; beim Freigeben kann deshalb 409 `tag.name_taken` kommen.
+    Interne Zuordnungen über den Namen finden nur Tags ohne Organisation; Tags einer Organisation werden über `tagId`
+    zugeordnet.
+
+    Unter `/portal/projects/{projectId}` sieht ein Portalkonto nur Tags, die seiner Organisation sichtbar sind, und nur an
+    Anfragen seiner Organisation. Lesen verlangt `ticket.read` mit der Leseregel für `tags`, Setzen und Entfernen
+    `ticket.edit` mit der Schreibregel für `tags`, was die Gruppe „Portal“ nicht vergibt. Ein Name ohne sichtbaren Tag legt
+    mit `tag.create` im Projekt einen Tag der Organisation an, sonst 403. Interne Tags derselben Anfrage bleiben unberührt
+    und erscheinen nirgends; ein interner oder fremder Tag antwortet wie ein unbekannter mit 404 `tag.not_found`. Die
+    Obergrenze von 30 Tags je Ticket zählt alle Tags der Anfrage.
+
     Der `ETag` ist die Version des Tags; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
     Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `tag.busy` und `Retry-After`; die
     ganze Anfrage darf wiederholt werden.
@@ -41,12 +76,14 @@ paths:
   /tags:
     get:
       operationId: listCompanyTags
-      summary: Unternehmenskatalog, nach Namen geordnet
+      summary: Unternehmenskatalog, nach Namen geordnet, ohne zusammengeführte Tags
       parameters:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Archived'
         - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/AfterId'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Usage'
       responses:
         '200':
           description: Tags
@@ -88,7 +125,7 @@ paths:
         '503': {$ref: '#/components/responses/Problem'}
     patch:
       operationId: changeCompanyTag
-      summary: Umbenennen, archivieren oder wiederherstellen (tags.manage)
+      summary: Umbenennen, beschreiben, färben, archivieren oder wiederherstellen (tags.manage)
       description: Ohne echte Änderung bleibt die Version gleich.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
@@ -107,17 +144,109 @@ paths:
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /tags/{tagId}/merge:
+    parameters:
+      - $ref: '#/components/parameters/TagId'
+    get:
+      operationId: previewCompanyTagMerge
+      summary: Vorschau des Zusammenführens in den Tag `into` (tags.manage)
+      description: |
+        Nennt beide Tags und wie viele Tickets und Projekte, die die anfragende Person lesen darf, die Quelle tragen. Weitere
+        Zuordnungen an nicht lesbaren Objekten werden beim Zusammenführen mit umgestellt; ihre Zahl nennt der Server nicht.
+      parameters:
+        - $ref: '#/components/parameters/Into'
+      responses:
+        '200':
+          description: Vorschau
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MergePreview'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: mergeCompanyTag
+      summary: Den Tag in einen anderen desselben Katalogs zusammenführen (tags.manage)
+      description: Antwortet mit dem Ziel. `If-Match` nennt die Version der Quelle.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MergeRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tags/bulk:
+    post:
+      operationId: bulkTicketTags
+      summary: Tags an vielen Tickets hinzufügen oder entfernen
+      description: |
+        Antwortet mit Zahlen je Ergebnis und einem Eintrag je genanntem Ticket (eine wiederholte Kennung zählt einmal).
+        `key` und bei einer Ablehnung `code` stehen nur bei Tickets, die die anfragende Person jetzt lesen darf
+        (`ticket.read`); sonst sind beide `null`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BulkRequest'}
+      responses:
+        '200':
+          description: Ergebnis der Massenänderung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BulkResult'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /tags/suggestions:
+    get:
+      operationId: suggestCompanyTags
+      summary: Vorschläge aus dem Unternehmenskatalog, für Tags von Projekten
+      description: |
+        Nicht archivierte, nicht zusammengeführte Tags; Namen, die mit dem Text beginnen, zuerst, dann Namen mit einem Wort,
+        das so beginnt, dann Namen, die ihn enthalten, jeweils nach Namen. `createCompany` sagt, ob die anfragende Person
+        im Unternehmenskatalog anlegen darf.
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/SuggestionLimit'
+      responses:
+        '200':
+          description: Vorschläge
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Suggestions'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /projects/{projectId}/catalog/tags:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
     get:
       operationId: listProjectCatalogTags
-      summary: Katalog des Projekts, nach Namen geordnet
+      summary: Katalog des Projekts, nach Namen geordnet, ohne zusammengeführte Tags
       parameters:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Archived'
         - $ref: '#/components/parameters/After'
+        - $ref: '#/components/parameters/AfterId'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Usage'
       responses:
         '200':
           description: Tags
@@ -162,7 +291,7 @@ paths:
         '503': {$ref: '#/components/responses/Problem'}
     patch:
       operationId: changeProjectCatalogTag
-      summary: Umbenennen, archivieren oder wiederherstellen (tags.manage im Projekt)
+      summary: Umbenennen, beschreiben, färben, archivieren oder wiederherstellen (tags.manage im Projekt)
       description: Ohne echte Änderung bleibt die Version gleich.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
@@ -180,6 +309,109 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/catalog/tags/{tagId}/merge:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TagId'
+    get:
+      operationId: previewProjectCatalogTagMerge
+      summary: Vorschau des Zusammenführens in den Tag `into` (tags.manage im Projekt)
+      description: |
+        Nennt beide Tags und wie viele Tickets und Projekte, die die anfragende Person lesen darf, die Quelle tragen. Weitere
+        Zuordnungen an nicht lesbaren Objekten werden beim Zusammenführen mit umgestellt; ihre Zahl nennt der Server nicht.
+      parameters:
+        - $ref: '#/components/parameters/Into'
+      responses:
+        '200':
+          description: Vorschau
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MergePreview'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: mergeProjectCatalogTag
+      summary: Den Tag in einen anderen desselben Katalogs zusammenführen (tags.manage im Projekt)
+      description: Antwortet mit dem Ziel. `If-Match` nennt die Version der Quelle.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MergeRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/catalog/suggestions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: suggestProjectTags
+      summary: Vorschläge aus Unternehmenskatalog und Projektkatalog, für Tags von Tickets
+      description: |
+        Reihenfolge wie bei `/tags/suggestions`, bei gleichem Namen der Unternehmenskatalog zuerst. `createCompany` und
+        `createProject` sagen, in welchem Katalog die anfragende Person anlegen darf. Wer den Projektkatalog nicht sieht,
+        bekommt 404 `project.not_found`.
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/SuggestionLimit'
+      responses:
+        '200':
+          description: Vorschläge
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Suggestions'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/catalog/lookup:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: lookupTags
+      summary: Tags nach Kennung, auch archivierte und zusammengeführte, etwa für die Tickethistorie
+      description: |
+        Liefert die genannten Tags des Unternehmenskatalogs und des Projektkatalogs, nach Namen geordnet. Kennungen anderer
+        Kataloge und unbekannte Kennungen fehlen ohne Hinweis. Sichtbar wie der Projektkatalog.
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: 1 bis 100 Kennungen, wiederholt.
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items: {type: string, format: uuid}
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Tag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /projects/{projectId}/tags:
     parameters:
@@ -277,6 +509,76 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/SuggestionLimit'
+    get:
+      operationId: listPortalTagSuggestions
+      summary: Vorschläge des Portals, nur der Organisation sichtbare Tags (ticket.read und Leseregel für tags)
+      responses:
+        '200':
+          description: Vorschläge und ob das Konto einen Tag anlegen darf
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalSuggestions'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/tags:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: listPortalTicketTags
+      summary: Sichtbare Tags einer Anfrage der Organisation
+      responses:
+        '200':
+          description: Sichtbare Tags, nach Namen geordnet, und ob das Konto sie ändern darf
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalTicketTags'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: assignPortalTicketTag
+      summary: Sichtbaren Tag setzen oder über den Namen anlegen (ticket.edit und Schreibregel für tags, zum Anlegen tag.create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PortalAssignment'}
+      responses:
+        '200':
+          description: Der gesetzte Tag, auch wenn er schon gesetzt war
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalTag'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/tags/{tagId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+      - $ref: '#/components/parameters/TagId'
+    delete:
+      operationId: unassignPortalTicketTag
+      summary: Sichtbaren Tag von einer Anfrage der Organisation entfernen
+      responses:
+        '204': {description: Entfernt oder nicht zugeordnet}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -314,6 +616,28 @@ components:
       in: query
       description: Name des letzten Tags der vorigen Seite, zum Weiterblättern.
       schema: {type: string}
+    AfterId:
+      name: afterId
+      in: query
+      description: >-
+        Kennung des letzten Tags der vorigen Seite (TASK-079). Ein Katalog kann denselben Namen für mehrere Organisationen
+        enthalten; mit afterId setzt die nächste Seite genau nach diesem Tag fort, ohne sie nach allen Tags dieses Namens.
+      schema: {type: string, format: uuid}
+    Usage:
+      name: usage
+      in: query
+      description: Nutzungszahlen mitliefern, gezählt über die lesbaren Tickets und Projekte.
+      schema: {type: boolean, default: false}
+    SuggestionLimit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 20, default: 20}
+    Into:
+      name: into
+      in: query
+      required: true
+      description: Kennung des Ziels.
+      schema: {type: string, format: uuid}
     Limit:
       name: limit
       in: query
@@ -335,10 +659,11 @@ components:
     Problem:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found, tag.not_found,
-        tag.name_taken, tag.archived, tag.version_conflict, tag.precondition_required, tag.busy, auth.required,
-        auth.forbidden, auth.csrf_invalid, auth.password_change_required. Gründe in `violations`: name.invalid,
-        archived.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous, fields.required,
-        fields.unknown, paging.invalid.
+        tag.name_taken, tag.archived, tag.merged, tag.merge_too_large, tag.limit_reached, tag.version_conflict,
+        tag.precondition_required, tag.busy, auth.required, auth.forbidden, auth.csrf_invalid,
+        auth.password_change_required. Gründe in `violations`: name.invalid, archived.invalid, description.invalid,
+        color.invalid, into.invalid, ids.invalid, tagId.invalid, catalog.invalid, target.required, target.ambiguous,
+        fields.required, fields.unknown, paging.invalid, visibility.invalid, forAllCustomers.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -373,6 +698,130 @@ components:
       properties:
         name: {type: string, minLength: 1, maxLength: 50}
         archived: {type: boolean}
+        description:
+          type: [string, 'null']
+          maxLength: 500
+          description: Reiner Text; Zeilenumbrüche und Tabulatoren erlaubt. Leer oder null entfernt die Beschreibung.
+        color:
+          oneOf:
+            - {$ref: '#/components/schemas/Color'}
+            - {type: 'null'}
+        visibility: {$ref: '#/components/schemas/Visibility'}
+        forAllCustomers:
+          type: boolean
+          enum: [true]
+          description: Gibt einen Tag einer Organisation für alle Kunden frei.
+    Visibility:
+      type: string
+      enum: [internal, customer]
+      description: Intern oder im Portal sichtbar (TASK-077).
+    PortalTag:
+      type: object
+      required: [id, name, description, color, archived, own]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        color:
+          oneOf:
+            - {$ref: '#/components/schemas/Color'}
+            - {type: 'null'}
+        archived: {type: boolean}
+        own: {type: boolean, description: Ein Tag der eigenen Organisation, noch nicht für alle Kunden freigegeben.}
+    PortalTicketTags:
+      type: object
+      required: [items, writable]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PortalTag'}
+        writable: {type: boolean}
+    PortalSuggestions:
+      type: object
+      required: [items, create]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/PortalTag'}
+        create: {type: boolean, description: Ob das Konto mit tag.create einen Tag seiner Organisation anlegen darf.}
+    PortalAssignment:
+      description: Ein sichtbarer Tag über `tagId` oder ein Name.
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required: [tagId]
+        - required: [name]
+      properties:
+        tagId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 50}
+    MergeRequest:
+      type: object
+      additionalProperties: false
+      required: [into]
+      properties:
+        into: {type: string, format: uuid, description: Kennung des Ziels im selben Katalog}
+    BulkRequest:
+      type: object
+      additionalProperties: false
+      required: [action, tags, tickets]
+      properties:
+        action: {type: string, enum: [add, remove]}
+        tags:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: {type: string, format: uuid}
+        tickets:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: {type: string, format: uuid}
+    BulkResult:
+      type: object
+      required: [changed, unchanged, notMatching, refused, items]
+      properties:
+        changed: {type: integer, minimum: 0}
+        unchanged: {type: integer, minimum: 0, description: Alle passenden Tags waren schon so.}
+        notMatching: {type: integer, minimum: 0, description: Keiner der Tags passt zum Projekt des Tickets.}
+        refused: {type: integer, minimum: 0}
+        items:
+          type: array
+          items:
+            type: object
+            required: [ticketId, key, outcome, code]
+            properties:
+              ticketId: {type: string, format: uuid}
+              key: {type: [string, 'null'], description: Schlüssel des Tickets, nur wenn es lesbar ist}
+              outcome: {type: string, enum: [changed, unchanged, not_matching, refused]}
+              code: {type: [string, 'null'], description: Grund einer Ablehnung, nur bei lesbaren Tickets}
+    Color:
+      type: string
+      description: Farbe der festen Palette; die Oberfläche zeigt sie in heller und dunkler Darstellung lesbar.
+      enum: [red, orange, amber, yellow, lime, green, teal, cyan, blue, indigo, violet, pink]
+    Usage:
+      type: object
+      required: [tickets, projects]
+      properties:
+        tickets: {type: integer, minimum: 0}
+        projects: {type: integer, minimum: 0}
+    MergePreview:
+      type: object
+      required: [source, target, usage]
+      properties:
+        source: {$ref: '#/components/schemas/Tag'}
+        target: {$ref: '#/components/schemas/Tag'}
+        usage: {$ref: '#/components/schemas/Usage'}
+    Suggestions:
+      type: object
+      required: [items, createCompany, createProject]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/Tag'}
+        createCompany: {type: boolean}
+        createProject: {type: boolean}
     ProjectAssignment:
       description: Ein vorhandener Tag über `tagId` oder ein Name des Unternehmenskatalogs.
       type: object
@@ -396,15 +845,41 @@ components:
         catalog: {type: string, enum: [project, company], default: project}
     Tag:
       type: object
-      required: [id, name, catalog, projectId, archived, version, createdAt, createdBy, updatedAt, updatedBy]
+      required: [id, name, catalog, projectId, description, color, archived, mergedInto, manageable, usage, version, createdAt,
+        createdBy, updatedAt, updatedBy, visibility, organizationId]
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
         catalog: {type: string, enum: [company, project]}
         projectId: {type: [string, 'null'], format: uuid, description: 'Projekt des Katalogs, null im Unternehmenskatalog'}
+        description: {type: [string, 'null']}
+        color:
+          oneOf:
+            - {$ref: '#/components/schemas/Color'}
+            - {type: 'null'}
         archived: {type: boolean}
+        mergedInto:
+          description: Bei einem zusammengeführten Tag das Ziel, sonst null.
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: {type: string, format: uuid}
+                name: {type: string}
+            - {type: 'null'}
+        manageable: {type: boolean, description: Ob die anfragende Person den Katalog dieses Tags pflegen darf (tags.manage).}
+        usage:
+          description: Nutzung, nur mit `usage=true` in Katalogen, sonst null.
+          oneOf:
+            - {$ref: '#/components/schemas/Usage'}
+            - {type: 'null'}
         version: {type: integer, minimum: 1}
         createdAt: {type: string, format: date-time}
         createdBy: {type: string, format: uuid}
         updatedAt: {type: string, format: date-time}
         updatedBy: {type: string, format: uuid}
+        visibility: {$ref: '#/components/schemas/Visibility'}
+        organizationId:
+          type: [string, 'null']
+          format: uuid
+          description: Organisation, die einen im Portal angelegten Tag allein sieht; null für alle Kunden.

@@ -38,4 +38,28 @@ public interface IdentityVerification {
      * exclusively and therefore waits for it.
      */
     boolean accountIsActiveLocal(UUID accountId);
+
+    /** True if the account exists, is active and is an internal account, not one of the portal (TASK-075). Row locked until the commit. */
+    boolean accountIsActiveInternal(UUID accountId);
+
+    /**
+     * The customer organization of a portal account, empty for an internal or unknown account (TASK-075). The row stays locked
+     * until the commit; the organization of an account never changes.
+     */
+    Optional<UUID> portalOrganization(UUID accountId);
+
+    /**
+     * The contact of a portal account, empty for an account without contact, an internal or an unknown one (TASK-076). The row
+     * stays locked until the commit, so the contact does not change meanwhile.
+     */
+    Optional<UUID> portalContact(UUID accountId);
+
+    /** True if the account exists and is a portal account, active or not (TASK-075). Row locked until the commit. */
+    boolean accountIsPortal(UUID accountId);
+
+    /**
+     * The portal accounts of the organization, active or not, in the order of their identifiers (TASK-078). The rows stay locked
+     * until the commit; a new portal account is created under the exclusive rights lock and so never joins meanwhile.
+     */
+    java.util.List<UUID> portalAccountsOf(UUID organizationId);
 }

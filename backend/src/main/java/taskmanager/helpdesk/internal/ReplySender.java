@@ -8,9 +8,11 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import taskmanager.helpdesk.ReplySent;
 import taskmanager.jobs.JobExecution;
 import taskmanager.jobs.JobFailure;
 import taskmanager.jobs.JobHandler;
@@ -35,12 +37,14 @@ import taskmanager.projects.ProjectAccess;
  * limit or the stop interrupted it) and records {@code uncertain} without sending: nothing is ever sent twice by itself. An
  * outcome is recorded only while the reply still belongs to the job of the attempt, so a late attempt never changes a send
  * a person started since (TASK-062, X-F1); when the last attempt ends without an outcome, {@code ReplyWatch} settles the
- * reply. The log names the reply and the code, never the text of the mail server.
+ * reply. The log names the reply and the code, never the text of the mail server. A reply sends the finished mail kept at
+ * its confirmation (TASK-082), whatever the template is now.
  */
 @Component
 class ReplySender implements JobHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ReplySender.class);
 
+    private final ApplicationEventPublisher events;
     private final HelpdeskRepository repository;
     private final MailSender sender;
     private final SecretBox secrets;
@@ -51,7 +55,9 @@ class ReplySender implements JobHandler {
     private final Duration timeout;
 
     ReplySender(HelpdeskRepository repository, MailSender sender, SecretBox secrets, ProjectAccess projects,
-            ObjectProvider<IdentityAccess> identity, Clock clock, PlatformTransactionManager transactions, HelpdeskProperties properties) {
+            ObjectProvider<IdentityAccess> identity, Clock clock, PlatformTransactionManager transactions, HelpdeskProperties properties,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.repository = repository;
         this.sender = sender;
         this.secrets = secrets;
@@ -151,7 +157,8 @@ class ReplySender implements JobHandler {
         repository.replyState(replyId, "sending", reply.errorCode(), now, null, now, by);
         String toName = repository.contact(reply.companyId(), reply.contactId()).map(Contact::name).orElse(null);
         return Optional.of(new Prepared(mailbox, password, new MailSender.Outgoing(reply.messageId(), reply.fromAddress(), mailbox.name(),
-            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now), by));
+            reply.toAddress(), toName, reply.subject(), reply.body(), reply.inReplyTo(), reply.references(), now,
+            repository.replyMail(replyId).orElse(null)), by));
     }
 
     /**
@@ -194,6 +201,11 @@ class ReplySender implements JobHandler {
         transaction.executeWithoutResult(status -> repository.lockReply(replyId).ifPresent(reply -> {
             if (reply.state().equals("sending") && reply.jobId().equals(job)) {
                 repository.replyState(replyId, state, code, null, sentAt, clock.instant(), by);
+                if (state.equals("sent")) {
+                    // The answer reaches the portal at its position (TASK-080, F2).
+                    repository.replyPortalPosition(replyId, repository.nextPortalPosition(reply.ticketId()));
+                    events.publishEvent(new ReplySent(reply.companyId(), reply.projectId(), reply.ticketId(), replyId, sentAt));
+                }
             } else {
                 LOG.warn("The outcome {} of reply {} came after the send of its job ended; it is not recorded", state, replyId);
             }

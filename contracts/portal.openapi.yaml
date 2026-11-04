@@ -1,0 +1,205 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Portalkonten (TASK-075)
+  version: 0.1.0
+  description: |
+    Portalkonten des Kundenportals (DEC-105). Ein Portalkonto ist ein lokales Konto mit genau einer Kundenorganisation des
+    Helpdesks und optional einem Kontakt dieser Organisation. Es wird mit Einmalpasswort und Pflichtwechsel angelegt (DEC-053),
+    kommt in die Gruppe „Portal“ und in die gewählten Projekte, die der Helpdesk seiner Organisation zugeordnet hat. Die
+    Organisation ändert sich nie, ein Portalkonto wird nie zu einem internen Konto oder Verzeichniskonto.
+
+    Alle Pfade verlangen eine vollständige Anmeldung mit dem Unternehmensrecht `accounts.manage`; Sitzung, CSRF und
+    `Cache-Control: no-store` gelten wie im Identitätsvertrag. Deaktivieren, Reaktivieren, Zurücksetzen des Passworts,
+    Anzeigename und Wartezeit nach Fehlversuchen laufen über `/accounts/{accountId}` wie bei internen Konten.
+
+    Die Gruppe „Portal“ entsteht mit dem ersten Portalkonto: Aktionen `ticket.read`, `ticket.create` und `portal.answer` (seit TASK-076) für alle Projekte,
+    Leseregeln für `title`, `description`, `type`, `status`, `priority`, `tags` und `attachments`, Schreibregeln für `title`,
+    `description` und `attachments`, alles für den Ressourcentyp `ticket`. Die Verwaltung kann sie in der Rechteverwaltung
+    ändern; die Gruppe wird über ihren Zweck gefunden, nicht über ihren Namen. Ein Portalkonto hält nie ein Unternehmensrecht:
+    Hat die Gruppe „Portal“ eines, antwortet die Anlage mit 409 `permissions.portal_company_right`.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /portal-accounts:
+    get:
+      operationId: listPortalAccounts
+      summary: Alle Portalkonten mit Organisation, Kontakt und Projekten
+      responses:
+        '200':
+          description: Portalkonten
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PortalAccount'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createPortalAccount
+      summary: Portalkonto mit Einmalpasswort anlegen
+      description: |
+        Der Anmeldename folgt den Regeln aller Konten (409 `account.username_taken`). Die Organisation muss bekannt sein
+        (`organizationId.required`, `organizationId.unknown`), der Kontakt zu ihr gehören (`contactId.not_of_organization`), und
+        jedes Projekt muss ihr zugeordnet sein (`projectIds.not_released`, höchstens 100, `projectIds.invalid`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201':
+          description: Angelegt; das Einmalpasswort steht nur in dieser Antwort.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedPortalAccount'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal-accounts/options:
+    get:
+      operationId: listPortalAccountOptions
+      summary: Kundenorganisationen mit zugeordneten Projekten und Kontakten, für das Formular
+      responses:
+        '200':
+          description: Organisationen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Option'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal-accounts/{accountId}:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    put:
+      operationId: updatePortalAccount
+      summary: Kontakt und Projekte eines Portalkontos setzen
+      description: |
+        `projectIds` ist die vollständige neue Liste; ausgelassene Projekte verlieren die Mitgliedschaft sofort, auch für laufende
+        Sitzungen. Fehlt das Feld oder ist es null, antwortet der Server mit 400 `projectIds.required` und ändert nichts; eine
+        leere Liste entfernt alle Projekte. Jedes genannte Projekt muss der Organisation zugeordnet sein. `contactId` null löst den Kontakt. Ein internes
+        Konto antwortet mit 409 `account.not_portal`, ein unbekanntes mit 404 `account.not_found`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRequest'}
+      responses:
+        '200':
+          description: Geändert
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalAccount'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.required, auth.forbidden,
+        auth.password_change_required, account.username_taken, account.not_found, account.not_portal,
+        account.organization_unknown, permissions.portal_company_right, account.busy (503 mit Retry-After).
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+        Retry-After: {schema: {type: integer}, description: Nur bei 503.}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    PortalAccount:
+      type: object
+      required: [id, username, active, organizationId, projectIds]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        displayName: {type: [string, 'null']}
+        active: {type: boolean}
+        organizationId: {type: string, format: uuid}
+        contactId: {type: [string, 'null'], format: uuid}
+        projectIds:
+          type: array
+          items: {type: string, format: uuid}
+    IssuedPortalAccount:
+      type: object
+      required: [account, oneTimePassword, oneTimePasswordExpiresAt]
+      properties:
+        account: {$ref: '#/components/schemas/PortalAccount'}
+        oneTimePassword: {type: string, readOnly: true, description: Wird einmal angezeigt und ist nicht erneut abrufbar.}
+        oneTimePasswordExpiresAt: {type: string, format: date-time}
+    CreateRequest:
+      type: object
+      required: [username, organizationId]
+      properties:
+        username: {type: string}
+        displayName: {type: [string, 'null']}
+        organizationId: {type: string, format: uuid}
+        contactId: {type: [string, 'null'], format: uuid}
+        projectIds:
+          type: array
+          maxItems: 100
+          items: {type: string, format: uuid}
+    UpdateRequest:
+      type: object
+      required: [projectIds]
+      properties:
+        contactId: {type: [string, 'null'], format: uuid}
+        projectIds:
+          type: array
+          maxItems: 100
+          items: {type: string, format: uuid}
+    Option:
+      type: object
+      required: [id, name, projects, contacts]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        projects:
+          type: array
+          items:
+            type: object
+            required: [id, key, name]
+            properties:
+              id: {type: string, format: uuid}
+              key: {type: string}
+              name: {type: string}
+        contacts:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}

@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Suche (TASK-029, TASK-044)
-  version: 0.1.0
+  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073)
+  version: 0.2.0
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -19,8 +19,12 @@ info:
     und Kleinschreibung und ohne sprachabhängige Wortstämme. Ein Text ohne Wörter trifft nichts. Ein Text der Form
     `KEY-12` nennt zusätzlich das Ticket 12 des Projekts KEY und steht dann vorn. Sonderzeichen sind keine Suchsyntax.
 
-    Filter: Wiederholte Werte eines Filters verbinden sich mit oder, verschiedene Filter mit und; jeder genannte Tag muss
-    zugeordnet sein. Ein Projekt außerhalb der eigenen Suche antwortet mit `project.unknown`, ein unbekannter oder nicht
+    Filter: Wiederholte Werte eines Filters verbinden sich mit oder, verschiedene Filter mit und. Die genannten Tags
+    (höchstens 10) wirken nach `tagMatch` (TASK-073, DEC-103): `all` (Vorgabe) verlangt jeden, `any` mindestens einen,
+    `none` keinen davon, `untagged` nimmt keinen Tag und findet nur Tickets oder Projekte ohne Tag. Alle Tags an einem
+    Ticket stammen aus dem Unternehmenskatalog oder dem Katalog seines Projekts und sind damit für jede Person sichtbar, die
+    die Tags des Tickets liest; ohne Leseregel für `tags` trifft jeder Tagfilter in diesem Projekt nichts, auch `none` und
+    `untagged`. Ein Projekt außerhalb der eigenen Suche antwortet mit `project.unknown`, ein unbekannter oder nicht
     sichtbarer Tag mit `tag.unknown`. Sichtbar sind der Unternehmenskatalog und die Kataloge der Projekte, in denen die
     Person Tickets lesen darf; für Projekte gilt nur der Unternehmenskatalog.
 
@@ -64,6 +68,7 @@ paths:
           schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
           explode: true
         - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/TagMatch'
         - name: custom
           in: query
           description: |
@@ -100,6 +105,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Text'
         - $ref: '#/components/parameters/Tag'
+        - $ref: '#/components/parameters/TagMatch'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -134,9 +140,15 @@ components:
     Tag:
       name: tag
       in: query
-      description: Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein.
-      schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+      description: Tagkennung, wiederholbar (höchstens 10, sonst `tag.invalid`); wie sie wirkt, sagt `tagMatch`.
+      schema: {type: array, items: {type: string, format: uuid}, maxItems: 10}
       explode: true
+    TagMatch:
+      name: tagMatch
+      in: query
+      description: |
+        `all`, `any` und `none` verlangen mindestens einen Tag, `untagged` keinen; sonst 400 `tagMatch.invalid`.
+      schema: {type: string, enum: [all, any, none, untagged], default: all}
     Limit:
       name: limit
       in: query

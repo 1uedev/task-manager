@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import taskmanager.appearance.MailTemplates;
 import taskmanager.helpdesk.internal.Contact;
 import taskmanager.helpdesk.internal.Customer;
 import taskmanager.helpdesk.internal.Message;
@@ -69,14 +70,15 @@ class TicketCustomerController {
     }
 
     record ViewBody(List<String> readable, List<String> writable, NamedBody customer, ContactBody contact, List<MailBody> mails,
-            List<ReplyBody> replies, boolean replyAllowed) {
+            List<ReplyBody> replies, boolean replyAllowed, boolean portalAnswerAllowed) {
         static ViewBody of(TicketCustomerService.View view) {
             boolean mails = view.readable().contains("mail");
             return new ViewBody(view.readable().stream().sorted().toList(), view.writable().stream().sorted().toList(),
                 view.customer() == null ? null : new NamedBody(view.customer().id(), view.customer().name()),
                 view.contact() == null ? null : ContactBody.of(view.contact()),
                 mails ? view.mails().stream().map(m -> MailBody.of(m, view.newAnswers())).toList() : null,
-                mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed());
+                mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed(),
+                view.portalAnswerAllowed());
         }
     }
 
@@ -129,6 +131,27 @@ class TicketCustomerController {
         ReplyService.Compose compose = Requests.retrying(() -> replies.compose(actor, projectId, number));
         return new ComposeBody(compose.mailboxes().stream().map(m -> new SenderBody(m.id(), m.name(), m.address())).toList(),
             compose.contactId(), compose.contactName(), compose.recipients(), compose.subject(), compose.suggestedMailbox());
+    }
+
+    record PartsBody(String name, String accentColor, boolean logo, String greeting, String body, String signature, String footer) {
+    }
+
+    record PreviewBody(String language, String text, String html, PartsBody parts) {
+    }
+
+    /**
+     * The finished mail of a reply as the confirmation would send it now (TASK-082): with the same checks, in the language of
+     * the contact and the template valid now; nothing is written.
+     */
+    @PostMapping("/reply/preview")
+    PreviewBody preview(@PathVariable UUID projectId, @PathVariable long number, @RequestBody(required = false) ReplyRequest body) {
+        AccessContext actor = requests.actor();
+        ReplyRequest request = body == null ? new ReplyRequest(null, null, null, null) : body;
+        MailTemplates.RenderedMail mail = Requests.retrying(() -> replies.preview(actor, projectId, number, request.mailboxId(), request.to(),
+            request.subject(), request.body()));
+        MailTemplates.Parts p = mail.parts();
+        return new PreviewBody(mail.language(), mail.text(), mail.html(),
+            new PartsBody(p.name(), p.accentColor(), p.logo(), p.greeting(), p.body(), p.signature(), p.footer()));
     }
 
     /** Confirms a reply; it is sent in the background (TASK-058). */

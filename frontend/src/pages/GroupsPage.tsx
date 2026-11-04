@@ -140,11 +140,13 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'helpdesk.manage': 'right.helpdesk.manage',
   'helpdesk.reply': 'right.helpdesk.reply',
   'helpdesk.review': 'right.helpdesk.review',
+  'portal.answer': 'right.portal.answer',
   'jobs.manage': 'right.jobs.manage',
   'permissions.audit.read': 'right.permissions.audit.read',
   'permissions.manage': 'right.permissions.manage',
   'projects.manage': 'right.projects.manage',
   'session_duration.manage': 'right.session_duration.manage',
+  'sla.manage': 'right.sla.manage',
   'project.manage': 'right.project.manage',
   'project.read': 'right.project.read',
   'tag.create': 'right.tag.create',
@@ -156,7 +158,7 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags', attachments: 'field.attachments',
-  customer: 'field.customer', contact: 'field.contact', mail: 'field.mail',
+  customer: 'field.customer', contact: 'field.contact', mail: 'field.mail', priority: 'field.priority',
 };
 
 type GroupAnswer = Promise<Result<GroupDetail | 'gone'>>;

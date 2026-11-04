@@ -22,7 +22,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,11 +58,23 @@ class AttachmentController {
         this.contexts = contexts;
     }
 
-    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy) {
+    /**
+     * An attachment; {@code customerCurrent} says whether the current customer of the ticket sees it (TASK-079): a file visible
+     * to a former customer is not. Right after an upload or a switch the organization written is the current one.
+     */
+    record AttachmentBody(UUID id, String name, long size, String sha256, Instant uploadedAt, UUID uploadedBy, String visibility,
+            boolean customerCurrent) {
         static AttachmentBody of(Attachment attachment) {
-            return new AttachmentBody(attachment.id(), attachment.name(), attachment.size(), attachment.sha256(), attachment.uploadedAt(),
-                attachment.uploadedBy());
+            return of(attachment, attachment.organizationId());
         }
+
+        static AttachmentBody of(Attachment attachment, UUID currentCustomer) {
+            return new AttachmentBody(attachment.id(), attachment.name(), attachment.size(), attachment.sha256(), attachment.uploadedAt(),
+                attachment.uploadedBy(), attachment.visibility(), attachment.visibleTo(currentCustomer));
+        }
+    }
+
+    record VisibilityRequest(String visibility) {
     }
 
     /** The header that names the largest accepted file, so an interface shows the limit the server is set to (review F8 of TASK-051). */
@@ -69,7 +83,8 @@ class AttachmentController {
     @GetMapping
     ResponseEntity<List<AttachmentBody>> list(@PathVariable UUID projectId, @PathVariable long number) {
         AccessContext actor = actor();
-        List<AttachmentBody> body = retrying(() -> attachments.list(actor, projectId, number)).stream().map(AttachmentBody::of).toList();
+        AttachmentService.Listing listing = retrying(() -> attachments.list(actor, projectId, number));
+        List<AttachmentBody> body = listing.items().stream().map(a -> AttachmentBody.of(a, listing.customer())).toList();
         return ResponseEntity.ok().header(MAX_BYTES_HEADER, Long.toString(attachments.maxBytes())).body(body);
     }
 
@@ -107,6 +122,15 @@ class AttachmentController {
             .body(new InputStreamResource(download.content()));
     }
 
+    /** Makes the attachment internal or visible to the customer (TASK-076); needs what removing needs. */
+    @PatchMapping("/{id}")
+    AttachmentBody setVisibility(@PathVariable UUID projectId, @PathVariable long number, @PathVariable UUID id,
+            @RequestBody(required = false) VisibilityRequest body) {
+        AccessContext actor = actor();
+        String visibility = body == null ? null : body.visibility();
+        return AttachmentBody.of(retrying(() -> attachments.setVisibility(actor, projectId, number, id, visibility)));
+    }
+
     @DeleteMapping("/{id}")
     ResponseEntity<Void> remove(@PathVariable UUID projectId, @PathVariable long number, @PathVariable UUID id) {
         AccessContext actor = actor();
@@ -118,7 +142,7 @@ class AttachmentController {
     }
 
     /** The permissions context of a complete login; a login that still has to change its password is refused. */
-    private AccessContext actor() {
+    AccessContext actor() {
         var request = identity.require();
         if (request.level() != AuthenticationLevel.FULL) {
             throw ApiProblemException.of(403, "auth.password_change_required");
@@ -127,7 +151,7 @@ class AttachmentController {
     }
 
     /** Runs one transaction of the service and answers a lock timeout or a deadlock as a retryable 503. */
-    private static <T> T retrying(Supplier<T> call) {
+    static <T> T retrying(Supplier<T> call) {
         try {
             return call.get();
         } catch (DataAccessException failure) {

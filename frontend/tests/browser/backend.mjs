@@ -8,9 +8,11 @@ const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
 const TAG_FIELD = 'tags';
 const ATTACHMENT_FIELD = 'attachments';
 const HELPDESK_FIELDS = ['customer', 'contact', 'mail'];
+const PRIORITY_FIELD = 'priority';
+const PRIORITIES = ['low', 'normal', 'high', 'critical'];
 // The fixed actor of tickets the mail intake opens (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage'];
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
 const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
@@ -24,12 +26,77 @@ const CONFIGURATION = {
 let counter = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
 const now = () => new Date(Date.UTC(2026, 9, 21, 8, 0, counter)).toISOString();
+// A tag as stored (TASK-028, TASK-072); `mergedInto` names the identifier of the tag that took its assignments.
+export const newTag = (name, projectId, by, extra = {}) => ({ id: uuid(), name, catalog: projectId === null ? 'company' : 'project', projectId, description: null,
+  color: null, archived: false, mergedInto: null, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id,
+  visibility: 'internal', organizationId: null, ...extra });
+const TAG_LIMIT = 30;
 
 export const ANNA = { username: 'anna', password: 'Anna Passwort 2026', displayName: 'Anna Admin' };
 export const BEN = { username: 'ben', password: 'Ben Passwort 2026', displayName: 'Ben Leser' };
 export const NORA = { username: 'nora', password: 'EinmalNora0001', displayName: 'Nora Neu' };
 
-export function createBackend({ accent = '#f97316', anonymousAppearance = false } = {}) {
+// The mail template "Antwort an Kunden" as the server sets it (TASK-082): plain text parts with placeholders, filled and
+// escaped for the HTML. The browser tests read the parts and the plain text; the HTML follows the same rules.
+const PLACEHOLDERS = ['company.name', 'contact.name', 'ticket.number', 'ticket.title', 'sender.name', 'mailbox.address', 'portal.url'];
+const BUILT_IN = {
+  de: { greeting: 'Guten Tag {{contact.name}},', signature: 'Viele Grüße\n{{sender.name}}\n{{company.name}}',
+    footer: 'Ticket {{ticket.number}}: {{ticket.title}}\nIhre Anfragen im Kundenportal: {{portal.url}}' },
+  en: { greeting: 'Hello {{contact.name}},', signature: 'Kind regards\n{{sender.name}}\n{{company.name}}',
+    footer: 'Ticket {{ticket.number}}: {{ticket.title}}\nYour requests in the customer portal: {{portal.url}}' },
+};
+const PLACEHOLDER_TOKEN = /\{\{([^{}]{0,60})\}\}/g;
+
+function unknownPlaceholders(text) {
+  const unknown = [...text.matchAll(PLACEHOLDER_TOKEN)].map((match) => match[1]).filter((name) => !PLACEHOLDERS.includes(name)).map((name) => `{{${name}}}`);
+  const rest = text.replace(PLACEHOLDER_TOKEN, ' ');
+  const open = rest.indexOf('{{');
+  const close = rest.indexOf('}}');
+  if (open >= 0) unknown.push(rest.slice(open, open + 30).trim());
+  else if (close >= 0) unknown.push(rest.slice(Math.max(0, close - 28), close + 2).trim());
+  return [...new Set(unknown)];
+}
+
+const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const trimLines = (lines) => {
+  let from = 0;
+  let to = lines.length;
+  while (from < to && lines[from].trim() === '') from += 1;
+  while (to > from && lines[to - 1].trim() === '') to -= 1;
+  return lines.slice(from, to).map((line) => line.trimEnd());
+};
+
+function fillTemplate(template, values, html) {
+  const lines = [];
+  for (const line of String(template).replace(/\r\n?/g, '\n').split('\n')) {
+    if (!values['portal.url'] && line.includes('{{portal.url}}')) continue;
+    let out = '';
+    let last = 0;
+    for (const match of line.matchAll(PLACEHOLDER_TOKEN)) {
+      out += html ? escapeHtml(line.slice(last, match.index)) : line.slice(last, match.index);
+      const value = String(values[match[1]] ?? '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').trim();
+      out += html ? escapeHtml(value) : value;
+      last = match.index + match[0].length;
+    }
+    out += html ? escapeHtml(line.slice(last)) : line.slice(last);
+    lines.push(out);
+  }
+  return trimLines(lines).join(html ? '<br>\n' : '\n');
+}
+
+function renderMail(code, texts, address, name, color, logo, sample) {
+  const values = { 'company.name': name, 'contact.name': sample.contact, 'ticket.number': sample.number, 'ticket.title': sample.title,
+    'sender.name': sample.sender, 'mailbox.address': sample.mailbox, 'portal.url': address ?? '' };
+  const parts = { name, accentColor: color, logo, greeting: fillTemplate(texts.greeting, values, false),
+    body: trimLines(sample.body.replace(/\r\n?/g, '\n').split('\n')).join('\n'), signature: fillTemplate(texts.signature, values, false),
+    footer: fillTemplate(texts.footer, values, false) };
+  const sections = [parts.greeting, parts.body, parts.signature].filter((part, index) => index === 1 || part !== '');
+  const text = `${sections.join('\n\n')}${parts.footer === '' ? '\n' : `\n\n-- \n${parts.footer}\n`}`;
+  const html = `<!DOCTYPE html>\n<html lang="${code}"><body><p>${fillTemplate(texts.greeting, values, true)}</p><p>${escapeHtml(parts.body).replace(/\n/g, '<br>\n')}</p></body></html>`;
+  return { language: code, text, html, parts };
+}
+
+export function createBackend({ accent = '#f97316', anonymousAppearance = false, brandName = 'Task Manager' } = {}) {
   const accounts = [ANNA, BEN, NORA].map((item) => ({
     id: uuid(), username: item.username, displayName: item.displayName, password: item.password, active: true,
     passwordChangeRequired: item === NORA, createdAt: now(),
@@ -47,6 +114,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     history: [],
     tags: [],
     ticketTags: [],
+    projectTags: [],
     // The attachments of tickets (TASK-051); `limit` is the largest file the stand in accepts, small so that tests can reach it.
     attachments: [],
     attachmentLimit: 1000,
@@ -56,7 +124,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       { id: uuid(), name: 'Lesen', members: [ben.id, nora.id], actions: ['project.read', 'ticket.read'].map((action) => ({ action, projectId: null })),
         fields: ['title', 'type', 'status', 'assignee', TAG_FIELD, ATTACHMENT_FIELD].map((field) => ({ resourceType: 'ticket', field, projectId: null, operation: 'read', effect: 'allow' })) },
     ],
-    appearance: { version: 3, accent, logo: null },
+    appearance: { version: 3, accent, name: brandName, logo: null },
+    // The mail template of TASK-082: null for a language means the built-in one.
+    mailTemplate: { version: 1, applicationUrl: null, de: null, en: null },
     // The LDAP connection (TASK-046): null until stored; `directoryDown` makes a sign in of an unknown name fail like an outage.
     ldap: null,
     ldapBindPasswordSet: true,
@@ -69,7 +139,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     activeWorkers: 1,
     jobConflict: false,
     // The helpdesk (TASK-057): customers, contacts, mailboxes with their status, mails and the customer of each ticket.
-    helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map() },
+    // Service deadlines (TASK-068): calendars, rules and the priority per ticket; `cycles` holds prepared cycles per ticket.
+    sla: { calendars: [], rules: [], priorities: new Map(), cycles: new Map() },
+    helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
+      // The portal conversation (TASK-076): posts of portal accounts and of the support, and when an account last opened a request
+      // with the highest position of an answer of the support it acknowledged (TASK-080); `positions` counts the answers per ticket.
+      posts: [], seen: new Map(), positions: new Map() },
     requests: [],
   };
 
@@ -84,11 +159,13 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   };
   addTicket('Anmeldung prüfen', 'Ablauf mit synthetischen Konten.', anna);
   addTicket('Suche nach Tags', 'Nur für Berechtigte sichtbar.', anna);
-  state.tags.push({ id: uuid(), name: 'Sicherheit', catalog: 'project', projectId: project.id, archived: false, version: 1, createdAt: now(), createdBy: anna.id, updatedAt: now(), updatedBy: anna.id });
+  state.tags.push(newTag('Sicherheit', project.id, anna));
 
   // ------------------------------------------------------------------ rights
   const groupsOf = (account) => state.groups.filter((group) => group.members.includes(account.id));
-  const companyRights = (account) => [...new Set(groupsOf(account).flatMap((group) => group.actions.filter((rule) => rule.projectId === null && COMPANY_ACTIONS.includes(rule.action)).map((rule) => rule.action)))];
+  // tags.manage is a company right for the company catalog and, with the membership, a project action for its catalog.
+  const companyRights = (account) => [...new Set(groupsOf(account).flatMap((group) => group.actions.filter((rule) => rule.projectId === null
+    && (COMPANY_ACTIONS.includes(rule.action) || rule.action === 'tags.manage')).map((rule) => rule.action)))];
   const isMember = (account, projectId) => (state.members.get(projectId) ?? []).some((member) => member.accountId === account.id);
   const may = (account, action, projectId) => {
     if (COMPANY_ACTIONS.includes(action)) return companyRights(account).includes(action);
@@ -102,6 +179,170 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   const readable = (account, projectId) => FIELDS.filter((name) => field(account, projectId, name, 'read'));
   const writable = (account, projectId) => may(account, 'ticket.edit', projectId) ? FIELDS.filter((name) => field(account, projectId, name, 'read') && field(account, projectId, name, 'write')) : [];
   const projectVisible = (account, item) => may(account, 'projects.manage') || (isMember(account, item.id) && PROJECT_ACTIONS.some((action) => may(account, action, item.id)));
+
+  // ------------------------------------------------------------------ tags (TASK-072)
+  const manageTags = (account, projectId) => (projectId === null ? companyRights(account).includes('tags.manage') : may(account, 'tags.manage', projectId));
+  const createTags = (account, projectId) => manageTags(account, projectId)
+    || (projectId === null ? groupsOf(account).some((group) => group.actions.some((rule) => rule.action === 'tag.create' && rule.projectId === null)) : may(account, 'tag.create', projectId));
+  const catalogVisible = (account, projectId) => ['project.read', 'project.manage', 'ticket.read', 'tag.create', 'tags.manage'].some((action) => may(account, action, projectId));
+  // As the search (TASK-073): the given tags filter after tagMatch; without the read rule for tags no tag filter matches.
+  const tagFilterMatches = (account, ticket, query) => {
+    const match = query.get('tagMatch') ?? 'all';
+    const wanted = query.getAll('tag');
+    if (match === 'all' && wanted.length === 0) return true;
+    if (!field(account, ticket.projectId, TAG_FIELD, 'read')) return false;
+    const held = new Set(state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => entry.tag));
+    if (match === 'untagged') return held.size === 0;
+    if (match === 'any') return wanted.some((id) => held.has(id));
+    if (match === 'none') return !wanted.some((id) => held.has(id));
+    return wanted.every((id) => held.has(id));
+  };
+  // As POST /tags/bulk (TASK-073): tags checked first, then every ticket for itself; keys only for readable tickets.
+  const bulkTags = (account, body) => {
+    const add = body?.action === 'add';
+    if (!add && body?.action !== 'remove') return problem(400, 'request.invalid', { violations: ['action.invalid'] });
+    const chosen = [];
+    for (const id of new Set(body.tags ?? [])) {
+      const tag = state.tags.find((candidate) => candidate.id === id);
+      if (!tag || (tag.projectId !== null && !catalogVisible(account, tag.projectId))) return problem(404, 'tag.not_found');
+      if (tag.mergedInto) return problem(409, 'tag.merged');
+      if (add && tag.archived) return problem(409, 'tag.archived');
+      chosen.push(tag);
+    }
+    const result = { changed: 0, unchanged: 0, notMatching: 0, refused: 0, items: [] };
+    for (const id of new Set(body.tickets ?? [])) {
+      const ticket = state.tickets.find((candidate) => candidate.id === id);
+      const readable = ticket !== undefined && may(account, 'ticket.read', ticket.projectId);
+      let outcome;
+      let code = null;
+      if (!ticket || !may(account, 'ticket.edit', ticket.projectId) || !field(account, ticket.projectId, TAG_FIELD, 'write')) {
+        outcome = 'refused';
+        code = ticket && readable ? 'auth.forbidden' : null;
+      } else {
+        const fitting = chosen.filter((tag) => tag.projectId === null || tag.projectId === ticket.projectId);
+        const held = state.ticketTags.filter((entry) => entry.ticket === ticket.id);
+        const missing = fitting.filter((tag) => !held.some((entry) => entry.tag === tag.id));
+        const present = fitting.filter((tag) => held.some((entry) => entry.tag === tag.id));
+        if (fitting.length === 0) outcome = 'not_matching';
+        else if (add && missing.length > 0 && held.length + missing.length > TAG_LIMIT) {
+          outcome = 'refused';
+          code = 'tag.limit_reached';
+        } else if (add ? missing.length === 0 : present.length === 0) outcome = 'unchanged';
+        else {
+          outcome = 'changed';
+          for (const tag of add ? missing : present) {
+            if (add) state.ticketTags.push({ ticket: ticket.id, tag: tag.id });
+            else state.ticketTags.splice(state.ticketTags.findIndex((entry) => entry.ticket === ticket.id && entry.tag === tag.id), 1);
+            state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: TAG_FIELD, from: add ? null : tag.id, to: add ? tag.id : null }] });
+          }
+        }
+      }
+      result[{ changed: 'changed', unchanged: 'unchanged', not_matching: 'notMatching', refused: 'refused' }[outcome]] += 1;
+      result.items.push({ ticketId: id, key: readable ? ticket.key : null, outcome, code: readable ? code : null });
+    }
+    return ok(result);
+  };
+  const tagKey = (name) => name.trim().replace(/\s+/g, ' ').toUpperCase().toLowerCase();
+  const tagView = (account, tag, usage = false) => {
+    const target = tag.mergedInto === null ? null : state.tags.find((entry) => entry.id === tag.mergedInto);
+    const ticketCount = state.ticketTags.filter((entry) => entry.tag === tag.id).filter((entry) => {
+      const ticket = state.tickets.find((item) => item.id === entry.ticket);
+      return ticket !== undefined && may(account, 'ticket.read', ticket.projectId) && field(account, ticket.projectId, TAG_FIELD, 'read');
+    }).length;
+    const projectCount = state.projectTags.filter((entry) => entry.tag === tag.id)
+      .filter((entry) => projectVisible(account, state.projects.find((item) => item.id === entry.project))).length;
+    return { ...tag, mergedInto: target ? { id: target.id, name: target.name } : null, manageable: manageTags(account, tag.projectId),
+      usage: usage ? { tickets: ticketCount, projects: projectCount } : null };
+  };
+  const catalogList = (account, projectId, query) => {
+    const q = tagKey(query.get('q') ?? '');
+    const after = query.get('after');
+    const afterId = query.get('afterId');
+    const limit = Number(query.get('limit') ?? 100);
+    // Ordered by name and identifier like the server; the cursor names both (TASK-079, F4).
+    const order = (a, b) => (tagKey(a.name) < tagKey(b.name) ? -1 : tagKey(a.name) > tagKey(b.name) ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const beyond = (tag) => after === null || tagKey(tag.name) > tagKey(after) || (afterId !== null && tagKey(tag.name) === tagKey(after) && tag.id > afterId);
+    return state.tags.filter((tag) => tag.projectId === projectId && tag.mergedInto === null && (query.get('archived') === 'true' || !tag.archived)
+      && (q === '' || tagKey(tag.name).includes(q)) && beyond(tag))
+      .sort(order).slice(0, limit).map((tag) => tagView(account, tag, query.get('usage') === 'true'));
+  };
+  // The limit of the suggestions as the server reads it: 1 to 20, 20 without one (TASK-079, H3).
+  const suggestionLimit = (query) => Math.min(20, Math.max(1, Number(query.get('limit') ?? 20) || 20));
+  const suggestions = (account, projectId, query) => {
+    const q = tagKey(query.get('q') ?? '');
+    const rank = (tag) => (q === '' || tagKey(tag.name).startsWith(q) ? 0 : tagKey(tag.name).includes(` ${q}`) ? 1 : 2);
+    const items = state.tags.filter((tag) => (tag.projectId === null || tag.projectId === projectId) && tag.mergedInto === null && !tag.archived
+      && (q === '' || tagKey(tag.name).includes(q)))
+      .sort((a, b) => rank(a) - rank(b) || tagKey(a.name).localeCompare(tagKey(b.name))).slice(0, suggestionLimit(query)).map((tag) => tagView(account, tag));
+    return { items, createCompany: createTags(account, null), createProject: projectId !== null && createTags(account, projectId) };
+  };
+  // Changes and merges of one catalog, as contracts/tags.openapi.yaml describes them.
+  const catalogTagRoute = (account, projectId, method, rest, query, headers, body) => {
+    const [, id, action] = rest.split('/');
+    const tag = state.tags.find((entry) => entry.id === id && entry.projectId === projectId);
+    if (!tag) return problem(404, 'tag.not_found');
+    if (method === 'GET' && action === undefined) return ok(tagView(account, tag), `"${tag.version}"`);
+    if (!manageTags(account, projectId)) return problem(403, 'auth.forbidden');
+    if (action === 'merge') {
+      const into = method === 'GET' ? query.get('into') : body?.into;
+      const target = state.tags.find((entry) => entry.id === into && entry.projectId === projectId);
+      if (into === id) return problem(400, 'request.invalid', { violations: ['into.invalid'] });
+      if (!target) return problem(404, 'tag.not_found');
+      if (tag.mergedInto !== null || target.mergedInto !== null) return problem(409, 'tag.merged');
+      if (target.archived) return problem(409, 'tag.archived');
+      if (method === 'GET') return ok({ source: tagView(account, tag, true), target: tagView(account, target, true), usage: tagView(account, tag, true).usage });
+      if (!headers['if-match']) return problem(428, 'tag.precondition_required');
+      if (headers['if-match'] !== `"${tag.version}"`) return problem(412, 'tag.version_conflict');
+      for (const list of [state.ticketTags, state.projectTags]) {
+        const owner = list === state.ticketTags ? 'ticket' : 'project';
+        for (const entry of list.filter((item) => item.tag === tag.id)) {
+          if (list.some((item) => item[owner] === entry[owner] && item.tag === target.id)) list.splice(list.indexOf(entry), 1);
+          else entry.tag = target.id;
+        }
+      }
+      Object.assign(tag, { mergedInto: target.id, version: tag.version + 1 });
+      for (const other of state.tags.filter((entry) => entry.mergedInto === tag.id)) other.mergedInto = target.id;
+      return ok(tagView(account, target), `"${target.version}"`);
+    }
+    if (method !== 'PATCH') return problem(405, 'request.method');
+    if (!headers['if-match']) return problem(428, 'tag.precondition_required');
+    if (headers['if-match'] !== `"${tag.version}"`) return problem(412, 'tag.version_conflict');
+    if (tag.mergedInto !== null) return problem(409, 'tag.merged');
+    if (body.color !== undefined && body.color !== null && !['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'teal', 'cyan', 'blue', 'indigo', 'violet', 'pink'].includes(body.color)) {
+      return problem(400, 'request.invalid', { violations: ['color.invalid'] });
+    }
+    if (typeof body.description === 'string' && body.description.trim().length > 500) return problem(400, 'request.invalid', { violations: ['description.invalid'] });
+    if (body.visibility !== undefined && !['internal', 'customer'].includes(body.visibility)) return problem(400, 'request.invalid', { violations: ['visibility.invalid'] });
+    // Tags in the portal (TASK-077): a tag of one organization becomes one for every customer when released or made internal.
+    const visibility = body.visibility ?? tag.visibility;
+    const organizationId = body.forAllCustomers === true || visibility === 'internal' ? null : tag.organizationId;
+    const name = body.name !== undefined ? body.name : tag.name;
+    if ((body.name !== undefined || organizationId !== tag.organizationId) && state.tags.some((entry) => entry !== tag && entry.projectId === projectId
+      && entry.mergedInto === null && entry.organizationId === organizationId && tagKey(entry.name) === tagKey(name))) {
+      return problem(409, 'tag.name_taken');
+    }
+    const next = { ...tag, ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.archived !== undefined ? { archived: body.archived } : {}),
+      ...(body.description !== undefined ? { description: body.description === null || body.description.trim() === '' ? null : body.description.trim() } : {}),
+      ...(body.color !== undefined ? { color: body.color } : {}), visibility, organizationId };
+    const changed = ['name', 'archived', 'description', 'color', 'visibility', 'organizationId'].some((key) => next[key] !== tag[key]);
+    if (changed) Object.assign(tag, next, { version: tag.version + 1, updatedAt: now(), updatedBy: account.id });
+    return ok(tagView(account, tag), `"${tag.version}"`);
+  };
+  // Assigning a tag by identifier or by name, creating a missing name when allowed; at most 30 tags per object.
+  const resolveTag = (account, projectId, body, companyOnly) => {
+    if (body.tagId !== undefined) {
+      const tag = state.tags.find((entry) => entry.id === body.tagId && (entry.projectId === null || (!companyOnly && entry.projectId === projectId)));
+      if (!tag) return { problem: problem(404, 'tag.not_found') };
+      if (tag.mergedInto !== null) return { problem: problem(409, 'tag.merged') };
+      if (tag.archived) return { problem: problem(409, 'tag.archived') };
+      return { tag };
+    }
+    const catalog = companyOnly || body.catalog === 'company' ? null : projectId;
+    const existing = state.tags.find((entry) => entry.projectId === catalog && entry.mergedInto === null && entry.organizationId === null && tagKey(entry.name) === tagKey(body.name));
+    if (existing) return existing.archived ? { problem: problem(409, 'tag.archived') } : { tag: existing };
+    if (!createTags(account, catalog)) return { problem: problem(403, 'auth.forbidden') };
+    return { tag: newTag(body.name.trim(), catalog, account), created: true };
+  };
 
   const configurationOf = (projectId) => state.configurations.get(projectId).configuration;
   const customFieldsOf = (projectId) => configurationOf(projectId).customFields ?? [];
@@ -123,7 +364,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
   // An account as the administration sees it (TASK-045): the state of the one time password and a running waiting time.
-  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', ...rest,
+  const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', kind: 'internal', organizationId: null, contactId: null, ...rest,
     oneTimePasswordState: rest.passwordChangeRequired ? 'open' : 'none', oneTimePasswordExpiresAt: rest.passwordChangeRequired ? '2026-10-24T08:00:00Z' : null,
     loginDelayedUntil: delayedUntil ?? null });
   const logAccount = (actor, event, target) => state.accountAudit.push({ id: state.accountAudit.length + 1, occurredAt: now(), actor: actor.username, event, accountId: target?.id ?? null, detail: null });
@@ -147,6 +388,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       session.account = null;
       return empty();
     }
+    // What the login page reads without a session (TASK-081).
+    if (p === '/appearance/public' && method === 'GET') {
+      if (state.publicAppearanceDown) return problem(503, 'server.unavailable');
+      return ok({ name: state.appearance.name, accentColor: state.appearance.accent, logoUrl: state.appearance.logo ? '/api/v1/appearance/public/logo' : null });
+    }
+    if (p === '/appearance/public/logo' && method === 'GET') {
+      return state.appearance.logo ? { status: 200, raw: PNG, type: 'image/png' } : problem(404, 'appearance.logo_not_found');
+    }
     const account = session.account;
     if (!account || !account.active) {
       session.account = null;
@@ -161,14 +410,49 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     }
     if (account.passwordChangeRequired) return problem(403, 'auth.password_change_required');
 
+    if (p.startsWith('/appearance/mail-template')) {
+      if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
+      const template = state.mailTemplate;
+      if (p === '/appearance/mail-template' && method === 'GET') return ok(mailTemplateBody(), `"${template.version}"`);
+      if (p === '/appearance/mail-template/preview' && method === 'POST') {
+        if (body.language !== 'de' && body.language !== 'en') return problem(400, 'mail_template.languages_missing');
+        const code = body.language;
+        const refused = checkTexts(code, body.texts) ?? checkAddress(body.applicationUrl);
+        if (refused) return refused;
+        const sample = code === 'en'
+          ? { contact: 'Alex Example', number: 'HELP-42', title: 'Printer in hall 2 does not start', sender: 'Sam Support', mailbox: 'support@example.com',
+            body: 'Thank you for your message.\nWe have restarted the printer; it works again.\nPlease let us know if anything is still wrong.' }
+          : { contact: 'Erika Beispiel', number: 'HELP-42', title: 'Drucker in Halle 2 startet nicht', sender: 'Max Support', mailbox: 'support@example.com',
+            body: 'Vielen Dank für Ihre Nachricht.\nWir haben den Drucker neu gestartet, er läuft wieder.\nBitte melden Sie sich, falls noch etwas nicht stimmt.' };
+        return ok(renderMail(code, body.texts, (body.applicationUrl?.trim().replace(/^https:/i, 'https:') || null), body.name ?? state.appearance.name,
+          (body.accentColor ?? state.appearance.accent).toLowerCase(), state.appearance.logo !== null, sample));
+      }
+      if (!headers['if-match']) return problem(428, 'mail_template.precondition_required');
+      if (headers['if-match'] !== `"${template.version}"`) return problem(412, 'mail_template.version_conflict');
+      if (p === '/appearance/mail-template' && method === 'PUT') {
+        if (!body.de || !body.en) return problem(400, 'mail_template.languages_missing');
+        const refused = checkAddress(body.applicationUrl) ?? checkTexts('de', body.de) ?? checkTexts('en', body.en);
+        if (refused) return refused;
+        Object.assign(template, { applicationUrl: (body.applicationUrl?.trim().replace(/^https:/i, 'https:') || null), de: { ...body.de }, en: { ...body.en }, version: template.version + 1 });
+        return ok(mailTemplateBody(), `"${template.version}"`);
+      }
+      if (p === '/appearance/mail-template' && method === 'DELETE') {
+        Object.assign(template, { de: null, en: null, version: template.version + 1 });
+        return ok(mailTemplateBody(), `"${template.version}"`);
+      }
+      return problem(404, 'resource.not_found');
+    }
     if (p === '/appearance' && method === 'GET') return ok(appearanceBody(), `"${state.appearance.version}"`);
     if (p.startsWith('/appearance')) {
       if (p === '/appearance/logo' && method === 'GET') return { status: 200, raw: PNG, type: 'image/png' };
       if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
       if (headers['if-match'] !== `"${state.appearance.version}"`) return problem(412, 'appearance.version_conflict');
       state.appearance.version += 1;
-      if (p === '/appearance') state.appearance.accent = body.accentColor;
-      else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
+      if (p === '/appearance' && method === 'DELETE') Object.assign(state.appearance, { accent: '#f97316', name: 'Task Manager', logo: null });
+      else if (p === '/appearance') {
+        if (body.accentColor !== undefined) state.appearance.accent = body.accentColor.toLowerCase();
+        if (body.name !== undefined) state.appearance.name = body.name.trim();
+      } else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
       else state.appearance.logo = null;
       return ok(appearanceBody(), `"${state.appearance.version}"`);
     }
@@ -196,7 +480,236 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         return ok({ ok: true, reason: null });
       }
     }
-    if (p === '/directory/accounts') return ok(state.accounts.map(({ id, username, displayName, active }) => ({ id, username, displayName, active })).sort((a, b) => a.username.localeCompare(b.username)));
+    // Portal accounts (TASK-075): one customer organization each, the group "Portal" and the projects released to the organization.
+    const portalOf = (item) => item.kind === 'portal';
+    if (p === '/portal/projects' && method === 'GET') {
+      if (!portalOf(account)) return problem(404, 'project.not_found');
+      return ok(state.projects.filter((item) => isMember(account, item.id)).map(({ id, key, name }) => ({ id, key, name,
+        ticketTypes: configurationOf(id).ticketTypes.filter((type) => type.portal === true).map((type) => ({ key: type.key, name: type.name })),
+        statuses: configurationOf(id).statuses.map((status) => ({ key: status.key, name: status.name, category: status.category })) })));
+    }
+    // The portal routes of a request (TASK-075, TASK-076); a request of another organization answers 404 like an unknown one.
+    const portalHd = state.helpdesk;
+    const ownTickets = (projectId) => state.tickets.filter((item) => item.projectId === projectId && portalHd.ticketCustomers.get(item.id)?.customerId === account.organizationId);
+    const portalFile = ({ id, name, size, uploadedAt }) => ({ id, name, size, uploadedAt });
+    // Tags in the portal (TASK-077): only tags visible to the organization; changing needs ticket.edit and the write rule for tags.
+    const visibleTag = (tag) => tag.visibility === 'customer' && tag.mergedInto === null && (tag.organizationId === null || tag.organizationId === account.organizationId);
+    const portalTag = ({ id, name, description, color, archived, organizationId }) => ({ id, name, description, color, archived, own: organizationId !== null });
+    const portalTagMatch = p.match(/^\/portal\/projects\/([^/]+)\/(?:tags|tickets\/(\d+)\/tags(?:\/([^/]+))?)$/);
+    if (portalTagMatch) {
+      const [, projectId, number, tagId] = portalTagMatch;
+      if (!portalOf(account) || !isMember(account, projectId) || !may(account, 'ticket.read', projectId) || !field(account, projectId, TAG_FIELD, 'read')) {
+        return problem(404, number === undefined ? 'project.not_found' : 'ticket.not_found');
+      }
+      const inProject = (tag) => visibleTag(tag) && (tag.projectId === null || tag.projectId === projectId);
+      if (number === undefined) {
+        const q = tagKey(query.get('q') ?? '');
+        return ok({ items: state.tags.filter((tag) => inProject(tag) && !tag.archived && (q === '' || tagKey(tag.name).includes(q)))
+          .sort((a, b) => tagKey(a.name).localeCompare(tagKey(b.name))).slice(0, suggestionLimit(query)).map(portalTag), create: may(account, 'tag.create', projectId) });
+      }
+      const ticket = ownTickets(projectId).find((item) => item.number === Number(number));
+      if (!ticket) return problem(404, 'ticket.not_found');
+      const writes = may(account, 'ticket.edit', projectId) && field(account, projectId, TAG_FIELD, 'write');
+      const held = () => state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => state.tags.find((tag) => tag.id === entry.tag));
+      if (method === 'GET') return ok({ items: held().filter(visibleTag).sort((a, b) => tagKey(a.name).localeCompare(tagKey(b.name))).map(portalTag), writable: writes });
+      if (!writes) return problem(403, 'auth.forbidden');
+      if (method === 'DELETE') {
+        const tag = state.tags.find((entry) => entry.id === tagId && inProject(entry));
+        if (!tag) return problem(404, 'tag.not_found');
+        const index = state.ticketTags.findIndex((entry) => entry.ticket === ticket.id && entry.tag === tag.id);
+        if (index >= 0) state.ticketTags.splice(index, 1);
+        return empty();
+      }
+      if (method !== 'POST') return problem(405, 'request.method');
+      if (Object.keys(body ?? {}).some((key) => !['tagId', 'name'].includes(key))) return problem(400, 'request.invalid', { violations: ['fields.unknown'] });
+      let tag = body.tagId !== undefined ? state.tags.find((entry) => entry.id === body.tagId && inProject(entry))
+        : state.tags.filter((entry) => inProject(entry) && tagKey(entry.name) === tagKey(body.name ?? ''))
+          .sort((a, b) => (a.organizationId === null) - (b.organizationId === null) || (a.projectId === null) - (b.projectId === null))[0];
+      if (!tag && body.tagId !== undefined) return problem(404, 'tag.not_found');
+      if (!tag) {
+        if (!body.name?.trim()) return problem(400, 'request.invalid', { violations: ['name.invalid'] });
+        if (!may(account, 'tag.create', projectId)) return problem(403, 'auth.forbidden');
+        // Like the server, a refused assignment leaves no new tag behind (TASK-079, H3): the limit is checked first.
+        if (held().length >= TAG_LIMIT) return problem(409, 'tag.limit_reached');
+        tag = newTag(body.name.trim(), projectId, account, { visibility: 'customer', organizationId: account.organizationId });
+        state.tags.push(tag);
+      }
+      if (tag.archived) return problem(409, 'tag.archived');
+      if (!held().some((entry) => entry.id === tag.id)) {
+        if (held().length >= TAG_LIMIT) return problem(409, 'tag.limit_reached');
+        state.ticketTags.push({ ticket: ticket.id, tag: tag.id });
+      }
+      return ok(portalTag(tag));
+    }
+    let portalMatch = p.match(/^\/portal\/projects\/([^/]+)\/(tickets|activity)(?:\/(\d+))?(\/[a-z]+)?(?:\/([^/]+))?$/);
+    if (portalMatch) {
+      const [, projectId, kind, number, tail, id] = portalMatch;
+      if (!portalOf(account) || !isMember(account, projectId) || !may(account, 'ticket.read', projectId)) return problem(404, 'project.not_found');
+      const own = ownTickets(projectId);
+      const view = (item) => ({ ...ticketView(account, item), writableFields: [] });
+      if (kind === 'activity' && method === 'GET') {
+        return ok(own.map((item) => {
+          const posts = portalHd.posts.filter((post) => post.ticketId === item.id && post.organizationId === account.organizationId);
+          const replies = portalHd.replies.filter((reply) => reply.ticketId === item.id && reply.state === 'sent' && reply.customerId === account.organizationId);
+          const answers = [...posts.filter((post) => post.authorKind === 'support').map((post) => ({ at: post.createdAt, position: post.position })),
+            ...replies.map((reply) => ({ at: reply.sentAt, position: reply.portalPosition }))];
+          const support = answers.map((answer) => answer.at).sort().at(-1) ?? null;
+          const highest = Math.max(0, ...answers.map((answer) => answer.position ?? 0));
+          const mark = portalHd.seen.get(`${account.id}:${item.id}`);
+          return { number: item.number, lastActivityAt: [...posts.map((post) => post.createdAt), ...replies.map((reply) => reply.sentAt)].sort().at(-1) ?? null,
+            lastSupportAt: support, seenAt: mark?.at ?? null, unread: highest > (mark?.position ?? 0) };
+        }));
+      }
+      if (number === undefined && method === 'GET') {
+        const configuration = configurationOf(projectId);
+        const category = (key) => configuration.statuses.find((status) => status.key === key)?.category;
+        const q = query.get('q')?.toLowerCase() ?? null;
+        return ok(own.filter((item) => !query.get('status') || item.values.status === query.get('status'))
+          .filter((item) => !query.get('state') || (query.get('state') === 'done') === (category(item.values.status) === 'done'))
+          .filter((item) => !q || [item.values.title, item.values.description].some((text) => text?.toLowerCase().includes(q)))
+          .filter((item) => !query.get('tag') || state.ticketTags.some((entry) => entry.ticket === item.id && entry.tag === query.get('tag')
+            && visibleTag(state.tags.find((tag) => tag.id === entry.tag))))
+          // Newest first and paged like the server: at most `limit` (default 50) below `before` (TASK-078, F6).
+          .filter((item) => !query.get('before') || item.number < Number(query.get('before')))
+          .sort((a, b) => b.number - a.number).slice(0, Number(query.get('limit') ?? 50)).map(view));
+      }
+      if (number === undefined && method === 'POST') {
+        if (!may(account, 'ticket.create', projectId)) return problem(403, 'auth.forbidden');
+        const configuration = configurationOf(projectId);
+        if (!configuration.ticketTypes.some((type) => type.portal === true && type.key === body.type)) return problem(400, 'request.invalid', { violations: ['type.not_offered'] });
+        if (!body.title?.trim()) return problem(400, 'request.invalid', { violations: ['title.invalid'] });
+        const item = state.projects.find((entry) => entry.id === projectId);
+        const next = state.tickets.filter((entry) => entry.projectId === projectId).length + 1;
+        const ticket = { id: uuid(), projectId, key: item.key, number: next, version: 1, configurationVersion: state.configurations.get(projectId).version,
+          values: { title: body.title.trim(), description: body.description ?? null, type: body.type, status: configuration.initialStatus, assignee: null }, custom: {},
+          createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+        state.tickets.push(ticket);
+        portalHd.ticketCustomers.set(ticket.id, { customerId: account.organizationId, contactId: account.contactId ?? null });
+        return { status: 201, body: { id: ticket.id, number: next } };
+      }
+      const ticket = own.find((item) => item.number === Number(number));
+      if (!ticket) return problem(404, 'ticket.not_found');
+      if (tail === undefined && method === 'GET') return ok(view(ticket));
+      if (tail === '/seen' && method === 'PUT') {
+        // The mark names the highest position of an answer of the support shown (TASK-080, F2); an answer not shown stays new,
+        // a mark beyond the answers counts as the last of them, an earlier mark changes nothing.
+        if (!Number.isInteger(body?.position) || body.position < 0) return problem(400, 'request.invalid', { violations: ['position.invalid'] });
+        const key = `${account.id}:${ticket.id}`;
+        const position = Math.min(body.position, portalHd.positions.get(ticket.id) ?? 0);
+        portalHd.seen.set(key, { position: Math.max(position, portalHd.seen.get(key)?.position ?? 0), at: now() });
+        return empty();
+      }
+      // Entries and files keep the organization they were written for (TASK-079, F1).
+      const files = state.attachments.filter((entry) => entry.ticket === ticket.id && !entry.removed && entry.visibility === 'customer'
+        && entry.organizationId === account.organizationId);
+      if (tail === '/conversation' && method === 'GET') {
+        const entries = [
+          ...portalHd.messages.filter((message) => message.ticketId === ticket.id && message.customerId === account.organizationId)
+            .map((message) => ({ kind: 'mail', id: message.id, at: message.receivedAt, author: 'customer', own: false, subject: message.subject, body: message.body, attachments: [], position: null })),
+          // A sent mail answer belongs to the organization its contact had when it was written (TASK-079, F1; TASK-080, H3).
+          ...portalHd.replies.filter((reply) => reply.ticketId === ticket.id && reply.state === 'sent' && reply.customerId === account.organizationId)
+            .map((reply) => ({ kind: 'reply', id: reply.id, at: reply.sentAt ?? reply.createdAt, author: 'support', own: false, subject: reply.subject, body: reply.body, attachments: [],
+              position: reply.portalPosition ?? null })),
+          ...portalHd.posts.filter((post) => post.ticketId === ticket.id && post.organizationId === account.organizationId).map((post) => ({ kind: 'post', id: post.id, at: post.createdAt, author: post.authorKind,
+            own: post.authorId === account.id, subject: null, body: post.body, attachments: files.filter((file) => post.attachmentIds.includes(file.id)).map(portalFile),
+            position: post.position ?? null })),
+        ].sort((a, b) => a.at.localeCompare(b.at));
+        return ok(entries);
+      }
+      if (tail === '/conversation' && method === 'POST') {
+        if (!may(account, 'portal.answer', projectId)) return problem(403, 'auth.forbidden');
+        if (!body.body?.trim()) return problem(400, 'request.invalid', { violations: ['body.invalid'] });
+        const ids = body.attachmentIds ?? [];
+        const taken = portalHd.posts.flatMap((post) => post.attachmentIds);
+        if (!ids.every((fileId) => files.some((file) => file.id === fileId && file.uploadedBy === account.id) && !taken.includes(fileId))) {
+          return problem(400, 'request.invalid', { violations: ['attachmentIds.invalid'] });
+        }
+        const post = { id: uuid(), ticketId: ticket.id, authorKind: 'customer', authorId: account.id, body: body.body.trim(), createdAt: now(), attachmentIds: ids,
+          organizationId: account.organizationId };
+        portalHd.posts.push(post);
+        return { status: 201, body: { kind: 'post', id: post.id, at: post.createdAt, author: 'customer', own: true, subject: null, body: post.body,
+          attachments: files.filter((file) => ids.includes(file.id)).map(portalFile), position: null } };
+      }
+      if (tail === '/attachments') {
+        if (!field(account, projectId, ATTACHMENT_FIELD, 'read')) return problem(404, 'ticket.not_found');
+        if (method === 'GET' && id === undefined) return { ...ok(files.map(portalFile)), headers: { 'X-Attachment-Max-Bytes': String(state.attachmentLimit) } };
+        if (method === 'GET') {
+          const found = files.find((entry) => entry.id === id && entry.content !== null);
+          return found ? { status: 200, raw: found.content, type: 'application/octet-stream', headers: { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(found.name)}` } } : problem(404, 'attachment.not_found');
+        }
+        if (method === 'POST') {
+          if (!may(account, 'portal.answer', projectId) || !field(account, projectId, ATTACHMENT_FIELD, 'write')) return problem(403, 'auth.forbidden');
+          const name = query.get('name');
+          const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
+          if (content.length === 0) return problem(400, 'attachment.empty');
+          if (content.length > state.attachmentLimit) return problem(413, 'attachment.too_large');
+          if (/\.(exe|bat|js|sh|html)$/i.test(name)) return problem(415, 'attachment.type_blocked');
+          const entry = { id: uuid(), ticket: ticket.id, name: name.split(/[\\/]/).pop(), size: content.length, sha256: 'a'.repeat(64), uploadedAt: now(), uploadedBy: account.id,
+            content, removed: false, visibility: 'customer', organizationId: account.organizationId };
+          state.attachments.push(entry);
+          return { status: 201, body: portalFile(entry) };
+        }
+      }
+      return problem(404, 'resource.not_found');
+    }
+    if (p.startsWith('/portal-accounts')) {
+      if (portalOf(account) || !may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
+      const released = (customer) => state.projects.filter((item) => customer.projects.includes(item.id)).map(({ id, key, name }) => ({ id, key, name }));
+      const portalView = (item) => ({ id: item.id, username: item.username, displayName: item.displayName, active: item.active, organizationId: item.organizationId,
+        contactId: item.contactId, projectIds: state.projects.filter((entry) => isMember(item, entry.id)).map((entry) => entry.id) });
+      const setProjects = (item, ids) => {
+        for (const entry of state.projects) {
+          const members = state.members.get(entry.id) ?? [];
+          const rest = members.filter((member) => member.accountId !== item.id);
+          state.members.set(entry.id, ids.includes(entry.id) ? [...rest, { accountId: item.id, addedAt: now() }] : rest);
+        }
+      };
+      const check = (customer, contactId, ids) => {
+        if (!customer) return problem(400, 'request.invalid', { violations: ['organizationId.unknown'] });
+        if (contactId && hd.contacts.find((entry) => entry.id === contactId)?.customerId !== customer.id) return problem(400, 'request.invalid', { violations: ['contactId.not_of_organization'] });
+        if (!(ids ?? []).every((id) => customer.projects.includes(id))) return problem(400, 'request.invalid', { violations: ['projectIds.not_released'] });
+        return null;
+      };
+      if (p === '/portal-accounts' && method === 'GET') return ok(state.accounts.filter(portalOf).map(portalView));
+      if (p === '/portal-accounts/options' && method === 'GET') {
+        return ok(hd.customers.map((customer) => ({ id: customer.id, name: customer.name, projects: released(customer),
+          contacts: hd.contacts.filter((entry) => entry.customerId === customer.id).map(({ id, name }) => ({ id, name })) })));
+      }
+      if (p === '/portal-accounts' && method === 'POST') {
+        const refused = check(hd.customers.find((entry) => entry.id === body.organizationId), body.contactId, body.projectIds);
+        if (refused) return refused;
+        if (state.accounts.some((item) => item.username === body.username)) return problem(409, 'account.username_taken');
+        let group = state.groups.find((entry) => entry.purpose === 'portal');
+        if (!group) {
+          group = { id: uuid(), name: 'Portal', purpose: 'portal', members: [], actions: ['ticket.read', 'ticket.create', 'portal.answer'].map((action) => ({ action, projectId: null })),
+            fields: ['title', 'description', 'type', 'status'].map((name) => ({ resourceType: 'ticket', field: name, projectId: null, operation: 'read', effect: 'allow' })) };
+          state.groups.push(group);
+        }
+        const created = { id: uuid(), username: body.username, displayName: body.displayName ?? null, password: `Einmal${counter}Portal`, active: true, passwordChangeRequired: true,
+          createdAt: now(), kind: 'portal', organizationId: body.organizationId, contactId: body.contactId ?? null };
+        state.accounts.push(created);
+        group.members.push(created.id);
+        setProjects(created, body.projectIds ?? []);
+        logAccount(account, 'account.created', created);
+        return ok({ account: portalView(created), oneTimePassword: created.password, oneTimePasswordExpiresAt: '2026-10-24T08:00:00Z' });
+      }
+      const single = p.match(/^\/portal-accounts\/([^/]+)$/);
+      if (single && method === 'PUT') {
+        const target = state.accounts.find((item) => item.id === single[1]);
+        if (!target) return problem(404, 'account.not_found');
+        if (!portalOf(target)) return problem(409, 'account.not_portal');
+        if (!Array.isArray(body?.projectIds)) return problem(400, 'request.invalid', { violations: ['projectIds.required'] });
+        const refused = check(hd.customers.find((entry) => entry.id === target.organizationId), body.contactId, body.projectIds);
+        if (refused) return refused;
+        target.contactId = body.contactId ?? null;
+        setProjects(target, body.projectIds ?? []);
+        return ok(portalView(target));
+      }
+    }
+    if (p === '/directory/accounts') {
+      if (portalOf(account)) return problem(403, 'auth.forbidden');
+      return ok(state.accounts.map(({ id, username, displayName, active, kind }) => ({ id, username, displayName, active, kind: kind ?? 'internal' })).sort((a, b) => a.username.localeCompare(b.username)));
+    }
     if (p.startsWith('/accounts')) {
       if (!may(account, 'accounts.manage')) return problem(403, 'auth.forbidden');
       if (p === '/accounts' && method === 'GET') return ok(state.accounts.map(accountView));
@@ -276,13 +789,36 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!item || !projectVisible(account, item)) return problem(404, 'project.not_found');
       return projectRoute(account, item, method, match[2] ?? '', query, headers, body);
     }
-    if (p === '/tags' && method === 'GET') return ok(state.tags.filter((tag) => tag.catalog === 'company'));
+    if (p === '/tags/bulk' && method === 'POST') return bulkTags(account, body);
+    if (p === '/tags' && method === 'GET') return ok(catalogList(account, null, query));
+    if (p === '/tags' && method === 'POST') {
+      if (!createTags(account, null)) return problem(403, 'auth.forbidden');
+      if (state.tags.some((tag) => tag.projectId === null && tag.mergedInto === null && tagKey(tag.name) === tagKey(body.name))) return problem(409, 'tag.name_taken');
+      const tag = newTag(body.name.trim(), null, account);
+      state.tags.push(tag);
+      return ok(tagView(account, tag), '"1"');
+    }
+    if (p === '/tags/suggestions' && method === 'GET') return ok(suggestions(account, null, query));
+    if (p.startsWith('/tags/')) return catalogTagRoute(account, null, method, p.slice('/tags'.length), query, headers, body);
     if (p === '/search/tickets') {
       const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
       const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
         .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
-        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields, tags: [] }));
-      return ok({ total: items.length, items });
+        .filter((ticket) => tagFilterMatches(account, ticket, query))
+        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields,
+          tags: field(account, ticket.projectId, TAG_FIELD, 'read') ? state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => {
+            const tag = state.tags.find((candidate) => candidate.id === entry.tag);
+            return { id: tag.id, name: tag.name };
+          }) : null }));
+      const tagMatch = query.get('tagMatch') ?? 'all';
+      const tags = query.getAll('tag');
+      if (!['all', 'any', 'none', 'untagged'].includes(tagMatch) || (tagMatch === 'untagged') !== (tags.length === 0) && query.has('tagMatch')) {
+        return problem(400, 'request.invalid', { violations: ['tagMatch.invalid'] });
+      }
+      if (tags.length > 10) return problem(400, 'request.invalid', { violations: ['tag.invalid'] });
+      const offset = Number(query.get('offset') ?? 0);
+      const limit = Number(query.get('limit') ?? 20);
+      return ok({ total: items.length, items: items.slice(offset, offset + limit) });
     }
     if (p === '/search/projects') {
       const q = (query.get('q') ?? '').toLowerCase();
@@ -318,6 +854,25 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok({ id: message.id, version: message.version }, `"${message.version}"`);
     }
     if (p.startsWith('/helpdesk')) return helpdeskRoute(account, method, p, headers, body);
+    if (p === '/sla/escalations' && method === 'GET') {
+      // As the backend (TASK-070): every full login; stages of the groups of the person on tickets they may read with the
+      // read rules of customer and priority, newest first, checked when reading.
+      const mine = new Set(groupsOf(account).map((group) => group.id));
+      const items = [];
+      for (const ticket of state.tickets) {
+        if (!may(account, 'ticket.read', ticket.projectId) || !field(account, ticket.projectId, 'customer', 'read') || !field(account, ticket.projectId, PRIORITY_FIELD, 'read')) continue;
+        const key = state.projects.find((entry) => entry.id === ticket.projectId)?.key ?? '';
+        for (const cycle of sla.cycles.get(ticket.id) ?? []) {
+          for (const stage of cycle.escalations ?? []) {
+            if (!mine.has(stage.groupId)) continue;
+            items.push({ projectId: ticket.projectId, projectKey: key, number: ticket.number, cycleNumber: cycle.number, cycleOutcome: cycle.outcome ?? null, ...stage });
+          }
+        }
+      }
+      // At most 200 visible entries, counted after the rights as on the server (TASK-071, F2).
+      return ok(items.sort((a, b) => b.reachedAt.localeCompare(a.reachedAt)).slice(0, 200));
+    }
+    if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -325,12 +880,43 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     if (rest === '' && method === 'GET') return ok(projectView(account, item), `"${item.version}"`);
     if (rest === '/members' && method === 'GET') return ok(state.members.get(item.id), `"${item.version}"`);
     if (rest.startsWith('/configuration/')) return configurationRoute(account, item, method, rest, headers, body);
-    if (rest === '/catalog/tags' && method === 'GET') return ok(state.tags.filter((tag) => tag.projectId === item.id));
+    if (rest.startsWith('/catalog/') && !catalogVisible(account, item.id)) return problem(404, 'project.not_found');
+    if (rest === '/catalog/tags' && method === 'GET') return ok(catalogList(account, item.id, query));
     if (rest === '/catalog/tags' && method === 'POST') {
-      if (!may(account, 'tag.create', item.id) && !may(account, 'tags.manage', item.id)) return problem(403, 'auth.forbidden');
-      const tag = { id: uuid(), name: body.name, catalog: 'project', projectId: item.id, archived: false, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      if (!createTags(account, item.id)) return problem(403, 'auth.forbidden');
+      if (state.tags.some((tag) => tag.projectId === item.id && tag.mergedInto === null && tag.organizationId === null && tagKey(tag.name) === tagKey(body.name))) return problem(409, 'tag.name_taken');
+      const tag = newTag(body.name.trim(), item.id, account);
       state.tags.push(tag);
-      return ok(tag);
+      return ok(tagView(account, tag), '"1"');
+    }
+    if (rest === '/catalog/suggestions' && method === 'GET') return ok(suggestions(account, item.id, query));
+    if (rest === '/catalog/lookup' && method === 'GET') {
+      const ids = query.getAll('id');
+      if (ids.length === 0 || ids.length > 100) return problem(400, 'request.invalid', { violations: ['ids.invalid'] });
+      return ok(state.tags.filter((tag) => ids.includes(tag.id) && (tag.projectId === null || tag.projectId === item.id)).map((tag) => tagView(account, tag)));
+    }
+    if (rest.startsWith('/catalog/tags/')) return catalogTagRoute(account, item.id, method, rest.slice('/catalog/tags'.length), query, headers, body);
+    if (rest.startsWith('/tags')) {
+      const view = projectView(account, item);
+      if (method === 'GET' && rest === '/tags') {
+        return ok(state.projectTags.filter((entry) => entry.project === item.id).map((entry) => tagView(account, state.tags.find((tag) => tag.id === entry.tag))));
+      }
+      if (!view.manageable) return problem(403, 'auth.forbidden');
+      if (method === 'POST' && rest === '/tags') {
+        const resolved = resolveTag(account, item.id, body, true);
+        if (resolved.problem) return resolved.problem;
+        const present = state.projectTags.some((entry) => entry.project === item.id && entry.tag === resolved.tag.id);
+        if (!present && state.projectTags.filter((entry) => entry.project === item.id).length >= TAG_LIMIT) return problem(409, 'tag.limit_reached');
+        if (resolved.created) state.tags.push(resolved.tag);
+        if (!present) state.projectTags.push({ project: item.id, tag: resolved.tag.id });
+        return empty();
+      }
+      if (method === 'DELETE') {
+        const tagId = rest.split('/')[2];
+        const index = state.projectTags.findIndex((entry) => entry.project === item.id && entry.tag === tagId);
+        if (index >= 0) state.projectTags.splice(index, 1);
+        return empty();
+      }
     }
     if (rest === '/tickets' && method === 'GET') {
       if (!may(account, 'ticket.read', item.id)) return problem(404, 'project.not_found');
@@ -398,8 +984,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
     if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
+    if (tail.startsWith('/sla')) return ticketSlaRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...HELPDESK_FIELDS.filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
@@ -408,7 +995,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!field(account, item.id, ATTACHMENT_FIELD, 'read')) return problem(403, 'auth.forbidden');
       const id = tail.split('/')[2];
       const mine = state.attachments.filter((entry) => entry.ticket === ticket.id);
-      const view = ({ ticket: _ticket, content: _content, removed: _removed, ...entry }) => entry;
+      const current = state.helpdesk.ticketCustomers.get(ticket.id)?.customerId ?? null;
+      const view = ({ ticket: _ticket, content: _content, removed: _removed, organizationId, ...entry }) => ({ visibility: 'internal', ...entry,
+        customerCurrent: entry.visibility === 'customer' && organizationId !== undefined && organizationId !== null && organizationId === current });
       const described = (entry) => JSON.stringify({ id: entry.id, name: entry.name, size: entry.size, sha256: entry.sha256 });
       if (method === 'GET' && id === undefined) return { ...ok(mine.filter((entry) => !entry.removed).map(view)), headers: { 'X-Attachment-Max-Bytes': String(state.attachmentLimit) } };
       if (method === 'GET' || method === 'HEAD') {
@@ -424,10 +1013,19 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         if (content.length === 0) return problem(400, 'attachment.empty');
         if (content.length > state.attachmentLimit) return problem(413, 'attachment.too_large');
         if (/\.(exe|bat|js|sh|html)$/i.test(name)) return problem(415, 'attachment.type_blocked');
-        const entry = { id: uuid(), ticket: ticket.id, name: name.split(/[\\/]/).pop(), size: content.length, sha256: 'a'.repeat(64), uploadedAt: now(), uploadedBy: account.id, content, removed: false };
+        const entry = { id: uuid(), ticket: ticket.id, name: name.split(/[\\/]/).pop(), size: content.length, sha256: 'a'.repeat(64), uploadedAt: now(), uploadedBy: account.id, content, removed: false, visibility: 'internal' };
         state.attachments.push(entry);
         state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: ATTACHMENT_FIELD, from: null, to: described(entry) }] });
         return { status: 201, body: view(entry) };
+      }
+      if (method === 'PATCH') {
+        const found = mine.find((entry) => entry.id === id && !entry.removed);
+        if (!found) return problem(404, 'attachment.not_found');
+        if (!['internal', 'customer'].includes(body?.visibility)) return problem(400, 'request.invalid', { violations: ['visibility.invalid'] });
+        found.visibility = body.visibility;
+        // Visible to the customer the ticket has now; switching to the customer again releases a file of a former one (TASK-079).
+        found.organizationId = body.visibility === 'customer' ? current : null;
+        return ok(view(found));
       }
       if (method === 'DELETE') {
         const found = mine.find((entry) => entry.id === id);
@@ -441,9 +1039,17 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     }
     if (tail.startsWith('/tags')) {
       if (!field(account, item.id, TAG_FIELD, 'read')) return problem(403, 'auth.forbidden');
-      if (method === 'GET') return ok(state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => state.tags.find((tag) => tag.id === entry.tag)));
+      if (method === 'GET') return ok(state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => tagView(account, state.tags.find((tag) => tag.id === entry.tag))));
       if (!may(account, 'ticket.edit', item.id) || !field(account, item.id, TAG_FIELD, 'write')) return problem(403, 'auth.forbidden');
-      const tagId = method === 'POST' ? body.tagId : tail.split('/')[2];
+      let tagId = tail.split('/')[2];
+      if (method === 'POST') {
+        const resolved = resolveTag(account, item.id, body, false);
+        if (resolved.problem) return resolved.problem;
+        const present = state.ticketTags.some((entry) => entry.ticket === ticket.id && entry.tag === resolved.tag.id);
+        if (!present && state.ticketTags.filter((entry) => entry.ticket === ticket.id).length >= TAG_LIMIT) return problem(409, 'tag.limit_reached');
+        if (resolved.created) state.tags.push(resolved.tag);
+        tagId = resolved.tag.id;
+      }
       const assigned = state.ticketTags.findIndex((entry) => entry.ticket === ticket.id && entry.tag === tagId);
       if (method === 'POST' && assigned < 0) {
         state.ticketTags.push({ ticket: ticket.id, tag: tagId });
@@ -645,6 +1251,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
 
   // ------------------------------------------------------------------ helpdesk (TASK-057)
   const hd = state.helpdesk;
+  // The next position of an answer of the support of the ticket in the portal conversation (TASK-080, F2).
+  const nextPosition = (ticketId) => {
+    const position = (hd.positions.get(ticketId) ?? 0) + 1;
+    hd.positions.set(ticketId, position);
+    return position;
+  };
   const versioned = (headers, entry, prefix) => {
     if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
     if (headers['if-match'] !== `"${entry.version}"`) return problem(412, `${prefix}.version_conflict`);
@@ -677,7 +1289,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const addresses = (body.addresses ?? []).map((value) => value.trim().toLowerCase());
       if (addresses.length === 0 || addresses.some((value) => !/^[^@\s]+@[^@\s]+$/.test(value))) return problem(400, 'request.invalid', { violations: ['addresses.invalid'] });
       if (hd.contacts.some((entry) => entry.addresses.some((value) => addresses.includes(value)))) return problem(409, 'contact.address_taken');
-      const contact = { id: uuid(), customerId: body.customerId, name: body.name.trim(), addresses, version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      if (body.language !== undefined && !['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      const contact = { id: uuid(), customerId: body.customerId, name: body.name.trim(), addresses, language: body.language ?? 'de', version: 1, createdAt: now(),
+        createdBy: account.id, updatedAt: now(), updatedBy: account.id };
       hd.contacts.push(contact);
       return { status: 201, body: contact, etag: '"1"' };
     }
@@ -687,7 +1301,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (!contact) return problem(404, 'contact.not_found');
       const refused = versioned(headers, contact, 'contact');
       if (refused) return refused;
-      Object.assign(contact, { customerId: body.customerId, name: body.name.trim(), addresses: body.addresses.map((value) => value.trim().toLowerCase()), version: contact.version + 1 });
+      if (body.language !== undefined && !['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      Object.assign(contact, { customerId: body.customerId, name: body.name.trim(), addresses: body.addresses.map((value) => value.trim().toLowerCase()),
+        language: body.language ?? contact.language ?? 'de', version: contact.version + 1 });
       return ok(contact, `"${contact.version}"`);
     }
     if (p === '/helpdesk/mailboxes' && method === 'GET') return ok(hd.mailboxes.map(mailboxView));
@@ -789,6 +1405,130 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
     return problem(404, 'resource.not_found');
   }
 
+  // Calendars and SLA rules as the backend (TASK-068): the company right sla.manage, versions in If-Match, the most specific
+  // rule unique per project, customer and type.
+  const sla = state.sla;
+  function slaRoute(account, method, p, headers, body) {
+    if (!may(account, 'sla.manage')) return problem(403, 'auth.forbidden');
+    const version = () => Number((headers['if-match'] ?? '').replaceAll('"', ''));
+    const invalidCalendar = (input) => {
+      const violations = [];
+      if (!input.name?.trim()) violations.push('name.invalid');
+      if (!/^[A-Za-z]+\/[A-Za-z_]+$/.test(input.timeZone ?? '') && input.timeZone !== 'UTC') violations.push('timeZone.invalid');
+      const spans = (hours) => hours.every((span) => /^\d\d:\d\d$/.test(span.from) && /^(\d\d:\d\d)$/.test(span.to) && span.from < span.to);
+      if (!(input.week ?? []).every((day) => spans(day.hours))) violations.push('week.hours_invalid');
+      if (!(input.week ?? []).some((day) => day.hours.length > 0)) violations.push('week.closed');
+      if (!(input.exceptions ?? []).every((item) => /^\d{4}-\d\d-\d\d$/.test(item.date))) violations.push('exceptions.date_invalid');
+      if (!(input.exceptions ?? []).every((item) => spans(item.hours))) violations.push('exceptions.hours_invalid');
+      return violations;
+    };
+    if (p === '/sla/calendars' && method === 'GET') return ok([...sla.calendars].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/sla/calendars' && method === 'POST') {
+      const violations = invalidCalendar(body);
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      if (sla.calendars.some((item) => item.name.toLowerCase() === body.name.trim().toLowerCase())) return problem(409, 'sla.calendar_name_taken');
+      const calendar = { id: uuid(), name: body.name.trim(), timeZone: body.timeZone, week: body.week, exceptions: body.exceptions ?? [], version: 1,
+        createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      sla.calendars.push(calendar);
+      return { status: 201, body: calendar, etag: '"1"' };
+    }
+    let match = p.match(/^\/sla\/calendars\/([^/]+)$/);
+    if (match) {
+      const calendar = sla.calendars.find((item) => item.id === match[1]);
+      if (!calendar) return problem(404, 'sla.calendar_not_found');
+      if (method === 'GET') return ok(calendar, `"${calendar.version}"`);
+      if (version() !== calendar.version) return problem(412, 'sla.version_conflict');
+      const violations = invalidCalendar(body);
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      Object.assign(calendar, { name: body.name.trim(), timeZone: body.timeZone, week: body.week, exceptions: body.exceptions ?? [], version: calendar.version + 1, updatedAt: now() });
+      return ok(calendar, `"${calendar.version}"`);
+    }
+    if (p === '/sla/options' && method === 'GET') {
+      return ok({ projects: state.projects.map((item) => ({ id: item.id, key: item.key, name: item.name, ticketTypes: state.configurations.get(item.id).configuration.ticketTypes })),
+        customers: hd.customers.map((item) => ({ id: item.id, name: item.name, projects: item.projects })),
+        groups: state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)) });
+    }
+    const checkedRule = (input, projectId, id) => {
+      const violations = [];
+      if (!input.name?.trim()) violations.push('name.invalid');
+      if (!state.projects.some((item) => item.id === projectId)) violations.push('projectId.unknown');
+      if (input.customerId && !hd.customers.find((item) => item.id === input.customerId)?.projects.includes(projectId)) violations.push('customerId.not_released');
+      if (input.ticketType && !input.customerId) violations.push('ticketType.requires_customer');
+      if (!sla.calendars.some((item) => item.id === input.calendarId)) violations.push('calendarId.unknown');
+      const budgets = input.budgets ?? {};
+      if (!PRIORITIES.every((priority) => budgets[priority])) violations.push('budgets.required');
+      else if (!PRIORITIES.every((priority) => [budgets[priority].firstResponse, budgets[priority].resolution].every((value) => Number.isInteger(value) && value >= 1 && value <= 525600))) {
+        violations.push('budgets.invalid');
+      }
+      // The stages as Rule.Stage.violations: at most 10 per clock, then per stage the first reason, each code once.
+      const stages = input.escalations ?? [];
+      if (['first_response', 'resolution'].some((clock) => stages.filter((stage) => stage?.clock === clock).length > 10)) violations.push('escalations.too_many');
+      const seen = new Set();
+      for (const stage of stages) {
+        const code = !['first_response', 'resolution'].includes(stage?.clock) || !Number.isInteger(stage.percent) || stage.percent < 1 || stage.percent > 1000 ? 'escalations.invalid'
+          : !state.groups.some((group) => group.id === stage.groupId) ? 'escalations.group_unknown'
+          : seen.has(`${stage.clock}/${stage.percent}/${stage.groupId}`) ? 'escalations.duplicate' : null;
+        if (code === null) seen.add(`${stage.clock}/${stage.percent}/${stage.groupId}`);
+        else if (!violations.includes(code)) violations.push(code);
+      }
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      if (sla.rules.some((rule) => rule.id !== id && rule.projectId === projectId && (rule.customerId ?? null) === (input.customerId ?? null)
+        && (rule.ticketType ?? null) === (input.ticketType ?? null))) return problem(409, 'sla.rule_conflict');
+      return null;
+    };
+    if (p === '/sla/rules' && method === 'GET') return ok([...sla.rules].sort((a, b) => a.name.localeCompare(b.name)));
+    if (p === '/sla/rules' && method === 'POST') {
+      const refused = checkedRule(body, body.projectId, null);
+      if (refused) return refused;
+      const rule = { id: uuid(), name: body.name.trim(), projectId: body.projectId, customerId: body.customerId ?? null, ticketType: body.ticketType ?? null,
+        calendarId: body.calendarId, budgets: body.budgets, escalations: body.escalations ?? [], version: 1, createdAt: now(), createdBy: account.id, updatedAt: now(), updatedBy: account.id };
+      sla.rules.push(rule);
+      return { status: 201, body: rule, etag: '"1"' };
+    }
+    match = p.match(/^\/sla\/rules\/([^/]+)$/);
+    const rule = sla.rules.find((item) => item.id === match?.[1]);
+    if (!match) return problem(404, 'resource.not_found');
+    if (!rule) return problem(404, 'sla.rule_not_found');
+    if (version() !== rule.version) return problem(412, 'sla.version_conflict');
+    if (method === 'DELETE') {
+      sla.rules.splice(sla.rules.indexOf(rule), 1);
+      return { status: 204, body: null };
+    }
+    const refused = checkedRule(body, rule.projectId, rule.id);
+    if (refused) return refused;
+    Object.assign(rule, { name: body.name.trim(), customerId: body.customerId ?? null, ticketType: body.ticketType ?? null, calendarId: body.calendarId,
+      budgets: body.budgets, escalations: body.escalations ?? [], version: rule.version + 1, updatedAt: now() });
+    return ok(rule, `"${rule.version}"`);
+  }
+
+  // The priority and the deadlines of a ticket: the priority with its read rule, the cycles also with the read rule of customer.
+  function ticketSlaRoute(account, item, ticket, method, tail, body) {
+    const readableHere = [PRIORITY_FIELD, 'customer'].filter((name) => field(account, item.id, name, 'read'));
+    const writableHere = may(account, 'ticket.edit', item.id) && field(account, item.id, PRIORITY_FIELD, 'read') && field(account, item.id, PRIORITY_FIELD, 'write') ? [PRIORITY_FIELD] : [];
+    const view = () => {
+      const priority = sla.priorities.get(ticket.id) ?? 'normal';
+      const both = readableHere.length === 2;
+      // Reached stages only of the groups of the person (TASK-070).
+      const mine = new Set(groupsOf(account).map((group) => group.id));
+      const cycles = (sla.cycles.get(ticket.id) ?? []).map((cycle) => ({ ...cycle, escalations: (cycle.escalations ?? []).filter((stage) => mine.has(stage.groupId)) }));
+      const stateOf = !hd.ticketCustomers.get(ticket.id) ? 'no_customer' : cycles.length === 0 ? 'no_rule' : 'active';
+      return { readable: readableHere, writable: writableHere, priority: readableHere.includes(PRIORITY_FIELD) ? priority : null,
+        state: both ? stateOf : null, cycles: both ? cycles : null, now: '2026-10-30T10:00:00Z' };
+    };
+    if (tail === '/sla' && method === 'GET') return ok(view());
+    if (tail === '/sla/priority' && method === 'PUT') {
+      if (!writableHere.includes(PRIORITY_FIELD)) return problem(403, 'auth.forbidden');
+      if (!PRIORITIES.includes(body?.priority)) return problem(400, 'request.invalid', { violations: ['priority.invalid'] });
+      const before = sla.priorities.get(ticket.id) ?? 'normal';
+      if (before !== body.priority) {
+        sla.priorities.set(ticket.id, body.priority);
+        state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: PRIORITY_FIELD, from: before, to: body.priority }] });
+      }
+      return ok(view());
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   // helpdesk.reply with ticket.read and the read rules on mail and contact, as ReplyService.mayReply.
   const mayReply = (account, projectId) => may(account, 'helpdesk.reply', projectId) && may(account, 'ticket.read', projectId)
     && field(account, projectId, 'mail', 'read') && field(account, projectId, 'contact', 'read');
@@ -808,13 +1548,29 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           sentAt: message.sentAt, fromAddress: message.fromAddress, fromName: message.fromName, to: message.to, cc: message.cc, subject: message.subject, body: message.body, attachments: message.attachments,
           newAnswer: Boolean(message.joinedAt && !message.seenAt), version: message.version })) : null,
         replies: readableHere.includes('mail') ? hd.replies.filter((reply) => reply.ticketId === ticket.id).map(replyView) : null,
-        replyAllowed: Boolean(contact) && mayReply(account, item.id) };
+        replyAllowed: Boolean(contact) && mayReply(account, item.id),
+        portalAnswerAllowed: Boolean(link?.customerId) && mayReply(account, item.id) };
     };
     const senders = () => hd.mailboxes.filter((mailbox) => mailbox.enabled && mailbox.projectId === item.id && mailbox.smtpHost && mailbox.address);
     const contactOfTicket = () => {
       const link = hd.ticketCustomers.get(ticket.id);
       return link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
     };
+    if (tail === '/helpdesk/portal-posts') {
+      const postView = (post) => ({ id: post.id, authorKind: post.authorKind, authorId: post.authorId, body: post.body, createdAt: post.createdAt,
+        attachments: state.attachments.filter((file) => post.attachmentIds.includes(file.id) && !file.removed).map(({ id, name, size, uploadedAt }) => ({ id, name, size, uploadedAt })) });
+      if (method === 'GET') {
+        if (!readableHere.includes('mail')) return problem(403, 'auth.forbidden');
+        return ok(hd.posts.filter((post) => post.ticketId === ticket.id).map(postView));
+      }
+      if (!mayReply(account, item.id)) return problem(403, 'auth.forbidden');
+      if (!hd.ticketCustomers.get(ticket.id)?.customerId) return problem(409, 'helpdesk.portal_no_customer');
+      if (!body.body?.trim()) return problem(400, 'request.invalid', { violations: ['body.invalid'] });
+      const post = { id: uuid(), ticketId: ticket.id, authorKind: 'support', authorId: account.id, body: body.body.trim(), createdAt: now(), attachmentIds: [],
+        organizationId: hd.ticketCustomers.get(ticket.id).customerId, position: nextPosition(ticket.id) };
+      hd.posts.push(post);
+      return { status: 201, body: postView(post) };
+    }
     if (tail.startsWith('/helpdesk/repl')) {
       if (!mayReply(account, item.id)) return problem(403, 'auth.forbidden');
       const contact = contactOfTicket();
@@ -826,7 +1582,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
           recipients: contact.addresses, subject: last?.subject ? `Re: ${last.subject}` : null,
           suggestedMailbox: list.find((mailbox) => mailbox.id === last?.mailboxId)?.id ?? list[0]?.id ?? null });
       }
-      if (tail === '/helpdesk/replies' && method === 'POST') {
+      if ((tail === '/helpdesk/replies' || tail === '/helpdesk/reply/preview') && method === 'POST') {
         const mailbox = senders().find((entry) => entry.id === body.mailboxId);
         const violations = [];
         if (!mailbox) violations.push('mailboxId.unavailable');
@@ -834,8 +1590,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
         if (!body.subject?.trim() || /[\r\n]/.test(body.subject)) violations.push('subject.invalid');
         if (!body.body?.trim()) violations.push('body.invalid');
         if (violations.length > 0) return problem(400, 'request.invalid', { violations });
-        const reply = { id: uuid(), ticketId: ticket.id, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
-          subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1 };
+        const code = contact.language === 'en' ? 'en' : 'de';
+        const project = state.projects.find((entry) => entry.id === item.id);
+        const mail = renderMail(code, state.mailTemplate[code] ?? BUILT_IN[code], state.mailTemplate.applicationUrl, state.appearance.name, state.appearance.accent,
+          state.appearance.logo !== null, { contact: contact.name, number: `${project?.key ?? ''}-${ticket.number}`, title: ticket.values?.title ?? '',
+            sender: account.displayName ?? account.username, mailbox: mailbox.address, body: body.body });
+        if (tail === '/helpdesk/reply/preview') return ok(mail);
+        const reply = { id: uuid(), ticketId: ticket.id, mail, projectId: item.id, contactId: contact.id, mailboxId: mailbox.id, fromAddress: mailbox.address, toAddress: body.to,
+          subject: body.subject.trim(), body: body.body, state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: account.id, attemptedAt: null, sentAt: null, version: 1,
+          customerId: contact.customerId, portalPosition: null };
         hd.replies.push(reply);
         state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
           changes: [{ field: 'mail', from: null, to: JSON.stringify({ reply: reply.id, to: reply.toAddress, subject: reply.subject }) }] });
@@ -849,7 +1612,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       if (headers['if-match'] !== `"${reply.version}"`) return problem(412, 'helpdesk.version_conflict');
       if (match[2] === 'settle') {
         if (reply.state !== 'uncertain') return problem(409, 'helpdesk.reply_not_uncertain');
-        Object.assign(reply, { state: 'sent', sentAt: now(), version: reply.version + 1 });
+        Object.assign(reply, { state: 'sent', sentAt: now(), version: reply.version + 1, portalPosition: nextPosition(ticket.id) });
         return ok(replyView(reply), `"${reply.version}"`);
       }
       if (!['failed', 'uncertain'].includes(reply.state)) return problem(409, 'helpdesk.reply_not_failed');
@@ -893,12 +1656,44 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
   function sessionBody(session) {
     const account = session.account;
     if (!account) return { authenticated: false, username: null, displayName: null, level: null, expiresAt: null, passwordChangeBy: null, csrfToken: TOKEN };
-    return { authenticated: true, username: account.username, displayName: account.displayName, level: account.passwordChangeRequired ? 'password_change_required' : 'full',
+    return { authenticated: true, username: account.username, displayName: account.displayName, kind: account.kind ?? 'internal', level: account.passwordChangeRequired ? 'password_change_required' : 'full',
       expiresAt: '2026-10-22T08:00:00Z', passwordChangeBy: account.passwordChangeRequired ? '2026-10-21T08:30:00Z' : null, csrfToken: TOKEN,
       rights: account.passwordChangeRequired ? [] : companyRights(account) };
   }
+  function mailTemplateBody() {
+    const language = (code) => ({ ...(state.mailTemplate[code] ?? BUILT_IN[code]), stored: state.mailTemplate[code] !== null, builtIn: BUILT_IN[code] });
+    return { applicationUrl: state.mailTemplate.applicationUrl, de: language('de'), en: language('en'), placeholders: PLACEHOLDERS,
+      version: state.mailTemplate.version, updatedAt: '2026-11-03T06:00:00Z' };
+  }
+
+  function checkTexts(code, texts) {
+    if (!texts) return problem(400, 'mail_template.languages_missing');
+    const invalid = [];
+    const unknown = [];
+    for (const part of ['greeting', 'signature', 'footer']) {
+      const text = String(texts[part] ?? '');
+      if ([...text].length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/.test(text)) invalid.push(`${code}.${part}`);
+      for (const token of unknownPlaceholders(text)) unknown.push(`${code}.${part}: ${token}`);
+    }
+    if (invalid.length > 0) return problem(400, 'mail_template.text_invalid', { violations: invalid });
+    if (unknown.length > 0) return problem(400, 'mail_template.placeholder_unknown', { violations: unknown });
+    return null;
+  }
+
+  function checkAddress(address) {
+    const value = address?.trim() ?? '';
+    if (value === '') return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && url.hostname !== '' && url.username === '' && !/\s/.test(value)) return null;
+    } catch {
+      // not an address
+    }
+    return problem(400, 'mail_template.address_invalid');
+  }
+
   function appearanceBody() {
-    return { accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
+    return { name: state.appearance.name, defaultName: 'Task Manager', accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
   }
 
   // Installs the backend for one browser context. `as` starts the context signed in.
@@ -911,7 +1706,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
       const headers = request.headers();
       const raw = request.postDataBuffer();
       const json = raw && (headers['content-type'] ?? '').includes('json') ? JSON.parse(raw.toString('utf8')) : raw;
-      state.requests.push({ method: request.method(), path: url.pathname, ifMatch: headers['if-match'] ?? null, csrf: headers['x-csrf-token'] ?? null, type: headers['content-type'] ?? null, body: raw, user: session.account?.username ?? null });
+      state.requests.push({ method: request.method(), path: url.pathname, query: url.search, ifMatch: headers['if-match'] ?? null, csrf: headers['x-csrf-token'] ?? null, type: headers['content-type'] ?? null, body: raw, user: session.account?.username ?? null });
       const unsafe = !['GET', 'HEAD'].includes(request.method());
       const answer = unsafe && headers['x-csrf-token'] !== TOKEN ? problem(403, 'auth.csrf_invalid')
         : anonymousAppearance && url.pathname === '/api/v1/session' ? ok({ authenticated: false })
@@ -939,19 +1734,32 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false 
 
   return {
     state, install, anna, ben, nora, project,
-    writes: () => state.requests.filter((item) => item.method !== 'GET'),
+    // A preview of a mail (TASK-082) is a POST that changes nothing; it is no write.
+    writes: () => state.requests.filter((item) => item.method !== 'GET' && !/\/(mail-template|reply)\/preview$/.test(item.path)),
     group: (name) => state.groups.find((group) => group.name === name),
     addJob,
     addMail,
     addTicket,
+    // A prepared cycle of a ticket, as the server would report it (TASK-068).
+    addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {
       const link = hd.ticketCustomers.get(ticket.id);
       const contact = hd.contacts.find((entry) => entry.id === link?.contactId);
       const reply = { id: uuid(), ticketId: ticket.id, projectId: ticket.projectId, contactId: contact?.id ?? null, mailboxId: hd.mailboxes[0]?.id ?? uuid(),
         fromAddress: hd.mailboxes[0]?.address ?? 'support@firma.example', toAddress: contact?.addresses[0] ?? 'lea@nordwerk.example', subject: 'Re: Drucker defekt',
-        body: 'Wir kümmern uns.', state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: anna.id, attemptedAt: null, sentAt: null, version: 1, ...extra };
+        body: 'Wir kümmern uns.', state: 'pending', errorCode: null, sends: 1, createdAt: now(), createdBy: anna.id, attemptedAt: null, sentAt: null, version: 1,
+        // The customer of the contact when the reply is written, as the server keeps it (TASK-079, F1; TASK-080, H3).
+        customerId: contact?.customerId ?? null, portalPosition: null, ...extra };
+      if (reply.state === 'sent' && reply.portalPosition === null) reply.portalPosition = nextPosition(ticket.id);
       hd.replies.push(reply);
       return reply;
+    },
+    // An answer of the support through the portal at the next position of its ticket (TASK-080).
+    addPortalAnswer: (ticket, body, extra = {}) => {
+      const post = { id: uuid(), ticketId: ticket.id, authorKind: 'support', authorId: anna.id, body, createdAt: now(), attachmentIds: [],
+        organizationId: hd.ticketCustomers.get(ticket.id)?.customerId ?? null, position: nextPosition(ticket.id), ...extra };
+      hd.posts.push(post);
+      return post;
     },
     deactivate: (account) => { account.active = false; },
   };

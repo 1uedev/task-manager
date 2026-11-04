@@ -56,7 +56,7 @@ class AttachmentServiceTest {
         FilesProperties properties = new FilesProperties("/unused", 1000, java.time.Duration.ofHours(24), java.time.Duration.ofDays(7),
             java.time.Duration.ofHours(1), List.of("exe"));
         service = new AttachmentService(attachments, storage, projects, tickets, permissions, Clock.systemUTC(), properties,
-            mock(PlatformTransactionManager.class));
+            mock(PlatformTransactionManager.class), mock(org.springframework.beans.factory.ObjectProvider.class));
         when(storage.stage(any(), anyLong())).thenReturn(staged);
         @SuppressWarnings("unchecked")
         Supplier<ResourceContext> resource = mock(Supplier.class);

@@ -39,7 +39,12 @@ public enum AdministrationRight {
      * Manage the mailboxes of the helpdesk, the customer organizations and their contacts (TASK-057). Gives no access to the
      * mails of a mailbox; the review queue needs the project action {@code helpdesk.review}.
      */
-    HELPDESK_MANAGE("helpdesk.manage");
+    HELPDESK_MANAGE("helpdesk.manage"),
+    /**
+     * Manage the business hours calendars and the SLA rules with their assignment to projects (TASK-068). Gives no access to
+     * tickets; the deadlines of a ticket follow its read rules.
+     */
+    SLA_MANAGE("sla.manage");
 
     private final String key;
 

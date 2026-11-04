@@ -217,7 +217,7 @@ def admin_client(args) -> Client:
 
 # ---------------------------------------------------------------------- data building blocks
 
-ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments"]
+ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments", "customer", "contact", "priority"]
 PROJECT_ACTIONS_FULL = ["project.read", "project.manage", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_EDIT = ["project.read", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_READ = ["project.read", "ticket.read"]
@@ -381,7 +381,7 @@ DEMO_DESCRIPTIONS = [
 def seed_demo(args) -> None:
     password = demo_password()
     admin = admin_client(args)
-    refuse_second_run(admin, {key for key, *_ in DEMO_PROJECTS}, {name for name, *_ in DEMO_PEOPLE})
+    refuse_second_run(admin, {key for key, *_ in DEMO_PROJECTS}, {name for name, *_ in DEMO_PEOPLE} | {name for name, *_ in DEMO_PORTAL})
     builder = Builder(admin, workers=4)
     builder.credentials = (args.admin, password)
     rng = random.Random(31)
@@ -403,9 +403,11 @@ def seed_demo(args) -> None:
     company = [builder.company_tag(name) for name in DEMO_COMPANY_TAGS]
     print("projects and tickets")
     jobs = []
+    project_ids: dict[str, str] = {}
     for key, name, description, local_tags, titles in DEMO_PROJECTS:
         members = [admin_id] + [people[u] for u, _, _, projects in DEMO_PEOPLE if key in projects]
         project = builder.project(key, name, description, members)
+        project_ids[key] = project
         local = [builder.project_tag(project, tag) for tag in local_tags]
         assignable = [people[u] for u, _, group, projects in DEMO_PEOPLE if key in projects and group != "Lesen ohne Beschreibung"]
         for title in titles:
@@ -419,9 +421,102 @@ def seed_demo(args) -> None:
             tags = rng.sample(local + company, k=rng.choice([0, 1, 1, 2, 3]))
             jobs.append((project, draft, status, tags))
     builder.tickets(jobs, "demo")
-    print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
+    nordwerk = seed_deadlines(admin, project_ids["HELP"])
+    seed_portal(admin, project_ids["HELP"], nordwerk, password)
+    seed_mail_template(admin)
+    print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
 
+
+def seed_mail_template(admin: Client) -> None:
+    """The mail template of the replies (TASK-082): the built-in greeting and footer with a demo signature per language."""
+    print("mail template")
+    current = admin.call("GET", "/appearance/mail-template")
+    texts = {code: {"greeting": current.body[code]["builtIn"]["greeting"], "signature": DEMO_SIGNATURE[code],
+                    "footer": current.body[code]["builtIn"]["footer"]} for code in ("de", "en")}
+    admin.call("PUT", "/appearance/mail-template", {"applicationUrl": None, **texts}, headers={"If-Match": current.headers.get("etag")})
+
+
+def seed_deadlines(admin: Client, project: str) -> str:
+    """Service deadlines in the helpdesk project (TASK-068): office hours, one rule with 120 and 480 business minutes for
+    every priority and two escalation stages per clock (TASK-070), "Erledigt" as the solved status, and a customer on three
+    tickets so that their clocks run."""
+    print("service deadlines")
+    current = admin.call("GET", f"/projects/{project}")
+    configuration = current.body["configuration"]
+    for status in configuration["statuses"]:
+        if status["key"] == "done":
+            status["sla"] = "resolved"
+    admin.call("PUT", f"/projects/{project}/configuration", configuration, headers={"If-Match": current.headers.get("etag")})
+    customer = admin.call("POST", "/helpdesk/customers", {"name": "Nordwerk Maschinenbau", "projects": [project]}).body["id"]
+    office = [{"from": "08:00", "to": "17:00"}]
+    calendar = admin.call("POST", "/sla/calendars", {
+        "name": "Bürozeiten", "timeZone": "Europe/Berlin", "week": [{"day": day, "hours": office} for day in range(1, 6)],
+        "exceptions": [{"date": "2026-12-24", "hours": [{"from": "08:00", "to": "12:00"}]}, {"date": "2026-12-25", "hours": []},
+                       {"date": "2026-12-26", "hours": []}],
+    }).body["id"]
+    budgets = {priority: {"firstResponse": 120, "resolution": 480} for priority in ("low", "normal", "high", "critical")}
+    # Escalation stages (TASK-070): a warning at 80 % for the project leads, the due stage at 100 % for the administration.
+    groups = {group["name"]: group["id"] for group in admin.call("GET", "/permissions/groups").body}
+    stages = [{"clock": clock, "percent": percent, "groupId": groups[name]}
+              for clock in ("first_response", "resolution") for percent, name in ((80, "Projektleitung"), (100, "Verwaltung Demo"))]
+    admin.call("POST", "/sla/rules", {"name": "Helpdesk Standard", "projectId": project, "calendarId": calendar, "budgets": budgets,
+                                      "escalations": stages})
+    for number in (1, 2, 3):
+        admin.call("PUT", f"/projects/{project}/tickets/{number}/helpdesk/customer", {"customerId": customer, "contactId": None})
+    admin.call("PUT", f"/projects/{project}/tickets/1/sla/priority", {"priority": "high"})
+    return customer
+
+
+# Portal accounts of two synthetic customers (TASK-076): username, display name, contact address, language of the mails
+# (TASK-082): the contact of Südtechnik reads English, so both languages of the mail template can be shown.
+DEMO_PORTAL = [
+    ("lea.nordwerk", "Lea Lang", "lea@nordwerk.example", "de"),
+    ("tom.suedtechnik", "Tom Tal", "tom@suedtechnik.example", "en"),
+]
+
+# The mail template "Antwort an Kunden" of the demonstration (TASK-082): an own signature in both languages, the built-in
+# greeting and footer.
+DEMO_SIGNATURE = {
+    "de": "Viele Grüße\n{{sender.name}}\nSupport {{company.name}}\nTelefon 0000 000000 (Beispiel)",
+    "en": "Kind regards\n{{sender.name}}\n{{company.name}} support\nPhone +00 0000 000000 (example)",
+}
+
+
+def seed_portal(admin: Client, project: str, nordwerk: str, password: str) -> None:
+    """The customer portal (TASK-076): the type "task" of the helpdesk project offered in the portal, a second customer
+    Südtechnik, one portal account with contact for each customer, a request of Südtechnik, and on the first request of
+    Nordwerk an answer of the support through the portal and a post of the customer."""
+    print("customer portal")
+    current = admin.call("GET", f"/projects/{project}")
+    configuration = current.body["configuration"]
+    for ticket_type in configuration["ticketTypes"]:
+        ticket_type["portal"] = ticket_type["key"] == "task"
+    admin.call("PUT", f"/projects/{project}/configuration", configuration, headers={"If-Match": current.headers.get("etag")})
+    suedtechnik = admin.call("POST", "/helpdesk/customers", {"name": "Südtechnik", "projects": [project]}).body["id"]
+    base = f"{admin.scheme}://{admin.host}:{admin.port}"
+    for (username, display, address, language), customer in zip(DEMO_PORTAL, (nordwerk, suedtechnik)):
+        contact = admin.call("POST", "/helpdesk/contacts", {"customerId": customer, "name": display, "addresses": [address],
+                                                            "language": language}).body["id"]
+        issued = admin.call("POST", "/portal-accounts", {"username": username, "displayName": display, "organizationId": customer,
+                                                         "contactId": contact, "projectIds": [project]}).body
+        person = Client(base)
+        person.login(username, issued["oneTimePassword"], new_password=password)
+        person.call("DELETE", "/session")
+        person.close()
+    admin.call("PUT", f"/projects/{project}/tickets/4/helpdesk/customer", {"customerId": suedtechnik, "contactId": None})
+    # The administration answers as support: helpdesk.reply with the read rule of the mails in its group.
+    group = next(item["id"] for item in admin.call("GET", "/permissions/groups").body if item["name"] == "Verwaltung Demo")
+    admin.call("PUT", f"/permissions/groups/{group}/actions", {"action": "helpdesk.reply", "projectId": None, "enabled": True})
+    admin.call("PUT", f"/permissions/groups/{group}/fields",
+               {"resourceType": "ticket", "field": "mail", "projectId": None, "operation": "read", "effect": "allow"})
+    admin.call("POST", f"/projects/{project}/tickets/1/helpdesk/portal-posts",
+               {"body": "Danke für die Meldung. Ein Techniker sieht sich den Drucker heute Nachmittag an."})
+    lea = Client(base)
+    lea.login(DEMO_PORTAL[0][0], password)
+    lea.call("POST", f"/portal/projects/{project}/tickets/1/conversation", {"body": "Vielen Dank, wir sind bis 16 Uhr im Büro."})
+    lea.call("DELETE", "/session")
+    lea.close()
 
 # ---------------------------------------------------------------------- reference data set
 

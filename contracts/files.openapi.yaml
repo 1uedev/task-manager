@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Dateien und Anhänge (TASK-051)
+  title: Task Manager API, Dateien und Anhänge (TASK-051, TASK-076)
   version: 0.1.0
   description: |
     Anhänge von Tickets (DEC-080). Alle Aufrufe verlangen eine vollständige Anmeldung; Sitzung, CSRF und
@@ -10,8 +10,25 @@ info:
     verlangen `ticket.read` und eine Leseregel für dieses Feld, Hochladen und Entfernen verlangen `ticket.edit` und eine
     Schreibregel dafür. Wer das Ticket nicht lesen darf, erhält 404 `project.not_found`, wer es lesen darf, aber nicht das
     Feld, erhält 403 `auth.forbidden`. Die Kennung eines Anhangs ist kein Rechtenachweis: jeder Abruf prüft die Rechte neu,
-    und der Anhang muss zu dem Ticket im Pfad gehören (sonst 404 `attachment.not_found`). Einen Anhang für Kunden oder
-    Portalkonten gibt es nicht; alle Anhänge sind intern.
+    und der Anhang muss zu dem Ticket im Pfad gehören (sonst 404 `attachment.not_found`).
+
+    Sichtbarkeit (TASK-076, DEC-106): Jeder Anhang ist `internal` oder `customer`. Intern hochgeladene Anhänge sind zunächst
+    `internal`, Dateien aus Mails des Kunden und Anhänge aus dem Portal `customer`. Umschalten verlangt `ticket.edit` und die
+    Schreibregel für `attachments`; es erscheint im Prüfprotokoll, nicht in der Tickethistorie, und ändert die Version des
+    Tickets nicht. Anhänge aus der Zeit vor TASK-076 sind `internal`.
+
+    Zielgruppe (TASK-079, DEC-109): Ein kundensichtbarer Anhang gehört zur Organisation, für die er sichtbar wurde: Portaldateien
+    zur Organisation des Kontos, Dateien einer Mail zu deren Kunde, umgeschaltete Anhänge zum Kunden, den das Ticket in diesem
+    Moment hat. Nach einem Kundenwechsel bleiben sie beim bisherigen Kunden. Erneutes Umschalten auf `customer` gibt einen
+    solchen Anhang ausdrücklich für den aktuellen Kunden frei (Prüfprotokoll `attachment.audience`). `customerCurrent` sagt, ob
+    der aktuelle Kunde des Tickets den Anhang sieht.
+
+    Portal: Unter `/portal/projects/{projectId}/tickets/{number}/attachments` sieht ein Portalkonto nur die kundensichtbaren
+    Anhänge einer Anfrage seiner Organisation (`ticket.read` mit der Leseregel für `attachments`). Ein interner Anhang
+    antwortet beim Herunterladen mit 404 `attachment.not_found` wie ein unbekannter, eine Anfrage einer anderen Organisation
+    mit 404 `ticket.not_found`. Hochladen verlangt `portal.answer` und die Schreibregel für `attachments`; der Anhang ist sofort
+    kundensichtbar und kann danach einem Portalbeitrag beigefügt werden (helpdesk.openapi.yaml). Ein internes Konto erhält
+    auf diesen Pfaden 404 `project.not_found`.
 
     Hochladen: Der Körper der Anfrage ist der Inhalt der Datei (`application/octet-stream`), der Name steht im Parameter
     `name` (URL kodiert, UTF-8). Der Server bereinigt den Namen: Pfadanteile, Steuer und Formatzeichen (auch die, die die
@@ -113,11 +130,108 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: setAttachmentVisibility
+      summary: Sichtbarkeit setzen (ticket.edit und Schreibregel für attachments, TASK-076)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility: {$ref: '#/components/schemas/Visibility'}
+      responses:
+        '200':
+          description: Der Anhang mit der neuen Sichtbarkeit
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Attachment'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
     delete:
       operationId: removeAttachment
       summary: Anhang entfernen (ticket.edit und Schreibregel für attachments)
       responses:
         '204': {description: Entfernt oder schon entfernt}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: listPortalAttachments
+      summary: Kundensichtbare Anhänge einer Anfrage (nur Portalkonten, TASK-076)
+      responses:
+        '200':
+          description: Die kundensichtbaren, nicht entfernten Anhänge, älteste zuerst
+          headers:
+            X-Attachment-Max-Bytes:
+              description: Größte angenommene Datei in Bytes.
+              schema: {type: integer, minimum: 1}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PortalAttachment'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: uploadPortalAttachment
+      summary: Datei aus dem Portal anhängen, immer kundensichtbar (portal.answer und Schreibregel für attachments)
+      parameters:
+        - name: name
+          in: query
+          required: true
+          description: Name der Datei, URL kodiert.
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      responses:
+        '201':
+          description: Angehängt
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalAttachment'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/attachments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+      - $ref: '#/components/parameters/AttachmentId'
+    get:
+      operationId: downloadPortalAttachment
+      summary: Inhalt eines kundensichtbaren Anhangs laden; ein interner antwortet mit 404 (TASK-076)
+      responses:
+        '200':
+          description: Der Inhalt, immer als Datei zum Speichern
+          headers:
+            Content-Disposition: {schema: {type: string}, description: 'attachment mit dem Namen als filename*'}
+            X-Content-Type-Options: {schema: {type: string, enum: [nosniff]}}
+            Content-Security-Policy: {schema: {type: string}}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
@@ -150,7 +264,7 @@ components:
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, project.not_found, ticket.not_found,
         attachment.not_found, attachment.empty, attachment.incomplete, attachment.too_large, attachment.type_blocked,
         attachment.storage_unavailable, attachment.busy, request.too_large, auth.required, auth.forbidden, auth.csrf_invalid,
-        auth.password_change_required. Grund in `violations`: name.invalid.
+        auth.password_change_required. Gründe in `violations`: name.invalid, visibility.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -171,9 +285,21 @@ components:
         violations:
           type: array
           items: {type: string}
+    Visibility:
+      type: string
+      enum: [internal, customer]
+      description: internal nur für interne Konten, customer auch im Portal (TASK-076).
+    PortalAttachment:
+      type: object
+      required: [id, name, size, uploadedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 255}
+        size: {type: integer, format: int64, minimum: 1}
+        uploadedAt: {type: string, format: date-time}
     Attachment:
       type: object
-      required: [id, name, size, sha256, uploadedAt, uploadedBy]
+      required: [id, name, size, sha256, uploadedAt, uploadedBy, visibility, customerCurrent]
       properties:
         id: {type: string, format: uuid}
         name: {type: string, minLength: 1, maxLength: 255, description: Der bereinigte Name.}
@@ -181,3 +307,5 @@ components:
         sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Prüfsumme des Inhalts, Kleinbuchstaben.}
         uploadedAt: {type: string, format: date-time}
         uploadedBy: {type: string, format: uuid}
+        visibility: {$ref: '#/components/schemas/Visibility'}
+        customerCurrent: {type: boolean, description: Der aktuelle Kunde des Tickets sieht den Anhang im Portal (TASK-079).}

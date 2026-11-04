@@ -67,6 +67,60 @@ export interface paths {
         patch: operations["updateTicket"];
         trace?: never;
     };
+    "/portal/projects/{projectId}/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Anfragen der eigenen Organisation im Projekt, neueste zuerst (nur Portalkonten, TASK-075)
+         * @description Nur Tickets, deren Kunde die Organisation des Portalkontos ist. `writableFields` ist leer. Ein internes Konto, ein
+         *     Projekt ohne Mitgliedschaft oder ohne `ticket.read` antwortet mit 404 `project.not_found`.
+         *
+         *     Filter (TASK-076): `status` nach dem Schlüssel eines Status, `state` nach offen oder erledigt (Kategorie `done` des Status),
+         *     `q` nach Text in Titel oder Beschreibung ohne Rücksicht auf Groß und Kleinschreibung, nur in den lesbaren der beiden
+         *     Felder. Ein Filter nach Status oder Zustand ohne Leserecht auf `status` antwortet mit 400 `request.invalid` und
+         *     `status.not_readable`, ein unbekannter Zustand mit `state.invalid`.
+         *
+         *     Tagfilter (TASK-077): `tag` nennt einen Tag, den das Portal der Organisation zeigt; ohne Leserecht auf `tags` antwortet
+         *     der Server mit 400 `tag.not_readable`. Ein interner, fremder oder unbekannter Tag findet nichts, ohne Hinweis darauf.
+         */
+        get: operations["listPortalTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Eine Anfrage der eigenen Organisation (nur Portalkonten, TASK-075)
+         * @description Eine Anfrage einer anderen Organisation, ohne Kunde oder in einem fremden Projekt antwortet mit 404 `ticket.not_found`.
+         */
+        get: operations["getPortalTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/tickets/{number}/history": {
         parameters: {
             query?: never;
@@ -79,7 +133,7 @@ export interface paths {
         };
         /**
          * Historie eines Tickets
-         * @description Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042). Ebenso ist jedes Hinzufügen oder Entfernen eines Anhangs ein eigener Eintrag mit genau einer Änderung des Feldes attachments (to beschreibt den hinzugefügten, from den entfernten Anhang als JSON Text mit id, name, size und sha256); diese Einträge sieht nur, wer die Leseregel für das Feld attachments hat (TASK-051). Kunde, Kontakt und eingegangene Mail eines Helpdesktickets sind ebenso eigene Einträge der Felder customer, contact und mail (to und from als JSON Text mit id und name, bei mail mit id, from und subject); sie sieht nur, wer die Leseregel des jeweiligen Feldes hat (TASK-057). Ein Ticket aus dem Mail Eingang trägt als Konto die feste Kennung 00000000-0000-0000-0000-00004d41494c.
+         * @description Je Version Zeitpunkt, Konto und die geänderten Felder mit altem und neuem Wert; Version 1 enthält die Werte bei der Anlage. Verborgene Felder fehlen, eine Version nur mit verborgenen Feldern fehlt ganz. Jedes Zuordnen oder Entfernen eines Tags ist ein eigener Eintrag mit genau einer Änderung des Feldes tags (to ist die Kennung des zugeordneten Tags, from die des entfernten) und der Version, die das Ticket dabei hatte; die Version des Tickets ändert sich dadurch nicht, mehrere Einträge können also dieselbe Version tragen. Diese Einträge sieht nur, wer die Leseregel für das Feld tags hat (TASK-042). Ebenso ist jedes Hinzufügen oder Entfernen eines Anhangs ein eigener Eintrag mit genau einer Änderung des Feldes attachments (to beschreibt den hinzugefügten, from den entfernten Anhang als JSON Text mit id, name, size und sha256); diese Einträge sieht nur, wer die Leseregel für das Feld attachments hat (TASK-051). Kunde, Kontakt und eingegangene Mail eines Helpdesktickets sind ebenso eigene Einträge der Felder customer, contact und mail (to und from als JSON Text mit id und name, bei mail mit id, from und subject); sie sieht nur, wer die Leseregel des jeweiligen Feldes hat (TASK-057). Die Priorität ist ebenso ein eigener Eintrag des Feldes priority mit altem und neuem Wert (low, normal, high oder critical); ihn sieht nur, wer die Leseregel des Feldes priority hat (TASK-068). Ein Ticket aus dem Mail Eingang trägt als Konto die feste Kennung 00000000-0000-0000-0000-00004d41494c.
          */
         get: operations["getTicketHistory"];
         put?: never;
@@ -163,6 +217,7 @@ export interface components {
              *     als `custom.<schlüssel>`, wenn sie aktiv sind. `tags` und `attachments` erscheinen, wenn die Anfrage Tags
              *     beziehungsweise Anhänge über ihre eigenen Endpunkte ändern darf (Befund F1 der Prüfung von TASK-051). `customer` und
              *     `contact` erscheinen mit ihrer Schreibregel und werden über den Helpdeskvertrag geändert; `mail` ist nie änderbar (TASK-057).
+             *     `priority` erscheint mit seiner Schreibregel und wird über den SLA Vertrag geändert (TASK-068).
              */
             writableFields: string[];
             /** Format: date-time */
@@ -351,6 +406,68 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalTickets: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: number;
+                status?: string;
+                state?: "open" | "done";
+                q?: string;
+                tag?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anfragen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getPortalTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Anfrage */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

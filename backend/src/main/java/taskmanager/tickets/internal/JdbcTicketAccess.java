@@ -126,6 +126,33 @@ class JdbcTicketAccess implements TicketAccess {
         tickets.lockShared(ticketId);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordPriorityChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added) {
+        if (removed == null && added == null) {
+            throw new IllegalArgumentException("nothing changed");
+        }
+        long version = tickets.lockShared(ticketId);
+        tickets.change(ticketId, version, occurredAt, actor, PRIORITY_FIELD, removed, added);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForPriorityChange(UUID ticketId) {
+        tickets.lockShared(ticketId);
+    }
+
+    @Override
+    public Optional<State> state(UUID ticketId) {
+        return tickets.byId(ticketId).map(ticket -> new State(ticket.companyId(), ticket.projectId(), ticket.number(), ticket.type(),
+            ticket.status(), ticket.createdAt()));
+    }
+
+    @Override
+    public Optional<String> title(UUID ticketId) {
+        return tickets.byId(ticketId).map(ticket -> ticket.title());
+    }
+
     /** Without the NUL character, which PostgreSQL cannot store, and without surrounding space; blank is {@code null}. */
     private static String clean(String text) {
         if (text == null) {

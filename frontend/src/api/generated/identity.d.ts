@@ -258,7 +258,8 @@ export interface paths {
          * Namen der Konten (jede vollständige Anmeldung)
          * @description Kennung, Anmeldename, Anzeigename und ob das Konto aktiv ist, für alle Konten des Unternehmens, nach Anmeldename
          *     sortiert (TASK-030). Die Oberfläche braucht die Namen für Mitglieder, Zuständige und Historie. Nichts über Passwörter,
-         *     Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht.
+         *     Sitzungen oder Rechte. Verlangt kein Verwaltungsrecht. Ein Portalkonto (TASK-075) erhält 403 `auth.forbidden`, weil es
+         *     sonst die Konten anderer Kunden erführe.
          */
         get: operations["listDirectory"];
         put?: never;
@@ -370,7 +371,7 @@ export interface components {
              *     Sitzung (GET /session), leer bei eingeschränkter Sitzung und bei einer Installation ohne Unternehmen; in Antworten auf
              *     Anmeldung und Passwortwechsel fehlt sie, der Client liest danach den Zustand. Ein Hinweis, was die Oberfläche zeigt, nie eine Berechtigung.
              */
-            rights?: ("accounts.manage" | "appearance.manage" | "helpdesk.manage" | "jobs.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "tags.manage")[];
+            rights?: ("accounts.manage" | "appearance.manage" | "helpdesk.manage" | "jobs.manage" | "permissions.manage" | "projects.manage" | "session_duration.manage" | "sla.manage" | "tags.manage")[];
             /**
              * @description `ldap`: das Passwort gehört dem Verzeichnis, die Oberfläche bietet keinen Passwortwechsel an.
              * @enum {string|null}
@@ -385,6 +386,12 @@ export interface components {
             passwordChangeBy?: string | null;
             /** @description Nur gesetzt, wenn der Server gerade ein Token ausgegeben hat. */
             csrfToken?: string | null;
+            /**
+             * @description `portal`: ein Portalkonto einer Kundenorganisation (TASK-075, DEC-105); die Oberfläche zeigt das Portal. Ein
+             *     Portalkonto hält nie Unternehmensrechte, `rights` ist für es leer.
+             * @enum {string|null}
+             */
+            kind?: "internal" | "portal" | null;
         };
         LoginRequest: {
             username: string;
@@ -433,6 +440,21 @@ export interface components {
              * @enum {string}
              */
             authKind: "local" | "ldap";
+            /**
+             * @description `portal`: ein lokales Konto einer Kundenorganisation (TASK-075); angelegt und zugeordnet über `/portal-accounts`.
+             * @enum {string}
+             */
+            kind?: "internal" | "portal";
+            /**
+             * Format: uuid
+             * @description Kundenorganisation eines Portalkontos; ändert sich nie
+             */
+            organizationId?: string | null;
+            /**
+             * Format: uuid
+             * @description Kontakt eines Portalkontos, falls verbunden
+             */
+            contactId?: string | null;
         };
         AuditEntry: {
             id: number;
@@ -452,6 +474,11 @@ export interface components {
             username: string;
             displayName?: string | null;
             active: boolean;
+            /**
+             * @description Ein Portalkonto wird als Mitglied und Autor angezeigt, aber nie als Zuständige Person angeboten (TASK-075).
+             * @enum {string}
+             */
+            kind: "internal" | "portal";
         };
         IssuedAccount: {
             account: components["schemas"]["Account"];

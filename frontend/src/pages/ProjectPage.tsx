@@ -1,14 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import {
-  addMember, companyTags, createProjectTag, createTicket, listMembers, listTickets, projectTags, readProject, readProjectRights,
-  removeMember, updateProject, type Member, type Project, type Ticket,
+  addMember, assignedProjectTags, assignProjectTag, createProjectTag, createTicket, listMembers, listTickets, readProject, readProjectRights, removeProjectTag,
+  removeMember, searchTickets, updateProject, type Member, type Project, type Ticket, type TicketHit,
 } from '../api/product.ts';
 import { CUSTOM_PREFIX, customFieldsOf, sendValue } from '../app/configuration.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
 import { hrefFor, navigate, type ProjectTab } from '../app/route.ts';
-import { useAccountName, useSession } from '../app/session.tsx';
+import { useAccountName, useChoosable, useSession } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
+import {
+  NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagCatalog, TagFilter, tagFilterActive, TagLabel, TagPicker, useTagProblemText, useTicketSelection,
+  type TagFilterValue, type TicketSelection,
+} from './TagParts.tsx';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
@@ -63,10 +67,42 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
   );
 }
 
+// One row of the ticket list, from the list of the project or from the search when a tag filter is set.
+interface TicketRow {
+  readonly id: string;
+  readonly key: string;
+  readonly number: number;
+  readonly fields: Readonly<Record<string, string | null | undefined>>;
+  readonly updatedAt: string | null;
+}
+
+const PAGE = 50;
+
 function TicketsTab({ project }: { readonly project: Project }) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
+  const [filter, setFilter] = useState<TagFilterValue>(NO_TAG_FILTER);
+  const [round, setRound] = useState(0);
+  const selection = useTicketSelection();
+  const active = tagFilterActive(filter);
+  const filterKey = `${filter.match}:${filter.tags.map((tag) => tag.id).join(',')}:${round}`;
+
+  return (
+    <>
+      <CreateTicket project={project} />
+      <section aria-labelledby="ticket-list">
+        <h2 id="ticket-list">{t('tickets.list')}</h2>
+        <TagFilter projectId={project.id} value={filter} onChange={setFilter} />
+        <SelectionBar selection={selection} projectId={project.id} onDone={() => setRound((value) => value + 1)} />
+        {active
+          ? <FilteredTickets key={filterKey} project={project} filter={filter} selection={selection} />
+          : <AllTickets key={round} project={project} selection={selection} />}
+      </section>
+    </>
+  );
+}
+
+function AllTickets({ project, selection }: { readonly project: Project; readonly selection: TicketSelection }) {
   const { api } = useBrand();
-  const name = useAccountName();
   const [extra, setExtra] = useState<Ticket[]>([]);
   const [more, setMore] = useState(true);
   const [tickets, reload] = useLoad(() => listTickets(api, project.id), [api, project.id]);
@@ -76,45 +112,89 @@ function TicketsTab({ project }: { readonly project: Project }) {
     const result = await listTickets(api, project.id, smallest);
     if (result.kind === 'ok') {
       setExtra((previous) => [...previous, ...result.data.value]);
-      setMore(result.data.value.length === 50);
+      setMore(result.data.value.length === PAGE);
     }
   }
 
   return (
+    <LoadedView loaded={tickets} retry={reload}>
+      {(first) => {
+        const all = [...first, ...extra];
+        return <TicketTable project={project} rows={all} selection={selection} withUpdated
+          onMore={more && first.length === PAGE ? () => void loadMore(all) : null} />;
+      }}
+    </LoadedView>
+  );
+}
+
+// With a tag filter the list comes from the search in this project, so list and search show the same tickets.
+function FilteredTickets({ project, filter, selection }: { readonly project: Project; readonly filter: TagFilterValue; readonly selection: TicketSelection }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const query = { project: [project.id], tag: filter.tags.map((tag) => tag.id), tagMatch: filter.match, limit: PAGE };
+  const [found, reload] = useLoad(() => searchTickets(api, query), [api, project.id]);
+  const [extra, setExtra] = useState<TicketRow[]>([]);
+
+  async function loadMore(offset: number) {
+    const result = await searchTickets(api, { ...query, offset });
+    if (result.kind === 'ok') setExtra((previous) => [...previous, ...result.data.value.items.map(hitRow)]);
+  }
+
+  return (
+    <LoadedView loaded={found} retry={reload}>
+      {(page) => {
+        const rows = [...page.items.map(hitRow), ...extra];
+        return (
+          <>
+            <p className="hint">{t('tickets.filtered')}</p>
+            <TicketTable project={project} rows={rows} selection={selection} withUpdated={false}
+              onMore={rows.length < page.total && rows.length + PAGE <= 1000 ? () => void loadMore(rows.length) : null} />
+          </>
+        );
+      }}
+    </LoadedView>
+  );
+}
+
+const hitRow = (hit: TicketHit): TicketRow => ({ id: hit.id, key: hit.key, number: hit.number, fields: hit.fields, updatedAt: null });
+
+function TicketTable({ project, rows, selection, withUpdated, onMore }: {
+  readonly project: Project;
+  readonly rows: readonly (Ticket | TicketRow)[];
+  readonly selection: TicketSelection;
+  readonly withUpdated: boolean;
+  readonly onMore: (() => void) | null;
+}) {
+  const { t, language } = useI18n();
+  const name = useAccountName();
+  if (rows.length === 0) return <EmptyText text={t('tickets.empty')} />;
+  const hidden = <span className="hidden-field">{t('field.hidden')}</span>;
+  return (
     <>
-      <CreateTicket project={project} />
-      <section aria-labelledby="ticket-list">
-        <h2 id="ticket-list">{t('tickets.list')}</h2>
-        <LoadedView loaded={tickets} retry={reload}>
-          {(first) => {
-            const all = [...first, ...extra];
-            if (all.length === 0) return <EmptyText text={t('tickets.empty')} />;
-            return (
-              <>
-                <div className="table-scroll">
-                  <table data-testid="ticket-table">
-                    <thead>
-                      <tr><th scope="col">{t('tickets.key')}</th><th scope="col">{t('field.title')}</th><th scope="col">{t('field.status')}</th><th scope="col">{t('field.assignee')}</th><th scope="col">{t('tickets.updated')}</th></tr>
-                    </thead>
-                    <tbody>
-                      {all.map((ticket) => (
-                        <tr key={ticket.id}>
-                          <td><a href={hrefFor({ name: 'ticket', projectId: project.id, number: ticket.number })}>{ticket.key}</a></td>
-                          <td>{'title' in ticket.fields ? ticket.fields.title : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td>{'status' in ticket.fields ? statusName(project, ticket.fields.status) : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td>{'assignee' in ticket.fields ? name(ticket.fields.assignee) || t('field.nobody') : <span className="hidden-field">{t('field.hidden')}</span>}</td>
-                          <td><time dateTime={ticket.updatedAt}>{formatDateTime(ticket.updatedAt, language)}</time></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {more && first.length === 50 && <button type="button" className="secondary" onClick={() => void loadMore(all)}>{t('tickets.more')}</button>}
-              </>
-            );
-          }}
-        </LoadedView>
-      </section>
+      <div className="table-scroll">
+        <table data-testid="ticket-table">
+          <thead>
+            <tr>
+              <th scope="col"><SelectPage selection={selection} items={rows} /></th>
+              <th scope="col">{t('tickets.key')}</th><th scope="col">{t('field.title')}</th><th scope="col">{t('field.status')}</th>
+              <th scope="col">{t('field.assignee')}</th>{withUpdated && <th scope="col">{t('tickets.updated')}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((ticket) => (
+              <tr key={ticket.id}>
+                <td><SelectTicket selection={selection} id={ticket.id} ticketKey={ticket.key} /></td>
+                <td><a href={hrefFor({ name: 'ticket', projectId: project.id, number: ticket.number })}>{ticket.key}</a></td>
+                <td>{'title' in ticket.fields ? ticket.fields.title : hidden}</td>
+                <td>{'status' in ticket.fields ? statusName(project, ticket.fields.status) : hidden}</td>
+                <td>{'assignee' in ticket.fields ? name(ticket.fields.assignee) || t('field.nobody') : hidden}</td>
+                {withUpdated && <td>{ticket.updatedAt !== null && <time dateTime={ticket.updatedAt}>{formatDateTime(ticket.updatedAt, language)}</time>}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {onMore !== null && <button type="button" className="secondary" onClick={onMore}>{t('tickets.more')}</button>}
     </>
   );
 }
@@ -136,7 +216,10 @@ function CreateTicket({ project }: { readonly project: Project }) {
   const [busy, setBusy] = useState(false);
   const required = (key: string) => config.fields.find((field) => field.key === key)?.required ?? false;
   const fields = customFieldsOf(config).filter((field) => field.active);
-  const persons = members.state === 'ok' ? members.value.map((member: Member) => ({ id: member.accountId, name: name(member.accountId) })) : [];
+  const choosable = useChoosable();
+  const persons = members.state === 'ok'
+    ? members.value.filter((member: Member) => choosable(member.accountId)).map((member: Member) => ({ id: member.accountId, name: name(member.accountId) }))
+    : [];
   useUnsavedGuard(title !== '' || description !== '' || Object.values(custom).some((value) => value !== ''));
 
   async function submit(event: FormEvent) {
@@ -178,7 +261,7 @@ function CreateTicket({ project }: { readonly project: Project }) {
     setError(reasons.length > 0 ? `${base} ${reasons.join(' ')}` : base);
   }
 
-  const people = members.state === 'ok' ? members.value : [];
+  const people = members.state === 'ok' ? members.value.filter((member: Member) => choosable(member.accountId)) : [];
   return (
     <details className="panel" open={false}>
       <summary>{t('tickets.create')}</summary>
@@ -228,7 +311,7 @@ function MembersTab({ project }: { readonly project: Project }) {
       <LoadedView loaded={members} retry={reload}>
         {(items, etag) => {
           const ids = new Set(items.map((member) => member.accountId));
-          const candidates = [...directory.values()].filter((entry) => entry.active && !ids.has(entry.id));
+          const candidates = [...directory.values()].filter((entry) => entry.active && entry.kind !== 'portal' && !ids.has(entry.id));
           return (
             <>
               {items.length === 0 ? <EmptyText text={t('members.empty')} /> : (
@@ -267,11 +350,12 @@ function MembersTab({ project }: { readonly project: Project }) {
 function TagsTab({ project }: { readonly project: Project }) {
   const { t } = useI18n();
   const { api } = useBrand();
-  const text = useProblemText();
-  const [own, reload] = useLoad(() => projectTags(api, project.id), [api, project.id]);
-  const [shared, reloadShared] = useLoad(() => companyTags(api), [api]);
+  const problemText = useTagProblemText();
   const [tagName, setTagName] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [round, setRound] = useState(0);
+  const [assigned, reloadAssigned] = useLoad(() => assignedProjectTags(api, project.id), [api, project.id]);
+  const [assignNotice, setAssignNotice] = useState<Notice | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -280,35 +364,57 @@ function TagsTab({ project }: { readonly project: Project }) {
     if (result.kind === 'ok') {
       setTagName('');
       setNotice({ kind: 'success', text: t('tags.created', { name: result.data.value.name }) });
-      return reload();
+      setRound((value) => value + 1);
+      return;
     }
-    setNotice({ kind: 'info', text: text(result.problem, { 'tag.name_taken': 'tags.error.taken', 'request.invalid': 'tags.error.name' }) });
+    setNotice({ kind: 'info', text: result.problem.code === 'request.invalid' ? t('tags.error.name') : problemText(result.problem) });
+  }
+
+  // Tags of the project itself come from the company catalog; changing them follows the project rights.
+  async function change(target: { readonly tagId: string } | { readonly name: string }, add: boolean) {
+    setAssignNotice(null);
+    const result = add ? await assignProjectTag(api, project.id, target)
+      : await removeProjectTag(api, project.id, 'tagId' in target ? target.tagId : '');
+    if (result.kind === 'ok') return reloadAssigned();
+    setAssignNotice({ kind: 'info', text: problemText(result.problem) });
   }
 
   return (
     <>
+      <section aria-labelledby="project-own-tags">
+        <h2 id="project-own-tags">{t('tags.ofProject')}</h2>
+        <p className="hint">{t('tags.ofProjectHint')}</p>
+        <NoticeView notice={assignNotice} />
+        <LoadedView loaded={assigned} retry={reloadAssigned}>
+          {(items) => (
+            <>
+              {items.length === 0 ? <EmptyText text={t('tags.none')} /> : (
+                <ul className="chips" data-testid="project-assigned-tags">
+                  {items.map((tag) => (
+                    <li key={tag.id} className={tag.archived ? 'archived' : undefined}>
+                      <TagLabel tag={tag} />
+                      {project.manageable && <button type="button" className="chip-remove" aria-label={t('tags.remove', { name: tag.name })}
+                        onClick={() => void change({ tagId: tag.id }, false)}>×</button>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {project.manageable && (
+                <TagPicker label={t('tags.assign')} projectId={null} exclude={new Set(items.map((tag) => tag.id))}
+                  onPick={(tag) => void change({ tagId: tag.id }, true)} onCreate={(name) => void change({ name }, true)} />
+              )}
+            </>
+          )}
+        </LoadedView>
+      </section>
       <section aria-labelledby="project-tags">
         <h2 id="project-tags">{t('tags.project')}</h2>
         <NoticeView notice={notice} />
-        <LoadedView loaded={own} retry={reload}>
-          {(items) => items.length === 0
-            ? <EmptyText text={t('tags.empty')} /> : (
-            <ul className="chips" data-testid="project-tags">{items.map((tag) => <li key={tag.id} className={tag.archived ? 'archived' : undefined}>{tag.name}</li>)}</ul>
-          )}
-        </LoadedView>
         <form className="inline-form" onSubmit={(event) => void submit(event)}>
           <TextField label={t('tags.new')} value={tagName} onChange={setTagName} maxLength={50} />
           <button type="submit" disabled={tagName.trim() === ''}>{t('tags.createSubmit')}</button>
         </form>
-      </section>
-      <section aria-labelledby="company-tags">
-        <h2 id="company-tags">{t('tags.company')}</h2>
-        <LoadedView loaded={shared} retry={reloadShared}>
-          {(items) => items.length === 0
-            ? <EmptyText text={t('tags.empty')} /> : (
-            <ul className="chips">{items.map((tag) => <li key={tag.id} className={tag.archived ? 'archived' : undefined}>{tag.name}</li>)}</ul>
-          )}
-        </LoadedView>
+        <TagCatalog scope={{ kind: 'project', projectId: project.id }} round={round} />
       </section>
     </>
   );

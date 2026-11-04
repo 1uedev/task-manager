@@ -436,6 +436,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/tickets/{number}/helpdesk/reply/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Die fertige Mail einer Antwort vor der Bestätigung (TASK-082)
+         * @description Prüft wie `sendReply` und zeigt die Mail in der Vorlage „Antwort an Kunden“ und der Sprache des Kontakts, wie sie jetzt
+         *     ginge; gespeichert wird nichts. Die Bestätigung setzt die Mail mit der dann gültigen Vorlage neu und hält sie fest.
+         */
+        post: operations["previewReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/tickets/{number}/helpdesk/replies": {
         parameters: {
             query?: never;
@@ -449,6 +470,8 @@ export interface paths {
          * Antwort an den Kontakt bestätigen; der Versand folgt im Hintergrund
          * @description Ohne `to` geht die Antwort an die erste Adresse des Kontakts. Verletzungen: `mailboxId.unavailable`,
          *     `to.not_of_contact`, `subject.invalid`, `body.invalid`. Die Antwort ist ein Eintrag des Felds `mail` in der Historie.
+         *     Die Mail wird mit der Vorlage „Antwort an Kunden“ in der Sprache des Kontakts als HTML und Klartext gesetzt und beim
+         *     Bestätigen festgehalten; ein erneuter Versand nutzt sie unverändert (TASK-082).
          */
         post: operations["sendReply"];
         delete?: never;
@@ -498,10 +521,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/tickets/{number}/helpdesk/portal-posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /** Beiträge des Portalgesprächs, älteste zuerst (ticket.read mit Leseregel mail, TASK-076) */
+        get: operations["listPortalPosts"];
+        put?: never;
+        /** Im Portal antworten (helpdesk.reply und Leseregeln mail und contact, TASK-076) */
+        post: operations["answerInPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anfrage im Portal anlegen (nur Portalkonten, TASK-076) */
+        post: operations["createPortalRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /** Letzte Einträge und neue Antworten des Supports je Anfrage der Organisation (nur Portalkonten, TASK-076) */
+        get: operations["listPortalActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Gespräch einer Anfrage, älteste Einträge zuerst (nur Portalkonten, TASK-076)
+         * @description Jeder Eintrag und jede Datei gehört zur Organisation, für die er geschrieben wurde (TASK-079, DEC-109). Nach einem Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel für sie entsteht.
+         */
+        get: operations["getPortalConversation"];
+        put?: never;
+        /** Beitrag zur Anfrage schreiben (portal.answer, TASK-076) */
+        post: operations["postInPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/projects/{projectId}/tickets/{number}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Gespräch bis zu einer gezeigten Antwort des Supports als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-080)
+         * @description position ist die höchste Position einer Antwort des Supports, die das Portal aus dem Gespräch angezeigt hat (Feld position der Einträge, 0 ohne solche Antwort). Eine Antwort, die nicht angezeigt wurde, bleibt neu, auch wenn ihr Zeitpunkt früher liegt (TASK-080, DEC-110). Eine Position hinter den gespeicherten Antworten gilt als die letzte von ihnen, eine kleinere als die vermerkte ändert nichts.
+         */
+        put: operations["markPortalRequestSeen"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PortalFile: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            uploadedAt: string;
+        };
+        PortalPost: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            authorKind: "customer" | "support";
+            /** Format: uuid */
+            authorId: string;
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            attachments: components["schemas"]["PortalFile"][];
+        };
+        ConversationEntry: {
+            /**
+             * @description mail: Mail der Organisation, reply: gesendete Mailantwort, post: Beitrag im Portal
+             * @enum {string}
+             */
+            kind: "mail" | "reply" | "post";
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            author: "customer" | "support";
+            /** @description Beitrag des anfragenden Kontos selbst. */
+            own: boolean;
+            subject?: string | null;
+            body: string | null;
+            attachments: components["schemas"]["PortalFile"][];
+            /**
+             * Format: int64
+             * @description Position einer Antwort des Supports im Gespräch (TASK-080). Das Portal vermerkt die höchste gezeigte Position als gelesen. Andere Einträge und eine Antwort, die beim Lesen noch nicht sicher feststand, haben keine.
+             */
+            position?: number | null;
+        };
         Problem: {
             type?: string;
             title: string;
@@ -553,6 +726,7 @@ export interface components {
             customerId: string;
             name: string;
             addresses: string[];
+            language: components["schemas"]["ContactLanguage"];
             /** Format: int64 */
             version: number;
             /** Format: date-time */
@@ -569,6 +743,28 @@ export interface components {
             customerId: string;
             name: string;
             addresses: string[];
+            /** @description Sprache der Mails an den Kontakt (TASK-082); ohne Angabe beim Anlegen Deutsch, beim Ändern unverändert. Sonst 400 mit `language.invalid`. */
+            language?: components["schemas"]["ContactLanguage"];
+        };
+        /** @enum {string} */
+        ContactLanguage: "de" | "en";
+        /** @description Die fertige Mail einer Antwort (TASK-082) */
+        MailPreview: {
+            language: components["schemas"]["ContactLanguage"];
+            /** @description Der Klartext der Mail */
+            text: string;
+            /** @description Das HTML der Mail; das Logo steht dort als cid:logo */
+            html: string;
+            /** @description Die Teile der Mail im Layout, für die Anzeige in der Anwendung */
+            parts: {
+                name: string;
+                accentColor: string;
+                logo: boolean;
+                greeting: string;
+                body: string;
+                signature: string;
+                footer: string;
+            };
         };
         /** @enum {string} */
         Security: "tls" | "starttls" | "none";
@@ -784,6 +980,8 @@ export interface components {
             replies: components["schemas"]["Reply"][] | null;
             /** @description Ob die Person dem Kontakt antworten darf; nur eine Momentaufnahme, der Server prüft beim Senden. */
             replyAllowed: boolean;
+            /** @description Ob die Person im Portal antworten darf (Rechte wie replyAllowed, dazu ein Kunde am Ticket, TASK-076); nur eine Momentaufnahme. */
+            portalAnswerAllowed: boolean;
         };
         /** @enum {string} */
         ReplyState: "pending" | "sent" | "failed" | "uncertain";
@@ -882,7 +1080,8 @@ export interface components {
          *     addresses.invalid, customerId.unknown, customerId.not_released, contactId.not_released, contactId.not_of_customer,
          *     projectId.unknown, ticketType.unknown, type.unknown, imapHost.invalid, imapPort.invalid, imapSecurity.invalid,
          *     username.invalid, folder.invalid, smtpHost.invalid, smtpPort.invalid, smtpSecurity.invalid, address.invalid,
-         *     authservId.invalid, maxBytes.invalid, reason.invalid), helpdesk.limit_invalid, helpdesk.state_invalid,
+         *     authservId.invalid, maxBytes.invalid, reason.invalid, type.not_offered, title.invalid, description.invalid,
+         *     body.invalid, attachmentIds.invalid), helpdesk.portal_no_customer, helpdesk.limit_invalid, helpdesk.state_invalid,
          *     customer.not_found, customer.name_taken, customer.version_conflict, contact.not_found, contact.address_taken,
          *     contact.version_conflict, mailbox.not_found, mailbox.name_taken, mailbox.version_conflict,
          *     helpdesk.secret_key_missing, helpdesk.message_not_found, helpdesk.message_processed, helpdesk.version_conflict,
@@ -1631,6 +1830,45 @@ export interface operations {
             503: components["responses"]["Problem"];
         };
     };
+    previewReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    mailboxId: string;
+                    to?: string | null;
+                    subject: string;
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Die fertige Mail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     sendReply: {
         parameters: {
             query?: never;
@@ -1745,6 +1983,241 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalPosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Beiträge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPost"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    answerInPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Die Antwort, sofort im Portal sichtbar */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPost"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createPortalRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Ein im Portal angebotener Tickettyp. */
+                    type: string;
+                    title: string;
+                    description?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Angelegt */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: int64 */
+                        number: number;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listPortalActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Je Anfrage mit Gespräch eine Zeile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        number: number;
+                        /** Format: date-time */
+                        lastActivityAt?: string | null;
+                        /** Format: date-time */
+                        lastSupportAt?: string | null;
+                        /** Format: date-time */
+                        seenAt?: string | null;
+                        /** @description Eine Antwort des Supports liegt hinter der zuletzt vermerkten Position (TASK-080). */
+                        unread: boolean;
+                    }[];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getPortalConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Einträge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationEntry"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    postInPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                    attachmentIds?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Der Beitrag */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationEntry"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    markPortalRequestSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    position: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Vermerkt */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

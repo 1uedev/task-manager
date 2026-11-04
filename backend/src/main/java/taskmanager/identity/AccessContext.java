@@ -13,11 +13,23 @@ import java.util.UUID;
  * @param sessionId server side session reference
  * @param level {@link AuthenticationLevel#FULL} for regular access
  * @param sessionExpiresAt end of the fixed session period
+ * @param organizationId the customer organization of a portal account, {@code null} for an internal account (TASK-075)
  */
 public record AccessContext(
         UUID accountId,
         String username,
         UUID sessionId,
         AuthenticationLevel level,
-        Instant sessionExpiresAt) {
+        Instant sessionExpiresAt,
+        UUID organizationId) {
+
+    /** The identity of an internal account. */
+    public AccessContext(UUID accountId, String username, UUID sessionId, AuthenticationLevel level, Instant sessionExpiresAt) {
+        this(accountId, username, sessionId, level, sessionExpiresAt, null);
+    }
+
+    /** True for a portal account. */
+    public boolean portal() {
+        return organizationId != null;
+    }
 }

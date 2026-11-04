@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Helpdesk über Mail (TASK-057, TASK-058)
-  version: 0.1.0
+  title: Task Manager API, Helpdesk über Mail und Portalgespräch (TASK-057, TASK-058, TASK-076, TASK-082)
+  version: 0.2.0
   description: |
     Erster Teil des Helpdesks über Mail (DEC-086, Paket A9, REQ-HD-001 bis REQ-HD-004): Kundenorganisationen und
     Kontakte, Postfächer mit IMAP Abruf, die Prüfwarteschlange und Kunde, Kontakt und Mails eines Tickets. Jeder Endpunkt
@@ -35,6 +35,23 @@ info:
     sendet eine gescheiterte Antwort erneut, eine unklare nur mit bestätigtem Risiko einer zweiten Zustellung. Eine Mail, die
     in In-Reply-To oder References die Message-ID einer Antwort nennt, kommt zum Ticket dieser Antwort, wenn sie sonst ein
     Ticket ergeben hätte und ihr Absender Kontakt des Kunden dieses Tickets ist; sonst wartet sie mit dem Ticket als Hinweis.
+
+    Portalgespräch (TASK-076, DEC-106): Unter `/portal/projects/{projectId}` legt ein Portalkonto Anfragen an
+    (`ticket.create` mit der Schreibregel für `title` und, wenn angegeben, `description`), sieht das Gespräch einer Anfrage
+    seiner Organisation (`ticket.read`) und schreibt Beiträge (`portal.answer`). Angeboten werden nur die in der
+    Projektkonfiguration fürs Portal markierten Tickettypen (sonst 400 `type.not_offered`). Kunde ist die Organisation des
+    Kontos, Kontakt sein Kontakt, solange dieser noch zur Organisation gehört; die Servicefristen beginnen mit der Anlage.
+    Das Gespräch besteht aus den Mails der Organisation, die zum Ticket gehören, den gesendeten Mailantworten und den
+    Beiträgen in beide Richtungen; interne Historie, Prüfwarteschlange, wartende, gescheiterte oder unklare Antworten und
+    alle anderen internen Daten fehlen. Anhänge erscheinen nur mit der Leseregel für `attachments` und nur kundensichtbare.
+    Ein Beitrag ist Text bis 100 000 Zeichen und trägt höchstens 20 Anhänge, die das Konto vorher an dieselbe Anfrage
+    geladen hat und die noch kein Beitrag trägt (sonst 400 `attachmentIds.invalid`); er zählt wie eine Kundenantwort per
+    Mail, auch für die Servicefristen. Eine Anfrage einer anderen Organisation antwortet mit 404 `ticket.not_found`, ein
+    internes Konto auf diesen Pfaden mit 404 `project.not_found`.
+
+    Am Ticket antwortet der Support über `/helpdesk/portal-posts` im Portal, mit denselben Rechten wie eine Mailantwort.
+    Die Antwort erscheint sofort im Portal und zählt als Erstreaktion; ein Ticket ohne Kunde antwortet mit 409
+    `helpdesk.portal_no_customer`. Die Beiträge sieht intern, wer die Leseregel für `mail` hat.
 servers:
   - url: /api/v1
 security:
@@ -570,6 +587,40 @@ paths:
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/reply/preview:
+    post:
+      operationId: previewReply
+      summary: Die fertige Mail einer Antwort vor der Bestätigung (TASK-082)
+      description: |
+        Prüft wie `sendReply` und zeigt die Mail in der Vorlage „Antwort an Kunden“ und der Sprache des Kontakts, wie sie jetzt
+        ginge; gespeichert wird nichts. Die Bestätigung setzt die Mail mit der dann gültigen Vorlage neu und hält sie fest.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mailboxId, subject, body]
+              properties:
+                mailboxId: {type: string, format: uuid}
+                to: {type: [string, 'null']}
+                subject: {type: string, maxLength: 998}
+                body: {type: string, maxLength: 100000}
+      responses:
+        '200':
+          description: Die fertige Mail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailPreview'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /projects/{projectId}/tickets/{number}/helpdesk/replies:
     post:
       operationId: sendReply
@@ -577,6 +628,8 @@ paths:
       description: |
         Ohne `to` geht die Antwort an die erste Adresse des Kontakts. Verletzungen: `mailboxId.unavailable`,
         `to.not_of_contact`, `subject.invalid`, `body.invalid`. Die Antwort ist ein Eintrag des Felds `mail` in der Historie.
+        Die Mail wird mit der Vorlage „Antwort an Kunden“ in der Sprache des Kontakts als HTML und Klartext gesetzt und beim
+        Bestätigen festgehalten; ein erneuter Versand nutzt sie unverändert (TASK-082).
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Number'
@@ -667,6 +720,186 @@ paths:
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/helpdesk/portal-posts:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: listPortalPosts
+      summary: Beiträge des Portalgesprächs, älteste zuerst (ticket.read mit Leseregel mail, TASK-076)
+      responses:
+        '200':
+          description: Beiträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PortalPost'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: answerInPortal
+      summary: Im Portal antworten (helpdesk.reply und Leseregeln mail und contact, TASK-076)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: {type: string, minLength: 1, maxLength: 100000}
+      responses:
+        '201':
+          description: Die Antwort, sofort im Portal sichtbar
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortalPost'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createPortalRequest
+      summary: Anfrage im Portal anlegen (nur Portalkonten, TASK-076)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title]
+              properties:
+                type: {type: string, description: Ein im Portal angebotener Tickettyp.}
+                title: {type: string, minLength: 1, maxLength: 200}
+                description: {type: [string, 'null'], maxLength: 20000}
+      responses:
+        '201':
+          description: Angelegt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, number]
+                properties:
+                  id: {type: string, format: uuid}
+                  number: {type: integer, format: int64}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/activity:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listPortalActivity
+      summary: Letzte Einträge und neue Antworten des Supports je Anfrage der Organisation (nur Portalkonten, TASK-076)
+      responses:
+        '200':
+          description: Je Anfrage mit Gespräch eine Zeile
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [number, unread]
+                  properties:
+                    number: {type: integer, format: int64}
+                    lastActivityAt: {type: [string, 'null'], format: date-time}
+                    lastSupportAt: {type: [string, 'null'], format: date-time}
+                    seenAt: {type: [string, 'null'], format: date-time}
+                    unread: {type: boolean, description: 'Eine Antwort des Supports liegt hinter der zuletzt vermerkten Position (TASK-080).'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/conversation:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: getPortalConversation
+      summary: Gespräch einer Anfrage, älteste Einträge zuerst (nur Portalkonten, TASK-076)
+      description: >-
+        Jeder Eintrag und jede Datei gehört zur Organisation, für die er geschrieben wurde (TASK-079, DEC-109). Nach einem
+        Kundenwechsel sieht die neue Organisation nur, was ab dem Wechsel für sie entsteht.
+      responses:
+        '200':
+          description: Einträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ConversationEntry'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: postInPortal
+      summary: Beitrag zur Anfrage schreiben (portal.answer, TASK-076)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: {type: string, minLength: 1, maxLength: 100000}
+                attachmentIds:
+                  type: array
+                  maxItems: 20
+                  items: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Der Beitrag
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConversationEntry'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}/seen:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    put:
+      operationId: markPortalRequestSeen
+      summary: Gespräch bis zu einer gezeigten Antwort des Supports als gelesen vermerken, für die Markierung neuer Antworten (nur Portalkonten, TASK-076, TASK-080)
+      description: >-
+        position ist die höchste Position einer Antwort des Supports, die das Portal aus dem Gespräch angezeigt hat (Feld
+        position der Einträge, 0 ohne solche Antwort). Eine Antwort, die nicht angezeigt wurde, bleibt neu, auch wenn ihr
+        Zeitpunkt früher liegt (TASK-080, DEC-110). Eine Position hinter den gespeicherten Antworten gilt als die letzte von
+        ihnen, eine kleinere als die vermerkte ändert nichts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [position]
+              properties:
+                position: {type: integer, format: int64, minimum: 0}
+      responses:
+        '204': {description: Vermerkt}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -707,7 +940,8 @@ components:
         addresses.invalid, customerId.unknown, customerId.not_released, contactId.not_released, contactId.not_of_customer,
         projectId.unknown, ticketType.unknown, type.unknown, imapHost.invalid, imapPort.invalid, imapSecurity.invalid,
         username.invalid, folder.invalid, smtpHost.invalid, smtpPort.invalid, smtpSecurity.invalid, address.invalid,
-        authservId.invalid, maxBytes.invalid, reason.invalid), helpdesk.limit_invalid, helpdesk.state_invalid,
+        authservId.invalid, maxBytes.invalid, reason.invalid, type.not_offered, title.invalid, description.invalid,
+        body.invalid, attachmentIds.invalid), helpdesk.portal_no_customer, helpdesk.limit_invalid, helpdesk.state_invalid,
         customer.not_found, customer.name_taken, customer.version_conflict, contact.not_found, contact.address_taken,
         contact.version_conflict, mailbox.not_found, mailbox.name_taken, mailbox.version_conflict,
         helpdesk.secret_key_missing, helpdesk.message_not_found, helpdesk.message_processed, helpdesk.version_conflict,
@@ -719,6 +953,46 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    PortalFile:
+      type: object
+      required: [id, name, size, uploadedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        size: {type: integer, format: int64}
+        uploadedAt: {type: string, format: date-time}
+    PortalPost:
+      type: object
+      required: [id, authorKind, authorId, body, createdAt, attachments]
+      properties:
+        id: {type: string, format: uuid}
+        authorKind: {type: string, enum: [customer, support]}
+        authorId: {type: string, format: uuid}
+        body: {type: string}
+        createdAt: {type: string, format: date-time}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/PortalFile'}
+    ConversationEntry:
+      type: object
+      required: [kind, id, at, author, own, body, attachments]
+      properties:
+        kind: {type: string, enum: [mail, reply, post], description: 'mail: Mail der Organisation, reply: gesendete Mailantwort, post: Beitrag im Portal'}
+        id: {type: string, format: uuid}
+        at: {type: string, format: date-time}
+        author: {type: string, enum: [customer, support]}
+        own: {type: boolean, description: Beitrag des anfragenden Kontos selbst.}
+        subject: {type: [string, 'null']}
+        body: {type: [string, 'null']}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/PortalFile'}
+        position:
+          type: [integer, 'null']
+          format: int64
+          description: >-
+            Position einer Antwort des Supports im Gespräch (TASK-080). Das Portal vermerkt die höchste gezeigte Position als
+            gelesen. Andere Einträge und eine Antwort, die beim Lesen noch nicht sicher feststand, haben keine.
     Problem:
       type: object
       required: [title, status, instance, code, correlationId]
@@ -765,7 +1039,7 @@ components:
           items: {type: string, format: uuid}
     Contact:
       type: object
-      required: [id, customerId, name, addresses, version, createdAt, createdBy, updatedAt, updatedBy]
+      required: [id, customerId, name, addresses, language, version, createdAt, createdBy, updatedAt, updatedBy]
       properties:
         id: {type: string, format: uuid}
         customerId: {type: string, format: uuid}
@@ -773,6 +1047,7 @@ components:
         addresses:
           type: array
           items: {type: string, format: email}
+        language: {$ref: '#/components/schemas/ContactLanguage'}
         version: {type: integer, format: int64}
         createdAt: {type: string, format: date-time}
         createdBy: {type: string, format: uuid}
@@ -789,6 +1064,32 @@ components:
           minItems: 1
           maxItems: 20
           items: {type: string}
+        language:
+          description: Sprache der Mails an den Kontakt (TASK-082); ohne Angabe beim Anlegen Deutsch, beim Ändern unverändert. Sonst 400 mit `language.invalid`.
+          $ref: '#/components/schemas/ContactLanguage'
+    ContactLanguage:
+      type: string
+      enum: [de, en]
+    MailPreview:
+      type: object
+      description: Die fertige Mail einer Antwort (TASK-082)
+      required: [language, text, html, parts]
+      properties:
+        language: {$ref: '#/components/schemas/ContactLanguage'}
+        text: {type: string, description: Der Klartext der Mail}
+        html: {type: string, description: 'Das HTML der Mail; das Logo steht dort als cid:logo'}
+        parts:
+          type: object
+          description: Die Teile der Mail im Layout, für die Anzeige in der Anwendung
+          required: [name, accentColor, logo, greeting, body, signature, footer]
+          properties:
+            name: {type: string}
+            accentColor: {type: string}
+            logo: {type: boolean}
+            greeting: {type: string}
+            body: {type: string}
+            signature: {type: string}
+            footer: {type: string}
     Security:
       type: string
       enum: [tls, starttls, none]
@@ -988,7 +1289,7 @@ components:
         version: {type: integer, format: int64}
     TicketHelpdesk:
       type: object
-      required: [readable, writable, customer, contact, mails, replies, replyAllowed]
+      required: [readable, writable, customer, contact, mails, replies, replyAllowed, portalAnswerAllowed]
       properties:
         readable:
           type: array
@@ -1014,6 +1315,9 @@ components:
         replyAllowed:
           type: boolean
           description: Ob die Person dem Kontakt antworten darf; nur eine Momentaufnahme, der Server prüft beim Senden.
+        portalAnswerAllowed:
+          type: boolean
+          description: Ob die Person im Portal antworten darf (Rechte wie replyAllowed, dazu ein Kunde am Ticket, TASK-076); nur eine Momentaufnahme.
     ReplyState:
       type: string
       enum: [pending, sent, failed, uncertain]

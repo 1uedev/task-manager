@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import {
   createContact, createCustomer, createMailbox, listContacts, listCustomers, listMailboxes, listProjects, readHelpdeskStatus, readProject,
-  testMailbox, updateContact, updateCustomer, updateMailbox, type Contact, type Customer, type Mailbox, type MailboxRequest, type ProjectSummary,
+  testMailbox, updateContact, updateCustomer, updateMailbox, type Contact, type ContactLanguage, type Customer, type Mailbox, type MailboxRequest, type ProjectSummary,
 } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -359,7 +359,7 @@ function Contacts({ customers }: { readonly customers: readonly Customer[] }) {
           <div className="table-scroll">
             <table>
               <thead>
-                <tr><th scope="col">{t('helpdesk.name')}</th><th scope="col">{t('helpdesk.customer')}</th><th scope="col">{t('helpdesk.addresses')}</th><th scope="col">{t('helpdesk.actions')}</th></tr>
+                <tr><th scope="col">{t('helpdesk.name')}</th><th scope="col">{t('helpdesk.customer')}</th><th scope="col">{t('helpdesk.addresses')}</th><th scope="col">{t('helpdesk.language')}</th><th scope="col">{t('helpdesk.actions')}</th></tr>
               </thead>
               <tbody>
                 {list.map((contact) => (
@@ -367,6 +367,7 @@ function Contacts({ customers }: { readonly customers: readonly Customer[] }) {
                     <td>{contact.name}</td>
                     <td>{customerName(contact.customerId)}</td>
                     <td>{contact.addresses.join(', ')}</td>
+                    <td>{t(contact.language === 'en' ? 'helpdesk.languageEn' : 'helpdesk.languageDe')}</td>
                     <td className="row-actions"><button type="button" className="secondary" onClick={() => setEditing(contact)}>{t('helpdesk.edit')}</button></td>
                   </tr>
                 ))}
@@ -401,17 +402,19 @@ function ContactForm({ contact, customers, onDone }: {
   const [customerId, setCustomerId] = useState(contact?.customerId ?? customers[0]?.id ?? '');
   const [name, setName] = useState(contact?.name ?? '');
   const [addresses, setAddresses] = useState((contact?.addresses ?? []).join('\n'));
+  // The language of the mails to the contact (TASK-082); German unless chosen otherwise.
+  const [language, setLanguage] = useState<ContactLanguage>(contact?.language ?? 'de');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
-  useUnsavedGuard(name !== (contact?.name ?? '') || addresses !== (contact?.addresses ?? []).join('\n'));
+  useUnsavedGuard(name !== (contact?.name ?? '') || addresses !== (contact?.addresses ?? []).join('\n') || language !== (contact?.language ?? 'de'));
 
   async function save(event: FormEvent) {
     event.preventDefault();
     setNotice(null);
     const list = addresses.split(/[\s,;]+/).map((value) => value.trim()).filter((value) => value !== '');
     setBusy(true);
-    const result = contact === null ? await createContact(api, customerId, name.trim(), list)
-      : await updateContact(api, contact.id, contact.version, customerId, name.trim(), list);
+    const result = contact === null ? await createContact(api, customerId, name.trim(), list, language)
+      : await updateContact(api, contact.id, contact.version, customerId, name.trim(), list, language);
     setBusy(false);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: reasons(result.problem) });
     onDone(result.data.value);
@@ -424,6 +427,9 @@ function ContactForm({ contact, customers, onDone }: {
         options={customers.map((customer) => ({ value: customer.id, label: customer.name }))} />
       <TextField label={t('helpdesk.name')} value={name} onChange={setName} required maxLength={120} />
       <TextField label={t('helpdesk.addresses')} hint={t('helpdesk.addressesHint')} value={addresses} onChange={setAddresses} multiline required />
+      <SelectField label={t('helpdesk.language')} hint={t('helpdesk.languageHint')} value={language}
+        onChange={(value) => setLanguage(value === 'en' ? 'en' : 'de')}
+        options={[{ value: 'de', label: t('helpdesk.languageDe') }, { value: 'en', label: t('helpdesk.languageEn') }]} />
       <p className="actions">
         <button type="submit" disabled={busy}>{t('helpdesk.save')}</button>
         <button type="button" className="secondary" onClick={() => onDone(null)}>{t('helpdesk.cancel')}</button>

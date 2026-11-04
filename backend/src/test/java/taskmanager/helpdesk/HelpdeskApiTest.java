@@ -1,5 +1,6 @@
 package taskmanager.helpdesk;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1009,6 +1011,14 @@ class HelpdeskApiTest {
         }
     }
 
+    /** A sent reply takes the next position of its ticket in the portal conversation (TASK-080, F2). */
+    private void assertPortalPosition(UUID reply) {
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                select r.portal_position is not null and r.portal_position <= p.position
+                from helpdesk_reply r join helpdesk_portal_position p on p.ticket_id = r.ticket_id where r.id = ?
+                """, Boolean.class, reply));
+    }
+
     private String replyState(UUID reply) {
         return jdbc.queryForObject("select state from helpdesk_reply where id = ?", String.class, reply);
     }
@@ -1054,6 +1064,7 @@ class HelpdeskApiTest {
 
         assertNull(runReplyJob(reply, 1));
         assertEquals("sent", replyState(reply));
+        assertPortalPosition(reply);
         List<jakarta.mail.internet.MimeMessage> received = receivedBy(setup.contactAddress());
         assertEquals(1, received.size());
         jakarta.mail.internet.MimeMessage mail = received.get(0);
@@ -1074,6 +1085,143 @@ class HelpdeskApiTest {
         Response history = replier.get("/api/v1/projects/" + setup.project() + "/tickets/" + number + "/history");
         assertTrue(history.body().contains(reply.toString()), history.body());
         assertEquals(List.of("reply.confirmed"), jdbc.queryForList("select operation from helpdesk_audit_event where target_id = ?", String.class, reply));
+    }
+
+    // ---------------------------------------------------------------- mail template (TASK-082)
+
+    /** The parts of a sent mail: the plain text, the HTML and the embedded logo, if any. */
+    private record MailParts(String text, String html, jakarta.mail.BodyPart logo) {
+    }
+
+    private static MailParts parts(jakarta.mail.internet.MimeMessage mail) throws Exception {
+        assertTrue(mail.isMimeType("multipart/alternative"), mail.getContentType());
+        jakarta.mail.Multipart alternative = (jakarta.mail.Multipart) mail.getContent();
+        assertEquals(2, alternative.getCount());
+        jakarta.mail.BodyPart text = alternative.getBodyPart(0);
+        assertTrue(text.isMimeType("text/plain"), text.getContentType());
+        jakarta.mail.BodyPart second = alternative.getBodyPart(1);
+        if (second.isMimeType("text/html")) {
+            return new MailParts((String) text.getContent(), (String) second.getContent(), null);
+        }
+        assertTrue(second.isMimeType("multipart/related"), second.getContentType());
+        jakarta.mail.Multipart related = (jakarta.mail.Multipart) second.getContent();
+        assertEquals(2, related.getCount());
+        assertTrue(related.getBodyPart(0).isMimeType("text/html"));
+        return new MailParts((String) text.getContent(), (String) related.getBodyPart(0).getContent(), related.getBodyPart(1));
+    }
+
+    private static final byte[] PNG = java.util.Base64.getDecoder().decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    private void restoreAppearance() {
+        jdbc.update("update appearance_setting set name = 'Task Manager', accent_color = '#f97316', logo = null, logo_type = null where id = 1");
+        jdbc.update("""
+                update appearance_mail_template set application_url = null, greeting_de = null, signature_de = null, footer_de = null,
+                    greeting_en = null, signature_en = null, footer_en = null where id = 1
+                """);
+    }
+
+    @Test
+    void aReplyGoesAsHtmlAndTextInTheTemplateAndLanguageOfTheContactAndKeepsTheMailOfItsConfirmation() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        long number = (Long) ticketFromMail(setup, "Drucker <Halle 2>")[0];
+        String key = jdbc.queryForObject("select key from project where id = ?", String.class, setup.project());
+        Browser replier = replier(setup);
+        try {
+            jdbc.update("update appearance_setting set name = 'Nordlicht <GmbH>', accent_color = '#123abc', logo = ?, logo_type = 'image/png' where id = 1", PNG);
+            jdbc.update("""
+                    update appearance_mail_template set application_url = 'https://support.example.com/', greeting_de = 'Hallo {{contact.name}},',
+                        signature_de = 'Gruß\n{{sender.name}}', footer_de = '{{company.name}} · {{ticket.number}} · {{ticket.title}}\nPortal: {{portal.url}}'
+                    where id = 1
+                    """);
+
+            // The check before the confirmation shows the finished mail; nothing is written.
+            Response preview = replier.send("POST", ticketPath(setup, number) + "/reply/preview",
+                Map.of("mailboxId", setup.mailbox(), "subject", "Re: Anfrage", "body", "Zeile 1\n<b>fett</b>"), null);
+            assertEquals(200, preview.status(), preview.body());
+            assertEquals("de", preview.json().get("language").asString());
+            String previewText = preview.json().get("text").asString();
+            assertTrue(previewText.startsWith("Hallo Lea Lang,\n\nZeile 1\n<b>fett</b>\n\nGruß\n"), previewText);
+            assertTrue(previewText.contains("-- \nNordlicht <GmbH> · " + key + "-" + number + " · Drucker <Halle 2>\nPortal: https://support.example.com/"), previewText);
+            String previewHtml = preview.json().get("html").asString();
+            assertTrue(previewHtml.contains("&lt;b&gt;fett&lt;/b&gt;") && !previewHtml.contains("<b>fett"), previewHtml);
+            assertTrue(previewHtml.contains("Nordlicht &lt;GmbH&gt;") && previewHtml.contains("Drucker &lt;Halle 2&gt;"), previewHtml);
+            assertTrue(previewHtml.contains("<a href=\"https://support.example.com/\""), previewHtml);
+            assertTrue(previewHtml.contains("cid:logo") && previewHtml.contains("#123abc"), previewHtml);
+            assertTrue(preview.json().get("parts").get("logo").asBoolean());
+            assertEquals("Hallo Lea Lang,", preview.json().get("parts").get("greeting").asString());
+            assertEquals(0, jdbc.queryForObject("select count(*) from helpdesk_reply where ticket_id = (select id from ticket where project_id = ? and number = ?)",
+                Long.class, setup.project(), number));
+            Response invalid = replier.send("POST", ticketPath(setup, number) + "/reply/preview",
+                Map.of("mailboxId", setup.mailbox(), "subject", "Re: Anfrage", "body", " "), null);
+            assertEquals(400, invalid.status(), invalid.body());
+
+            UUID german = replyId(replier, setup, number, "Zeile 1\n<b>fett</b>");
+            // Template and appearance change after the confirmation: the waiting send keeps its mail.
+            jdbc.update("update appearance_mail_template set greeting_de = 'Geändert', application_url = null where id = 1");
+            jdbc.update("update appearance_setting set name = 'Anders', logo = null, logo_type = null where id = 1");
+            assertNull(runReplyJob(german, 1));
+            List<jakarta.mail.internet.MimeMessage> received = receivedBy(setup.contactAddress());
+            assertEquals(1, received.size());
+            MailParts sent = parts(received.get(0));
+            assertEquals(previewText, sent.text().replace("\r\n", "\n"));
+            assertTrue(sent.html().replace("\r\n", "\n").contains("Zeile 1<br>\n&lt;b&gt;fett&lt;/b&gt;</p>"), sent.html());
+            assertTrue(sent.html().contains("Nordlicht &lt;GmbH&gt;") && !sent.html().contains("Geändert"), sent.html());
+            assertNotNull(sent.logo(), "the logo goes with the mail");
+            assertEquals("<logo>", ((jakarta.mail.internet.MimeBodyPart) sent.logo()).getContentID());
+            assertTrue(sent.logo().isMimeType("image/png"));
+            assertArrayEquals(PNG, sent.logo().getInputStream().readAllBytes());
+
+            // A send repeated by a person keeps the mail of the confirmation as well.
+            jdbc.update("update helpdesk_reply set state = 'failed', sent_at = null, portal_position = null where id = ?", german);
+            Response view = replier.get(ticketPath(setup, number));
+            Response again = replier.send("POST", ticketPath(setup, number) + "/replies/" + german + "/send", Map.of(),
+                "\"" + find(view.json().get("replies"), german).get("version").asLong() + "\"");
+            assertEquals(200, again.status(), again.body());
+            assertNull(runReplyJob(german, 1));
+            assertEquals(previewText, parts(receivedBy(setup.contactAddress()).get(1)).text().replace("\r\n", "\n"));
+
+            // An English contact gets the built-in English template; without logo the head shows the name alone.
+            jdbc.update("update helpdesk_contact set language = 'en' where id = ?", setup.contact());
+            UUID english = replyId(replier, setup, number, "We are on it.");
+            assertNull(runReplyJob(english, 1));
+            MailParts en = parts(receivedBy(setup.contactAddress()).get(2));
+            String text = en.text().replace("\r\n", "\n");
+            assertTrue(text.startsWith("Hello Lea Lang,\n\nWe are on it.\n\nKind regards\n"), text);
+            assertTrue(text.contains("\nAnders\n") && text.contains("Ticket " + key + "-" + number + ": Drucker <Halle 2>"), text);
+            assertFalse(text.contains("portal"), "without an address the line with the link is left out: " + text);
+            assertFalse(text.contains("{{"), text);
+            assertNull(en.logo());
+            assertTrue(en.html().contains("<html lang=\"en\">") && !en.html().contains("cid:logo"), en.html());
+            assertEquals("en", jdbc.queryForObject("select language from helpdesk_reply_mail where reply_id = ?", String.class, english));
+        } finally {
+            restoreAppearance();
+        }
+    }
+
+    @Test
+    void theLanguageOfAContactIsGermanByDefaultAndChangesOnlyToGermanOrEnglish() {
+        Setup setup = setup();
+        Browser admin = setup.admin();
+        Response created = admin.send("POST", "/api/v1/helpdesk/contacts",
+            Map.of("customerId", setup.customer(), "name", "Ana", "addresses", List.of("ana" + COUNTER.incrementAndGet() + "@nordwerk.example")), null);
+        assertEquals(201, created.status(), created.body());
+        assertEquals("de", created.json().get("language").asString());
+        String id = created.json().get("id").asString();
+        Response english = admin.send("PUT", "/api/v1/helpdesk/contacts/" + id, Map.of("customerId", setup.customer(), "name", "Ana",
+            "addresses", List.of(created.json().get("addresses").get(0).asString()), "language", "en"), created.etag());
+        assertEquals(200, english.status(), english.body());
+        assertEquals("en", english.json().get("language").asString());
+        // Without a language the contact keeps its own.
+        Response kept = admin.send("PUT", "/api/v1/helpdesk/contacts/" + id, Map.of("customerId", setup.customer(), "name", "Ana B",
+            "addresses", List.of(created.json().get("addresses").get(0).asString())), english.etag());
+        assertEquals(200, kept.status(), kept.body());
+        assertEquals("en", kept.json().get("language").asString());
+        Response invalid = admin.send("PUT", "/api/v1/helpdesk/contacts/" + id, Map.of("customerId", setup.customer(), "name", "Ana",
+            "addresses", List.of(created.json().get("addresses").get(0).asString()), "language", "fr"), kept.etag());
+        assertEquals(400, invalid.status(), invalid.body());
+        assertTrue(invalid.body().contains("language.invalid"), invalid.body());
     }
 
     @Test
@@ -1214,6 +1362,50 @@ class HelpdeskApiTest {
         assertEquals(replies, jdbc.queryForObject("select count(*) from helpdesk_reply", Long.class), "nothing answers by itself");
     }
 
+    /** The service deadlines on the real mail path (TASK-068): the cycle starts at the mail, the sent reply meets the first response. */
+    @Test
+    void aTicketFromMailGetsItsDeadlinesAndTheSentReplyMeetsTheFirstResponse() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser sla = person(AdministrationRight.SLA_MANAGE);
+        List<Map<String, Object>> week = new ArrayList<>();
+        for (int day = 1; day <= 7; day++) {
+            week.add(Map.of("day", day, "hours", List.of(Map.of("from", "00:00", "to", "24:00"))));
+        }
+        Response calendar = sla.send("POST", "/api/v1/sla/calendars", Map.of("name", "Immer " + COUNTER.incrementAndGet(),
+            "timeZone", "Europe/Berlin", "week", week, "exceptions", List.of()), null);
+        assertEquals(201, calendar.status(), calendar.body());
+        Map<String, Object> minutes = Map.of("firstResponse", 60, "resolution", 480);
+        Response rule = sla.send("POST", "/api/v1/sla/rules", Map.of("name", "Standard", "projectId", setup.project(),
+            "calendarId", calendar.json().get("id").asString(), "budgets", Map.of("low", minutes, "normal", minutes, "high", minutes,
+            "critical", minutes)), null);
+        assertEquals(201, rule.status(), rule.body());
+
+        long number = (Long) ticketFromMail(setup, "Server steht")[0];
+        Browser replier = replier(setup);
+        grant(replier.id, setup.project(), "READ:priority");
+        String path = "/api/v1/projects/" + setup.project() + "/tickets/" + number + "/sla";
+        Instant received = jdbc.queryForObject("select received_at from helpdesk_message where mailbox_id = ? order by uid desc limit 1",
+            java.sql.Timestamp.class, setup.mailbox()).toInstant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Response view = replier.get(path);
+        assertEquals(200, view.status(), view.body());
+        assertEquals("active", view.json().get("state").asString(), view.body());
+        JsonNode cycle = view.json().get("cycles").get(0);
+        assertEquals(received, Instant.parse(cycle.get("startedAt").asString()), "the cycle starts when the mail came in");
+        assertEquals(received.plusSeconds(3600), Instant.parse(cycle.get("firstResponse").get("dueAt").asString()));
+        assertEquals("running", cycle.get("firstResponse").get("state").asString());
+
+        UUID reply = UUID.fromString(reply(replier, setup, number, "Wir starten ihn neu.").json().get("id").asString());
+        assertEquals("running", replier.get(path).json().get("cycles").get(0).get("firstResponse").get("state").asString(),
+            "a confirmed reply that is not sent yet meets nothing");
+        assertNull(runReplyJob(reply, 1));
+        assertEquals("sent", replyState(reply));
+        JsonNode met = replier.get(path).json().get("cycles").get(0);
+        assertEquals("met", met.get("firstResponse").get("state").asString(), met.toString());
+        assertEquals("running", met.get("resolution").get("state").asString());
+        assertFalse(met.get("firstResponse").get("breached").asBoolean());
+    }
+
     @Test
     void repliesNeedTheirRightAndTheContactOfTheTicket() throws Exception {
         Setup setup = setup();
@@ -1347,6 +1539,7 @@ class HelpdeskApiTest {
             Response settled = replier.send("POST", ticketPath(setup, number) + "/replies/" + lost + "/settle", null, etag);
             assertEquals(200, settled.status(), settled.body());
             assertEquals("sent", settled.json().get("state").asString());
+            assertPortalPosition(lost);
             assertEquals(0, server.connections());
 
             // The contact lost the address between the confirmation and the send: nothing is sent.

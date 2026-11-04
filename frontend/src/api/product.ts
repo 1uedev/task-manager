@@ -1,11 +1,14 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
+import type { components as AppearanceTypes } from './generated/appearance';
 import type { components as FileTypes } from './generated/files';
 import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
 import type { components as JobTypes } from './generated/jobs';
 import type { components as PermissionTypes } from './generated/permissions';
+import type { components as PortalTypes } from './generated/portal';
 import type { components as ProjectTypes } from './generated/projects';
 import type { components as SearchTypes } from './generated/search';
+import type { components as SlaTypes } from './generated/sla';
 import type { components as TagTypes } from './generated/tags';
 import type { components as TicketTypes } from './generated/tickets';
 import { readProblem, type ProblemInfo } from './problem.ts';
@@ -29,6 +32,14 @@ export type ConfigurationUsage = ProjectTypes['schemas']['Usage'];
 export type Ticket = TicketTypes['schemas']['Ticket'];
 export type HistoryEntry = TicketTypes['schemas']['HistoryEntry'];
 export type Tag = TagTypes['schemas']['Tag'];
+export type TagColor = TagTypes['schemas']['Color'];
+export type TagUsage = TagTypes['schemas']['Usage'];
+export type TagMergePreview = TagTypes['schemas']['MergePreview'];
+export type TagSuggestions = TagTypes['schemas']['Suggestions'];
+export type TagVisibility = TagTypes['schemas']['Visibility'];
+export type PortalTag = TagTypes['schemas']['PortalTag'];
+export type PortalTicketTags = TagTypes['schemas']['PortalTicketTags'];
+export type PortalTagSuggestions = TagTypes['schemas']['PortalSuggestions'];
 export type Attachment = FileTypes['schemas']['Attachment'];
 export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
@@ -44,6 +55,11 @@ export type JobSummary = JobTypes['schemas']['JobSummary'];
 export type HelpdeskStatus = HelpdeskTypes['schemas']['HelpdeskStatus'];
 export type Customer = HelpdeskTypes['schemas']['Customer'];
 export type Contact = HelpdeskTypes['schemas']['Contact'];
+export type ContactLanguage = HelpdeskTypes['schemas']['ContactLanguage'];
+export type ReplyMail = HelpdeskTypes['schemas']['MailPreview'];
+export type MailTemplate = AppearanceTypes['schemas']['MailTemplate'];
+export type MailTexts = AppearanceTypes['schemas']['MailTexts'];
+export type MailPreview = AppearanceTypes['schemas']['MailPreview'];
 export type Mailbox = HelpdeskTypes['schemas']['Mailbox'];
 export type MailboxRequest = HelpdeskTypes['schemas']['MailboxRequest'];
 export type MailboxTest = HelpdeskTypes['schemas']['MailboxTest'];
@@ -59,6 +75,48 @@ export type ReplyForm = HelpdeskTypes['schemas']['ReplyForm'];
 export type OpenReply = HelpdeskTypes['schemas']['OpenReply'];
 export type NewAnswer = HelpdeskTypes['schemas']['NewAnswer'];
 export type SeenAnswer = HelpdeskTypes['schemas']['SeenAnswer'];
+export type SlaCalendar = SlaTypes['schemas']['Calendar'];
+export type SlaCalendarRequest = SlaTypes['schemas']['CalendarRequest'];
+export type SlaRule = SlaTypes['schemas']['Rule'];
+export type SlaRuleRequest = SlaTypes['schemas']['RuleRequest'];
+export type SlaBudgets = SlaTypes['schemas']['Budgets'];
+export type SlaOptions = SlaTypes['schemas']['Options'];
+export type SlaPriority = SlaTypes['schemas']['Priority'];
+export type SlaClock = SlaTypes['schemas']['Clock'];
+export type SlaCycle = SlaTypes['schemas']['Cycle'];
+export type SlaStage = SlaTypes['schemas']['Stage'];
+export type SlaReachedStage = SlaTypes['schemas']['ReachedStage'];
+export type SlaEscalation = SlaTypes['schemas']['EscalationItem'];
+export type TicketSla = SlaTypes['schemas']['TicketSla'];
+export type PortalAccount = PortalTypes['schemas']['PortalAccount'];
+export type IssuedPortalAccount = PortalTypes['schemas']['IssuedPortalAccount'];
+export type PortalOption = PortalTypes['schemas']['Option'];
+export interface PortalProject {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+  // The ticket types offered for new requests and every status with name and category (TASK-076).
+  readonly ticketTypes: readonly { readonly key: string; readonly name: string }[];
+  readonly statuses: readonly { readonly key: string; readonly name: string; readonly category: 'open' | 'in_progress' | 'done' }[];
+}
+export type PortalEntry = HelpdeskTypes['schemas']['ConversationEntry'];
+export type PortalPost = HelpdeskTypes['schemas']['PortalPost'];
+export type PortalFile = HelpdeskTypes['schemas']['PortalFile'];
+export type AttachmentVisibility = FileTypes['schemas']['Visibility'];
+export interface PortalActivity {
+  readonly number: number;
+  readonly lastActivityAt?: string | null;
+  readonly lastSupportAt?: string | null;
+  readonly seenAt?: string | null;
+  readonly unread: boolean;
+}
+export interface PortalFilter {
+  readonly status: string | null;
+  readonly state: 'open' | 'done' | null;
+  readonly q: string | null;
+  // A tag the portal shows to the organization (TASK-077).
+  readonly tag?: string | null;
+}
 
 export interface Versioned<T> {
   readonly value: T;
@@ -98,6 +156,9 @@ export const isTicket = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key') 
 export const isHistoryEntry = (v: unknown) => record(v) && typeof v.version === 'number' && Array.isArray(v.changes);
 export const isAttachment = (v: unknown) => hasStrings(v, 'id', 'name', 'sha256', 'uploadedAt', 'uploadedBy') && typeof (v as Attachment).size === 'number';
 export const isTag = (v: unknown) => hasStrings(v, 'id', 'name', 'catalog') && typeof (v as Tag).archived === 'boolean';
+const isSuggestions = (v: unknown) => record(v) && Array.isArray(v.items) && v.items.every(isTag) && typeof v.createCompany === 'boolean'
+  && typeof v.createProject === 'boolean';
+const isMergePreview = (v: unknown) => record(v) && isTag(v.source) && isTag(v.target) && record(v.usage);
 export const isGroup = (v: unknown) => hasStrings(v, 'id', 'name');
 export const isGroupDetail = (v: unknown) => isGroup(v) && Array.isArray((v as GroupDetail).members)
   && Array.isArray((v as GroupDetail).actions) && Array.isArray((v as GroupDetail).fields);
@@ -180,6 +241,82 @@ export const saveLdapSettings = (api: ServerApi, body: LdapSettingsRequest) =>
 export const testLdapSettings = (api: ServerApi, settings: LdapSettingsRequest | null, username: string | null) =>
   run(() => api.identity.POST('/settings/ldap/test', { body: { ...(settings === null ? {} : { settings }), ...(username === null ? {} : { username }) } }),
     one<LdapTestResult>((v) => record(v) && typeof v.ok === 'boolean'));
+// Portal accounts of customers (TASK-075): one organization each, optionally a contact, and the projects released to it.
+const isPortalAccount = (v: unknown) => hasStrings(v, 'id', 'username', 'organizationId') && typeof (v as PortalAccount).active === 'boolean'
+  && Array.isArray((v as PortalAccount).projectIds);
+const isPortalOption = (v: unknown) => hasStrings(v, 'id', 'name') && Array.isArray((v as PortalOption).projects) && Array.isArray((v as PortalOption).contacts);
+export const listPortalAccounts = (api: ServerApi) => run(() => api.portal.GET('/portal-accounts'), listOf<PortalAccount>(isPortalAccount));
+export const listPortalOptions = (api: ServerApi) => run(() => api.portal.GET('/portal-accounts/options'), listOf<PortalOption>(isPortalOption));
+export const createPortalAccount = (api: ServerApi, body: { username: string; displayName: string | null; organizationId: string; contactId: string | null; projectIds: string[] }) =>
+  run(() => api.portal.POST('/portal-accounts', { body }),
+    one<IssuedPortalAccount>((v) => record(v) && isPortalAccount(v.account) && typeof v.oneTimePassword === 'string'));
+export const updatePortalAccount = (api: ServerApi, id: string, contactId: string | null, projectIds: string[]) =>
+  run(() => api.portal.PUT('/portal-accounts/{accountId}', { params: { path: { accountId: id } }, body: { contactId, projectIds } }),
+    one<PortalAccount>(isPortalAccount));
+// What a portal account itself reads: its projects and the requests of its organization there.
+export const listPortalProjects = (api: ServerApi) =>
+  run(() => api.projects.GET('/portal/projects'), listOf<PortalProject>((v) => hasStrings(v, 'id', 'key', 'name')
+    && Array.isArray((v as PortalProject).ticketTypes) && Array.isArray((v as PortalProject).statuses)));
+// One page of the portal list, the newest first; a further page starts below the smallest number shown (TASK-078, F6).
+export const PORTAL_PAGE = 50;
+export const listPortalTickets = (api: ServerApi, projectId: string, filter?: PortalFilter, before?: number) =>
+  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets', { params: { path: { projectId }, query: {
+    limit: PORTAL_PAGE, ...(before !== undefined ? { before } : {}),
+    ...(filter?.status ? { status: filter.status } : {}), ...(filter?.state ? { state: filter.state } : {}), ...(filter?.q ? { q: filter.q } : {}),
+    ...(filter?.tag ? { tag: filter.tag } : {}),
+  } } }), listOf<Ticket>(isTicket));
+// Tags in the portal (TASK-077): only tags visible to the organization, setting and removing them, creating one by name.
+const isPortalTag = (v: unknown) => hasStrings(v, 'id', 'name') && typeof (v as PortalTag).own === 'boolean';
+export const portalTicketTags = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tags.GET('/portal/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } } }),
+    one<PortalTicketTags>((v) => record(v) && Array.isArray(v.items) && v.items.every(isPortalTag) && typeof v.writable === 'boolean'));
+export const portalTagSuggestions = (api: ServerApi, projectId: string, q: string) =>
+  run(() => api.tags.GET('/portal/projects/{projectId}/tags', { params: { path: { projectId }, query: q.trim() === '' ? {} : { q: q.trim() } } }),
+    one<PortalTagSuggestions>((v) => record(v) && Array.isArray(v.items) && v.items.every(isPortalTag) && typeof v.create === 'boolean'));
+export const assignPortalTag = (api: ServerApi, projectId: string, number: number, target: { readonly tagId: string } | { readonly name: string }) =>
+  run(() => api.tags.POST('/portal/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, body: target }),
+    one<PortalTag>(isPortalTag));
+export const removePortalTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
+  run(() => api.tags.DELETE('/portal/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
+// The conversation of the portal (TASK-076): creating, the entries of a request, posts, the marker of new answers and files.
+const isPortalFile = (v: unknown) => hasStrings(v, 'id', 'name', 'uploadedAt') && typeof (v as PortalFile).size === 'number';
+const isPortalEntry = (v: unknown) => hasStrings(v, 'kind', 'id', 'at', 'author') && Array.isArray((v as PortalEntry).attachments);
+const isPortalPost = (v: unknown) => hasStrings(v, 'id', 'authorKind', 'authorId', 'createdAt') && Array.isArray((v as PortalPost).attachments);
+export const createPortalRequest = (api: ServerApi, projectId: string, body: { type: string; title: string; description: string | null }) =>
+  run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets', { params: { path: { projectId } }, body }),
+    one<{ readonly id: string; readonly number: number }>((v) => hasStrings(v, 'id') && typeof (v as { number: unknown }).number === 'number'));
+export const listPortalActivity = (api: ServerApi, projectId: string) =>
+  run(() => api.helpdesk.GET('/portal/projects/{projectId}/activity', { params: { path: { projectId } } }),
+    listOf<PortalActivity>((v) => record(v) && typeof v.number === 'number' && typeof v.unread === 'boolean'));
+export const readPortalConversation = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } } }),
+    listOf<PortalEntry>(isPortalEntry));
+export const postInPortal = (api: ServerApi, projectId: string, number: number, body: string, attachmentIds: readonly string[]) =>
+  run(() => api.helpdesk.POST('/portal/projects/{projectId}/tickets/{number}/conversation', { params: { path: { projectId, number } },
+    body: { body, attachmentIds: [...attachmentIds] } }), one<PortalEntry>(isPortalEntry));
+/** Acknowledges the conversation up to {@code position}, the highest position of an answer of the support shown (TASK-080, F2). */
+export const markPortalSeen = (api: ServerApi, projectId: string, number: number, position: number) =>
+  run(() => api.helpdesk.PUT('/portal/projects/{projectId}/tickets/{number}/seen', { params: { path: { projectId, number } }, body: { position } }), nothing);
+export const listPortalAttachments = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.files.GET('/portal/projects/{projectId}/tickets/{number}/attachments', { params: { path: { projectId, number } } }),
+    listOf<PortalFile>(isPortalFile));
+export const uploadPortalAttachment = (api: ServerApi, projectId: string, number: number, file: File) =>
+  run(() => api.files.POST('/portal/projects/{projectId}/tickets/{number}/attachments', {
+    params: { path: { projectId, number }, query: { name: file.name } },
+    body: file as unknown as string,
+    bodySerializer: (body) => body as unknown as BodyInit,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  }), one<PortalFile>(isPortalFile));
+export const portalAttachmentUrl = (projectId: string, number: number, id: string) =>
+  `/api/v1/portal/projects/${projectId}/tickets/${number}/attachments/${id}`;
+export const listPortalPosts = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/portal-posts', { params: { path: { projectId, number } } }),
+    listOf<PortalPost>(isPortalPost));
+export const answerInPortal = (api: ServerApi, projectId: string, number: number, body: string) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/portal-posts', { params: { path: { projectId, number } }, body: { body } }),
+    one<PortalPost>(isPortalPost));
+export const readPortalTicket = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.tickets.GET('/portal/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }), one<Ticket>(isTicket));
 export const readDirectory = (api: ServerApi) => run(() => api.identity.GET('/directory/accounts'), listOf<DirectoryEntry>(isDirectoryEntry));
 
 // ---------------------------------------------------------------- projects
@@ -262,8 +399,82 @@ export const ticketTags = (api: ServerApi, projectId: string, number: number) =>
 export const assignTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
   run(() => api.tags.POST('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, // The default catalog is not sent; the server reads it only together with a name.
     body: { tagId } as { tagId: string; catalog: 'project' } }), nothing);
+// A name the catalog does not hold yet is created there in the same request (TASK-028).
+export const assignTicketTagByName = (api: ServerApi, projectId: string, number: number, name: string, catalog: 'company' | 'project') =>
+  run(() => api.tags.POST('/projects/{projectId}/tickets/{number}/tags', { params: { path: { projectId, number } }, body: { name, catalog } }), nothing);
 export const removeTicketTag = (api: ServerApi, projectId: string, number: number, tagId: string) =>
   run(() => api.tags.DELETE('/projects/{projectId}/tickets/{number}/tags/{tagId}', { params: { path: { projectId, number, tagId } } }), nothing);
+
+// The catalog a page maintains: the company catalog, or the catalog of one project (TASK-072).
+export type TagScope = { readonly kind: 'company' } | { readonly kind: 'project'; readonly projectId: string };
+
+export interface CatalogQuery {
+  readonly q: string;
+  readonly archived: boolean;
+  // The last tag of the previous page: its name and identifier, since one catalog holds a name once per audience (TASK-079, F4).
+  readonly after: { readonly name: string; readonly id: string } | null;
+}
+
+export const CATALOG_PAGE = 50;
+
+export const catalogTags = (api: ServerApi, scope: TagScope, query: CatalogQuery) => {
+  const params = { ...(query.q.trim() === '' ? {} : { q: query.q.trim() }), archived: query.archived, usage: true, limit: CATALOG_PAGE,
+    ...(query.after === null ? {} : { after: query.after.name, afterId: query.after.id }) };
+  return scope.kind === 'company'
+    ? run(() => api.tags.GET('/tags', { params: { query: params } }), listOf<Tag>(isTag))
+    : run(() => api.tags.GET('/projects/{projectId}/catalog/tags', { params: { path: { projectId: scope.projectId }, query: params } }), listOf<Tag>(isTag));
+};
+
+export interface TagChange {
+  readonly name?: string;
+  readonly description?: string | null;
+  readonly color?: TagColor | null;
+  readonly archived?: boolean;
+  readonly visibility?: TagVisibility;
+  readonly forAllCustomers?: true;
+}
+
+export const changeTag = (api: ServerApi, scope: TagScope, id: string, etag: string, change: TagChange) => scope.kind === 'company'
+  ? run(() => api.tags.PATCH('/tags/{tagId}', { params: { path: { tagId: id }, ...ifMatch(etag) }, body: change }), one<Tag>(isTag))
+  : run(() => api.tags.PATCH('/projects/{projectId}/catalog/tags/{tagId}', { params: { path: { projectId: scope.projectId, tagId: id }, ...ifMatch(etag) },
+    body: change }), one<Tag>(isTag));
+
+export const previewMerge = (api: ServerApi, scope: TagScope, id: string, into: string) => scope.kind === 'company'
+  ? run(() => api.tags.GET('/tags/{tagId}/merge', { params: { path: { tagId: id }, query: { into } } }), one<TagMergePreview>(isMergePreview))
+  : run(() => api.tags.GET('/projects/{projectId}/catalog/tags/{tagId}/merge', { params: { path: { projectId: scope.projectId, tagId: id }, query: { into } } }),
+    one<TagMergePreview>(isMergePreview));
+
+// The version of the source goes along as If-Match; the answer is the target.
+export const mergeTag = (api: ServerApi, scope: TagScope, id: string, version: number, into: string) => scope.kind === 'company'
+  ? run(() => api.tags.POST('/tags/{tagId}/merge', { params: { path: { tagId: id }, ...ifMatch(`"${version}"`) }, body: { into } }), one<Tag>(isTag))
+  : run(() => api.tags.POST('/projects/{projectId}/catalog/tags/{tagId}/merge', { params: { path: { projectId: scope.projectId, tagId: id },
+    ...ifMatch(`"${version}"`) }, body: { into } }), one<Tag>(isTag));
+
+// Suggestions while typing: from the company catalog for projects, with the catalog of the project for its tickets.
+export const tagSuggestions = (api: ServerApi, projectId: string | null, q: string) => {
+  const query = q.trim() === '' ? {} : { q: q.trim() };
+  return projectId === null
+    ? run(() => api.tags.GET('/tags/suggestions', { params: { query } }), one<TagSuggestions>(isSuggestions))
+    : run(() => api.tags.GET('/projects/{projectId}/catalog/suggestions', { params: { path: { projectId }, query } }), one<TagSuggestions>(isSuggestions));
+};
+
+// Tags by identifier, archived and merged ones included, so a history names tags that left the catalog.
+export const lookupTags = (api: ServerApi, projectId: string, ids: readonly string[]) =>
+  run(() => api.tags.GET('/projects/{projectId}/catalog/lookup', { params: { path: { projectId }, query: { id: [...ids] } } }), listOf<Tag>(isTag));
+
+// Bulk change (TASK-073): each ticket is checked and changed for itself; the answer counts and names what was readable.
+export type TagBulkResult = TagTypes['schemas']['BulkResult'];
+export const TAG_BULK_TICKETS = 500;
+export const bulkTicketTags = (api: ServerApi, action: 'add' | 'remove', tags: readonly string[], tickets: readonly string[]) =>
+  run(() => api.tags.POST('/tags/bulk', { body: { action, tags: [...tags], tickets: [...tickets] } }),
+    one<TagBulkResult>((v) => record(v) && typeof v.changed === 'number' && Array.isArray(v.items)));
+
+export const assignedProjectTags = (api: ServerApi, projectId: string) =>
+  run(() => api.tags.GET('/projects/{projectId}/tags', { params: { path: { projectId } } }), listOf<Tag>(isTag));
+export const assignProjectTag = (api: ServerApi, projectId: string, target: { readonly tagId: string } | { readonly name: string }) =>
+  run(() => api.tags.POST('/projects/{projectId}/tags', { params: { path: { projectId } }, body: target as { tagId: string } }), nothing);
+export const removeProjectTag = (api: ServerApi, projectId: string, tagId: string) =>
+  run(() => api.tags.DELETE('/projects/{projectId}/tags/{tagId}', { params: { path: { projectId, tagId } } }), nothing);
 
 // ---------------------------------------------------------------- attachments (TASK-051)
 
@@ -288,6 +499,9 @@ export const uploadAttachment = (api: ServerApi, projectId: string, number: numb
     bodySerializer: (body) => body as unknown as BodyInit,
     headers: { 'Content-Type': 'application/octet-stream' },
   }), one<Attachment>(isAttachment));
+export const setAttachmentVisibility = (api: ServerApi, projectId: string, number: number, id: string, visibility: AttachmentVisibility) =>
+  run(() => api.files.PATCH('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } }, body: { visibility } }),
+    one<Attachment>(isAttachment));
 export const removeAttachment = (api: ServerApi, projectId: string, number: number, id: string) =>
   run(() => api.files.DELETE('/projects/{projectId}/tickets/{number}/attachments/{id}', { params: { path: { projectId, number, id } } }), nothing);
 // A link, not a request: the browser saves the file itself, with the session cookie and the headers of the download.
@@ -306,19 +520,28 @@ export const checkAttachment = (api: ServerApi, projectId: string, number: numbe
 
 // ---------------------------------------------------------------- search
 
+// How the chosen tags filter (TASK-073): all of them, at least one, none of them, or tickets without any tag.
+export type TagMatch = 'all' | 'any' | 'none' | 'untagged';
+export const TAG_FILTER_MAX = 10;
+
 export interface TicketQuery {
   readonly q?: string;
   readonly project?: readonly string[];
   readonly status?: readonly string[];
   readonly tag?: readonly string[];
+  readonly tagMatch?: TagMatch;
+  readonly limit?: number;
   readonly offset?: number;
 }
 
 export const searchTickets = (api: ServerApi, query: TicketQuery) =>
   run(() => api.search.GET('/search/tickets', {
     params: { query: { ...(query.q ? { q: query.q } : {}), ...(query.project?.length ? { project: [...query.project] } : {}),
-      ...(query.status?.length ? { status: [...query.status] } : {}), ...(query.tag?.length ? { tag: [...query.tag] } : {}),
-      limit: 20, offset: query.offset ?? 0 } },
+      ...(query.status?.length ? { status: [...query.status] } : {}),
+      ...(query.tagMatch !== 'untagged' && query.tag?.length ? { tag: [...query.tag] } : {}),
+      // Any or none without a tag asks nothing, as all without a tag does.
+      ...(query.tagMatch === 'untagged' || ((query.tagMatch === 'any' || query.tagMatch === 'none') && query.tag?.length) ? { tagMatch: query.tagMatch } : {}),
+      limit: query.limit ?? 20, offset: query.offset ?? 0 } },
     querySerializer: { array: { style: 'form', explode: true } },
   }), one<{ total: number; items: TicketHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'projectId'))));
 export const searchProjects = (api: ServerApi, q: string) =>
@@ -399,10 +622,12 @@ export const updateCustomer = (api: ServerApi, id: string, version: number, name
   run(() => api.helpdesk.PUT('/helpdesk/customers/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { name, projects: [...projects] } }),
     one<Customer>(isCustomer));
 export const listContacts = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/contacts'), listOf<Contact>(isContact));
-export const createContact = (api: ServerApi, customerId: string, name: string, addresses: readonly string[]) =>
-  run(() => api.helpdesk.POST('/helpdesk/contacts', { body: { customerId, name, addresses: [...addresses] } }), one<Contact>(isContact));
-export const updateContact = (api: ServerApi, id: string, version: number, customerId: string, name: string, addresses: readonly string[]) =>
-  run(() => api.helpdesk.PUT('/helpdesk/contacts/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { customerId, name, addresses: [...addresses] } }),
+export const createContact = (api: ServerApi, customerId: string, name: string, addresses: readonly string[], language: ContactLanguage = 'de') =>
+  run(() => api.helpdesk.POST('/helpdesk/contacts', { body: { customerId, name, addresses: [...addresses], language } }), one<Contact>(isContact));
+export const updateContact = (api: ServerApi, id: string, version: number, customerId: string, name: string, addresses: readonly string[],
+  language?: ContactLanguage) =>
+  run(() => api.helpdesk.PUT('/helpdesk/contacts/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) },
+    body: { customerId, name, addresses: [...addresses], ...(language === undefined ? {} : { language }) } }),
     one<Contact>(isContact));
 export const listMailboxes = (api: ServerApi) => run(() => api.helpdesk.GET('/helpdesk/mailboxes'), listOf<Mailbox>(isMailbox));
 export const createMailbox = (api: ServerApi, body: MailboxRequest) =>
@@ -445,6 +670,11 @@ const isReply = (v: unknown) => hasStrings(v, 'id', 'toAddress', 'subject', 'sta
 export const readReplyForm = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.helpdesk.GET('/projects/{projectId}/tickets/{number}/helpdesk/reply', { params: { path: { projectId, number } } }),
     one<ReplyForm>((v) => record(v) && Array.isArray(v.mailboxes) && Array.isArray(v.recipients)));
+// The finished mail of a reply before it is confirmed (TASK-082): in the template and the language of the contact.
+const isMail = (v: unknown) => hasStrings(v, 'language', 'text', 'html') && record((v as ReplyMail).parts);
+export const previewReply = (api: ServerApi, projectId: string, number: number, mailboxId: string, to: string, subject: string, body: string) =>
+  run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/reply/preview', { params: { path: { projectId, number } },
+    body: { mailboxId, to, subject, body } }), one<ReplyMail>(isMail));
 export const sendReply = (api: ServerApi, projectId: string, number: number, mailboxId: string, to: string, subject: string, body: string) =>
   run(() => api.helpdesk.POST('/projects/{projectId}/tickets/{number}/helpdesk/replies', { params: { path: { projectId, number } },
     body: { mailboxId, to, subject, body } }), one<Reply>(isReply));
@@ -468,3 +698,48 @@ export const readNewAnswers = (api: ServerApi) =>
 export const markAnswerSeen = (api: ServerApi, id: string, version: number) =>
   run(() => api.helpdesk.POST('/helpdesk/answers/{id}/seen', { params: { path: { id }, ...ifMatch(`"${version}"`) } }),
     one<SeenAnswer>((v) => hasStrings(v, 'id') && typeof (v as SeenAnswer).version === 'number'));
+
+// ---------------------------------------------------------------- service deadlines (TASK-068)
+
+export const SLA_PRIORITIES: readonly SlaPriority[] = ['low', 'normal', 'high', 'critical'];
+const isSlaCalendar = (v: unknown) => hasStrings(v, 'id', 'name', 'timeZone') && typeof (v as SlaCalendar).version === 'number'
+  && Array.isArray((v as SlaCalendar).week);
+const isSlaRule = (v: unknown) => hasStrings(v, 'id', 'name', 'projectId', 'calendarId') && typeof (v as SlaRule).version === 'number'
+  && record((v as SlaRule).budgets);
+const isTicketSla = (v: unknown) => record(v) && Array.isArray(v.readable) && Array.isArray(v.writable) && typeof v.now === 'string';
+
+export const listSlaCalendars = (api: ServerApi) => run(() => api.sla.GET('/sla/calendars'), listOf<SlaCalendar>(isSlaCalendar));
+export const createSlaCalendar = (api: ServerApi, body: SlaCalendarRequest) =>
+  run(() => api.sla.POST('/sla/calendars', { body }), one<SlaCalendar>(isSlaCalendar));
+export const updateSlaCalendar = (api: ServerApi, id: string, version: number, body: SlaCalendarRequest) =>
+  run(() => api.sla.PUT('/sla/calendars/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaCalendar>(isSlaCalendar));
+export const listSlaRules = (api: ServerApi) => run(() => api.sla.GET('/sla/rules'), listOf<SlaRule>(isSlaRule));
+export const readSlaOptions = (api: ServerApi) =>
+  run(() => api.sla.GET('/sla/options'), one<SlaOptions>((v) => record(v) && Array.isArray(v.projects) && Array.isArray(v.customers) && Array.isArray(v.groups)));
+export const createSlaRule = (api: ServerApi, body: SlaRuleRequest) => run(() => api.sla.POST('/sla/rules', { body }), one<SlaRule>(isSlaRule));
+export const updateSlaRule = (api: ServerApi, id: string, version: number, body: SlaRuleRequest) =>
+  run(() => api.sla.PUT('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<SlaRule>(isSlaRule));
+export const removeSlaRule = (api: ServerApi, id: string, version: number) =>
+  run(() => api.sla.DELETE('/sla/rules/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) } }), nothing);
+
+const isSlaEscalation = (v: unknown) => hasStrings(v, 'projectId', 'projectKey', 'kind', 'groupId', 'groupName', 'thresholdAt', 'reachedAt')
+  && typeof (v as SlaEscalation).number === 'number' && typeof (v as SlaEscalation).percent === 'number';
+export const listSlaEscalations = (api: ServerApi) => run(() => api.sla.GET('/sla/escalations'), listOf<SlaEscalation>(isSlaEscalation));
+export const readTicketSla = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.sla.GET('/projects/{projectId}/tickets/{number}/sla', { params: { path: { projectId, number } } }), one<TicketSla>(isTicketSla));
+export const setTicketPriority = (api: ServerApi, projectId: string, number: number, priority: SlaPriority) =>
+  run(() => api.sla.PUT('/projects/{projectId}/tickets/{number}/sla/priority', { params: { path: { projectId, number } }, body: { priority } }),
+    one<TicketSla>(isTicketSla));
+
+// ---------------------------------------------------------------- mail template (TASK-082)
+
+const isMailLanguage = (v: unknown) => hasStrings(v, 'greeting', 'signature', 'footer') && typeof (v as { stored?: unknown }).stored === 'boolean';
+const isMailTemplate = (v: unknown) => record(v) && isMailLanguage(v.de) && isMailLanguage(v.en) && Array.isArray(v.placeholders)
+  && typeof v.version === 'number';
+export const readMailTemplate = (api: ServerApi) => run(() => api.appearance.GET('/appearance/mail-template'), one<MailTemplate>(isMailTemplate));
+export const saveMailTemplate = (api: ServerApi, etag: string, applicationUrl: string | null, de: MailTexts, en: MailTexts) =>
+  run(() => api.appearance.PUT('/appearance/mail-template', { params: ifMatch(etag), body: { applicationUrl, de, en } }), one<MailTemplate>(isMailTemplate));
+export const resetMailTemplate = (api: ServerApi, etag: string) =>
+  run(() => api.appearance.DELETE('/appearance/mail-template', { params: ifMatch(etag) }), one<MailTemplate>(isMailTemplate));
+export const previewMailTemplate = (api: ServerApi, body: { language: 'de' | 'en'; applicationUrl: string | null; texts: MailTexts; name?: string; accentColor?: string }) =>
+  run(() => api.appearance.POST('/appearance/mail-template/preview', { body }), one<MailPreview>(isMail));
