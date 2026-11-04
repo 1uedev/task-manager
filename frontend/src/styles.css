@@ -535,6 +535,9 @@ form.search-form .field:first-child { flex: 2 1 18rem; }
 .attachments li > a { font-weight: 600; overflow-wrap: anywhere; }
 .attachment-warning { flex-basis: 100%; margin: 0; color: var(--warning); font-size: 0.9rem; }
 
+/* A new answer of the customer that nobody has marked as seen yet (TASK-067). */
+li.new-answer { border-left: 3px solid var(--brand-primary); padding-left: 0.6rem; }
+.badge.new-answer { display: inline-flex; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 650; background: var(--accent-soft); color: var(--brand-text); }
 /* Tag colors, suggestions and catalog care (TASK-072). The color is a mark next to the name, never the only carrier of
    meaning; each mark has at least 3:1 against the surface in light and dark display. */
 .tag-label { display: inline-flex; align-items: center; gap: 0.4rem; }
