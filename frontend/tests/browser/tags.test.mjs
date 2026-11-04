@@ -74,8 +74,9 @@ describe('tag catalog care', () => {
   });
 
   test('a stale version names the conflict, archived tags show only on request', async () => {
-    await withApp({}, async (page, backend) => {
-      const tag = companyTag(backend, 'Alt');
+    // The tag exists before the page loads its catalog, so the test does not race the delayed catalog query (TASK-086, Claude H4).
+    await withApp({ prepare: (backend) => { withTagRights(backend); companyTag(backend, 'Alt'); } }, async (page, backend) => {
+      const tag = backend.state.tags.find((entry) => entry.name === 'Alt');
       await page.getByRole('button', { name: 'Alt bearbeiten' }).click();
       tag.version = 5;
       const form = page.getByRole('form', { name: 'Tag Alt bearbeiten' });
@@ -92,9 +93,9 @@ describe('tag catalog care', () => {
   });
 
   test('merging asks for a target, shows the preview and moves the assignments', async () => {
-    await withApp({}, async (page, backend) => {
-      const source = companyTag(backend, 'Rechnung');
-      const target = companyTag(backend, 'Abrechnung', { color: 'blue' });
+    await withApp({ prepare: (backend) => { withTagRights(backend); companyTag(backend, 'Rechnung'); companyTag(backend, 'Abrechnung', { color: 'blue' }); } }, async (page, backend) => {
+      const source = backend.state.tags.find((entry) => entry.name === 'Rechnung');
+      const target = backend.state.tags.find((entry) => entry.name === 'Abrechnung');
       const [first, second] = backend.state.tickets;
       backend.state.ticketTags.push({ ticket: first.id, tag: source.id }, { ticket: second.id, tag: source.id }, { ticket: second.id, tag: target.id });
       await page.getByRole('button', { name: 'Rechnung zusammenführen', exact: true }).click();

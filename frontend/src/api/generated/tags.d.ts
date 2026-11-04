@@ -105,7 +105,7 @@ export interface paths {
          * Vorschläge aus dem Unternehmenskatalog, für Tags von Projekten
          * @description Nicht archivierte, nicht zusammengeführte Tags; Namen, die mit dem Text beginnen, zuerst, dann Namen mit einem Wort,
          *     das so beginnt, dann Namen, die ihn enthalten, jeweils nach Namen. `createCompany` sagt, ob die anfragende Person
-         *     im Unternehmenskatalog anlegen darf.
+         *     im Unternehmenskatalog anlegen darf. Mit `archived=true` auch archivierte Tags, für Filter und Entfernen (TASK-086).
          */
         get: operations["suggestCompanyTags"];
         put?: never;
@@ -811,6 +811,8 @@ export interface operations {
                 /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
                 q?: components["parameters"]["Search"];
                 limit?: components["parameters"]["SuggestionLimit"];
+                /** @description Auch archivierte Tags zeigen. */
+                archived?: components["parameters"]["Archived"];
             };
             header?: never;
             path?: never;
@@ -1013,6 +1015,8 @@ export interface operations {
                 /** @description Teil des Namens, ohne Unterschied der Groß und Kleinschreibung. */
                 q?: components["parameters"]["Search"];
                 limit?: components["parameters"]["SuggestionLimit"];
+                /** @description Auch archivierte Tags zeigen. */
+                archived?: components["parameters"]["Archived"];
             };
             header?: never;
             path: {

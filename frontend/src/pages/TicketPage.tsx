@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  assignTicketTag, assignTicketTagByName, listMembers, lookupTags, readHistory, readProject, readTicket, removeTicketTag, SLA_PRIORITIES, ticketTags, updateTicket,
+  assignTicketTag, assignTicketTagByName, listMembers, lookupAllTags, readHistory, readProject, readTicket, removeTicketTag, SLA_PRIORITIES, ticketTags, updateTicket,
   type CustomValues, type Project, type Result, type Tag, type Ticket, type TicketChange,
 } from '../api/product.ts';
 import {
@@ -394,10 +394,10 @@ function History({ project, ticket, round }: { readonly project: Project; readon
   // The tags the history names, looked up by identifier, so archived and merged tags keep their names (TASK-072).
   const tagIds = history.state === 'ok'
     ? [...new Set(history.value.flatMap((entry) => entry.changes.filter((change) => change.field === 'tags').flatMap((change) => [change.from, change.to])
-      .filter((id): id is string => typeof id === 'string' && id !== '')))].slice(0, 100).sort()
+      .filter((id): id is string => typeof id === 'string' && id !== '')))].sort()
     : [];
   const tagKey = tagIds.join(',');
-  const [named] = useLoad(() => (tagIds.length === 0 ? Promise.resolve({ kind: 'ok' as const, data: { value: [] as Tag[], etag: null } }) : lookupTags(api, project.id, tagIds)),
+  const [named] = useLoad(() => lookupAllTags(api, project.id, tagIds),
     [api, project.id, tagKey]);
   const tagNames = new Map((named.state === 'ok' ? named.value : []).map((tag) => [tag.id, tag.mergedInto === null
     ? tag.name : t('history.tagMerged', { name: tag.name, target: tag.mergedInto.name })]));

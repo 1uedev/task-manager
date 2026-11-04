@@ -9,6 +9,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import taskmanager.permissions.AccessContext;
+import taskmanager.permissions.PermissionDenied;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.tags.internal.TagService.BulkOutcome;
 
@@ -52,6 +53,11 @@ public class TagBulk {
             } catch (ApiProblemException refused) {
                 outcome = BulkOutcome.REFUSED;
                 code = refused.code();
+            } catch (PermissionDenied denied) {
+                // The check right before the commit (TASK-043), above all the end of the session during a long bulk change:
+                // this ticket is rolled back and counted as refused, the result still reaches the caller (TASK-086, Claude F2).
+                outcome = BulkOutcome.REFUSED;
+                code = "auth.forbidden";
             } catch (DataAccessException failure) {
                 if (!retryable(failure)) {
                     throw failure;
@@ -60,11 +66,25 @@ public class TagBulk {
                 code = "tag.busy";
             }
             counts[outcome.ordinal()]++;
-            String key = tags.readableKey(actor, ticket).orElse(null);
+            String key = readableKey(actor, ticket);
             items.add(new Item(ticket, key, outcome, key == null ? null : code));
         }
         return new Result(counts[BulkOutcome.CHANGED.ordinal()], counts[BulkOutcome.UNCHANGED.ordinal()],
             counts[BulkOutcome.NOT_MATCHING.ordinal()], counts[BulkOutcome.REFUSED.ordinal()], items);
+    }
+
+    /** The key when the caller may still read the ticket; a refusal or a busy lock only leaves the key out (Claude F2). */
+    private String readableKey(AccessContext actor, UUID ticket) {
+        try {
+            return tags.readableKey(actor, ticket).orElse(null);
+        } catch (ApiProblemException | PermissionDenied refused) {
+            return null;
+        } catch (DataAccessException failure) {
+            if (!retryable(failure)) {
+                throw failure;
+            }
+            return null;
+        }
     }
 
     private static boolean retryable(Throwable failure) {

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { listProjects, searchProjects, searchTickets, type ProjectHit, type TicketHit } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -8,6 +8,12 @@ import { EmptyText, PageHead, SelectField, TextField } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import { NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagFilter, tagFilterActive, useTicketSelection, type TagFilterValue } from './TagParts.tsx';
+
+interface Query {
+  readonly q: string;
+  readonly project: string;
+  readonly tagFilter: TagFilterValue;
+}
 
 type Found =
   | { readonly state: 'idle' }
@@ -29,12 +35,19 @@ export function SearchPage() {
   const [tagFilter, setTagFilter] = useState<TagFilterValue>(NO_TAG_FILTER);
   const selection = useTicketSelection();
 
-  async function run(nextOffset: number) {
-    if (q.trim().length > 200) return setError(t('search.error.long'));
-    setError(null);
+  // The query last sent: paging, retry and the reload after a bulk change repeat it, not fields changed since (TASK-086).
+  const sent = useRef<Query>({ q: '', project: '', tagFilter: NO_TAG_FILTER });
+  // Only the answer of the search started last is shown; an earlier one that arrives late is dropped (TASK-086, Codex H1).
+  const latest = useRef(0);
+
+  async function run(nextOffset: number, query: Query = sent.current) {
+    const ticket = ++latest.current;
+    sent.current = query;
+    const text = query.q.trim();
     setFound({ state: 'loading' });
-    const tickets = await searchTickets(api, { q: q.trim(), project: project === '' ? [] : [project], offset: nextOffset,
-      tag: tagFilter.tags.map((tag) => tag.id), tagMatch: tagFilter.match });
+    const tickets = await searchTickets(api, { q: text, project: query.project === '' ? [] : [query.project], offset: nextOffset,
+      tag: query.tagFilter.tags.map((tag) => tag.id), tagMatch: query.tagFilter.match });
+    if (ticket !== latest.current) return;
     if (tickets.kind !== 'ok') {
       if (tickets.problem.status === 400) {
         setFound({ state: 'idle' });
@@ -43,14 +56,17 @@ export function SearchPage() {
       return setFound({ state: 'problem', problem: tickets.problem });
     }
     // Projects carry tags of the company catalog only, so a tag filter applies to tickets here.
-    const projectHits = q.trim() !== '' && project === '' && nextOffset === 0 && !tagFilterActive(tagFilter) ? await searchProjects(api, q.trim()) : null;
+    const projectHits = text !== '' && query.project === '' && nextOffset === 0 && !tagFilterActive(query.tagFilter) ? await searchProjects(api, text) : null;
+    if (ticket !== latest.current) return;
     setOffset(nextOffset);
     setFound({ state: 'ok', tickets: tickets.data.value, projects: projectHits?.kind === 'ok' ? projectHits.data.value : null });
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    void run(0);
+    if (q.trim().length > 200) return setError(t('search.error.long'));
+    setError(null);
+    void run(0, { q, project, tagFilter });
   }
 
   const names = new Map((projects.state === 'ok' ? projects.value : []).map((item) => [item.id, item]));
