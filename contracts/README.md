@@ -28,4 +28,6 @@ Vor der jeweiligen Fachimplementierung erhält die produktive API einen eigenen 
 
 [sla.openapi.yaml](sla.openapi.yaml) beschreibt die Servicefristen (TASK-068, DEC-098): Geschäftszeitkalender und SLA Regeln mit dem Unternehmensrecht `sla.manage` sowie Priorität und Fristen eines Tickets nach den Feldregeln `priority` und `customer`. `SlaContractTest` gleicht ihn mit den Routen ab. Identitäts-, Rechte- und Ticketvertrag nennen seither `sla.manage` und das Feld `priority`; der Projektvertrag nennt die SLA Art eines Status.
 
+[time.openapi.yaml](time.openapi.yaml) beschreibt die Zeiterfassung (TASK-069, DEC-099): Buchungen mit Korrektur und Storno, die Projektaktionen `time.book`, `time.read` und `time.manage`, Auswertung mit Summen und CSV Export. `TimeContractTest` gleicht ihn mit den Routen ab; der Rechtekatalog `GET /api/v1/permissions/catalog` nennt seither die drei Aktionen.
+
 [portal.openapi.yaml](portal.openapi.yaml) beschreibt die Portalkonten (TASK-075, DEC-105): Anlage mit Einmalpasswort, Kundenorganisation, Kontakt und Projektfreigabe mit dem Unternehmensrecht `accounts.manage`. `PortalContractTest` gleicht ihn mit den Routen ab. Identitäts-, Projekt-, Ticket- und Rechtevertrag nennen seither die Kontoart `portal`, die Portalsicht `/portal/projects` und `/portal/projects/{projectId}/tickets` und den Konflikt `permissions.portal_company_right`.

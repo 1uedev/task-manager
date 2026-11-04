@@ -479,6 +479,22 @@ Grenze: Bricht die Verbindung, während die Mail schon beim Server liegt, aber v
 
 **Grenzen.** (1) Keine Entwürfe, keine weiteren Empfänger, keine Anhänge, keine Vorlagen mit Branding (A17), keine Benachrichtigungen und kein SLA. (2) Die Annahme durch den Server ist kein Beweis der Zustellung; Zustellberichte werden nicht ausgewertet. (3) Gruppenrechte gelten zum Zeitpunkt der Bestätigung. (4) Eine unklare Antwort kann den Kunden erreicht haben; erneutes Senden kann ein Duplikat erzeugen, darauf weist die Oberfläche hin. (5) Gesendete Antworten werden nicht im Gesendet Ordner des Postfachs abgelegt.
 
+## Zeiterfassung (TASK-069)
+
+Paket A6 (DEC-099). Migration V0053 legt `time_entry` und `time_entry_revision` an. Vertrag: [contracts/time.openapi.yaml](../contracts/time.openapi.yaml), Routen unter `/api/v1/time`.
+
+**Rechte.** Die Projektaktionen `time.book` (eigene Zeit buchen, eigene Buchungen lesen, korrigieren und stornieren), `time.read` (Buchungen aller im Projekt lesen, mit Summen und Export) und `time.manage` (für aktive Mitglieder buchen, fremde Buchungen korrigieren und stornieren, enthält das Lesen). Nur interne Mitglieder des Projekts erhalten sie; ein Portalkonto sieht keine Zeiten. Ohne eine der drei Aktionen antwortet ein Projekt mit 404 `project.not_found`, eine nicht sichtbare Buchung mit 404 `time.entry_not_found`. Jede Änderung prüft ihr Recht beim Commit.
+
+**Buchen.** `POST /time/projects/{projectId}/entries` mit Datum, Minuten (1 bis 1440), Beschreibung (1 bis 1000 Zeichen), optional Ticketnummer des Projekts und Person. Abgelehnt mit 400 und den Gründen `date.required`, `date.invalid`, `date.future` (später als heute in UTC plus ein Tag), `minutes.invalid`, `description.required`, `description.too_long`, `ticket.unknown` (auch ohne `ticket.read`) und `person.not_member` (keine aktive interne Person des Projekts). Geschlossene Tickets nehmen Buchungen an.
+
+**Korrigieren und Stornieren.** `PUT /time/entries/{id}` und `POST /time/entries/{id}/cancel` verlangen If-Match (428 ohne, 412 `time.version_conflict` bei veralteter Version). Bei fremden Buchungen ist ein Grund Pflicht (`reason.required`, höchstens 500 Zeichen). Jeder Stand bleibt als Revision mit Bearbeiter, Zeitpunkt und Grund erhalten; eine Korrektur ohne geänderten Wert schreibt keine. Eine stornierte Buchung zählt in keiner Summe, bleibt lesbar und antwortet auf jede Änderung mit 409 `time.entry_cancelled`. Die Tickethistorie bleibt unberührt.
+
+**Auswertung.** `GET /time/entries` filtert nach Projekt, Ticketnummer (nur mit Projekt), Person und Zeitraum, auf Wunsch mit stornierten Buchungen. Sie zeigt höchstens 500 Buchungen, die Summe, die Summen je Person und je Ticket über alle passenden, nicht stornierten Buchungen. Ein Ticket erscheint nur mit `ticket.read`, sein Titel nur mit der Leseregel für `title`; sonst zählt die Buchung unter „ohne Ticket“. `GET /time/export` liefert dieselbe Auswahl als CSV (UTF-8 mit BOM, Semikolon, Dezimalkomma, Kopfzeilen für Zeitraum, Filter und Einheit, Summenzeile, Formelzeichen am Zellanfang mit Hochkomma entschärft), höchstens 50 000 Zeilen, sonst 400 `time.export_too_large`.
+
+**Oberfläche.** Am Ticket stehen Summe, Liste und ein Formular zum Buchen, sobald die Person eine Zeitaktion im Projekt hat. Die Seite „Zeiten“ zeigt „Meine Zeiten“ als Woche mit Summen je Tag und die Auswertung mit Filtern, Summen und CSV Link.
+
+**Grenzen.** Keine Unternehmenszeitzone, daher UTC für „heute“. Kein Timer, keine Freigaben, keine Abrechnung, keine Suche über Zeiten. Die Regel für archivierte Projekte folgt mit der Archivierung.
+
 ## Neue Kundenantworten (TASK-067)
 
 Hinweis H7 der Prüfung von TASK-058 (DEC-097). Migration V0052 ergänzt `helpdesk_message` um `joined_at`, `seen_at` und `seen_by`.
