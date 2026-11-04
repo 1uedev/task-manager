@@ -99,10 +99,11 @@ class TagController {
     }
 
     @GetMapping("/api/v1/tags/suggestions")
-    SuggestionsBody companySuggestions(@RequestParam(required = false) String q, @RequestParam(required = false) Integer limit) {
+    SuggestionsBody companySuggestions(@RequestParam(required = false) String q, @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "false") boolean archived) {
         AccessContext actor = actor();
         int size = suggestionLimit(limit);
-        return SuggestionsBody.of(retrying(() -> tags.companySuggestions(actor, q, size)));
+        return SuggestionsBody.of(retrying(() -> tags.companySuggestions(actor, q, archived, size)));
     }
 
     @PostMapping("/api/v1/tags")
@@ -214,10 +215,10 @@ class TagController {
 
     @GetMapping("/api/v1/projects/{projectId}/catalog/suggestions")
     SuggestionsBody projectSuggestions(@PathVariable UUID projectId, @RequestParam(required = false) String q,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit, @RequestParam(defaultValue = "false") boolean archived) {
         AccessContext actor = actor();
         int size = suggestionLimit(limit);
-        return SuggestionsBody.of(retrying(() -> tags.projectSuggestions(actor, projectId, q, size)));
+        return SuggestionsBody.of(retrying(() -> tags.projectSuggestions(actor, projectId, q, archived, size)));
     }
 
     @GetMapping("/api/v1/projects/{projectId}/catalog/lookup")

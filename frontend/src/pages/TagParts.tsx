@@ -47,7 +47,7 @@ type Option =
 
 // A text field with suggestions while typing, as a combobox with a list box (WAI-ARIA). Arrow keys move through the
 // suggestions, Enter takes the marked one, Escape closes the list. Offers to create a tag when the server allows it.
-export function TagPicker({ label, projectId, exclude, only, onPick, onCreate, disabled = false }: {
+export function TagPicker({ label, projectId, exclude, only, onPick, onCreate, disabled = false, archived = false }: {
   readonly label: string;
   readonly projectId: string | null;
   readonly exclude: ReadonlySet<string>;
@@ -55,6 +55,8 @@ export function TagPicker({ label, projectId, exclude, only, onPick, onCreate, d
   readonly onPick: (tag: Tag) => void;
   readonly onCreate?: (name: string, catalog: 'company' | 'project') => void;
   readonly disabled?: boolean;
+  // Also offers archived tags, marked as such: for filters and removals, never for new assignments.
+  readonly archived?: boolean;
 }) {
   const { t } = useI18n();
   const { api } = useBrand();
@@ -76,14 +78,14 @@ export function TagPicker({ label, projectId, exclude, only, onPick, onCreate, d
     if (!open) return;
     const ticket = ++latest.current;
     const timer = setTimeout(() => {
-      void tagSuggestions(api, projectId, text).then((result) => {
+      void tagSuggestions(api, projectId, text, archived).then((result) => {
         if (ticket !== latest.current) return;
         setFound(result.kind === 'ok' ? result.data.value : null);
         setActive(0);
       });
     }, 150);
     return () => clearTimeout(timer);
-  }, [api, projectId, text, open]);
+  }, [api, projectId, text, open, archived]);
 
   const typed = text.trim();
   const items = (found?.items ?? []).filter((tag) => !exclude.has(tag.id) && (only === undefined || tag.catalog === only));
@@ -126,8 +128,12 @@ export function TagPicker({ label, projectId, exclude, only, onPick, onCreate, d
     }
   }
 
+  const tagText = (tag: Tag) => {
+    const name = tag.catalog === 'company' && projectId !== null ? t('tags.companyLabel', { name: tag.name }) : tag.name;
+    return tag.archived ? `${name} (${t('tags.archivedBadge')})` : name;
+  };
   const optionText = (option: Option) => option.kind === 'tag'
-    ? (option.tag.catalog === 'company' && projectId !== null ? t('tags.companyLabel', { name: option.tag.name }) : option.tag.name)
+    ? tagText(option.tag)
     : t(option.catalog === 'project' ? 'tags.createInProject' : 'tags.createInCompany', { name: option.name });
 
   return (
@@ -414,7 +420,7 @@ export function TagFilter({ projectId, value, onChange }: {
         </ul>
       )}
       {!untagged && value.tags.length < TAG_FILTER_MAX && (
-        <TagPicker label={t('tagFilter.add')} projectId={projectId} exclude={new Set(value.tags.map((tag) => tag.id))}
+        <TagPicker label={t('tagFilter.add')} projectId={projectId} exclude={new Set(value.tags.map((tag) => tag.id))} archived
           onPick={(tag) => onChange({ ...value, tags: [...value.tags, tag] })} />
       )}
       {!untagged && TAG_FILTER_MAX <= value.tags.length && <p className="hint">{t('tagFilter.full', { count: TAG_FILTER_MAX })}</p>}
@@ -456,7 +462,12 @@ export function TagBulk({ selected, projectId, onDone }: {
       <h2 id="tag-bulk">{t('tagBulk.title', { count: selected.length })}</h2>
       <NoticeView notice={notice} />
       {result !== null && <TagBulkSummary result={result} />}
-      <SelectField label={t('tagBulk.action')} value={action} onChange={(value) => { setAction(value as 'add' | 'remove'); setConfirming(false); }}
+      <SelectField label={t('tagBulk.action')} value={action} onChange={(value) => {
+        setAction(value as 'add' | 'remove');
+        // Archived tags may only be removed; adding keeps the other chosen tags.
+        if (value === 'add') setChosen(chosen.filter((tag) => !tag.archived));
+        setConfirming(false);
+      }}
         options={[{ value: 'add', label: t('tagBulk.add') }, { value: 'remove', label: t('tagBulk.remove') }]} />
       {chosen.length > 0 && (
         <ul className="chips" aria-label={t('tagBulk.chosen')}>
@@ -470,7 +481,7 @@ export function TagBulk({ selected, projectId, onDone }: {
         </ul>
       )}
       {chosen.length < TAG_FILTER_MAX && (
-        <TagPicker label={t('tagBulk.tag')} projectId={projectId} exclude={new Set(chosen.map((tag) => tag.id))}
+        <TagPicker label={t('tagBulk.tag')} projectId={projectId} exclude={new Set(chosen.map((tag) => tag.id))} archived={action === 'remove'}
           onPick={(tag) => { setChosen([...chosen, tag]); setConfirming(false); }} />
       )}
       {!confirming ? (
@@ -495,7 +506,7 @@ const BULK_REASONS: Readonly<Record<string, MessageKey>> = {
   'auth.forbidden': 'tagBulk.reason.forbidden',
   'tag.limit_reached': 'tagBulk.reason.limit',
   'tag.archived': 'tagBulk.reason.archived',
-  'tag.merged': 'tagBulk.reason.archived',
+  'tag.merged': 'tagBulk.reason.merged',
   'tag.busy': 'tagBulk.reason.busy',
 };
 

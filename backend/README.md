@@ -255,6 +255,24 @@ Zweiter Teil von Paket A3 (DEC-103, Regeln 1 bis 4 in TODO.md), ohne Migration. 
 
 **Grenzen.** (1) Keine Massenänderung an Projekten, keine Anlage neuer Tags darin, kein Ersetzen der ganzen Tagliste. (2) Keine gespeicherten Filter. (3) Kein Hintergrundauftrag; eine abgebrochene Anfrage lässt die bis dahin geänderten Tickets geändert, eine Wiederholung ergänzt den Rest ohne Doppel. (4) Die Prüfung gilt zum Sperrzeitpunkt, nicht beim Commit.
 
+## Befunde beider Prüfungen von TASK-072 und TASK-073 (TASK-086)
+
+Behebung der Befunde der Codex Prüfung (`docs/REVIEW_TASK-072-073_PR-229-230.md`) und der Claude Prüfung (`docs/REVIEW_TASK-072-073_PR-229-230_claude.md`), DEC-116, ohne Migration. Vertrag tags 0.5.0. Tests in `TagsApiTest` (Abschnitt „findings of both reviews“, Vorschläge mit archivierten Tags, Wettlauf um den dreißigsten Platz) und `tags-bulk.test.mjs` sowie `tags.test.mjs` im Browser.
+
+**Zusammenführen.** Zusammenführungen eines Katalogs laufen nacheinander: `merge` nimmt vor den Tagzeilen eine Beratungssperre je Katalog (Projekt, beim Unternehmenskatalog das Unternehmen). `markMerged` hängt auch frühere Verweise auf die Quelle um, also Zeilen außerhalb des gesperrten Paars; eine alte zweite Zusammenführung einer solchen früheren Quelle wartet jetzt vor ihrer ersten Tagsperre und sieht danach die zusammengeführte Quelle (`409 tag.merged`) statt einer Verklemmung mit `503 tag.busy` (Codex F1). Zuordnungen nehmen diese Sperre nicht; sie warten wie bisher an der Tagzeile.
+
+**Massenentfernen.** Der Zweig „entfernen“ sperrt die passenden Tags wie das Hinzufügen geteilt in der Reihenfolge ihrer Kennungen und lehnt ein Ticket mit `tag.merged` ab, wenn ein Tag nach der Vorabprüfung zusammengeführt wurde; das Ticket trägt dann den Zieltag und zählt nicht mehr als „schon so“ (Codex F2, Claude F1). Archivierte Tags bleiben entfernbar.
+
+**Ergebnis trotz Abbruch.** Eine Ablehnung der Prüfung direkt vor dem Commit (TASK-043), vor allem das Ende der Sitzung während einer langen Massenänderung, zählt das Ticket als abgelehnt mit `auth.forbidden`, die Anfrage endet mit dem Ergebnis. Eine Ablehnung oder Sperre beim Lesen des Schlüssels lässt nur den Schlüssel weg (Claude F2).
+
+**Archivierte Tags in Filtern.** `GET /api/v1/tags/suggestions` und `GET /api/v1/projects/{projectId}/catalog/suggestions` nehmen `archived=true` und schlagen dann auch archivierte, nie zusammengeführte Tags vor. Der Tagfilter und „Tags entfernen“ nutzen das und markieren solche Tags als archiviert; neue Zuordnungen und „Tags hinzufügen“ bieten sie weiter nicht an, ein Wechsel auf „hinzufügen“ nimmt sie aus der Auswahl (Codex F3).
+
+**Oberfläche.** Die Suche übernimmt nur die Antwort der zuletzt gestarteten Suche (Codex H1) und wiederholt beim Blättern, Wiederholen und nach einer Massenänderung die zuletzt abgeschickte Suche statt geänderter, nicht abgeschickter Felder (Claude H3). Ein zusammengeführter Tag hat im Ergebnis der Massenänderung einen eigenen Grund (Claude H1). Die Ticketliste mit Tagfilter sagt, wenn sie an der Tiefe der Suche von 1000 Treffern endet (Claude H2). Die Historie löst Tagnamen in Paketen zu 100 Kennungen auf (Codex H3).
+
+**Tests.** Die Testattrappe prüft den Körper der Massenänderung und die Tags einer Suche wie der Server (Codex H2); die Tests mit der Katalogabfrage legen ihre Tags vor dem Laden an (Claude H4). Neue Backendtests für die Zuordnung der Quelle während des Zusammenführens und den gleichzeitig beginnenden Wettlauf um den dreißigsten Platz (Claude H5).
+
+**Grenzen.** (1) Ein `PermissionDenied` aus einem anderen Grund als dem Sitzungsende zählt ebenso als `auth.forbidden`. (2) Das Recht `CREATE` für `pg_trgm` steht weiter nur hier und in V0033; eine Installationsanleitung gibt es noch nicht.
+
 ## Portalkonten, Sicht und Rechte (TASK-075)
 
 Erster Teil von Paket A11 Kundenportal (DEC-105, Regeln 1 bis 7 in TODO.md). Migrationen V0034 (Art, Organisation und Kontakt am Konto), V0035 (Zweck einer Gruppe) und V0036 (Index der Kundenzuordnung je Projekt). Verträge: [portal.openapi.yaml](../contracts/portal.openapi.yaml) für die Verwaltung, die Lesepfade in [projects.openapi.yaml](../contracts/projects.openapi.yaml) und [tickets.openapi.yaml](../contracts/tickets.openapi.yaml). Tests in `PortalAccountsApiTest` (Fälle 1 bis 7 aus docs/PERMISSIONS.md), `PortalContractTest`, den angepassten Vertragstests und `portal.test.mjs` im Browser.

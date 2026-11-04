@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 3 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -32,7 +32,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-10-30 |
-| [TASK-086](#task-086-befunde-beider-prüfungen-von-task-072-und-task-073-beheben-a3) | Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3) | claude-20261101-tags-01 | 2026-11-04 |
 
 ### Blockiert – BLOCKIERT
 
@@ -45,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-072](#task-072-tag-katalogpflege-und-zusammenführen-a3-teil-1) | Tag Katalogpflege und Zusammenführen (A3 Teil 1) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
+| [TASK-086](#task-086-befunde-beider-prüfungen-von-task-072-und-task-073-beheben-a3) | Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3) | claude-20261101-tags-01 | 2026-11-04 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -168,9 +168,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-086 Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-04
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-04
 
-**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-102, DEC-103; [Codex Bericht](docs/REVIEW_TASK-072-073_PR-229-230.md) (PR #254), [Claude Bericht](docs/REVIEW_TASK-072-073_PR-229-230_claude.md) (PR #231). **Abhängigkeiten:** TASK-072 und TASK-073 geliefert. **Arbeitsstand:** Von Holger am 4. November 2026 mit „Ja, alles in TASK-086“ beauftragt; Branch claude/project-thread-trk1ni, Umsetzung voraussichtlich mit DEC-116, ohne Migration geplant.
+**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-102, DEC-103; [Codex Bericht](docs/REVIEW_TASK-072-073_PR-229-230.md) (PR #254), [Claude Bericht](docs/REVIEW_TASK-072-073_PR-229-230_claude.md) (PR #231). **Abhängigkeiten:** TASK-072 und TASK-073 geliefert. **Arbeitsstand:** Von Holger am 4. November 2026 mit „Ja, alles in TASK-086“ beauftragt; Branch claude/project-thread-trk1ni, Ergebnis mit DEC-116 ohne Migration; Beschreibung in backend/README.md (Abschnitt „Befunde beider Prüfungen von TASK-072 und TASK-073“), Vertrag tags 0.5.0.
 
 **Umfang:** Nur die Befunde und Hinweise beider Prüfungen:
 1. Codex F1: Umhängen früherer Zusammenführungsverweise in derselben Sperrfolge wie Quelle und Ziel, ohne Verklemmung mit einer gleichzeitigen alten Zusammenführung.
@@ -184,7 +184,9 @@ Nicht Teil: neue Funktionen, Massenänderung an Projekten, gespeicherte Filter.
 
 **Abnahmekriterien:** Vorschlag, zur Prüfung: F1 bis F3 der Codex Prüfung und F1, F2 der Claude Prüfung jeweils mit einem Regressionstest belegt (Backend für Sperrfolge, Entfernen nach Zusammenführen und Fehler beim Abschluss, Browser für archivierte Tags im Filter und die verspätete Suchantwort); bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
+**Übergabe:** Beratungssperre je Katalog vor dem Zusammenführen; Massenentfernen mit geteilten Tagsperren und `tag.merged` für inzwischen zusammengeführte Tags; Ablehnung beim Commit und Fehler beim Schlüssel als abgelehntes Ticket im Ergebnis; Vorschläge mit `archived=true` für Tagfilter und Entfernen; Suche mit Nummer je Anfrage und gemerkter abgeschickter Suche; eigener Grund „zusammengeführt“, Hinweis an der Grenze von 1000 Treffern, Historie in Paketen zu 100; Testattrappe mit den Ablehnungen des Servers, stabile Katalogtests. Je Befund ein Regressionstest, die neuen Backend und Browsertests scheitern ohne die Korrektur. Nachweise im Ergebnis PR. Grenzen: jede Ablehnung beim Commit heißt `auth.forbidden`; die Installationsanleitung für `pg_trgm` steht aus.
+
+**Nächster Schritt:** Prüfung durch eine zweite KI und Abnahme von TASK-072, TASK-073 und TASK-086 durch Holger.
 
 ## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
 

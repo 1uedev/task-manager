@@ -31,6 +31,7 @@ export const newTag = (name, projectId, by, extra = {}) => ({ id: uuid(), name, 
   color: null, archived: false, mergedInto: null, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id,
   visibility: 'internal', organizationId: null, ...extra });
 const TAG_LIMIT = 30;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ANNA = { username: 'anna', password: 'Anna Passwort 2026', displayName: 'Anna Admin' };
 export const BEN = { username: 'ben', password: 'Ben Passwort 2026', displayName: 'Ben Leser' };
@@ -200,7 +201,17 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // As POST /tags/bulk (TASK-073): tags checked first, then every ticket for itself; keys only for readable tickets.
   const bulkTags = (account, body) => {
     const add = body?.action === 'add';
-    if (!add && body?.action !== 'remove') return problem(400, 'request.invalid', { violations: ['action.invalid'] });
+    // The body checks of the server (TASK-086, Codex H2): known fields, an action, 1 to 10 tags and 1 to 500 tickets.
+    const violations = [];
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return problem(400, 'request.invalid', { violations: ['action.invalid', 'tags.invalid', 'tickets.invalid'] });
+    }
+    if (Object.keys(body).some((key) => !['action', 'tags', 'tickets'].includes(key))) violations.push('fields.unknown');
+    if (!add && body.action !== 'remove') violations.push('action.invalid');
+    const list = (value, max) => Array.isArray(value) && value.length > 0 && value.length <= max && value.every((item) => typeof item === 'string' && UUID.test(item));
+    if (!list(body.tags, 10)) violations.push('tags.invalid');
+    if (!list(body.tickets, 500)) violations.push('tickets.invalid');
+    if (violations.length > 0) return problem(400, 'request.invalid', { violations });
     const chosen = [];
     for (const id of new Set(body.tags ?? [])) {
       const tag = state.tags.find((candidate) => candidate.id === id);
@@ -271,7 +282,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   const suggestions = (account, projectId, query) => {
     const q = tagKey(query.get('q') ?? '');
     const rank = (tag) => (q === '' || tagKey(tag.name).startsWith(q) ? 0 : tagKey(tag.name).includes(` ${q}`) ? 1 : 2);
-    const items = state.tags.filter((tag) => (tag.projectId === null || tag.projectId === projectId) && tag.mergedInto === null && !tag.archived
+    // archived=true also offers archived tags, for filters and removals (TASK-086, Codex F3).
+    const archived = query.get('archived') === 'true';
+    const items = state.tags.filter((tag) => (tag.projectId === null || tag.projectId === projectId) && tag.mergedInto === null && (archived || !tag.archived)
       && (q === '' || tagKey(tag.name).includes(q)))
       .sort((a, b) => rank(a) - rank(b) || tagKey(a.name).localeCompare(tagKey(b.name))).slice(0, suggestionLimit(query)).map((tag) => tagView(account, tag));
     return { items, createCompany: createTags(account, null), createProject: projectId !== null && createTags(account, projectId) };
@@ -816,6 +829,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         return problem(400, 'request.invalid', { violations: ['tagMatch.invalid'] });
       }
       if (tags.length > 10) return problem(400, 'request.invalid', { violations: ['tag.invalid'] });
+      // Unknown and merged tags and tags of a hidden catalog answer alike, as the server checks them (TASK-086, Codex H2).
+      if (tags.some((id) => {
+        const tag = state.tags.find((candidate) => candidate.id === id);
+        return !tag || tag.mergedInto || (tag.projectId !== null && !catalogVisible(account, tag.projectId));
+      })) return problem(400, 'request.invalid', { violations: ['tag.unknown'] });
       const offset = Number(query.get('offset') ?? 0);
       const limit = Number(query.get('limit') ?? 20);
       return ok({ total: items.length, items: items.slice(offset, offset + limit) });
