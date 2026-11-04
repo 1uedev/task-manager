@@ -11,6 +11,7 @@ import type { components as SearchTypes } from './generated/search';
 import type { components as SlaTypes } from './generated/sla';
 import type { components as TagTypes } from './generated/tags';
 import type { components as TicketTypes } from './generated/tickets';
+import type { components as TimeTypes } from './generated/time';
 import { readProblem, type ProblemInfo } from './problem.ts';
 
 // The product API of TASK-030. Types come from the published contracts; every answer is checked again at runtime for
@@ -86,6 +87,11 @@ export type SlaStage = SlaTypes['schemas']['Stage'];
 export type SlaReachedStage = SlaTypes['schemas']['ReachedStage'];
 export type SlaEscalation = SlaTypes['schemas']['EscalationItem'];
 export type TicketSla = SlaTypes['schemas']['TicketSla'];
+export type TimeProject = TimeTypes['schemas']['TimeProject'];
+export type TimeEntry = TimeTypes['schemas']['Entry'];
+export type TimeRevision = TimeTypes['schemas']['Revision'];
+export type TimeEntryDetail = TimeTypes['schemas']['EntryDetail'];
+export type TimeEntryList = TimeTypes['schemas']['EntryList'];
 export type PortalAccount = PortalTypes['schemas']['PortalAccount'];
 export type IssuedPortalAccount = PortalTypes['schemas']['IssuedPortalAccount'];
 export type PortalOption = PortalTypes['schemas']['Option'];
@@ -719,6 +725,50 @@ export const readTicketSla = (api: ServerApi, projectId: string, number: number)
 export const setTicketPriority = (api: ServerApi, projectId: string, number: number, priority: SlaPriority) =>
   run(() => api.sla.PUT('/projects/{projectId}/tickets/{number}/sla/priority', { params: { path: { projectId, number } }, body: { priority } }),
     one<TicketSla>(isTicketSla));
+
+// ---------------------------------------------------------------- time entries (TASK-069)
+
+export interface TimeFilter {
+  readonly project?: string;
+  readonly ticket?: number;
+  readonly person?: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly cancelled?: boolean;
+}
+export interface TimeInput {
+  readonly date: string;
+  readonly minutes: number;
+  readonly description: string;
+  readonly ticketNumber: number | null;
+}
+const isTimeProject = (v: unknown) => hasStrings(v, 'projectId', 'key', 'name') && record((v as TimeProject).access);
+const isTimeEntry = (v: unknown) => hasStrings(v, 'id', 'projectId', 'personId', 'date', 'description') && typeof (v as TimeEntry).minutes === 'number'
+  && typeof (v as TimeEntry).version === 'number';
+const isTimeDetail = (v: unknown) => record(v) && isTimeEntry(v.entry) && Array.isArray(v.revisions);
+const isTimeList = (v: unknown) => record(v) && Array.isArray(v.entries) && v.entries.every(isTimeEntry) && typeof v.totalMinutes === 'number'
+  && Array.isArray(v.perPerson) && Array.isArray(v.perTicket);
+const timeQuery = (filter: TimeFilter) => Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== undefined && value !== '' && value !== false));
+
+export const listTimeProjects = (api: ServerApi) => run(() => api.time.GET('/time/projects'), listOf<TimeProject>(isTimeProject));
+export const listTimePeople = (api: ServerApi, projectId: string) =>
+  run(() => api.time.GET('/time/projects/{projectId}/people', { params: { path: { projectId } } }), listOf<string>((v) => typeof v === 'string'));
+export const listTimeEntries = (api: ServerApi, filter: TimeFilter) =>
+  run(() => api.time.GET('/time/entries', { params: { query: timeQuery(filter) } }), one<TimeEntryList>(isTimeList));
+export const readTimeEntry = (api: ServerApi, id: string) =>
+  run(() => api.time.GET('/time/entries/{id}', { params: { path: { id } } }), one<TimeEntryDetail>(isTimeDetail));
+export const bookTime = (api: ServerApi, projectId: string, input: TimeInput, personId: string | null) =>
+  run(() => api.time.POST('/time/projects/{projectId}/entries', { params: { path: { projectId } }, body: { ...input, personId } }),
+    one<TimeEntryDetail>(isTimeDetail));
+export const correctTime = (api: ServerApi, id: string, version: number, input: TimeInput, reason: string | null) =>
+  run(() => api.time.PUT('/time/entries/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { ...input, reason } }),
+    one<TimeEntryDetail>(isTimeDetail));
+export const cancelTime = (api: ServerApi, id: string, version: number, reason: string | null) =>
+  run(() => api.time.POST('/time/entries/{id}/cancel', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { reason } }),
+    one<TimeEntryDetail>(isTimeDetail));
+// The export is a file to save; the browser fetches it with the session cookie like any other download.
+export const timeExportHref = (filter: TimeFilter) => `/api/v1/time/export?${new URLSearchParams(
+  Object.entries(timeQuery({ ...filter, cancelled: false })).map(([key, value]) => [key, String(value)])).toString()}`;
 
 // ---------------------------------------------------------------- mail template (TASK-082)
 
