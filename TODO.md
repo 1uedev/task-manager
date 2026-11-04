@@ -224,7 +224,7 @@ Nicht Teil: neue Funktionen, Massenänderung an Projekten, gespeicherte Filter.
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-04
 
-**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; DEC-111; docs/REVIEW_TASK-081_PR-243.md. **Abhängigkeiten:** TASK-081 geliefert (PR #243). **Arbeitsstand:** Holger hat am 4. November 2026 den Codex Prüfbericht zu TASK-081 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl im Faden zu A17. Branch claude/project-thread-tzp0cw, Umsetzung voraussichtlich mit DEC-117 und der Migration V0053.
+**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; DEC-111; docs/REVIEW_TASK-081_PR-243.md. **Abhängigkeiten:** TASK-081 geliefert (PR #243). **Arbeitsstand:** Holger hat am 4. November 2026 den Codex Prüfbericht zu TASK-081 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl im Faden zu A17. Branch claude/project-thread-tzp0cw, Umsetzung voraussichtlich mit DEC-117 und der Migration V0054 (V0053 ist für TASK-069 vorgemerkt; vor dem Ergebnis die nächste freie Nummer prüfen).
 
 **Umfang:** Befunde F1 bis F4 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-081_PR-243.md:
 1. F1: eine gemeinsame Regel für den Namen in Backend und Oberfläche, die auch geschützte Leerzeichen am Rand entfernt und ungültige Unicode Folgen mit 400 ablehnt; vorhandene betroffene Namen korrigiert eine neue Migration, V0046 bleibt unverändert.
