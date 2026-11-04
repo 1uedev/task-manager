@@ -857,18 +857,30 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           subject: reply.subject, state: reply.state, errorCode: reply.errorCode, createdAt: reply.createdAt, attemptedAt: reply.attemptedAt })));
     }
     if (p === '/helpdesk/answers' && method === 'GET') {
-      // As the backend (TASK-067): mails that joined an existing ticket and nobody marked as seen, newest first.
+      // As the backend (TASK-067, TASK-088): mails that joined an existing ticket and nobody marked as seen, newest first with
+      // the identifier as tie breaker, at most 100, and only those whose ticket still lives in the project of the mail.
+      if (hd.answersDown > 0) {
+        hd.answersDown -= 1;
+        return problem(503, 'server.unavailable');
+      }
+      const ticketOf = (message) => state.tickets.find((entry) => entry.id === message.ticketId && entry.projectId === message.projectId);
       return ok(hd.messages.filter((message) => message.joinedAt && !message.seenAt && message.ticketId && mayReply(account, message.projectId))
-        .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt))
-        .map((message) => ({ id: message.id, projectId: message.projectId, number: state.tickets.find((entry) => entry.id === message.ticketId).number,
+        .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt) || b.id.localeCompare(a.id))
+        .slice(0, 100)
+        .filter((message) => ticketOf(message))
+        .map((message) => ({ id: message.id, projectId: message.projectId, number: ticketOf(message).number,
           fromAddress: message.fromAddress, fromName: message.fromName, subject: message.subject, receivedAt: message.receivedAt, version: message.version })));
     }
     const seen = p.match(/^\/helpdesk\/answers\/([^/]+)\/seen$/);
     if (seen && method === 'POST') {
+      // As the backend: the controller asks for If-Match first; then rights, the ticket in the project of the mail, version, state.
+      if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
       const message = hd.messages.find((entry) => entry.id === seen[1]);
       if (!message || !may(account, 'ticket.read', message.projectId)) return problem(404, 'helpdesk.message_not_found');
       if (!mayReply(account, message.projectId)) return problem(403, 'auth.forbidden');
-      if (!headers['if-match']) return problem(428, 'helpdesk.precondition_required');
+      if (message.ticketId && !state.tickets.some((entry) => entry.id === message.ticketId && entry.projectId === message.projectId)) {
+        return problem(404, 'helpdesk.message_not_found');
+      }
       if (headers['if-match'] !== `"${message.version}"`) return problem(412, 'helpdesk.version_conflict');
       if (!message.joinedAt || message.seenAt) return problem(409, 'helpdesk.answer_not_new');
       Object.assign(message, { seenAt: now(), seenBy: account.id, version: message.version + 1 });
@@ -1706,7 +1718,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           newAnswer: Boolean(message.joinedAt && !message.seenAt), version: message.version })) : null,
         replies: readableHere.includes('mail') ? hd.replies.filter((reply) => reply.ticketId === ticket.id).map(replyView) : null,
         replyAllowed: Boolean(contact) && mayReply(account, item.id),
-        portalAnswerAllowed: Boolean(link?.customerId) && mayReply(account, item.id) };
+        portalAnswerAllowed: Boolean(link?.customerId) && mayReply(account, item.id),
+        answerSeenAllowed: mayReply(account, item.id) };
     };
     const senders = () => hd.mailboxes.filter((mailbox) => mailbox.enabled && mailbox.projectId === item.id && mailbox.smtpHost && mailbox.address);
     const contactOfTicket = () => {

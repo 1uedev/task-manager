@@ -178,6 +178,10 @@ function MailThread({ value, project, ticket, onChanged }: {
 }) {
   const { t, language } = useI18n();
   const code = useHelpdeskCode();
+  // The button of a marked answer disappears with the reload, so the notice lives here and the focus goes to the heading of
+  // the mails, right above it (TASK-088, F2).
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const mails = value.mails ?? [];
   const replies = value.replies ?? [];
   const entries = [
@@ -187,7 +191,8 @@ function MailThread({ value, project, ticket, onChanged }: {
   if (entries.length === 0) return null;
   return (
     <>
-      <h3>{t('ticketHelpdesk.mails')}</h3>
+      <h3 ref={heading} tabIndex={-1}>{t('ticketHelpdesk.mails')}</h3>
+      <NoticeView notice={notice} />
       <ul className="plain-list" data-testid="ticket-mails">
         {entries.map(({ mail, reply }) => mail !== null ? (
           <li key={mail.id} data-mail={mail.id} className={mail.newAnswer ? 'new-answer' : undefined}>
@@ -201,7 +206,11 @@ function MailThread({ value, project, ticket, onChanged }: {
                   {file.refusal ? ` ${code(file.refusal)}` : ''}</p>
               ))}
             </details>
-            {mail.newAnswer && value.replyAllowed && <AnswerSeen id={mail.id} version={mail.version} onChanged={onChanged} />}
+            {mail.newAnswer && value.answerSeenAllowed && <AnswerSeen id={mail.id} version={mail.version} onDone={(next) => {
+              setNotice(next);
+              heading.current?.focus();
+              onChanged();
+            }} />}
           </li>
         ) : reply !== null && (
           <li key={reply.id} data-reply={reply.id}>
@@ -222,29 +231,28 @@ function MailThread({ value, project, ticket, onChanged }: {
 }
 
 // A new answer of the customer (TASK-067) stays highlighted until a person who may reply marks it as seen for everybody.
-function AnswerSeen({ id, version, onChanged }: { readonly id: string; readonly version: number; readonly onChanged: () => void }) {
+function AnswerSeen({ id, version, onDone }: {
+  readonly id: string;
+  readonly version: number;
+  readonly onDone: (notice: Notice) => void;
+}) {
   const { t } = useI18n();
   const { api } = useBrand();
   const text = useProblemText();
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
 
   async function seen() {
     setBusy(true);
-    setNotice(null);
     const result = await markAnswerSeen(api, id, version);
     setBusy(false);
-    if (result.kind !== 'ok') {
-      setNotice({ kind: 'info', text: text(result.problem, ANSWER_PROBLEMS) });
-    }
-    onChanged();
+    onDone(result.kind === 'ok' ? { kind: 'success', text: t('inbox.answerSeen') }
+      : { kind: 'info', text: text(result.problem, { ...ANSWER_PROBLEMS, 'helpdesk.version_conflict': 'ticketHelpdesk.answerChanged',
+        'helpdesk.answer_not_new': 'ticketHelpdesk.answerChanged', 'helpdesk.message_not_found': 'ticketHelpdesk.answerChanged' }) });
   }
 
   return (
-    <div className="inline-form" data-testid="answer-seen">
-      <p className="actions"><button type="button" className="secondary" disabled={busy} onClick={() => void seen()}>{t('inbox.markSeen')}</button></p>
-      <NoticeView notice={notice} />
-    </div>
+    <p className="actions" data-testid="answer-seen">
+      <button type="button" className="secondary" disabled={busy} onClick={() => void seen()}>{t('inbox.markSeen')}</button></p>
   );
 }
 

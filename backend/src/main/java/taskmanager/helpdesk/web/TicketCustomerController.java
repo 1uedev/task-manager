@@ -70,7 +70,7 @@ class TicketCustomerController {
     }
 
     record ViewBody(List<String> readable, List<String> writable, NamedBody customer, ContactBody contact, List<MailBody> mails,
-            List<ReplyBody> replies, boolean replyAllowed, boolean portalAnswerAllowed) {
+            List<ReplyBody> replies, boolean replyAllowed, boolean portalAnswerAllowed, boolean answerSeenAllowed) {
         static ViewBody of(TicketCustomerService.View view) {
             boolean mails = view.readable().contains("mail");
             return new ViewBody(view.readable().stream().sorted().toList(), view.writable().stream().sorted().toList(),
@@ -78,7 +78,7 @@ class TicketCustomerController {
                 view.contact() == null ? null : ContactBody.of(view.contact()),
                 mails ? view.mails().stream().map(m -> MailBody.of(m, view.newAnswers())).toList() : null,
                 mails ? view.replies().stream().map(ReplyBody::of).toList() : null, view.replyAllowed(),
-                view.portalAnswerAllowed());
+                view.portalAnswerAllowed(), view.answerSeenAllowed());
         }
     }
 

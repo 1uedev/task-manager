@@ -453,7 +453,8 @@ paths:
       description: |
         Mails, die einem schon bestehenden Ticket zugeordnet wurden (selbst als Antwort auf eine Antwort oder über
         `…/inbox/{id}/attach`) und die noch niemand als gesehen markiert hat, höchstens 100. Nur Projekte, in denen die Person
-        Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067).
+        Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067), und nur
+        Mails, deren Ticket noch im Projekt der Mail liegt. Antworten aus dem Kundenportal zählen nicht dazu.
       responses:
         '200':
           description: Neue Kundenantworten
@@ -464,13 +465,16 @@ paths:
                 items: {$ref: '#/components/schemas/NewAnswer'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /helpdesk/answers/{id}/seen:
     post:
       operationId: markAnswerSeen
       summary: Neue Kundenantwort für alle als gesehen markieren (Rechte wie eine Antwort, If-Match)
       description: |
-        Ohne `ticket.read` 404 `helpdesk.message_not_found`, ohne die Rechte einer Antwort 403, eine Mail, die keine neue
-        Kundenantwort ist, 409 `helpdesk.answer_not_new`. Steht mit Person und Zeitpunkt im Audit (`answer.seen`).
+        Ohne If-Match 428. Ohne `ticket.read` 404 `helpdesk.message_not_found`, ebenso wenn das Ticket der Mail nicht mehr im
+        Projekt der Mail liegt (TASK-088); ohne die Rechte einer Antwort 403; eine Mail, die keine neue Kundenantwort ist, 409
+        `helpdesk.answer_not_new`. Kann eine Sperre nicht rechtzeitig genommen werden, 503 `helpdesk.busy` mit `Retry-After`.
+        Steht mit Person, Zeitpunkt und Ticket im Audit (`answer.seen`).
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/IfMatch'
@@ -488,6 +492,7 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /helpdesk/replies:
     get:
       operationId: listOpenReplies
@@ -945,10 +950,11 @@ components:
         customer.not_found, customer.name_taken, customer.version_conflict, contact.not_found, contact.address_taken,
         contact.version_conflict, mailbox.not_found, mailbox.name_taken, mailbox.version_conflict,
         helpdesk.secret_key_missing, helpdesk.message_not_found, helpdesk.message_processed, helpdesk.version_conflict,
-        helpdesk.precondition_required, helpdesk.busy (503 mit Retry-After), project.not_found, ticket.not_found,
+        helpdesk.precondition_required, helpdesk.answer_not_new, helpdesk.busy (503 mit Retry-After), project.not_found, ticket.not_found,
         auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
+        Retry-After: {schema: {type: integer}, description: Nur bei 503.}
       content:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
@@ -1289,7 +1295,7 @@ components:
         version: {type: integer, format: int64}
     TicketHelpdesk:
       type: object
-      required: [readable, writable, customer, contact, mails, replies, replyAllowed, portalAnswerAllowed]
+      required: [readable, writable, customer, contact, mails, replies, replyAllowed, portalAnswerAllowed, answerSeenAllowed]
       properties:
         readable:
           type: array
@@ -1318,6 +1324,9 @@ components:
         portalAnswerAllowed:
           type: boolean
           description: Ob die Person im Portal antworten darf (Rechte wie replyAllowed, dazu ein Kunde am Ticket, TASK-076); nur eine Momentaufnahme.
+        answerSeenAllowed:
+          type: boolean
+          description: Ob die Person neue Kundenantworten als gesehen markieren darf (Rechte wie replyAllowed, aber ohne Kontakt am Ticket, TASK-088); nur eine Momentaufnahme.
     ReplyState:
       type: string
       enum: [pending, sent, failed, uncertain]
