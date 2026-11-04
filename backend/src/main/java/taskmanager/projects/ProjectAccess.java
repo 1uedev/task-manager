@@ -36,6 +36,12 @@ public interface ProjectAccess {
      */
     boolean isMember(UUID projectId, UUID accountId);
 
+    /**
+     * The members of the project, ordered by the time they joined (TASK-069). Call it after {@link #resource} locked the project
+     * in the same transaction, like {@link #isMember}.
+     */
+    List<UUID> members(UUID projectId);
+
     /** The key of the project, for example {@code PLAT}; keys never change. */
     Optional<String> key(UUID projectId);
 

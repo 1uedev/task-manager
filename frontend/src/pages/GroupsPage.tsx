@@ -154,6 +154,9 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'ticket.create': 'right.ticket.create',
   'ticket.edit': 'right.ticket.edit',
   'ticket.read': 'right.ticket.read',
+  'time.book': 'right.time.book',
+  'time.manage': 'right.time.manage',
+  'time.read': 'right.time.read',
 };
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {

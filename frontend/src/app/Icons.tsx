@@ -9,6 +9,7 @@ export const MoonIcon = () => <svg {...base}><path d="M20 14.5A8 8 0 0 1 9.5 4 8
 export const MonitorIcon = () => <svg {...base}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>;
 export const AlertIcon = () => <svg {...base}><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></svg>;
 export const TimerIcon = () => <svg {...base}><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 1.5M9 2h6" /></svg>;
+export const HourglassIcon = () => <svg {...base}><path d="M6 3h12M6 21h12" /><path d="M7 3c0 5 10 6 10 9s-10 4-10 9" /><path d="M17 3c0 5-10 6-10 9s10 4 10 9" /></svg>;
 export const ClockIcon = () => <svg {...base}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
 export const PaletteIcon = () => <svg {...base}><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10Z" /><circle cx="7.5" cy="11" r="1" /><circle cx="10" cy="7" r="1" /><circle cx="15" cy="7.5" r="1" /></svg>;
 export const GripIcon = () => <svg {...base} strokeWidth={0} fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>;

@@ -13,7 +13,7 @@ const PRIORITIES = ['low', 'normal', 'high', 'critical'];
 // The fixed actor of tickets the mail intake opens (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
-const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
+const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -147,6 +147,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       // with the highest position of an answer of the support it acknowledged (TASK-080); `positions` counts the answers per ticket.
       posts: [], seen: new Map(), positions: new Map() },
     requests: [],
+    // Time entries (TASK-069) with their revisions; `timeConflict` makes the next change fail like a concurrent one.
+    time: [],
+    timeConflict: false,
   };
 
   const addTicket = (title, description, by) => {
@@ -891,6 +894,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       return ok(items.sort((a, b) => b.reachedAt.localeCompare(a.reachedAt)).slice(0, 200));
     }
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
+    if (p.startsWith('/time')) return timeRoute(account, method, p, query, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -1419,6 +1423,141 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         changes: [{ field: 'mail', from: null, to: JSON.stringify({ id: message.id, from: message.fromAddress, subject: message.subject }) }] });
       Object.assign(message, { state: 'ticket', ticketId: ticket.id, contactId: contact?.id ?? null, customerId: contact?.customerId ?? null, processedAt: now(), processedBy: account.id, version: message.version + 1 });
       return ok({ ticketId: ticket.id, projectId: ticket.projectId, number: ticket.number, attachments: message.attachments });
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  // ------------------------------------------------------------------ time entries (TASK-069)
+  // As the backend: time.book for own entries, time.read for everybody's, time.manage for booking and changing for others;
+  // tickets only with ticket.read, their title only with the read rule of the title; cancelled entries in no sum.
+  const timeAccess = (account, projectId) => {
+    if (account.kind === 'portal' || !isMember(account, projectId)) return { book: false, read: false, manage: false };
+    return { book: may(account, 'time.book', projectId), read: may(account, 'time.read', projectId), manage: may(account, 'time.manage', projectId) };
+  };
+  const timeAny = (access) => access.book || access.read || access.manage;
+  const timeTicket = (account, entry) => {
+    if (entry.ticketId === null) return null;
+    const ticket = state.tickets.find((item) => item.id === entry.ticketId);
+    if (!ticket || !may(account, 'ticket.read', ticket.projectId)) return null;
+    return { number: ticket.number, title: field(account, ticket.projectId, 'title', 'read') ? ticket.values.title : null };
+  };
+  const timeVisible = (account, entry) => {
+    const access = timeAccess(account, entry.projectId);
+    return access.read || access.manage || (access.book && entry.personId === account.id);
+  };
+  const timeView = (account, entry) => {
+    const access = timeAccess(account, entry.projectId);
+    const own = entry.personId === account.id;
+    const { ticketId, revisions, ...rest } = entry;
+    return { ...rest, projectKey: state.projects.find((item) => item.id === entry.projectId)?.key ?? '', ticket: timeTicket(account, entry),
+      cancelled: entry.cancelledAt !== null, own, changeable: entry.cancelledAt === null && (access.manage || (own && access.book)) };
+  };
+  // Every answer about one entry carries its revisions, as GET, POST and PUT of the backend.
+  const timeDetail = (account, entry) => ({ entry: timeView(account, entry), revisions: entry.revisions.map(({ ticketId, ...revision }) => ({ ...revision,
+    ticket: timeTicket(account, { ticketId }) })) });
+  const timeCheck = (account, projectId, body, own) => {
+    const violations = [];
+    if (!body.date) violations.push('date.required');
+    else if (body.date > new Date(Date.now() + 86400000).toISOString().slice(0, 10)) violations.push('date.future');
+    if (!Number.isInteger(body.minutes) || body.minutes < 1 || body.minutes > 1440) violations.push('minutes.invalid');
+    const description = (body.description ?? '').trim();
+    if (description === '') violations.push('description.required');
+    else if (description.length > 1000) violations.push('description.too_long');
+    let ticketId = null;
+    if (body.ticketNumber !== null && body.ticketNumber !== undefined) {
+      const ticket = state.tickets.find((item) => item.projectId === projectId && item.number === body.ticketNumber);
+      if (!ticket || !may(account, 'ticket.read', projectId)) violations.push('ticket.unknown');
+      else ticketId = ticket.id;
+    }
+    if (own === false && !(body.reason ?? '').trim()) violations.push('reason.required');
+    return { violations, values: { ticketId, date: body.date, minutes: body.minutes, description } };
+  };
+  function timeRoute(account, method, p, query, headers, body) {
+    if (p === '/time/projects' && method === 'GET') {
+      return ok(state.projects.map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: timeAccess(account, item.id) }))
+        .filter((item) => timeAny(item.access)).sort((a, b) => a.key.localeCompare(b.key)));
+    }
+    let match = p.match(/^\/time\/projects\/([^/]+)\/(people|entries)$/);
+    if (match) {
+      const projectId = match[1];
+      const access = timeAccess(account, projectId);
+      if (!timeAny(access)) return problem(404, 'project.not_found');
+      if (match[2] === 'people' && method === 'GET') {
+        if (!access.read && !access.manage) return problem(403, 'auth.forbidden');
+        return ok((state.members.get(projectId) ?? []).map((member) => member.accountId));
+      }
+      if (match[2] === 'entries' && method === 'POST') {
+        const person = body.personId ?? account.id;
+        const own = person === account.id;
+        if (own ? !(access.book || access.manage) : !access.manage) return problem(403, 'auth.forbidden');
+        const { violations, values } = timeCheck(account, projectId, body, null);
+        if (!own && !isMember({ id: person }, projectId)) violations.push('person.not_member');
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        const at = now();
+        const entry = { id: uuid(), projectId, personId: person, ...values, cancelledAt: null, cancelledBy: null, createdAt: at, createdBy: account.id,
+          updatedAt: at, updatedBy: account.id, version: 1, revisions: [{ revision: 1, kind: 'created', occurredAt: at, actorId: account.id, ...values, reason: null }] };
+        state.time.push(entry);
+        return { status: 201, body: timeDetail(account, entry), etag: '"1"' };
+      }
+    }
+    if (p === '/time/entries' && method === 'GET') {
+      const project = query.get('project');
+      const person = query.get('person');
+      const ticketNumber = query.get('ticket');
+      const from = query.get('from');
+      const to = query.get('to');
+      if (from && to && to < from) return problem(400, 'request.invalid', { violations: ['to.before_from'] });
+      const entries = state.time.filter((entry) => timeVisible(account, entry)
+        && (!project || entry.projectId === project) && (!person || entry.personId === person)
+        && (!ticketNumber || state.tickets.find((item) => item.id === entry.ticketId)?.number === Number(ticketNumber))
+        && (!from || entry.date >= from) && (!to || entry.date <= to) && (query.get('cancelled') === 'true' || entry.cancelledAt === null))
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+      const counted = entries.filter((entry) => entry.cancelledAt === null);
+      const perPerson = new Map();
+      const perTicket = new Map();
+      for (const entry of counted) {
+        perPerson.set(entry.personId, (perPerson.get(entry.personId) ?? 0) + entry.minutes);
+        const ticket = timeTicket(account, entry);
+        const key = `${entry.projectId}#${ticket?.number ?? ''}`;
+        const sum = perTicket.get(key) ?? { projectId: entry.projectId, projectKey: state.projects.find((item) => item.id === entry.projectId)?.key ?? '', ticket, minutes: 0 };
+        sum.minutes += entry.minutes;
+        perTicket.set(key, sum);
+      }
+      return ok({ entries: entries.slice(0, 500).map((entry) => timeView(account, entry)), truncated: entries.length > 500, count: counted.length,
+        totalMinutes: counted.reduce((total, entry) => total + entry.minutes, 0), perPerson: [...perPerson].map(([personId, minutes]) => ({ personId, minutes })),
+        perTicket: [...perTicket.values()] });
+    }
+    match = p.match(/^\/time\/entries\/([^/]+)(\/cancel)?$/);
+    if (match) {
+      const entry = state.time.find((item) => item.id === match[1]);
+      if (!entry || !timeVisible(account, entry)) return problem(404, 'time.entry_not_found');
+      if (method === 'GET' && !match[2]) {
+        return ok(timeDetail(account, entry), `"${entry.version}"`);
+      }
+      const view = timeView(account, entry);
+      if (!headers['if-match']) return problem(428, 'time.precondition_required');
+      if (state.timeConflict) {
+        state.timeConflict = false;
+        return problem(412, 'time.version_conflict');
+      }
+      if (headers['if-match'] !== `"${entry.version}"`) return problem(412, 'time.version_conflict');
+      if (entry.cancelledAt !== null) return problem(409, 'time.entry_cancelled');
+      if (!view.changeable) return problem(403, 'auth.forbidden');
+      const at = now();
+      if (match[2] && method === 'POST') {
+        if (!view.own && !(body?.reason ?? '').trim()) return problem(400, 'request.invalid', { violations: ['reason.required'] });
+        Object.assign(entry, { cancelledAt: at, cancelledBy: account.id, updatedAt: at, updatedBy: account.id, version: entry.version + 1 });
+        entry.revisions.push({ revision: entry.revisions.length + 1, kind: 'cancelled', occurredAt: at, actorId: account.id, ticketId: entry.ticketId, date: entry.date,
+          minutes: entry.minutes, description: entry.description, reason: (body?.reason ?? '').trim() || null });
+        return ok(timeDetail(account, entry), `"${entry.version}"`);
+      }
+      if (!match[2] && method === 'PUT') {
+        const { violations, values } = timeCheck(account, entry.projectId, body, view.own);
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        Object.assign(entry, values, { updatedAt: at, updatedBy: account.id, version: entry.version + 1 });
+        entry.revisions.push({ revision: entry.revisions.length + 1, kind: 'corrected', occurredAt: at, actorId: account.id, ...values, reason: (body.reason ?? '').trim() || null });
+        return ok(timeDetail(account, entry), `"${entry.version}"`);
+      }
     }
     return problem(404, 'resource.not_found');
   }
