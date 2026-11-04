@@ -20,7 +20,8 @@ import tools.jackson.databind.json.JsonMapper;
  * action {@code helpdesk.reply}, {@code ticket.read} and the read rules of {@code mail} and {@code contact}; whoever answers
  * the customer is whoever has to see the answer.
  *
- * <p>Locks, in this order: rights, project row ({@code FOR SHARE}), the mail.
+ * <p>Locks, in this order: rights, project row ({@code FOR SHARE}), the mail, the ticket row ({@code FOR SHARE}). This is the
+ * order of taking a mail from the review queue to its ticket, without its lock of the customer of the ticket.
  */
 @Service
 public class AnswerService {
@@ -60,13 +61,26 @@ public class AnswerService {
 
     /**
      * Marks a new answer as seen for everybody. Without {@code ticket.read} the mail does not exist for the caller (404),
-     * without the rights of a reply the marking is refused (403); a mail that is no new answer gives 409.
+     * without the rights of a reply the marking is refused (403); a mail that is no new answer gives 409. A mail whose ticket
+     * left the project of the mail does not exist for the caller either (TASK-088).
      */
     @Transactional
     public Message seen(AccessContext actor, UUID id, long expectedVersion) {
         Message unlocked = repository.message(actor.companyId(), id).orElseThrow(AnswerService::notFound);
         replies.requireReply(actor, unlocked.projectId(), AnswerService::notFound);
         Message mail = repository.lockMessage(actor.companyId(), id).orElseThrow(AnswerService::notFound);
+        // The rights above are those of the project of the mail. The ticket decides what the caller may see, so it has to live
+        // there still (TASK-088, F1); the shared lock keeps it there until the commit, as for every helpdesk change. A mail
+        // without ticket (still in the review queue) is no answer and ends below with 412 or 409 as before.
+        if (mail.ticketId() != null) {
+            if (!inPlace(actor, mail)) {
+                throw notFound();
+            }
+            tickets.lockForHelpdeskChange(mail.ticketId());
+            if (!inPlace(actor, mail)) {
+                throw notFound();
+            }
+        }
         if (mail.version() != expectedVersion) {
             throw ApiProblemException.of(412, "helpdesk.version_conflict");
         }
@@ -77,6 +91,13 @@ public class AnswerService {
         repository.answerSeen(id, now, actor.userId());
         repository.audit(actor.companyId(), "message", id, "answer.seen", JSON.writeValueAsString(new Detail(mail.ticketId())), actor.userId(), now);
         return repository.message(actor.companyId(), id).orElseThrow();
+    }
+
+    /** Whether the ticket of the mail lives in the company of the caller and in the project of the mail. */
+    private boolean inPlace(AccessContext actor, Message mail) {
+        return tickets.locate(mail.ticketId())
+            .filter(location -> location.companyId().equals(actor.companyId()) && location.projectId().equals(mail.projectId()))
+            .isPresent();
     }
 
     private record Detail(UUID ticketId) {

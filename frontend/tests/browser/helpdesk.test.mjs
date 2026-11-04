@@ -526,6 +526,9 @@ describe('replies to customers', () => {
       assert.equal(answer.seenBy, backend.ben.id);
       const call = backend.state.requests.findLast((entry) => entry.method === 'POST' && entry.path.endsWith('/seen'));
       assert.equal(call.ifMatch, '"1"');
+      // The row is gone, so the focus waits at the heading of the list, above the notice (TASK-088, F2).
+      await list.getByRole('status').filter({ hasText: 'Die Antwort ist als gesehen markiert.' }).waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'new-answers');
 
       // In the ticket the remaining answer is opened and marked; marking it there removes it from the list as well.
       await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
@@ -537,6 +540,8 @@ describe('replies to customers', () => {
       await mail.getByTestId('answer-seen').getByRole('button', { name: 'Gesehen' }).click();
       await mail.getByTestId('new-answer').waitFor({ state: 'detached' });
       assert.ok(second.seenAt);
+      await section.getByRole('status').filter({ hasText: 'Die Antwort ist als gesehen markiert.' }).waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'E-Mail Verlauf');
       await page.goto(`${base()}#/inbox`);
       await page.getByRole('heading', { name: 'Prüfwarteschlange' }).waitFor();
       assert.equal(await page.getByTestId('new-answers').count(), 0);
@@ -553,8 +558,67 @@ describe('replies to customers', () => {
       await item.waitFor();
       Object.assign(answer, { seenAt: '2026-10-21T08:07:00Z', seenBy: backend.anna.id, version: answer.version + 1 });
       await item.getByRole('button', { name: 'Gesehen' }).click();
-      await page.getByTestId('new-answers').getByRole('status').waitFor();
+      await page.getByTestId('new-answers').getByRole('status').filter({ hasText: 'Die Liste ist neu geladen.' }).waitFor();
       await item.waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'new-answers');
+    });
+  });
+
+  test('marking an answer in the ticket that somebody else marked first keeps the notice (TASK-088, F2)', async () => {
+    let ticket;
+    let answer;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      ticket = withReplier(backend);
+      answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', joinedAt: '2026-10-21T08:05:00Z' });
+    } }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      const mail = section.locator(`li[data-mail="${answer.id}"]`);
+      await mail.getByTestId('new-answer').waitFor();
+      Object.assign(answer, { seenAt: '2026-10-21T08:07:00Z', seenBy: backend.anna.id, version: answer.version + 1 });
+      await mail.getByTestId('answer-seen').getByRole('button', { name: 'Gesehen' }).click();
+      await mail.getByTestId('new-answer').waitFor({ state: 'detached' });
+      const notice = section.getByRole('status').filter({ hasText: 'Das Ticket ist neu geladen.' });
+      await notice.waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'E-Mail Verlauf');
+      // The reload of the ticket keeps the notice.
+      await page.waitForTimeout(300);
+      assert.equal(await notice.count(), 1);
+    });
+  });
+
+  test('a failed load of the new answers is no empty list and can be repeated (TASK-088, F3)', async () => {
+    let answer;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      const ticket = withReplier(backend);
+      answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', joinedAt: '2026-10-21T08:05:00Z' });
+      backend.state.helpdesk.answersDown = 1;
+    } }, async (page) => {
+      const list = page.getByTestId('new-answers');
+      await list.getByRole('heading', { name: 'Neue Kundenantworten' }).waitFor();
+      const retry = list.getByRole('button', { name: 'Erneut versuchen' });
+      await retry.waitFor();
+      assert.equal(await list.locator('li').count(), 0);
+      await retry.click();
+      await list.locator(`li[data-answer="${answer.id}"]`).waitFor();
+    });
+  });
+
+  test('an answer can be marked at a ticket without contact (TASK-088, H2)', async () => {
+    let ticket;
+    let answer;
+    await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+      ticket = withReplier(backend);
+      backend.state.helpdesk.ticketCustomers.get(ticket.id).contactId = null;
+      answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', joinedAt: '2026-10-21T08:05:00Z' });
+    } }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      const mail = section.locator(`li[data-mail="${answer.id}"]`);
+      await mail.getByTestId('new-answer').waitFor();
+      await mail.getByTestId('answer-seen').getByRole('button', { name: 'Gesehen' }).click();
+      await mail.getByTestId('new-answer').waitFor({ state: 'detached' });
+      assert.ok(answer.seenAt);
     });
   });
 });

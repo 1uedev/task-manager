@@ -304,7 +304,8 @@ export interface paths {
          * Neue Kundenantworten an bestehenden Tickets in den Projekten mit helpdesk.reply, neueste zuerst
          * @description Mails, die einem schon bestehenden Ticket zugeordnet wurden (selbst als Antwort auf eine Antwort oder über
          *     `…/inbox/{id}/attach`) und die noch niemand als gesehen markiert hat, höchstens 100. Nur Projekte, in denen die Person
-         *     Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067).
+         *     Mitglied ist und `helpdesk.reply`, `ticket.read` sowie die Leseregeln für `mail` und `contact` hat (TASK-067), und nur
+         *     Mails, deren Ticket noch im Projekt der Mail liegt. Antworten aus dem Kundenportal zählen nicht dazu.
          */
         get: operations["listNewAnswers"];
         put?: never;
@@ -326,8 +327,10 @@ export interface paths {
         put?: never;
         /**
          * Neue Kundenantwort für alle als gesehen markieren (Rechte wie eine Antwort, If-Match)
-         * @description Ohne `ticket.read` 404 `helpdesk.message_not_found`, ohne die Rechte einer Antwort 403, eine Mail, die keine neue
-         *     Kundenantwort ist, 409 `helpdesk.answer_not_new`. Steht mit Person und Zeitpunkt im Audit (`answer.seen`).
+         * @description Ohne If-Match 428. Ohne `ticket.read` 404 `helpdesk.message_not_found`, ebenso wenn das Ticket der Mail nicht mehr im
+         *     Projekt der Mail liegt (TASK-088); ohne die Rechte einer Antwort 403; eine Mail, die keine neue Kundenantwort ist, 409
+         *     `helpdesk.answer_not_new`. Kann eine Sperre nicht rechtzeitig genommen werden, 503 `helpdesk.busy` mit `Retry-After`.
+         *     Steht mit Person, Zeitpunkt und Ticket im Audit (`answer.seen`).
          */
         post: operations["markAnswerSeen"];
         delete?: never;
@@ -982,6 +985,8 @@ export interface components {
             replyAllowed: boolean;
             /** @description Ob die Person im Portal antworten darf (Rechte wie replyAllowed, dazu ein Kunde am Ticket, TASK-076); nur eine Momentaufnahme. */
             portalAnswerAllowed: boolean;
+            /** @description Ob die Person neue Kundenantworten als gesehen markieren darf (Rechte wie replyAllowed, aber ohne Kontakt am Ticket, TASK-088); nur eine Momentaufnahme. */
+            answerSeenAllowed: boolean;
         };
         /** @enum {string} */
         ReplyState: "pending" | "sent" | "failed" | "uncertain";
@@ -1085,12 +1090,14 @@ export interface components {
          *     customer.not_found, customer.name_taken, customer.version_conflict, contact.not_found, contact.address_taken,
          *     contact.version_conflict, mailbox.not_found, mailbox.name_taken, mailbox.version_conflict,
          *     helpdesk.secret_key_missing, helpdesk.message_not_found, helpdesk.message_processed, helpdesk.version_conflict,
-         *     helpdesk.precondition_required, helpdesk.busy (503 mit Retry-After), project.not_found, ticket.not_found,
+         *     helpdesk.precondition_required, helpdesk.answer_not_new, helpdesk.busy (503 mit Retry-After), project.not_found, ticket.not_found,
          *     auth.required, auth.forbidden, auth.csrf_invalid, auth.password_change_required.
          */
         Problem: {
             headers: {
                 "X-Correlation-Id"?: string;
+                /** @description Nur bei 503. */
+                "Retry-After"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -1657,6 +1664,7 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     markAnswerSeen: {
@@ -1689,6 +1697,7 @@ export interface operations {
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
             428: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listOpenReplies: {
