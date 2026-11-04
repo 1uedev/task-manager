@@ -180,9 +180,9 @@ public class TagService {
 
     /** Suggestions from the company catalog, for the tags of projects. */
     @Transactional
-    public Suggestions companySuggestions(AccessContext actor, String search, int limit) {
+    public Suggestions companySuggestions(AccessContext actor, String search, boolean includeArchived, int limit) {
         internal(actor);
-        List<Tag> found = tags.suggestions(actor.companyId(), null, TagName.searchKey(search), limit);
+        List<Tag> found = tags.suggestions(actor.companyId(), null, TagName.searchKey(search), includeArchived, limit);
         return new Suggestions(views(actor, found, false), allowedAny(actor, company(actor), CREATE, MANAGE), false);
     }
 
@@ -232,9 +232,9 @@ public class TagService {
 
     /** Suggestions from the company catalog and the catalog of the project, for the tags of its tickets. */
     @Transactional
-    public Suggestions projectSuggestions(AccessContext actor, UUID projectId, String search, int limit) {
+    public Suggestions projectSuggestions(AccessContext actor, UUID projectId, String search, boolean includeArchived, int limit) {
         Supplier<ResourceContext> resource = catalogVisible(actor, projectId);
-        List<Tag> found = tags.suggestions(actor.companyId(), projectId, TagName.searchKey(search), limit);
+        List<Tag> found = tags.suggestions(actor.companyId(), projectId, TagName.searchKey(search), includeArchived, limit);
         return new Suggestions(views(actor, found, false), allowedAny(actor, company(actor), CREATE, MANAGE), allowedAny(actor, resource, CREATE, MANAGE));
     }
 
@@ -402,6 +402,14 @@ public class TagService {
                 }
             }
         } else {
+            // Locked like an assignment (TASK-086, Codex F2): a tag merged after the check before the tickets refuses the
+            // ticket instead of counting it as unchanged, its assignments now carry the target. Archived tags stay removable.
+            for (Tag tag : fitting) {
+                Tag current = tags.lockForAssignment(actor.companyId(), tag.id(), location.projectId()).orElseThrow(TagService::tagNotFound);
+                if (current.merged()) {
+                    throw ApiProblemException.of(409, "tag.merged");
+                }
+            }
             tickets.lockForTagChange(ticket);
             Instant now = clock.instant();
             for (Tag tag : fitting) {
@@ -562,6 +570,10 @@ public class TagService {
     }
 
     private Tag merge(AccessContext actor, UUID projectId, UUID sourceId, long expectedVersion, UUID targetId) {
+        // Merges of one catalog run one after the other (TASK-086, Codex F1): markMerged also moves the references of earlier
+        // merges onto the target, rows outside the pair; without this lock a stale merge of such an earlier source could hold
+        // that row and wait for the pair, a cycle the database breaks with a deadlock.
+        tags.lockObject("tag_merge", projectId != null ? projectId : actor.companyId());
         Tag[] pair = lockPair(actor, projectId, sourceId, targetId);
         Tag source = pair[0];
         Tag target = pair[1];

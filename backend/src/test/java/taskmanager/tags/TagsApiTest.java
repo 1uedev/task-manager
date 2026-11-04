@@ -935,7 +935,7 @@ class TagsApiTest {
         grant(member.id(), project.id(), "ticket.read", "tag.create");
         String token = "s" + COUNTER.incrementAndGet();
         tag(admin, "/api/v1/tags", "Zz " + token + "anfang");
-        tag(admin, "/api/v1/tags", token + " Start");
+        UUID start = tag(admin, "/api/v1/tags", token + " Start");
         tag(member, catalog(project), "Mitte" + token + "x");
         UUID archived = tag(admin, "/api/v1/tags", token + " Archiv");
         assertEquals(200, patch(admin, "/api/v1/tags/" + archived, Map.of("archived", true), "\"1\"").status());
@@ -957,6 +957,13 @@ class TagsApiTest {
         assertEquals(1, member.get("/api/v1/projects/" + project.id() + "/catalog/suggestions?limit=1&q=" + token).json().get("items").size());
         assertEquals(0, member.get("/api/v1/tags/suggestions?q=" + token + "%25").json().get("items").size(),
             "a percent sign is a character, not a wildcard");
+        // For filters and removal the archived tags are offered too, merged ones never (TASK-086, Codex F3).
+        UUID merged = tag(admin, "/api/v1/tags", token + " Weg");
+        assertEquals(200, mergeInto(admin, "/api/v1/tags/" + merged, start, "\"1\"").status());
+        Response withArchived = member.get("/api/v1/projects/" + project.id() + "/catalog/suggestions?archived=true&q=" + token);
+        List<String> all = StreamSupport.stream(withArchived.json().get("items").spliterator(), false).map(tag -> tag.get("name").asString()).toList();
+        assertEquals(List.of(token + " Archiv", token + " Start", "Zz " + token + "anfang", "Mitte" + token + "x"), all, withArchived.body());
+        assertEquals(3, member.get("/api/v1/tags/suggestions?archived=true&q=" + token).json().get("items").size());
     }
 
     @Test
@@ -999,9 +1006,20 @@ class TagsApiTest {
         for (int i = 0; i < 29; i++) {
             assertEquals(204, post(worker, ticketTags(project, number), Map.of("name", token + "-" + i)).status());
         }
-        // Two assignments race for the last place: exactly one gets it.
-        Future<Response> one = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-a")));
-        Future<Response> two = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-b")));
+        // Two assignments race for the last place: both wait at the held ticket and start together; exactly one gets it.
+        UUID ticket = ticketId(project, number);
+        Future<Response> one;
+        Future<Response> two;
+        Runnable release = hold("select id from ticket where id = '" + ticket + "' for update");
+        try {
+            one = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-a")));
+            two = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-b")));
+            assertTrue(waitsAt("from ticket"), "the assignments wait for the ticket");
+            Thread.sleep(300);
+            assertFalse(one.isDone() || two.isDone());
+        } finally {
+            release.run();
+        }
         List<Integer> statuses = new ArrayList<>(List.of(one.get(20, TimeUnit.SECONDS).status(), two.get(20, TimeUnit.SECONDS).status()));
         statuses.sort(null);
         assertEquals(List.of(204, 409), statuses);
@@ -1185,6 +1203,140 @@ class TagsApiTest {
         }
         assertCounts(running.get(30, TimeUnit.SECONDS), 2, 0, 0, 0);
         assertEquals(1, tagCount(worker, project, second));
+    }
+
+    // ---------------------------------------------------------------- findings of both reviews (TASK-086)
+
+    @Test
+    void aStaleMergeOfAnEarlierSourceWaitsForARunningMergeOfItsTargetWithoutDeadlock() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person member = person();
+        Project project = project(member);
+        grant(member.id(), project.id(), TICKETS);
+        String token = "k" + COUNTER.incrementAndGet();
+        List<UUID> sorted = new ArrayList<>();
+        for (String name : List.of("Erste ", "Zweite ", "Dritte ")) {
+            sorted.add(tag(admin, "/api/v1/tags", name + token));
+        }
+        sorted.sort(null);
+        UUID a = sorted.get(0);
+        UUID b = sorted.get(1);
+        UUID c = sorted.get(2);
+        assertEquals(200, mergeInto(admin, "/api/v1/tags/" + a, b, "\"1\"").status(), "A into B first");
+        long number = ticket(member, project, "Haelt B");
+        assertEquals(204, post(member, ticketTags(project, number), Map.of("tagId", b.toString())).status());
+        UUID ticket = ticketId(project, number);
+        // B into C locks B and C and then waits at the held assignment of B; a stale second merge of A into B starts meanwhile.
+        Runnable release = hold("select ticket_id from tag_ticket where ticket_id = '" + ticket + "' and tag_id = '" + b + "' for update");
+        Future<Response> running;
+        Future<Response> stale;
+        try {
+            running = POOL.submit(() -> mergeInto(admin, "/api/v1/tags/" + b, c, "\"1\""));
+            assertTrue(waitsAt("tag_ticket"), "the merge of B waits for the held assignment");
+            stale = POOL.submit(() -> mergeInto(admin, "/api/v1/tags/" + a, b, "\"1\""));
+            Thread.sleep(500);
+            assertFalse(running.isDone() || stale.isDone());
+        } finally {
+            release.run();
+        }
+        Response first = running.get(30, TimeUnit.SECONDS);
+        assertEquals(200, first.status(), first.body());
+        assertProblem(stale.get(30, TimeUnit.SECONDS), 409, "tag.merged");
+        assertEquals(c, jdbc.queryForObject("select merged_into from tag where id = ?", UUID.class, a), "A follows the chain to C");
+        assertEquals(List.of(c.toString()), ids(member.get(ticketTags(project, number))));
+    }
+
+    @Test
+    void anAssignmentOfTheSourceDuringAMergeWaitsAndThenSeesTheMergedTag() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person member = person();
+        Project project = project(member);
+        grant(member.id(), project.id(), TICKETS);
+        String token = "g" + COUNTER.incrementAndGet();
+        UUID source = tag(admin, "/api/v1/tags", "Von " + token);
+        UUID target = tag(admin, "/api/v1/tags", "Nach " + token);
+        long tagged = ticket(member, project, "Mit Quelle");
+        long later = ticket(member, project, "Spaeter");
+        assertEquals(204, post(member, ticketTags(project, tagged), Map.of("tagId", source.toString())).status());
+        UUID held = ticketId(project, tagged);
+        // The merge locks both tags and waits at the held assignment; an assignment of the source waits for the merge.
+        Runnable release = hold("select ticket_id from tag_ticket where ticket_id = '" + held + "' and tag_id = '" + source + "' for update");
+        Future<Response> merging;
+        Future<Response> assigning;
+        try {
+            merging = POOL.submit(() -> mergeInto(admin, "/api/v1/tags/" + source, target, "\"1\""));
+            assertTrue(waitsAt("tag_ticket"), "the merge waits for the held assignment");
+            assigning = POOL.submit(() -> post(member, ticketTags(project, later), Map.of("tagId", source.toString())));
+            Thread.sleep(500);
+            assertFalse(merging.isDone() || assigning.isDone());
+        } finally {
+            release.run();
+        }
+        assertEquals(200, merging.get(30, TimeUnit.SECONDS).status());
+        assertProblem(assigning.get(30, TimeUnit.SECONDS), 409, "tag.merged");
+        assertEquals(List.of(target.toString()), ids(member.get(ticketTags(project, tagged))));
+        assertEquals(0, tagCount(member, project, later), "no assignment of the merged source");
+    }
+
+    @Test
+    void aBulkRemovalRefusesATicketWhoseTagWasMergedAfterTheCheck() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project one = project(worker);
+        Project two = project(worker);
+        grant(worker.id(), one.id(), TICKETS);
+        grant(worker.id(), two.id(), TICKETS);
+        String token = "e" + COUNTER.incrementAndGet();
+        UUID source = tag(admin, "/api/v1/tags", "Rechnung " + token);
+        UUID target = tag(admin, "/api/v1/tags", "Abrechnung " + token);
+        long first = ticket(worker, one, "Zuerst");
+        long second = ticket(worker, two, "Danach");
+        assertEquals(204, post(worker, ticketTags(one, first), Map.of("tagId", source.toString())).status());
+        assertEquals(204, post(worker, ticketTags(two, second), Map.of("tagId", source.toString())).status());
+        UUID held = ticketId(two, second);
+        // The project of the second ticket is held; the first ticket is done, then the tag is merged before the second one.
+        Runnable release = hold("select id from project where id = '" + two.id() + "' for update");
+        Future<Response> running;
+        try {
+            running = POOL.submit(() -> bulk(worker, "remove", List.of(source), List.of(ticketId(one, first), held)));
+            assertTrue(waitsAt("from project"), "the bulk change waits at the second project");
+            assertEquals(0, tagCount(worker, one, first), "the first ticket is already committed");
+            assertEquals(200, mergeInto(admin, "/api/v1/tags/" + source, target, "\"1\"").status());
+        } finally {
+            release.run();
+        }
+        Response result = running.get(30, TimeUnit.SECONDS);
+        assertCounts(result, 1, 0, 0, 1);
+        assertEquals("tag.merged", item(result, held).get("code").asString(), "not counted as already removed");
+        assertEquals(List.of(target.toString()), ids(worker.get(ticketTags(two, second))), "the ticket carries the target");
+    }
+
+    @Test
+    void aSessionThatEndsDuringABulkChangeStillYieldsTheResult() throws Exception {
+        Person worker = person();
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        long first = ticket(worker, project, "Vor dem Ende");
+        long second = ticket(worker, project, "Nach dem Ende");
+        UUID tag = tag(admin, "/api/v1/tags", "Ende " + COUNTER.incrementAndGet());
+        UUID held = ticketId(project, second);
+        jdbc.update("update identity_session set expires_at = clock_timestamp() + interval '4 seconds' where account_id = ? and revoked_at is null",
+            worker.id());
+        // The second ticket waits at its row until the session has ended; the check right before its commit refuses it.
+        Runnable release = hold("select id from ticket where id = '" + held + "' for update");
+        Future<Response> running;
+        try {
+            running = POOL.submit(() -> bulk(worker, "add", List.of(tag), List.of(ticketId(project, first), held)));
+            assertTrue(waitsAt("from ticket"), "the bulk change waits for the second ticket");
+            Thread.sleep(4500);
+        } finally {
+            release.run();
+        }
+        Response result = running.get(30, TimeUnit.SECONDS);
+        assertCounts(result, 1, 0, 0, 1);
+        assertTrue(item(result, held).get("key").isNull(), "the ended session reads no key");
+        assertEquals(1, jdbc.queryForObject("select count(*) from tag_ticket where tag_id = ?", Integer.class, tag), "only the first ticket");
     }
 
     private static int tagCount(Person person, Project project, long number) {
