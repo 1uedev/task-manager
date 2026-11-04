@@ -26,6 +26,19 @@ public class AppearanceService {
     public static final int NAME_MAX = 80;
     private static final Pattern COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
 
+    /*
+     * The rule of the name (TASK-087, finding F1 of docs/REVIEW_TASK-081_PR-243.md), written out character by character so
+     * the server, the database check of V0054 and the interface (frontend/src/api/client.ts) agree on every Unicode version.
+     * EDGE: spaces removed at both ends, every Unicode space including the protected ones and the line breaks. FORBIDDEN:
+     * control characters, line and paragraph separators and the format characters (Unicode 15.1, category Cf), nowhere.
+     */
+    static final String EDGE = "\\x{9}-\\x{d}\\x{1c}-\\x{20}\\x{85}\\x{a0}\\x{1680}\\x{2000}-\\x{200a}\\x{2028}\\x{2029}\\x{202f}\\x{205f}\\x{3000}\\x{feff}";
+    static final String FORBIDDEN = "\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{ad}\\x{600}-\\x{605}\\x{61c}\\x{6dd}\\x{70f}\\x{890}\\x{891}\\x{8e2}\\x{180e}"
+        + "\\x{200b}-\\x{200f}\\x{2028}-\\x{202e}\\x{2060}-\\x{2064}\\x{2066}-\\x{206f}\\x{feff}\\x{fff9}-\\x{fffb}\\x{110bd}\\x{110cd}"
+        + "\\x{13430}-\\x{1343f}\\x{1bca0}-\\x{1bca3}\\x{1d173}-\\x{1d17a}\\x{e0001}\\x{e0020}-\\x{e007f}";
+    private static final Pattern EDGES = Pattern.compile("^[" + EDGE + "]+|[" + EDGE + "]+$");
+    private static final Pattern FORBIDDEN_CHARACTER = Pattern.compile("[" + FORBIDDEN + "]");
+
     private final JdbcClient jdbc;
     private final Clock clock;
     private final ObjectProvider<AdministrationRights> rights;
@@ -53,7 +66,8 @@ public class AppearanceService {
 
     /**
      * Changes the accent color, the name or both in one step (TASK-081). A part that is not sent stays as it is; a request
-     * that sends neither is refused. Each changed part gets its own entry in the audit trail.
+     * that sends neither is refused. Each part that really changes gets its own entry in the audit trail; a request that
+     * changes nothing leaves version and audit as they are (TASK-087, hint H2 of docs/REVIEW_TASK-081_PR-243.md).
      */
     @Transactional
     public Appearance change(AccessContext actor, long expectedVersion, String accentColor, String name) {
@@ -66,13 +80,18 @@ public class AppearanceService {
         Appearance before = locked(expectedVersion);
         String nextColor = color == null ? before.accentColor() : color;
         String nextName = shown == null ? before.name() : shown;
+        boolean colorChanged = !nextColor.equals(before.accentColor());
+        boolean nameChanged = !nextName.equals(before.name());
+        if (!colorChanged && !nameChanged) {
+            return before;
+        }
         jdbc.sql("update appearance_setting set accent_color = ?, name = ?, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(nextColor, nextName, ts(), actor.accountId()).update();
-        if (color != null) {
-            audit(actor, "appearance.accent_changed", before.accentColor() + " -> " + color);
+        if (colorChanged) {
+            audit(actor, "appearance.accent_changed", before.accentColor() + " -> " + nextColor);
         }
-        if (shown != null) {
-            audit(actor, "appearance.name_changed", before.name() + " -> " + shown);
+        if (nameChanged) {
+            audit(actor, "appearance.name_changed", before.name() + " -> " + nextName);
         }
         return current();
     }
@@ -97,13 +116,14 @@ public class AppearanceService {
     }
 
     /**
-     * The name after surrounding spaces are removed: 1 to 80 characters without control characters or line breaks, so it
-     * fits a page head, a window title and a mail header alike.
+     * The name after the spaces of {@link #EDGE} are removed at both ends: 1 to 80 characters, none of {@link #FORBIDDEN}
+     * and no half of a surrogate pair, so it fits a page head, a window title and a mail header alike and the interface
+     * accepts what the server stored (TASK-087).
      */
     static String validName(String raw) {
-        String name = raw.strip();
-        if (name.isEmpty() || name.codePointCount(0, name.length()) > NAME_MAX
-            || name.codePoints().anyMatch(c -> Character.isISOControl(c) || c == 0x2028 || c == 0x2029 || Character.getType(c) == Character.FORMAT)) {
+        String name = EDGES.matcher(raw).replaceAll("");
+        if (name.isEmpty() || name.codePointCount(0, name.length()) > NAME_MAX || FORBIDDEN_CHARACTER.matcher(name).find()
+            || name.codePoints().anyMatch(c -> c >= 0xd800 && c <= 0xdfff)) {
             throw ApiProblemException.of(400, "appearance.name_invalid");
         }
         return name;

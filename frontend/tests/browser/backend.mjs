@@ -12,6 +12,9 @@ const PRIORITY_FIELD = 'priority';
 const PRIORITIES = ['low', 'normal', 'high', 'critical'];
 // The fixed actor of tickets the mail intake opens (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
+// The rule of the name, the same as AppearanceService on the server and frontend/src/api/client.ts (TASK-087).
+const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
+const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
 const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
@@ -460,12 +463,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (p === '/appearance/logo' && method === 'GET') return { status: 200, raw: PNG, type: 'image/png' };
       if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
       if (headers['if-match'] !== `"${state.appearance.version}"`) return problem(412, 'appearance.version_conflict');
+      if (p === '/appearance' && method === 'PUT') {
+        // The rule of the server (TASK-087): spaces of every kind leave the edges, an unchanged request is no change.
+        const name = body.name === undefined ? state.appearance.name : body.name.replace(NAME_EDGES, '');
+        if (name === '' || [...name].length > 80 || NAME_FORBIDDEN.test(name)) return problem(400, 'appearance.name_invalid');
+        const accent = body.accentColor === undefined ? state.appearance.accent : body.accentColor.toLowerCase();
+        if (name !== state.appearance.name || accent !== state.appearance.accent) {
+          state.appearance.version += 1;
+          Object.assign(state.appearance, { name, accent });
+        }
+        return ok(appearanceBody(), `"${state.appearance.version}"`);
+      }
       state.appearance.version += 1;
       if (p === '/appearance' && method === 'DELETE') Object.assign(state.appearance, { accent: '#f97316', name: 'Task Manager', logo: null });
-      else if (p === '/appearance') {
-        if (body.accentColor !== undefined) state.appearance.accent = body.accentColor.toLowerCase();
-        if (body.name !== undefined) state.appearance.name = body.name.trim();
-      } else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
+      else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
       else state.appearance.logo = null;
       return ok(appearanceBody(), `"${state.appearance.version}"`);
     }

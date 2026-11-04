@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
-import { APPEARANCE_RIGHT, createServerApi, readAppearance, readPublicAppearance, readSession, type LoadedAppearance, type PublicAppearance, type ServerApi } from '../api/client.ts';
+import { APPEARANCE_RIGHT, createServerApi, isBrandName, normalizeBrandName, readAppearance, readPublicAppearance, readSession, type LoadedAppearance, type PublicAppearance, type ServerApi } from '../api/client.ts';
 import { readStoredTheme, storeTheme } from '../app/preferences.ts';
 import { accentBrand, brandToCssVariables, DEFAULT_ACCENT, DEFAULT_NAME, isAccentColor, type Brand } from './brand.ts';
 
@@ -113,7 +113,7 @@ export function BrandProvider({ children, api: given }: { readonly children: Rea
     setPreviewAccent(color !== null && isAccentColor(color) ? color.toLowerCase() : null);
   }, []);
   const previewName = useCallback((next: string | null) => {
-    setPreviewedName(next !== null && next.trim() !== '' ? next.trim() : null);
+    setPreviewedName(next !== null && isBrandName(normalizeBrandName(next)) ? normalizeBrandName(next) : null);
   }, []);
   const accept = useCallback((loaded: LoadedAppearance) => {
     setConnection((current) => (current.state === 'ready' ? { ...current, loaded } : current));

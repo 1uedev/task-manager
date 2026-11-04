@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040, TASK-081, TASK-082)
-  version: 0.3.0
+  title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040, TASK-081, TASK-082, TASK-087)
+  version: 0.3.1
   description: |
     Name, Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur, wer das Unternehmensrecht
     `appearance.manage` des Berechtigungsmoduls hält (sonst 403 `auth.forbidden`, TASK-040). Sitzung, CSRF und
@@ -90,6 +90,13 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/PublicAppearance'}
+    head:
+      operationId: headPublicAppearance
+      summary: Köpfe von GET /appearance/public ohne Inhalt, ohne Sitzung
+      description: Dieselben Köpfe und derselbe Status wie GET, ohne Antwortkörper (TASK-087, Hinweis H3).
+      security: []
+      responses:
+        '200': {description: Wie GET, ohne Inhalt}
   /appearance/public/logo:
     get:
       operationId: getPublicLogo
@@ -104,6 +111,14 @@ paths:
             image/jpeg: {schema: {type: string, format: binary}}
             image/webp: {schema: {type: string, format: binary}}
         '404': {$ref: '#/components/responses/Problem'}
+    head:
+      operationId: headPublicLogo
+      summary: Köpfe von GET /appearance/public/logo ohne Inhalt, ohne Sitzung
+      description: Dieselben Köpfe und derselbe Status wie GET, ohne Bilddaten; ohne Logo 404 (TASK-087, Hinweis H3).
+      security: []
+      responses:
+        '200': {description: Wie GET, ohne Inhalt}
+        '404': {description: Kein Logo gespeichert}
   /appearance/logo:
     get:
       operationId: getLogo
@@ -299,7 +314,15 @@ components:
       minProperties: 1
       properties:
         accentColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
-        name: {type: string, minLength: 1, maxLength: 80}
+        name:
+          type: string
+          minLength: 1
+          description: |
+            Der Server entfernt zuerst an beiden Enden Leerzeichen jeder Art, auch geschützte (U+00A0, U+2007, U+202F) und
+            Zeilenumbrüche. Danach muss der Name 1 bis 80 Zeichen haben und darf keine Steuerzeichen, Zeilen- oder
+            Absatztrenner und keine Formatzeichen (Unicode Kategorie Cf) und keine halben Surrogatpaare enthalten, sonst 400
+            `appearance.name_invalid`. Die Datenbank prüft dieselbe Regel (V0054, TASK-087). Die Länge gilt daher erst nach
+            dem Entfernen der Ränder.
     PublicAppearance:
       type: object
       additionalProperties: false

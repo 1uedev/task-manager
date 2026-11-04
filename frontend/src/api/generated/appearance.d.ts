@@ -44,7 +44,11 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Köpfe von GET /appearance/public ohne Inhalt, ohne Sitzung
+         * @description Dieselben Köpfe und derselbe Status wie GET, ohne Antwortkörper (TASK-087, Hinweis H3).
+         */
+        head: operations["headPublicAppearance"];
         patch?: never;
         trace?: never;
     };
@@ -64,7 +68,11 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Köpfe von GET /appearance/public/logo ohne Inhalt, ohne Sitzung
+         * @description Dieselben Köpfe und derselbe Status wie GET, ohne Bilddaten; ohne Logo 404 (TASK-087, Hinweis H3).
+         */
+        head: operations["headPublicLogo"];
         patch?: never;
         trace?: never;
     };
@@ -165,6 +173,13 @@ export interface components {
         };
         AppearanceChange: {
             accentColor?: string;
+            /**
+             * @description Der Server entfernt zuerst an beiden Enden Leerzeichen jeder Art, auch geschützte (U+00A0, U+2007, U+202F) und
+             *     Zeilenumbrüche. Danach muss der Name 1 bis 80 Zeichen haben und darf keine Steuerzeichen, Zeilen- oder
+             *     Absatztrenner und keine Formatzeichen (Unicode Kategorie Cf) und keine halben Surrogatpaare enthalten, sonst 400
+             *     `appearance.name_invalid`. Die Datenbank prüft dieselbe Regel (V0054, TASK-087). Die Länge gilt daher erst nach
+             *     dem Entfernen der Ränder.
+             */
             name?: string;
         };
         PublicAppearance: {
@@ -381,6 +396,24 @@ export interface operations {
             };
         };
     };
+    headPublicAppearance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wie GET */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPublicLogo: {
         parameters: {
             query?: never;
@@ -402,6 +435,31 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    headPublicLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wie GET */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Kein Logo gespeichert */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getLogo: {
