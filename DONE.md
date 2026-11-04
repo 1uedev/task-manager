@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,64 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-086 Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3)
+
+**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-102, DEC-103, DEC-116. **Verantwortlich:** claude-20261101-tags-01. **Abgeschlossen:** 2026-11-04.
+
+**Abnahmekriterien:** F1 bis F3 der Codex Prüfung und F1, F2 der Claude Prüfung jeweils mit einem Regressionstest belegt (Backend für Sperrfolge, Entfernen nach Zusammenführen und Fehler beim Abschluss, Browser für archivierte Tags im Filter und die verspätete Suchantwort); bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-116, ohne Migration, Vertrag tags 0.5.0. Zusammenführungen eines Katalogs laufen nacheinander über eine Beratungssperre je Katalog vor den Tagsperren, damit das Umhängen früherer Verweise nicht mit einer gleichzeitigen Zusammenführung verklemmt (Codex F1). Das Massenentfernen sperrt seine Tags wie das Hinzufügen und lehnt ein Ticket mit dem Grund `tag.merged` ab, wenn ein Tag inzwischen zusammengeführt wurde; archivierte Tags bleiben entfernbar (Codex F2, Claude F1). Eine Ablehnung beim Commit oder ein Fehler beim Lesen des Schlüssels zählt das Ticket als abgelehnt, statt die ganze Anfrage ohne Ergebnis zu beenden (Claude F2). Die Vorschläge liefern mit `archived=true` auch archivierte Tags für Tagfilter und Entfernen, neue Zuordnungen schließen sie weiter aus (Codex F3). Suche und Ticketliste übernehmen nur die Antwort der zuletzt gestarteten Anfrage und wiederholen die abgeschickte Suche (Codex H1). Dazu der eigene Grund „zusammengeführt“, ein Hinweis an der Grenze von 1000 Treffern, die Namensauflösung der Historie in Paketen zu 100, die Testattrappe mit den Ablehnungen des Servers und stabile Katalogtests.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (520 Tests), darunter die neuen Nebenläufigkeitstests in `TagsApiTest`; die neuen Backend und Browsertests scheitern ohne die Korrektur. Frontend `npm run verify`, `npm run test:browser` 184 von 184. CI auf PR #257 grün.
+
+**Review:** Die Korrekturen setzen die beiden Prüfberichte zu TASK-072 und TASK-073 um (siehe dort). Eine getrennte Nachprüfung der Korrekturen hat nicht stattgefunden; Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-11-04, im Thread mit „ist abgenommen“ nach dem Merge von PR #257, gemeinsam mit TASK-072 und TASK-073; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Jede Ablehnung beim Commit erscheint im Ergebnis der Massenänderung als `auth.forbidden`, auch wenn die Ursache das Sitzungsende ist. Die Installationsanleitung für die Erweiterung `pg_trgm` bei einer eigenen Datenbank steht aus (Claude H5). Für die Grenze von 1000 Treffern gibt es keinen Browsertest.
+
+**Referenz:** Codex Prüfbericht und Reservierung #254 (2769647), Ergebnis #257 (2b1d9eb); verknüpft mit TASK-072, TASK-073 und DEC-116.
+
+## TASK-073 Tag Massenänderung und Filter (A3 Teil 2)
+
+**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-046, DEC-069, DEC-103; docs/TAGS_SEARCH.md (T05, T06, T07, T14). **Verantwortlich:** claude-20261101-tags-01. **Abgeschlossen:** 2026-11-04.
+
+**Abnahmekriterien:** Massenänderung nach Rechteentzug an einem Teil der Auswahl (T06) und mit gleichzeitiger Einzeländerung (T07) ohne stillen Verlust und ohne fremde Namen im Ergebnis. Filter liefern dieselben Treffer in Ticketliste und Suche; verborgene Tags beeinflussen weder Treffer noch Zähler (T05, T14). Vertrag gegen Routen, Backend Tests für Rechte, Grenzen und Teilergebnisse, Browser Tests für Auswahl, Vorschau, Ergebnis und Filter.
+
+**Fachliche Regeln** (von Holger am 1. November 2026 bestätigt): Bis 500 Tickets auswählbar, auch über Projekte, „Tags hinzufügen“ oder „Tags entfernen“ mit 1 bis 10 vorhandenen Tags; jedes Ticket für sich mit aktuellen Rechten geprüft und geändert, Projekttags nur im eigenen Projekt, keine Gesamttransaktion; Ergebnis mit Zahlen für geändert, schon so, nicht passend, abgelehnt und Schlüsseln nur lesbarer Tickets, direkt statt als Hintergrundauftrag; Filter „alle“, „mindestens einer“, „keiner“ und „ohne sichtbare Tags“ mit bis zu 10 Tags, nur Sichtbares zählt.
+
+**Ergebnis:** DEC-103, ohne Migration, Verträge tags 0.3.0 und search 0.2.0. `POST /api/v1/tags/bulk` prüft die Tags vorab und jedes Ticket in eigener Transaktion und liefert vier Zahlen mit Schlüsseln nur lesbarer Tickets. `tagMatch` mit `all`, `any`, `none` und `untagged` in Ticket und Projektsuche. Oberfläche mit Tagfilter, Auswahl, Prüfung vor dem Ausführen und Ergebnis in Suche und Ticketliste; die Ticketliste nutzt mit Tagfilter die Suche.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (473 Tests), Frontend `npm run verify` und Browsertests für Auswahl, Ergebnis und Filter grün. CI auf PR #230 grün.
+
+**Review:** (1) Getrennte Prüfung durch Claude ([Bericht](docs/REVIEW_TASK-072-073_PR-229-230_claude.md), PR #231): Empfehlung zur Abnahme mit F1 (Massenentfernen ohne Tagsperre) und F2 (Fehler beim Abschluss ohne Ergebnis) sowie Hinweisen H1 bis H5. (2) Getrennte Prüfung durch Codex, Sitzung codex-20261102-tags-review-01 ([Bericht](docs/REVIEW_TASK-072-073_PR-229-230.md), PR #254): F1 bis F3 und Empfehlung, vor der Abnahme nachzubessern. Alle Befunde beider Berichte mit TASK-086 behoben.
+
+**Abnahme:** Holger, 2026-11-04, im Thread mit „ist abgenommen“, gemeinsam mit TASK-072 und TASK-086; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Eine abgebrochene Anfrage lässt die bis dahin geänderten Tickets geändert; Massenänderung an Projekten und gespeicherte Filter sind nicht Teil.
+
+**Referenz:** Reservierung #228 (5422fb8), Ergebnis #230 (2fed223), Claude Prüfbericht #231 (35470ea), Codex Prüfbericht #254 (2769647), Korrekturen TASK-086 #257 (2b1d9eb).
+
+## TASK-072 Tag Katalogpflege und Zusammenführen (A3 Teil 1)
+
+**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-API-001; DEC-046, DEC-049, DEC-068, DEC-102; docs/TAGS_SEARCH.md (T02, T03, T08). **Verantwortlich:** claude-20261101-tags-01. **Abgeschlossen:** 2026-11-04.
+
+**Abnahmekriterien:** Beschreibung, Farbe und Pflege nur mit `tags.manage` im passenden Bereich, mit Version (If-Match) und Audit; ungültige Farbe oder zu lange Beschreibung 400. Zusammenführen dedupliziert (T03), verschiebt keine Sichtbarkeit, hält historische Verweise auflösbar, führt die Suche nach und ist gegen gleichzeitige Zuordnung und gleichzeitiges Zusammenführen sicher. Vorschau und Nutzungszahlen verraten keine nicht lesbaren Tickets. Vorschläge zeigen keine archivierten, zusammengeführten oder verborgenen Tags; Obergrenze greift bei Ticket und Projekt. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Verwaltungsseite, Projektreiter, Zusammenführen und Vorschläge.
+
+**Fachliche Regeln** (von Holger am 1. November 2026 mit „passt so“ bestätigt): Beschreibung bis 500 Zeichen, Farbe aus 12 Palettenfarben, Pflege mit `tags.manage`, Seite „Tags“ und Projektreiter, Nutzungszahlen nur über lesbare Objekte, Zusammenführen nur im selben Katalog mit Vorschau und Bestätigung, ohne neuen Historieneintrag je Ticket, bis 20.000 Zuordnungen, Vorschläge aus Unternehmens und Projektkatalog mit Trigrammindex, höchstens 30 Tags je Ticket und Projekt.
+
+**Ergebnis:** DEC-102, Migration V0033 (Beschreibung, Farbe, Verweis der Zusammenführung, Trigrammindex), Vertrag tags 0.2.0. Backend mit Zusammenführen samt Vorschau, Vorschlägen, Namensabfrage für die Historie, Nutzungszahlen und Obergrenze; Oberfläche mit Seite „Tags“, Projektreiter und Auswahl mit Vorschlägen an Ticket und Projekt.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (467 Tests), Frontend `npm run verify`, Browsertests der Tags 8 von 8. CI auf PR #229 grün einschließlich Lifecycle mit der Migration V0033.
+
+**Review:** Gemeinsam mit TASK-073 durch Claude (PR #231) und Codex (PR #254) geprüft, siehe TASK-073; der Codex Befund F1 (Sperrfolge beim Umhängen früherer Verweise) und F3 (archivierte Tags im Filter) betrafen diese Aufgabe und sind mit TASK-086 behoben.
+
+**Abnahme:** Holger, 2026-11-04, im Thread mit „ist abgenommen“, gemeinsam mit TASK-073 und TASK-086; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Zusammenführen zwischen Katalogen, Hierarchien, Aliase und endgültiges Löschen sind nicht Teil; die Rechte werden zum Sperrzeitpunkt geprüft.
+
+**Referenz:** Reservierung #228 (5422fb8), Ergebnis #229 (3ad1c89), Prüfberichte #231 und #254, Korrekturen TASK-086 #257 (2b1d9eb).
 
 ## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
 
