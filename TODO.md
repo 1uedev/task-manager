@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
+| [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
 
 ### Blockiert – BLOCKIERT
 
@@ -160,6 +161,29 @@ Nicht Teil: weitere Funktionen des Auftritts; die Stabilisierung der Tagtests (H
 
 **Abnahmekriterien:** Vorschlag, zur Prüfung:
 1. F1 und H1 mit API und Migrationstests für U+00A0, U+2007, U+202F und einen einzelnen Surrogaten; F2, F3 und F4 mit Browsertests (verlorene Eingabe, Fokus über `document.activeElement`, sichtbare Ausdehnung des Namens mit und ohne Logo bei 1100 und 320 px); H2 mit einem API Test für ein identisches PUT.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
+
+## TASK-088 Befunde der Prüfung von TASK-067 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261104-newanswersfix-01 · **Aktualisiert:** 2026-11-04
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097; docs/REVIEW_TASK-067_PR-221.md. **Abhängigkeiten:** TASK-067 geliefert (PR #221). **Arbeitsstand:** Holger hat am 4. November 2026 den Codex Prüfbericht zu TASK-067 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl auf der Entscheidungskarte vom selben Tag. Branch claude/project-thread-fde105; Ergebnis mit DEC-118, ohne Migration.
+
+**Umfang:** Befunde F1 bis F3 und Hinweise H1 bis H4 aus docs/REVIEW_TASK-067_PR-221.md:
+1. F1: Als gesehen markieren prüft nach dem Sperren der Mail das aktuelle Ticket und sein Projekt; passt es nicht oder fehlt das Leserecht dort, antwortet der Server wie bei einer unbekannten Mail mit 404, ohne Änderung und Audit.
+2. F2: Die Meldung bei einem Konflikt bleibt im Ticket sichtbar; nach dem Markieren liegt der Fokus in Ticket und Liste auf einem sinnvollen Ziel und der Erfolg wird bestätigt.
+3. F3: Ein Fehler beim Abruf der neuen Antworten wird in der Prüfwarteschlange angezeigt und lässt sich wiederholen; leer, ladend und fehlgeschlagen sind unterscheidbar.
+4. H1: Der Testersatz der Browsertests bildet Grenze 100, Reihenfolge, Ticketzuordnung und die Reihenfolge der Prüfungen (428 vor 404) wie der Server ab.
+5. H2: „Gesehen“ steht im Ticket allen offen, die markieren dürfen, auch ohne aktuellen Kontakt.
+6. H3: Der Vertrag nennt 503 mit Retry-After bei beiden Routen; TODO, DEC-097 und README nennen V0052, 36 Routen und die Grenze zu Portalbeiträgen.
+7. H4: Regressionen für alten Datenbestand ohne Markierung, gleichzeitiges Markieren mit genau einem Audit, Anhängen gegen Markieren und den Projektwechsel aus F1.
+
+Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 und H4 mit API Tests gegen die echte Datenbank; F2 und F3 mit Browsertests einschließlich `document.activeElement`; H2 mit einem Browsertest ohne Kontakt.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
 **Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
