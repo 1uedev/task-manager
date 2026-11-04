@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-10-30 |
+| [TASK-086](#task-086-befunde-beider-prüfungen-von-task-072-und-task-073-beheben-a3) | Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3) | claude-20261101-tags-01 | 2026-11-04 |
 
 ### Blockiert – BLOCKIERT
 
@@ -166,6 +167,26 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** `POST /api/v1/tags/bulk` mit Prüfung der Tags vorab und je Ticket in eigener Transaktion, Ergebnis mit vier Zahlen und Schlüsseln nur lesbarer Tickets; `tagMatch` mit `all`, `any`, `none` und `untagged` in Ticket und Projektsuche; Oberfläche mit Tagfilter, Auswahl, Prüfung vor dem Ausführen und Ergebnis in Suche und Ticketliste, die mit Tagfilter die Suche nutzt. Nachweise im Ergebnis PR. Grenzen: kein Hintergrundauftrag, eine abgebrochene Anfrage lässt bis dahin geänderte Tickets geändert; Prüfung zum Sperrzeitpunkt.
 
 **Nächster Schritt:** Unabhängige Prüfung von TASK-072 und TASK-073 und Abnahme durch Holger.
+
+## TASK-086 Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-04
+
+**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-102, DEC-103; [Codex Bericht](docs/REVIEW_TASK-072-073_PR-229-230.md) (PR #254), [Claude Bericht](docs/REVIEW_TASK-072-073_PR-229-230_claude.md) (PR #231). **Abhängigkeiten:** TASK-072 und TASK-073 geliefert. **Arbeitsstand:** Von Holger am 4. November 2026 mit „Ja, alles in TASK-086“ beauftragt; Branch claude/project-thread-trk1ni, Umsetzung voraussichtlich mit DEC-116, ohne Migration geplant.
+
+**Umfang:** Nur die Befunde und Hinweise beider Prüfungen:
+1. Codex F1: Umhängen früherer Zusammenführungsverweise in derselben Sperrfolge wie Quelle und Ziel, ohne Verklemmung mit einer gleichzeitigen alten Zusammenführung.
+2. Codex F2 und Claude F1: Massenentfernen sperrt und prüft die Tags wie das Hinzufügen; ein zwischenzeitlich zusammengeführter Tag lehnt das Ticket mit Grund ab, archivierte Tags bleiben entfernbar.
+3. Claude F2: Ein Fehler beim Abschluss eines Tickets oder beim Lesen seines Schlüssels beendet die Massenänderung nicht ohne Ergebnis, das Ticket zählt als abgelehnt.
+4. Codex F3: Archivierte Tags sind im Tagfilter und beim Entfernen auswählbar, neue Zuordnungen schließen sie weiter aus.
+5. Codex H1: Suche und Ticketliste übernehmen nur die Antwort der zuletzt gestarteten Anfrage.
+6. Kleinere Hinweise beider Prüfungen: Text des Grundes für zusammengeführte Tags, Testattrappe mit den Ablehnungen des Servers, Namensauflösung der Historie in Paketen, stabiler zeitabhängiger Browsertest und die übrigen Hinweise H1 bis H5 der Claude Prüfung, soweit sie Code oder Tests betreffen.
+
+Nicht Teil: neue Funktionen, Massenänderung an Projekten, gespeicherte Filter.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung: F1 bis F3 der Codex Prüfung und F1, F2 der Claude Prüfung jeweils mit einem Regressionstest belegt (Backend für Sperrfolge, Entfernen nach Zusammenführen und Fehler beim Abschluss, Browser für archivierte Tags im Filter und die verspätete Suchantwort); bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
 
 ## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
 
