@@ -238,6 +238,10 @@ export interface components {
             language: "de" | "en";
             applicationUrl?: string | null;
             texts: components["schemas"]["MailTexts"];
+            /**
+             * @description Der ungespeicherte Name für die Vorschau mit derselben Regel wie `AppearanceChange.name`: Die Ränder fallen zuerst
+             *     weg, die Grenze von 80 Zeichen gilt danach (TASK-087, Hinweis H2 aus docs/REVIEW_TASK-087_PR-259.md).
+             */
             name?: string;
             accentColor?: string;
         };

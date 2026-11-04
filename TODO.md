@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -40,10 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-11-04 |
-| [TASK-072](#task-072-tag-katalogpflege-und-zusammenführen-a3-teil-1) | Tag Katalogpflege und Zusammenführen (A3 Teil 1) | claude-20261101-tags-01 | 2026-11-01 |
-| [TASK-073](#task-073-tag-massenänderung-und-filter-a3-teil-2) | Tag Massenänderung und Filter (A3 Teil 2) | claude-20261101-tags-01 | 2026-11-01 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
-| [TASK-086](#task-086-befunde-beider-prüfungen-von-task-072-und-task-073-beheben-a3) | Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3) | claude-20261101-tags-01 | 2026-11-04 |
 | [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -113,85 +110,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Nächster Schritt:** Getrennte Prüfung (Codex oder Claude) und fachliche Abnahme durch Holger, danach Übertrag nach DONE.md.
 
-## TASK-072 Tag Katalogpflege und Zusammenführen (A3 Teil 1)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-01
-
-**Bezug:** REQ-TAG-001, REQ-ACL-004, REQ-API-001; DEC-046, DEC-049, DEC-068; docs/TAGS_SEARCH.md (T02, T03, T08). **Abhängigkeiten:** TASK-028, TASK-042, TASK-029 und TASK-030, abgenommen. **Arbeitsstand:** Holger hat am 1. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A3 nach A10 bestätigt und am selben Tag die 20 Vorschläge mit „passt so“ übernommen (Punkte unten). Reservierung mit PR #228 auf main. Ergebnis auf Branch claude/project-thread-trk1ni mit DEC-102 und Migration V0033; Beschreibung in backend/README.md (Abschnitt „Tag Katalogpflege und Zusammenführen“), Vertrag contracts/tags.openapi.yaml 0.2.0.
-
-**Umfang:** Katalogpflege in der Oberfläche, Beschreibung und Farbe, Zusammenführen, Verwaltungsseite, Nutzungszahlen, Autovervollständigung und Obergrenze je Objekt. Nicht Teil: Massenänderung und Filter (TASK-073), Portaltags (A11), gespeicherte Filter, Hierarchien, Aliase oder Synonyme, endgültiges Löschen, Zusammenführen zwischen Katalogen.
-
-**Fachliche Regeln** (von Holger am 1. November 2026 bestätigt):
-1. Beschreibung optional, reiner Text, höchstens 500 Zeichen, sichtbar für alle, die den Tag sehen.
-2. Farbe aus einer festen Palette von 12 Farben oder keine, in hell und dunkel lesbar; gespeichert wird der Name der Palettenfarbe. Der Name bleibt immer als Text lesbar.
-3. Beschreibung, Farbe, Umbenennen, Archivieren, Wiederherstellen und Zusammenführen brauchen `tags.manage`, für den Unternehmenskatalog unternehmensweit, für einen Projektkatalog im Projekt; `project.manage` allein reicht nicht. Kein neues Recht.
-4. Menüpunkt „Tags“ für Personen mit `tags.manage` im Unternehmen mit Unternehmenskatalog, Suche, Filter „archiviert“, Bearbeiten und Zusammenführen; der Projektkatalog wird im Reiter „Tags“ des Projekts gepflegt, Bedienelemente nur mit `tags.manage` im Projekt.
-5. Nutzungszahl je Tag für Tickets und Projekte, gezählt nur über Objekte, die die Person lesen darf.
-6. Zusammenführen nur im selben Katalog. Quelle und Ziel wählen, Vorschau, Bestätigung; Zuordnungen der Quelle gehen auf das Ziel über, doppelte entfallen. Die Quelle verschwindet aus Katalog und Vorschlägen und gibt ihren Namen frei; ihre Kennung bleibt als Verweis auf das Ziel. Archiviertes Ziel nicht erlaubt, archivierte Quelle schon.
-7. Die Vorschau nennt die Zahl der betroffenen lesbaren Tickets und Projekte und weist ohne Zahl darauf hin, dass weitere Zuordnungen an nicht lesbaren Tickets mit umgestellt werden.
-8. Kein neuer Eintrag in der Tickethistorie je Ticket, Ticketversion unverändert; alte Einträge mit der Quelle zeigen deren letzten Namen mit „zusammengeführt in“ Ziel. Das Tagaudit hält Quelle, Ziel, Person und Zeitpunkt fest; die Suche wird in derselben Transaktion nachgeführt.
-9. Zusammenführen in einer Transaktion bis 20.000 Zuordnungen; darüber verständliche Ablehnung.
-10. Archivierte Tags werden nicht vorgeschlagen und nicht neu zugeordnet, bleiben am Ticket sichtbar und filterbar.
-11. Autovervollständigung aus Unternehmenskatalog und Projektkatalog, Treffer am Wortanfang zuerst, auch Teilwörter, höchstens 20 Vorschläge mit Farbe und Katalog, Trigrammindex; mit Erstellrecht „neuen Tag anlegen“.
-12. Höchstens 30 Tags je Ticket und je Projekt; bestehende Zuordnungen über der Grenze bleiben, neue werden abgelehnt.
-13. Projekte nehmen weiter nur Tags des Unternehmenskatalogs.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Beschreibung, Farbe und Pflege nur mit `tags.manage` im passenden Bereich, mit Version (If-Match) und Audit; ungültige Farbe oder zu lange Beschreibung 400.
-2. Zusammenführen dedupliziert (T03), verschiebt keine Sichtbarkeit, hält historische Verweise auflösbar, führt die Suche nach und ist gegen gleichzeitige Zuordnung und gleichzeitiges Zusammenführen sicher.
-3. Vorschau und Nutzungszahlen verraten keine nicht lesbaren Tickets.
-4. Vorschläge zeigen keine archivierten, zusammengeführten oder verborgenen Tags; Obergrenze greift bei Ticket und Projekt.
-5. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Verwaltungsseite, Projektreiter, Zusammenführen und Vorschläge.
-
-**Übergabe:** Backend mit Migration V0033 (Beschreibung, Farbe, Verweis der Zusammenführung, Trigrammindex), Zusammenführen mit Vorschau, Vorschlägen, Namensabfrage für die Historie, Nutzungszahlen und Obergrenze; Oberfläche mit Seite „Tags“, Projektreiter und Auswahl mit Vorschlägen an Ticket und Projekt. Nachweise im Ergebnis PR. Grenzen: Zusammenführen nur im selben Katalog, über 20.000 Zuordnungen abgelehnt, Prüfung zum Sperrzeitpunkt.
-
-**Nächster Schritt:** Unabhängige Prüfung und Abnahme durch Holger; danach TASK-073.
-
-## TASK-073 Tag Massenänderung und Filter (A3 Teil 2)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-01
-
-**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-046, DEC-069; docs/TAGS_SEARCH.md (T05, T06, T07, T14). **Abhängigkeiten:** TASK-072 geliefert. **Arbeitsstand:** Mit TASK-072 von Holger am 1. November 2026 beauftragt und mit den Vorschlägen 13 bis 16 bestätigt. Das Ergebnis von TASK-072 ist mit PR #229 auf main; danach ohne neue Reservierung in derselben Sitzung umgesetzt, Ergebnis mit DEC-103 ohne Migration auf Branch claude/project-thread-trk1ni; Beschreibung in backend/README.md (Abschnitt „Tag Massenänderung und Filter“), Verträge tags 0.3.0 und search 0.2.0.
-
-**Umfang:** Massenänderung an Tickets und Tagfilter in Ticketliste und Suche mit Oberfläche. Nicht Teil: Massenänderung an Projekten, Anlage neuer Tags in der Massenänderung, gespeicherte Filter, Hintergrundaufträge.
-
-**Fachliche Regeln** (von Holger am 1. November 2026 bestätigt):
-1. In Ticketliste und Suchergebnis bis 500 Tickets auswählbar, auch über Projekte; „Tags hinzufügen“ oder „Tags entfernen“ mit 1 bis 10 vorhandenen Tags, kein Ersetzen der ganzen Liste.
-2. Jedes Ticket wird für sich mit aktuellen Rechten geprüft und geändert (`ticket.edit` und Schreibregel für `tags`); ein Projekttag passt nur zu Tickets seines Projekts, andere werden als „nicht passend“ übersprungen; keine Gesamttransaktion.
-3. Ergebnis mit Zahlen für geändert, schon so, nicht passend, abgelehnt; einzelne Tickets nur mit Schlüssel, wenn noch lesbar; Wiederholung ohne doppelte Zuordnung; Anfrage direkt, nicht als Hintergrundauftrag.
-4. Filter „alle gewählten Tags“, „mindestens einer“, „keiner der gewählten“ und „ohne sichtbare Tags“, bis 10 Tags je Filter, kombinierbar; nur Sichtbares zählt, ohne Leseregel für `tags` kein Tagfilter.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Massenänderung nach Rechteentzug an einem Teil der Auswahl (T06) und mit gleichzeitiger Einzeländerung (T07) ohne stillen Verlust und ohne fremde Namen im Ergebnis.
-2. Filter liefern dieselben Treffer in Ticketliste und Suche; verborgene Tags beeinflussen weder Treffer noch Zähler (T05, T14).
-3. Vertrag gegen Routen, Backend Tests für Rechte, Grenzen und Teilergebnisse, Browser Tests für Auswahl, Vorschau, Ergebnis und Filter.
-
-**Übergabe:** `POST /api/v1/tags/bulk` mit Prüfung der Tags vorab und je Ticket in eigener Transaktion, Ergebnis mit vier Zahlen und Schlüsseln nur lesbarer Tickets; `tagMatch` mit `all`, `any`, `none` und `untagged` in Ticket und Projektsuche; Oberfläche mit Tagfilter, Auswahl, Prüfung vor dem Ausführen und Ergebnis in Suche und Ticketliste, die mit Tagfilter die Suche nutzt. Nachweise im Ergebnis PR. Grenzen: kein Hintergrundauftrag, eine abgebrochene Anfrage lässt bis dahin geänderte Tickets geändert; Prüfung zum Sperrzeitpunkt.
-
-**Nächster Schritt:** Unabhängige Prüfung von TASK-072 und TASK-073 und Abnahme durch Holger.
-
-## TASK-086 Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261101-tags-01 · **Aktualisiert:** 2026-11-04
-
-**Bezug:** REQ-TAG-001, REQ-SRCH-001, REQ-TKT-004; DEC-102, DEC-103; [Codex Bericht](docs/REVIEW_TASK-072-073_PR-229-230.md) (PR #254), [Claude Bericht](docs/REVIEW_TASK-072-073_PR-229-230_claude.md) (PR #231). **Abhängigkeiten:** TASK-072 und TASK-073 geliefert. **Arbeitsstand:** Von Holger am 4. November 2026 mit „Ja, alles in TASK-086“ beauftragt; Branch claude/project-thread-trk1ni, Ergebnis mit DEC-116 ohne Migration; Beschreibung in backend/README.md (Abschnitt „Befunde beider Prüfungen von TASK-072 und TASK-073“), Vertrag tags 0.5.0.
-
-**Umfang:** Nur die Befunde und Hinweise beider Prüfungen:
-1. Codex F1: Umhängen früherer Zusammenführungsverweise in derselben Sperrfolge wie Quelle und Ziel, ohne Verklemmung mit einer gleichzeitigen alten Zusammenführung.
-2. Codex F2 und Claude F1: Massenentfernen sperrt und prüft die Tags wie das Hinzufügen; ein zwischenzeitlich zusammengeführter Tag lehnt das Ticket mit Grund ab, archivierte Tags bleiben entfernbar.
-3. Claude F2: Ein Fehler beim Abschluss eines Tickets oder beim Lesen seines Schlüssels beendet die Massenänderung nicht ohne Ergebnis, das Ticket zählt als abgelehnt.
-4. Codex F3: Archivierte Tags sind im Tagfilter und beim Entfernen auswählbar, neue Zuordnungen schließen sie weiter aus.
-5. Codex H1: Suche und Ticketliste übernehmen nur die Antwort der zuletzt gestarteten Anfrage.
-6. Kleinere Hinweise beider Prüfungen: Text des Grundes für zusammengeführte Tags, Testattrappe mit den Ablehnungen des Servers, Namensauflösung der Historie in Paketen, stabiler zeitabhängiger Browsertest und die übrigen Hinweise H1 bis H5 der Claude Prüfung, soweit sie Code oder Tests betreffen.
-
-Nicht Teil: neue Funktionen, Massenänderung an Projekten, gespeicherte Filter.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung: F1 bis F3 der Codex Prüfung und F1, F2 der Claude Prüfung jeweils mit einem Regressionstest belegt (Backend für Sperrfolge, Entfernen nach Zusammenführen und Fehler beim Abschluss, Browser für archivierte Tags im Filter und die verspätete Suchantwort); bestehende Backend und Browser Tests bleiben grün.
-
-**Übergabe:** Beratungssperre je Katalog vor dem Zusammenführen; Massenentfernen mit geteilten Tagsperren und `tag.merged` für inzwischen zusammengeführte Tags; Ablehnung beim Commit und Fehler beim Schlüssel als abgelehntes Ticket im Ergebnis; Vorschläge mit `archived=true` für Tagfilter und Entfernen; Suche mit Nummer je Anfrage und gemerkter abgeschickter Suche; eigener Grund „zusammengeführt“, Hinweis an der Grenze von 1000 Treffern, Historie in Paketen zu 100; Testattrappe mit den Ablehnungen des Servers, stabile Katalogtests. Je Befund ein Regressionstest, die neuen Backend und Browsertests scheitern ohne die Korrektur. Nachweise im Ergebnis PR. Grenzen: jede Ablehnung beim Commit heißt `auth.forbidden`; die Installationsanleitung für `pg_trgm` steht aus.
-
-**Nächster Schritt:** Prüfung durch eine zweite KI und Abnahme von TASK-072, TASK-073 und TASK-086 durch Holger.
-
 ## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
 
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-02
@@ -249,4 +167,9 @@ Nicht Teil: weitere Funktionen des Auftritts; die Stabilisierung der Tagtests (H
 2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw clean verify` 522 Tests, davon einer rot (`JobExecutorTest.anExpiredLeaseOnTheLastAttemptFailsTheJob`, ohne Bezug, in der Wiederholung der Klasse 26 von 26 grün). Neu: in `AppearanceApiTest` geschützte Leerzeichen, ungültige Folgen und Surrogate über die API, die Datenbankprüfung und das unveränderte `PUT`; `AppearanceNameMigrationTest` mit sieben gespeicherten Namen von V0052 auf V0054. Frontend `npm run verify` 80 Tests, `npm run test:browser` 191 Tests, davon 190 grün; rot war nur `ldap.test.mjs` wegen einer Routenantwort nach dem Schließen des Browsers, ohne Bezug, einzeln zweimal 12 von 12 grün. Neu im Browser: erhaltene Eingaben bei Farbe, Name und Logo, Ränder mit geschützten Leerzeichen, Fokus nach Speichern, Abbrechen und Zurücksetzen per Tastatur, sichtbarer Name bei 1100 und 320 px mit und ohne Logo vor und nach der Anmeldung; ohne die Behebung waren fünf dieser Tests rot. Repositoryprüfungen grün. Nicht lokal: `lifecycle-check.sh` mit Docker (läuft in CI).
 3. Grenzen: Die Liste der Formatzeichen folgt Unicode 15.1 und wird bei neuen Unicode Versionen nicht von selbst länger. Emoji Folgen mit Verbindungszeichen (U+200D) und Flaggen aus Tag Zeichen bleiben wie bisher abgelehnt. V0054 schreibt für eine Bereinigung keinen Auditeintrag.
 
-**Nächster Schritt:** Nachprüfung durch eine zweite KI, danach Abnahme von TASK-081 und TASK-087 durch Holger.
+**Nachbesserung nach der Codex Nachprüfung (docs/REVIEW_TASK-087_PR-259.md, 4. November 2026, Empfehlung „nachbessern“) im selben PR #259:**
+1. R1: „Aktuellen Stand laden“ nach einem Versionskonflikt übernimmt den gespeicherten Wert nur für den Teil, dessen Speichern scheiterte; die ungespeicherte Eingabe der anderen Teile bleibt. Browsertest „after a conflict on the name the current version is loaded and the unsaved color stays“, der ohne die Korrektur scheitert.
+2. R2: Zurücksetzen im Standardzustand, Logo entfernen ohne Logo und dasselbe Logo noch einmal lassen Version und Audit stehen wie ein `PUT` ohne Änderung. API Test `resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges`, der ohne die Korrektur scheitert.
+3. H1: Der Testersatz behandelt `null` wie einen nicht gesendeten Teil, antwortet auf eine Anfrage ohne Teile mit 400 `appearance.change_empty` und prüft die Werte vor der Version wie der Server. H2: `MailTemplatePreviewRequest.name` beschreibt die Normalisierung statt einer Länge am Rohwert (Vertrag appearance 0.3.2).
+
+**Nächster Schritt:** Kurze Nachprüfung von R1, R2, H1 und H2 durch eine zweite KI, danach Abnahme von TASK-081 und TASK-087 durch Holger.

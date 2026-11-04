@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Erscheinungsbild (TASK-036, TASK-040, TASK-081, TASK-082, TASK-087)
-  version: 0.3.1
+  version: 0.3.2
   description: |
     Name, Akzentfarbe und Logo des Unternehmens. Lesen darf jede vollständige Anmeldung, ändern nur, wer das Unternehmensrecht
     `appearance.manage` des Berechtigungsmoduls hält (sonst 403 `auth.forbidden`, TASK-040). Sitzung, CSRF und
@@ -410,7 +410,12 @@ components:
             - type: string
             - type: 'null'
         texts: {$ref: '#/components/schemas/MailTexts'}
-        name: {type: string, minLength: 1, maxLength: 80}
+        name:
+          type: string
+          minLength: 1
+          description: |
+            Der ungespeicherte Name für die Vorschau mit derselben Regel wie `AppearanceChange.name`: Die Ränder fallen zuerst
+            weg, die Grenze von 80 Zeichen gilt danach (TASK-087, Hinweis H2 aus docs/REVIEW_TASK-087_PR-259.md).
         accentColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
     MailParts:
       type: object

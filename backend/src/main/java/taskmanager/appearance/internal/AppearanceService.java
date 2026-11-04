@@ -2,6 +2,7 @@ package taskmanager.appearance.internal;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -96,11 +97,17 @@ public class AppearanceService {
         return current();
     }
 
-    /** Puts name, accent color and logo back to the defaults in one step (TASK-081). */
+    /**
+     * Puts name, accent color and logo back to the defaults in one step (TASK-081). When everything already is the
+     * default, version and audit stay as they are (TASK-087, finding R2 of docs/REVIEW_TASK-087_PR-259.md).
+     */
     @Transactional
     public Appearance reset(AccessContext actor, long expectedVersion) {
         requireRight();
-        locked(expectedVersion);
+        Appearance before = locked(expectedVersion);
+        if (before.name().equals(DEFAULT_NAME) && before.accentColor().equals(DEFAULT_ACCENT) && !before.hasLogo()) {
+            return before;
+        }
         jdbc.sql("update appearance_setting set name = ?, accent_color = ?, logo = null, logo_type = null, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(DEFAULT_NAME, DEFAULT_ACCENT, ts(), actor.accountId()).update();
         audit(actor, "appearance.reset", null);
@@ -146,7 +153,11 @@ public class AppearanceService {
         if (Logo.validType(content).isEmpty()) {
             throw ApiProblemException.of(415, "appearance.logo_unreadable");
         }
-        locked(expectedVersion);
+        Appearance before = locked(expectedVersion);
+        // The same file again changes nothing: version and audit stay (TASK-087, finding R2).
+        if (before.hasLogo() && logo().filter(l -> l.type().equals(type) && Arrays.equals(l.content(), content)).isPresent()) {
+            return before;
+        }
         jdbc.sql("update appearance_setting set logo = ?, logo_type = ?, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(content, type, ts(), actor.accountId()).update();
         audit(actor, "appearance.logo_replaced", type + ", " + content.length + " bytes");
@@ -156,7 +167,11 @@ public class AppearanceService {
     @Transactional
     public Appearance removeLogo(AccessContext actor, long expectedVersion) {
         requireRight();
-        locked(expectedVersion);
+        Appearance before = locked(expectedVersion);
+        // Without a logo there is nothing to remove: version and audit stay (TASK-087, finding R2).
+        if (!before.hasLogo()) {
+            return before;
+        }
         jdbc.sql("update appearance_setting set logo = null, logo_type = null, version = version + 1, updated_at = ?, updated_by = ? where id = 1")
             .params(ts(), actor.accountId()).update();
         audit(actor, "appearance.logo_removed", null);

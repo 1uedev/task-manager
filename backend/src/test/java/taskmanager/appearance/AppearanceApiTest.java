@@ -496,6 +496,26 @@ class AppearanceApiTest {
     }
 
     @Test
+    void resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges() {
+        // Finding R2 of docs/REVIEW_TASK-087_PR-259.md: no request without a change counts as a change.
+        Browser admin = person(true);
+        Response reset = admin.send("DELETE", "/api/v1/appearance", null, null, "\"1\"");
+        assertEquals(200, reset.status(), reset.body());
+        assertEquals("\"1\"", reset.header("ETag"));
+        Response remove = admin.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\"");
+        assertEquals(200, remove.status(), remove.body());
+        assertEquals("\"1\"", remove.header("ETag"));
+        assertEquals("\"2\"", admin.logo("image/png", PNG, "\"1\"").header("ETag"));
+        Response again = admin.logo("image/png", PNG, "\"2\"");
+        assertEquals(200, again.status(), again.body());
+        assertEquals("\"2\"", again.header("ETag"));
+        assertProblem(admin.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\""), 412, "appearance.version_conflict");
+        assertEquals("\"3\"", admin.send("DELETE", "/api/v1/appearance", null, null, "\"2\"").header("ETag"));
+        assertEquals(List.of("appearance.logo_replaced", "appearance.reset"),
+            jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
+    }
+
+    @Test
     void resetPutsNameColorAndLogoBackInOneStep() {
         Browser admin = person(true);
         assertEquals(200, admin.json("PUT", "/api/v1/appearance", Map.of("name", "Nordlicht", "accentColor", "#7c3aed"), "\"1\"").status());

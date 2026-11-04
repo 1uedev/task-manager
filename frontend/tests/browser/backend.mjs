@@ -465,23 +465,42 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (p.startsWith('/appearance')) {
       if (p === '/appearance/logo' && method === 'GET') return { status: 200, raw: PNG, type: 'image/png' };
       if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
-      if (headers['if-match'] !== `"${state.appearance.version}"`) return problem(412, 'appearance.version_conflict');
+      const current = headers['if-match'] === `"${state.appearance.version}"`;
       if (p === '/appearance' && method === 'PUT') {
-        // The rule of the server (TASK-087): spaces of every kind leave the edges, an unchanged request is no change.
-        const name = body.name === undefined ? state.appearance.name : body.name.replace(NAME_EDGES, '');
+        // The rule of the server (TASK-087): a part sent as null is not sent, a request without parts is refused, the
+        // values are checked before the version, spaces of every kind leave the edges, an unchanged request is no change.
+        const sentName = body?.name ?? null;
+        const sentAccent = body?.accentColor ?? null;
+        if (sentName === null && sentAccent === null) return problem(400, 'appearance.change_empty');
+        if (sentAccent !== null && !/^#[0-9a-fA-F]{6}$/.test(sentAccent)) return problem(400, 'appearance.color_invalid');
+        const name = sentName === null ? state.appearance.name : sentName.replace(NAME_EDGES, '');
         if (name === '' || [...name].length > 80 || NAME_FORBIDDEN.test(name)) return problem(400, 'appearance.name_invalid');
-        const accent = body.accentColor === undefined ? state.appearance.accent : body.accentColor.toLowerCase();
+        if (!current) return problem(412, 'appearance.version_conflict');
+        const accent = sentAccent === null ? state.appearance.accent : sentAccent.toLowerCase();
         if (name !== state.appearance.name || accent !== state.appearance.accent) {
           state.appearance.version += 1;
           Object.assign(state.appearance, { name, accent });
         }
         return ok(appearanceBody(), `"${state.appearance.version}"`);
       }
-      state.appearance.version += 1;
-      if (p === '/appearance' && method === 'DELETE') Object.assign(state.appearance, { accent: '#f97316', name: 'Task Manager', logo: null });
-      else if (method === 'PUT') state.appearance.logo = { contentType: 'image/png', size: body.length, url: `/api/v1/appearance/logo?v=${state.appearance.version}` };
-      else state.appearance.logo = null;
-      return ok(appearanceBody(), `"${state.appearance.version}"`);
+      if (!current) return problem(412, 'appearance.version_conflict');
+      // Reset, removing the logo and the same logo again change nothing when nothing changes (TASK-087, finding R2).
+      const a = state.appearance;
+      if (p === '/appearance' && method === 'DELETE') {
+        if (a.accent === '#f97316' && a.name === 'Task Manager' && a.logo === null) return ok(appearanceBody(), `"${a.version}"`);
+        a.version += 1;
+        Object.assign(a, { accent: '#f97316', name: 'Task Manager', logo: null });
+      } else if (method === 'PUT') {
+        const content = Buffer.isBuffer(body) ? body : Buffer.from(body ?? '');
+        if (a.logo !== null && a.logo.content?.equals(content)) return ok(appearanceBody(), `"${a.version}"`);
+        a.version += 1;
+        a.logo = { contentType: 'image/png', size: content.length, content, url: `/api/v1/appearance/logo?v=${a.version}` };
+      } else {
+        if (a.logo === null) return ok(appearanceBody(), `"${a.version}"`);
+        a.version += 1;
+        a.logo = null;
+      }
+      return ok(appearanceBody(), `"${a.version}"`);
     }
 
     if (p.startsWith('/settings/ldap')) {
@@ -1861,7 +1880,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   }
 
   function appearanceBody() {
-    return { name: state.appearance.name, defaultName: 'Task Manager', accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo, version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
+    return { name: state.appearance.name, defaultName: 'Task Manager', accentColor: state.appearance.accent, defaultAccentColor: '#f97316', logo: state.appearance.logo && (({ content, ...shown }) => shown)(state.appearance.logo), version: state.appearance.version, updatedAt: '2026-10-19T06:00:00Z' };
   }
 
   // Installs the backend for one browser context. `as` starts the context signed in.

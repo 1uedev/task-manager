@@ -297,6 +297,39 @@ describe('company appearance', () => {
     });
   });
 
+  // TASK-087, finding R1: loading the current version after a conflict keeps the unsaved input of the other parts.
+  test('after a conflict on the name the current version is loaded and the unsaved color stays', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Ungespeicherter Name');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      server.state.appearance.version = 9; // someone else saved another color and name meanwhile
+      server.state.appearance.accent = '#16a34a';
+      server.state.appearance.name = 'Fremder Name';
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Fremder Name');
+      await accentBecomes(page, '#7c3aed', 'the unsaved color stays');
+      assert.equal(await page.getByRole('button', { name: 'Violett' }).getAttribute('aria-pressed'), 'true');
+
+      await field.fill('Zweiter Entwurf');
+      server.state.appearance.version = 10;
+      server.state.appearance.accent = '#e11d48';
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#E11D48');
+      assert.equal(await field.inputValue(), 'Zweiter Entwurf', 'the unsaved name stays');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      assert.equal(server.state.appearance.name, 'Zweiter Entwurf');
+    });
+  });
+
   test('a logo dropped on the area is uploaded as image bytes and shown in the sidebar', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {

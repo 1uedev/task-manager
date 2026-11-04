@@ -13,7 +13,7 @@ import { MailTemplateSection } from './MailTemplateSection.tsx';
 type Pending = ReturnType<typeof changeAccentColor>;
 // Which part a saving step changes: only its own unsaved input is replaced by the answer of the server (TASK-087, F2).
 type Part = 'name' | 'color' | 'logo' | 'all';
-type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo } | { readonly kind: 'invalid'; readonly text: MessageKey };
+type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo; readonly part: Part } | { readonly kind: 'invalid'; readonly text: MessageKey };
 
 // Synthetic content of the sample mail, in the language of the mail and not of the interface (TASK-081). The mail template
 // of TASK-082 below shows the real frame around a reply for whoever may change it.
@@ -69,6 +69,25 @@ export function AppearancePage() {
     setName(savedName);
   }, [savedName]);
 
+  // After a version conflict "Aktuellen Stand laden" gives only the part whose saving failed the current saved value;
+  // the unsaved input of every other part stays (TASK-087, finding R1 of docs/REVIEW_TASK-087_PR-259.md).
+  const takeSaved = useRef<Part | null>(null);
+  const loadedEtag = loaded?.etag;
+  useEffect(() => {
+    const part = takeSaved.current;
+    if (part === null || !loaded) return;
+    takeSaved.current = null;
+    if (part === 'color' || part === 'all') {
+      edited.current = false;
+      setDraft(loaded.appearance.accentColor);
+      setHex(loaded.appearance.accentColor.toUpperCase());
+    }
+    if (part === 'name' || part === 'all') {
+      nameEdited.current = false;
+      setName(loaded.appearance.name);
+    }
+  }, [loadedEtag]);
+
   // The whole interface shows the color and name being edited; leaving the page shows the saved ones again.
   useEffect(() => {
     preview(draft === savedAccent ? null : draft);
@@ -110,7 +129,7 @@ export function AppearancePage() {
       }
       setNotice({ kind: 'saved', text: success });
     } else {
-      setNotice({ kind: 'problem', problem: outcome.problem });
+      setNotice({ kind: 'problem', problem: outcome.problem, part });
     }
     setFocusAfter('notice');
   }
@@ -291,7 +310,7 @@ export function AppearancePage() {
             {notice?.kind === 'problem' && (
               notice.problem.kind === 'conflict'
                 ? <ProblemView problem={notice.problem} actionLabel="states.reload" onAction={() => {
-                  edited.current = false;
+                  takeSaved.current = notice.part;
                   setNotice(null);
                   reload();
                 }} />
