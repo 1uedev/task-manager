@@ -30,6 +30,17 @@ class JdbcCustomerDirectory implements CustomerDirectory {
         return repository.ticketCustomer(ticketId).map(HelpdeskRepository.TicketCustomer::customerId);
     }
 
+    @Override
+    public List<ContactSummary> contacts(UUID companyId, UUID customerId) {
+        return customerId == null ? List.of()
+            : repository.contacts(companyId, customerId).stream().map(contact -> new ContactSummary(contact.id(), contact.name())).toList();
+    }
+
+    @Override
+    public Optional<UUID> lockCustomerOfContact(UUID companyId, UUID contactId) {
+        return contactId == null ? Optional.empty() : repository.shareContact(companyId, contactId).map(Contact::customerId);
+    }
+
     private static Summary summary(Customer customer) {
         return new Summary(customer.id(), customer.name(), customer.projects());
     }

@@ -25,6 +25,52 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /portal/projects:
+    get:
+      operationId: listPortalProjects
+      summary: Projekte eines Portalkontos mit Schlüssel, Name, angebotenen Tickettypen und Status (TASK-075, TASK-076)
+      description: |
+        Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`. Konto und
+        Sitzung werden in derselben Transaktion erneut geprüft; endet die Sitzung oder wird das Konto deaktiviert, während der
+        Aufruf wartet, antwortet er mit 403 `auth.forbidden` (TASK-078). Gesperrte Zeilen ergeben 503 `project.busy` mit
+        `Retry-After`.
+        `ticketTypes` sind die im Portal angebotenen Tickettypen der geltenden Konfiguration, `statuses` alle Status mit Name
+        und Kategorie, damit das Portal den Status mit seinem Namen zeigt und nach offen oder erledigt filtert (TASK-076).
+      responses:
+        '200':
+          description: Projekte
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, key, name, ticketTypes, statuses]
+                  properties:
+                    id: {type: string, format: uuid}
+                    key: {type: string}
+                    name: {type: string}
+                    ticketTypes:
+                      type: array
+                      items:
+                        type: object
+                        required: [key, name]
+                        properties:
+                          key: {type: string}
+                          name: {type: string}
+                    statuses:
+                      type: array
+                      items:
+                        type: object
+                        required: [key, name, category]
+                        properties:
+                          key: {type: string}
+                          name: {type: string}
+                          category: {type: string, enum: [open, in_progress, done]}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /projects:
     get:
       operationId: listProjects
@@ -326,7 +372,10 @@ paths:
     put:
       operationId: addProjectMember
       summary: Mitglied hinzufügen (project.manage oder projects.manage)
-      description: Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein vorhandenes Mitglied bleibt unverändert.
+      description: |
+        Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein Portalkonto (TASK-075) kommt nur in ein
+        Projekt, das der Helpdesk seiner Kundenorganisation zugeordnet hat, sonst 400 mit `accountId.not_released`. Ein
+        vorhandenes Mitglied bleibt unverändert.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:
@@ -503,6 +552,11 @@ components:
             properties:
               key: {type: string, pattern: '^[a-z][a-z0-9_]{0,39}$'}
               name: {type: string, minLength: 1, maxLength: 80}
+              portal:
+                type: boolean
+                description: |
+                  Im Kundenportal für neue Anfragen angeboten (TASK-076); fehlt die Angabe, gilt false. Ohne markierten Typ legt
+                  niemand im Portal an.
         statuses:
           type: array
           minItems: 1

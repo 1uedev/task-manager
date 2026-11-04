@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.helpdesk.CustomerDirectory;
+import taskmanager.permissions.GroupDirectory;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.sla.internal.Calendar;
 import taskmanager.sla.internal.Rule;
@@ -50,14 +51,15 @@ class SlaAdministrationController {
     }
 
     record RuleBody(UUID id, String name, UUID projectId, UUID customerId, String ticketType, UUID calendarId, Rule.Budgets budgets,
-            long version, Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy) {
+            List<Rule.Stage> escalations, long version, Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy) {
         static RuleBody of(Rule r) {
-            return new RuleBody(r.id(), r.name(), r.projectId(), r.customerId(), r.ticketType(), r.calendarId(), r.budgets(), r.version(),
-                r.createdAt(), r.createdBy(), r.updatedAt(), r.updatedBy());
+            return new RuleBody(r.id(), r.name(), r.projectId(), r.customerId(), r.ticketType(), r.calendarId(), r.budgets(), r.escalations(),
+                r.version(), r.createdAt(), r.createdBy(), r.updatedAt(), r.updatedBy());
         }
     }
 
-    record RuleRequest(String name, UUID projectId, UUID customerId, String ticketType, UUID calendarId, Rule.Budgets budgets) {
+    record RuleRequest(String name, UUID projectId, UUID customerId, String ticketType, UUID calendarId, Rule.Budgets budgets,
+            List<Rule.Stage> escalations) {
     }
 
     record ProjectOptionBody(UUID id, String key, String name, List<ProjectConfiguration.TicketType> ticketTypes) {
@@ -69,7 +71,7 @@ class SlaAdministrationController {
         }
     }
 
-    record OptionsBody(List<ProjectOptionBody> projects, List<CustomerOptionBody> customers) {
+    record OptionsBody(List<ProjectOptionBody> projects, List<CustomerOptionBody> customers, List<GroupDirectory.Summary> groups) {
     }
 
     @GetMapping("/calendars")
@@ -116,15 +118,15 @@ class SlaAdministrationController {
         requests.administrator();
         SlaAdministration.Options options = SlaRequests.retrying(administration::options);
         return new OptionsBody(options.projects().stream().map(p -> new ProjectOptionBody(p.id(), p.key(), p.name(), p.ticketTypes())).toList(),
-            options.customers().stream().map(CustomerOptionBody::of).toList());
+            options.customers().stream().map(CustomerOptionBody::of).toList(), options.groups());
     }
 
     @PostMapping("/rules")
     ResponseEntity<RuleBody> createRule(@RequestBody(required = false) RuleRequest body) {
         var actor = requests.administrator();
-        RuleRequest request = body == null ? new RuleRequest(null, null, null, null, null, null) : body;
+        RuleRequest request = body == null ? new RuleRequest(null, null, null, null, null, null, null) : body;
         Rule rule = SlaRequests.retrying(() -> administration.createRule(actor.accountId(), request.name(), request.projectId(), request.customerId(),
-            blankToNull(request.ticketType()), request.calendarId(), request.budgets()));
+            blankToNull(request.ticketType()), request.calendarId(), request.budgets(), request.escalations()));
         return ResponseEntity.status(201).eTag(SlaRequests.etag(rule.version())).body(RuleBody.of(rule));
     }
 
@@ -133,9 +135,9 @@ class SlaAdministrationController {
             @RequestBody(required = false) RuleRequest body) {
         var actor = requests.administrator();
         long version = SlaRequests.expectedVersion(ifMatch);
-        RuleRequest request = body == null ? new RuleRequest(null, null, null, null, null, null) : body;
+        RuleRequest request = body == null ? new RuleRequest(null, null, null, null, null, null, null) : body;
         Rule rule = SlaRequests.retrying(() -> administration.updateRule(actor.accountId(), id, version, request.name(), request.customerId(),
-            blankToNull(request.ticketType()), request.calendarId(), request.budgets()));
+            blankToNull(request.ticketType()), request.calendarId(), request.budgets(), request.escalations()));
         return ResponseEntity.ok().eTag(SlaRequests.etag(rule.version())).body(RuleBody.of(rule));
     }
 

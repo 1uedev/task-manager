@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,8 @@ import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.TicketAccess;
+import taskmanager.tickets.TicketOrganizations;
+import taskmanager.tickets.TicketTagFilter;
 
 /**
  * Tickets of a project with history and conflict detection (TASK-027, DEC-067), with the custom fields, the workflows of the
@@ -69,15 +72,132 @@ public class TicketService {
     private final IdentityVerification identity;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final TicketOrganizations organizations;
+    private final ObjectProvider<TicketTagFilter> tagFilter;
 
     TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, TicketOrganizations organizations, ObjectProvider<TicketTagFilter> tagFilter) {
+        this.tagFilter = tagFilter;
         this.tickets = tickets;
         this.projects = projects;
         this.permissions = permissions;
         this.identity = identity;
         this.clock = clock;
         this.events = events;
+        this.organizations = organizations;
+    }
+
+    // ------------------------------------------------------------------------------------------------ portal (TASK-075)
+
+    /**
+     * The tickets of the organization of a portal account in one project, newest first (TASK-075, DEC-105). The permissions
+     * module checks {@code ticket.read} with the organization of the caller as the organization of the resource; only tickets
+     * whose customer is that organization are listed, and their link rows stay locked until the commit. An internal account,
+     * a project without membership or without the right answer 404 like an unknown project.
+     */
+    @Transactional
+    public List<TicketView> portalList(AccessContext actor, UUID projectId, int limit, Long before) {
+        return portalList(actor, projectId, limit, before, PortalFilter.NONE);
+    }
+
+    /**
+     * What the portal list filters by (TASK-076): a status key, {@code open} or {@code done} after the category of the status, and
+     * a text that title or description contain, ignoring case. A filter by status needs the read rule of the field
+     * {@code status}; the text searches only the fields of the two the caller may read. {@code null} filters nothing. A tag
+     * (TASK-077) needs the read rule of the field {@code tags}; a tag the portal does not show to the organization finds nothing.
+     */
+    public record PortalFilter(String status, String state, String text, UUID tag) {
+        public static final PortalFilter NONE = new PortalFilter(null, null, null, null);
+
+        public PortalFilter(String status, String state, String text) {
+            this(status, state, text, null);
+        }
+
+        public PortalFilter {
+            status = status == null || status.isBlank() ? null : status.strip();
+            state = state == null || state.isBlank() ? null : state.strip();
+            text = text == null || text.isBlank() ? null : text.strip().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** The list of {@link #portalList(AccessContext, UUID, int, Long)} with the filters of the portal start page (TASK-076). */
+    @Transactional
+    public List<TicketView> portalList(AccessContext actor, UUID projectId, int limit, Long before, PortalFilter filter) {
+        portalOnly(actor);
+        if (filter.state() != null && !filter.state().equals("open") && !filter.state().equals("done")) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("state.invalid"));
+        }
+        Supplier<ResourceContext> project = resource(actor, projectId);
+        Supplier<ResourceContext> resource = () -> withOrganization(project.get(), actor.organizationId());
+        Decision read = readable(actor, resource, projectId);
+        Set<String> readable = read.readableFields();
+        if ((filter.status() != null || filter.state() != null) && !readable.contains("status")) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("status.not_readable"));
+        }
+        if (filter.tag() != null && !permissions.inspect(actor, resource, READ, Set.of(TicketAccess.TAGS_FIELD)).readableFields()
+                .contains(TicketAccess.TAGS_FIELD)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("tag.not_readable"));
+        }
+        String key = projects.key(projectId).orElseThrow(TicketService::projectNotFound);
+        ProjectConfiguration configuration = configuration(projectId);
+        List<UUID> own = organizations.lockTicketsOf(projectId, actor.organizationId());
+        if (filter.tag() != null) {
+            TicketTagFilter tagged = tagFilter.getIfUnique();
+            Set<UUID> carrying = tagged == null ? Set.of() : tagged.ticketsWith(actor.companyId(), projectId, actor.organizationId(), filter.tag());
+            own = own.stream().filter(carrying::contains).toList();
+        }
+        return tickets.listAmong(actor.companyId(), projectId, own, Integer.MAX_VALUE, before).stream()
+            .filter(ticket -> filter.status() == null || filter.status().equals(ticket.status()))
+            .filter(ticket -> filter.state() == null
+                || filter.state().equals("done") == ProjectConfiguration.CATEGORY_DONE.equals(category(configuration, ticket.status())))
+            .filter(ticket -> filter.text() == null || contains(readable, "title", ticket.title(), filter.text())
+                || contains(readable, "description", ticket.description(), filter.text()))
+            .limit(limit)
+            .map(ticket -> new TicketView(ticket, key, readable, Set.of(), configuration)).toList();
+    }
+
+    private static String category(ProjectConfiguration configuration, String status) {
+        return configuration.statuses().stream().filter(s -> s.key().equals(status)).findFirst()
+            .map(ProjectConfiguration.Status::category).orElse(null);
+    }
+
+    private static boolean contains(Set<String> readable, String field, String value, String text) {
+        return readable.contains(field) && value != null && value.toLowerCase(java.util.Locale.ROOT).contains(text);
+    }
+
+    /**
+     * One ticket for a portal account (TASK-075): the organization of the resource is the customer of this ticket, so a ticket
+     * of another organization or without customer answers 404 like an unknown one. The answer names no writable field.
+     */
+    @Transactional
+    public TicketView portalGet(AccessContext actor, UUID projectId, long number) {
+        portalOnly(actor);
+        Supplier<ResourceContext> project = resource(actor, projectId);
+        Supplier<ResourceContext> resource = () -> {
+            ResourceContext base = project.get();
+            if (!base.projectMember()) {
+                return base;
+            }
+            UUID organization = tickets.find(actor.companyId(), projectId, number)
+                .flatMap(ticket -> organizations.lockOrganization(ticket.id(), actor.organizationId())).orElse(null);
+            return withOrganization(base, organization);
+        };
+        Decision read = inspect(actor, resource, READ, projectId, FIELDS);
+        if (!read.allowed()) {
+            throw notFound();
+        }
+        Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
+        return view(ticket, read.readableFields(), Set.of());
+    }
+
+    private static ResourceContext withOrganization(ResourceContext base, UUID organization) {
+        return new ResourceContext(base.companyId(), base.projectId(), organization, base.projectMember(), base.resourceType());
+    }
+
+    private static void portalOnly(AccessContext actor) {
+        if (!actor.external()) {
+            throw projectNotFound();
+        }
     }
 
     /** A ticket with the key of its project, the fields the caller may read and write and the configuration they refer to. */
@@ -405,7 +525,7 @@ public class TicketService {
             violations.add("assignee.not_member");
             return null;
         }
-        if (!projects.isMember(projectId, account) || !identity.accountIsActive(account)) {
+        if (!projects.isMember(projectId, account) || !identity.accountIsActiveInternal(account)) {
             violations.add("assignee.not_member");
             return null;
         }
@@ -435,7 +555,7 @@ public class TicketService {
             return null;
         }
         if (ProjectConfiguration.USER.equals(field.type()) && (!projects.isMember(projectId, UUID.fromString(value))
-                || !identity.accountIsActive(UUID.fromString(value)))) {
+                || !identity.accountIsActiveInternal(UUID.fromString(value)))) {
             violations.add(field.id() + ".not_member");
             return null;
         }

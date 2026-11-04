@@ -10,15 +10,18 @@ import { HELPDESK_RIGHT, HelpdeskPage } from '../pages/HelpdeskPage.tsx';
 import { InboxPage } from '../pages/InboxPage.tsx';
 import { JOBS_RIGHT, JobsPage } from '../pages/JobsPage.tsx';
 import { LoginPage, PasswordPage } from '../pages/LoginPage.tsx';
+import { PortalPage } from '../pages/PortalPage.tsx';
 import { ProjectPage } from '../pages/ProjectPage.tsx';
 import { ProjectsPage } from '../pages/ProjectsPage.tsx';
 import { SearchPage } from '../pages/SearchPage.tsx';
 import { SLA_RIGHT, SlaPage } from '../pages/SlaPage.tsx';
+import { TAGS_RIGHT, TagsPage } from '../pages/TagsPage.tsx';
+import { EscalationsPage } from '../pages/EscalationsPage.tsx';
 import { StartPage } from '../pages/StartPage.tsx';
 import { TicketPage } from '../pages/TicketPage.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import {
-  BoardIcon, BrushIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TimerIcon, UsersIcon,
+  AlertIcon, BoardIcon, BrushIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TagIcon, TimerIcon, UsersIcon,
 } from './Icons.tsx';
 import { readStoredOrder, storeOrder } from './preferences.ts';
 import { hrefFor, section, useRoute, type Route, type RouteName } from './route.ts';
@@ -27,18 +30,18 @@ import { formatDateTime } from '../i18n/format.ts';
 import { useReorder } from './useReorder.ts';
 
 const NAV_LABEL: Record<RouteName, MessageKey> = {
-  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', appearance: 'nav.appearance',
+  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', escalations: 'nav.escalations', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', tags: 'nav.tags', appearance: 'nav.appearance',
 };
 const NAV_ICON: Record<RouteName, () => ReactNode> = {
-  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, appearance: BrushIcon,
+  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, escalations: AlertIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, tags: TagIcon, appearance: BrushIcon,
 };
 const PAGE_TITLE: Record<RouteName, MessageKey> = {
-  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', appearance: 'appearance.title',
+  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', escalations: 'escalations.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', tags: 'tagsPage.title', appearance: 'appearance.title',
 };
 const THEME_LABEL: Record<Theme, MessageKey> = { light: 'theme.light', dark: 'theme.dark', system: 'theme.system' };
 const THEME_ICON: Record<Theme, () => ReactNode> = { light: SunIcon, dark: MoonIcon, system: MonitorIcon };
 // The main entries can be put in a personal order; the administration section stays fixed below them.
-const MAIN_ROUTES: readonly RouteName[] = ['start', 'projects', 'search', 'inbox', 'board'];
+const MAIN_ROUTES: readonly RouteName[] = ['start', 'projects', 'search', 'inbox', 'board', 'escalations'];
 
 function Preferences() {
   const { t, language, languages, setLanguage } = useI18n();
@@ -71,15 +74,18 @@ function Preferences() {
   );
 }
 
-function BrandMark() {
+// The portal carries the same appearance with the addition "Kundenportal" (TASK-081).
+function BrandMark({ addition }: { readonly addition?: MessageKey }) {
   const { brand } = useBrand();
+  const { t } = useI18n();
   return (
     <div className="brand">
       {brand.logoUrl !== null
         // The name beside it is read out, so the logo itself stays silent instead of announcing a generic label.
         ? <img src={brand.logoUrl} alt="" className="brand-logo" />
-        : <span className="brand-mark" aria-hidden="true">{brand.name.slice(0, 1)}</span>}
+        : <span className="brand-mark" aria-hidden="true">{[...brand.name][0]}</span>}
       <span className="brand-name" data-testid="brand-name">{brand.name}</span>
+      {addition !== undefined && <span className="brand-addition" data-testid="brand-addition">{t(addition)}</span>}
     </div>
   );
 }
@@ -109,6 +115,7 @@ export function App() {
       </div>
     );
   }
+  if (view.state === 'ready' && view.session.portal) return <PortalShell />;
   if (view.state === 'ready') return <Shell />;
   return (
     <div className="gate">
@@ -153,6 +160,30 @@ function HandoverPage() {
   );
 }
 
+// A portal account sees only its requests: no navigation of the staff, no administration (TASK-075, DEC-105).
+function PortalShell() {
+  const { t, language } = useI18n();
+  const { brand } = useBrand();
+  const { view, signOut } = useSession();
+  const who = view.state === 'ready' ? view.session.displayName ?? view.session.username ?? '' : '';
+  useEffect(() => {
+    document.title = `${t('portal.title')} · ${brand.name}`;
+  }, [language, brand.name, t]);
+  return (
+    <div className="gate portal">
+      <header className="gate-head">
+        <BrandMark addition="portal.brandAddition" />
+        <div className="portal-session">
+          <p className="who" data-testid="who">{who}</p>
+          <button type="button" className="link-button logout" onClick={() => void signOut()}><LogoutIcon />{t('session.logout')}</button>
+          <Preferences />
+        </div>
+      </header>
+      <main id="main" tabIndex={-1}><PortalPage /></main>
+    </div>
+  );
+}
+
 function pageTitle(route: Route): MessageKey {
   if (route.name === 'project' || route.name === 'ticket') return 'projects.title';
   if (route.name === 'group') return 'groups.title';
@@ -190,8 +221,12 @@ function Shell() {
     }
     const focus = () => main.current?.querySelector('h1')?.focus();
     focus();
-    // A page that loads first gets its heading a moment later.
-    const timer = setTimeout(focus, 400);
+    // A page that loads first gets its heading a moment later, unless the person already moved into the new content.
+    const timer = setTimeout(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body || active === main.current || !main.current?.contains(active)
+        || active.tagName === 'H1') focus();
+    }, 400);
     return () => clearTimeout(timer);
   }, [routeKey]);
 
@@ -211,9 +246,11 @@ function Shell() {
     ...(has(HELPDESK_RIGHT) ? ['helpdesk' as const] : []),
     ...(has(SLA_RIGHT) ? ['sla' as const] : []),
     ...(has(JOBS_RIGHT) ? ['jobs' as const] : []),
+    ...(has(TAGS_RIGHT) ? ['tags' as const] : []),
     'appearance',
   ];
-  const allowed = (name: RouteName) => name !== 'accounts' && name !== 'groups' && name !== 'jobs' && name !== 'helpdesk' && name !== 'sla' ? true : admin.includes(name);
+  const allowed = (name: RouteName) => name !== 'accounts' && name !== 'groups' && name !== 'jobs' && name !== 'helpdesk' && name !== 'sla' && name !== 'tags'
+    ? true : admin.includes(name);
 
   return (
     <div className="shell">
@@ -260,9 +297,11 @@ function Shell() {
           {route.name === 'groups' && allowed('groups') && <GroupsPage />}
           {route.name === 'group' && allowed('groups') && <GroupPage key={route.id} id={route.id} />}
           {route.name === 'inbox' && <InboxPage />}
+          {route.name === 'escalations' && <EscalationsPage />}
           {route.name === 'helpdesk' && allowed('helpdesk') && <HelpdeskPage />}
           {route.name === 'sla' && allowed('sla') && <SlaPage />}
           {route.name === 'jobs' && allowed('jobs') && <JobsPage />}
+          {route.name === 'tags' && allowed('tags') && <TagsPage />}
           {route.name === 'appearance' && <AppearancePage />}
         </main>
         <footer>

@@ -22,14 +22,15 @@ import taskmanager.search.internal.SearchService.CustomFilter;
 import taskmanager.search.internal.SearchService.Page;
 import taskmanager.search.internal.SearchService.ProjectHit;
 import taskmanager.search.internal.SearchService.ProjectQuery;
+import taskmanager.search.internal.SearchService.TagMatch;
 import taskmanager.search.internal.SearchService.TagRef;
 import taskmanager.search.internal.SearchService.TicketHit;
 import taskmanager.search.internal.SearchService.TicketQuery;
 
 /**
  * Search for tickets and projects (TASK-029). Every endpoint needs a complete login; the service decides what the caller
- * may find. Repeated parameters combine with "or" inside one filter and with "and" between filters; every given tag is
- * required. A lock that could not be taken in time ends the search with 503 {@code search.busy} and {@code Retry-After}.
+ * may find. Repeated parameters combine with "or" inside one filter and with "and" between filters; the given tags follow
+ * {@code tagMatch} ({@code all} by default). A lock that could not be taken in time ends the search with 503 {@code search.busy} and {@code Retry-After}.
  */
 @RestController
 class SearchController {
@@ -40,6 +41,7 @@ class SearchController {
     private static final int MAX_VALUES = 20;
     private static final int MAX_VALUE_LENGTH = 100;
     private static final int MAX_CUSTOM_VALUE_LENGTH = 200;
+    private static final int MAX_TAGS = 10;
 
     private final SearchService search;
     private final AccessContexts identity;
@@ -66,12 +68,14 @@ class SearchController {
     PageBody<TicketHitBody> tickets(@RequestParam(required = false) String q,
             @RequestParam(required = false) List<String> project, @RequestParam(required = false) List<String> status,
             @RequestParam(required = false) List<String> type, @RequestParam(required = false) List<String> assignee,
-            @RequestParam(required = false) List<String> tag, @RequestParam(required = false) List<String> custom,
+            @RequestParam(required = false) List<String> tag, @RequestParam(required = false) String tagMatch,
+            @RequestParam(required = false) List<String> custom,
             @RequestParam(required = false) Integer limit, @RequestParam(required = false) Integer offset) {
         AccessContext actor = actor();
         List<String> violations = new ArrayList<>();
+        List<UUID> tags = tags(tag, violations);
         TicketQuery query = new TicketQuery(q, ids(project, "project", violations), texts(status, "status", violations),
-            texts(type, "type", violations), ids(assignee, "assignee", violations), ids(tag, "tag", violations),
+            texts(type, "type", violations), ids(assignee, "assignee", violations), tags, tagMatch(tagMatch, tags, violations),
             customFilters(custom, violations), limit(limit, violations), offset(offset, violations));
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
@@ -82,10 +86,13 @@ class SearchController {
 
     @GetMapping("/api/v1/search/projects")
     PageBody<ProjectHit> projects(@RequestParam(required = false) String q, @RequestParam(required = false) List<String> tag,
+            @RequestParam(required = false) String tagMatch,
             @RequestParam(required = false) Integer limit, @RequestParam(required = false) Integer offset) {
         AccessContext actor = actor();
         List<String> violations = new ArrayList<>();
-        ProjectQuery query = new ProjectQuery(q, ids(tag, "tag", violations), limit(limit, violations), offset(offset, violations));
+        List<UUID> tags = tags(tag, violations);
+        ProjectQuery query = new ProjectQuery(q, tags, tagMatch(tagMatch, tags, violations), limit(limit, violations),
+            offset(offset, violations));
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
@@ -94,6 +101,39 @@ class SearchController {
     }
 
     // ------------------------------------------------------------------------------------------------ helpers
+
+    /** At most {@value #MAX_TAGS} tags in one tag filter (DEC-103). */
+    private static List<UUID> tags(List<String> raw, List<String> violations) {
+        if (raw != null && raw.size() > MAX_TAGS) {
+            violations.add("tag.invalid");
+            return List.of();
+        }
+        return ids(raw, "tag", violations);
+    }
+
+    /**
+     * {@code all} (the default), {@code any} and {@code none} need at least one tag, {@code untagged} takes none
+     * ({@code tagMatch.invalid} otherwise).
+     */
+    private static TagMatch tagMatch(String raw, List<UUID> tags, List<String> violations) {
+        if (raw == null) {
+            return TagMatch.ALL;
+        }
+        TagMatch match = switch (raw.strip()) {
+            case "all" -> TagMatch.ALL;
+            case "any" -> TagMatch.ANY;
+            case "none" -> TagMatch.NONE;
+            case "untagged" -> TagMatch.UNTAGGED;
+            default -> null;
+        };
+        if (match == null || (match == TagMatch.UNTAGGED) != tags.isEmpty()) {
+            if (!violations.contains("tag.invalid")) {
+                violations.add("tagMatch.invalid");
+            }
+            return TagMatch.ALL;
+        }
+        return match;
+    }
 
     private static List<UUID> ids(List<String> raw, String name, List<String> violations) {
         List<UUID> ids = new ArrayList<>();

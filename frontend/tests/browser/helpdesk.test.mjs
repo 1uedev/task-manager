@@ -84,8 +84,13 @@ describe('helpdesk administration', () => {
       const contactForm = page.getByTestId('contact-form');
       await contactForm.getByLabel(/^Name/).fill('Lea Lang');
       await contactForm.getByLabel('Mailadressen').fill('Lea@Nordwerk.example\nlea.lang@nordwerk.example');
+      // Mails to the contact go in its language (TASK-082); German unless chosen otherwise.
+      assert.equal(await contactForm.getByLabel('Sprache').inputValue(), 'de');
+      await contactForm.getByLabel('Sprache').selectOption('en');
       await contactForm.getByRole('button', { name: 'Speichern' }).click();
       await page.locator('tr[data-contact="Lea Lang"]').getByText('lea@nordwerk.example, lea.lang@nordwerk.example').waitFor();
+      await page.locator('tr[data-contact="Lea Lang"]').getByText('Englisch').waitFor();
+      assert.equal(backend.state.helpdesk.contacts[0].language, 'en');
 
       // The same address for a second contact is refused with its reason.
       await page.getByRole('button', { name: 'Kontakt anlegen' }).click();
@@ -342,6 +347,15 @@ describe('replies to customers', () => {
       await form.getByRole('button', { name: 'Antwort prüfen' }).click();
       const check = form.getByTestId('reply-check');
       await check.getByText('Diese Antwort geht an Lea Lang <lea@nordwerk.example>, gesendet von Support <support@firma.example>.').waitFor();
+      // The check shows the finished mail in the built-in German template (TASK-082).
+      await check.getByTestId('reply-language').getByText('So geht die Mail raus, auf Deutsch.').waitFor();
+      const mail = check.getByTestId('reply-mail');
+      assert.equal(await mail.locator('[data-part="greeting"]').textContent(), 'Guten Tag Lea Lang,');
+      assert.equal(await mail.locator('[data-part="body"]').textContent(), 'Hallo Frau Lang,\nwir tauschen den Drucker morgen.');
+      assert.equal(await mail.locator('[data-part="signature"]').textContent(), 'Viele Grüße\nBen Leser\nTask Manager');
+      assert.match(await mail.locator('[data-part="footer"]').textContent(), /^Ticket PLAT-\d+: Drucker defekt$/, 'without an address the portal line is left out');
+      await mail.getByText('Klartext der Mail').click();
+      assert.match(await check.getByTestId('reply-mail-text').textContent(), /^Guten Tag Lea Lang,\n\nHallo Frau Lang,/);
       assert.equal(backend.state.helpdesk.replies.length, 0, 'nothing is stored before the confirmation');
       await check.getByRole('button', { name: 'Jetzt senden' }).click();
       await section.getByText('Die Antwort ist bestätigt und wird gesendet.').waitFor();
@@ -351,6 +365,78 @@ describe('replies to customers', () => {
       assert.equal(reply.body, 'Hallo Frau Lang,\nwir tauschen den Drucker morgen.');
       await section.locator(`li[data-reply="${reply.id}"]`).getByTestId('reply-state').getByText('wird gesendet').waitFor();
       await page.getByTestId('history').getByText('Antwort an lea@nordwerk.example zum Versand bestätigt: Re: Drucker defekt').waitFor();
+    });
+  });
+
+  test('an English contact gets the mail in the English template with the saved texts', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/start', prepare: (backend) => {
+      ticket = withReplier(backend);
+      backend.state.helpdesk.contacts[0].language = 'en';
+      Object.assign(backend.state.mailTemplate, { applicationUrl: 'https://support.example.com', en: { greeting: 'Dear {{contact.name}},',
+        signature: 'Best\n{{sender.name}}', footer: '{{company.name}} <support>\nPortal: {{portal.url}}' } });
+    } }, async (page, backend) => {
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      await section.getByRole('button', { name: 'Dem Kunden antworten' }).click();
+      const form = section.getByTestId('reply-form');
+      await form.getByLabel('Text').fill('We replace the printer <tomorrow>.');
+      await form.getByRole('button', { name: 'Antwort prüfen' }).click();
+      const check = form.getByTestId('reply-check');
+      await check.getByTestId('reply-language').getByText('So geht die Mail raus, auf Englisch.').waitFor();
+      const mail = check.getByTestId('reply-mail');
+      assert.equal(await mail.getAttribute('lang'), 'en');
+      assert.equal(await mail.locator('[data-part="greeting"]').textContent(), 'Dear Lea Lang,');
+      assert.equal(await mail.locator('[data-part="body"]').textContent(), 'We replace the printer <tomorrow>.', 'text stays text');
+      assert.equal(await mail.locator('[data-part="footer"]').textContent(), 'Task Manager <support>\nPortal: https://support.example.com');
+      assert.equal(await mail.locator('tomorrow, support').count(), 0, 'no markup reaches the page');
+      await check.getByRole('button', { name: 'Jetzt senden' }).click();
+      await section.getByText('Die Antwort ist bestätigt und wird gesendet.').waitFor();
+      assert.equal(backend.state.helpdesk.replies[0].mail.language, 'en');
+    });
+  });
+
+  test('a check that answers after an edit is dropped, and only the checked draft is confirmed', async () => {
+    let ticket;
+    await withApp({ as: BEN, hash: '#/start', prepare: (backend) => { ticket = withReplier(backend); } }, async (page, backend) => {
+      let arrived;
+      const previewArrived = new Promise((resolve) => { arrived = resolve; });
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      let first = true;
+      await page.route('**/api/v1/projects/*/tickets/*/helpdesk/reply/preview', async (route) => {
+        if (first) {
+          first = false;
+          arrived();
+          await held;
+        }
+        await route.fallback();
+      });
+      await page.goto(`${base()}#/projects/${backend.project.id}/tickets/${ticket.number}`);
+      const section = page.getByTestId('ticket-helpdesk');
+      await section.getByRole('button', { name: 'Dem Kunden antworten' }).click();
+      const form = section.getByTestId('reply-form');
+      await form.getByLabel('Text').fill('Geprüfter Text A');
+      await form.getByRole('button', { name: 'Antwort prüfen' }).click();
+      await previewArrived;
+      await form.getByLabel('Text').fill('Ungeprüfter Text B');
+      release();
+      // The late check of A would open the check; give it the time to arrive and be dropped (F1 of the review).
+      await page.waitForTimeout(300);
+      assert.equal(await form.getByTestId('reply-check').count(), 0, 'the check of an older draft is not shown');
+      assert.equal(await form.getByLabel('Text').inputValue(), 'Ungeprüfter Text B');
+      await form.getByRole('button', { name: 'Antwort prüfen' }).click();
+      const check = form.getByTestId('reply-check');
+      await check.locator('[data-part="body"]').getByText('Ungeprüfter Text B').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'reply-check', 'the focus moves to the check');
+      await check.getByRole('button', { name: 'Zurück zum Text' }).click();
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Antwort prüfen', 'the focus returns to the check button');
+      await form.getByRole('button', { name: 'Antwort prüfen' }).click();
+      await check.getByRole('button', { name: 'Jetzt senden' }).click();
+      await section.getByText('Die Antwort ist bestätigt und wird gesendet.').waitFor();
+      assert.equal(backend.state.helpdesk.replies.length, 1);
+      assert.equal(backend.state.helpdesk.replies[0].body, 'Ungeprüfter Text B');
+      assert.match(backend.state.helpdesk.replies[0].mail.text, /Ungeprüfter Text B/);
     });
   });
 

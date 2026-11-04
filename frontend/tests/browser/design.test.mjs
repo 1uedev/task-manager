@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { auditContrast } from './audit.mjs';
-import { ANNA, BEN, TOKEN, createBackend } from './backend.mjs';
+import { ANNA, BEN, NORA, TOKEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-036: light and dark surfaces, the company accent from the server, and drag and drop with its keyboard
@@ -141,11 +141,50 @@ describe('company appearance', () => {
     });
   });
 
-  test('before the login the default orange is used and nothing of the company is read', async () => {
-    const backend = fake();
+  test('before the login the login page shows the company name, color and logo and reads nothing else', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    backend.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
     await withPage({ backend, as: null }, async (page) => {
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      await accentBecomes(page, '#2563eb', 'the login page carries the company color');
+      await page.waitForSelector('header img.brand-logo');
+      assert.equal(await page.locator('header img.brand-logo').getAttribute('src'), '/api/v1/appearance/public/logo');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      assert.equal(await page.title(), 'Anmelden · Nordlicht Service');
+      assert.deepEqual([...new Set(backend.state.requests.map((item) => item.path))].sort(),
+        ['/api/v1/appearance/public', '/api/v1/appearance/public/logo', '/api/v1/session']);
+    });
+  });
+
+  test('when the public appearance cannot be read the login page keeps the default', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    backend.state.publicAppearanceDown = true;
+    await withPage({ backend, as: null }, async (page) => {
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      await page.waitForFunction(() => performance.getEntriesByType('resource').some((entry) => entry.name.endsWith('/api/v1/appearance/public')));
       assert.equal(await accent(page), '#f97316');
-      assert.deepEqual([...new Set(backend.state.requests.map((item) => item.path))], ['/api/v1/session']);
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
+    });
+  });
+
+  test('the password change and the page after logging out show the company appearance', async () => {
+    const backend = fake({ brandName: 'Nordlicht Service' });
+    await withPage({ backend, as: null }, async (page) => {
+      await page.getByLabel(/^Anmeldename/).fill(NORA.username);
+      await page.getByLabel(/^Passwort/).fill(NORA.password);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('h1:has-text("Eigenes Passwort festlegen")');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      await accentBecomes(page, '#2563eb', 'the password change carries the company color');
+      await page.getByLabel(/^Einmalpasswort/).fill(NORA.password);
+      await page.getByLabel(/^Neues Passwort \(/).fill('Nora Passwort 2026');
+      await page.getByLabel(/^Neues Passwort wiederholen/).fill('Nora Passwort 2026');
+      await page.getByRole('button', { name: 'Passwort speichern' }).click();
+      await page.waitForSelector('.shell main h1');
+      await page.getByRole('button', { name: 'Abmelden' }).click();
+      await page.getByRole('heading', { name: 'Anmelden' }).waitFor();
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      await accentBecomes(page, '#2563eb', 'the page after logging out carries the company color');
     });
   });
 
@@ -202,9 +241,37 @@ describe('company appearance', () => {
     });
   });
 
+  test('a color typed before the saved one arrives is kept', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      let arrived;
+      const requested = new Promise((resolve) => { arrived = resolve; });
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      await page.route((url) => url.pathname === '/api/v1/appearance', async (route) => {
+        if (route.request().method() === 'GET') {
+          arrived();
+          await held;
+        }
+        await route.fallback();
+      });
+      await page.reload();
+      await requested;
+      const field = page.getByLabel('Farbwert');
+      await field.fill('#12');
+      release();
+      await page.waitForTimeout(300);
+      assert.equal(await field.inputValue(), '#12', 'the late saved color does not overwrite what was typed');
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+    });
+  });
+
   test('an invalid typed color cannot save the last valid one', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      // Saving opens once the session and the saved appearance are loaded; wait for them instead of racing the load.
+      await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
+      await page.getByRole('button', { name: 'Für alle speichern' }).waitFor();
       const field = page.getByLabel('Farbwert');
       const save = page.getByRole('button', { name: 'Für alle speichern' });
       await field.fill('#7C3AED');
@@ -270,19 +337,19 @@ describe('drag and drop', () => {
       await page.keyboard.press('Alt+ArrowUp');
       await page.keyboard.press('Alt+ArrowUp');
       const order = () => page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route));
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox']);
-      assert.match(await live(page), /Board steht jetzt an Position 2 von 5/);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations']);
+      assert.match(await live(page), /Board steht jetzt an Position 2 von 6/);
       assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Board');
       await page.reload();
       await page.waitForSelector('.shell main h1');
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox']);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations']);
     });
   });
 
   test('navigation entries can be dragged with the mouse', async () => {
     await withPage({}, async (page) => {
       await page.dragAndDrop('.nav-main li[data-route="search"]', '.nav-main li[data-route="start"]');
-      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board']);
+      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board', 'escalations']);
     });
   });
 
@@ -308,6 +375,136 @@ describe('drag and drop', () => {
       assert.deepEqual(await page.locator('[data-column="doing"] [data-card]').evaluateAll((cards) => cards.map((card) => card.dataset.card)), ['c2', 'c1', 'c5']);
       await page.dragAndDrop('[data-card="c6"]', '[data-column="review"] header');
       assert.equal(await column('c6'), 'review');
+    });
+  });
+});
+
+// TASK-081: the name of the company, resetting everything and the preview of every area.
+describe('company name and preview', () => {
+  test('a holder of the right previews and saves the name, which reaches the head and every preview', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Task Manager');
+      await field.fill('  Nordlicht Service  ');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name"]')?.textContent === 'Nordlicht Service');
+      for (const area of ['preview-app', 'preview-login', 'preview-portal', 'preview-mail-de', 'preview-mail-en']) {
+        assert.match(await page.getByTestId(area).innerText(), /Nordlicht Service/, area);
+      }
+      assert.match(await page.getByTestId('preview-portal').innerText(), /Kundenportal/);
+      assert.match(await page.getByTestId('preview-mail-de').innerText(), /Guten Tag Erika Musterfrau/);
+      assert.match(await page.getByTestId('preview-mail-en').innerText(), /Hello Jane Example/);
+      assert.equal(await page.getByTestId('preview-mail-en').getAttribute('lang'), 'en');
+      assert.deepEqual(server.writes(), [], 'nothing is sent while typing');
+
+      await field.fill('');
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+      await page.getByText('Bitte 1 bis 80 Zeichen ohne Zeilenumbruch eingeben.').waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name"]')?.textContent === 'Task Manager');
+
+      await field.fill('Nordlicht Service');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      const [write] = server.writes();
+      assert.deepEqual({ method: write.method, path: write.path, ifMatch: write.ifMatch, csrf: write.csrf }, { method: 'PUT', path: '/api/v1/appearance', ifMatch: '"3"', csrf: TOKEN });
+      assert.deepEqual(JSON.parse(write.body.toString()), { name: 'Nordlicht Service' });
+      await page.getByRole('link', { name: 'Start' }).click();
+      await page.waitForSelector('h1:has-text("Willkommen")');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht Service');
+      assert.match(await page.title(), / · Nordlicht Service$/);
+    });
+  });
+
+  test('resetting everything asks once more and puts name, color and logo back', async () => {
+    const server = fake({ brandName: 'Nordlicht Service' });
+    server.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      await page.getByRole('heading', { name: 'Alles zurücksetzen' }).waitFor();
+      await page.getByRole('button', { name: 'Alles zurücksetzen' }).click();
+      assert.deepEqual(server.writes(), [], 'the first click only asks');
+      await page.getByRole('button', { name: 'Abbrechen' }).click();
+      await page.getByRole('button', { name: 'Alles zurücksetzen' }).click();
+      await page.getByRole('button', { name: 'Ja, alles zurücksetzen' }).click();
+      await page.getByText('Name, Akzentfarbe und Logo sind auf den Standard zurückgesetzt.').waitFor();
+      const [write] = server.writes();
+      assert.deepEqual({ method: write.method, path: write.path, ifMatch: write.ifMatch, csrf: write.csrf }, { method: 'DELETE', path: '/api/v1/appearance', ifMatch: '"3"', csrf: TOKEN });
+      await accentBecomes(page, '#f97316');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Task Manager');
+      assert.equal(await page.locator('header img.brand-logo').count(), 0);
+      assert.equal(await page.getByLabel('Name des Unternehmens').inputValue(), 'Task Manager');
+    });
+  });
+
+  test('the mail template is edited per language with a preview of synthetic data, checked by the server and reset', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const section = page.getByTestId('mail-template');
+      await section.getByRole('heading', { name: 'Mailvorlage „Antwort an Kunden“' }).waitFor();
+      await section.getByText('Es gilt die eingebaute Vorlage dieser Sprache.').waitFor();
+      const preview = section.getByTestId('mail-template-preview');
+      await preview.locator('[data-part="greeting"]').getByText('Guten Tag Erika Beispiel,').waitFor();
+      assert.match(await preview.locator('[data-part="signature"]').textContent(), /^Viele Grüße\nMax Support\nNordlicht$/);
+      assert.equal(await preview.getAttribute('lang'), 'de');
+
+      // A mistyped placeholder is named in the preview and refused when saving.
+      await section.getByTestId('mail-part-signature').fill('Gruß\n{{sender.nme}}');
+      await section.getByTestId('mail-preview-problem').getByText('Unbekannter Platzhalter: Deutsch, Signatur: {{sender.nme}}').waitFor();
+      await section.getByRole('button', { name: 'Vorlage speichern' }).click();
+      await section.getByTestId('mail-template-problem').getByText('Unbekannter Platzhalter: Deutsch, Signatur: {{sender.nme}}').waitFor();
+      assert.deepEqual(server.writes().map((write) => write.method), ['PUT']);
+      assert.equal(server.state.mailTemplate.version, 1, 'nothing refused is stored');
+
+      await section.getByTestId('mail-part-signature').fill('Gruß\n{{sender.name}}');
+      await section.getByTestId('mail-language-en').click();
+      assert.equal(await section.getByTestId('mail-language-en').getAttribute('aria-pressed'), 'true');
+      await section.getByTestId('mail-part-greeting').fill('Dear {{contact.name}}');
+      await section.getByTestId('mail-address').fill('https://support.example.com');
+      await preview.locator('[data-part="greeting"]').getByText('Dear Alex Example').waitFor();
+      assert.equal(await preview.getAttribute('lang'), 'en');
+      assert.match(await preview.locator('[data-part="footer"]').textContent(), /customer portal: https:\/\/support\.example\.com$/);
+      await section.getByRole('button', { name: 'Vorlage speichern' }).click();
+      await section.getByTestId('mail-template-saved').getByText('Die Mailvorlage ist gespeichert. Neue Antworten nutzen sie ab jetzt.').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'mail-template-saved', 'the focus is not lost after a save');
+      const saved = server.writes().at(-1);
+      assert.deepEqual({ method: saved.method, path: saved.path, ifMatch: saved.ifMatch, csrf: saved.csrf },
+        { method: 'PUT', path: '/api/v1/appearance/mail-template', ifMatch: '"1"', csrf: TOKEN });
+      const body = JSON.parse(saved.body.toString());
+      assert.equal(body.applicationUrl, 'https://support.example.com');
+      assert.equal(body.de.signature, 'Gruß\n{{sender.name}}');
+      assert.equal(body.en.greeting, 'Dear {{contact.name}}');
+      await section.getByText('Gespeicherte Vorlage dieser Sprache.').waitFor();
+
+      // Back to the built-in template after one more question.
+      await section.getByRole('button', { name: 'Eingebaute Vorlage verwenden' }).click();
+      await section.getByRole('button', { name: 'Ja, eingebaute Vorlage verwenden' }).click();
+      await section.getByText('Beide Sprachen nutzen wieder die eingebaute Vorlage.').waitFor();
+      assert.equal(server.writes().at(-1).method, 'DELETE');
+      assert.equal(await section.getByTestId('mail-part-greeting').inputValue(), 'Guten Tag {{contact.name}},');
+    });
+  });
+
+  test('the mail template follows the unsaved name and color of the page and stays usable at 320 pixels', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance', viewport: { width: 320, height: 900 } }, async (page) => {
+      const preview = page.getByTestId('mail-template-preview');
+      await preview.waitFor();
+      await page.getByLabel('Name des Unternehmens').fill('Südlicht');
+      await preview.locator('.mail-name').getByText('Südlicht').waitFor();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.equal(overflow, 0, 'no horizontal scrolling');
+    });
+  });
+
+  test('a person without the right sees no reset and cannot save a name', async () => {
+    const server = fake();
+    await withPage({ backend: server, as: BEN, hash: '#/appearance' }, async (page) => {
+      await page.getByTestId('appearance-mode').waitFor();
+      assert.equal(await page.getByRole('heading', { name: 'Alles zurücksetzen' }).count(), 0);
+      assert.equal(await page.getByTestId('mail-template').count(), 0, 'no mail template without the right');
+      await page.getByLabel('Name des Unternehmens').fill('Vorschau');
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
+      assert.deepEqual(server.writes(), []);
     });
   });
 });

@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,266 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-085 Befunde der Prüfung von TASK-082 beheben (A17)
+
+**Bezug:** REQ-BRAND-002, REQ-HD-001, REQ-UX-001; DEC-112, DEC-115. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 ist mit einem Browsertest mit gehaltener Prüfung und zwischenzeitlicher Eingabe belegt, F2 und H2 mit Backendtests, H1 mit Fokusprüfungen im Browser; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-115, ohne Migration. Die Bestätigung einer Antwort sendet genau die geprüfte Fassung (Postfach, Empfänger, Betreff, Text); eine Prüfung, die nach einer Änderung, einem Abbruch oder einer neuen Prüfung antwortet, wird verworfen. Das Schema der Adresse der Anwendung gilt in jeder Schreibweise und wird kleingeschrieben gespeichert, Pfad und Abfrage bleiben. Der Fokus geht nach dem Speichern der Vorlage auf die Bestätigung, beim Prüfen einer Antwort auf die fertige Mail und beim Zurückgehen auf „Antwort prüfen“. Die Vorlagenvorschau lehnt eine fehlende oder fremde Sprache mit 400 `mail_template.languages_missing` ab. Die Browsertests für Portalkopf und Farbwert warten auf den geladenen Auftritt; dabei behoben, dass eine halb eingetippte Farbe vom spät geladenen gespeicherten Auftritt überschrieben wurde.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (515 Tests), `AppearanceApiTest` mit `HTTPS://` und `Https://` in der Vorschau, `HTTPS://` beim Speichern und der abgelehnten Sprache. Frontend `npm run verify` mit 79 Tests, `npm run test:browser` 181 von 181. CI auf PR #250 grün.
+
+**Review:** Getrennte Nachprüfung durch Codex, Sitzung codex-20261103-mailtemplate-review-02 ([Bericht](docs/REVIEW_TASK-085_PR-250.md), PR #253): F1, F2, H1 bis H3 und der Nachtrag wirksam, kein neuer Produktbefund, Empfehlung zur Abnahme; eigene Gegenproben mit gehaltener Prüfung in 14 Fallgruppen, 4 HTTPS Schreibweisen und 15 abgelehnten Adressen gegen die echte API.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch mit „Ok“ auf den Vorschlag, TASK-082 und TASK-085 jetzt abzunehmen und TASK-081 erst nach einer eigenen Prüfung; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Testpflege nach N1 bis N3 der Nachprüfung: der Login Sprachtest wartet nur auf den Ladebildschirm, die neuen Verzögerungstests warten pauschal 300 ms statt auf die verarbeitete Antwort, und die Tag Testvorbereitung legt Tags erst nach dem Öffnen der Seite an.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-082 #248 (86df764), Ergebnis #250 (010ad07), Nachprüfbericht und Abschluss #253; verknüpft mit TASK-082 und DEC-115.
+
+## TASK-082 Mailvorlage für Antworten an Kunden (A17 Teil 2)
+
+**Bezug:** REQ-BRAND-001, REQ-BRAND-002, REQ-I18N-001, REQ-HD-001; OPEN-015; DEC-091, DEC-112. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Eine Antwort an einen deutschen und einen englischen Kontakt geht als HTML und Klartext mit Logo, Name und gespeicherter Vorlage in der jeweiligen Sprache, ohne gespeicherte Vorlage gilt die Rückfallvorlage; unbekannte Platzhalter werden abgelehnt (W15), Werte mit HTML Zeichen erscheinen maskiert, die Vorschau zeigt keine echten Daten; eine nach der Bestätigung geänderte Vorlage ändert eine wartende oder erneut versuchte Sendung nicht; Migration, Vertrag gegen Routen, Backend Tests mit dem SMTP Testserver, Browser Tests für Vorlagenpflege, Kontaktsprache und Vorschau.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen zu A17 bestätigt): Vorlage „Antwort an Kunden“ mit Anrede, Signatur und Fußzeile je Sprache als Klartext mit den festen Platzhaltern `{{company.name}}`, `{{contact.name}}`, `{{ticket.number}}`, `{{ticket.title}}`, `{{sender.name}}`, `{{mailbox.address}}` und `{{portal.url}}`; optionale Adresse der Anwendung nur mit https; Sprache am Kontakt Deutsch oder Englisch; jede Antwort als HTML und Klartext mit eingebettetem Logo; eingebaute Vorlage mit Zurücksetzen; die fertige Mail wird bei der Bestätigung festgehalten; Pflege mit `appearance.manage`, Version und Audit; Demosignatur und englischer Kontakt von Südtechnik.
+
+**Ergebnis:** DEC-112, Migrationen V0049 (`appearance_mail_template`) und V0050 (Sprache am Kontakt, `helpdesk_reply_mail`, `helpdesk_reply_image`). Endpunkte für Vorlage und Vorschau im Erscheinungsbild, Vorschau der fertigen Antwort vor der Bestätigung, `SmtpMailSender` sendet `multipart/alternative` mit dem Logo als `cid:logo`. Oberfläche: Abschnitt „Mailvorlage“ auf der Seite „Erscheinungsbild“, Sprache in der Kontaktpflege, Prüfung einer Antwort mit der fertigen Mail. Verträge appearance und helpdesk ergänzt.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (515 Tests), darunter neue Tests in `AppearanceApiTest` und `HelpdeskApiTest` mit dem SMTP Testserver. Frontend `npm run verify` mit 79 Tests, `npm run test:browser` 179 von 179. CI auf PR #247 grün einschließlich Lifecycle mit 47 Migrationen.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-mailtemplate-review-01 ([Bericht](docs/REVIEW_TASK-082_PR-247.md), PR #248): Empfehlung „nachbessern“ mit F1 (Bestätigung einer ungeprüften Fassung), F2 (HTTPS in Großschreibung), H1 bis H3; alle mit TASK-085 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch mit „Ok“, zusammen mit TASK-085; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Das HTML der Mail erscheint in der Anwendung nicht selbst, die Vorschau zeigt die gefüllten Teile und den Klartext; eine zwischen Prüfung und Bestätigung geänderte Vorlage gilt mit der Bestätigung; Antworten vor V0050 gehen weiter als reiner Text; ohne Leserecht auf den Titel bleibt `{{ticket.title}}` leer.
+
+**Referenz:** Reservierung #242 (e450c14), Ergebnis #247 (c06a8a2), Prüfbericht #248 (86df764); verknüpft mit TASK-081, TASK-085 und DEC-112.
+
+## TASK-084 Befund der Prüfung von TASK-083 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-113, DEC-114. **Verantwortlich:** claude-20261103-portal-05. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 und die Hinweise H1 und H3 aus docs/REVIEW_TASK-083_PR-245.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-114, Migration V0051. Die Grenze zwischen alten Mailantworten und den nach V0043 von der Anwendung gespeicherten ist der Installationszeitpunkt von V0043, als UTC gelesen, plus 12 Stunden; sie hängt nicht mehr von der Zeitzone der Datenbanksitzung ab und liegt nie vor der echten Installation. Antworten davor werden nach der Regel aus TASK-083 neu berechnet, spätere behalten den Wert der Anwendung; V0047 bleibt unverändert. Testbeschreibung und backend/README.md präzisiert (H3).
+
+**Prüfungen:** `PortalAudienceMigrationTest` mit vier Zeitzonenpaaren (UTC und Europe/Berlin, UTC−12 und UTC+14, jeweils beide Richtungen); ohne V0051 schlägt er für UTC nach Europe/Berlin fehl. Backend vollständig gegen PostgreSQL 16 lokal grün (516 Tests), CI auf PR #249 grün nach Übernahme von TASK-082 und TASK-085; 48 Migrationen.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-portal-review-06 ([Bericht](docs/REVIEW_TASK-084.md), PR #251): F1, H1 und H3 behoben, kein neuer Befund, Empfehlung zur Abnahme; eigene Gegenproben mit bereits angewendeter V0047, Mikrosekundengrenzen und der Formel über 598 Zeitzonen.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“ auf die Frage, ob er TASK-075 bis TASK-080, TASK-083 und TASK-084 abnimmt; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Mailantworten aus den ersten 12 Stunden (bei östlichen Zonen bis 26 Stunden) nach dem Update auf V0043 an zuvor umgezogene Kontakte bleiben verborgen; die Uhr der Datenbank muss damals gestimmt haben.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-083 #246 (4d10360), Ergebnis #249 (2e714da), Prüfbericht #251 (b416f2b); verknüpft mit TASK-083 und DEC-114.
+
+## TASK-083 Befunde der Prüfung von TASK-080 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-110, DEC-113. **Verantwortlich:** claude-20261103-portal-04. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 und F2 sowie H1 aus docs/REVIEW_TASK-080_PR-241.md ohne Zeitfenster behoben und mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-113, Migrationen V0047 und V0048. Alte Mailantworten erhalten nur dann eine Organisation, wenn jede Anlage und Änderung des Kontakts bis zum Zeitpunkt der Antwort dieselbe nennt; Anhänge, deren jüngste Handlung ein Umschalten auf „Kunde“ vor TASK-079 ist, erhalten nur dann einen Kunden, wenn jede Kundenänderung des Tickets bis dahin denselben nennt. Sonst bleibt die Zielgruppe leer. Mailantworten, die die Anwendung nach V0043 gespeichert hat, behalten ihren Wert (F2).
+
+**Prüfungen:** `PortalAudienceMigrationTest` mit drei Fällen (Upgrade von V0040, Korrektur nach V0042, Korrektur nach V0045 mit Zeilen der Anwendung), darin gehaltene Änderungen von Kontakt und Kunde, kurz vorher angelegter Kontakt und reine Namensänderung; voller Backendlauf, `npm run verify`, CI auf PR #245 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261103-portal-review-05 ([Bericht](docs/REVIEW_TASK-083_PR-245.md), PR #246): Historienregel bestätigt, F1 (Grenze abhängig von der Zeitzone der Sitzung) mit TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-080 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Mailantworten an einen Kontakt, der vorher die Organisation gewechselt hat, bleiben verborgen; H2 der Prüfung von TASK-080 bleibt als Hinweis.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-080 #244 (8b06bea), Ergebnis #245 (bfff1bc); verknüpft mit TASK-080, TASK-084 und DEC-113.
+
+## TASK-080 Befunde der Prüfung von TASK-079 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002; DEC-106, DEC-109, DEC-110. **Verantwortlich:** claude-20261102-portal-03. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F3 und der Zusatz zu H3 aus docs/REVIEW_TASK-079_PR-239.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-110 nach Holgers Auswahl „Beheben, unklare Altdaten verbergen“, Migrationen V0043 bis V0045. Die Zielgruppe vorhandener Portalantworten, Mailantworten und kundensichtbarer Anhänge kommt nur aus der Historie und bleibt ohne sichere Quelle leer, auch nach V0041 und V0042 (F1). Der Lesestand im Portal richtet sich nach der Position der Antworten des Supports (`helpdesk_portal_position`, F2). Eine verspätete Folgeseite der Portalliste wird ab dem Filterwechsel verworfen (F3). Der Testersatz hält den Kunden einer Mailantwort fest.
+
+**Prüfungen:** `PortalAudienceMigrationTest`, `PortalConversationApiTest` (gehaltene Portalantwort mit früherer Zeit bleibt neu), `HelpdeskApiTest`, drei neue Browsertests in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #241 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-04 ([Bericht](docs/REVIEW_TASK-080_PR-241.md), PR #244): Positionslösung und Portalliste bestätigt, F1 und F2 zur historischen Zielgruppe mit TASK-083 und TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-079, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Bestandsdaten ohne sichere Quelle bleiben verborgen, nur Dateien lassen sich freigeben; H4 der Prüfung von TASK-076 bis TASK-078 (Seitengröße begrenzt die Arbeit im Backend nicht) bleibt offen.
+
+**Referenz:** Reservierung #240 (c0c1d73), Ergebnis #241 (42b1de4), Prüfbericht #244 (8b06bea); verknüpft mit TASK-079, TASK-083 und DEC-110.
+
+## TASK-079 Befunde der Prüfung von TASK-076 bis TASK-078 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-TAG-001, REQ-ACL-002; DEC-049, DEC-106, DEC-107, DEC-108, DEC-109. **Verantwortlich:** claude-20261102-portal-02. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F5 und H1 bis H3 aus docs/REVIEW_TASK-076-078_A11.md behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-109 nach Holgers Auswahl „Nur neue Einträge“, Migrationen V0041 und V0042. Beiträge, gesendete Mailantworten und kundensichtbare Anhänge behalten die Organisation, für die sie geschrieben wurden; eine Datei eines früheren Kunden gibt der Support ausdrücklich frei (F1). Lesestand bis zum neuesten gezeigten Eintrag (F2), Verwerfen später Folgeseiten (F3), Katalogcursor aus Name und Kennung (F4), durchsuchbarer Tagfilter im Portal (F5), dokumentierte Zählung verborgener Tags (H1), Tests gehaltener Tagänderungen (H2), angeglichener Testersatz (H3).
+
+**Prüfungen:** `PortalConversationApiTest`, `PortalAudienceMigrationTest`, `PortalTagsApiTest`, sechs neue Browsertests in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #239 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-03 ([Bericht](docs/REVIEW_TASK-079_PR-239.md), PR #240): F4, F5 und H1 bis H3 bestätigt, F1 bis F3 mit TASK-080 und den Folgeaufgaben behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-078, TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Beiträge und Mailantworten lassen sich nicht für eine andere Organisation freigeben; H4 bleibt offen.
+
+**Referenz:** Reservierung und Prüfbericht zu TASK-076 bis TASK-078 #238 (8f80168), Ergebnis #239 (a5b03ed); verknüpft mit TASK-076, TASK-077, TASK-078, TASK-080 und DEC-109.
+
+## TASK-078 Befunde der Prüfung von TASK-075 beheben (A11)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001; DEC-027, DEC-105, DEC-106, DEC-107. **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** F1 bis F6 und H1 bis H3 aus docs/REVIEW_TASK-075_PR-233.md sowie H5 nach Holgers Wahl behoben und, soweit testbar, mit automatischen Tests belegt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-107 nach Holgers Auswahl „Beheben, Entzug wirkt sofort“, ohne Migration. Fremde Anfrage antwortet auch bei gesperrter Zeile wie eine unbekannte Nummer (F1); `Permissions.current` mit geteilter Rechtesperre, sperrender Kontoprüfung und Projektreihenfolge der Datenbank (F2, F3); 400 bei fehlender Projektliste (F4); keine Portalkonten als Bearbeiter oder Personen (F5); weitere Seiten der Portalliste mit einfachem Schlüssel (F6, H1); 503 im Vertrag (H2); einzelne Gründe im Formular (H3); entzieht der Helpdesk einer Organisation ein Projekt, endet die Mitgliedschaft ihrer Portalkonten sofort (H5).
+
+**Prüfungen:** fünf neue Tests in `PortalAccountsApiTest` (die zu F1 und F3 schlagen mit dem alten Verhalten fehl), zwei neue und ein geschärfter Browsertest in `portal.test.mjs`; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #236 grün.
+
+**Review:** Die Codex Prüfung von TASK-076 bis TASK-078, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238), bestätigt den sofortigen Entzug; ihre Befunde wurden mit TASK-079 und den Folgeaufgaben behoben.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075 bis TASK-077, TASK-079, TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Die Portal Projektliste antwortet bei innerhalb des Aufrufs abgelaufener Sitzung mit 403; ein Kontakt, der die Organisation wechselt, bleibt am Konto.
+
+**Referenz:** Reservierung #235 (f3933c3), Ergebnis #236 (9a9a6aa); verknüpft mit TASK-075 und DEC-107.
+
+## TASK-077 Tags im Portal (A11 Teil 3)
+
+**Bezug:** REQ-TAG-001, REQ-PORTAL-001, REQ-ACL-002; DEC-049, DEC-068, DEC-102, DEC-108; docs/TAGS_SEARCH.md (T04, T10, T18, T19). **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** T04, T10, T18 und T19 als automatische Tests; Zuordnung durch Portalnutzer lässt interne Tags unverändert, auch bei gleichzeitiger interner Änderung; Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anzeige, Anlage und Zuordnung im Portal und die Sichtbarkeit in der Tagpflege.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen 17 bis 19 bestätigt): Tags „intern“ oder „Kunde“ mit `tags.manage`; Anlage im Portal nur mit `tag.create` in einer Gruppe des Portalkontos, gebunden an die eigene Organisation bis zur Freigabe für alle Kunden; Setzen und Entfernen kundensichtbarer Tags nur mit Schreibregel für Tags, interne bleiben unberührt.
+
+**Ergebnis:** DEC-108, Migration V0040. Sichtbarkeit je Tag, Bindung an die Organisation und Freigabe (`forAllCustomers`), Namen je Katalog und Zielgruppe; Portalpfade für Tags an Projekten und Anfragen; Tagfilter der Portalliste über den Port `TicketTagFilter`; Oberfläche im Portal und in der Tagpflege.
+
+**Prüfungen:** `PortalTagsApiTest` mit T04, T10, T18, T19 und gleichzeitigen Zuordnungen; `TagsContractTest` mit 26 Routen; voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #237 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238): F4, F5 und H1 bis H3 zu den Tags mit TASK-079 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075, TASK-076, TASK-078 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Die Obergrenze von 30 Tags zählt interne Tags mit; Katalogpflege und Massenänderung im Portal fehlen wie vereinbart; die Suche bleibt für Portalkonten verschlossen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #237 (07968e7); verknüpft mit TASK-079 und DEC-108.
+
+## TASK-076 Portalgespräch, Anhänge und Portalseiten (A11 Teil 2)
+
+**Bezug:** REQ-PORTAL-001, REQ-HD-002, REQ-HD-003, REQ-TKT-004, REQ-ACL-003; DEC-027, DEC-035, DEC-091, DEC-098, DEC-106; docs/HELPDESK_SLA.md, docs/PERMISSIONS.md (Fall 8). **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Der Verlauf zeigt nur die vereinbarten Teile; ein interner Anhang ist über seinen direkten Link nicht erreichbar, ein kundensichtbarer derselben Anfrage schon (Fall 8); Portalbeitrag und Portalantwort wirken auf Kundenantworten und Servicefristen wie die Mailwege; Migration, Vertrag gegen Routen, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests für Liste, Anlage, Verlauf, Antworten und Anhänge.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen 10 bis 16 und 20 bestätigt): Anlage nur mit im Portal angebotenen Tickettypen, Kunde und Kontakt aus dem Konto; Kundenverlauf ohne Internes; Portalbeiträge zählen wie Kundenantworten per Mail; Support antwortet über Portal oder Mail mit `helpdesk.reply`; Status nur lesbar; Portalliste mit Filtern und Markierung neuer Antworten; Anhänge „intern“ oder „Kunde“; Demodaten Nordwerk und Südtechnik.
+
+**Ergebnis:** DEC-106, Migrationen V0037 bis V0039. Tickettypen mit Markierung `portal`, Anlage im Portal, Gespräch je Anfrage, Beiträge mit eigenen Dateien und der Aktion `portal.answer`, „Im Portal antworten“ am Ticket, Sichtbarkeit je Anhang mit Umschalter, Portalliste mit Filtern, Statusnamen und Markierung, Demokonten `lea.nordwerk` und `tom.suedtechnik`.
+
+**Prüfungen:** `PortalConversationApiTest` (Anlage, Verlauf, Fall 8, Umschalten, Filter, Markierung, gleichzeitige Beiträge, Ereignisse für die Servicefristen), angepasste Vertragstests, voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #234 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-02 ([Bericht](docs/REVIEW_TASK-076-078_A11.md), PR #238): F1 bis F3 zum Gespräch mit TASK-079, TASK-080, TASK-083 und TASK-084 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-075, TASK-077 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein Beitrag ändert die Version des Tickets nicht; Anhänge aus der Zeit vor TASK-076 bleiben intern, bis jemand sie umschaltet; die Portalliste filtert in der Anwendung, für sehr viele Anfragen nicht gemessen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #234 (7b1dc2e); verknüpft mit TASK-075, TASK-079 und DEC-106.
+
+## TASK-075 Portalkonten, Sicht und Rechte (A11 Teil 1)
+
+**Bezug:** REQ-PORTAL-001, REQ-PORTAL-003, REQ-ACL-002, REQ-AUTH-001, REQ-API-001; DEC-027, DEC-031, DEC-053, DEC-105; docs/PERMISSIONS.md (Organisationssicht, Fälle 1 bis 8), docs/HELPDESK_SLA.md. **Verantwortlich:** claude-20261102-portal-01. **Abgeschlossen:** 2026-11-03.
+
+**Abnahmekriterien:** Fälle 1 bis 8 aus docs/PERMISSIONS.md als automatische Tests, soweit ihre Daten in V1 bestehen; ein Portalkonto vor dem Pflichtwechsel hat keinen Fachzugriff; Unternehmensrechte, fremde Organisation oder nicht zugeordnete Projekte werden abgelehnt, auch bei gleichzeitiger Änderung; Entzug der Projektfreigabe oder Deaktivierung wirkt sofort; Migration, Vertrag gegen Routen, Backend Tests für Rechte und Nebenläufigkeit, Browser Tests für die Kontenverwaltung.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit „passt so“ zu den 20 Vorschlägen bestätigt): lokale Portalkonten mit genau einer unveränderlichen Kundenorganisation und optionalem Kontakt, angelegt mit `accounts.manage`; nie Unternehmensrechte; nur Projekte der Organisation; Standardgruppe „Portal“; Sicht auf alle Anfragen der eigenen Organisation in den eigenen Projekten, andere antworten mit 404.
+
+**Ergebnis:** DEC-105, Migrationen V0034 bis V0036. Portalkonten über `/api/v1/portal-accounts`, Gruppe „Portal“ mit Zweck `portal`, Ablehnung von Unternehmensrechten im Rechtekern, Organisationssicht über `/api/v1/portal/projects` und die Anfragen je Projekt; Abschnitt „Portalkonten“ in der Kontenverwaltung und die Sicht „Ihre Anfragen“.
+
+**Prüfungen:** `PortalAccountsApiTest` (Fälle 1 bis 7, Pflichtwechsel, Gruppe und Unternehmensrechte, Entzug und Deaktivierung), `PortalContractTest`, voller Backendlauf, `npm run verify`, alle Browsertests, CI auf PR #233 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-portal-review-01 ([Bericht](docs/REVIEW_TASK-075_PR-233.md), PR #234): F1 bis F6 und H1 bis H3 sowie H5 mit TASK-078 behoben; die Nachprüfung in docs/REVIEW_TASK-076-078_A11.md bestätigt den sofortigen Entzug.
+
+**Abnahme:** Holger, 2026-11-03, im Projektgespräch per Auswahl „Ja, alle abnehmen“, zusammen mit TASK-076 bis TASK-080, TASK-083 und TASK-084; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein Kontakt, der später die Organisation wechselt, bleibt am Konto, bis die Verwaltung es ändert; Selbstregistrierung, Passwort vergessen per Mail, zweiter Faktor und Wissen im Portal gehören zu späteren Paketen.
+
+**Referenz:** Reservierung #232 (3b41da8), Ergebnis #233 (59e8e08); verknüpft mit TASK-078 und DEC-105.
+
+## TASK-071 Befunde der Codex Prüfung von TASK-070 beheben
+
+**Bezug:** REQ-HD-005, ACC-002. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** Regressionstests für den Fall aus F1 (Pause nach der Schwelle), für H5 (Erfüllung nach der Schwelle vor der Prüfung) und für den kleineren Budgetwechsel; ein API Test mit mehr als 200 neueren nicht lesbaren und einer älteren lesbaren Stufe; API Test für `clock: null` mit 400; Browsertests gegen die angepasste Attrappe; volle Backend- und Frontend-Suites grün.
+
+**Ergebnis:** DEC-101, ohne Migration. Holger hat am 31. Oktober 2026 zu H5 „Ja, Stufe nachtragen“ gewählt. `TicketSla.change` hält vor jedem Schreiben eines geänderten Zyklus (Statuswechsel, Kunde entfernt, Antwort gesendet, Priorität) die bis dahin erreichten Stufen unter derselben Sperre fest; die Überwachung nutzt dieselbe Methode `record`. `Escalations.due` nimmt einen Zeitpunkt vor dem letzten Stand als diesen Stand, so dass eine erst durch ein kleineres Budget fällige Stufe den Zeitpunkt der Budgetänderung erhält. Die Liste liest Kandidaten seitenweise (`SlaRepository.escalationsFor` mit Fortsetzung und ausgeschlossenen Projekten) bis 200 sichtbare Einträge. `Rule.Stage.violations` prüft eine fehlende Uhr zuerst. Testattrappe mit der Grenze von 200.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 460 Tests), darunter `EscalationsTest` mit 8 Tests und 5 neue Tests in `SlaApiTest`. Frontend `tsc`, 77 Einheitentests und 139 Browsertests grün. CI auf PR #225 grün. Nicht lokal geprüft: Lifecycle Skript und Abbild ohne Docker, beides in der CI.
+
+**Review:** Getrennte Nachprüfung durch Codex, Sitzung codex-20261101-task071-review-01, am festen Head 8602afe ([Bericht](docs/REVIEW_TASK-071_PR-225.md), PR #226): F1 bis F3 sowie H1, H2 und H5 behoben, kein neuer Befund, Empfehlung zur Abnahme. Codex hat 8 Tests aus `EscalationsTest`, 9 ausgewählte Fälle aus `SlaApiTest`, zwei eigene Zusatzfälle (zwei Prioritätswechsel ohne Überwachung dazwischen, Kunde nach der Schwelle entfernt) und die 8 SLA Browsertests ausgeführt, nicht die vollständigen Suites.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“ auf die Frage, ob TASK-068, TASK-070 und TASK-071 ohne eigene Prüfung von TASK-068 abgenommen werden; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Aus der Nachprüfung H1 (die Liste ist bei gleichzeitigem Schreiben keine eingefrorene Momentaufnahme), H2 (der Nebenläufigkeitstest erzwingt nicht beide Reihenfolgen, gezielte Barrieren wären eine spätere Härtung), H3 (Zyklen, deren Stufen vor dieser Änderung nicht beim Anhalten gespeichert wurden, erhalten nach dem Fortsetzen den Zeitpunkt des Fortsetzens).
+
+**Referenz:** Prüfbericht und Reservierung #224 (6ccb7eb), Ergebnis #225 (23afc8b), Nachprüfbericht #226 (a692820); verknüpft mit TASK-070 und DEC-101.
+
+## TASK-070 SLA Eskalationen (A10 Teil 2)
+
+**Bezug:** REQ-HD-005 (Eskalationen), ACC-002; OPEN-008. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** S-13 und H-11 als Tests, mehrere Ausführer erzeugen keine doppelte Stufe; die Liste zeigt nur Tickets, die die Person lesen darf, und nur Stufen ihrer Gruppen, Rechte werden beim Lesen geprüft; eine Pause oder Erfüllung vor der Schwelle erzeugt keine Stufe, eine bereits entstandene bleibt im Verlauf; Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 mit den Vorschlägen 17 bis 20 zu OPEN-008 bestätigt): Stufen je Regel und Uhr mit Prozentwert und Empfängergruppe, Vorschlag 80 % und 100 % ohne feste Produktvorgabe; Hinweis am Ticket und Liste „SLA Eskalationen“ für Mitglieder der Gruppe mit Leserecht, keine Mail; jede Stufe je Ticket, Zyklus, Uhr und Stufe höchstens einmal, nach einem Ausfall nur die höchste fällige mit Protokoll der übersprungenen (H-11), Überwachung `sla.watch` jede Minute; keine automatische Zuweisung und kein Statuswechsel.
+
+**Ergebnis:** DEC-100, Migration V0032. Stufen je Regelversion, wiederkehrende Aufgabe `sla.watch`, Tabelle `sla_escalation` mit einer Zeile je Zyklus, Uhr und Stufe, Port `GroupDirectory` des Berechtigungsmoduls, Liste `GET /api/v1/sla/escalations`, erreichte Stufen in der Ticketansicht; Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml), Beschreibung in [backend/README.md](backend/README.md#eskalationen-task-070). Oberfläche mit Stufen im Regelformular, Seite „SLA Eskalationen“ und Hinweis am Ticket; Demodaten mit Stufen je Uhr. Die Befunde der Prüfung sind mit TASK-071 behoben.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (55 Testklassen, 453 Tests), darunter `EscalationsTest` mit 6 Tests, vier neue Tests in `SlaApiTest` und `SlaContractTest` mit 12 Routen. Frontend `tsc`, 77 Einheitentests und 138 Browsertests grün. CI auf PR #223 grün, Lifecycle Skript und Abbild nur in der CI.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261031-task070-review-01 ([Bericht](docs/REVIEW_TASK-070_PR-223.md), PR #224): F1 und F2 (P2) und F3 (P3) sowie Hinweise H1 bis H5; F1 bis F3, H1, H2 und H5 mit TASK-071 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“, zusammen mit TASK-068 und TASK-071; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H3 der Prüfung (eine Stufe mit gelöschter Gruppe erreicht niemanden und muss vor dem Speichern repariert werden) und H4 („jede Minute“ ist das Intervall, keine harte Zusage der Verzögerung). Mail und Benachrichtigungen für Eskalationen gehören zu einem späteren Paket.
+
+**Referenz:** Reservierung #220 (f55568c), Ergebnis #223 (f68438f), Prüfbericht #224 (6ccb7eb); verknüpft mit TASK-068, TASK-071 und DEC-100.
+
+## TASK-068 SLA Fristen und Geschäftszeiten (A10 Teil 1)
+
+**Bezug:** REQ-HD-003 (SLA Fristen), REQ-HD-004 (Geschäftszeiten), ACC-002; DEC-032; OPEN-008. **Verantwortlich:** claude-20261030-sla-01. **Abgeschlossen:** 2026-11-01.
+
+**Abnahmekriterien:** Rechenbeispiele S-01 bis S-14 und H-09, H-10, H-12 aus docs/HELPDESK_SLA.md als Backend Tests, dazu Grenzauflösung bei Zeitumstellung; Kalender und Regeln versioniert, nur mit `sla.manage` änderbar, mit Audit, mehrdeutige Zuordnung mit 409 abgelehnt; Uhren in der Transaktion der auslösenden Änderung fortgeschrieben ohne doppelten oder verlorenen Zyklus; Fristen am Ticket nur mit Leserecht und ohne verborgene Felder; Migration, Vertrag, Backend Tests für Rechte, Zustände und Nebenläufigkeit, Browser Tests, Demodaten mit einem Kalender und einer Regel.
+
+**Fachliche Regeln** (von Holger am 30. Oktober 2026 bestätigt, Klärung von OPEN-008):
+1. Neues Ticketfeld `priority` mit den Werten Niedrig, Normal, Hoch, Kritisch, Vorgabe Normal, mit Feldregeln und Historie.
+2. Budgets ohne Produktvorgabe: Erstreaktion und Lösung in Geschäftsminuten je Regel und Priorität; 120 und 480 Minuten nur in den Demodaten.
+3. Zuordnung der Regel in der Reihenfolge Projekt mit Kunde und Tickettyp, Projekt mit Kunde, Standard des Projekts; zwei gleich passende Regeln werden beim Speichern abgelehnt; ohne Regel zeigt das Ticket „Keine SLA zugeordnet“.
+4. Fristen nur für Tickets mit gesetztem Feld `customer`; ein später gesetzter Kunde startet mit dem Zeitpunkt aus Regel 7.
+5. Neues Unternehmensrecht `sla.manage` für Kalender, Regeln und deren Zuordnung; Lesen der Fristen folgt der Leseregel des Tickets.
+6. Kalender mit IANA Zeitzone, je Wochentag einem oder mehreren offenen Zeiträumen und datierten Ausnahmen; Zeitumstellung wie in docs/HELPDESK_SLA.md (nicht existierende Uhrzeit auf die nächste gültige, doppelte Startzeit auf das frühere, doppelte Endzeit auf das spätere Vorkommen). Ein laufender Zyklus behält die Fassung von Regel und Kalender, mit der er begann.
+7. Start ist der erste dauerhafte Eingang: bei einer Mail der Zeitpunkt der Speicherung durch den Abruf, auch bei späterer Übernahme aus der Prüfwarteschlange (S-12); sonst die Anlage des Tickets. Der Date Header zählt nicht.
+8. Qualifizierte Erstreaktion ist eine Antwort über SMTP im Zustand „gesendet“, zum Zeitpunkt der Annahme durch den Mailserver.
+9. Jeder Status eines Ablaufs bekommt in der Projektkonfiguration eine SLA Art: offen (Vorgabe), wartet auf Kunde, gelöst, verworfen.
+10. Kundenpause (DEC-032) beginnt mit dem Wechsel in „wartet auf Kunde“ und endet mit einer dem Ticket zugeordneten Kundenantwort oder dem nächsten Statuswechsel; eine Antwort des Supports beendet sie nicht.
+11. Lösung ist erfüllt, wenn das Ticket in „gelöst“ steht und im Zyklus mindestens eine Antwort gesendet wurde, zum späteren der beiden Zeitpunkte (H-09); „verworfen“ beendet den Zyklus als Abbruch.
+12. Rückkehr aus „gelöst“ in einen offenen Status beginnt einen neuen Zyklus mit neuem Budget (S-10); eine Kundenmail allein öffnet nicht wieder.
+13. Prioritätswechsel: neues Budget minus verbrauchte Zeit, bei negativem Rest ab diesem Moment verletzt (S-09); erfüllte Uhren bleiben erfüllt.
+14. Das Ticket zeigt je Uhr Zustand (läuft, pausiert, erfüllt, verletzt, abgebrochen), Fälligkeit mit Zeitzone, verbleibende Geschäftszeit, Regel und Kalender; während einer Pause nur das Restbudget.
+
+**Ergebnis:** DEC-098, Migration V0030. Modul `sla` mit Kalendern, Regeln, Priorität und Zyklen mit je einer Uhr für Erstreaktion und Lösung, Vertrag [contracts/sla.openapi.yaml](contracts/sla.openapi.yaml), Beschreibung in [backend/README.md](backend/README.md#servicefristen-task-068). Der Helpdesk meldet `TicketCustomerChanged`, `ReplySent` und `CustomerAnswered` und stellt `CustomerDirectory` bereit; Tickets haben das Feld `priority`, die Projektkonfiguration je Status die SLA Art. Oberfläche: Seite „Servicefristen“, Abschnitt „Priorität und Fristen“ am Ticket, SLA Art in den Projekteinstellungen. Demodaten mit Kalender „Bürozeiten“ und Regel „Helpdesk Standard“.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (54 Testklassen, 443 Tests), darunter `SlaCalculationTest` mit 24 Tests, `SlaApiTest` mit 10 Tests, `SlaContractTest` mit 11 Routen und ein Test über den echten Mailweg in `HelpdeskApiTest`. Frontend `tsc`, 77 Einheitentests und 135 Browsertests grün. CI auf PR #222 grün, Bildprüfung mit Demodaten, Lifecycle Skript und Abbild nur in der CI.
+
+**Review:** Keine eigene getrennte Prüfung. Die Codex Prüfung von TASK-070 und die Nachprüfung von TASK-071 haben die Fristuhren nur dort gelesen, wo die Eskalationen sie nutzen; die Nachprüfung weist ausdrücklich darauf hin, dass für TASK-068 keine eigene Prüfung vorliegt. Holger hat auf diese Frage hin ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-11-01, im Projektgespräch mit „gleich abnehmen“, zusammen mit TASK-070 und TASK-071; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Eine geänderte SLA Art wirkt erst beim nächsten Statuswechsel eines Tickets; eine später angelegte Regel gilt nicht für Tickets, deren Kunde schon gesetzt war; ein Kundenwechsel von A nach B behält den laufenden Zyklus; laufende Zyklen werden nicht neu bewertet. Eine getrennte technische Prüfung von TASK-068 kann später nachgeholt werden.
+
+**Referenz:** Reservierung #220 (f55568c), Ergebnis #222 (9f0abba); verknüpft mit TASK-070 und DEC-098.
 
 ## TASK-066 Befund F1 und Hinweis H2 der Codex Prüfung von TASK-065 beheben
 

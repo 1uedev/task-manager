@@ -219,6 +219,11 @@ function TypesEditor({ config, update }: { readonly config: Whole; readonly upda
           <li key={item.key} className="item-row">
             <TextField label={t('config.nameOf', { key: item.key })} value={item.name} maxLength={80}
               onChange={(value) => update((c) => ({ ...c, ticketTypes: c.ticketTypes.map((x, i) => (i === index ? { ...x, name: value } : x)) }))} />
+            <label className="check">
+              <input type="checkbox" checked={item.portal === true}
+                onChange={(event) => update((c) => ({ ...c, ticketTypes: c.ticketTypes.map((x, i) => (i === index ? { ...x, portal: event.target.checked } : x)) }))} />
+              {` ${t('config.portalType', { name: item.name })}`}
+            </label>
             <button type="button" className="secondary" disabled={config.ticketTypes.length === 1}
               onClick={() => update((c) => removeType(c, item.key))}>{t('config.remove', { name: item.name })}</button>
           </li>

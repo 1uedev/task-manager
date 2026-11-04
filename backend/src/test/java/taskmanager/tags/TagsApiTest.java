@@ -733,4 +733,461 @@ class TagsApiTest {
         }
         return false;
     }
+
+    // ---------------------------------------------------------------- catalog care (TASK-072)
+
+    private static String merge(String tagPath) {
+        return tagPath + "/merge";
+    }
+
+    private static Response mergeInto(Person person, String tagPath, UUID target, String version) {
+        return person.browser().send("POST", merge(tagPath), Map.of("into", target.toString()), version);
+    }
+
+    private static List<String> ids(Response response) {
+        assertEquals(200, response.status(), response.body());
+        return StreamSupport.stream(response.json().spliterator(), false).map(tag -> tag.get("id").asString()).toList();
+    }
+
+    @Test
+    void descriptionAndColorAreSetWithTagsManageAndChecked() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person reader = person();
+        UUID id = tag(admin, "/api/v1/tags", "Farbe " + COUNTER.incrementAndGet());
+        String path = "/api/v1/tags/" + id;
+        assertTrue(admin.get(path).json().get("manageable").asBoolean());
+        assertFalse(reader.get(path).json().get("manageable").asBoolean());
+        assertTrue(reader.get(path).json().get("description").isNull());
+        assertTrue(reader.get(path).json().get("color").isNull());
+
+        assertProblem(patch(reader, path, Map.of("color", "teal"), "\"1\""), 403, "auth.forbidden");
+        Response invalidColor = patch(admin, path, Map.of("color", "#00ff00"), "\"1\"");
+        assertProblem(invalidColor, 400, "request.invalid");
+        assertEquals(List.of("color.invalid"), invalidColor.violations());
+        Response tooLong = patch(admin, path, Map.of("description", "x".repeat(501)), "\"1\"");
+        assertProblem(tooLong, 400, "request.invalid");
+        assertEquals(List.of("description.invalid"), tooLong.violations());
+        assertEquals(List.of("description.invalid"), patch(admin, path, Map.of("description", "Zeile\u0007"), "\"1\"").violations());
+        assertEquals(List.of("color.invalid"), patch(admin, path, Map.of("color", 3), "\"1\"").violations());
+
+        Response changed = patch(admin, path, Map.of("description", "  Kunden aus dem Norden\r\nund Osten  ", "color", "teal"), "\"1\"");
+        assertEquals(200, changed.status(), changed.body());
+        assertEquals("\"2\"", changed.header("ETag"));
+        assertEquals("Kunden aus dem Norden\nund Osten", changed.json().get("description").asString());
+        assertEquals("teal", changed.json().get("color").asString());
+        assertEquals("teal", reader.get(path).json().get("color").asString(), "who sees the tag sees its color");
+        assertEquals("\"2\"", patch(admin, path, Map.of("color", "teal"), "\"2\"").header("ETag"), "the same color changes nothing");
+        assertEquals(500, patch(admin, path, Map.of("description", "ä".repeat(500)), "\"2\"").json().get("description").asString().length());
+
+        Map<String, Object> clear = new HashMap<>();
+        clear.put("description", null);
+        clear.put("color", null);
+        Response cleared = patch(admin, path, clear, "\"3\"");
+        assertEquals(200, cleared.status(), cleared.body());
+        assertTrue(cleared.json().get("description").isNull());
+        assertTrue(cleared.json().get("color").isNull());
+        assertTrue(patch(admin, path, Map.of("description", "   "), "\"4\"").json().get("description").isNull(), "a blank description is no description");
+        assertEquals(List.of("tag.created", "tag.described", "tag.colored", "tag.described", "tag.described", "tag.colored"), audit(id));
+    }
+
+    @Test
+    void mergingMovesEveryAssignmentOnceFreesTheNameAndKeepsHistoryAndVersions() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person member = person(AdministrationRight.TAGS_MANAGE);
+        Project project = project(member);
+        grant(member.id(), project.id(), TICKETS);
+        grant(member.id(), project.id(), "project.read");
+        String token = "m" + COUNTER.incrementAndGet();
+        UUID source = tag(admin, "/api/v1/tags", "Quelle " + token);
+        UUID target = tag(admin, "/api/v1/tags", "Ziel " + token);
+        long both = ticket(member, project, "Beide");
+        long only = ticket(member, project, "Nur die erste");
+        for (long number : List.of(both, only)) {
+            assertEquals(204, post(member, ticketTags(project, number), Map.of("tagId", source.toString())).status());
+        }
+        assertEquals(204, post(member, ticketTags(project, both), Map.of("tagId", target.toString())).status());
+        assertEquals(204, post(project.manager(), projectTags(project), Map.of("tagId", source.toString())).status());
+        String history = "/api/v1/projects/" + project.id() + "/tickets/" + both + "/history";
+        int entries = member.get(history).json().size();
+
+        Response preview = member.get(merge("/api/v1/tags/" + source) + "?into=" + target);
+        assertEquals(200, preview.status(), preview.body());
+        assertEquals(2, preview.json().get("usage").get("tickets").asLong());
+        assertEquals(1, preview.json().get("usage").get("projects").asLong());
+        assertEquals("Ziel " + token, preview.json().get("target").get("name").asString());
+        Response outsider = admin.get(merge("/api/v1/tags/" + source) + "?into=" + target);
+        assertEquals(0, outsider.json().get("usage").get("tickets").asLong(), "tickets the caller cannot read are not counted");
+        assertEquals(0, outsider.json().get("usage").get("projects").asLong());
+        Response usage = member.get("/api/v1/tags?usage=true&q=" + token);
+        assertEquals(2, usage.json().get(0).get("usage").get("tickets").asLong(), usage.body());
+        assertTrue(member.get("/api/v1/tags?q=" + token).json().get(0).get("usage").isNull(), "usage only when asked for");
+
+        Response merged = mergeInto(admin, "/api/v1/tags/" + source, target, "\"1\"");
+        assertEquals(200, merged.status(), merged.body());
+        assertEquals(target.toString(), merged.json().get("id").asString());
+        for (long number : List.of(both, only)) {
+            assertEquals(List.of(target.toString()), ids(member.get(ticketTags(project, number))), "one assignment, no duplicate");
+        }
+        assertEquals(List.of(target.toString()), ids(member.get(projectTags(project))));
+        assertEquals(entries, member.get(history).json().size(), "merging writes no ticket history");
+        assertEquals("\"1\"", member.get("/api/v1/projects/" + project.id() + "/tickets/" + both).header("ETag"), "ticket versions stay");
+
+        Response gone = admin.get("/api/v1/tags/" + source);
+        assertEquals(200, gone.status(), gone.body());
+        assertEquals(target.toString(), gone.json().get("mergedInto").get("id").asString());
+        assertEquals("Ziel " + token, gone.json().get("mergedInto").get("name").asString());
+        assertEquals(List.of("Ziel " + token), tagNames(admin.get("/api/v1/tags?archived=true&q=" + token)), "the source left the catalog");
+        assertProblem(patch(admin, "/api/v1/tags/" + source, Map.of("name", "Wieder"), "\"2\""), 409, "tag.merged");
+        assertProblem(post(member, ticketTags(project, only), Map.of("tagId", source.toString())), 409, "tag.merged");
+        assertEquals(201, post(admin, "/api/v1/tags", Map.of("name", "Quelle " + token)).status(), "the name is free again");
+        assertEquals("tag.merged", audit(source).getLast());
+        assertEquals("tag.merged_in", audit(target).getLast());
+
+        Response found = member.get("/api/v1/search/tickets?tag=" + target);
+        assertEquals(200, found.status(), found.body());
+        assertEquals(2, found.json().get("total").asLong(), found.body());
+        assertProblem(member.get("/api/v1/search/tickets?tag=" + source), 400, "request.invalid");
+        assertEquals(0, member.get("/api/v1/search/tickets?q=quelle%20" + token).json().get("total").asLong(),
+            "the old name no longer finds the tickets");
+        assertEquals(2, member.get("/api/v1/search/tickets?q=ziel%20" + token).json().get("total").asLong());
+    }
+
+    @Test
+    void mergingStaysInsideOneCatalogAndChecksItsTags() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person creator = person();
+        grant(creator.id(), null, "tag.create");
+        Person projectAdmin = person();
+        Person member = person();
+        Project project = project(projectAdmin, member);
+        grant(projectAdmin.id(), project.id(), "tags.manage");
+        grant(member.id(), project.id(), "ticket.read");
+        String token = "r" + COUNTER.incrementAndGet();
+        UUID a = tag(admin, "/api/v1/tags", "A " + token);
+        UUID b = tag(admin, "/api/v1/tags", "B " + token);
+        UUID own = tag(projectAdmin, catalog(project), "Eigen " + token);
+        UUID other = tag(projectAdmin, catalog(project), "Anders " + token);
+        String company = "/api/v1/tags/";
+
+        assertProblem(mergeInto(creator, company + a, b, "\"1\""), 403, "auth.forbidden");
+        assertProblem(creator.get(merge(company + a) + "?into=" + b), 403, "auth.forbidden");
+        assertProblem(mergeInto(admin, company + a, a, "\"1\""), 400, "request.invalid");
+        assertProblem(mergeInto(admin, company + a, own, "\"1\""), 404, "tag.not_found");
+        assertProblem(mergeInto(projectAdmin, catalog(project) + "/" + own, a, "\"1\""), 404, "tag.not_found");
+        assertProblem(admin.browser().send("POST", merge(company + a), Map.of("into", "x"), "\"1\""), 400, "request.invalid");
+        assertProblem(admin.browser().send("POST", merge(company + a), Map.of("into", b.toString()), null), 428, "tag.precondition_required");
+        assertProblem(mergeInto(admin, company + a, b, "\"9\""), 412, "tag.version_conflict");
+        assertProblem(mergeInto(projectAdmin, company + a, b, "\"1\""), 403, "auth.forbidden");
+        assertProblem(mergeInto(member, catalog(project) + "/" + own, other, "\"1\""), 403, "auth.forbidden");
+
+        assertEquals(200, patch(admin, company + b, Map.of("archived", true), "\"1\"").status());
+        assertProblem(mergeInto(admin, company + a, b, "\"1\""), 409, "tag.archived");
+        assertEquals(200, patch(admin, company + b, Map.of("archived", false), "\"2\"").status());
+        assertEquals(200, patch(admin, company + a, Map.of("archived", true), "\"1\"").status());
+        assertEquals(200, mergeInto(admin, company + a, b, "\"2\"").status(), "an archived source may be merged");
+        assertProblem(mergeInto(admin, company + b, a, "\"3\""), 409, "tag.merged");
+
+        Response inProject = mergeInto(projectAdmin, catalog(project) + "/" + own, other, "\"1\"");
+        assertEquals(200, inProject.status(), inProject.body());
+        assertEquals(List.of("Anders " + token), tagNames(member.get(catalog(project) + "?q=" + token)));
+    }
+
+    @Test
+    void aSecondMergeOfTheSamePairWaitsAndThenSeesTheFirst() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        String token = "w" + COUNTER.incrementAndGet();
+        UUID a = tag(admin, "/api/v1/tags", "Eins " + token);
+        UUID b = tag(admin, "/api/v1/tags", "Zwei " + token);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        // An assignment in progress holds both tags shared; both merges wait for it.
+        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from tag where id in (?, ?) for share", a, b);
+            held.countDown();
+            try {
+                release.await(20, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertTrue(held.await(10, TimeUnit.SECONDS));
+        Future<Response> first = POOL.submit(() -> mergeInto(admin, "/api/v1/tags/" + a, b, "\"1\""));
+        Future<Response> second = POOL.submit(() -> mergeInto(admin, "/api/v1/tags/" + b, a, "\"1\""));
+        Thread.sleep(500);
+        assertFalse(first.isDone() || second.isDone(), "both merges wait for the assignment");
+        release.countDown();
+        holder.get(20, TimeUnit.SECONDS);
+        List<Integer> statuses = new ArrayList<>(List.of(first.get(20, TimeUnit.SECONDS).status(), second.get(20, TimeUnit.SECONDS).status()));
+        statuses.sort(null);
+        assertEquals(List.of(200, 409), statuses, "one merge wins, the other sees a merged tag; no deadlock");
+        assertEquals(1, jdbc.queryForObject("select count(*) from tag where id in (?, ?) and merged_into is null", Integer.class, a, b));
+    }
+
+    @Test
+    void suggestionsPutTheBestMatchesFirstAndLeaveOutArchivedMergedAndHiddenTags() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person member = person();
+        Person stranger = person();
+        Project project = project(member);
+        Person foreigner = person();
+        Project foreign = project(foreigner);
+        grant(foreigner.id(), foreign.id(), "tag.create");
+        grant(member.id(), project.id(), "ticket.read", "tag.create");
+        String token = "s" + COUNTER.incrementAndGet();
+        tag(admin, "/api/v1/tags", "Zz " + token + "anfang");
+        tag(admin, "/api/v1/tags", token + " Start");
+        tag(member, catalog(project), "Mitte" + token + "x");
+        UUID archived = tag(admin, "/api/v1/tags", token + " Archiv");
+        assertEquals(200, patch(admin, "/api/v1/tags/" + archived, Map.of("archived", true), "\"1\"").status());
+        tag(foreigner, catalog(foreign), token + " Fremd");
+
+        Response found = member.get("/api/v1/projects/" + project.id() + "/catalog/suggestions?q=" + token);
+        assertEquals(200, found.status(), found.body());
+        List<String> names = StreamSupport.stream(found.json().get("items").spliterator(), false).map(tag -> tag.get("name").asString()).toList();
+        assertEquals(List.of(token + " Start", "Zz " + token + "anfang", "Mitte" + token + "x"), names,
+            "start of the name, start of a word, then anywhere; no archived and no foreign tags");
+        assertTrue(found.json().get("createProject").asBoolean());
+        assertFalse(found.json().get("createCompany").asBoolean());
+        Response company = member.get("/api/v1/tags/suggestions?q=" + token);
+        assertEquals(2, company.json().get("items").size(), company.body());
+        assertFalse(company.json().get("createCompany").asBoolean());
+        assertTrue(admin.get("/api/v1/tags/suggestions?q=" + token).json().get("createCompany").asBoolean());
+        assertProblem(stranger.get("/api/v1/projects/" + project.id() + "/catalog/suggestions?q=" + token), 404, "project.not_found");
+        assertProblem(member.get("/api/v1/tags/suggestions?limit=21"), 400, "request.invalid");
+        assertEquals(1, member.get("/api/v1/projects/" + project.id() + "/catalog/suggestions?limit=1&q=" + token).json().get("items").size());
+        assertEquals(0, member.get("/api/v1/tags/suggestions?q=" + token + "%25").json().get("items").size(),
+            "a percent sign is a character, not a wildcard");
+    }
+
+    @Test
+    void theLookupNamesArchivedAndMergedTagsOfVisibleCatalogsOnly() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person member = person();
+        Person stranger = person();
+        Project project = project(member);
+        Person foreigner = person();
+        Project foreign = project(foreigner);
+        grant(foreigner.id(), foreign.id(), "tag.create");
+        grant(member.id(), project.id(), "ticket.read", "tags.manage");
+        String token = "l" + COUNTER.incrementAndGet();
+        UUID shared = tag(admin, "/api/v1/tags", "Geteilt " + token);
+        UUID own = tag(member, catalog(project), "Eigen " + token);
+        UUID kept = tag(member, catalog(project), "Bleibt " + token);
+        UUID hidden = tag(foreigner, catalog(foreign), "Fremd " + token);
+        assertEquals(200, mergeInto(member, catalog(project) + "/" + own, kept, "\"1\"").status());
+        String lookup = "/api/v1/projects/" + project.id() + "/catalog/lookup?id=" + shared + "&id=" + own + "&id=" + hidden;
+
+        Response found = member.get(lookup);
+        assertEquals(200, found.status(), found.body());
+        assertEquals(List.of(own.toString(), shared.toString()), ids(found), "the foreign tag is left out without a hint");
+        assertEquals(kept.toString(), found.json().get(0).get("mergedInto").get("id").asString());
+        assertTrue(found.json().get(0).get("manageable").asBoolean());
+        assertProblem(stranger.get(lookup), 404, "project.not_found");
+        assertProblem(member.get("/api/v1/projects/" + project.id() + "/catalog/lookup"), 400, "request.invalid");
+        assertProblem(member.get("/api/v1/projects/" + project.id() + "/catalog/lookup?id=nein"), 400, "request.invalid");
+    }
+
+    @Test
+    void aTicketAndAProjectHoldAtMostThirtyTags() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long number = ticket(worker, project, "Viele Tags");
+        String token = "t" + COUNTER.incrementAndGet();
+        for (int i = 0; i < 29; i++) {
+            assertEquals(204, post(worker, ticketTags(project, number), Map.of("name", token + "-" + i)).status());
+        }
+        // Two assignments race for the last place: exactly one gets it.
+        Future<Response> one = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-a")));
+        Future<Response> two = POOL.submit(() -> post(worker, ticketTags(project, number), Map.of("name", token + "-b")));
+        List<Integer> statuses = new ArrayList<>(List.of(one.get(20, TimeUnit.SECONDS).status(), two.get(20, TimeUnit.SECONDS).status()));
+        statuses.sort(null);
+        assertEquals(List.of(204, 409), statuses);
+        assertEquals(30, tagCount(worker, project, number));
+        assertProblem(post(worker, ticketTags(project, number), Map.of("name", token + "-c")), 409, "tag.limit_reached");
+        assertTrue(tagNames(worker.get(catalog(project) + "?q=" + token + "-c")).isEmpty(), "the refused name was not created");
+        String present = worker.get(ticketTags(project, number)).json().get(0).get("id").asString();
+        assertEquals(204, post(worker, ticketTags(project, number), Map.of("tagId", present)).status(), "an existing assignment stays possible");
+
+        for (int i = 0; i < 30; i++) {
+            UUID id = tag(admin, "/api/v1/tags", token + "-p" + i);
+            assertEquals(204, post(project.manager(), projectTags(project), Map.of("tagId", id.toString())).status());
+        }
+        UUID extra = tag(admin, "/api/v1/tags", token + "-p30");
+        assertProblem(post(project.manager(), projectTags(project), Map.of("tagId", extra.toString())), 409, "tag.limit_reached");
+    }
+
+    // ---------------------------------------------------------------- bulk change (TASK-073)
+
+    private static Response bulk(Person person, String action, List<UUID> tags, List<UUID> tickets) {
+        return post(person, "/api/v1/tags/bulk", Map.of("action", action, "tags", tags.stream().map(UUID::toString).toList(),
+            "tickets", tickets.stream().map(UUID::toString).toList()));
+    }
+
+    private UUID ticketId(Project project, long number) {
+        return jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, project.id(), number);
+    }
+
+    private static void assertCounts(Response response, int changed, int unchanged, int notMatching, int refused) {
+        assertEquals(200, response.status(), response.body());
+        JsonNode json = response.json();
+        assertEquals(List.of(changed, unchanged, notMatching, refused), List.of(json.get("changed").asInt(), json.get("unchanged").asInt(),
+            json.get("notMatching").asInt(), json.get("refused").asInt()), response.body());
+    }
+
+    private static JsonNode item(Response response, UUID ticket) {
+        for (JsonNode item : response.json().get("items")) {
+            if (item.get("ticketId").asString().equals(ticket.toString())) {
+                return item;
+            }
+        }
+        throw new AssertionError("no item for " + ticket + ": " + response.body());
+    }
+
+    @Test
+    void aBulkChangeChecksEveryTicketForItselfAndNamesOnlyReadableTickets() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Person author = person();
+        Project first = project(worker, author);
+        Project second = project(worker, author);
+        Project readOnly = project(worker, author);
+        Project closed = project(author);
+        for (Project project : List.of(first, second, readOnly, closed)) {
+            grant(author.id(), project.id(), TICKETS);
+        }
+        grant(worker.id(), first.id(), TICKETS);
+        grant(worker.id(), first.id(), "tag.create");
+        grant(worker.id(), second.id(), TICKETS);
+        grant(worker.id(), readOnly.id(), "ticket.read", "READ:*", "READ:tags");
+        UUID company = tag(admin, "/api/v1/tags", "Sammel " + COUNTER.incrementAndGet());
+        UUID local = tag(worker, catalog(first), "Nur hier");
+        long a = ticket(author, first, "Eins");
+        long b = ticket(author, first, "Zwei");
+        long c = ticket(author, second, "Drei");
+        long d = ticket(author, readOnly, "Vier");
+        long e = ticket(author, closed, "Fünf");
+        List<UUID> all = List.of(ticketId(first, a), ticketId(first, b), ticketId(second, c), ticketId(readOnly, d), ticketId(closed, e));
+
+        Response added = bulk(worker, "add", List.of(company, local), all);
+        assertCounts(added, 3, 0, 0, 2);
+        assertEquals("changed", item(added, all.get(2)).get("outcome").asString(), "the company tag fits the other project");
+        assertEquals(List.of(company.toString()), StreamSupport.stream(worker.get(ticketTags(second, c)).json().spliterator(), false)
+            .map(tag -> tag.get("id").asString()).toList(), "the project tag stays in its project");
+        JsonNode refused = item(added, all.get(3));
+        assertEquals("refused", refused.get("outcome").asString());
+        assertEquals(readOnly.key() + "-" + d, refused.get("key").asString());
+        assertEquals("auth.forbidden", refused.get("code").asString(), "a readable ticket is named with the reason");
+        JsonNode hidden = item(added, all.get(4));
+        assertEquals("refused", hidden.get("outcome").asString());
+        assertTrue(hidden.get("key").isNull() && hidden.get("code").isNull(), "an unreadable ticket is neither named nor explained");
+        assertEquals(first.key() + "-" + a, item(added, all.get(0)).get("key").asString());
+        assertEquals(2, tagCount(worker, first, a));
+        assertEquals("\"1\"", worker.get("/api/v1/projects/" + first.id() + "/tickets/" + a).header("ETag"), "the version stays");
+        assertEquals(2L, jdbc.queryForObject("select count(*) from ticket_change where ticket_id = ? and field = 'tags'", Long.class, all.get(0)));
+
+        assertCounts(bulk(worker, "add", List.of(company, local), all.subList(0, 3)), 0, 3, 0, 0);
+        assertEquals(2L, jdbc.queryForObject("select count(*) from tag_ticket where ticket_id = ?", Long.class, all.get(0)),
+            "repeating adds nothing twice");
+        assertCounts(bulk(worker, "add", List.of(local), List.of(all.get(2))), 0, 0, 1, 0);
+        assertEquals("not_matching", item(bulk(worker, "remove", List.of(local), List.of(all.get(2))), all.get(2)).get("outcome").asString());
+
+        Response removed = bulk(worker, "remove", List.of(company), all);
+        assertCounts(removed, 3, 0, 0, 2);
+        assertEquals(1, tagCount(worker, first, a));
+        assertCounts(bulk(worker, "remove", List.of(company), all.subList(0, 3)), 0, 3, 0, 0);
+
+        // The tags of a bulk change are checked before any ticket.
+        assertEquals(200, patch(admin, "/api/v1/tags/" + company, Map.of("archived", true), "\"1\"").status());
+        assertProblem(bulk(worker, "add", List.of(company), all), 409, "tag.archived");
+        assertCounts(bulk(worker, "remove", List.of(company), all.subList(0, 1)), 0, 1, 0, 0);
+        grant(author.id(), closed.id(), "tag.create");
+        UUID foreign = tag(author, catalog(closed), "Fremd " + COUNTER.incrementAndGet());
+        assertProblem(bulk(worker, "add", List.of(foreign), all), 404, "tag.not_found");
+        assertProblem(bulk(worker, "add", List.of(UUID.randomUUID()), all), 404, "tag.not_found");
+        UUID source = tag(admin, "/api/v1/tags", "Quelle " + COUNTER.incrementAndGet());
+        UUID target = tag(admin, "/api/v1/tags", "Ziel " + COUNTER.incrementAndGet());
+        assertEquals(200, mergeInto(admin, "/api/v1/tags/" + source, target, "\"1\"").status());
+        assertProblem(bulk(worker, "remove", List.of(source), all), 409, "tag.merged");
+        assertEquals(List.of("tag.created", "tag.assigned", "tag.assigned", "tag.assigned", "tag.unassigned", "tag.unassigned",
+            "tag.unassigned", "tag.archived"), audit(company));
+    }
+
+    @Test
+    void aBulkChangeChecksItsBodyAndLimits() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        UUID company = tag(admin, "/api/v1/tags", "Grenze " + COUNTER.incrementAndGet());
+        List<String> ticket = List.of(UUID.randomUUID().toString());
+        assertEquals(List.of("action.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "replace", "tags", List.of(company.toString()), "tickets", ticket)).violations());
+        assertEquals(List.of("tags.invalid"), post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", List.of(), "tickets", ticket)).violations());
+        List<String> eleven = java.util.stream.IntStream.range(0, 11).mapToObj(i -> UUID.randomUUID().toString()).toList();
+        assertEquals(List.of("tags.invalid"), post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", eleven, "tickets", ticket)).violations());
+        List<String> many = java.util.stream.IntStream.range(0, 501).mapToObj(i -> UUID.randomUUID().toString()).toList();
+        assertEquals(List.of("tickets.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", many)).violations());
+        assertEquals(List.of("tickets.invalid"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", List.of("kein"))).violations());
+        assertEquals(List.of("fields.unknown"), post(worker, "/api/v1/tags/bulk",
+            Map.of("action", "add", "tags", List.of(company.toString()), "tickets", ticket, "name", "x")).violations());
+        Response unknown = post(worker, "/api/v1/tags/bulk", Map.of("action", "add", "tags", List.of(company.toString(), company.toString()),
+            "tickets", List.of(ticket.get(0), ticket.get(0))));
+        assertCounts(unknown, 0, 0, 0, 1);
+        assertEquals(1, unknown.json().get("items").size(), "a repeated ticket counts once");
+        assertTrue(item(unknown, UUID.fromString(ticket.get(0))).get("key").isNull());
+    }
+
+    @Test
+    void aBulkChangeKeepsTheLimitPerTicketWhole() {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        grant(worker.id(), project.id(), "tag.create");
+        long full = ticket(worker, project, "Fast voll");
+        long empty = ticket(worker, project, "Leer");
+        String token = "m" + COUNTER.incrementAndGet();
+        for (int i = 0; i < 29; i++) {
+            assertEquals(204, post(worker, ticketTags(project, full), Map.of("name", token + "-" + i)).status());
+        }
+        UUID one = tag(admin, "/api/v1/tags", token + "-x");
+        UUID two = tag(admin, "/api/v1/tags", token + "-y");
+        Response result = bulk(worker, "add", List.of(one, two), List.of(ticketId(project, full), ticketId(project, empty)));
+        assertCounts(result, 1, 0, 0, 1);
+        assertEquals("tag.limit_reached", item(result, ticketId(project, full)).get("code").asString());
+        assertEquals(29, tagCount(worker, project, full), "a refused ticket keeps no part of the change");
+        assertEquals(2, tagCount(worker, project, empty));
+    }
+
+    @Test
+    void aBulkChangeWaitsForASingleChangeOfATicketAndThenAppliesIt() throws Exception {
+        Person admin = person(AdministrationRight.TAGS_MANAGE);
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        long first = ticket(worker, project, "Gleichzeitig");
+        long second = ticket(worker, project, "Daneben");
+        UUID company = tag(admin, "/api/v1/tags", "Parallel " + COUNTER.incrementAndGet());
+        UUID held = ticketId(project, second);
+        // A change of the second ticket holds its row; the bulk change finishes the first ticket and waits there.
+        Runnable release = hold("select id from ticket where id = '" + held + "' for update");
+        Future<Response> running;
+        try {
+            running = POOL.submit(() -> bulk(worker, "add", List.of(company), List.of(ticketId(project, first), held)));
+            assertTrue(waitsAt("from ticket"), "the bulk change waits for the ticket row");
+            assertEquals(1, tagCount(worker, project, first), "the first ticket is already committed");
+            assertFalse(running.isDone());
+        } finally {
+            release.run();
+        }
+        assertCounts(running.get(30, TimeUnit.SECONDS), 2, 0, 0, 0);
+        assertEquals(1, tagCount(worker, project, second));
+    }
+
+    private static int tagCount(Person person, Project project, long number) {
+        return person.get(ticketTags(project, number)).json().size();
+    }
 }

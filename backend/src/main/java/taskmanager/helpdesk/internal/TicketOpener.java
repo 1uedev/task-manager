@@ -57,7 +57,7 @@ class TicketOpener {
         if (parsed != null) {
             for (ParsedMail.File file : parsed.files()) {
                 AttachmentIntake.Outcome outcome = attachments.attach(message.companyId(), message.projectId(), ticket, file.name(),
-                    file.content(), actor);
+                    file.content(), actor, customer == null ? null : customer.id());
                 notes.add(new Message.AttachmentNote(outcome.name(), file.content().length, outcome.attachmentId(), outcome.refusal()));
             }
         } else {
@@ -95,7 +95,7 @@ class TicketOpener {
         if (parsed != null) {
             for (ParsedMail.File file : parsed.files()) {
                 AttachmentIntake.Outcome outcome = attachments.attach(message.companyId(), message.projectId(), ticket, file.name(),
-                    file.content(), actor);
+                    file.content(), actor, customer == null ? null : customer.id());
                 notes.add(new Message.AttachmentNote(outcome.name(), file.content().length, outcome.attachmentId(), outcome.refusal()));
             }
         } else {

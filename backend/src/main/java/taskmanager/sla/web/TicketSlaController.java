@@ -40,12 +40,13 @@ class TicketSlaController {
 
     record CycleBody(int number, UUID ruleId, String ruleName, long ruleVersion, UUID calendarId, String calendarName, long calendarVersion,
             String timeZone, String priority, Instant startedAt, String outcome, String reason, Instant closedAt, ClockBody firstResponse,
-            ClockBody resolution) {
+            ClockBody resolution, List<TicketSla.StageView> escalations) {
         static CycleBody of(TicketSla.CycleView view, Instant now) {
             SlaCycle c = view.cycle();
             return new CycleBody(c.number(), c.ruleId(), view.ruleName(), c.ruleVersion(), c.calendarId(), view.calendarName(), c.calendarVersion(),
                 view.timeZone(), c.priority(), c.startedAt(), c.outcome(), c.reason(), c.closedAt(),
-                ClockBody.of(c.firstResponse(), view.firstResponseRemaining(), now), ClockBody.of(c.resolution(), view.resolutionRemaining(), now));
+                ClockBody.of(c.firstResponse(), view.firstResponseRemaining(), now), ClockBody.of(c.resolution(), view.resolutionRemaining(), now),
+                view.escalations());
         }
     }
 

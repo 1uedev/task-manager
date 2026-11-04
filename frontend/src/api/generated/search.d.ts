@@ -111,8 +111,10 @@ export interface components {
     parameters: {
         /** @description Suchtext; ohne ihn gelten nur die Filter. */
         Text: string;
-        /** @description Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein. */
+        /** @description Tagkennung, wiederholbar (höchstens 10, sonst `tag.invalid`); wie sie wirkt, sagt `tagMatch`. */
         Tag: string[];
+        /** @description `all`, `any` und `none` verlangen mindestens einen Tag, `untagged` keinen; sonst 400 `tagMatch.invalid`. */
+        TagMatch: "all" | "any" | "none" | "untagged";
         Limit: number;
         Offset: number;
     };
@@ -135,8 +137,10 @@ export interface operations {
                 type?: string[];
                 /** @description Konto der Zuständigkeit, wiederholbar. */
                 assignee?: string[];
-                /** @description Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein. */
+                /** @description Tagkennung, wiederholbar (höchstens 10, sonst `tag.invalid`); wie sie wirkt, sagt `tagMatch`. */
                 tag?: components["parameters"]["Tag"];
+                /** @description `all`, `any` und `none` verlangen mindestens einen Tag, `untagged` keinen; sonst 400 `tagMatch.invalid`. */
+                tagMatch?: components["parameters"]["TagMatch"];
                 /**
                  * @description Eigenes Feld in der Form `<schlüssel>=<wert>`, wiederholbar (höchstens 20); das Ticket muss genau diesen Wert
                  *     tragen, jeder genannte Filter muss zutreffen. Der Wert steht so, wie die Ticketschnittstelle ihn führt:
@@ -177,8 +181,10 @@ export interface operations {
             query?: {
                 /** @description Suchtext; ohne ihn gelten nur die Filter. */
                 q?: components["parameters"]["Text"];
-                /** @description Tagkennung, wiederholbar (höchstens 20); jeder Tag muss zugeordnet sein. */
+                /** @description Tagkennung, wiederholbar (höchstens 10, sonst `tag.invalid`); wie sie wirkt, sagt `tagMatch`. */
                 tag?: components["parameters"]["Tag"];
+                /** @description `all`, `any` und `none` verlangen mindestens einen Tag, `untagged` keinen; sonst 400 `tagMatch.invalid`. */
+                tagMatch?: components["parameters"]["TagMatch"];
                 limit?: components["parameters"]["Limit"];
                 offset?: components["parameters"]["Offset"];
             };

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 public class AccountRepository {
     private static final long ADMINISTRATION_LOCK = 7_240_001L;
     private static final String COLUMNS =
-        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at, auth_kind, external_id";
+        "id, username, display_name, password_hash, password_change_required, one_time_expires_at, one_time_used_at, active, created_at, updated_at, auth_kind, external_id, kind, organization_id, contact_id";
 
     private final JdbcClient jdbc;
 
@@ -32,14 +32,18 @@ public class AccountRepository {
             Db.instant(rs, "created_at"),
             Db.instant(rs, "updated_at"),
             rs.getString("auth_kind"),
-            rs.getString("external_id"));
+            rs.getString("external_id"),
+            rs.getString("kind"),
+            rs.getObject("organization_id", UUID.class),
+            rs.getObject("contact_id", UUID.class));
     }
 
     public void insert(AccountRecord account) {
-        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        jdbc.sql("insert into identity_account (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .params(account.id(), account.username(), account.displayName(), account.passwordHash(),
                 account.passwordChangeRequired(), Db.ts(account.oneTimeExpiresAt()), Db.ts(account.oneTimeUsedAt()), account.active(),
-                Db.ts(account.createdAt()), Db.ts(account.updatedAt()), account.authKind(), account.externalId())
+                Db.ts(account.createdAt()), Db.ts(account.updatedAt()), account.authKind(), account.externalId(), account.kind(),
+                account.organizationId(), account.contactId())
             .update();
     }
 
@@ -102,6 +106,11 @@ public class AccountRepository {
 
     public void setActive(UUID id, boolean active, Instant now) {
         jdbc.sql("update identity_account set active = ?, updated_at = ? where id = ?").params(active, Db.ts(now), id).update();
+    }
+
+    /** Links a portal account to a contact of its organization or removes the link (TASK-075). */
+    public void setContact(UUID id, UUID contactId, Instant now) {
+        jdbc.sql("update identity_account set contact_id = ?, updated_at = ? where id = ?").params(contactId, Db.ts(now), id).update();
     }
 
     public void setDisplayName(UUID id, String displayName, Instant now) {

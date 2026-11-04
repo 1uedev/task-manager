@@ -40,11 +40,12 @@ import taskmanager.helpdesk.ReplySent;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
+import taskmanager.sla.internal.SlaWatch;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * TASK-068: calendars, rules, the priority and the deadlines of tickets through the real HTTP interface with the real
+ * TASK-068 and TASK-070: calendars, rules, the priority, the deadlines and the escalation stages of tickets through the real HTTP interface with the real
  * permissions, projects, tickets and helpdesk modules and a real PostgreSQL. Calendars here are open around the clock, so
  * a due time is the start plus the budget. A sent reply and an answer of the customer are published as the helpdesk does
  * it in its transaction; the helpdesk tests run them through a real mail server.
@@ -83,6 +84,7 @@ class SlaApiTest {
     @Autowired CompanyContext companies;
     @Autowired PlatformTransactionManager transactions;
     @Autowired ApplicationEventPublisher events;
+    @Autowired org.springframework.context.ApplicationContext context;
 
     // ---------------------------------------------------------------- a minimal browser
 
@@ -311,6 +313,70 @@ class SlaApiTest {
 
     private static Instant instant(JsonNode node) {
         return Instant.parse(node.asString());
+    }
+
+    /** A group of the rights administration without rights, with the given members. */
+    private UUID group(UUID... members) {
+        UUID group = UUID.randomUUID();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            UUID companyId = companies.find().orElseGet(companies::create);
+            jdbc.update("insert into permissions_revision(company_id) values (?) on conflict do nothing", companyId);
+            jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, "Leitstand " + COUNTER.incrementAndGet());
+            for (UUID member : members) {
+                jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, member);
+            }
+            jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
+        });
+        return group;
+    }
+
+    private static Map<String, Object> stage(String clock, int percent, UUID group) {
+        return Map.of("clock", clock, "percent", percent, "groupId", group);
+    }
+
+    /** A standard rule of the project, 60 and 240 minutes, with the given stages. */
+    private UUID ruleWithStages(Setup setup, List<Map<String, Object>> stages) {
+        Map<String, Object> body = rule("Stufen " + COUNTER.incrementAndGet(), setup.project(), null, null, setup.calendar(), 60, 240);
+        body.put("escalations", stages);
+        Response created = setup.admin().send("POST", "/api/v1/sla/rules", body, null);
+        assertEquals(201, created.status(), created.body());
+        assertEquals(stages.size(), created.json().get("escalations").size(), created.body());
+        return UUID.fromString(created.json().get("id").asString());
+    }
+
+    private Instant started(Setup setup, long number) {
+        return instant(sla(setup.agent(), setup, number).json().get("cycles").get(0).get("startedAt"));
+    }
+
+    private int watch(Instant now) {
+        return context.getBean(SlaWatch.class).watch(now);
+    }
+
+    private List<Map<String, Object>> stagesOf(UUID ticket) {
+        return jdbc.queryForList("select kind, percent, skipped from sla_escalation where ticket_id = ? order by percent", ticket);
+    }
+
+    /** Moves the running clocks of the open cycle back by {@code minutes}, as if the cycle had started that much earlier. */
+    private void backdate(UUID ticket, int minutes) {
+        jdbc.update("""
+                update sla_clock set checkpoint_at = checkpoint_at - make_interval(mins => ?), due_at = due_at - make_interval(mins => ?)
+                where state = 'running' and cycle_id in (select id from sla_cycle where ticket_id = ? and outcome is null)
+                """, minutes, minutes, ticket);
+    }
+
+    private List<Map<String, Object>> thresholds(UUID ticket) {
+        return jdbc.queryForList("select kind, percent, skipped, threshold_at from sla_escalation where ticket_id = ? order by percent, kind", ticket);
+    }
+
+    private static Instant at(Map<String, Object> row) {
+        return ((java.sql.Timestamp) row.get("threshold_at")).toInstant();
+    }
+
+    private List<JsonNode> listed(Browser browser, Setup setup, long number) {
+        Response list = browser.get("/api/v1/sla/escalations");
+        assertEquals(200, list.status(), list.body());
+        return java.util.stream.StreamSupport.stream(list.json().spliterator(), false)
+            .filter(item -> item.get("projectId").asString().equals(setup.project().toString()) && item.get("number").asLong() == number).toList();
     }
 
     // ---------------------------------------------------------------- administration
@@ -578,5 +644,282 @@ class SlaApiTest {
         assertEquals(1, jdbc.queryForObject("select count(*) from sla_cycle where ticket_id = ?", Integer.class, ticket));
         assertEquals(2, jdbc.queryForObject("select count(*) from sla_clock c join sla_cycle y on y.id = c.cycle_id where y.ticket_id = ?",
             Integer.class, ticket));
+    }
+
+    // ---------------------------------------------------------------- escalations (TASK-070)
+
+    @Test
+    void stagesOfARuleAreCheckedAgainstTheGroupsAndVersioned() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        Response options = setup.admin().get("/api/v1/sla/options");
+        assertTrue(options.body().contains(leads.toString()), "the groups are offered as recipients");
+        Map<String, Object> body = rule("Kaputte Stufen", setup.project(), null, null, setup.calendar(), 60, 240);
+        body.put("escalations", List.of(stage("first_response", 80, UUID.randomUUID()), stage("first_response", 0, leads),
+            stage("resolution", 80, leads), stage("resolution", 80, leads)));
+        Response refused = setup.admin().send("POST", "/api/v1/sla/rules", body, null);
+        assertEquals(400, refused.status(), refused.body());
+        assertEquals(List.of("escalations.group_unknown", "escalations.invalid", "escalations.duplicate"),
+            JSON.convertValue(refused.json().get("violations"), List.class));
+
+        UUID rule = ruleWithStages(setup, List.of(stage("first_response", 80, leads), stage("first_response", 100, leads)));
+        Map<String, Object> changed = rule("Weniger Stufen", setup.project(), null, null, setup.calendar(), 60, 240);
+        changed.put("escalations", List.of(stage("resolution", 90, leads)));
+        Response updated = setup.admin().send("PUT", "/api/v1/sla/rules/" + rule, changed, "\"1\"");
+        assertEquals(200, updated.status(), updated.body());
+        assertEquals("resolution", updated.json().get("escalations").get(0).get("clock").asString());
+        assertEquals(2, jdbc.queryForObject("select count(*) from sla_rule_version where rule_id = ?", Integer.class, rule), "two versions");
+        assertEquals(2, jdbc.queryForObject("select jsonb_array_length(escalations) from sla_rule_version where rule_id = ? and version = 1", Integer.class, rule));
+    }
+
+    @Test
+    void theWatchReachesEachStageOnceAndTheListShowsItToGroupMembersWhoMayRead() {
+        Setup setup = setup();
+        Browser stranger = person();
+        Browser noCustomerRule = person();
+        Browser outsider = person();
+        Response member = setup.admin().get("/api/v1/projects/" + setup.project());
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/members/" + noCustomerRule.id, null, member.etag()).status());
+        grant(noCustomerRule.id, setup.project(), "ticket.read", "READ:title", "READ:priority");
+        UUID leads = group(setup.agent().id, stranger.id, noCustomerRule.id);
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads), stage("first_response", 100, leads), stage("resolution", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        String changes = "select count(*) from ticket_change where ticket_id = ?";
+        int before = jdbc.queryForObject(changes, Integer.class, ticket);
+        String assignee = jdbc.queryForObject("select coalesce(assignee::text, '') || status from ticket where id = ?", String.class, ticket);
+
+        watch(start.plus(Duration.ofMinutes(29)));
+        assertEquals(List.of(), stagesOf(ticket), "below the threshold");
+        watch(start.plus(Duration.ofMinutes(30)));
+        assertEquals(1, stagesOf(ticket).size(), "S-13: the share of the budget is reached");
+        watch(start.plus(Duration.ofMinutes(45)));
+        assertEquals(1, stagesOf(ticket).size(), "rule 3: at most once");
+
+        List<JsonNode> items = listed(setup.agent(), setup, number);
+        assertEquals(1, items.size());
+        assertEquals(50, items.get(0).get("percent").asInt());
+        assertEquals("first_response", items.get(0).get("kind").asString());
+        assertEquals(start.plus(Duration.ofMinutes(30)), instant(items.get(0).get("thresholdAt")));
+        assertTrue(items.get(0).get("cycleOutcome").isNull());
+        assertTrue(items.get(0).get("groupName").asString().startsWith("Leitstand"));
+        assertEquals(List.of(), listed(stranger, setup, number), "a member of the group who may not read the ticket");
+        assertEquals(List.of(), listed(noCustomerRule, setup, number), "without the read rule of customer the deadlines stay hidden");
+        assertEquals(List.of(), listed(outsider, setup, number), "not a member of the group");
+        JsonNode hint = sla(setup.agent(), setup, number).json().get("cycles").get(0).get("escalations");
+        assertEquals(1, hint.size(), "the hint at the ticket");
+        assertEquals(50, hint.get(0).get("percent").asInt());
+
+        // Rights apply when reading: the ticket becomes readable for the stranger later, and the stage shows up.
+        Response again = setup.admin().get("/api/v1/projects/" + setup.project());
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/members/" + stranger.id, null, again.etag()).status());
+        grant(stranger.id, setup.project(), "ticket.read", "READ:*");
+        assertEquals(1, listed(stranger, setup, number).size());
+
+        assertEquals("open", jdbc.queryForObject("select case when count(*) = 0 then 'open' else 'closed' end from sla_cycle where ticket_id = ? and outcome is not null",
+            String.class, ticket));
+        assertEquals(before, jdbc.queryForObject(changes, Integer.class, ticket), "rule 4: the stages change nothing at the ticket");
+        assertEquals(assignee, jdbc.queryForObject("select coalesce(assignee::text, '') || status from ticket where id = ?", String.class, ticket),
+            "rule 4: no assignment and no status change");
+    }
+
+    @Test
+    void afterAnOutageOnlyTheHighestStageIsReachedAndTwoWatchesStoreItOnce() throws Exception {
+        Setup setup = setup();
+        UUID support = group(setup.agent().id);
+        UUID lead = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 80, support), stage("first_response", 100, lead)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant late = started(setup, number).plus(Duration.ofHours(3));
+
+        List<Callable<Integer>> runs = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            runs.add(() -> watch(late));
+        }
+        for (Future<Integer> run : POOL.invokeAll(runs)) {
+            run.get();
+        }
+        List<Map<String, Object>> stored = stagesOf(ticket);
+        assertEquals(2, stored.size(), stored.toString());
+        assertEquals(Boolean.TRUE, stored.get(0).get("skipped"), "H-11: the warning is passed over");
+        assertEquals(Boolean.FALSE, stored.get(1).get("skipped"));
+        List<JsonNode> items = listed(setup.agent(), setup, number);
+        assertEquals(1, items.size(), "no series of old warnings");
+        assertEquals(100, items.get(0).get("percent").asInt());
+        assertEquals(lead.toString(), items.get(0).get("groupId").asString());
+        watch(late.plus(Duration.ofHours(1)));
+        assertEquals(2, stagesOf(ticket).size(), "a skipped stage does not come later");
+    }
+
+    @Test
+    void aPauseOrAMetClockBeforeTheThresholdReachesNoStageAndAReachedOneStays() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads), stage("resolution", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        status(setup, number, "waiting");
+        publish(new ReplySent(companies.find().orElseThrow(), setup.project(), ticket, UUID.randomUUID(), Instant.now()));
+        watch(start.plus(Duration.ofHours(10)));
+        assertEquals(List.of(), stagesOf(ticket), "the first response is met and the resolution paused");
+
+        long other = ticket(setup, "task");
+        UUID otherId = ticketId(setup, other);
+        assertEquals(200, setCustomer(setup, other, setup.customer()).status());
+        watch(started(setup, other).plus(Duration.ofMinutes(31)));
+        assertEquals(1, stagesOf(otherId).size());
+        status(setup, other, "rejected");
+        JsonNode cycle = sla(setup.agent(), setup, other).json().get("cycles").get(0);
+        assertEquals("cancelled", cycle.get("outcome").asString());
+        assertEquals(1, cycle.get("escalations").size(), "the stage stays in the history");
+        List<JsonNode> items = listed(setup.agent(), setup, other);
+        assertEquals(1, items.size());
+        assertEquals("cancelled", items.get(0).get("cycleOutcome").asString());
+        watch(started(setup, other).plus(Duration.ofHours(10)));
+        assertEquals(1, stagesOf(otherId).size(), "a closed cycle reaches nothing");
+    }
+
+    // ---------------------------------------------------------------- fixes of the review of TASK-070 (TASK-071)
+
+    @Test
+    void aPauseAfterTheThresholdKeepsTheStageWithTheTimeItWasPassed() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("resolution", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        backdate(ticket, 180);
+        Instant passed = start.minus(Duration.ofMinutes(180)).plus(Duration.ofMinutes(120));
+
+        status(setup, number, "waiting");
+        List<Map<String, Object>> stored = thresholds(ticket);
+        assertEquals(1, stored.size(), "F1 and H5: the pause stores the stage before the clock stops");
+        assertEquals(passed, at(stored.get(0)), "the time the clock passed 50 %, not the time of the pause");
+        publish(new CustomerAnswered(companies.find().orElseThrow(), setup.project(), ticket, Instant.now()));
+        watch(Instant.now().plus(Duration.ofHours(1)));
+        assertEquals(List.of(stored.get(0)), thresholds(ticket), "after the resume the stage keeps its time and comes not again");
+        assertEquals(passed, instant(listed(setup.agent(), setup, number).get(0).get("thresholdAt")));
+    }
+
+    @Test
+    void aClockMetAfterTheThresholdButBeforeTheWatchKeepsItsStage() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads), stage("first_response", 100, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        Instant start = started(setup, number);
+        backdate(ticket, 40);
+
+        publish(new ReplySent(companies.find().orElseThrow(), setup.project(), ticket, UUID.randomUUID(), Instant.now()));
+        List<Map<String, Object>> stored = thresholds(ticket);
+        assertEquals(1, stored.size(), "H5: the reply stores the stage the clock passed before the next watch");
+        assertEquals(50, stored.get(0).get("percent"));
+        assertEquals(start.minus(Duration.ofMinutes(40)).plus(Duration.ofMinutes(30)), at(stored.get(0)));
+        watch(Instant.now().plus(Duration.ofHours(2)));
+        assertEquals(1, thresholds(ticket).size(), "the met clock reaches no further stage");
+        assertEquals(1, listed(setup.agent(), setup, number).size());
+    }
+
+    @Test
+    void aSmallerBudgetReachesAStageAtTheChangeAndALargerOneDefersIt() {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("first_response", 80, leads)));
+        long smaller = ticket(setup, "task");
+        UUID smallerId = ticketId(setup, smaller);
+        assertEquals(200, setCustomer(setup, smaller, setup.customer()).status());
+        backdate(smallerId, 20);
+        Instant before = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        assertEquals(200, priority(setup.agent(), setup, smaller, "critical").status());
+        assertEquals(List.of(), thresholds(smallerId), "20 of 60 minutes: the old budget had not reached 80 %");
+        watch(Instant.now());
+        List<Map<String, Object>> stored = thresholds(smallerId);
+        assertEquals(1, stored.size(), "20 of 15 minutes: the new budget is past 80 %");
+        assertFalse(at(stored.get(0)).isBefore(before), "the stage is due from the change of the budget on");
+        assertTrue(at(stored.get(0)).isBefore(Instant.now().plusSeconds(1)));
+
+        long larger = ticket(setup, "task");
+        UUID largerId = ticketId(setup, larger);
+        assertEquals(200, setCustomer(setup, larger, setup.customer()).status());
+        Instant start = started(setup, larger);
+        assertEquals(200, priority(setup.agent(), setup, larger, "low").status());
+        watch(start.plus(Duration.ofMinutes(60)));
+        assertEquals(List.of(), thresholds(largerId), "60 of 120 minutes: not yet 80 %");
+        watch(start.plus(Duration.ofMinutes(97)));
+        assertEquals(1, thresholds(largerId).size(), "96 of 120 minutes");
+    }
+
+    @Test
+    void aStatusChangeAndWatchesAtTheSameTimeStoreEachStageOnce() throws Exception {
+        Setup setup = setup();
+        UUID leads = group(setup.agent().id);
+        ruleWithStages(setup, List.of(stage("resolution", 50, leads), stage("first_response", 50, leads)));
+        long number = ticket(setup, "task");
+        UUID ticket = ticketId(setup, number);
+        assertEquals(200, setCustomer(setup, number, setup.customer()).status());
+        backdate(ticket, 180);
+        List<Callable<Integer>> calls = new ArrayList<>();
+        calls.add(() -> status(setup, number, "waiting").status());
+        for (int i = 0; i < 3; i++) {
+            calls.add(() -> watch(Instant.now()));
+        }
+        for (Future<Integer> result : POOL.invokeAll(calls)) {
+            result.get();
+        }
+        assertEquals(2, thresholds(ticket).size(), thresholds(ticket).toString());
+        assertEquals(1, jdbc.queryForObject("select count(*) from sla_escalation where ticket_id = ? and kind = 'resolution'", Integer.class, ticket));
+    }
+
+    @Test
+    void theListCountsVisibleEntriesAndAStageWithoutClockIsRefused() {
+        Setup setup = setup();
+        Browser member = person();
+        UUID leads = group(setup.agent().id, member.id);
+        Map<String, Object> body = rule("Ohne Uhr", setup.project(), null, null, setup.calendar(), 60, 240);
+        Map<String, Object> missing = new LinkedHashMap<>();
+        missing.put("clock", null);
+        missing.put("percent", 80);
+        missing.put("groupId", leads);
+        body.put("escalations", List.of(missing));
+        Response refused = setup.admin().send("POST", "/api/v1/sla/rules", body, null);
+        assertEquals(400, refused.status(), "F3: " + refused.body());
+        assertEquals(List.of("escalations.invalid"), JSON.convertValue(refused.json().get("violations"), List.class));
+
+        // F2: an older stage the member may read behind 201 newer ones of a project they may not read.
+        ruleWithStages(setup, List.of(stage("first_response", 50, leads)));
+        long readable = ticket(setup, "task");
+        assertEquals(200, setCustomer(setup, readable, setup.customer()).status());
+        Response project = setup.admin().get("/api/v1/projects/" + setup.project());
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/members/" + member.id, null, project.etag()).status());
+        grant(member.id, setup.project(), "ticket.read", "READ:*");
+        watch(started(setup, readable).plus(Duration.ofMinutes(31)));
+        assertEquals(1, listed(member, setup, readable).size());
+
+        Setup hidden = setup();
+        ruleWithStages(hidden, List.of(stage("first_response", 50, leads)));
+        long other = ticket(hidden, "task");
+        assertEquals(200, setCustomer(hidden, other, hidden.customer()).status());
+        UUID cycle = jdbc.queryForObject("select id from sla_cycle where ticket_id = ?", UUID.class, ticketId(hidden, other));
+        UUID company = companies.find().orElseThrow();
+        for (int i = 1; i <= 201; i++) {
+            jdbc.update("""
+                    insert into sla_escalation(id, company_id, project_id, ticket_id, cycle_id, kind, stage, percent, group_id, threshold_at, reached_at, skipped)
+                    values (?, ?, ?, ?, ?, 'first_response', ?, 50, ?, now(), now() + interval '1 day' + make_interval(mins => ?), false)
+                    """, UUID.randomUUID(), company, hidden.project(), ticketId(hidden, other), cycle, i, leads, i);
+        }
+        Response list = member.get("/api/v1/sla/escalations");
+        assertEquals(200, list.status(), list.body());
+        assertEquals(1, list.json().size(), "only the readable stage, found behind the 201 hidden ones");
+        assertEquals(readable, list.json().get(0).get("number").asLong());
     }
 }

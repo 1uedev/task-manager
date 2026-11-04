@@ -31,7 +31,8 @@ public interface IdentityAccess {
     default boolean userExists(UUID companyId, UUID userId) { return false; }
 
     /**
-     * True only for an existing, active, internal account of the company, whichever session it has. Same locking
+     * True only for an existing, active, internal account of the company, whichever session it has; never for a portal
+     * account (TASK-075). Same locking
      * rule as {@link #userExists}: the state stays stable through the caller's commit; absent implementation denies.
      * A known but deactivated account is not active.
      */
@@ -42,4 +43,10 @@ public interface IdentityAccess {
      * through a directory (TASK-047). Same locking rule as {@link #userActive}; absent implementation denies.
      */
     default boolean userActiveLocal(UUID companyId, UUID userId) { return false; }
+
+    /**
+     * True only for an existing portal account of the company, active or not (TASK-075, DEC-105). Same locking rule as
+     * {@link #userExists}; absent implementation denies, which treats nobody as a portal account.
+     */
+    default boolean userPortal(UUID companyId, UUID userId) { return false; }
 }

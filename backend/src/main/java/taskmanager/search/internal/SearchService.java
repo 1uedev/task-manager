@@ -61,15 +61,36 @@ public class SearchService {
     public record CustomFilter(String key, String value) {
     }
 
-    public record TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
-            List<UUID> tags, List<CustomFilter> custom, int limit, int offset) {
-        public TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
-                List<UUID> tags, int limit, int offset) {
-            this(text, projects, statuses, types, assignees, tags, List.of(), limit, offset);
+    /**
+     * How the given tags filter (TASK-073, DEC-103): every one of them, at least one, none of them, or no visible tag at all
+     * (then no tag is given). Who may not read the tags of a project finds none of its tickets with a tag filter.
+     */
+    public enum TagMatch {
+        ALL, ANY, NONE, UNTAGGED;
+
+        /** True when the filter asks something of the tags; {@code ALL} without tags asks nothing. */
+        boolean active(List<UUID> tags) {
+            return this == UNTAGGED || !tags.isEmpty();
         }
     }
 
-    public record ProjectQuery(String text, List<UUID> tags, int limit, int offset) {
+    public record TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
+            List<UUID> tags, TagMatch tagMatch, List<CustomFilter> custom, int limit, int offset) {
+        public TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
+                List<UUID> tags, List<CustomFilter> custom, int limit, int offset) {
+            this(text, projects, statuses, types, assignees, tags, TagMatch.ALL, custom, limit, offset);
+        }
+
+        public TicketQuery(String text, List<UUID> projects, List<String> statuses, List<String> types, List<UUID> assignees,
+                List<UUID> tags, int limit, int offset) {
+            this(text, projects, statuses, types, assignees, tags, TagMatch.ALL, List.of(), limit, offset);
+        }
+    }
+
+    public record ProjectQuery(String text, List<UUID> tags, TagMatch tagMatch, int limit, int offset) {
+        public ProjectQuery(String text, List<UUID> tags, int limit, int offset) {
+            this(text, tags, TagMatch.ALL, limit, offset);
+        }
     }
 
     public record TagRef(UUID id, String name) {
@@ -138,7 +159,7 @@ public class SearchService {
         // A filter on a field the caller may not read matches nothing in these projects.
         if ((!query.statuses().isEmpty() && !fields.contains("status")) || (!query.types().isEmpty() && !fields.contains("type"))
                 || (!query.assignees().isEmpty() && !fields.contains("assignee"))
-                || (!query.tags().isEmpty() && !fields.contains(TicketAccess.TAGS_FIELD))
+                || (query.tagMatch().active(query.tags()) && !fields.contains(TicketAccess.TAGS_FIELD))
                 || query.custom().stream().anyMatch(filter -> !fields.contains(ProjectConfiguration.CUSTOM_PREFIX + filter.key()))) {
             return;
         }
@@ -211,10 +232,7 @@ public class SearchService {
         filter(where, local, "s.status", query.statuses());
         filter(where, local, "s.type", query.types());
         filter(where, local, "s.assignee", query.assignees());
-        for (UUID tag : query.tags()) {
-            where.append(" and exists (select 1 from search_ticket_tag a where a.ticket_id = s.ticket_id and a.tag_id = ?)");
-            local.add(tag);
-        }
+        tagFilter(where, local, "search_ticket_tag", "ticket_id", "s.ticket_id", query.tags(), query.tagMatch());
         for (CustomFilter filter : query.custom()) {
             where.append(" and exists (select 1 from search_ticket_custom c where c.ticket_id = s.ticket_id and c.field_key = ? and c.value = ?)");
             local.add(filter.key());
@@ -223,6 +241,29 @@ public class SearchService {
         selects.add("select s.ticket_id as id, s.project_id, p.key as project_key, s.number, " + rank + " as rank "
             + "from search_ticket s join search_project p on p.project_id = s.project_id where " + where);
         params.addAll(local);
+    }
+
+    /**
+     * The tag filter of one select. Every tag on a ticket comes from the company catalog or the catalog of its project, which
+     * who may read the tags of the ticket sees, so "no visible tag" is "no tag" there.
+     */
+    private static void tagFilter(StringBuilder where, List<Object> params, String table, String column, String owner, List<UUID> tags,
+            TagMatch match) {
+        String assignments = "select 1 from " + table + " a where a." + column + " = " + owner;
+        switch (match) {
+            case ALL -> {
+                for (UUID tag : tags) {
+                    where.append(" and exists (").append(assignments).append(" and a.tag_id = ?)");
+                    params.add(tag);
+                }
+            }
+            case ANY, NONE -> {
+                where.append(match == TagMatch.ANY ? " and exists (" : " and not exists (").append(assignments)
+                    .append(" and a.tag_id in (").append(placeholders(tags.size())).append("))");
+                params.addAll(tags);
+            }
+            case UNTAGGED -> where.append(" and not exists (").append(assignments).append(")");
+        }
     }
 
     private static void filter(StringBuilder where, List<Object> params, String column, List<?> values) {
@@ -334,10 +375,7 @@ public class SearchService {
             where.append(" and s.document @@ to_tsquery('simple', ?)");
             params.add(text.tsquery());
         }
-        for (UUID tag : query.tags()) {
-            where.append(" and exists (select 1 from search_project_tag a where a.project_id = s.project_id and a.tag_id = ?)");
-            params.add(tag);
-        }
+        tagFilter(where, params, "search_project_tag", "project_id", "s.project_id", query.tags(), query.tagMatch());
         String select = "select s.project_id, s.key, s.name, s.description, " + rank + " as rank from search_project s where " + where;
         List<Object> countParams = text.present() ? params.subList(1, params.size()) : params;
         long total = jdbc.sql("select count(*) from search_project s where " + where).params(countParams).query(Long.class).single();

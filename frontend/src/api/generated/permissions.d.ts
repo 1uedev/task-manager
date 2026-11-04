@@ -315,6 +315,7 @@ export interface components {
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.required, auth.forbidden,
          *     auth.password_change_required, permissions.group_not_found, project.not_found, permissions.last_administrator, permissions.last_local_administrator,
          *     permissions.group_name_taken (409, Name schon vergeben, ohne Rücksicht auf Groß- und Kleinschreibung),
+         *     permissions.portal_company_right (409, ein Portalkonto bekäme ein Unternehmensrecht, TASK-075),
          *     permissions.busy (mit Retry-After). Gründe in `violations`: name.invalid, action.unknown, action.company_only,
          *     enabled.required, resourceType.unknown, field.unknown, operation.invalid, effect.invalid, limit.out_of_range,
          *     before.out_of_range.

@@ -27,6 +27,12 @@ info:
     verlangtes Feld fehlt, bleibt gültig, bis jemand das Feld schreibt oder einen Übergang nimmt, der es verlangt.
     Veröffentlicht die Projektverwaltung eine neue Konfiguration, gilt sie sofort für alle Tickets des Projekts.
 
+    Portalkonten (TASK-075, DEC-105) lesen Anfragen nur über `/portal/projects/{projectId}/tickets`. Dort prüft das
+    Berechtigungsmodul `ticket.read` mit der Kundenorganisation des Tickets als Organisation der Ressource: Ein Portalkonto
+    sieht alle Anfragen seiner Organisation in seinen Projekten (DEC-027), eine Anfrage einer anderen Organisation oder ohne
+    Kunde antwortet wie eine unbekannte mit 404 `ticket.not_found`. Die Endpunkte unter `/projects/{projectId}/tickets`
+    antworten einem Portalkonto immer mit 404 `project.not_found`, auch Historie, Anhänge und Suche bleiben verschlossen.
+
     Der `ETag` ist die Version des Tickets; jede Änderung braucht sie als `If-Match` (428 ohne, 412 bei veraltetem Wert).
     Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server mit 503 `ticket.busy` und `Retry-After`; die
     ganze Anfrage darf wiederholt werden.
@@ -148,6 +154,75 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
         '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listPortalTickets
+      summary: Anfragen der eigenen Organisation im Projekt, neueste zuerst (nur Portalkonten, TASK-075)
+      description: |
+        Nur Tickets, deren Kunde die Organisation des Portalkontos ist. `writableFields` ist leer. Ein internes Konto, ein
+        Projekt ohne Mitgliedschaft oder ohne `ticket.read` antwortet mit 404 `project.not_found`.
+
+        Filter (TASK-076): `status` nach dem Schlüssel eines Status, `state` nach offen oder erledigt (Kategorie `done` des Status),
+        `q` nach Text in Titel oder Beschreibung ohne Rücksicht auf Groß und Kleinschreibung, nur in den lesbaren der beiden
+        Felder. Ein Filter nach Status oder Zustand ohne Leserecht auf `status` antwortet mit 400 `request.invalid` und
+        `status.not_readable`, ein unbekannter Zustand mit `state.invalid`.
+
+        Tagfilter (TASK-077): `tag` nennt einen Tag, den das Portal der Organisation zeigt; ohne Leserecht auf `tags` antwortet
+        der Server mit 400 `tag.not_readable`. Ein interner, fremder oder unbekannter Tag findet nichts, ohne Hinweis darauf.
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+        - name: before
+          in: query
+          schema: {type: integer, minimum: 1}
+        - name: status
+          in: query
+          schema: {type: string}
+        - name: state
+          in: query
+          schema: {type: string, enum: [open, done]}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 200}
+        - name: tag
+          in: query
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Anfragen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Ticket'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /portal/projects/{projectId}/tickets/{number}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: getPortalTicket
+      summary: Eine Anfrage der eigenen Organisation (nur Portalkonten, TASK-075)
+      description: Eine Anfrage einer anderen Organisation, ohne Kunde oder in einem fremden Projekt antwortet mit 404 `ticket.not_found`.
+      responses:
+        '200':
+          description: Anfrage
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ticket'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /projects/{projectId}/tickets/{number}/history:
     parameters:

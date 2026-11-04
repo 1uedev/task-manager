@@ -64,12 +64,14 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
 
   // The company appearance needs a complete login; it is loaded again whenever the login changes.
   const ready = view.state === 'ready';
+  // A portal account may not read the account directory of the staff (TASK-075); it never needs names of other accounts.
+  const portal = view.state === 'ready' && view.session.portal;
   useEffect(() => {
     reload();
   }, [ready, reload]);
 
   useEffect(() => {
-    if (!ready) {
+    if (!ready || portal) {
       setDirectory(new Map());
       return;
     }
@@ -78,7 +80,7 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
       if (!abort.signal.aborted && result.kind === 'ok') setDirectory(new Map(result.data.value.map((entry) => [entry.id, entry])));
     });
     return () => abort.abort();
-  }, [api, ready, directoryRound]);
+  }, [api, ready, portal, directoryRound]);
 
   // Logging out also removes the CSRF cookie. GET /session issues a new one for the anonymous session before the login
   // form is shown again, whatever stage the login had reached; otherwise the next login would be refused.
@@ -114,6 +116,13 @@ export function useSession(): SessionContext {
 // The name to show for an account: the display name, else the login name, else a shortened identifier.
 // The fixed actor of tickets the mail intake opened without a person (TASK-057).
 export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
+
+// Whether an account may be chosen as assignee or for a person field: never a portal account (TASK-078, F5). An account the
+// directory does not know stays choosable; the server checks the choice anyway.
+export function useChoosable(): (id: string) => boolean {
+  const { directory } = useSession();
+  return useCallback((id) => directory.get(id)?.kind !== 'portal', [directory]);
+}
 
 export function useAccountName(): (id: string | null | undefined) => string {
   const { directory } = useSession();

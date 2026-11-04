@@ -55,15 +55,15 @@ class HelpdeskAdministrationController {
     record CustomerRequest(String name, List<UUID> projects) {
     }
 
-    record ContactBody(UUID id, UUID customerId, String name, List<String> addresses, long version, Instant createdAt, UUID createdBy,
-            Instant updatedAt, UUID updatedBy) {
+    record ContactBody(UUID id, UUID customerId, String name, List<String> addresses, String language, long version, Instant createdAt,
+            UUID createdBy, Instant updatedAt, UUID updatedBy) {
         static ContactBody of(Contact c) {
-            return new ContactBody(c.id(), c.customerId(), c.name(), c.addresses(), c.version(), c.createdAt(), c.createdBy(), c.updatedAt(),
-                c.updatedBy());
+            return new ContactBody(c.id(), c.customerId(), c.name(), c.addresses(), c.language(), c.version(), c.createdAt(), c.createdBy(),
+                c.updatedAt(), c.updatedBy());
         }
     }
 
-    record ContactRequest(UUID customerId, String name, List<String> addresses) {
+    record ContactRequest(UUID customerId, String name, List<String> addresses, String language) {
     }
 
     record MailboxStatusBody(Instant polledAt, Instant succeededAt, String errorCode, Instant errorAt, String notice, Instant noticeAt) {
@@ -133,7 +133,8 @@ class HelpdeskAdministrationController {
     @PostMapping("/contacts")
     ResponseEntity<ContactBody> createContact(@RequestBody ContactRequest body) {
         UUID actor = requests.administrator().accountId();
-        Contact contact = Requests.retrying(() -> directory.createContact(actor, required(body).customerId(), body.name(), body.addresses()));
+        Contact contact = Requests.retrying(() -> directory.createContact(actor, required(body).customerId(), body.name(), body.addresses(),
+            body.language()));
         return ResponseEntity.status(HttpStatus.CREATED).eTag(Requests.etag(contact.version())).body(ContactBody.of(contact));
     }
 
@@ -143,7 +144,7 @@ class HelpdeskAdministrationController {
         UUID actor = requests.administrator().accountId();
         long version = Requests.expectedVersion(ifMatch);
         Contact contact = Requests.retrying(() -> directory.updateContact(actor, id, version, required(body).customerId(), body.name(),
-            body.addresses()));
+            body.addresses(), body.language()));
         return ResponseEntity.ok().eTag(Requests.etag(contact.version())).body(ContactBody.of(contact));
     }
 

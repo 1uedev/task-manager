@@ -76,7 +76,12 @@ public class SessionService {
 
     /** A session as it is presented to the client. */
     public record SessionView(UUID accountId, String username, String displayName, AuthenticationLevel level,
-            Instant startedAt, Instant expiresAt, Instant restrictedUntil, String authKind) {
+            Instant startedAt, Instant expiresAt, Instant restrictedUntil, String authKind, String kind, UUID organizationId) {
+
+        /** True for a portal account (TASK-075). */
+        public boolean portal() {
+            return organizationId != null;
+        }
     }
 
     /** A freshly issued session together with the two secrets that exist only in the cookies. */
@@ -219,7 +224,7 @@ public class SessionService {
             .update();
         AuthenticationLevel level = restrictedUntil != null ? AuthenticationLevel.PASSWORD_CHANGE_REQUIRED : AuthenticationLevel.FULL;
         return new Issued(token, csrf, new SessionView(account.id(), account.username(), account.displayName(), level,
-            startedAt, expiresAt, restrictedUntil, account.authKind()));
+            startedAt, expiresAt, restrictedUntil, account.authKind(), account.kind(), account.organizationId()));
     }
 
     /** Finds the session behind a token, or nothing when it is unknown, revoked, expired or its account is deactivated. */
@@ -229,6 +234,7 @@ public class SessionService {
         return jdbc.sql("""
                 select s.id, s.account_id, s.csrf_hash, s.started_at, s.expires_at, s.restricted, s.restricted_expires_at,
                        a.username, a.display_name, a.active, a.password_change_required, a.auth_kind,
+                       a.kind, a.organization_id,
                        (select value from identity_setting where name = 'session_duration_hours') as duration_hours
                 from identity_session s join identity_account a on a.id = s.account_id
                 where s.token_hash = ? and s.revoked_at is null
@@ -249,7 +255,8 @@ public class SessionService {
                 }
                 AuthenticationLevel level = restricted ? AuthenticationLevel.PASSWORD_CHANGE_REQUIRED : AuthenticationLevel.FULL;
                 SessionView view = new SessionView(rs.getObject("account_id", UUID.class), rs.getString("username"),
-                    rs.getString("display_name"), level, started, effective, restrictedUntil, rs.getString("auth_kind"));
+                    rs.getString("display_name"), level, started, effective, restrictedUntil, rs.getString("auth_kind"),
+                    rs.getString("kind"), rs.getObject("organization_id", UUID.class));
                 return new Resolved(rs.getObject("id", UUID.class), view, rs.getBytes("csrf_hash"));
             })
             .optional();

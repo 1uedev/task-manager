@@ -7,6 +7,7 @@ import type { paths as FilesPaths } from './generated/files';
 import type { paths as HelpdeskPaths } from './generated/helpdesk';
 import type { paths as JobsPaths } from './generated/jobs';
 import type { paths as SlaPaths } from './generated/sla';
+import type { paths as PortalPaths } from './generated/portal';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as PermissionsPaths } from './generated/permissions';
 import type { paths as ProjectsPaths } from './generated/projects';
@@ -144,6 +145,7 @@ export function createServerApi(fetcher: typeof fetch = (...args) => globalThis.
     jobs: createClient<JobsPaths>({ baseUrl, fetch }),
     helpdesk: createClient<HelpdeskPaths>({ baseUrl, fetch }),
     sla: createClient<SlaPaths>({ baseUrl, fetch }),
+    portal: createClient<PortalPaths>({ baseUrl, fetch }),
     // A bare HEAD below the API with the session rules above, for a question the contracts answer without a body (review F4 of TASK-051).
     head: (path: string) => fetch(`${baseUrl}${path}`, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' }),
   };
@@ -160,6 +162,8 @@ export interface SessionState {
   // Keys of the administrative rights the session holds, as the server lists them. Only a hint for what to show: the server
   // checks every change again and answers 403 without the right.
   readonly rights: readonly string[];
+  // A customer account of the portal (TASK-075): it sees the portal pages instead of the internal interface.
+  readonly portal: boolean;
 }
 
 export const APPEARANCE_RIGHT = 'appearance.manage';
@@ -178,6 +182,7 @@ export function parseSession(value: unknown): SessionState | null {
     passwordChangeBy: text(item.passwordChangeBy),
     full: item.authenticated && item.level === 'full',
     rights,
+    portal: item.kind === 'portal',
   };
 }
 
@@ -188,6 +193,8 @@ export interface AppearanceLogo {
 }
 
 export interface Appearance {
+  readonly name: string;
+  readonly defaultName: string;
   readonly accentColor: string;
   readonly defaultAccentColor: string;
   readonly logo: AppearanceLogo | null;
@@ -212,6 +219,7 @@ export function parseAppearance(value: unknown): Appearance | null {
   if (typeof value !== 'object' || value === null) return null;
   const item = value as Record<string, unknown>;
   if (!isAccentColor(item.accentColor) || !isAccentColor(item.defaultAccentColor)) return null;
+  if (!isBrandName(item.name) || !isBrandName(item.defaultName)) return null;
   if (typeof item.version !== 'number' || !Number.isSafeInteger(item.version) || item.version < 1) return null;
   let logo: AppearanceLogo | null = null;
   if (item.logo !== null) {
@@ -223,11 +231,52 @@ export function parseAppearance(value: unknown): Appearance | null {
     logo = { contentType: raw.contentType, size: raw.size, url };
   }
   return {
+    name: item.name,
+    defaultName: item.defaultName,
     accentColor: item.accentColor.toLowerCase(),
     defaultAccentColor: item.defaultAccentColor.toLowerCase(),
     logo,
     version: item.version,
   };
+}
+
+export const BRAND_NAME_MAX = 80;
+
+// A name as the server stores it: 1 to 80 characters, no surrounding spaces, no control or format characters (TASK-081).
+export function isBrandName(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const length = [...value].length;
+  return length >= 1 && length <= BRAND_NAME_MAX && value === value.trim() && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(value);
+}
+
+// What the login page shows before anyone is signed in (TASK-081): name, accent color and the public logo, nothing else.
+export interface PublicAppearance {
+  readonly name: string;
+  readonly accentColor: string;
+  readonly logoUrl: string | null;
+}
+
+export function parsePublicAppearance(value: unknown): PublicAppearance | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const item = value as Record<string, unknown>;
+  if (!isBrandName(item.name) || !isAccentColor(item.accentColor)) return null;
+  let logoUrl: string | null = null;
+  if (item.logoUrl !== null) {
+    logoUrl = typeof item.logoUrl === 'string' && item.logoUrl.startsWith('/') ? acceptableLogo(item.logoUrl) : null;
+    if (logoUrl === null) return null;
+  }
+  return { name: item.name, accentColor: item.accentColor.toLowerCase(), logoUrl };
+}
+
+export function readPublicAppearance(api: ServerApi, signal?: AbortSignal): Promise<Outcome<PublicAppearance>> {
+  return guarded(async () => {
+    const { data, error, response } = await api.appearance.GET('/appearance/public', { ...(signal ? { signal } : {}) });
+    if (!response.ok) {
+      return { kind: 'problem', problem: readProblem(response.status, error, response.headers.get('X-Correlation-Id')) };
+    }
+    const parsed = parsePublicAppearance(data);
+    return parsed ? { kind: 'ok', data: parsed } : { kind: 'problem', problem: INVALID_RESPONSE };
+  });
 }
 
 function csrfHeader(): Record<string, string> {
@@ -265,11 +314,27 @@ export function readAppearance(api: ServerApi, signal?: AbortSignal): Promise<Ou
 
 // `etag` is the version of the last read; the server refuses a change against an older one (412).
 export function changeAccentColor(api: ServerApi, etag: string, accentColor: string): Promise<Outcome<LoadedAppearance>> {
+  return changeAppearance(api, etag, { accentColor });
+}
+
+// A part that is not sent stays as it is on the server (TASK-081).
+export function changeAppearance(api: ServerApi, etag: string, change: { readonly accentColor?: string; readonly name?: string }): Promise<Outcome<LoadedAppearance>> {
   return guarded(async () => {
     const { data, error, response } = await api.appearance.PUT('/appearance', {
       params: { header: { 'If-Match': etag } },
       headers: csrfHeader(),
-      body: { accentColor },
+      body: change,
+    });
+    return loaded(response, data, error);
+  });
+}
+
+// Name, accent color and logo back to the defaults in one step (TASK-081).
+export function resetAppearance(api: ServerApi, etag: string): Promise<Outcome<LoadedAppearance>> {
+  return guarded(async () => {
+    const { data, error, response } = await api.appearance.DELETE('/appearance', {
+      params: { header: { 'If-Match': etag } },
+      headers: csrfHeader(),
     });
     return loaded(response, data, error);
   });

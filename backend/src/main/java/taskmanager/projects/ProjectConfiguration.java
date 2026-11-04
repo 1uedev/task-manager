@@ -32,6 +32,8 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     public static final Set<String> ALWAYS_REQUIRED = Set.of("title", "type", "status");
     /** The categories a status belongs to, for later views and searches across projects. */
     public static final Set<String> CATEGORIES = Set.of("open", "in_progress", "done");
+    /** The category of the statuses in which a ticket counts as done, for example in the portal filter (TASK-076). */
+    public static final String CATEGORY_DONE = "done";
     /** The kinds of a status for service deadlines (TASK-068). */
     public static final String SLA_OPEN = "open";
     public static final Set<String> SLA_KINDS = Set.of(SLA_OPEN, "waiting", "resolved", "cancelled");
@@ -60,7 +62,23 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     static final int MAX_REQUIRED_PER_TRANSITION = 10;
     private static final String KEY = "[a-z][a-z0-9_]{0,39}";
 
-    public record TicketType(String key, String name) {
+    /**
+     * A ticket type. {@code portal} offers it for new requests in the customer portal (TASK-076); documents written before read
+     * as {@code false}, so no type is offered until a project administration marks one.
+     */
+    public record TicketType(String key, String name, Boolean portal) {
+        public TicketType {
+            portal = portal != null && portal;
+        }
+
+        public TicketType(String key, String name) {
+            this(key, name, false);
+        }
+    }
+
+    /** The ticket types offered for new requests in the portal (TASK-076). */
+    public List<TicketType> portalTypes() {
+        return ticketTypes.stream().filter(TicketType::portal).toList();
     }
 
     /**
@@ -230,7 +248,7 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
     /** The same configuration with surrounding blanks removed from the names, as it is stored. */
     public ProjectConfiguration normalized() {
         return new ProjectConfiguration(
-            ticketTypes.stream().map(t -> new TicketType(t.key(), t.name().strip())).toList(),
+            ticketTypes.stream().map(t -> new TicketType(t.key(), t.name().strip(), t.portal())).toList(),
             statuses.stream().map(s -> new Status(s.key(), s.name().strip(), s.category(), s.sla())).toList(),
             initialStatus, transitions, fields, workflows,
             customFields.stream().map(field -> new CustomField(field.key(), field.name().strip(), field.type(), field.required(),

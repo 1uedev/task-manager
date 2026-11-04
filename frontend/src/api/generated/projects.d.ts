@@ -4,6 +4,31 @@
  */
 
 export interface paths {
+    "/portal/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Projekte eines Portalkontos mit Schlüssel, Name, angebotenen Tickettypen und Status (TASK-075, TASK-076)
+         * @description Die Projekte, in denen das Portalkonto Mitglied ist. Ein internes Konto erhält 404 `project.not_found`. Konto und
+         *     Sitzung werden in derselben Transaktion erneut geprüft; endet die Sitzung oder wird das Konto deaktiviert, während der
+         *     Aufruf wartet, antwortet er mit 403 `auth.forbidden` (TASK-078). Gesperrte Zeilen ergeben 503 `project.busy` mit
+         *     `Retry-After`.
+         *     `ticketTypes` sind die im Portal angebotenen Tickettypen der geltenden Konfiguration, `statuses` alle Status mit Name
+         *     und Kategorie, damit das Portal den Status mit seinem Namen zeigt und nach offen oder erledigt filtert (TASK-076).
+         */
+        get: operations["listPortalProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects": {
         parameters: {
             query?: never;
@@ -227,7 +252,9 @@ export interface paths {
         get?: never;
         /**
          * Mitglied hinzufügen (project.manage oder projects.manage)
-         * @description Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein vorhandenes Mitglied bleibt unverändert.
+         * @description Das Konto muss existieren und aktiv sein, sonst 400 mit `accountId.unknown`. Ein Portalkonto (TASK-075) kommt nur in ein
+         *     Projekt, das der Helpdesk seiner Kundenorganisation zugeordnet hat, sonst 400 mit `accountId.not_released`. Ein
+         *     vorhandenes Mitglied bleibt unverändert.
          */
         put: operations["addProjectMember"];
         post?: never;
@@ -326,6 +353,11 @@ export interface components {
             ticketTypes: {
                 key: string;
                 name: string;
+                /**
+                 * @description Im Kundenportal für neue Anfragen angeboten (TASK-076); fehlt die Angabe, gilt false. Ohne markierten Typ legt
+                 *     niemand im Portal an.
+                 */
+                portal?: boolean;
             }[];
             statuses: {
                 key: string;
@@ -443,6 +475,45 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPortalProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projekte */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        key: string;
+                        name: string;
+                        ticketTypes: {
+                            key: string;
+                            name: string;
+                        }[];
+                        statuses: {
+                            key: string;
+                            name: string;
+                            /** @enum {string} */
+                            category: "open" | "in_progress" | "done";
+                        }[];
+                    }[];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listProjects: {
         parameters: {
             query?: never;

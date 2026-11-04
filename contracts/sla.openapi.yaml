@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Servicefristen (TASK-068)
+  title: Task Manager API, Servicefristen (TASK-068, TASK-070)
   version: 0.1.0
   description: |
     Geschäftszeitkalender, SLA Regeln, Priorität und Fristen eines Tickets (DEC-031, DEC-032, DEC-098). Jeder Endpunkt
@@ -130,7 +130,8 @@ paths:
         Eine Regel gilt in einem Projekt für jedes Ticket mit Kunde, für einen Kunden oder für einen Kunden und einen
         Tickettyp. Ungültige Angaben ergeben 400 `request.invalid` mit Verletzungen aus `name.invalid`, `projectId.unknown`,
         `customerId.not_released`, `ticketType.requires_customer`, `ticketType.unknown`, `calendarId.unknown`,
-        `budgets.required`, `budgets.invalid`. Eine aktive Regel, die dieselben Tickets gleich genau trifft, ergibt 409
+        `budgets.required`, `budgets.invalid`, `escalations.invalid`, `escalations.group_unknown`, `escalations.duplicate`,
+        `escalations.too_many`. Eine aktive Regel, die dieselben Tickets gleich genau trifft, ergibt 409
         `sla.rule_conflict`. Steht im Audit.
       requestBody:
         required: true
@@ -208,6 +209,25 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Options'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /sla/escalations:
+    get:
+      operationId: listSlaEscalations
+      summary: Liste „SLA Eskalationen“ (TASK-070)
+      description: |
+        Jede vollständige Anmeldung, ohne besonderes Recht. Erreichte Stufen der Gruppen, in denen die Person Mitglied ist,
+        neueste zuerst, höchstens 200, nur auf Tickets, die die Person mit den Leseregeln von `customer` und `priority` lesen
+        darf. Die Rechte gelten beim Lesen, nicht beim Erreichen der Stufe. Ohne Gruppe mit Stufen ist die Liste leer.
+      responses:
+        '200':
+          description: Erreichte Stufen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/EscalationItem'}
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
@@ -397,6 +417,22 @@ components:
         ticketType: {type: [string, 'null'], description: Nur zusammen mit einem Kunden}
         calendarId: {type: string, format: uuid}
         budgets: {$ref: '#/components/schemas/Budgets'}
+        escalations:
+          type: array
+          description: |
+            Eskalationsstufen je Uhr (TASK-070), Teil jeder Regelversion; je Uhr höchstens 10. Ein laufender Zyklus behält die
+            Stufen der Version, mit der er begann. Fehlt die Angabe, hat die Regel keine Stufen.
+          items: {$ref: '#/components/schemas/Stage'}
+    Stage:
+      type: object
+      description: |
+        Hat die Uhr `clock` den Anteil `percent` ihres Budgets verbraucht, erscheint das Ticket für die Mitglieder der Gruppe
+        `groupId` in ihrer Liste. Die Position in der Liste der Regelversion kennzeichnet die Stufe.
+      required: [clock, percent, groupId]
+      properties:
+        clock: {type: string, enum: [first_response, resolution]}
+        percent: {type: integer, minimum: 1, maximum: 1000}
+        groupId: {type: string, format: uuid}
     Rule:
       allOf:
         - $ref: '#/components/schemas/RuleRequest'
@@ -411,8 +447,17 @@ components:
             updatedBy: {type: string, format: uuid}
     Options:
       type: object
-      required: [projects, customers]
+      required: [projects, customers, groups]
       properties:
+        groups:
+          type: array
+          description: Die Gruppen des Unternehmens als Empfänger von Stufen (TASK-070).
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
         projects:
           type: array
           items:
@@ -465,7 +510,7 @@ components:
         Ticket wieder geöffnet wird. Er endet `met`, sobald eine Antwort gesendet und der Status erledigt ist, oder
         `cancelled` (Grund `status_cancelled` oder `customer_removed`).
       required: [number, ruleId, ruleName, ruleVersion, calendarId, calendarName, calendarVersion, timeZone, priority, startedAt,
-        firstResponse, resolution]
+        firstResponse, resolution, escalations]
       properties:
         number: {type: integer}
         ruleId: {type: string, format: uuid}
@@ -482,6 +527,35 @@ components:
         closedAt: {type: [string, 'null'], format: date-time}
         firstResponse: {$ref: '#/components/schemas/Clock'}
         resolution: {$ref: '#/components/schemas/Clock'}
+        escalations:
+          type: array
+          description: Erreichte Stufen des Zyklus für Gruppen, in denen die Person Mitglied ist (TASK-070); sie bleiben im Verlauf.
+          items: {$ref: '#/components/schemas/ReachedStage'}
+    ReachedStage:
+      type: object
+      required: [kind, percent, groupId, groupName, thresholdAt, reachedAt]
+      properties:
+        kind: {type: string, enum: [first_response, resolution]}
+        percent: {type: integer}
+        groupId: {type: string, format: uuid}
+        groupName: {type: string}
+        thresholdAt: {type: string, format: date-time, description: Wann die Uhr den Anteil erreichte}
+        reachedAt: {type: string, format: date-time, description: Wann die Überwachung die Stufe festhielt}
+    EscalationItem:
+      type: object
+      required: [projectId, projectKey, number, cycleNumber, kind, percent, groupId, groupName, thresholdAt, reachedAt]
+      properties:
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        number: {type: integer, format: int64}
+        cycleNumber: {type: integer}
+        cycleOutcome: {type: [string, 'null'], enum: [met, cancelled, null], description: Null solange der Zyklus offen ist}
+        kind: {type: string, enum: [first_response, resolution]}
+        percent: {type: integer}
+        groupId: {type: string, format: uuid}
+        groupName: {type: string}
+        thresholdAt: {type: string, format: date-time}
+        reachedAt: {type: string, format: date-time}
     TicketSla:
       type: object
       description: |

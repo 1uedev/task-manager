@@ -24,6 +24,7 @@ import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.ApiProblemException;
+import taskmanager.projects.MembershipAdmission;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.TicketUsage;
@@ -58,9 +59,11 @@ public class ProjectService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final ObjectProvider<TicketUsage> tickets;
+    private final ObjectProvider<MembershipAdmission> admission;
 
     ProjectService(ProjectRepository projects, ProjectAccess access, Permissions permissions, IdentityVerification identity,
-            Clock clock, ApplicationEventPublisher events, ObjectProvider<TicketUsage> tickets) {
+            Clock clock, ApplicationEventPublisher events, ObjectProvider<TicketUsage> tickets, ObjectProvider<MembershipAdmission> admission) {
+        this.admission = admission;
         this.projects = projects;
         this.access = access;
         this.permissions = permissions;
@@ -347,6 +350,10 @@ public class ProjectService {
         if (accountId == null || !identity.accountIsActive(accountId)) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("accountId.unknown"));
         }
+        // A portal account joins only a project released for its organization (TASK-075).
+        if (identity.accountIsPortal(accountId) && !mayJoin(actor.companyId(), id, accountId)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("accountId.not_released"));
+        }
         Instant now = clock.instant();
         if (projects.addMember(id, accountId, now, actor.userId())) {
             projects.touch(id, now, actor.userId());
@@ -364,6 +371,45 @@ public class ProjectService {
             projects.audit(id, actor.userId(), "project.member_removed", accountId.toString(), now);
         }
         return new Members(projects.members(id), projects.lock(actor.companyId(), id, true).orElseThrow().version());
+    }
+
+    /**
+     * The projects a portal account is a member of, with key and name (TASK-075, DEC-105). The membership is all it takes to
+     * know them; what the account may do inside is decided per request. An internal account gets 404, it has its own list.
+     */
+    @Transactional
+    public List<Project> portalProjects(AccessContext actor) {
+        return portalProjectsWithConfiguration(actor).stream().map(PortalProject::project).toList();
+    }
+
+    /** A project of a portal account with its configuration in force, for the ticket types it offers and the names of its statuses (TASK-076). */
+    public record PortalProject(Project project, ProjectConfiguration configuration) {
+    }
+
+    @Transactional
+    public List<PortalProject> portalProjectsWithConfiguration(AccessContext actor) {
+        if (!actor.external()) {
+            throw notFound();
+        }
+        // Rights and identity first, in the order of every other check (TASK-078, F2 and F3): a deactivation or a change of the
+        // memberships that ended while this call waited is seen, and the exclusive rights lock of the account administration
+        // serializes both, so their project locks never cross.
+        if (!permissions.current(actor)) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        List<PortalProject> own = new ArrayList<>();
+        for (UUID id : projects.memberships(actor.companyId(), actor.userId())) {
+            projects.lock(actor.companyId(), id, false).filter(project -> projects.isMember(id, actor.userId()))
+                .ifPresent(project -> own.add(new PortalProject(project,
+                    projects.configuration(id, project.configurationVersion()).orElseThrow())));
+        }
+        own.sort(Comparator.comparing(entry -> entry.project().key()));
+        return own;
+    }
+
+    private boolean mayJoin(UUID companyId, UUID projectId, UUID accountId) {
+        var candidates = admission.stream().limit(2).toList();
+        return candidates.size() == 1 && candidates.getFirst().mayJoin(companyId, projectId, accountId);
     }
 
     // ------------------------------------------------------------------------------------------------ access

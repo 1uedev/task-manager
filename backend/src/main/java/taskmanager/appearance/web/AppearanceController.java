@@ -25,14 +25,20 @@ import taskmanager.platform.AdministrationRights;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * Accent color and logo of the company. Reading needs a complete login; changing needs the right {@code appearance.manage}
- * (TASK-040). The service checks it authoritatively in the transaction of the change; the endpoint refuses a request that
- * clearly lacks it before it reads a body. The ETag is the version of the setting and every change needs it as If-Match.
+ * Name, accent color and logo of the company. Reading the whole setting needs a complete login; changing needs the right
+ * {@code appearance.manage} (TASK-040). The service checks it authoritatively in the transaction of the change; the endpoint
+ * refuses a request that clearly lacks it before it reads a body. The ETag is the version of the setting and every change
+ * needs it as If-Match.
+ *
+ * <p>Below {@code /public} the login page, the password change and the page after logging out read only what they show:
+ * name, accent color and logo, without version, time or person (TASK-081). The authentication filter lets exactly these
+ * two reads through without a session.
  */
 @RestController
 @RequestMapping("/api/v1/appearance")
 class AppearanceController {
     static final String LOGO_PATH = "/api/v1/appearance/logo";
+    static final String PUBLIC_LOGO_PATH = "/api/v1/appearance/public/logo";
 
     private final AppearanceService appearance;
     private final AccessContexts contexts;
@@ -47,10 +53,14 @@ class AppearanceController {
     record LogoBody(String contentType, int size, String url) {
     }
 
-    record AppearanceBody(String accentColor, String defaultAccentColor, LogoBody logo, long version, Instant updatedAt) {
+    record AppearanceBody(String name, String defaultName, String accentColor, String defaultAccentColor, LogoBody logo, long version,
+            Instant updatedAt) {
     }
 
-    record AccentRequest(String accentColor) {
+    record PublicBody(String name, String accentColor, String logoUrl) {
+    }
+
+    record ChangeRequest(String accentColor, String name) {
     }
 
     @GetMapping
@@ -60,15 +70,37 @@ class AppearanceController {
     }
 
     @PutMapping
-    ResponseEntity<AppearanceBody> changeAccent(@RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @RequestBody(required = false) AccentRequest request) {
+    ResponseEntity<AppearanceBody> change(@RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @RequestBody(required = false) ChangeRequest request) {
         AccessContext actor = administrator();
-        return body(appearance.changeAccent(actor, expectedVersion(ifMatch), request == null ? null : request.accentColor()));
+        return body(appearance.change(actor, expectedVersion(ifMatch), request == null ? null : request.accentColor(),
+            request == null ? null : request.name()));
+    }
+
+    @DeleteMapping
+    ResponseEntity<AppearanceBody> reset(@RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        AccessContext actor = administrator();
+        return body(appearance.reset(actor, expectedVersion(ifMatch)));
+    }
+
+    @GetMapping("/public")
+    PublicBody publicAppearance() {
+        Appearance current = appearance.current();
+        return new PublicBody(current.name(), current.accentColor(), current.hasLogo() ? PUBLIC_LOGO_PATH : null);
+    }
+
+    @GetMapping("/public/logo")
+    ResponseEntity<byte[]> publicLogo() {
+        return image();
     }
 
     @GetMapping("/logo")
     ResponseEntity<byte[]> logo() {
         reader();
+        return image();
+    }
+
+    private ResponseEntity<byte[]> image() {
         var logo = appearance.logo().orElseThrow(() -> ApiProblemException.of(404, "appearance.logo_not_found"));
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_TYPE, logo.type())
@@ -138,6 +170,6 @@ class AppearanceController {
             : null;
         return ResponseEntity.ok()
             .eTag("\"" + current.version() + "\"")
-            .body(new AppearanceBody(current.accentColor(), AppearanceService.DEFAULT_ACCENT, logo, current.version(), current.updatedAt()));
+            .body(new AppearanceBody(current.name(), AppearanceService.DEFAULT_NAME, current.accentColor(), AppearanceService.DEFAULT_ACCENT, logo, current.version(), current.updatedAt()));
     }
 }

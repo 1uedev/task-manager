@@ -6,7 +6,9 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -134,16 +136,17 @@ class HelpdeskRepository {
 
     void insertContact(Contact contact) {
         jdbc.sql("""
-                insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                insert into helpdesk_contact (id, company_id, customer_id, name, version, created_at, created_by, updated_at, updated_by, language)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(contact.id(), contact.companyId(), contact.customerId(), contact.name(), contact.version(),
-                ts(contact.createdAt()), contact.createdBy(), ts(contact.updatedAt()), contact.updatedBy()).update();
+                ts(contact.createdAt()), contact.createdBy(), ts(contact.updatedAt()), contact.updatedBy(), contact.language()).update();
         replaceAddresses(contact);
     }
 
     void updateContact(Contact contact) {
-        jdbc.sql("update helpdesk_contact set customer_id = ?, name = ?, version = ?, updated_at = ?, updated_by = ? where id = ?")
-            .params(contact.customerId(), contact.name(), contact.version(), ts(contact.updatedAt()), contact.updatedBy(), contact.id())
+        jdbc.sql("update helpdesk_contact set customer_id = ?, name = ?, language = ?, version = ?, updated_at = ?, updated_by = ? where id = ?")
+            .params(contact.customerId(), contact.name(), contact.language(), contact.version(), ts(contact.updatedAt()), contact.updatedBy(),
+                contact.id())
             .update();
         replaceAddresses(contact);
     }
@@ -162,7 +165,7 @@ class HelpdeskRepository {
             .param(id).query(String.class).list();
         return new Contact(id, rs.getObject("company_id", UUID.class), rs.getObject("customer_id", UUID.class), rs.getString("name"),
             addresses, rs.getLong("version"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
-            rs.getObject("updated_by", UUID.class));
+            rs.getObject("updated_by", UUID.class), rs.getString("language"));
     }
 
     // ------------------------------------------------------------------------------------------------ mailboxes
@@ -411,6 +414,39 @@ class HelpdeskRepository {
             .query((rs, row) -> 1).list();
     }
 
+    /**
+     * The next position of an answer of the support in the portal conversation of the ticket (TASK-080, F2). The counter row
+     * stays locked until the transaction ends, so a later answer gets its position only after the earlier one committed:
+     * whoever reads the counter sees every answer up to it.
+     */
+    long nextPortalPosition(UUID ticketId) {
+        return jdbc.sql("""
+                insert into helpdesk_portal_position (ticket_id, position) values (?, 1)
+                on conflict (ticket_id) do update set position = helpdesk_portal_position.position + 1
+                returning position
+                """).param(ticketId).query(Long.class).single();
+    }
+
+    /** The highest position of an answer of the support of the ticket that has committed, 0 without any. */
+    long portalPosition(UUID ticketId) {
+        return jdbc.sql("select position from helpdesk_portal_position where ticket_id = ?").param(ticketId).query(Long.class)
+            .optional().orElse(0L);
+    }
+
+    void replyPortalPosition(UUID replyId, long position) {
+        jdbc.sql("update helpdesk_reply set portal_position = ? where id = ?").params(position, replyId).update();
+    }
+
+    /** The positions of the sent mail answers of the ticket in the portal conversation. */
+    Map<UUID, Long> replyPortalPositions(UUID ticketId) {
+        Map<UUID, Long> positions = new HashMap<>();
+        jdbc.sql("select id, portal_position from helpdesk_reply where ticket_id = ? and portal_position is not null").param(ticketId)
+            .query(rs -> {
+                positions.put(rs.getObject("id", UUID.class), rs.getLong("portal_position"));
+            });
+        return positions;
+    }
+
     /** Locks the contact {@code FOR SHARE}, so that it keeps its customer until the transaction ends; then reads it. */
     Optional<Contact> shareContact(UUID companyId, UUID contactId) {
         if (jdbc.sql("select id from helpdesk_contact where id = ? and company_id = ? for share").params(contactId, companyId)
@@ -436,17 +472,47 @@ class HelpdeskRepository {
 
     private static final String REPLY_COLUMNS = "id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, "
         + "subject, body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at, "
-        + "created_by, updated_at, updated_by, version";
+        + "created_by, updated_at, updated_by, version, customer_id";
 
     void insertReply(Reply r) {
         jdbc.sql("""
                 insert into helpdesk_reply (id, company_id, project_id, ticket_id, mailbox_id, contact_id, from_address, to_address, subject,
                     body, message_id, in_reply_to, references_header, state, error_code, job_id, sends, attempted_at, sent_at, created_at,
-                    created_by, updated_at, updated_by, version)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_by, updated_at, updated_by, version, customer_id)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(r.id(), r.companyId(), r.projectId(), r.ticketId(), r.mailboxId(), r.contactId(), r.fromAddress(), r.toAddress(),
                 r.subject(), r.body(), r.messageId(), r.inReplyTo(), r.references(), r.state(), r.errorCode(), r.jobId(), r.sends(),
-                ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version()).update();
+                ts(r.attemptedAt()), ts(r.sentAt()), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version(),
+                r.customerId()).update();
+    }
+
+    /** The finished mail of a reply as it was confirmed (TASK-082); a logo is kept once per content. */
+    void insertReplyMail(UUID replyId, taskmanager.appearance.MailTemplates.RenderedMail mail) {
+        String digest = null;
+        if (mail.logo() != null) {
+            digest = java.util.HexFormat.of().formatHex(sha256(mail.logo().content()));
+            jdbc.sql("insert into helpdesk_reply_image (digest, content_type, content) values (?, ?, ?) on conflict (digest) do nothing")
+                .params(digest, mail.logo().contentType(), mail.logo().content()).update();
+        }
+        jdbc.sql("insert into helpdesk_reply_mail (reply_id, language, text_body, html_body, logo_digest) values (?, ?, ?, ?, ?)")
+            .params(replyId, mail.language(), mail.text(), mail.html(), digest).update();
+    }
+
+    /** The finished mail of a reply, or empty for one confirmed before TASK-082. */
+    Optional<MailSender.Rendered> replyMail(UUID replyId) {
+        return jdbc.sql("""
+                select m.text_body, m.html_body, i.content_type, i.content from helpdesk_reply_mail m
+                left join helpdesk_reply_image i on i.digest = m.logo_digest where m.reply_id = ?
+                """).param(replyId).query((rs, row) -> new MailSender.Rendered(rs.getString("text_body"), rs.getString("html_body"),
+                rs.getString("content_type"), rs.getBytes("content"))).optional();
+    }
+
+    private static byte[] sha256(byte[] content) {
+        try {
+            return java.security.MessageDigest.getInstance("SHA-256").digest(content);
+        } catch (java.security.NoSuchAlgorithmException missing) {
+            throw new IllegalStateException(missing);
+        }
     }
 
     Optional<Reply> reply(UUID companyId, UUID id) {
@@ -525,7 +591,7 @@ class HelpdeskRepository {
             rs.getString("message_id"), rs.getString("in_reply_to"), rs.getString("references_header"), rs.getString("state"),
             rs.getString("error_code"), rs.getObject("job_id", UUID.class), rs.getInt("sends"), instant(rs, "attempted_at"),
             instant(rs, "sent_at"), instant(rs, "created_at"), rs.getObject("created_by", UUID.class), instant(rs, "updated_at"),
-            rs.getObject("updated_by", UUID.class), rs.getLong("version"));
+            rs.getObject("updated_by", UUID.class), rs.getLong("version"), rs.getObject("customer_id", UUID.class));
     }
 
     // ------------------------------------------------------------------------------------------------ customer of a ticket
