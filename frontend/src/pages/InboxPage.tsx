@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
   attachMessage, createContact, discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listCustomers, listInbox, listOpenReplies, listProjects,
-  readInboxMessage, readInboxSummary, ticketFromMessage, type MailMessage, type MessageState,
+  markAnswerSeen, readInboxMessage, readNewAnswers, readInboxSummary, ticketFromMessage, type MailMessage, type MessageState,
 } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad } from '../app/hooks.ts';
@@ -61,6 +61,7 @@ export function InboxPage() {
         <p className="hint" data-testid="inbox-summary">{t('inbox.summary', { review: summary.value.review, automatic: summary.value.automatic })}</p>
       )}
       <NoticeView notice={notice} />
+      <NewAnswers round={round} />
       <OpenReplies round={round} />
       <SelectField label={t('inbox.filter')} value={state} onChange={(value) => { setOpen(null); setState(value as MessageState); }}
         options={HELPDESK_STATES.map((value) => ({ value, label: t(`inbox.state.${value}` as MessageKey) }))} />
@@ -265,6 +266,53 @@ function NewContact({ address, name, onCreated }: { readonly address: string; re
     </details>
   );
 }
+
+// Answers of customers that joined a ticket that already existed and nobody has marked as seen yet (TASK-067), of the
+// projects in which the person may reply. The ticket keeps its status, so this list is where such an answer shows up.
+function NewAnswers({ round }: { readonly round: number }) {
+  const { t, language } = useI18n();
+  const { api } = useBrand();
+  const text = useProblemText();
+  const [answers, reload] = useLoad(() => readNewAnswers(api), [api, round]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  async function seen(id: string, version: number) {
+    setBusy(id);
+    setNotice(null);
+    const result = await markAnswerSeen(api, id, version);
+    setBusy(null);
+    if (result.kind !== 'ok') setNotice({ kind: 'info', text: text(result.problem, ANSWER_PROBLEMS) });
+    reload();
+  }
+
+  if (answers.state !== 'ok' || (answers.value.length === 0 && notice === null)) return null;
+  return (
+    <section className="panel" aria-labelledby="new-answers" data-testid="new-answers">
+      <h2 id="new-answers">{t('inbox.newAnswers')}</h2>
+      <ul className="plain-list">
+        {answers.value.map((answer) => (
+          <li key={answer.id} data-answer={answer.id}>
+            <a href={hrefFor({ name: 'ticket', projectId: answer.projectId, number: answer.number })}>
+              {t('inbox.newAnswer', { subject: answer.subject ?? t('inbox.noSubject'), number: answer.number })}</a>{' '}
+            <span className="hint">{t('inbox.newAnswerFrom', { from: answer.fromName ? `${answer.fromName} <${answer.fromAddress ?? ''}>` : answer.fromAddress ?? t('inbox.noSender'),
+              date: formatDateTime(answer.receivedAt, language) })}</span>{' '}
+            <button type="button" className="secondary" disabled={busy === answer.id} onClick={() => void seen(answer.id, answer.version)}>
+              {t('inbox.markSeen')}</button>
+          </li>
+        ))}
+      </ul>
+      <NoticeView notice={notice} />
+    </section>
+  );
+}
+
+export const ANSWER_PROBLEMS: Readonly<Record<string, MessageKey>> = {
+  'helpdesk.version_conflict': 'inbox.answerChanged',
+  'helpdesk.answer_not_new': 'inbox.answerChanged',
+  'helpdesk.message_not_found': 'inbox.answerChanged',
+  'auth.forbidden': 'ticketHelpdesk.error.replyForbidden',
+};
 
 // Replies to customers that the mail server has not accepted yet (TASK-058), of the projects in which the person may reply:
 // pending ones, and failed or uncertain ones that wait for a decision in their ticket.
