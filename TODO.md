@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
 
 ### Blockiert – BLOCKIERT
 
@@ -199,3 +201,23 @@ Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
 **Ergebnis (zur Prüfung):** Umgesetzt nach DEC-118 auf Branch claude/project-thread-fde105, ohne Migration. (1) F1: `AnswerService.seen` prüft nach der Sperre der Mail, dass das Ticket noch im Unternehmen und im Projekt der Mail liegt, einmal vor und einmal unter der geteilten Sperre des Tickets; sonst 404 `helpdesk.message_not_found`. Eine Mail ohne Ticket endet wie bisher mit 412 oder 409. (2) F2: Meldung und Fokus liegen in Ticket und Liste an der Überschrift über den Einträgen, mit Erfolgsmeldung „Die Antwort ist als gesehen markiert.“ und eigenem Konflikttext im Ticket. (3) F3: Ein Ladefehler der Liste zeigt Überschrift, Fehler und „Erneut versuchen“. (4) H2: `answerSeenAllowed` in der Ticketansicht, Vertrag und generierte Typen. (5) H1: Testersatz mit 428 zuerst, Ticket im Projekt der Mail, Grenze 100 vor dem Ticketfilter und Kennung als zweiter Sortierschlüssel. (6) H3: 503 mit Retry-After bei beiden Routen, `helpdesk.answer_not_new` in der Codeliste, V0052 und 36 Routen in TASK-067 und DEC-097, Portalgrenze im README. (7) H4 und F1: `HelpdeskApiTest.anAnswerWhoseTicketLeftTheProjectIsUnknown` (schlägt ohne die Behebung mit 200 statt 404 fehl), `twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking`, `anAnswerCanBeMarkedOnlyAfterItJoinedItsTicket`, `anAnswerFromBeforeTheMigrationIsNeverNew`, `anAnswerCanBeMarkedAtATicketWithoutContact`; Browsertests für Fokus und Meldung in Liste und Ticket, Konflikt im Ticket, Ladefehler mit Wiederholen und Ticket ohne Kontakt.
 
 **Nächster Schritt:** Prüfung durch eine zweite KI (Codex oder Claude), danach Abnahme von TASK-067 und TASK-088 durch Holger.
+
+## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117; docs/REVIEW_TASK-087_PR-259_2.md. **Abhängigkeiten:** TASK-087 geliefert (PR #259). **Arbeitsstand:** Holger hat am 6. November 2026 den Codex Bericht der zweiten Nachprüfung von TASK-087 (Empfehlung „nachbessern“) in den Thread gestellt. Branch claude/project-thread-tzp0cw; ohne Migration.
+
+**Umfang:** Befunde S1 und S2 und Hinweise H1 und H2 aus docs/REVIEW_TASK-087_PR-259_2.md:
+1. S1: „Aktuellen Stand laden“ nach einem Versionskonflikt ist an genau diesen Ladevorgang gebunden. Auch eine Antwort mit gleicher Version schließt ihn ab; scheitert das Laden, bleiben die Eingaben und eine wiederholbare Fehlermeldung, und kein offener Auftrag wirkt auf eine spätere Ladung oder Teiländerung.
+2. S2: Der Testersatz antwortet auf falsche JSON Typen bei Name und Farbe mit einer regulären Fehlerantwort wie der Server.
+3. H1: Ein API Test mit gleichzeitigen unveränderten Anfragen zum Zurücksetzen, Entfernen und gleichen Logo sowie mit veralteter Version.
+4. H2: Der Testersatz prüft beim Logo den angegebenen Typ wie der Server, bevor er Inhalte vergleicht.
+
+Nicht Teil: weitere Änderungen am Auftritt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. S1 mit Browsertests für gleiche Version, Ladefehler und eine danach folgende Bearbeitung eines anderen Teils; S2 und H2 mit Browsertests oder direkten Aufrufen des Testersatzes; H1 mit einem API Test gegen die echte Datenbank.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
