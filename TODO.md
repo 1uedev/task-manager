@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -45,6 +43,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
 | [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
+| [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -175,7 +174,7 @@ Nicht Teil: weitere Funktionen des Auftritts; die Stabilisierung der Tagtests (H
 2. R2: Zurücksetzen im Standardzustand, Logo entfernen ohne Logo und dasselbe Logo noch einmal lassen Version und Audit stehen wie ein `PUT` ohne Änderung. API Test `resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges`, der ohne die Korrektur scheitert.
 3. H1: Der Testersatz behandelt `null` wie einen nicht gesendeten Teil, antwortet auf eine Anfrage ohne Teile mit 400 `appearance.change_empty` und prüft die Werte vor der Version wie der Server. H2: `MailTemplatePreviewRequest.name` beschreibt die Normalisierung statt einer Länge am Rohwert (Vertrag appearance 0.3.2).
 
-**Nächster Schritt:** Kurze Nachprüfung von R1, R2, H1 und H2 durch eine zweite KI, danach Abnahme von TASK-081 und TASK-087 durch Holger.
+**Nächster Schritt:** Die zweite Codex Nachprüfung (docs/REVIEW_TASK-087_PR-259_2.md, 6. November 2026) empfiehlt „nachbessern“; die Befunde behebt TASK-089. Abnahme durch Holger danach zusammen mit TASK-081 und TASK-089.
 
 ## TASK-088 Befunde der Prüfung von TASK-067 beheben
 
@@ -204,7 +203,7 @@ Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
 
 ## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
 
 **Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117; docs/REVIEW_TASK-087_PR-259_2.md. **Abhängigkeiten:** TASK-087 geliefert (PR #259). **Arbeitsstand:** Holger hat am 6. November 2026 den Codex Bericht der zweiten Nachprüfung von TASK-087 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „S1, S2, H1 und H2 beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
 
@@ -220,4 +219,9 @@ Nicht Teil: weitere Änderungen am Auftritt.
 1. S1 mit Browsertests für gleiche Version, Ladefehler und eine danach folgende Bearbeitung eines anderen Teils; S2 und H2 mit Browsertests oder direkten Aufrufen des Testersatzes; H1 mit einem API Test gegen die echte Datenbank.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
+**Übergabe zur Prüfung (2026-11-06):**
+1. Ergebnis: DEC-119, ohne Migration. S1: `AppearancePage.tsx` liest nach „Aktuellen Stand laden“ den Auftritt selbst (`loadCurrent`) und übernimmt genau diese Antwort nur für den gescheiterten Teil (`take`), auch bei gleicher Version, mit der Meldung „Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.“; ein Lesefehler zeigt „Erneut versuchen“, alle Eingaben bleiben, kein Auftrag wirkt später nach. Der Provider wird dafür nicht mehr neu geladen. S2: Testersatz für Objekte, Listen, `null`, Zahlen und Wahrheitswerte wie der Server, festgehalten in `AppearanceApiTest.wrongJsonTypesAreRefusedLikeTheTestStandIn`. H1: `concurrentRequestsWithoutAChangeLeaveVersionAndAuditAndAStaleOneIsRefused`. H2: Testersatz prüft Leere, Größe, erkannten und angegebenen Typ des Logos vor der Version.
+2. Nachweise (lokal, JDK 21, PostgreSQL 16): die beiden neuen Browsertests zu S1 scheitern mit der Seite von main und laufen mit der Korrektur; die Ergebnisse der Gesamtläufe stehen im Ergebnis PR.
+3. Grenzen: Der Testersatz prüft das Logo nicht durch Dekodieren (`appearance.logo_unreadable` bleibt dem Server vorbehalten).
+
+**Nächster Schritt:** Prüfung durch eine zweite KI, danach Abnahme von TASK-081, TASK-087 und TASK-089 durch Holger.

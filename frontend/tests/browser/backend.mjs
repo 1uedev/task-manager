@@ -461,7 +461,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       }
       return problem(404, 'resource.not_found');
     }
-    if (p === '/appearance' && method === 'GET') return ok(appearanceBody(), `"${state.appearance.version}"`);
+    if (p === '/appearance' && method === 'GET') {
+      if (state.appearanceReadDown) return problem(503, 'server.unavailable');
+      return ok(appearanceBody(), `"${state.appearance.version}"`);
+    }
     if (p.startsWith('/appearance')) {
       if (p === '/appearance/logo' && method === 'GET') return { status: 200, raw: PNG, type: 'image/png' };
       if (!may(account, 'appearance.manage')) return problem(403, 'auth.forbidden');
@@ -469,8 +472,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (p === '/appearance' && method === 'PUT') {
         // The rule of the server (TASK-087): a part sent as null is not sent, a request without parts is refused, the
         // values are checked before the version, spaces of every kind leave the edges, an unchanged request is no change.
-        const sentName = body?.name ?? null;
-        const sentAccent = body?.accentColor ?? null;
+        // Like the JSON binding of the server (TASK-089, finding S2): an object or a list in a field or as the whole body is
+        // 400 request.invalid, a number or a truth value is taken as its text, a body of null sends no part.
+        if (Array.isArray(body) || (body !== null && typeof body !== 'object')) return problem(400, 'request.invalid');
+        const asText = (value) => (value === undefined || value === null ? null
+          : typeof value === 'object' ? undefined : String(value));
+        const sentName = asText(body?.name);
+        const sentAccent = asText(body?.accentColor);
+        if (sentName === undefined || sentAccent === undefined) return problem(400, 'request.invalid');
         if (sentName === null && sentAccent === null) return problem(400, 'appearance.change_empty');
         if (sentAccent !== null && !/^#[0-9a-fA-F]{6}$/.test(sentAccent)) return problem(400, 'appearance.color_invalid');
         const name = sentName === null ? state.appearance.name : sentName.replace(NAME_EDGES, '');
@@ -483,6 +492,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         }
         return ok(appearanceBody(), `"${state.appearance.version}"`);
       }
+      // The checks of a logo come before the version like on the server (TASK-089, hint H2): empty, too large, a type the bytes
+      // do not show, or a declared type that is not the one of the bytes.
+      let logo = null;
+      if (p === '/appearance/logo' && method === 'PUT') {
+        const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
+        if (content.length === 0) return problem(400, 'appearance.logo_empty');
+        if (content.length > 512 * 1024) return problem(413, 'request.too_large');
+        const type = content.subarray(0, 8).equals(PNG.subarray(0, 8)) ? 'image/png'
+          : content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff ? 'image/jpeg'
+            : content.subarray(0, 4).toString('latin1') === 'RIFF' && content.subarray(8, 12).toString('latin1') === 'WEBP' ? 'image/webp' : null;
+        const declared = (headers['content-type'] ?? '').toLowerCase().split(';')[0].trim();
+        if (type === null || declared !== type) return problem(415, 'appearance.logo_type_invalid');
+        logo = { type, content };
+      }
       if (!current) return problem(412, 'appearance.version_conflict');
       // Reset, removing the logo and the same logo again change nothing when nothing changes (TASK-087, finding R2).
       const a = state.appearance;
@@ -490,11 +513,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         if (a.accent === '#f97316' && a.name === 'Task Manager' && a.logo === null) return ok(appearanceBody(), `"${a.version}"`);
         a.version += 1;
         Object.assign(a, { accent: '#f97316', name: 'Task Manager', logo: null });
-      } else if (method === 'PUT') {
-        const content = Buffer.isBuffer(body) ? body : Buffer.from(body ?? '');
-        if (a.logo !== null && a.logo.content?.equals(content)) return ok(appearanceBody(), `"${a.version}"`);
+      } else if (logo !== null) {
+        if (a.logo !== null && a.logo.contentType === logo.type && a.logo.content?.equals(logo.content)) return ok(appearanceBody(), `"${a.version}"`);
         a.version += 1;
-        a.logo = { contentType: 'image/png', size: content.length, content, url: `/api/v1/appearance/logo?v=${a.version}` };
+        a.logo = { contentType: logo.type, size: logo.content.length, content: logo.content, url: `/api/v1/appearance/logo?v=${a.version}` };
       } else {
         if (a.logo === null) return ok(appearanceBody(), `"${a.version}"`);
         a.version += 1;

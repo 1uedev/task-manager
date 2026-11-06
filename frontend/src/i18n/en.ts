@@ -116,6 +116,7 @@ export const en: Record<MessageKey, Message> = {
   'appearance.name.invalid': 'Please enter 1 to {max} characters without a line break.',
   'appearance.name.save': 'Save name',
   'appearance.name.reset': 'Use default name',
+  'appearance.reloaded': 'The current version is loaded. Unsaved input of other parts stays.',
   'appearance.name.saved': 'The name is saved for everyone.',
   'appearance.resetAll.title': 'Reset everything',
   'appearance.resetAll.hint': 'Puts the name ({name}), the accent color ({color}) and the logo back to the default in one step.',

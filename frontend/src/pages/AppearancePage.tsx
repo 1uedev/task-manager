@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
-import { BRAND_NAME_MAX, changeAccentColor, changeAppearance, isBrandName, isLogoType, LOGO_MAX_BYTES, normalizeBrandName, removeLogo, replaceLogo, resetAppearance } from '../api/client.ts';
+import { BRAND_NAME_MAX, changeAccentColor, changeAppearance, isBrandName, isLogoType, LOGO_MAX_BYTES, normalizeBrandName, readAppearance, removeLogo, replaceLogo, resetAppearance, type LoadedAppearance } from '../api/client.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { CheckIcon, ShieldIcon, UploadIcon } from '../app/Icons.tsx';
 import { ACCENT_PRESETS, contrastRatio, isAccentColor, textOn } from '../brand/brand.ts';
@@ -13,7 +13,7 @@ import { MailTemplateSection } from './MailTemplateSection.tsx';
 type Pending = ReturnType<typeof changeAccentColor>;
 // Which part a saving step changes: only its own unsaved input is replaced by the answer of the server (TASK-087, F2).
 type Part = 'name' | 'color' | 'logo' | 'all';
-type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo; readonly part: Part } | { readonly kind: 'invalid'; readonly text: MessageKey };
+type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo; readonly part: Part; readonly loading?: true } | { readonly kind: 'invalid'; readonly text: MessageKey };
 
 // Synthetic content of the sample mail, in the language of the mail and not of the interface (TASK-081). The mail template
 // of TASK-082 below shows the real frame around a reply for whoever may change it.
@@ -30,7 +30,7 @@ function PreviewMark({ logo, name }: { readonly logo: string | null; readonly na
 // again; everyone else gets a preview in this window that is never sent anywhere.
 export function AppearancePage() {
   const { t, language } = useI18n();
-  const { connection, api, savedAccent, defaultAccent, savedName, defaultName, preview, previewName, accept, reload, brand } = useBrand();
+  const { connection, api, savedAccent, defaultAccent, savedName, defaultName, preview, previewName, accept, brand } = useBrand();
   const admin = connection.state === 'ready' && connection.mayChangeAppearance;
   const loaded = connection.state === 'ready' ? connection.loaded : null;
   const [draft, setDraft] = useState(savedAccent);
@@ -69,25 +69,6 @@ export function AppearancePage() {
     setName(savedName);
   }, [savedName]);
 
-  // After a version conflict "Aktuellen Stand laden" gives only the part whose saving failed the current saved value;
-  // the unsaved input of every other part stays (TASK-087, finding R1 of docs/REVIEW_TASK-087_PR-259.md).
-  const takeSaved = useRef<Part | null>(null);
-  const loadedEtag = loaded?.etag;
-  useEffect(() => {
-    const part = takeSaved.current;
-    if (part === null || !loaded) return;
-    takeSaved.current = null;
-    if (part === 'color' || part === 'all') {
-      edited.current = false;
-      setDraft(loaded.appearance.accentColor);
-      setHex(loaded.appearance.accentColor.toUpperCase());
-    }
-    if (part === 'name' || part === 'all') {
-      nameEdited.current = false;
-      setName(loaded.appearance.name);
-    }
-  }, [loadedEtag]);
-
   // The whole interface shows the color and name being edited; leaving the page shows the saved ones again.
   useEffect(() => {
     preview(draft === savedAccent ? null : draft);
@@ -110,26 +91,47 @@ export function AppearancePage() {
     setNotice(null);
   }
 
+  // Only the given part takes the saved value; an unsaved name stays while the color is saved and the other way round.
+  function take(part: Part, data: LoadedAppearance) {
+    accept(data);
+    if (part === 'color' || part === 'all') {
+      edited.current = false;
+      setDraft(data.appearance.accentColor);
+      setHex(data.appearance.accentColor.toUpperCase());
+    }
+    if (part === 'name' || part === 'all') {
+      nameEdited.current = false;
+      setName(data.appearance.name);
+    }
+  }
+
   async function run(part: Part, call: () => Pending, success: MessageKey) {
     setBusy(true);
     setNotice(null);
     const outcome = await call();
     setBusy(false);
     if (outcome.kind === 'ok') {
-      accept(outcome.data);
-      // Only what this step sent takes the saved value; an unsaved name stays while the color is saved and the other way round.
-      if (part === 'color' || part === 'all') {
-        edited.current = false;
-        setDraft(outcome.data.appearance.accentColor);
-        setHex(outcome.data.appearance.accentColor.toUpperCase());
-      }
-      if (part === 'name' || part === 'all') {
-        nameEdited.current = false;
-        setName(outcome.data.appearance.name);
-      }
+      take(part, outcome.data);
       setNotice({ kind: 'saved', text: success });
     } else {
       setNotice({ kind: 'problem', problem: outcome.problem, part });
+    }
+    setFocusAfter('notice');
+  }
+
+  // "Aktuellen Stand laden" after a version conflict reads the appearance itself and takes exactly this answer: the part
+  // whose saving failed gets the saved value, every other unsaved input stays, also when the version did not change. A
+  // failed read keeps all input and offers the same step again (TASK-089, finding S1 of docs/REVIEW_TASK-087_PR-259_2.md).
+  async function loadCurrent(part: Part) {
+    setBusy(true);
+    setNotice(null);
+    const outcome = await readAppearance(api);
+    setBusy(false);
+    if (outcome.kind === 'ok') {
+      take(part, outcome.data);
+      setNotice({ kind: 'saved', text: 'appearance.reloaded' });
+    } else {
+      setNotice({ kind: 'problem', problem: outcome.problem, part, loading: true });
     }
     setFocusAfter('notice');
   }
@@ -308,12 +310,9 @@ export function AppearancePage() {
             {notice?.kind === 'saved' && <p className="success" role="status" ref={savedNotice} tabIndex={-1} data-testid="appearance-saved">{t(notice.text)}</p>}
             {notice?.kind === 'invalid' && <p className="state state-problem" role="alert">{t(notice.text)}</p>}
             {notice?.kind === 'problem' && (
-              notice.problem.kind === 'conflict'
-                ? <ProblemView problem={notice.problem} actionLabel="states.reload" onAction={() => {
-                  takeSaved.current = notice.part;
-                  setNotice(null);
-                  reload();
-                }} />
+              notice.problem.kind === 'conflict' || notice.loading
+                ? <ProblemView problem={notice.problem} actionLabel={notice.loading ? 'states.retry' : 'states.reload'}
+                  onAction={() => void loadCurrent(notice.part)} />
                 : <ProblemView problem={notice.problem} />
             )}
           </div>
