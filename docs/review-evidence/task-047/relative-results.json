@@ -1,0 +1,21 @@
+[ {
+  "case" : "recover-via-local-permissions-manager",
+  "cliExit" : 0,
+  "accountsBeforeGrant" : 403,
+  "grantStatus" : 200,
+  "accountsAfterGrant" : 200,
+  "localAdministrators" : 1
+}, {
+  "case" : "legacy-without-any-local-permissions-manager",
+  "localAdministrators" : 0,
+  "localResetExit" : 2,
+  "localResetNotAdministrator" : true,
+  "directoryResetExit" : 2,
+  "directoryResetManaged" : true,
+  "bootstrapExit" : 2,
+  "bootstrapAccountsExist" : true
+}, {
+  "case" : "recover-via-still-open-directory-session",
+  "membershipStatus" : 200,
+  "localAdministrators" : 1
+} ]

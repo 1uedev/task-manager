@@ -1,0 +1,33 @@
+[ {
+  "case" : "revoked-right-after-early",
+  "observedSerialWaiters" : 1,
+  "status" : 403,
+  "code" : "auth.forbidden",
+  "targetKind" : "ldap"
+}, {
+  "case" : "conversion-deactivation-conversion-first",
+  "firstUpdateWaiters" : 1,
+  "secondSerialWaiters" : 1,
+  "secondEarlyRightsWaiters" : 0,
+  "statuses" : [ 200, 200 ],
+  "active" : false,
+  "kind" : "local",
+  "externalCleared" : true,
+  "otpLoginStatus" : 401
+}, {
+  "case" : "conversion-deactivation-deactivation-first",
+  "firstUpdateWaiters" : 1,
+  "secondSerialWaiters" : 0,
+  "secondEarlyRightsWaiters" : 1,
+  "statuses" : [ 200, 200 ],
+  "active" : false,
+  "kind" : "local",
+  "externalCleared" : true,
+  "otpLoginStatus" : 401
+}, {
+  "case" : "self-conversion",
+  "status" : 200,
+  "otpReturned" : true,
+  "sessionAuthenticated" : false,
+  "protectedAccountsStatus" : 401
+} ]

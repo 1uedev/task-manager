@@ -1,0 +1,53 @@
+[ {
+  "case" : "local-guard-race-membership",
+  "observedRevisionWaiters" : 2,
+  "statuses" : [ 200, 409 ],
+  "codes" : [ "success", "permissions.last_local_administrator" ],
+  "localAdministrators" : 1
+}, {
+  "case" : "local-guard-race-action",
+  "observedRevisionWaiters" : 2,
+  "statuses" : [ 200, 409 ],
+  "codes" : [ "success", "permissions.last_local_administrator" ],
+  "localAdministrators" : 1
+}, {
+  "case" : "local-guard-race-deactivation",
+  "observedWaiters" : 2,
+  "statuses" : [ 200, 409 ],
+  "codes" : [ "success", "account.last_administrator" ],
+  "localAdministrators" : 1
+}, {
+  "case" : "local-guard-race-mixed",
+  "observedWaiters" : 2,
+  "statuses" : [ 409, 200 ],
+  "codes" : [ "account.last_administrator", "success" ],
+  "localAdministrators" : 1
+}, {
+  "case" : "last-local-guard",
+  "deactivateStatus" : 409,
+  "membershipStatus" : 409,
+  "accountsRightStatus" : 409,
+  "localAdministrators" : 1
+}, {
+  "case" : "conversion-login-race",
+  "conversionWaitObserved" : 1,
+  "loginWaitObserved" : 1,
+  "conversionStatus" : 200,
+  "ldapLoginStatus" : 200,
+  "ldapLoginLevel" : "password_change_required",
+  "ldapLoginKind" : "local",
+  "issuedOtpLoginStatus" : 401,
+  "issuedOtpLoginCode" : "auth.one_time_password_used",
+  "oldSessionAuthenticated" : false,
+  "sameMembershipCount" : true,
+  "conversionAuditCount" : 1
+}, {
+  "case" : "already-local",
+  "status" : 409,
+  "code" : "account.already_local"
+}, {
+  "case" : "converted-entry-alias",
+  "newAccount" : true,
+  "authKind" : "ldap",
+  "memberships" : 0
+} ]
