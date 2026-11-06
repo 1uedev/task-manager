@@ -330,6 +330,89 @@ describe('company appearance', () => {
     });
   });
 
+  // TASK-089, finding S1: "Aktuellen Stand laden" takes exactly its own answer, also with the same version, and a failed
+  // read keeps every input, offers the same step again and leaves nothing behind for a later change.
+  test('loading after a conflict ends with the same version too and leaves nothing behind for a later save', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Erster Entwurf');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      server.state.appearance.version = 9;
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      server.state.appearance.version = 3; // the read answers with the version the page already has
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.getByText('Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.').waitFor();
+      assert.equal(await field.inputValue(), 'Nordlicht', 'the failed part takes the saved name');
+      await accentBecomes(page, '#7c3aed', 'the unsaved color stays');
+
+      await field.fill('Zweiter Entwurf');
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      assert.equal(await field.inputValue(), 'Zweiter Entwurf', 'a later save of another part keeps the new name');
+    });
+  });
+
+  test('a failed load after a conflict keeps every input and can be tried again', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Ungespeichert');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      server.state.appearance.version = 9;
+      server.state.appearance.name = 'Fremder Name';
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      server.state.appearanceReadDown = true;
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      const retry = page.getByRole('button', { name: 'Erneut versuchen' });
+      await retry.waitFor();
+      assert.equal(await field.inputValue(), 'Ungespeichert', 'the name stays after the failed read');
+      await accentBecomes(page, '#7c3aed', 'and so does the color');
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isEnabled(), true, 'the page stays usable');
+
+      server.state.appearanceReadDown = false;
+      await retry.click();
+      await page.getByText('Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.').waitFor();
+      assert.equal(await field.inputValue(), 'Fremder Name', 'the repeated step takes the saved name');
+      await accentBecomes(page, '#7c3aed', 'the color stays');
+      await page.getByRole('button', { name: 'Namen speichern' }).waitFor();
+      await field.fill('Letzter Entwurf');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      assert.equal(await field.inputValue(), 'Letzter Entwurf', 'nothing of the failed read acts later');
+    });
+  });
+
+  // TASK-089, finding S2 and hint H2: the stand in answers wrong JSON types and logo types like the server.
+  test('the stand in refuses wrong JSON types and logo types like the server', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
+      const send = (path, type, body) => page.evaluate(async ({ path, type, body, token }) => {
+        const answer = await fetch(path, { method: 'PUT', headers: { 'Content-Type': type, 'If-Match': '"3"', 'X-CSRF-Token': token },
+          body: typeof body === 'string' ? body : new Uint8Array(body) });
+        return [answer.status, (await answer.json()).code ?? null];
+      }, { path, type, body, token: TOKEN });
+      for (const body of ['{"name":{}}', '{"name":["A"]}', '{"accentColor":["#f97316"]}', '[]']) {
+        assert.deepEqual(await send('/api/v1/appearance', 'application/json', body), [400, 'request.invalid'], body);
+      }
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', 'null'), [400, 'appearance.change_empty']);
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"accentColor":42}'), [400, 'appearance.color_invalid']);
+      assert.deepEqual(await send('/api/v1/appearance/logo', 'image/jpeg', [...PNG]), [415, 'appearance.logo_type_invalid']);
+      assert.deepEqual(await send('/api/v1/appearance/logo', 'image/png', [1, 2, 3]), [415, 'appearance.logo_type_invalid']);
+      assert.equal(server.state.appearance.version, 3, 'nothing was stored');
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"name":42}'), [200, null]);
+      assert.equal(server.state.appearance.name, '42');
+    });
+  });
+
   test('a logo dropped on the area is uploaded as image bytes and shown in the sidebar', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {

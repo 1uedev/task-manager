@@ -471,6 +471,25 @@ class AppearanceApiTest {
     }
 
     @Test
+    void wrongJsonTypesAreRefusedLikeTheTestStandIn() {
+        // TASK-089, finding S2: what the server answers to wrong JSON types, so the browser test stand in can do the same.
+        Browser admin = person(true);
+        for (String body : List.of("{\"name\":{}}", "{\"name\":[\"A\"]}", "{\"accentColor\":[\"#f97316\"]}", "[]")) {
+            assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", body.getBytes(StandardCharsets.UTF_8), "\"1\""),
+                400, "request.invalid");
+        }
+        assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", "null".getBytes(StandardCharsets.UTF_8), "\"1\""),
+            400, "appearance.change_empty");
+        assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", "{\"accentColor\":42}".getBytes(StandardCharsets.UTF_8), "\"1\""),
+            400, "appearance.color_invalid");
+        assertEquals(1L, jdbc.queryForObject("select version from appearance_setting where id = 1", Long.class));
+        // A number or a truth value is taken as its text, like every other string field of the API.
+        Response number = admin.send("PUT", "/api/v1/appearance", "application/json", "{\"name\":42}".getBytes(StandardCharsets.UTF_8), "\"1\"");
+        assertEquals(200, number.status(), number.body());
+        assertEquals("42", number.json().get("name").asString());
+    }
+
+    @Test
     void theDatabaseRefusesWhatTheServerRefuses() {
         // Hint H1: V0054 checks the same rule, so an import or a later path cannot store what the interface would refuse.
         for (String name : List.of("A\nB", "A\u200bB", "A\u2028B", "\u00a0Acme", "Acme\u202f", " Acme", "")) {
@@ -513,6 +532,44 @@ class AppearanceApiTest {
         assertEquals("\"3\"", admin.send("DELETE", "/api/v1/appearance", null, null, "\"2\"").header("ETag"));
         assertEquals(List.of("appearance.logo_replaced", "appearance.reset"),
             jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
+    }
+
+    @Test
+    void concurrentRequestsWithoutAChangeLeaveVersionAndAuditAndAStaleOneIsRefused() {
+        // TASK-089, hint H1: two requests at once that change nothing both succeed under the row lock without a new version.
+        Browser first = person(true);
+        Browser second = person(true);
+        assertEquals(List.of("\"1\"", "\"1\""), together(() -> first.send("DELETE", "/api/v1/appearance", null, null, "\"1\""),
+            () -> second.send("DELETE", "/api/v1/appearance", null, null, "\"1\"")));
+        assertEquals(List.of("\"1\"", "\"1\""), together(() -> first.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\""),
+            () -> second.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\"")));
+        assertEquals("\"2\"", first.logo("image/png", PNG, "\"1\"").header("ETag"));
+        assertEquals(List.of("\"2\"", "\"2\""), together(() -> first.logo("image/png", PNG, "\"2\""), () -> second.logo("image/png", PNG, "\"2\"")));
+        // A stale version is refused before the content is compared, even when the content is the same.
+        assertProblem(second.logo("image/png", PNG, "\"1\""), 412, "appearance.version_conflict");
+        assertProblem(second.json("PUT", "/api/v1/appearance", Map.of("name", "Task Manager"), "\"1\""), 412, "appearance.version_conflict");
+        assertEquals(List.of("appearance.logo_replaced"),
+            jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
+        assertEquals(2L, jdbc.queryForObject("select version from appearance_setting where id = 1", Long.class));
+    }
+
+    /** Sends both requests at the same moment and gives the ETag of each after checking that both succeeded. */
+    private static List<String> together(java.util.function.Supplier<Response> one, java.util.function.Supplier<Response> other) {
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> { start.await(); return one.get(); });
+            var b = pool.submit(() -> { start.await(); return other.get(); });
+            start.countDown();
+            List<String> etags = new ArrayList<>();
+            for (var future : List.of(a, b)) {
+                Response response = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(200, response.status(), response.body());
+                etags.add(response.header("ETag"));
+            }
+            return etags;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

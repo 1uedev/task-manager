@@ -116,6 +116,7 @@ export const de = {
   'appearance.name.invalid': 'Bitte 1 bis {max} Zeichen ohne Zeilenumbruch eingeben.',
   'appearance.name.save': 'Namen speichern',
   'appearance.name.reset': 'Standardnamen wählen',
+  'appearance.reloaded': 'Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.',
   'appearance.name.saved': 'Der Name ist für alle gespeichert.',
   'appearance.resetAll.title': 'Alles zurücksetzen',
   'appearance.resetAll.hint': 'Setzt Name ({name}), Akzentfarbe ({color}) und Logo in einem Schritt auf den Standard.',
