@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -43,6 +41,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-11-04 |
 | [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
+| [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -142,9 +141,10 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Grenzen: Die Beispielmail zeigt bis TASK-082 nur Kopf, Beispieltext und Name; echte Mails bleiben bis dahin reiner Text. Mit Logo bleibt der Name im Kopf wie bisher nur für Screenreader sichtbar. Ein geändertes Logo erscheint auf geöffneten Anmeldeseiten erst beim nächsten Laden.
 
 **Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-081_PR-243.md, 4. November 2026) empfiehlt „nachbessern“; die Befunde behebt TASK-087. Abnahme durch Holger danach zusammen mit TASK-087. TASK-082 und TASK-085 sind am 3. November 2026 abgenommen (DONE.md).
+
 ## TASK-087 Befunde der Prüfung von TASK-081 beheben (A17)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-04
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-04
 
 **Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; DEC-111; docs/REVIEW_TASK-081_PR-243.md. **Abhängigkeiten:** TASK-081 geliefert (PR #243). **Arbeitsstand:** Holger hat am 4. November 2026 den Codex Prüfbericht zu TASK-081 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl „F1 bis F4 und H1 bis H3 beheben“ vom selben Tag. Branch claude/project-thread-tzp0cw, Umsetzung voraussichtlich mit DEC-117 und der Migration V0054 (V0053 ist für TASK-069 vorgemerkt; vor dem Ergebnis die nächste freie Nummer prüfen).
 
@@ -163,7 +163,17 @@ Nicht Teil: weitere Funktionen des Auftritts; die Stabilisierung der Tagtests (H
 1. F1 und H1 mit API und Migrationstests für U+00A0, U+2007, U+202F und einen einzelnen Surrogaten; F2, F3 und F4 mit Browsertests (verlorene Eingabe, Fokus über `document.activeElement`, sichtbare Ausdehnung des Namens mit und ohne Logo bei 1100 und 320 px); H2 mit einem API Test für ein identisches PUT.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
+**Übergabe zur Prüfung (2026-11-04):**
+1. Ergebnis: DEC-117, Migration V0054 (nach V0053 von TASK-069). Die Regel des Namens steht ausgeschrieben gleich in `AppearanceService` (`EDGE`, `FORBIDDEN`), in V0054 als Datenbankprüfung, in `frontend/src/api/client.ts` (`normalizeBrandName`, `isBrandName`) und im Testersatz: Leerzeichen jeder Art an den Rändern fallen weg, Steuer-, Trenn- und Formatzeichen (Unicode 15.1, Cf) und halbe Surrogatpaare werden mit 400 `appearance.name_invalid` abgelehnt. V0054 kürzt gespeicherte Namen an den Rändern und setzt einen danach ungültigen auf „Task Manager“. Ein `PUT` ohne Änderung lässt Version und Audit stehen; das Audit nennt nur geänderte Teile. `AppearancePage.tsx` übernimmt nach dem Speichern nur den Wert des gespeicherten Teils, setzt den Fokus auf die Rückmeldung und nach „Abbrechen“ auf „Alles zurücksetzen“. `styles.css` blendet den Namen neben dem Logo und bis 30 rem nicht mehr aus; dort erhält der Kopf für ihn eine eigene Zeile. Vertrag appearance 0.3.1 mit `HEAD` der öffentlichen Pfade und der Normalisierung des Namens; `AppearanceContractTest` prüft HEAD genau für diese beiden Pfade. backend/README.md ergänzt.
+2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw clean verify` 522 Tests, davon einer rot (`JobExecutorTest.anExpiredLeaseOnTheLastAttemptFailsTheJob`, ohne Bezug, in der Wiederholung der Klasse 26 von 26 grün). Neu: in `AppearanceApiTest` geschützte Leerzeichen, ungültige Folgen und Surrogate über die API, die Datenbankprüfung und das unveränderte `PUT`; `AppearanceNameMigrationTest` mit sieben gespeicherten Namen von V0052 auf V0054. Frontend `npm run verify` 80 Tests, `npm run test:browser` 191 Tests, davon 190 grün; rot war nur `ldap.test.mjs` wegen einer Routenantwort nach dem Schließen des Browsers, ohne Bezug, einzeln zweimal 12 von 12 grün. Neu im Browser: erhaltene Eingaben bei Farbe, Name und Logo, Ränder mit geschützten Leerzeichen, Fokus nach Speichern, Abbrechen und Zurücksetzen per Tastatur, sichtbarer Name bei 1100 und 320 px mit und ohne Logo vor und nach der Anmeldung; ohne die Behebung waren fünf dieser Tests rot. Repositoryprüfungen grün. Nicht lokal: `lifecycle-check.sh` mit Docker (läuft in CI).
+3. Grenzen: Die Liste der Formatzeichen folgt Unicode 15.1 und wird bei neuen Unicode Versionen nicht von selbst länger. Emoji Folgen mit Verbindungszeichen (U+200D) und Flaggen aus Tag Zeichen bleiben wie bisher abgelehnt. V0054 schreibt für eine Bereinigung keinen Auditeintrag.
+
+**Nachbesserung nach der Codex Nachprüfung (docs/REVIEW_TASK-087_PR-259.md, 4. November 2026, Empfehlung „nachbessern“) im selben PR #259:**
+1. R1: „Aktuellen Stand laden“ nach einem Versionskonflikt übernimmt den gespeicherten Wert nur für den Teil, dessen Speichern scheiterte; die ungespeicherte Eingabe der anderen Teile bleibt. Browsertest „after a conflict on the name the current version is loaded and the unsaved color stays“, der ohne die Korrektur scheitert.
+2. R2: Zurücksetzen im Standardzustand, Logo entfernen ohne Logo und dasselbe Logo noch einmal lassen Version und Audit stehen wie ein `PUT` ohne Änderung. API Test `resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges`, der ohne die Korrektur scheitert.
+3. H1: Der Testersatz behandelt `null` wie einen nicht gesendeten Teil, antwortet auf eine Anfrage ohne Teile mit 400 `appearance.change_empty` und prüft die Werte vor der Version wie der Server. H2: `MailTemplatePreviewRequest.name` beschreibt die Normalisierung statt einer Länge am Rohwert (Vertrag appearance 0.3.2).
+
+**Nächster Schritt:** Kurze Nachprüfung von R1, R2, H1 und H2 durch eine zweite KI, danach Abnahme von TASK-081 und TASK-087 durch Holger.
 
 ## TASK-088 Befunde der Prüfung von TASK-067 beheben
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { changeAccentColor, changeAppearance, createServerApi, isBrandName, parseAppearance, parsePublicAppearance, parseSession, readAppearance, readPublicAppearance, readSession, removeLogo, replaceLogo, resetAppearance } from '../src/api/client.ts';
+import { changeAccentColor, changeAppearance, createServerApi, isBrandName, normalizeBrandName, parseAppearance, parsePublicAppearance, parseSession, readAppearance, readPublicAppearance, readSession, removeLogo, replaceLogo, resetAppearance } from '../src/api/client.ts';
 import { readCsrfToken } from '../src/api/csrf.ts';
 import { restoreOrder } from '../src/app/preferences.ts';
 import { move } from '../src/app/useReorder.ts';
@@ -122,6 +122,17 @@ test('the name of the appearance is checked like the server checks it', () => {
   for (const bad of ['', ' Nordlicht', 'Nordlicht ', 'x'.repeat(81), 'Zeile\nUmbruch', 'Rechts\u202ELinks', 7, null]) assert.equal(isBrandName(bad), false, String(bad));
   assert.equal(parseAppearance({ ...APPEARANCE, name: '' }), null);
   assert.equal(parseAppearance({ ...APPEARANCE, name: 'Nordlicht' })?.name, 'Nordlicht');
+});
+
+// TASK-087, finding F1: the same rule as the server, so a name the server stored is never refused here.
+test('protected spaces at the edges leave the name and broken or hidden characters are refused', () => {
+  assert.equal(normalizeBrandName('\u00a0\u2007Acme\u202f\u3000'), 'Acme');
+  assert.equal(normalizeBrandName('\ufeff Acme\u00a0GmbH \u2028'), 'Acme\u00a0GmbH');
+  for (const good of ['Acme\u00a0GmbH', 'A\u2007B']) assert.equal(isBrandName(good), true, good);
+  for (const bad of ['\u00a0Acme', 'Acme\u00a0', 'Acme\u202f', '\u2007', 'A\u200bB', 'A\u2028B', 'A\u00adB', 'A\ud800B', '\udc00', 'A\u{e0041}B']) {
+    assert.equal(isBrandName(bad), false, [...bad].map((c) => c.codePointAt(0)?.toString(16)).join(' '));
+  }
+  assert.equal(parsePublicAppearance({ name: 'Acme\u00a0GmbH', accentColor: '#2563eb', logoUrl: null })?.name, 'Acme\u00a0GmbH');
 });
 
 test('the login page reads only name, color and the public logo, and refuses anything else', async () => {

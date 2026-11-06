@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
-import { BRAND_NAME_MAX, changeAccentColor, changeAppearance, isBrandName, isLogoType, LOGO_MAX_BYTES, removeLogo, replaceLogo, resetAppearance } from '../api/client.ts';
+import { BRAND_NAME_MAX, changeAccentColor, changeAppearance, isBrandName, isLogoType, LOGO_MAX_BYTES, normalizeBrandName, removeLogo, replaceLogo, resetAppearance } from '../api/client.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { CheckIcon, ShieldIcon, UploadIcon } from '../app/Icons.tsx';
 import { ACCENT_PRESETS, contrastRatio, isAccentColor, textOn } from '../brand/brand.ts';
@@ -11,7 +11,9 @@ import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import { MailTemplateSection } from './MailTemplateSection.tsx';
 
 type Pending = ReturnType<typeof changeAccentColor>;
-type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo } | { readonly kind: 'invalid'; readonly text: MessageKey };
+// Which part a saving step changes: only its own unsaved input is replaced by the answer of the server (TASK-087, F2).
+type Part = 'name' | 'color' | 'logo' | 'all';
+type Notice = { readonly kind: 'saved'; readonly text: MessageKey } | { readonly kind: 'problem'; readonly problem: ProblemInfo; readonly part: Part } | { readonly kind: 'invalid'; readonly text: MessageKey };
 
 // Synthetic content of the sample mail, in the language of the mail and not of the interface (TASK-081). The mail template
 // of TASK-082 below shows the real frame around a reply for whoever may change it.
@@ -40,6 +42,17 @@ export function AppearancePage() {
   const [dropping, setDropping] = useState(false);
   const [localLogo, setLocalLogo] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  // After a saving step the focus goes to its outcome, after cancelling the question back to "Alles zurücksetzen" (TASK-087, F3).
+  const noticeArea = useRef<HTMLDivElement>(null);
+  const savedNotice = useRef<HTMLParagraphElement>(null);
+  const resetStart = useRef<HTMLButtonElement>(null);
+  const [focusAfter, setFocusAfter] = useState<'notice' | 'resetStart' | null>(null);
+  useEffect(() => {
+    if (focusAfter === null) return;
+    if (focusAfter === 'resetStart') resetStart.current?.focus();
+    else (savedNotice.current ?? noticeArea.current)?.focus();
+    setFocusAfter(null);
+  }, [focusAfter, notice, confirmReset]);
   const ids = { custom: useId(), hex: useId(), hexError: useId(), notice: useId(), name: useId(), nameError: useId(), nameHint: useId() };
 
   // The saved color arrives after the first render; take it over as long as nothing was edited.
@@ -56,12 +69,31 @@ export function AppearancePage() {
     setName(savedName);
   }, [savedName]);
 
+  // After a version conflict "Aktuellen Stand laden" gives only the part whose saving failed the current saved value;
+  // the unsaved input of every other part stays (TASK-087, finding R1 of docs/REVIEW_TASK-087_PR-259.md).
+  const takeSaved = useRef<Part | null>(null);
+  const loadedEtag = loaded?.etag;
+  useEffect(() => {
+    const part = takeSaved.current;
+    if (part === null || !loaded) return;
+    takeSaved.current = null;
+    if (part === 'color' || part === 'all') {
+      edited.current = false;
+      setDraft(loaded.appearance.accentColor);
+      setHex(loaded.appearance.accentColor.toUpperCase());
+    }
+    if (part === 'name' || part === 'all') {
+      nameEdited.current = false;
+      setName(loaded.appearance.name);
+    }
+  }, [loadedEtag]);
+
   // The whole interface shows the color and name being edited; leaving the page shows the saved ones again.
   useEffect(() => {
     preview(draft === savedAccent ? null : draft);
   }, [draft, savedAccent, preview]);
   useEffect(() => () => preview(null), [preview]);
-  const trimmedName = name.trim();
+  const trimmedName = normalizeBrandName(name);
   const nameValid = isBrandName(trimmedName);
   useEffect(() => {
     previewName(nameValid && trimmedName !== savedName ? trimmedName : null);
@@ -78,22 +110,28 @@ export function AppearancePage() {
     setNotice(null);
   }
 
-  async function run(call: () => Pending, success: MessageKey) {
+  async function run(part: Part, call: () => Pending, success: MessageKey) {
     setBusy(true);
     setNotice(null);
     const outcome = await call();
     setBusy(false);
     if (outcome.kind === 'ok') {
       accept(outcome.data);
-      edited.current = false;
-      nameEdited.current = false;
-      setDraft(outcome.data.appearance.accentColor);
-      setHex(outcome.data.appearance.accentColor.toUpperCase());
-      setName(outcome.data.appearance.name);
+      // Only what this step sent takes the saved value; an unsaved name stays while the color is saved and the other way round.
+      if (part === 'color' || part === 'all') {
+        edited.current = false;
+        setDraft(outcome.data.appearance.accentColor);
+        setHex(outcome.data.appearance.accentColor.toUpperCase());
+      }
+      if (part === 'name' || part === 'all') {
+        nameEdited.current = false;
+        setName(outcome.data.appearance.name);
+      }
       setNotice({ kind: 'saved', text: success });
     } else {
-      setNotice({ kind: 'problem', problem: outcome.problem });
+      setNotice({ kind: 'problem', problem: outcome.problem, part });
     }
+    setFocusAfter('notice');
   }
 
   function takeFile(file: File | undefined) {
@@ -102,7 +140,7 @@ export function AppearancePage() {
     if (file.size > LOGO_MAX_BYTES) return setNotice({ kind: 'invalid', text: 'appearance.logo.tooLarge' });
     if (admin && loaded) {
       const type = file.type;
-      void run(() => replaceLogo(api, loaded.etag, file, type), 'appearance.logo.saved');
+      void run('logo', () => replaceLogo(api, loaded.etag, file, type), 'appearance.logo.saved');
       return;
     }
     setLocalLogo(URL.createObjectURL(file));
@@ -150,7 +188,7 @@ export function AppearancePage() {
             <p className="hint" id={ids.nameHint}>{t('appearance.name.hint')}</p>
             <p className="actions">
               <button type="button" disabled={!admin || busy || !nameValid || trimmedName === savedName || !loaded}
-                onClick={() => loaded && nameValid && void run(() => changeAppearance(api, loaded.etag, { name: trimmedName }), 'appearance.name.saved')}>
+                onClick={() => loaded && nameValid && void run('name', () => changeAppearance(api, loaded.etag, { name: trimmedName }), 'appearance.name.saved')}>
                 {t('appearance.name.save')}
               </button>
               <button type="button" className="secondary" disabled={busy || trimmedName === defaultName} onClick={() => {
@@ -203,7 +241,7 @@ export function AppearancePage() {
             <p className="actions">
               {/* An invalid typed value blocks saving: draft still holds the last valid color, which is not what the field shows. */}
               <button type="button" disabled={!admin || busy || !hexValid || draft === savedAccent || !loaded}
-                onClick={() => loaded && isAccentColor(hex) && void run(() => changeAccentColor(api, loaded.etag, draft), 'appearance.color.saved')}>
+                onClick={() => loaded && isAccentColor(hex) && void run('color', () => changeAccentColor(api, loaded.etag, draft), 'appearance.color.saved')}>
                 {t('appearance.save')}
               </button>
               <button type="button" className="secondary" disabled={busy || draft === defaultAccent} onClick={() => choose(defaultAccent)}>
@@ -238,7 +276,7 @@ export function AppearancePage() {
             {admin && loaded?.appearance.logo && (
               <p className="actions">
                 <button type="button" className="secondary" disabled={busy}
-                  onClick={() => void run(() => removeLogo(api, loaded.etag), 'appearance.logo.removed')}>
+                  onClick={() => void run('logo', () => removeLogo(api, loaded.etag), 'appearance.logo.removed')}>
                   {t('appearance.logo.remove')}
                 </button>
               </p>
@@ -251,25 +289,28 @@ export function AppearancePage() {
               <p>{t('appearance.resetAll.hint', { name: defaultName, color: defaultAccent.toUpperCase() })}</p>
               <p className="actions">
                 {!confirmReset
-                  ? <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmReset(true)}>{t('appearance.resetAll.start')}</button>
+                  ? <button ref={resetStart} type="button" className="secondary" disabled={busy} onClick={() => setConfirmReset(true)}>{t('appearance.resetAll.start')}</button>
                   : <>
                     <button type="button" disabled={busy} onClick={() => {
                       setConfirmReset(false);
-                      void run(() => resetAppearance(api, loaded.etag), 'appearance.resetAll.done');
+                      void run('all', () => resetAppearance(api, loaded.etag), 'appearance.resetAll.done');
                     }}>{t('appearance.resetAll.confirm')}</button>
-                    <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmReset(false)}>{t('appearance.resetAll.cancel')}</button>
+                    <button type="button" className="secondary" disabled={busy} onClick={() => {
+                      setConfirmReset(false);
+                      setFocusAfter('resetStart');
+                    }}>{t('appearance.resetAll.cancel')}</button>
                   </>}
               </p>
             </section>
           )}
 
-          <div id={ids.notice} aria-live="polite">
-            {notice?.kind === 'saved' && <p className="success" role="status">{t(notice.text)}</p>}
+          <div id={ids.notice} aria-live="polite" ref={noticeArea} tabIndex={-1}>
+            {notice?.kind === 'saved' && <p className="success" role="status" ref={savedNotice} tabIndex={-1} data-testid="appearance-saved">{t(notice.text)}</p>}
             {notice?.kind === 'invalid' && <p className="state state-problem" role="alert">{t(notice.text)}</p>}
             {notice?.kind === 'problem' && (
               notice.problem.kind === 'conflict'
                 ? <ProblemView problem={notice.problem} actionLabel="states.reload" onAction={() => {
-                  edited.current = false;
+                  takeSaved.current = notice.part;
                   setNotice(null);
                   reload();
                 }} />

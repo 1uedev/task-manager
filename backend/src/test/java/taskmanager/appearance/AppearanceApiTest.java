@@ -3,6 +3,7 @@ package taskmanager.appearance;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -441,6 +442,77 @@ class AppearanceApiTest {
         assertEquals(longest, accepted.json().get("name").asString());
         assertProblem(person(false).json("PUT", "/api/v1/appearance", Map.of("name", "Fremd"), "\"2\""), 403, "auth.forbidden");
         assertEquals(1, auditCount());
+    }
+
+    @Test
+    void protectedSpacesAtTheEdgesAreRemovedAndBrokenUnicodeIsRefused() {
+        // Finding F1 of docs/REVIEW_TASK-081_PR-243.md: Java strip() kept these, the interface then refused the appearance.
+        Browser admin = person(true);
+        long version = 1;
+        for (String edge : List.of("\u00a0", "\u2007", "\u202f", "\u3000", "\ufeff", "\u2028")) {
+            Response named = admin.json("PUT", "/api/v1/appearance", Map.of("name", edge + "Acme " + version + edge), "\"" + version + "\"");
+            assertEquals(200, named.status(), named.body());
+            assertEquals("Acme " + version, named.json().get("name").asString());
+            version++;
+        }
+        // Inside the name a protected space is a normal character.
+        Response inner = admin.json("PUT", "/api/v1/appearance", Map.of("name", "Acme\u00a0GmbH"), "\"" + version + "\"");
+        assertEquals("Acme\u00a0GmbH", inner.json().get("name").asString());
+        version++;
+        for (String name : List.of("\u00a0", "\u2007\u202f", "A\u200bB", "A\u2028B", "A\u00adB")) {
+            assertProblem(admin.json("PUT", "/api/v1/appearance", Map.of("name", name), "\"" + version + "\""), 400, "appearance.name_invalid");
+        }
+        // A lone surrogate written as an escape in the JSON itself is refused, not stored as a question mark.
+        for (String escaped : List.of("A\\ud800", "\\udc00B")) {
+            assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", ("{\"name\":\"" + escaped + "\"}").getBytes(StandardCharsets.UTF_8),
+                "\"" + version + "\""), 400, "appearance.name_invalid");
+        }
+        assertEquals("Acme\u00a0GmbH", jdbc.queryForObject("select name from appearance_setting where id = 1", String.class));
+    }
+
+    @Test
+    void theDatabaseRefusesWhatTheServerRefuses() {
+        // Hint H1: V0054 checks the same rule, so an import or a later path cannot store what the interface would refuse.
+        for (String name : List.of("A\nB", "A\u200bB", "A\u2028B", "\u00a0Acme", "Acme\u202f", " Acme", "")) {
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbc.update("update appearance_setting set name = ? where id = 1", name), name);
+        }
+        assertEquals(1, jdbc.update("update appearance_setting set name = ? where id = 1", "Acme\u00a0GmbH \uD83D\uDE80"));
+    }
+
+    @Test
+    void anUnchangedPartIsNeitherAuditedNorCountedAsAChange() {
+        // Hint H2: only a part that really changes is a change.
+        Browser admin = person(true);
+        assertEquals(200, admin.json("PUT", "/api/v1/appearance", Map.of("name", "Probe", "accentColor", "#2563eb"), "\"1\"").status());
+        Response same = admin.json("PUT", "/api/v1/appearance", Map.of("name", " Probe ", "accentColor", "#2563EB"), "\"2\"");
+        assertEquals(200, same.status(), same.body());
+        assertEquals("\"2\"", same.header("ETag"));
+        Response colorOnly = admin.json("PUT", "/api/v1/appearance", Map.of("name", "Probe", "accentColor", "#7c3aed"), "\"2\"");
+        assertEquals("\"3\"", colorOnly.header("ETag"));
+        assertEquals(List.of("appearance.accent_changed: #f97316 -> #2563eb", "appearance.name_changed: Task Manager -> Probe",
+                "appearance.accent_changed: #2563eb -> #7c3aed"),
+            jdbc.queryForList("select event || ': ' || detail from appearance_audit_event order by id", String.class));
+    }
+
+    @Test
+    void resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges() {
+        // Finding R2 of docs/REVIEW_TASK-087_PR-259.md: no request without a change counts as a change.
+        Browser admin = person(true);
+        Response reset = admin.send("DELETE", "/api/v1/appearance", null, null, "\"1\"");
+        assertEquals(200, reset.status(), reset.body());
+        assertEquals("\"1\"", reset.header("ETag"));
+        Response remove = admin.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\"");
+        assertEquals(200, remove.status(), remove.body());
+        assertEquals("\"1\"", remove.header("ETag"));
+        assertEquals("\"2\"", admin.logo("image/png", PNG, "\"1\"").header("ETag"));
+        Response again = admin.logo("image/png", PNG, "\"2\"");
+        assertEquals(200, again.status(), again.body());
+        assertEquals("\"2\"", again.header("ETag"));
+        assertProblem(admin.send("DELETE", "/api/v1/appearance/logo", null, null, "\"1\""), 412, "appearance.version_conflict");
+        assertEquals("\"3\"", admin.send("DELETE", "/api/v1/appearance", null, null, "\"2\"").header("ETag"));
+        assertEquals(List.of("appearance.logo_replaced", "appearance.reset"),
+            jdbc.queryForList("select event from appearance_audit_event order by id", String.class));
     }
 
     @Test

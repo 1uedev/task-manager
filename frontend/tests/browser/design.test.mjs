@@ -297,6 +297,39 @@ describe('company appearance', () => {
     });
   });
 
+  // TASK-087, finding R1: loading the current version after a conflict keeps the unsaved input of the other parts.
+  test('after a conflict on the name the current version is loaded and the unsaved color stays', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Ungespeicherter Name');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      server.state.appearance.version = 9; // someone else saved another color and name meanwhile
+      server.state.appearance.accent = '#16a34a';
+      server.state.appearance.name = 'Fremder Name';
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Fremder Name');
+      await accentBecomes(page, '#7c3aed', 'the unsaved color stays');
+      assert.equal(await page.getByRole('button', { name: 'Violett' }).getAttribute('aria-pressed'), 'true');
+
+      await field.fill('Zweiter Entwurf');
+      server.state.appearance.version = 10;
+      server.state.appearance.accent = '#e11d48';
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#E11D48');
+      assert.equal(await field.inputValue(), 'Zweiter Entwurf', 'the unsaved name stays');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      assert.equal(server.state.appearance.name, 'Zweiter Entwurf');
+    });
+  });
+
   test('a logo dropped on the area is uploaded as image bytes and shown in the sidebar', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
@@ -435,6 +468,116 @@ describe('company name and preview', () => {
       assert.equal(await page.getByLabel('Name des Unternehmens').inputValue(), 'Task Manager');
     });
   });
+
+  // TASK-087, finding F2 of docs/REVIEW_TASK-081_PR-243.md: saving one part keeps the unsaved input of the others.
+  test('saving the color keeps an unsaved name and saving the name keeps an unsaved color', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Entwurf GmbH');
+      await page.getByRole('button', { name: 'Grün' }).click();
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      assert.equal(await field.inputValue(), 'Entwurf GmbH', 'the unsaved name stays');
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Entwurf GmbH', 'and so does its preview');
+      assert.deepEqual(JSON.parse(server.writes()[0].body.toString()), { accentColor: '#16a34a' });
+
+      await page.getByRole('button', { name: 'Violett' }).click();
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      assert.deepEqual(JSON.parse(server.writes()[1].body.toString()), { name: 'Entwurf GmbH' });
+      await accentBecomes(page, '#7c3aed', 'the unsaved color stays');
+      assert.equal(await page.getByRole('button', { name: 'Violett' }).getAttribute('aria-pressed'), 'true');
+
+      await field.fill('Noch ein Entwurf');
+      await page.getByTestId('logo-file').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+      await page.getByText('Das Logo ist für alle gespeichert.').waitFor();
+      assert.equal(await field.inputValue(), 'Noch ein Entwurf', 'a logo keeps the unsaved name');
+      await accentBecomes(page, '#7c3aed', 'and the unsaved color');
+    });
+  });
+
+  // TASK-087, finding F1: protected spaces at the edges leave the name before it is sent, as on the server.
+  test('protected spaces at the edges of the name are removed before saving', async () => {
+    const server = fake();
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Task Manager');
+      await field.fill('\u00a0\u202fNordlicht\u00a0GmbH\u2007');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      assert.deepEqual(JSON.parse(server.writes()[0].body.toString()), { name: 'Nordlicht\u00a0GmbH' });
+      assert.equal(await page.getByTestId('brand-name').innerText(), 'Nordlicht\u00a0GmbH');
+      await field.fill('\u00a0');
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true);
+    });
+  });
+
+  // TASK-087, finding F3: the keyboard focus lands on the outcome of a step and returns to the start of a cancelled question.
+  test('after saving the focus is on the confirmation and after cancelling the question on the reset button', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await field.fill('Nordlicht Service');
+      await page.getByRole('button', { name: 'Namen speichern' }).focus();
+      await page.keyboard.press('Enter');
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'appearance-saved');
+
+      await page.getByRole('button', { name: 'Grün' }).click();
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).focus();
+      await page.keyboard.press('Enter');
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'appearance-saved');
+
+      await page.getByRole('button', { name: 'Alles zurücksetzen' }).focus();
+      await page.keyboard.press('Enter');
+      await page.getByRole('button', { name: 'Abbrechen' }).focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.textContent === 'Alles zurücksetzen' && document.activeElement.tagName === 'BUTTON');
+
+      await page.keyboard.press('Enter');
+      await page.getByRole('button', { name: 'Ja, alles zurücksetzen' }).focus();
+      await page.keyboard.press('Enter');
+      await page.getByText('Name, Akzentfarbe und Logo sind auf den Standard zurückgesetzt.').waitFor();
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'appearance-saved');
+    });
+  });
+
+  // TASK-087, finding F4: the name is visible beside the logo and at phone width, not only for screen readers.
+  for (const width of [1100, 320]) {
+    for (const withLogo of [true, false]) {
+      test(`the name is visible in the head at ${width} px ${withLogo ? 'with' : 'without'} a logo, before and after the login`, async () => {
+        const backend = fake({ brandName: 'Nordlicht Service' });
+        if (withLogo) backend.state.appearance.logo = { contentType: 'image/png', size: 67, url: '/api/v1/appearance/logo?v=3' };
+        for (const as of [null, ANNA]) {
+          await withPage({ backend, as, viewport: { width, height: 800 } }, async (page) => {
+            await page.waitForFunction(() => document.querySelector('[data-testid="brand-name"]')?.textContent === 'Nordlicht Service');
+            if (withLogo) await page.waitForSelector('header img.brand-logo');
+            const shown = await page.evaluate(() => {
+              const name = document.querySelector('[data-testid="brand-name"]');
+              const box = name.getBoundingClientRect();
+              const style = getComputedStyle(name);
+              const others = [...document.querySelectorAll('.preferences, .sidebar nav')]
+                .map((element) => element.getBoundingClientRect())
+                .filter((other) => other.width > 0 && !(other.right <= box.left || other.left >= box.right || other.bottom <= box.top || other.top >= box.bottom));
+              return { width: box.width, height: box.height, clip: style.clip, inside: box.left >= 0 && box.right <= window.innerWidth + 0.5, covered: others.length,
+                scroll: document.documentElement.scrollWidth <= window.innerWidth };
+            });
+            assert.ok(shown.width > 40 && shown.height > 10, JSON.stringify(shown));
+            assert.notEqual(shown.clip, 'rect(0px, 0px, 0px, 0px)');
+            assert.ok(shown.inside, JSON.stringify(shown));
+            assert.equal(shown.covered, 0, 'nothing lies over the name');
+            assert.ok(shown.scroll, 'no horizontal scrolling');
+          });
+        }
+      });
+    }
+  }
 
   test('the mail template is edited per language with a preview of synthetic data, checked by the server and reset', async () => {
     const server = fake({ brandName: 'Nordlicht' });

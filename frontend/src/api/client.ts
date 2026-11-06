@@ -244,11 +244,23 @@ export function parseAppearance(value: unknown): Appearance | null {
 
 export const BRAND_NAME_MAX = 80;
 
-// A name as the server stores it: 1 to 80 characters, no surrounding spaces, no control or format characters (TASK-081).
+// The rule of the name, character by character the same as AppearanceService.EDGE and FORBIDDEN on the server and the check
+// of V0054 in the database (TASK-087, finding F1 of docs/REVIEW_TASK-081_PR-243.md), so a stored name is never refused here.
+// Spaces of every kind, the protected ones included, are removed at both ends; control characters, line and paragraph
+// separators, format characters (Unicode 15.1, Cf) and halves of a surrogate pair are refused anywhere.
+const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
+const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
+
+// The name as the server will store it: without the spaces at its edges.
+export function normalizeBrandName(value: string): string {
+  return value.replace(NAME_EDGES, '');
+}
+
+// A name as the server stores it: 1 to 80 characters after the edges are removed, none of the refused characters (TASK-081, TASK-087).
 export function isBrandName(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const length = [...value].length;
-  return length >= 1 && length <= BRAND_NAME_MAX && value === value.trim() && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(value);
+  return length >= 1 && length <= BRAND_NAME_MAX && value === normalizeBrandName(value) && !NAME_FORBIDDEN.test(value);
 }
 
 // What the login page shows before anyone is signed in (TASK-081): name, accent color and the public logo, nothing else.

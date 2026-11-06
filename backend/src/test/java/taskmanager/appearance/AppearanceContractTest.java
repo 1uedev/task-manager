@@ -1,6 +1,7 @@
 package taskmanager.appearance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -67,5 +68,21 @@ class AppearanceContractTest {
         Set<String> mapped = mapped();
         assertEquals(12, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
+    }
+
+    /** HEAD is answered by the GET routes; the contract names it only for the two public reads (TASK-087, hint H3). */
+    @Test
+    @SuppressWarnings("unchecked")
+    void headIsDocumentedExactlyForThePublicReads() throws IOException {
+        Map<String, Object> document = new Yaml().load(Files.readString(CONTRACT));
+        Map<String, Map<String, Object>> paths = (Map<String, Map<String, Object>>) document.get("paths");
+        Set<String> head = new TreeSet<>();
+        for (var path : paths.entrySet()) {
+            if (path.getValue().containsKey("head")) {
+                assertTrue(path.getValue().containsKey("get"), path.getKey());
+                head.add(path.getKey());
+            }
+        }
+        assertEquals(Set.of("/appearance/public", "/appearance/public/logo"), head);
     }
 }
