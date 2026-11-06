@@ -1,0 +1,4 @@
+REAL SESSION: {"timezone": ["Mitteleuropäische Zeit", "Mitteleuropäische Sommerzeit"], "UTC_hours_left": 24.0, "verify_formula_hours_left": 23.0}
+SMALL REFERENCE COMPLEX SEARCH: {"projects": 4, "initial_tickets": 200, "accounts_plus_admin": 13, "queries": 100, "zero_matches": 91, "nonzero_matches": 9, "all_HTTP_200": true}
+CONTROL: positive complex filter from an actual ticket returns at least one hit
+REAL POST RETRY: one Client.call produced two committed tickets; backend statuses [201, 201]
