@@ -206,7 +206,7 @@ Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
 
 **Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
 
-**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117; docs/REVIEW_TASK-087_PR-259_2.md. **Abhängigkeiten:** TASK-087 geliefert (PR #259). **Arbeitsstand:** Holger hat am 6. November 2026 den Codex Bericht der zweiten Nachprüfung von TASK-087 (Empfehlung „nachbessern“) in den Thread gestellt. Branch claude/project-thread-tzp0cw; ohne Migration.
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117; docs/REVIEW_TASK-087_PR-259_2.md. **Abhängigkeiten:** TASK-087 geliefert (PR #259). **Arbeitsstand:** Holger hat am 6. November 2026 den Codex Bericht der zweiten Nachprüfung von TASK-087 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „S1, S2, H1 und H2 beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
 
 **Umfang:** Befunde S1 und S2 und Hinweise H1 und H2 aus docs/REVIEW_TASK-087_PR-259_2.md:
 1. S1: „Aktuellen Stand laden“ nach einem Versionskonflikt ist an genau diesen Ladevorgang gebunden. Auch eine Antwort mit gleicher Version schließt ihn ab; scheitert das Laden, bleiben die Eingaben und eine wiederholbare Fehlermeldung, und kein offener Auftrag wirkt auf eine spätere Ladung oder Teiländerung.
