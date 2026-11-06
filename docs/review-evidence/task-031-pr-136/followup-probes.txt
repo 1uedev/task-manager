@@ -1,0 +1,10 @@
+POST drop: commits=1, exception=UnclearOutcome, measurement classification=unclear
+POST partial: commits=1, exception=IncompleteRead, measurement classification=error
+POST timeout: commits=1, exception=TimeoutError, measurement classification=error
+Komplexe Suche mit Treffern: samples=113, p95_ms=43.0, hits={'with_hits': 113, 'without_hits': 0, 'p50': 1, 'max': 25}
+Komplexe Suche selektiv: samples=37, p95_ms=55.3, hits={'with_hits': 3, 'without_hits': 34, 'p50': 0, 'max': 10}
+Published JSON/Markdown: exact generated table match, totals/targets/counts consistent; raw percentiles not independently reconstructed
+Positive generator: 10000/10000 queries match their synthetic source ticket
+Controlled write: GET 900ms + PATCH 10ms => save 10ms, complete action 910ms; target only on save
+UTC expiry arithmetic: 24 hours across both DST changes
+All independent probe assertions passed
