@@ -1294,6 +1294,153 @@ class HelpdeskApiTest {
         assertEquals(waiting.toString(), list.json().get(0).get("id").asString());
     }
 
+    /** A new answer of the setup: a confirmed answer of the contact to a sent reply, with the number of its ticket. */
+    private record Answer(UUID id, long number, String replyId) {
+    }
+
+    private Answer newAnswer(Setup setup, Browser replier, String subject) throws Exception {
+        long number = (Long) ticketFromMail(setup, subject)[0];
+        UUID reply = UUID.fromString(reply(replier, setup, number, "Bitte prüfen.").json().get("id").asString());
+        assertNull(runReplyJob(reply, 1));
+        String replyId = "<" + reply + "@firma.example>";
+        deliver(setup, confirmed("nordwerk.example") + "In-Reply-To: " + replyId + "\r\n", "Re: " + subject, "Geht wieder.");
+        intake.fetch(setup.mailbox());
+        UUID answer = jdbc.queryForObject("select id from helpdesk_message where mailbox_id = ? order by uid desc limit 1", UUID.class,
+            setup.mailbox());
+        assertNotNull(jdbc.queryForObject("select joined_at from helpdesk_message where id = ?", Instant.class, answer));
+        return new Answer(answer, number, replyId);
+    }
+
+    private long messageVersion(UUID id) {
+        return jdbc.queryForObject("select version from helpdesk_message where id = ?", Long.class, id);
+    }
+
+    private List<String> answerAudit(UUID id) {
+        return jdbc.queryForList("select operation from helpdesk_audit_event where target_id = ?", String.class, id);
+    }
+
+    /**
+     * F1 of the review of TASK-067: the rights of a marking are those of the project of the mail, so a ticket that left that
+     * project takes its answer out of reach. The mail answers like an unknown one and stays new.
+     */
+    @Test
+    void anAnswerWhoseTicketLeftTheProjectIsUnknown() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Answer answer = newAnswer(setup, replier, "Umzug");
+        long version = messageVersion(answer.id());
+        Setup other = setup();
+        UUID ticket = jdbc.queryForObject("select ticket_id from helpdesk_message where id = ?", UUID.class, answer.id());
+        jdbc.update("update ticket set project_id = ?, number = 999 where id = ?", other.project(), ticket);
+
+        assertEquals(0, replier.get("/api/v1/helpdesk/answers").json().size(), "the list already leaves it out");
+        Response seen = replier.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, "\"" + version + "\"");
+        assertEquals(404, seen.status(), seen.body());
+        assertEquals("helpdesk.message_not_found", seen.code());
+        assertEquals(List.of(), answerAudit(answer.id()));
+        assertNull(jdbc.queryForObject("select seen_at from helpdesk_message where id = ?", Instant.class, answer.id()));
+        assertEquals(version, messageVersion(answer.id()));
+
+        // Back in its project the answer is new and can be marked again.
+        jdbc.update("update ticket set project_id = ?, number = ? where id = ?", setup.project(), answer.number(), ticket);
+        assertEquals(200, replier.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, "\"" + version + "\"").status());
+    }
+
+    /** H2 of the review of TASK-067: marking needs the rights of a reply, but no contact at the ticket. */
+    @Test
+    void anAnswerCanBeMarkedAtATicketWithoutContact() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Answer answer = newAnswer(setup, replier, "Ohne Kontakt");
+        UUID ticket = jdbc.queryForObject("select ticket_id from helpdesk_message where id = ?", UUID.class, answer.id());
+        jdbc.update("update helpdesk_ticket_customer set contact_id = null where ticket_id = ?", ticket);
+
+        Response view = replier.get(ticketPath(setup, answer.number()));
+        assertFalse(view.json().get("replyAllowed").asBoolean(), view.body());
+        assertTrue(view.json().get("answerSeenAllowed").asBoolean(), view.body());
+        assertTrue(view.json().get("mails").get(1).get("newAnswer").asBoolean());
+        Browser reader = member(setup);
+        grant(reader.id, setup.project(), "ticket.read", "READ:*");
+        assertFalse(reader.get(ticketPath(setup, answer.number())).json().get("answerSeenAllowed").asBoolean());
+        Response seen = replier.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null,
+            "\"" + messageVersion(answer.id()) + "\"");
+        assertEquals(200, seen.status(), seen.body());
+    }
+
+    /** H4 of the review of TASK-067: two people mark the same answer at once; one marking counts, with one audit entry. */
+    @Test
+    void twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser first = replier(setup);
+        Browser second = replier(setup);
+        Answer answer = newAnswer(setup, first, "Gleichzeitig");
+        String version = "\"" + messageVersion(answer.id()) + "\"";
+        Future<Response> a = POOL.submit(() -> first.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
+        Future<Response> b = POOL.submit(() -> second.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
+        List<Integer> statuses = new ArrayList<>(List.of(a.get(20, java.util.concurrent.TimeUnit.SECONDS).status(),
+            b.get(20, java.util.concurrent.TimeUnit.SECONDS).status()));
+        statuses.sort(null);
+        assertEquals(200, statuses.get(0), statuses.toString());
+        assertTrue(statuses.get(1) == 409 || statuses.get(1) == 412, statuses.toString());
+        assertEquals(List.of("answer.seen"), answerAudit(answer.id()));
+        UUID by = jdbc.queryForObject("select seen_by from helpdesk_message where id = ?", UUID.class, answer.id());
+        assertTrue(by.equals(first.id) || by.equals(second.id));
+    }
+
+    /**
+     * H4 of the review of TASK-067: a mail in the review queue is no answer yet; marking it before the reviewer adds it to the
+     * ticket is refused, and a marking with the version from before the attach is a conflict.
+     */
+    @Test
+    void anAnswerCanBeMarkedOnlyAfterItJoinedItsTicket() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Answer first = newAnswer(setup, replier, "Warteschlange");
+        deliver(setup, "In-Reply-To: " + first.replyId() + "\r\n", "Re: Warteschlange", "Noch etwas.");
+        intake.fetch(setup.mailbox());
+        UUID waiting = jdbc.queryForObject("select id from helpdesk_message where mailbox_id = ? order by uid desc limit 1", UUID.class,
+            setup.mailbox());
+        String before = "\"" + messageVersion(waiting) + "\"";
+        Response early = replier.send("POST", "/api/v1/helpdesk/answers/" + waiting + "/seen", null, before);
+        assertEquals(409, early.status(), early.body());
+        assertEquals("helpdesk.answer_not_new", early.code());
+
+        Browser reviewer = reviewer(setup);
+        Response shown = reviewer.get("/api/v1/helpdesk/inbox/" + waiting);
+        assertEquals(200, reviewer.send("POST", "/api/v1/helpdesk/inbox/" + waiting + "/attach", null, shown.etag()).status());
+        assertEquals(412, replier.send("POST", "/api/v1/helpdesk/answers/" + waiting + "/seen", null, before).status());
+        assertFalse(answerAudit(waiting).contains("answer.seen"));
+        String after = "\"" + messageVersion(waiting) + "\"";
+        assertEquals(200, replier.send("POST", "/api/v1/helpdesk/answers/" + waiting + "/seen", null, after).status());
+        assertEquals(1, answerAudit(waiting).stream().filter("answer.seen"::equals).count());
+    }
+
+    /**
+     * H4 of the review of TASK-067: mails that joined their ticket before V0052 carry no time of joining and are never new;
+     * the database refuses a marking without it.
+     */
+    @Test
+    void anAnswerFromBeforeTheMigrationIsNeverNew() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Answer answer = newAnswer(setup, replier, "Altbestand");
+        jdbc.update("update helpdesk_message set joined_at = null where id = ?", answer.id());
+
+        assertEquals(0, replier.get("/api/v1/helpdesk/answers").json().size());
+        assertFalse(replier.get(ticketPath(setup, answer.number())).json().get("mails").get(1).get("newAnswer").asBoolean());
+        Response seen = replier.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null,
+            "\"" + messageVersion(answer.id()) + "\"");
+        assertEquals(409, seen.status(), seen.body());
+        assertEquals("helpdesk.answer_not_new", seen.code());
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+            () -> jdbc.update("update helpdesk_message set seen_at = now(), seen_by = ? where id = ?", replier.id, answer.id()));
+    }
+
     @Test
     void theAnswerOfTheCustomerJoinsTheTicketOfTheReply() throws Exception {
         Setup setup = setup();

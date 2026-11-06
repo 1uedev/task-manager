@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
   attachMessage, createContact, discardMessage, HELPDESK_STATES, INBOX_PAGE, listCandidates, listCustomers, listInbox, listOpenReplies, listProjects,
@@ -276,20 +276,35 @@ function NewAnswers({ round }: { readonly round: number }) {
   const [answers, reload] = useLoad(() => readNewAnswers(api), [api, round]);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
 
+  // The row of a marked answer leaves the list, so the focus goes to the heading of the list, right above the notice
+  // (TASK-088, F2).
   async function seen(id: string, version: number) {
     setBusy(id);
     setNotice(null);
     const result = await markAnswerSeen(api, id, version);
     setBusy(null);
-    if (result.kind !== 'ok') setNotice({ kind: 'info', text: text(result.problem, ANSWER_PROBLEMS) });
+    setNotice(result.kind === 'ok' ? { kind: 'success', text: t('inbox.answerSeen') } : { kind: 'info', text: text(result.problem, ANSWER_PROBLEMS) });
+    heading.current?.focus();
     reload();
   }
 
-  if (answers.state !== 'ok' || (answers.value.length === 0 && notice === null)) return null;
+  if (answers.state === 'loading') return null;
+  // A failed load is no empty list: it says so and offers to load again (TASK-088, F3).
+  if (answers.state === 'problem') {
+    return (
+      <section className="panel" aria-labelledby="new-answers" data-testid="new-answers">
+        <h2 id="new-answers">{t('inbox.newAnswers')}</h2>
+        <ProblemView problem={answers.problem} onAction={reload} actionLabel="states.retry" />
+      </section>
+    );
+  }
+  if (answers.value.length === 0 && notice === null) return null;
   return (
     <section className="panel" aria-labelledby="new-answers" data-testid="new-answers">
-      <h2 id="new-answers">{t('inbox.newAnswers')}</h2>
+      <h2 id="new-answers" ref={heading} tabIndex={-1}>{t('inbox.newAnswers')}</h2>
+      <NoticeView notice={notice} />
       <ul className="plain-list">
         {answers.value.map((answer) => (
           <li key={answer.id} data-answer={answer.id}>
@@ -302,7 +317,6 @@ function NewAnswers({ round }: { readonly round: number }) {
           </li>
         ))}
       </ul>
-      <NoticeView notice={notice} />
     </section>
   );
 }
