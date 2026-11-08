@@ -1369,7 +1369,10 @@ class HelpdeskApiTest {
         assertEquals(200, seen.status(), seen.body());
     }
 
-    /** H4 of the review of TASK-067: two people mark the same answer at once; one marking counts, with one audit entry. */
+    /**
+     * H4 of the review of TASK-067 and R2 of the review of TASK-088: two people mark the same answer while a third transaction
+     * holds the mail. Both wait for it, then one marking counts: 200 and 412, one step of the version, one audit of the winner.
+     */
     @Test
     void twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking() throws Exception {
         Setup setup = setup();
@@ -1377,17 +1380,63 @@ class HelpdeskApiTest {
         Browser first = replier(setup);
         Browser second = replier(setup);
         Answer answer = newAnswer(setup, first, "Gleichzeitig");
-        String version = "\"" + messageVersion(answer.id()) + "\"";
-        Future<Response> a = POOL.submit(() -> first.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
-        Future<Response> b = POOL.submit(() -> second.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
-        List<Integer> statuses = new ArrayList<>(List.of(a.get(20, java.util.concurrent.TimeUnit.SECONDS).status(),
-            b.get(20, java.util.concurrent.TimeUnit.SECONDS).status()));
+        long before = messageVersion(answer.id());
+        String version = "\"" + before + "\"";
+        Future<Response> a;
+        Future<Response> b;
+        try (java.sql.Connection holder = holdMessage(answer.id())) {
+            a = POOL.submit(() -> first.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
+            awaitTrue(() -> lockWaiters() == 1, "the first marking waits for the mail");
+            b = POOL.submit(() -> second.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, version));
+            awaitTrue(() -> lockWaiters() == 2, "the second marking waits as well");
+            holder.rollback();
+        }
+        Response ra = a.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        Response rb = b.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        List<Integer> statuses = new ArrayList<>(List.of(ra.status(), rb.status()));
         statuses.sort(null);
-        assertEquals(200, statuses.get(0), statuses.toString());
-        assertTrue(statuses.get(1) == 409 || statuses.get(1) == 412, statuses.toString());
+        assertEquals(List.of(200, 412), statuses, ra.body() + " " + rb.body());
+        assertEquals(before + 1, messageVersion(answer.id()), "one step of the version");
         assertEquals(List.of("answer.seen"), answerAudit(answer.id()));
-        UUID by = jdbc.queryForObject("select seen_by from helpdesk_message where id = ?", UUID.class, answer.id());
-        assertTrue(by.equals(first.id) || by.equals(second.id));
+        UUID winner = ra.status() == 200 ? first.id : second.id;
+        assertEquals(winner, jdbc.queryForObject("select seen_by from helpdesk_message where id = ?", UUID.class, answer.id()));
+        assertEquals(winner, jdbc.queryForObject("select actor_account_id from helpdesk_audit_event where target_id = ? and operation = 'answer.seen'",
+            UUID.class, answer.id()));
+    }
+
+    /**
+     * R2 of the review of TASK-088: the ticket leaves the project of the mail while the marking already passed the first check
+     * and waits for the ticket. The check under the lock of the ticket sees the move: 404, nothing changed, no audit.
+     */
+    @Test
+    void aTicketThatLeavesTheProjectWhileTheMarkingWaitsMakesTheAnswerUnknown() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Answer answer = newAnswer(setup, replier, "Umzug unterwegs");
+        long version = messageVersion(answer.id());
+        Setup other = setup();
+        UUID ticket = jdbc.queryForObject("select ticket_id from helpdesk_message where id = ?", UUID.class, answer.id());
+        javax.sql.DataSource source = context.getBean(javax.sql.DataSource.class);
+        Future<Response> seen;
+        try (java.sql.Connection move = source.getConnection()) {
+            move.setAutoCommit(false);
+            try (var update = move.prepareStatement("update ticket set project_id = ?, number = 999 where id = ?")) {
+                update.setObject(1, other.project());
+                update.setObject(2, ticket);
+                assertEquals(1, update.executeUpdate());
+            }
+            long moving = pid(move);
+            seen = POOL.submit(() -> replier.send("POST", "/api/v1/helpdesk/answers/" + answer.id() + "/seen", null, "\"" + version + "\""));
+            awaitTrue(() -> !blockedBy(moving).isEmpty(), "the marking passed the first check and waits for the ticket");
+            move.commit();
+        }
+        Response response = seen.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(404, response.status(), response.body());
+        assertEquals("helpdesk.message_not_found", response.code());
+        assertEquals(version, messageVersion(answer.id()));
+        assertNull(jdbc.queryForObject("select seen_at from helpdesk_message where id = ?", Instant.class, answer.id()));
+        assertEquals(List.of(), answerAudit(answer.id()));
     }
 
     /**
@@ -1417,6 +1466,65 @@ class HelpdeskApiTest {
         String after = "\"" + messageVersion(waiting) + "\"";
         assertEquals(200, replier.send("POST", "/api/v1/helpdesk/answers/" + waiting + "/seen", null, after).status());
         assertEquals(1, answerAudit(waiting).stream().filter("answer.seen"::equals).count());
+    }
+
+    /**
+     * R2 of the review of TASK-088: attaching from the review queue and marking wait for the same mail in both orders. The attach
+     * first: it joins, the marking with the version from before ends with 412. The marking first: 409, the attach joins anyway.
+     */
+    @Test
+    void attachingAndMarkingThatWaitForTheSameMailEndInEitherOrder() throws Exception {
+        Setup setup = setup();
+        smtp(setup, MAIL.getSmtp().getPort());
+        Browser replier = replier(setup);
+        Browser reviewer = reviewer(setup);
+        Answer first = newAnswer(setup, replier, "Reihenfolge");
+        for (boolean attachFirst : new boolean[] { true, false }) {
+            deliver(setup, "In-Reply-To: " + first.replyId() + "\r\n", "Re: Reihenfolge", attachFirst ? "Erst nehmen." : "Erst markieren.");
+            intake.fetch(setup.mailbox());
+            UUID waiting = jdbc.queryForObject("select id from helpdesk_message where mailbox_id = ? order by uid desc limit 1", UUID.class,
+                setup.mailbox());
+            String etag = reviewer.get("/api/v1/helpdesk/inbox/" + waiting).etag();
+            String version = "\"" + messageVersion(waiting) + "\"";
+            Callable<Response> attach = () -> reviewer.send("POST", "/api/v1/helpdesk/inbox/" + waiting + "/attach", null, etag);
+            Callable<Response> mark = () -> replier.send("POST", "/api/v1/helpdesk/answers/" + waiting + "/seen", null, version);
+            Future<Response> earlier;
+            Future<Response> later;
+            try (java.sql.Connection holder = holdMessage(waiting)) {
+                earlier = POOL.submit(attachFirst ? attach : mark);
+                awaitTrue(() -> lockWaiters() == 1, "the first request waits for the mail");
+                later = POOL.submit(attachFirst ? mark : attach);
+                awaitTrue(() -> lockWaiters() == 2, "the second request waits as well");
+                holder.rollback();
+            }
+            Response attached = (attachFirst ? earlier : later).get(20, java.util.concurrent.TimeUnit.SECONDS);
+            Response marked = (attachFirst ? later : earlier).get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(200, attached.status(), attached.body());
+            assertEquals(attachFirst ? 412 : 409, marked.status(), marked.body());
+            Map<String, Object> row = jdbc.queryForMap("select joined_at, seen_at, seen_by from helpdesk_message where id = ?", waiting);
+            assertNotNull(row.get("joined_at"), "the mail joined its ticket");
+            assertNull(row.get("seen_at"));
+            assertNull(row.get("seen_by"));
+            assertFalse(answerAudit(waiting).contains("answer.seen"));
+            assertTrue(replier.get("/api/v1/helpdesk/answers").json().toString().contains(waiting.toString()), "the mail is a new answer");
+        }
+    }
+
+    /** Opens a transaction that holds the row of the mail until the caller rolls it back or closes the connection. */
+    private java.sql.Connection holdMessage(UUID id) throws SQLException {
+        java.sql.Connection holder = context.getBean(javax.sql.DataSource.class).getConnection();
+        holder.setAutoCommit(false);
+        try (var lock = holder.prepareStatement("select id from helpdesk_message where id = ? for update")) {
+            lock.setObject(1, id);
+            lock.executeQuery().close();
+        }
+        return holder;
+    }
+
+    /** How many processes of the test database wait for a lock. */
+    private long lockWaiters() {
+        return jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and cardinality(pg_blocking_pids(pid)) > 0",
+            Long.class);
     }
 
     /**

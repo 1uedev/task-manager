@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -45,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
 | [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
 | [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
+| [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -201,6 +202,26 @@ Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
 **Ergebnis (zur Prüfung):** Umgesetzt nach DEC-118 auf Branch claude/project-thread-fde105, ohne Migration. (1) F1: `AnswerService.seen` prüft nach der Sperre der Mail, dass das Ticket noch im Unternehmen und im Projekt der Mail liegt, einmal vor und einmal unter der geteilten Sperre des Tickets; sonst 404 `helpdesk.message_not_found`. Eine Mail ohne Ticket endet wie bisher mit 412 oder 409. (2) F2: Meldung und Fokus liegen in Ticket und Liste an der Überschrift über den Einträgen, mit Erfolgsmeldung „Die Antwort ist als gesehen markiert.“ und eigenem Konflikttext im Ticket. (3) F3: Ein Ladefehler der Liste zeigt Überschrift, Fehler und „Erneut versuchen“. (4) H2: `answerSeenAllowed` in der Ticketansicht, Vertrag und generierte Typen. (5) H1: Testersatz mit 428 zuerst, Ticket im Projekt der Mail, Grenze 100 vor dem Ticketfilter und Kennung als zweiter Sortierschlüssel. (6) H3: 503 mit Retry-After bei beiden Routen, `helpdesk.answer_not_new` in der Codeliste, V0052 und 36 Routen in TASK-067 und DEC-097, Portalgrenze im README. (7) H4 und F1: `HelpdeskApiTest.anAnswerWhoseTicketLeftTheProjectIsUnknown` (schlägt ohne die Behebung mit 200 statt 404 fehl), `twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking`, `anAnswerCanBeMarkedOnlyAfterItJoinedItsTicket`, `anAnswerFromBeforeTheMigrationIsNeverNew`, `anAnswerCanBeMarkedAtATicketWithoutContact`; Browsertests für Fokus und Meldung in Liste und Ticket, Konflikt im Ticket, Ladefehler mit Wiederholen und Ticket ohne Kontakt.
 
 **Nächster Schritt:** Prüfung durch eine zweite KI (Codex oder Claude), danach Abnahme von TASK-067 und TASK-088 durch Holger.
+
+## TASK-091 Befunde der Nachprüfung von TASK-088 beheben
+
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261108-newanswersfix-02 · **Aktualisiert:** 2026-11-08
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097, DEC-118; docs/REVIEW_TASK-088_PR-261.md. **Abhängigkeiten:** TASK-088 geliefert (PR #261). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht der Nachprüfung von TASK-088 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl auf der Entscheidungskarte vom selben Tag. Branch claude/project-thread-fde105; Ergebnis mit eigener DEC-ID, ohne Migration.
+
+**Umfang:** Befunde R1 und R2 aus docs/REVIEW_TASK-088_PR-261.md:
+1. R1: Die Liste „Neue Kundenantworten“ zeigt beim Laden Überschrift und übersetzte Ladeanzeige; ladend, leer und fehlgeschlagen sind sichtbar unterscheidbar. Ein Browsertest hält den Abruf zurück und prüft erst ladend, dann leer und gefüllt.
+2. R2: Dauerhafte Regressionstests: eine Antwort, die vor V0052 an ihrem Ticket hängt, bleibt nach der Migration unmarkiert; Anhängen und Markieren in beiden Reihenfolgen unter gehaltener Sperre; der Projektwechsel zwischen erster Prüfung und Ticketsperre; gleichzeitiges Markieren mit 200 und 412, genau einer Versionserhöhung und genau einem passenden Audit, jeweils mit nachgewiesenen Wartezuständen.
+
+Nicht Teil: die wechselnden Zeitüberschreitungen der Tag Browsertests (Hinweis H1, gesondert), Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. R1 mit Browsertest in Deutsch; R2 mit API und Migrationstests gegen die echte Datenbank, die ohne die jeweilige Prüfung im Code fehlschlagen würden.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis (zur Prüfung):** Umgesetzt nach DEC-121 auf Branch claude/project-thread-fde105, ohne Migration. (1) R1: `NewAnswers` in frontend/src/pages/InboxPage.tsx zeigt beim Laden Überschrift und Ladeanzeige mit `aria-busy`; Browsertests halten den Abruf im Testersatz zurück (`state.hold`) und prüfen ladend, dann leer (Abschnitt verschwindet) und gefüllt. (2) R2: `NewAnswersMigrationTest` migriert bis V0051, legt eine eröffnende Mail, eine später angehängte Antwort und eine wartende Mail an und prüft nach dem Upgrade, dass keine neu ist; ein Nachfüllen von `joined_at` in V0052 lässt ihn fehlschlagen. In `HelpdeskApiTest`: `twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking` hält die Mail, wartet auf zwei wartende Markierungen und verlangt 200 und 412, eine Versionserhöhung und ein Audit des Gewinners; `attachingAndMarkingThatWaitForTheSameMailEndInEitherOrder` prüft beide Reihenfolgen (Anhängen zuerst: 200 und 412; Markieren zuerst: 409 und 200, danach neu); `aTicketThatLeavesTheProjectWhileTheMarkingWaitsMakesTheAnswerUnknown` hält den Projektwechsel offen, bis das Markieren auf die Ticketsperre wartet, und verlangt 404 ohne Änderung und Audit; ohne die zweite Prüfung unter der Sperre schlägt er mit 200 fehl.
+
+**Nächster Schritt:** Kurze Nachprüfung durch eine zweite KI, danach Abnahme von TASK-067, TASK-088 und TASK-091 durch Holger.
 
 ## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
 
