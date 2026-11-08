@@ -604,6 +604,32 @@ describe('replies to customers', () => {
     });
   });
 
+  for (const filled of [false, true]) {
+    test(`a list of new answers that is still loading shows so and then ${filled ? 'its answers' : 'nothing'} (TASK-091, R1)`, async () => {
+      let release;
+      let answer;
+      await withApp({ as: BEN, hash: '#/inbox', prepare: (backend) => {
+        const ticket = withReplier(backend);
+        if (filled) answer = backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, subject: 'Re: Drucker defekt', joinedAt: '2026-10-21T08:05:00Z' });
+        backend.state.hold = { '/api/v1/helpdesk/answers': new Promise((resolve) => { release = resolve; }) };
+      } }, async (page) => {
+        const list = page.getByTestId('new-answers');
+        await page.getByRole('heading', { name: 'Prüfwarteschlange' }).waitFor();
+        await list.getByRole('heading', { name: 'Neue Kundenantworten' }).waitFor();
+        await list.getByRole('status').filter({ hasText: 'Wird geladen' }).waitFor();
+        assert.equal(await list.getAttribute('aria-busy'), 'true');
+        assert.equal(await list.locator('li').count(), 0);
+        release();
+        if (filled) {
+          await list.locator(`li[data-answer="${answer.id}"]`).waitFor();
+          assert.equal(await list.getByRole('status').count(), 0, 'the loading notice is gone');
+        } else {
+          await list.waitFor({ state: 'detached' });
+        }
+      });
+    });
+  }
+
   test('an answer can be marked at a ticket without contact (TASK-088, H2)', async () => {
     let ticket;
     let answer;

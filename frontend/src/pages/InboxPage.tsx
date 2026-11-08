@@ -290,7 +290,16 @@ function NewAnswers({ round }: { readonly round: number }) {
     reload();
   }
 
-  if (answers.state === 'loading') return null;
+  // Still loading is neither empty nor failed: the list says so under its heading until the answer arrives (TASK-091, R1). Only an
+  // empty list without a notice leaves no trace, as the review queue would otherwise show it to everybody.
+  if (answers.state === 'loading') {
+    return (
+      <section className="panel" aria-labelledby="new-answers" aria-busy="true" data-testid="new-answers">
+        <h2 id="new-answers">{t('inbox.newAnswers')}</h2>
+        <LoadingView />
+      </section>
+    );
+  }
   // A failed load is no empty list: it says so and offers to load again (TASK-088, F3).
   if (answers.state === 'problem') {
     return (
