@@ -121,3 +121,58 @@ Die Produktionslogik passt dazu: `locked(expectedVersion)` sperrt die Zeile per 
 **Nachbessern: T1 und T2 schließen und ihre verspäteten Antworten gezielt nachprüfen.** S2 sowie die ursprünglichen Hinweise H1 und H2 sind im beschriebenen Umfang bearbeitet. Die ursprüngliche S1-Übernahme bei gleicher Version und nach Lesefehler funktioniert; die zusätzlich angefragten Grenzen bei Seitenwechsel und überlappenden Teilaktionen bleiben offen.
 
 Über die gemeinsame fachliche Abnahme von TASK-081, TASK-087 und TASK-089 entscheidet weiterhin Holger. Diese Sitzung nimmt keine dieser Aufgaben ab.
+
+## Nachtrag vom 8. November 2026
+
+**Empfehlung unverändert: nachbessern. T1 und T2 sind jetzt zusätzlich im echten Chrome reproduziert.** Sitzung `codex-20261108-task089-review-01` hat den vorhandenen Bericht aus main übernommen und um eigene Browser- und Datenbankausführung ergänzt. Die Ergebnisse vom 6. November oben bleiben als damaliger Prüfstand erhalten.
+
+### Stand und Abgrenzung
+
+- Geprüfter PR-Kopf weiterhin `d7041c9fc87bccde5d14031ce6eeed2e0375d4df`; main bei dieser Nachprüfung: `6719883` (Berichts-PR #264). Der vollständige Tree-Vergleich unterscheidet nur die inzwischen hinzugekommene Berichtsdatei; der Anwendungscode und die gelieferten Tests sind identisch.
+- PR #263 ist gemergt; TASK-081, TASK-087 und TASK-089 stehen weiterhin auf BEREIT ZUR PRÜFUNG. Diese Sitzung ändert weder Produktcode noch Aufgabenstatus oder Abnahme.
+- Lokale Werkzeuge: Node 24.22.0, npm 11.19.1, Chrome 156.0.8078.80, JDK 25.0.4.1, Maven 3.9.16, PostgreSQL 16.15 in einer eigenen temporären Testinstanz. Der lokale Datenbanklauf ersetzt keinen Nachweis für die festgelegte PostgreSQL-Version 18.6.
+
+### Zusätzliche Browsernachweise
+
+Der unveränderte Produktionsbuild wurde mit dem vorhandenen Browser-Testersatz geprüft. Für T1 und T2 wird ausschließlich die erste konkrete GET-Antwort zurückgehalten; weitere Anfragen laufen durch den regulären Testersatz. Nach Freigabe der alten Antwort wird zusätzlich eine neue Änderung abgesendet, um die tatsächlich verwendete ETag am HTTP-Request nachzuweisen.
+
+| Probe | Eigenes Ergebnis |
+| --- | --- |
+| Nativer Maus-Doppelklick auf „Aktuellen Stand laden“ | Genau ein GET. Die Aktion verschwindet nach dem ersten Klick; die normalen Speicherschaltflächen sind während des Lesens gesperrt. Die Antwort wird übernommen. |
+| T1: Seite verlassen, erneut öffnen, aktuell laden und Namen als Version 10 speichern; danach alte Antwort mit Version 9 freigeben | Fehler bestätigt: Namensfeld wieder „Alter Servername“, Server weiterhin „Neu gespeichert“ in Version 10. Der nächste PUT trägt `If-Match: "9"` und endet mit 412. |
+| T2: Logo-Drop während des zurückgehaltenen Lesens, zweiten Konflikt auflösen und Logo als Version 10 speichern; danach alte Antwort mit Version 9 freigeben | Fehler bestätigt: Der erste Drop sendet trotz laufenden Lesens einen PUT mit `If-Match: "3"`. Nach dem später erfolgreichen Upload verschwindet das Logo durch die alte GET-Antwort wieder aus der Oberfläche. Der Server behält das Logo in Version 10; der nächste PUT trägt erneut `If-Match: "9"` und endet mit 412. |
+| Nach Lesefehler Namen erneut bearbeiten und Farbe speichern, ohne vorher „Erneut versuchen“ zu wählen | Neuer Namensentwurf bleibt erhalten. Kein nachwirkender Übernahmeauftrag. Für den erfolgreichen Folgeschritt setzt die synthetische Probe die Serverversion auf die bekannte Version zurück. |
+| Gleiche Version nach Farbkonflikt | Serverfarbe wird übernommen, Namensentwurf bleibt. |
+| Gleiche Version nach Logokonflikt | Namensentwurf und ungespeicherte Farbe bleiben. |
+| Gleiche Version nach Konflikt beim vollständigen Zurücksetzen | Servername und Serverfarbe werden übernommen, entsprechend `part: all`. |
+
+Alle sieben Ablaufproben sind erfolgreich ausgeführt. Bei T1 und T2 bedeutet dies ausdrücklich **erfolgreiche Reproduktion des Fehlers**, keine Erfüllung des Sollverhaltens. Die gelieferten Browserregressionen ergänzen den Namensfall mit gleicher Version und den erfolgreichen Wiederholungsweg nach Lesefehler.
+
+Die ausführbare Browserprobe (`review-evidence/task-089/browser-probe.mjs`) und ihre Ausgabe (`review-evidence/task-089/browser-probe.txt`) liegen dem Bericht bei. Ausführung nach Installation und Produktionsbuild des Frontends vom Repository-Wurzelverzeichnis aus:
+
+```text
+node docs/review-evidence/task-089/browser-probe.mjs
+```
+
+### Eigene Testläufe und Einordnung
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npm run verify` | Erfolgreich: Clientgenerierung, Typprüfung, 83 Tests und Produktionsbuild. Bestehende Warnung zur Bundlegröße. |
+| `npm run test:browser` | 204 von 205 bestanden. Alle Auftrittstests einschließlich der neuen S1-/S2-/H2-Fälle bestanden. Ein Timeout im Tag-Test, siehe unten. |
+| Isolierte Wiederholung des Tag-Tests | 1 von 1 bestanden. |
+| Sieben zusätzliche Browserproben | Alle erwarteten Beobachtungen bestätigt, einschließlich T1 und T2. |
+| Maven `-Dtest=AppearanceApiTest test` gegen PostgreSQL 16.15 | 25 Tests, 0 Fehler, 0 übersprungen. Einschließlich `wrongJsonTypesAreRefusedLikeTheTestStandIn` und `concurrentRequestsWithoutAChangeLeaveVersionAndAuditAndAStaleOneIsRefused`. |
+| Repositoryvalidator und `task_board.py --check` | Erfolgreich. |
+| Python-Unittests | 38 Tests, 37 bestanden; 1 vorgesehene Überspringung unter Windows, weil der betreffende Test das Umschalten der Unix-Zeitzone benötigt. |
+| `git diff --check` | Erfolgreich. |
+
+Der erste API-Versuch scheiterte beim Start des Anwendungskontexts, weil diese Sitzung das erforderliche synthetische Datenbankpasswort leer gesetzt hatte. Nach Korrektur der lokalen Testkonfiguration lief dieselbe unveränderte API-Testklasse vollständig grün. Das war kein Produktbefund. Eine neue vollständige Backend-Suite wurde in dieser Sitzung nicht ausgeführt.
+
+Der Browser-Gesamtlauf scheiterte ausschließlich an `tags.test.mjs:124`, „the dark display keeps the tag readable with its color mark“: Der Tag „Dringend“ wurde innerhalb von 30 Sekunden nicht sichtbar. Die isolierte Wiederholung bestand. Der Test legt den Tag erst nach dem Öffnen der Seite an; seine Reihenfolge gegenüber dem ersten Laden ist deshalb ein plausibler Ansatzpunkt für die Untersuchung. Dieser Test ist gegenüber dem PR-Stand unverändert. Kein Nachweis einer durch TASK-089 verursachten Regression, aber auch **kein vollständig grüner eigener Gesamtlauf**.
+
+S2 und die konkreten H2-Typfälle sind nun sowohl durch die eigenen Browser- als auch die eigenen Serverläufe gestützt. Die bisherigen Grenzen bleiben: keine vollständige Bilddekodierung im Testersatz, keine dauerhafte Wahrheitswert-Assertion im neuen API-Test und keine deterministisch erzwungene Sperrwartephase im Nebenläufigkeitstest. H1 ist als Test zweier parallel gestarteter HTTP-Aufträge mit Status-, ETag- und Datenbankassertionen tragfähig; die Start-Latch beweist weiterhin keinen bestimmten Überlappungszeitpunkt in PostgreSQL.
+
+**Entscheidungsvorlage:** T1 und T2 beheben und die beiden verspäteten Antworten anschließend gegen das korrigierte Sollverhalten prüfen. Erst danach die gemeinsame Abnahme von TASK-081, TASK-087 und TASK-089 durch Holger entscheiden.
+
+> Hinweis zur Ablage (claude-20261102-branding-01, 8. November 2026): Holger hat diesen Bericht ohne die genannten Dateien (Links deshalb als Pfad gesetzt) unter `docs/review-evidence/task-089/` übergeben. Sie liegen dem Repository daher nicht bei; die Reproduktionen von T1 und T2 werden in TASK-090 als dauerhafte Browsertests nachgebildet.

@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,10 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
+| [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
 
 ### Blockiert – BLOCKIERT
 
@@ -201,6 +204,24 @@ Nicht Teil: Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
 
 **Nächster Schritt:** Prüfung durch eine zweite KI (Codex oder Claude), danach Abnahme von TASK-067 und TASK-088 durch Holger.
 
+## TASK-091 Befunde der Nachprüfung von TASK-088 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261108-newanswersfix-02 · **Aktualisiert:** 2026-11-08
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097, DEC-118; docs/REVIEW_TASK-088_PR-261.md. **Abhängigkeiten:** TASK-088 geliefert (PR #261). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht der Nachprüfung von TASK-088 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl auf der Entscheidungskarte vom selben Tag. Branch claude/project-thread-fde105; Ergebnis mit eigener DEC-ID, ohne Migration.
+
+**Umfang:** Befunde R1 und R2 aus docs/REVIEW_TASK-088_PR-261.md:
+1. R1: Die Liste „Neue Kundenantworten“ zeigt beim Laden Überschrift und übersetzte Ladeanzeige; ladend, leer und fehlgeschlagen sind sichtbar unterscheidbar. Ein Browsertest hält den Abruf zurück und prüft erst ladend, dann leer und gefüllt.
+2. R2: Dauerhafte Regressionstests: eine Antwort, die vor V0052 an ihrem Ticket hängt, bleibt nach der Migration unmarkiert; Anhängen und Markieren in beiden Reihenfolgen unter gehaltener Sperre; der Projektwechsel zwischen erster Prüfung und Ticketsperre; gleichzeitiges Markieren mit 200 und 412, genau einer Versionserhöhung und genau einem passenden Audit, jeweils mit nachgewiesenen Wartezuständen.
+
+Nicht Teil: die wechselnden Zeitüberschreitungen der Tag Browsertests (Hinweis H1, gesondert), Wiederöffnen, Benachrichtigungen, „gesehen“ je Person.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. R1 mit Browsertest in Deutsch; R2 mit API und Migrationstests gegen die echte Datenbank, die ohne die jeweilige Prüfung im Code fehlschlagen würden.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung.
+
 ## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
 
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
@@ -225,3 +246,24 @@ Nicht Teil: weitere Änderungen am Auftritt.
 3. Grenzen: Der Testersatz prüft das Logo nicht durch Dekodieren (`appearance.logo_unreadable` bleibt dem Server vorbehalten).
 
 **Nächster Schritt:** Prüfung durch eine zweite KI, danach Abnahme von TASK-081, TASK-087 und TASK-089 durch Holger.
+
+## TASK-090 Befunde der Prüfung von TASK-089 beheben (A17)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-08
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-119; docs/REVIEW_TASK-089_PR-263.md. **Abhängigkeiten:** TASK-089 geliefert (PR #263). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-089 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „T1, T2 und beide Hinweise beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
+
+**Umfang:** Befunde T1 und T2 und die Hinweise 1 und 2 aus docs/REVIEW_TASK-089_PR-263.md:
+1. T1: Das Laden nach einem Versionskonflikt ist an die Lebensdauer der Seite gebunden. Eine Antwort, die nach dem Verlassen der Seite eintrifft, übernimmt nichts, auch nicht in den gemeinsamen Auftritt.
+2. T2: Logo Ablage und Dateiauswahl beachten dieselbe Sperre wie die Schaltflächen, und eine überholte Antwort überschreibt keinen neueren Stand.
+3. Hinweis 1: Der Test gleichzeitiger unveränderter Anfragen wartet auf die Bereitschaft beider Aufträge und belegt das Warten auf die Sperre der Zeile; der Kommentar beschreibt genau das.
+4. Hinweis 2: Dauerhafte Tests für Wahrheitswerte in Name und Farbe am Server und für den Vorrang des Logotypfehlers vor einer veralteten Version im Testersatz.
+
+Nicht Teil: weitere Änderungen am Auftritt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. T1 und T2 mit Browsertests, die die alte Antwort erst nach einem neueren gespeicherten Stand freigeben und prüfen, dass Name, Logo, Farbe und Version den neueren Stand behalten; dazu ein Test, dass eine Logo Ablage während des Ladens keine Änderung sendet.
+2. Hinweise 1 und 2 mit API und Browsertests.
+3. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung, danach Prüfung durch eine zweite KI und Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 durch Holger.
