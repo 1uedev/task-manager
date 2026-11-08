@@ -1929,6 +1929,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const raw = request.postDataBuffer();
       const json = raw && (headers['content-type'] ?? '').includes('json') ? JSON.parse(raw.toString('utf8')) : raw;
       state.requests.push({ method: request.method(), path: url.pathname, query: url.search, ifMatch: headers['if-match'] ?? null, csrf: headers['x-csrf-token'] ?? null, type: headers['content-type'] ?? null, body: raw, user: session.account?.username ?? null });
+      // A test can hold the answer of one path until it resolves the promise (TASK-091, R1: a list that is still loading).
+      if (state.hold?.[url.pathname]) await state.hold[url.pathname];
       const unsafe = !['GET', 'HEAD'].includes(request.method());
       const answer = unsafe && headers['x-csrf-token'] !== TOKEN ? problem(403, 'auth.csrf_invalid')
         : anonymousAppearance && url.pathname === '/api/v1/session' ? ok({ authenticated: false })
