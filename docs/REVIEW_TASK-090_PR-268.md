@@ -1,6 +1,6 @@
 # Prüfung TASK-090 / PR #268
 
-**Empfehlung: nachbessern, klein.** T1 und T2 sind in der verlangten Form behoben. Meine eigenen Proben mit späten Antworten, Dateiauswahl, Ablage und Tastatur laufen gegen den neuen Stand wie vorgesehen, und die gelieferten Regressionen scheitern mit der Seite von main. Die neue Abfrage `alive` ist aber breiter als nötig: Sie verwirft auch die Antwort eines **erfolgreichen** Speicherns, das erst nach dem Verlassen der Seite zurückkommt. Danach kennt die Oberfläche eine ältere Version als der Server, zeigt den alten Stand und schickt die nächste Änderung mit veralteter Version (412). Auf main ist das nicht so; es ist eine kleine Rückentwicklung (B1). Die Hinweise 1 und 2 sind tragfähig umgesetzt.
+**Empfehlung: nachbessern, klein (nach der Nachprüfung im Nachtrag unten: abnehmen).** T1 und T2 sind in der verlangten Form behoben. Meine eigenen Proben mit späten Antworten, Dateiauswahl, Ablage und Tastatur laufen gegen den neuen Stand wie vorgesehen, und die gelieferten Regressionen scheitern mit der Seite von main. Die neue Abfrage `alive` ist aber breiter als nötig: Sie verwirft auch die Antwort eines **erfolgreichen** Speicherns, das erst nach dem Verlassen der Seite zurückkommt. Danach kennt die Oberfläche eine ältere Version als der Server, zeigt den alten Stand und schickt die nächste Änderung mit veralteter Version (412). Auf main ist das nicht so; es ist eine kleine Rückentwicklung (B1). Die Hinweise 1 und 2 sind tragfähig umgesetzt.
 
 ## Prüfstand und Umfang
 
@@ -103,3 +103,21 @@ Die Version steigt am Server danach genau auf 4 (42, true, false), damit ist auc
 **Nachbessern mit B1**, dann ist der Stand aus meiner Sicht abnahmefähig. B1 ist klein und lässt sich mit einer Zeile in `run` und `loadCurrent` sowie einem Browsertest beheben; die Hinweise 1 bis 3 können im selben Zug mit. Alternativ kann Holger B1 als bekannte Grenze annehmen, weil ein Speichern selten genau beim Verlassen der Seite endet und „Aktuellen Stand laden“ den Zustand wiederherstellt.
 
 Über die gemeinsame Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 entscheidet Holger. Diese Sitzung nimmt nichts ab.
+
+## Nachtrag vom 8. November 2026: Nachprüfung von B1
+
+**Empfehlung jetzt: abnehmen.** B1 ist behoben, die Hinweise 1 bis 3 sind umgesetzt. Hinweis 4 (500 statt 503 bei einem Sperrablauf am Auftritt) bleibt bewusst außerhalb von TASK-090 und gehört in eine spätere Aufgabe.
+
+Geprüfter Kopf von `claude/project-thread-tzp0cw`: `993b504` (davor `a519f73`, Merge von main mit TASK-091).
+
+| Punkt | Umsetzung | Eigene Prüfung |
+| --- | --- | --- |
+| B1 | `keep` gibt in `run` und `loadCurrent` eine erfolgreiche Antwort einer verlassenen Seite an `accept`; die Seitenzustände bleiben unberührt. Neuer Browsertest „a save whose answer arrives after leaving the page is kept for the next visit“. | Probe P5 jetzt wie auf main: Feld „Gespeichert“, nächste Änderung mit `If-Match: "4"`, gespeichert als Version 5. Der neue Test scheitert, wenn `keep` nichts übernimmt, und ist mit der Korrektur grün. |
+| Hinweis 1 | `etagVersion` und `newerOrSame` in `brand.ts` mit eigenem Unit-Test (älter, gleich, neuer, schwache ETag, ohne bekannten Stand, keine ganze Zahl). | Unit-Tests 84 von 84 grün. |
+| Hinweis 2 | Das eigene Laden des Providers nutzt denselben Vergleich wie `accept`. | Code gelesen. Nach Ab- und Anmeldung ist der Stand nicht `ready`, das Angebot wird dann vollständig übernommen. |
+| Hinweis 3 | Der Kommentar von `together` nennt `lock_timeout`; der Pool schließt nach der haltenden Verbindung; `finally` öffnet `start`. | `AppearanceApiTest` 25 von 25 grün. |
+| `{"name":false}` im Testersatz | ergänzt | Teil der grünen Browsertests. |
+
+Weitere Läufe am neuen Kopf: `npm run verify` grün, `npm run test:browser` 210 von 210 grün, eigene Proben P1 bis P5 grün. Das vollständige Backend habe ich am neuen Kopf nicht erneut ausgeführt; die Änderungen im Backend gegenüber der ersten Prüfung betreffen nur `AppearanceApiTest` und die von main übernommenen Tests von TASK-091.
+
+Über die gemeinsame Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 entscheidet Holger.
