@@ -393,15 +393,16 @@ describe('company appearance', () => {
   // TASK-090, T1 and T2 of docs/REVIEW_TASK-089_PR-263.md: the answer of "Aktuellen Stand laden" is held back and given
   // out only later with the then old version 9. It takes nothing from a page that was left, never takes back a newer
   // version, and no logo can be dropped while it is pending.
-  async function holdNextRead(page, server) {
+  async function holdNextRead(page, server, method = 'GET', change = () => {}) {
     let armed = false;
     let arrived;
     let release;
     const requested = new Promise((resolve) => { arrived = resolve; });
     const held = new Promise((resolve) => { release = resolve; });
     await page.route((url) => url.pathname === '/api/v1/appearance', async (route) => {
-      if (!armed || route.request().method() !== 'GET') return route.fallback();
+      if (!armed || route.request().method() !== method) return route.fallback();
       armed = false;
+      change(server.state.appearance);
       const a = server.state.appearance;
       const body = { name: a.name, defaultName: 'Task Manager', accentColor: a.accent, defaultAccentColor: '#f97316',
         logo: a.logo && (({ content, ...shown }) => shown)(a.logo), version: a.version, updatedAt: '2026-10-19T06:00:00Z' };
@@ -451,6 +452,33 @@ describe('company appearance', () => {
       await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
       assert.equal(server.writes().at(-1).ifMatch, '"10"', 'the next change is sent against the newer version');
       assert.equal(server.state.appearance.name, 'Neu gespeichert');
+    });
+  });
+
+  // TASK-090, finding B1 of docs/REVIEW_TASK-090_PR-268.md: a save that succeeds after the page was left still reaches
+  // the shared appearance, so the page shows it again and the next change is sent against its version.
+  test('a save whose answer arrives after leaving the page is kept for the next visit', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const hold = await holdNextRead(page, server, 'PUT', (a) => { a.name = 'Gespeichert'; a.version += 1; });
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      await field.fill('Gespeichert');
+      hold.arm();
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await hold.requested;
+      await page.evaluate(() => { location.hash = '#/start'; });
+      await field.waitFor({ state: 'detached' });
+      hold.release();
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { location.hash = '#/appearance'; });
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Gespeichert');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      assert.equal(server.writes().at(-1).ifMatch, '"4"', 'the next change is sent against the saved version');
+      assert.equal(server.state.appearance.version, 5);
     });
   });
 
@@ -519,6 +547,8 @@ describe('company appearance', () => {
       assert.equal(server.state.appearance.name, '42');
       assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"name":true}', '"4"'), [200, null]);
       assert.equal(server.state.appearance.name, 'true');
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"name":false}', '"5"'), [200, null]);
+      assert.equal(server.state.appearance.name, 'false');
     });
   });
 

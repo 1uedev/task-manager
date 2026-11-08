@@ -572,38 +572,46 @@ class AppearanceApiTest {
      * Sends both requests while a transaction of the test holds the row of the appearance locked, waits until both threads
      * are ready and then until PostgreSQL shows both requests waiting for that lock, and only then releases it. So both
      * really meet at the row lock (TASK-090, hint 1 of docs/REVIEW_TASK-089_PR-263.md). Gives the ETag of each answer
-     * after checking that both succeeded.
+     * after checking that both succeeded. The real window for the second request to reach the lock is the `lock_timeout`
+     * of 5 seconds in application.yaml, not the 20 seconds of the loop: a request that waits longer is cancelled with
+     * 55P03 (TASK-090, hint 3 of docs/REVIEW_TASK-090_PR-268.md).
      */
     private List<String> together(java.util.function.Supplier<Response> one, java.util.function.Supplier<Response> other) {
         var ready = new java.util.concurrent.CountDownLatch(2);
         var start = new java.util.concurrent.CountDownLatch(1);
-        try (var holder = dataSource.getConnection(); var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
-            holder.setAutoCommit(false);
-            try (var statement = holder.createStatement()) {
-                statement.execute("select id from appearance_setting where id = 1 for update");
+        // The pool is declared first so it closes last: the holding connection ends its lock before the pool waits for
+        // its threads, and `finally` opens `start` so no thread waits on it for ever after a failure.
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2); var holder = dataSource.getConnection()) {
+            try {
+                holder.setAutoCommit(false);
+                try (var statement = holder.createStatement()) {
+                    statement.execute("select id from appearance_setting where id = 1 for update");
+                }
+                var a = pool.submit(() -> { ready.countDown(); start.await(); return one.get(); });
+                var b = pool.submit(() -> { ready.countDown(); start.await(); return other.get(); });
+                assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS), "both threads are ready");
+                start.countDown();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+                int waiting = 0;
+                while (waiting < 2 && System.nanoTime() < deadline) {
+                    waiting = jdbc.queryForObject("""
+                        select count(*) from pg_stat_activity
+                        where datname = current_database() and wait_event_type = 'Lock' and query ilike '%appearance_setting%'
+                        """, Integer.class);
+                    if (waiting < 2) Thread.sleep(20);
+                }
+                assertEquals(2, waiting, "both requests wait for the row lock at the same time");
+                holder.rollback();
+                List<String> etags = new ArrayList<>();
+                for (var future : List.of(a, b)) {
+                    Response response = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                    assertEquals(200, response.status(), response.body());
+                    etags.add(response.header("ETag"));
+                }
+                return etags;
+            } finally {
+                start.countDown();
             }
-            var a = pool.submit(() -> { ready.countDown(); start.await(); return one.get(); });
-            var b = pool.submit(() -> { ready.countDown(); start.await(); return other.get(); });
-            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS), "both threads are ready");
-            start.countDown();
-            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
-            int waiting = 0;
-            while (waiting < 2 && System.nanoTime() < deadline) {
-                waiting = jdbc.queryForObject("""
-                    select count(*) from pg_stat_activity
-                    where datname = current_database() and wait_event_type = 'Lock' and query ilike '%appearance_setting%'
-                    """, Integer.class);
-                if (waiting < 2) Thread.sleep(20);
-            }
-            assertEquals(2, waiting, "both requests wait for the row lock at the same time");
-            holder.rollback();
-            List<String> etags = new ArrayList<>();
-            for (var future : List.of(a, b)) {
-                Response response = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
-                assertEquals(200, response.status(), response.body());
-                etags.add(response.header("ETag"));
-            }
-            return etags;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

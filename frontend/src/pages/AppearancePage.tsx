@@ -56,6 +56,11 @@ export function AppearancePage() {
     setNotice(null);
     return true;
   }
+  // A page that was left changes none of its own state, but a saved version still reaches the shared appearance, so the
+  // next change is sent against it; `accept` never takes an older one (TASK-090, finding B1 of docs/REVIEW_TASK-090_PR-268.md).
+  function keep(outcome: Awaited<Pending>) {
+    if (outcome.kind === 'ok') accept(outcome.data);
+  }
   function end(): boolean {
     working.current = false;
     if (!alive.current) return false;
@@ -132,7 +137,7 @@ export function AppearancePage() {
   async function run(part: Part, call: () => Pending, success: MessageKey) {
     if (!begin()) return;
     const outcome = await call();
-    if (!end()) return;
+    if (!end()) return keep(outcome);
     if (outcome.kind === 'ok') {
       take(part, outcome.data);
       setNotice({ kind: 'saved', text: success });
@@ -148,7 +153,7 @@ export function AppearancePage() {
   async function loadCurrent(part: Part) {
     if (!begin()) return;
     const outcome = await readAppearance(api);
-    if (!end()) return;
+    if (!end()) return keep(outcome);
     if (outcome.kind === 'ok') {
       take(part, outcome.data);
       setNotice({ kind: 'saved', text: 'appearance.reloaded' });
