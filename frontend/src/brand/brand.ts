@@ -1,5 +1,21 @@
 // Company branding: logo and colors from a setting. Values are validated data, never executable code.
 
+// The version in an ETag such as "9" or W/"9"; null when it is not a whole number.
+export function etagVersion(etag: string): number | null {
+  const match = /^(?:W\/)?"(\d+)"$/.exec(etag.trim());
+  return match ? Number(match[1]) : null;
+}
+
+// Which of two read or saved states of the appearance a window keeps: the version only grows, so an older offer is
+// dropped and an equal or newer one is taken (TASK-090, T1 and T2 of docs/REVIEW_TASK-089_PR-263.md). Without a known
+// state, or when a version is no whole number, the offer is taken.
+export function newerOrSame<T extends { readonly etag: string }>(known: T | null, offered: T): T {
+  if (known === null) return offered;
+  const was = etagVersion(known.etag);
+  const now = etagVersion(offered.etag);
+  return was !== null && now !== null && now < was ? known : offered;
+}
+
 export interface Brand {
   readonly name: string;
   readonly logoUrl: string | null;

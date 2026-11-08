@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACCENT_PRESETS, accentBrand, brandToCssVariables, contrastRatio, DEFAULT_ACCENT, defaultBrand, derivePalette, parseBrand, textOn, type Brand } from '../src/brand/brand.ts';
+import { ACCENT_PRESETS, accentBrand, brandToCssVariables, contrastRatio, DEFAULT_ACCENT, defaultBrand, derivePalette, etagVersion, newerOrSame, parseBrand, textOn, type Brand } from '../src/brand/brand.ts';
 
 const darkBrand = accentBrand(DEFAULT_ACCENT, null, 'dark');
 
@@ -159,4 +159,19 @@ test('text on any accent that can be picked reaches 4.5', () => {
 test('an invalid accent falls back to the default instead of reaching the style sheet', () => {
   for (const value of ['red', '#fff', 'url(x)', '#12345g']) assert.equal(accentBrand(value, null, 'light').colors.primary, DEFAULT_ACCENT);
   assert.equal(accentBrand('#1D4ED8', null, 'light').colors.primary, '#1d4ed8');
+});
+
+// TASK-090, hint 1 of docs/REVIEW_TASK-090_PR-268.md: the comparison that keeps a window from taking back a newer version.
+test('a window keeps the newer appearance and takes an equal or newer one', () => {
+  const at = (etag: string) => ({ etag });
+  const nine = at('"9"');
+  assert.equal(newerOrSame(nine, at('"8"')), nine, 'an older version is dropped');
+  const same = at('"9"');
+  assert.equal(newerOrSame(nine, same), same, 'the same version is taken');
+  const ten = at('W/"10"');
+  assert.equal(newerOrSame(nine, ten), ten, 'a newer version is taken, also as weak ETag');
+  assert.equal(newerOrSame(null, nine), nine, 'without a known state the offer is taken');
+  const odd = at('"x"');
+  assert.equal(newerOrSame(nine, odd), odd, 'an ETag that is no whole number is taken');
+  assert.deepEqual(['"12"', 'W/"3"', ' "4" ', '"-1"', '"1.5"', '12'].map(etagVersion), [12, 3, 4, null, null, null]);
 });
