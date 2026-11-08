@@ -89,6 +89,7 @@ class AppearanceApiTest {
     @Value("${local.server.port}") int port;
     @Autowired AccountService accounts;
     @Autowired JdbcTemplate jdbc;
+    @Autowired javax.sql.DataSource dataSource;
     @Autowired CompanyContext companies;
     @Autowired PlatformTransactionManager transactions;
 
@@ -482,11 +483,24 @@ class AppearanceApiTest {
             400, "appearance.change_empty");
         assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", "{\"accentColor\":42}".getBytes(StandardCharsets.UTF_8), "\"1\""),
             400, "appearance.color_invalid");
+        // TASK-090, hint 2: a truth value as color is its text and so no color either.
+        assertProblem(admin.send("PUT", "/api/v1/appearance", "application/json", "{\"accentColor\":true}".getBytes(StandardCharsets.UTF_8), "\"1\""),
+            400, "appearance.color_invalid");
         assertEquals(1L, jdbc.queryForObject("select version from appearance_setting where id = 1", Long.class));
         // A number or a truth value is taken as its text, like every other string field of the API.
         Response number = admin.send("PUT", "/api/v1/appearance", "application/json", "{\"name\":42}".getBytes(StandardCharsets.UTF_8), "\"1\"");
         assertEquals(200, number.status(), number.body());
         assertEquals("42", number.json().get("name").asString());
+        Response truth = admin.send("PUT", "/api/v1/appearance", "application/json", "{\"name\":true}".getBytes(StandardCharsets.UTF_8), "\"2\"");
+        assertEquals(200, truth.status(), truth.body());
+        assertEquals("true", truth.json().get("name").asString());
+        Response untruth = admin.send("PUT", "/api/v1/appearance", "application/json", "{\"name\":false}".getBytes(StandardCharsets.UTF_8), "\"3\"");
+        assertEquals(200, untruth.status(), untruth.body());
+        assertEquals("false", untruth.json().get("name").asString());
+        // TASK-090, hint 2: a wrong logo type is named before a stale version, like the test stand in does.
+        assertProblem(admin.logo("image/jpeg", PNG, "\"1\""), 415, "appearance.logo_type_invalid");
+        assertProblem(admin.logo("image/png", new byte[] {1, 2, 3}, "\"1\""), 415, "appearance.logo_type_invalid");
+        assertEquals(4L, jdbc.queryForObject("select version from appearance_setting where id = 1", Long.class));
     }
 
     @Test
@@ -537,6 +551,7 @@ class AppearanceApiTest {
     @Test
     void concurrentRequestsWithoutAChangeLeaveVersionAndAuditAndAStaleOneIsRefused() {
         // TASK-089, hint H1: two requests at once that change nothing both succeed under the row lock without a new version.
+        // TASK-090, hint 1: `together` holds the row lock until both requests are seen waiting for it in PostgreSQL.
         Browser first = person(true);
         Browser second = person(true);
         assertEquals(List.of("\"1\"", "\"1\""), together(() -> first.send("DELETE", "/api/v1/appearance", null, null, "\"1\""),
@@ -553,20 +568,50 @@ class AppearanceApiTest {
         assertEquals(2L, jdbc.queryForObject("select version from appearance_setting where id = 1", Long.class));
     }
 
-    /** Sends both requests at the same moment and gives the ETag of each after checking that both succeeded. */
-    private static List<String> together(java.util.function.Supplier<Response> one, java.util.function.Supplier<Response> other) {
+    /**
+     * Sends both requests while a transaction of the test holds the row of the appearance locked, waits until both threads
+     * are ready and then until PostgreSQL shows both requests waiting for that lock, and only then releases it. So both
+     * really meet at the row lock (TASK-090, hint 1 of docs/REVIEW_TASK-089_PR-263.md). Gives the ETag of each answer
+     * after checking that both succeeded. The real window for the second request to reach the lock is the `lock_timeout`
+     * of 5 seconds in application.yaml, not the 20 seconds of the loop: a request that waits longer is cancelled with
+     * 55P03 (TASK-090, hint 3 of docs/REVIEW_TASK-090_PR-268.md).
+     */
+    private List<String> together(java.util.function.Supplier<Response> one, java.util.function.Supplier<Response> other) {
+        var ready = new java.util.concurrent.CountDownLatch(2);
         var start = new java.util.concurrent.CountDownLatch(1);
-        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
-            var a = pool.submit(() -> { start.await(); return one.get(); });
-            var b = pool.submit(() -> { start.await(); return other.get(); });
-            start.countDown();
-            List<String> etags = new ArrayList<>();
-            for (var future : List.of(a, b)) {
-                Response response = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
-                assertEquals(200, response.status(), response.body());
-                etags.add(response.header("ETag"));
+        // The pool is declared first so it closes last: the holding connection ends its lock before the pool waits for
+        // its threads, and `finally` opens `start` so no thread waits on it for ever after a failure.
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2); var holder = dataSource.getConnection()) {
+            try {
+                holder.setAutoCommit(false);
+                try (var statement = holder.createStatement()) {
+                    statement.execute("select id from appearance_setting where id = 1 for update");
+                }
+                var a = pool.submit(() -> { ready.countDown(); start.await(); return one.get(); });
+                var b = pool.submit(() -> { ready.countDown(); start.await(); return other.get(); });
+                assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS), "both threads are ready");
+                start.countDown();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+                int waiting = 0;
+                while (waiting < 2 && System.nanoTime() < deadline) {
+                    waiting = jdbc.queryForObject("""
+                        select count(*) from pg_stat_activity
+                        where datname = current_database() and wait_event_type = 'Lock' and query ilike '%appearance_setting%'
+                        """, Integer.class);
+                    if (waiting < 2) Thread.sleep(20);
+                }
+                assertEquals(2, waiting, "both requests wait for the row lock at the same time");
+                holder.rollback();
+                List<String> etags = new ArrayList<>();
+                for (var future : List.of(a, b)) {
+                    Response response = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                    assertEquals(200, response.status(), response.body());
+                    etags.add(response.header("ETag"));
+                }
+                return etags;
+            } finally {
+                start.countDown();
             }
-            return etags;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

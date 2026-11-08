@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { APPEARANCE_RIGHT, createServerApi, isBrandName, normalizeBrandName, readAppearance, readPublicAppearance, readSession, type LoadedAppearance, type PublicAppearance, type ServerApi } from '../api/client.ts';
 import { readStoredTheme, storeTheme } from '../app/preferences.ts';
-import { accentBrand, brandToCssVariables, DEFAULT_ACCENT, DEFAULT_NAME, isAccentColor, type Brand } from './brand.ts';
+import { accentBrand, brandToCssVariables, DEFAULT_ACCENT, DEFAULT_NAME, isAccentColor, newerOrSame, type Brand } from './brand.ts';
 
 export type Theme = 'system' | 'light' | 'dark';
 export const THEMES: readonly Theme[] = ['light', 'dark', 'system'];
@@ -81,7 +81,11 @@ export function BrandProvider({ children, api: given }: { readonly children: Rea
       const appearance = await readAppearance(api, abort.signal);
       if (abort.signal.aborted) return;
       if (appearance.kind !== 'ok') return setConnection({ state: 'offline' });
-      setConnection({ state: 'ready', mayChangeAppearance: session.data.rights.includes(APPEARANCE_RIGHT), loaded: appearance.data });
+      // The own load of the provider keeps a newer version a page took meanwhile, like `accept` (TASK-090, hint 2 of
+      // docs/REVIEW_TASK-090_PR-268.md).
+      const mayChangeAppearance = session.data.rights.includes(APPEARANCE_RIGHT);
+      setConnection((current) => ({ state: 'ready', mayChangeAppearance,
+        loaded: newerOrSame(current.state === 'ready' ? current.loaded : null, appearance.data) }));
     })().catch(() => {
       // Aborted because the provider went away or a newer load started.
     });
@@ -115,8 +119,13 @@ export function BrandProvider({ children, api: given }: { readonly children: Rea
   const previewName = useCallback((next: string | null) => {
     setPreviewedName(next !== null && isBrandName(normalizeBrandName(next)) ? normalizeBrandName(next) : null);
   }, []);
+  // An answer that arrives late never takes back a newer version this window already knows (TASK-090, see newerOrSame).
   const accept = useCallback((loaded: LoadedAppearance) => {
-    setConnection((current) => (current.state === 'ready' ? { ...current, loaded } : current));
+    setConnection((current) => {
+      if (current.state !== 'ready') return current;
+      const kept = newerOrSame(current.loaded, loaded);
+      return kept === current.loaded ? current : { ...current, loaded: kept };
+    });
   }, []);
   const reload = useCallback(() => setRound((value) => value + 1), []);
   const setTheme = useCallback((next: Theme) => {

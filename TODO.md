@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
 | [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
+| [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
 | [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -247,13 +246,13 @@ Nicht Teil: weitere Änderungen am Auftritt.
 2. Nachweise (lokal, JDK 21, PostgreSQL 16): die beiden neuen Browsertests zu S1 scheitern mit der Seite von main und laufen mit der Korrektur; die Ergebnisse der Gesamtläufe stehen im Ergebnis PR.
 3. Grenzen: Der Testersatz prüft das Logo nicht durch Dekodieren (`appearance.logo_unreadable` bleibt dem Server vorbehalten).
 
-**Nächster Schritt:** Prüfung durch eine zweite KI, danach Abnahme von TASK-081, TASK-087 und TASK-089 durch Holger.
+**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-089_PR-263.md, 6. und 8. November 2026) empfiehlt „nachbessern“; T1, T2 und die Hinweise 1 und 2 behebt TASK-090. Abnahme durch Holger danach zusammen mit TASK-081, TASK-087 und TASK-090.
 
 ## TASK-090 Befunde der Prüfung von TASK-089 beheben (A17)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-08
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-08
 
-**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-119; docs/REVIEW_TASK-089_PR-263.md. **Abhängigkeiten:** TASK-089 geliefert (PR #263). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-089 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „T1, T2 und beide Hinweise beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-119, DEC-120; docs/REVIEW_TASK-089_PR-263.md, docs/REVIEW_TASK-090_PR-268.md. **Abhängigkeiten:** TASK-089 geliefert (PR #263). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-089 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „T1, T2 und beide Hinweise beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
 
 **Umfang:** Befunde T1 und T2 und die Hinweise 1 und 2 aus docs/REVIEW_TASK-089_PR-263.md:
 1. T1: Das Laden nach einem Versionskonflikt ist an die Lebensdauer der Seite gebunden. Eine Antwort, die nach dem Verlassen der Seite eintrifft, übernimmt nichts, auch nicht in den gemeinsamen Auftritt.
@@ -268,4 +267,10 @@ Nicht Teil: weitere Änderungen am Auftritt.
 2. Hinweise 1 und 2 mit API und Browsertests.
 3. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Umsetzung nach Merge dieser Reservierung, danach Prüfung durch eine zweite KI und Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 durch Holger.
+**Übergabe zur Prüfung (2026-11-08):**
+1. Ergebnis: DEC-120, ohne Migration. T1: `AppearancePage.tsx` übernimmt nach dem Verlassen der Seite keine Antwort mehr (`alive`), und `BrandProvider.accept` verwirft eine Antwort mit älterer Version als der bekannten. T2: Alle Schritte der Seite, auch Logo Ablage und Dateiauswahl, laufen über dieselbe Sperre (`working`, `begin`, `end`); eine Ablage während eines Vorgangs sendet nichts. Hinweis 1: `AppearanceApiTest.together` hält die Zeile gesperrt, wartet auf die Bereitschaft beider Aufträge und gibt die Sperre erst frei, wenn `pg_stat_activity` beide Anfragen wartend zeigt. Hinweis 2: Wahrheitswerte bei Name und Farbe und der Vorrang von 415 vor 412 beim Logo in `wrongJsonTypesAreRefusedLikeTheTestStandIn` und im Browsertest des Testersatzes.
+2. Nachweise (lokal, JDK 21, PostgreSQL 16): die Browsertests „a late answer of a page that was left takes nothing and keeps the newer saved version“ und „no logo can be dropped while the current version is loading and the old answer takes nothing back“ scheitern mit der Seite von main und laufen mit der Korrektur; die Ergebnisse der Gesamtläufe stehen im Ergebnis PR.
+3. Grenzen: Ein Lesevorgang wird beim Verlassen der Seite nicht abgebrochen; seine Antwort ändert die Seite nicht mehr, eine gleiche oder neuere Version erreicht aber den gemeinsamen Auftritt. Eine Ablage während eines Vorgangs wird ohne eigene Meldung übergangen; die Seite zeigt den laufenden Vorgang durch gesperrte Schaltflächen.
+4. Nachtrag nach der Claude Prüfung (docs/REVIEW_TASK-090_PR-268.md, Holgers Wahl „B1 beheben lassen“ vom 8. November 2026): B1: Ein erfolgreiches Speichern oder Laden, dessen Antwort nach dem Verlassen der Seite eintrifft, geht weiter an `accept` (`keep`), nur die Zustände der Seite bleiben unberührt; Browsertest „a save whose answer arrives after leaving the page is kept for the next visit“ scheitert ohne die Behebung. Hinweis 1: `newerOrSame` und `etagVersion` liegen in `brand.ts` mit eigenem Test in tests/brand.test.ts. Hinweis 2: Das eigene Laden des Providers nutzt denselben Vergleich. Hinweis 3: `together` nennt die Grenze durch `lock_timeout` von 5 Sekunden, gibt die Sperre vor dem Pool frei und öffnet den Start auch nach einem Fehlschlag. Dazu `{"name":false}` im Testersatz.
+
+**Nächster Schritt:** Prüfung durch eine zweite KI, danach Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 durch Holger.
