@@ -390,16 +390,118 @@ describe('company appearance', () => {
     });
   });
 
+  // TASK-090, T1 and T2 of docs/REVIEW_TASK-089_PR-263.md: the answer of "Aktuellen Stand laden" is held back and given
+  // out only later with the then old version 9. It takes nothing from a page that was left, never takes back a newer
+  // version, and no logo can be dropped while it is pending.
+  async function holdNextRead(page, server) {
+    let armed = false;
+    let arrived;
+    let release;
+    const requested = new Promise((resolve) => { arrived = resolve; });
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route((url) => url.pathname === '/api/v1/appearance', async (route) => {
+      if (!armed || route.request().method() !== 'GET') return route.fallback();
+      armed = false;
+      const a = server.state.appearance;
+      const body = { name: a.name, defaultName: 'Task Manager', accentColor: a.accent, defaultAccentColor: '#f97316',
+        logo: a.logo && (({ content, ...shown }) => shown)(a.logo), version: a.version, updatedAt: '2026-10-19T06:00:00Z' };
+      const etag = `"${a.version}"`;
+      arrived();
+      await held;
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { ETag: etag }, body: JSON.stringify(body) });
+    });
+    return { arm: () => { armed = true; }, requested, release: () => release() };
+  }
+
+  test('a late answer of a page that was left takes nothing and keeps the newer saved version', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const hold = await holdNextRead(page, server);
+      const field = page.getByLabel('Name des Unternehmens');
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      server.state.appearance.version = 9;
+      server.state.appearance.name = 'Alter Servername';
+      await field.fill('Erster Entwurf');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      hold.arm();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await hold.requested;
+
+      await page.evaluate(() => { location.hash = '#/start'; });
+      await field.waitFor({ state: 'detached' });
+      await page.evaluate(() => { location.hash = '#/appearance'; });
+      await field.waitFor();
+      await field.fill('Neu gespeichert');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await page.getByText('Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.').waitFor();
+      await field.fill('Neu gespeichert');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Name ist für alle gespeichert.').waitFor();
+      assert.equal(server.state.appearance.version, 10);
+
+      hold.release();
+      await page.waitForTimeout(300);
+      assert.equal(await field.inputValue(), 'Neu gespeichert', 'the old answer does not take back the name');
+      await page.getByRole('button', { name: 'Violett' }).click();
+      await page.locator('section[aria-labelledby="accent-heading"]').getByRole('button', { name: 'Für alle speichern' }).click();
+      await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+      assert.equal(server.writes().at(-1).ifMatch, '"10"', 'the next change is sent against the newer version');
+      assert.equal(server.state.appearance.name, 'Neu gespeichert');
+    });
+  });
+
+  test('no logo can be dropped while the current version is loading and the old answer takes nothing back', async () => {
+    const server = fake({ brandName: 'Nordlicht' });
+    await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
+      const hold = await holdNextRead(page, server);
+      const drop = () => page.getByTestId('logo-dropzone').evaluate((zone, bytes) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([new Uint8Array(bytes)], 'logo.png', { type: 'image/png' }));
+        zone.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+        zone.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+      }, [...PNG]);
+      await page.waitForFunction(() => document.querySelector('[data-testid="brand-name-input"]')?.value === 'Nordlicht');
+      await accentBecomes(page, '#2563eb');
+      server.state.appearance.version = 9;
+      await page.getByLabel('Name des Unternehmens').fill('Erster Entwurf');
+      await page.getByRole('button', { name: 'Namen speichern' }).click();
+      await page.getByText('Der Eintrag wurde zwischenzeitlich geändert.').waitFor();
+      hold.arm();
+      await page.getByRole('button', { name: 'Aktuellen Stand laden' }).click();
+      await hold.requested;
+      const logoWrites = () => server.writes().filter((item) => item.path === '/api/v1/appearance/logo').length;
+
+      await drop();
+      await page.waitForTimeout(300);
+      assert.equal(logoWrites(), 0, 'a drop during the read sends nothing');
+      assert.equal(await page.getByRole('button', { name: 'Namen speichern' }).isDisabled(), true, 'the page stays locked');
+
+      hold.release();
+      await page.getByText('Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.').waitFor();
+      await drop();
+      await page.getByText('Das Logo ist für alle gespeichert.').waitFor();
+      assert.deepEqual(server.writes().filter((item) => item.path === '/api/v1/appearance/logo').map((item) => item.ifMatch), ['"9"']);
+      assert.equal(await page.locator('header img.brand-logo').getAttribute('src'), '/api/v1/appearance/logo?v=10');
+      await page.getByRole('button', { name: 'Logo entfernen' }).click();
+      await page.getByText('Das Logo wurde entfernt.').waitFor();
+      assert.equal(server.writes().at(-1).ifMatch, '"10"', 'the logo keeps the version it was saved with');
+    });
+  });
+
   // TASK-089, finding S2 and hint H2: the stand in answers wrong JSON types and logo types like the server.
   test('the stand in refuses wrong JSON types and logo types like the server', async () => {
     const server = fake();
     await withPage({ backend: server, hash: '#/appearance' }, async (page) => {
       await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
-      const send = (path, type, body) => page.evaluate(async ({ path, type, body, token }) => {
-        const answer = await fetch(path, { method: 'PUT', headers: { 'Content-Type': type, 'If-Match': '"3"', 'X-CSRF-Token': token },
+      const send = (path, type, body, etag = '"3"') => page.evaluate(async ({ path, type, body, etag, token }) => {
+        const answer = await fetch(path, { method: 'PUT', headers: { 'Content-Type': type, 'If-Match': etag, 'X-CSRF-Token': token },
           body: typeof body === 'string' ? body : new Uint8Array(body) });
         return [answer.status, (await answer.json()).code ?? null];
-      }, { path, type, body, token: TOKEN });
+      }, { path, type, body, etag, token: TOKEN });
       for (const body of ['{"name":{}}', '{"name":["A"]}', '{"accentColor":["#f97316"]}', '[]']) {
         assert.deepEqual(await send('/api/v1/appearance', 'application/json', body), [400, 'request.invalid'], body);
       }
@@ -407,9 +509,16 @@ describe('company appearance', () => {
       assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"accentColor":42}'), [400, 'appearance.color_invalid']);
       assert.deepEqual(await send('/api/v1/appearance/logo', 'image/jpeg', [...PNG]), [415, 'appearance.logo_type_invalid']);
       assert.deepEqual(await send('/api/v1/appearance/logo', 'image/png', [1, 2, 3]), [415, 'appearance.logo_type_invalid']);
+      // TASK-090, hint 2: the type is named before a stale version, and a truth value as color is no color.
+      assert.deepEqual(await send('/api/v1/appearance/logo', 'image/jpeg', [...PNG], '"1"'), [415, 'appearance.logo_type_invalid']);
+      assert.deepEqual(await send('/api/v1/appearance/logo', 'image/png', [1, 2, 3], '"1"'), [415, 'appearance.logo_type_invalid']);
+      assert.deepEqual(await send('/api/v1/appearance/logo', 'image/png', [...PNG], '"1"'), [412, 'appearance.version_conflict']);
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"accentColor":true}'), [400, 'appearance.color_invalid']);
       assert.equal(server.state.appearance.version, 3, 'nothing was stored');
       assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"name":42}'), [200, null]);
       assert.equal(server.state.appearance.name, '42');
+      assert.deepEqual(await send('/api/v1/appearance', 'application/json', '{"name":true}', '"4"'), [200, null]);
+      assert.equal(server.state.appearance.name, 'true');
     });
   });
 

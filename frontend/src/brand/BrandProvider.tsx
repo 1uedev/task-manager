@@ -53,6 +53,12 @@ function useSystemDark(): boolean {
   return dark;
 }
 
+// The version in an ETag such as "9" or W/"9"; null when it is not a whole number.
+function etagVersion(etag: string): number | null {
+  const match = /^(?:W\/)?"(\d+)"$/.exec(etag.trim());
+  return match ? Number(match[1]) : null;
+}
+
 export function BrandProvider({ children, api: given }: { readonly children: ReactNode; readonly api?: ServerApi }) {
   const api = useMemo(() => given ?? createServerApi(), [given]);
   const [connection, setConnection] = useState<Connection>({ state: 'loading' });
@@ -115,8 +121,16 @@ export function BrandProvider({ children, api: given }: { readonly children: Rea
   const previewName = useCallback((next: string | null) => {
     setPreviewedName(next !== null && isBrandName(normalizeBrandName(next)) ? normalizeBrandName(next) : null);
   }, []);
+  // An answer that arrives late never takes back a newer version this window already knows (TASK-090, T1 and T2 of
+  // docs/REVIEW_TASK-089_PR-263.md): the version only grows, so an older one is dropped and an equal one is taken.
   const accept = useCallback((loaded: LoadedAppearance) => {
-    setConnection((current) => (current.state === 'ready' ? { ...current, loaded } : current));
+    setConnection((current) => {
+      if (current.state !== 'ready') return current;
+      const known = etagVersion(current.loaded.etag);
+      const offered = etagVersion(loaded.etag);
+      if (known !== null && offered !== null && offered < known) return current;
+      return { ...current, loaded };
+    });
   }, []);
   const reload = useCallback(() => setRound((value) => value + 1), []);
   const setTheme = useCallback((next: Theme) => {

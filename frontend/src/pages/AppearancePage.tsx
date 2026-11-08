@@ -38,6 +38,30 @@ export function AppearancePage() {
   const [name, setName] = useState(savedName);
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
+  // One step at a time for every way in, buttons as well as dropping or choosing a logo, and none after the page was left:
+  // the lock is a ref so a drop in the same moment already sees it, and a late answer of a left page takes nothing
+  // (TASK-090, T1 and T2 of docs/REVIEW_TASK-089_PR-263.md).
+  const working = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  function begin(): boolean {
+    if (working.current) return false;
+    working.current = true;
+    setBusy(true);
+    setNotice(null);
+    return true;
+  }
+  function end(): boolean {
+    working.current = false;
+    if (!alive.current) return false;
+    setBusy(false);
+    return true;
+  }
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dropping, setDropping] = useState(false);
   const [localLogo, setLocalLogo] = useState<string | null>(null);
@@ -106,10 +130,9 @@ export function AppearancePage() {
   }
 
   async function run(part: Part, call: () => Pending, success: MessageKey) {
-    setBusy(true);
-    setNotice(null);
+    if (!begin()) return;
     const outcome = await call();
-    setBusy(false);
+    if (!end()) return;
     if (outcome.kind === 'ok') {
       take(part, outcome.data);
       setNotice({ kind: 'saved', text: success });
@@ -123,10 +146,9 @@ export function AppearancePage() {
   // whose saving failed gets the saved value, every other unsaved input stays, also when the version did not change. A
   // failed read keeps all input and offers the same step again (TASK-089, finding S1 of docs/REVIEW_TASK-087_PR-259_2.md).
   async function loadCurrent(part: Part) {
-    setBusy(true);
-    setNotice(null);
+    if (!begin()) return;
     const outcome = await readAppearance(api);
-    setBusy(false);
+    if (!end()) return;
     if (outcome.kind === 'ok') {
       take(part, outcome.data);
       setNotice({ kind: 'saved', text: 'appearance.reloaded' });
@@ -137,7 +159,7 @@ export function AppearancePage() {
   }
 
   function takeFile(file: File | undefined) {
-    if (!file) return;
+    if (!file || working.current) return;
     if (!isLogoType(file.type)) return setNotice({ kind: 'invalid', text: 'appearance.logo.wrongType' });
     if (file.size > LOGO_MAX_BYTES) return setNotice({ kind: 'invalid', text: 'appearance.logo.tooLarge' });
     if (admin && loaded) {
@@ -257,7 +279,7 @@ export function AppearancePage() {
             <div className="dropzone" data-testid="logo-dropzone" data-active={dropping || undefined}
               onDragOver={(event) => {
                 event.preventDefault();
-                setDropping(true);
+                if (!working.current) setDropping(true);
               }}
               onDragLeave={() => setDropping(false)} onDrop={onDrop}>
               {shownLogo !== null
