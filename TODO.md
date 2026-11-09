@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,13 +28,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
-
-### Blockiert – BLOCKIERT
-
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-094](#task-094-sprachfassungen-im-wiki-a12-teil-2) | Sprachfassungen im Wiki (A12 Teil 2) | claude-20261109-wiki-01 | 2026-11-09 |
+
+### Blockiert – BLOCKIERT
+
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -89,9 +89,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-094 Sprachfassungen im Wiki (A12 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261109-wiki-01 · **Aktualisiert:** 2026-11-09
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261109-wiki-01 · **Aktualisiert:** 2026-11-09
 
-**Bezug:** REQ-DOC-003, REQ-I18N-001; OPEN-011; DEC-033; docs/WIKI_I18N_BRANDING.md (Optionale Übersetzungen, Prüffälle W01, W07, W08, W12). **Abhängigkeiten:** TASK-093 auf main. **Arbeitsstand:** Mit TASK-093 von Holger am 9. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-093 auf main ist. Geplanter Branch claude/project-thread-ipd3h4, Entscheidung DEC-124, eigene Migration nach denen von TASK-093.
+**Bezug:** REQ-DOC-003, REQ-I18N-001; OPEN-011; DEC-033; docs/WIKI_I18N_BRANDING.md (Optionale Übersetzungen, Prüffälle W01, W07, W08, W12). **Abhängigkeiten:** TASK-093 auf main. **Arbeitsstand:** Mit TASK-093 von Holger am 9. November 2026 beauftragt und mit den Vorschlägen bestätigt; das Ergebnis von TASK-093 ist seit 9. November 2026 mit PR #278 und #279 auf main, damit ist die Blockade aufgehoben. Branch claude/project-thread-ipd3h4, Entscheidung DEC-124, eigene Migration nach denen von TASK-093.
 
 **Umfang:** Sprachfassungen Deutsch und Englisch je Seite mit eigenem Titel, Entwurf, Revisionen und Veröffentlichung, Rückfallregel für Leser, Übersetzungshinweis mit Vergleich, Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: weitere Sprachen, automatische oder KI Übersetzung, Suche.
 
@@ -107,4 +107,4 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Nach neuer Veröffentlichung der Ausgangsfassung bleibt die Übersetzung erhalten und zeigt den Hinweis (W07).
 4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests in Deutsch und Englisch.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-093 auf main die Blockade aufheben und umsetzen.
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen.
