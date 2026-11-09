@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,60 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-091 Befunde der Nachprüfung von TASK-088 beheben
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097, DEC-118, DEC-121. **Verantwortlich:** claude-20261108-newanswersfix-02. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** R1 mit Browsertest in Deutsch; R2 mit API und Migrationstests gegen die echte Datenbank, die ohne die jeweilige Prüfung im Code fehlschlagen würden; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-121, ohne Migration. Die Liste „Neue Kundenantworten“ zeigt beim Laden Überschrift und Ladeanzeige mit `aria-busy`; ladend, leer (Abschnitt ausgeblendet) und fehlgeschlagen (Fehler mit „Erneut versuchen“) sind unterscheidbar (R1). `NewAnswersMigrationTest` prüft das Upgrade über V0052 ohne nachträglich neue Antworten; `HelpdeskApiTest` prüft gleichzeitiges Markieren mit genau 200 und 412, einer Versionserhöhung und einem Audit, Anhängen und Markieren in beiden Reihenfolgen unter gehaltener Sperre und den Projektwechsel zwischen erster Prüfung und Ticketsperre, jeweils mit nachgewiesenen Wartezuständen (R2). Der bestehende Browsertest aus TASK-088 wartet seit B1 der Prüfung auf das Ausblenden der leeren Liste.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal (545 Tests), Gegenproben: ohne die zweite Prüfung unter der Ticketsperre und mit einem Nachfüllen in V0052 schlagen die Tests fehl. Frontend `npm run verify` und Browsertests 210 von 210 nach B1, der betroffene Test zehnmal einzeln grün. CI auf PR #269 und PR #272 grün.
+
+**Review:** Getrennte Prüfung durch Claude an Stelle von Codex, Sitzung claude-20261108-newanswersfix-review-01 ([Bericht](docs/REVIEW_TASK-091_PR-269.md), PR #272): R1 und R2 wirksam behoben, Befund B1 [P3] (Browsertest zählte die Liste während des Ladens) nach Holgers „B1 noch beheben“ im selben PR behoben, danach Empfehlung „abnehmen“. Die Prüfung ist von einer anderen Sitzung als der des Autors, aber nicht von einem anderen Modell.
+
+**Abnahme:** Holger, 2026-11-09, im Thread „Neue Kundenantworten sichtbar machen“ mit „ja“ auf die Empfehlung, TASK-067, TASK-088 und TASK-091 abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H1 der Prüfung, `lockWaiters()` zählt alle Wartenden der Testdatenbank statt der eigenen Verbindungen; H2, Personen ohne `helpdesk.reply` sehen beim ersten Laden kurz die Ladeanzeige; H3, die englische Ladeanzeige ist nur durch eine Probe belegt; H4, nach „Gesehen“ bleibt die Zeile bis zum Ende des Neuladens bedienbar. Die wechselnden Zeitüberschreitungen der Tag Browsertests (H1 der Nachprüfung von TASK-088) bleiben gesondert.
+
+**Referenz:** Reservierung mit Codex Bericht der Nachprüfung von TASK-088 #266 (0319aeb), Ergebnis #269 (419d8b2), Prüfbericht mit Behebung von B1 #272 (9e77cd9); verknüpft mit TASK-067, TASK-088 und DEC-121.
+
+## TASK-088 Befunde der Prüfung von TASK-067 beheben
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097, DEC-118. **Verantwortlich:** claude-20261104-newanswersfix-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** F1 und H4 mit API Tests gegen die echte Datenbank; F2 und F3 mit Browsertests einschließlich `document.activeElement`; H2 mit einem Browsertest ohne Kontakt; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-118, ohne Migration. `AnswerService.seen` prüft nach der Sperre der Mail, dass das Ticket noch im Unternehmen und im Projekt der Mail liegt, einmal vor und einmal unter der geteilten Sperre des Tickets, sonst 404 `helpdesk.message_not_found` ohne Änderung und Audit (F1). Meldung und Fokus liegen in Ticket und Liste an der Überschrift, mit Erfolgsmeldung und eigenem Konflikttext (F2). Ein Ladefehler der Liste zeigt Überschrift, Fehler und „Erneut versuchen“ (F3). Testersatz wie der Server (H1), `answerSeenAllowed` auch ohne Kontakt (H2), 503 mit Retry-After im Vertrag und berichtigte Texte zu V0052 und 36 Routen (H3), Regressionstests (H4). Die Unterscheidung von ladend und leer sowie die dauerhaften Sperr und Upgradetests aus der Nachprüfung ergänzt TASK-091.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16, Browsertests mit Fokus und Meldungen in Liste und Ticket; CI auf PR #261 grün.
+
+**Review:** Getrennte Nachprüfung durch Codex ([Bericht](docs/REVIEW_TASK-088_PR-261.md), PR #266): F1, F2, der Fehlerweg von F3 und H1 bis H3 wirksam; R1 und R2 offen, behoben mit TASK-091.
+
+**Abnahme:** Holger, 2026-11-09, zusammen mit TASK-067 und TASK-091 (siehe TASK-091); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine eigenen; siehe TASK-091.
+
+**Referenz:** Reservierung mit Codex Prüfbericht zu TASK-067 #260 (fc167e5), Ergebnis #261 (1a75e5d); verknüpft mit TASK-067, TASK-091 und DEC-118.
+
+## TASK-067 Neue Kundenantworten an bestehenden Tickets sichtbar machen
+
+**Bezug:** REQ-HD-002, REQ-TKT-005; DEC-097, DEC-118, DEC-121. **Verantwortlich:** claude-20261030-newanswers-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** Jede durch den Abruf oder durch `…/attach` an ein bestehendes Ticket angehängte Mail ist neu, eröffnende Mails nicht; die Liste der neuen Kundenantworten nennt nur Projekte mit Mitgliedschaft, `helpdesk.reply` und den Leseregeln für `mail` und `contact`, ohne `ticket.read` keine Spur des Tickets; Markieren mit denselben Rechten, versioniert (If-Match) und mit Audit, danach für alle aus der Liste; die Ticketansicht hebt neue Antworten nur mit der Leseregel für `mail` hervor; Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Ergebnis:** DEC-097, Migration V0052 (`joined_at`, `seen_at`, `seen_by` an `helpdesk_message`). `TicketOpener.append` vermerkt das Anhängen für Abruf und `…/attach`. Endpunkte `GET /api/v1/helpdesk/answers` und `POST /api/v1/helpdesk/answers/{id}/seen` mit If-Match, Rechten wie beim Versand und Audit `answer.seen`; die Mails im Ticket tragen `newAnswer` und `version`. Oberfläche: Liste „Neue Kundenantworten“ in der Prüfwarteschlange und hervorgehobene Antwort mit „Gesehen“ im Ticket. Die Befunde der Prüfungen beheben TASK-088 und TASK-091. Beschreibung in backend/README.md, Abschnitt „Neue Kundenantworten (TASK-067)“.
+
+**Prüfungen:** `HelpdeskApiTest.anAnswerThatJoinsATicketIsNewUntilSomeoneMarksItAsSeen` (Liste, Ticketansicht, 403, 404, 428, 412, 409, Audit, Anhängen über die Prüfwarteschlange), Vertrag gegen Routen (36), Browsertests; CI auf PR #221 grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-067_PR-221.md), PR #260) mit F1 bis F3 und H1 bis H4, behoben mit TASK-088; Nachprüfungen siehe TASK-088 und TASK-091.
+
+**Abnahme:** Holger, 2026-11-09, zusammen mit TASK-088 und TASK-091 (siehe TASK-091); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): automatisches Wiederöffnen erledigter Tickets als Einstellung je Projekt, Benachrichtigungen (REQ-TKT-005), SLA Bezug und „gesehen“ je Person bleiben außerhalb.
+
+**Referenz:** Reservierung #218 (678fed5), Ergebnis #221 (b4004be); verknüpft mit TASK-088, TASK-091 und DEC-097.
 
 ## TASK-090 Befunde der Prüfung von TASK-089 beheben (A17)
 
