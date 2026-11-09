@@ -233,42 +233,36 @@ public class TimeService {
             }
             parts.add(new Part(projectId, access, ticketsOf, person, ticket));
         }
+        // One statement reads count, sums, days and rows, so they come from one snapshot even under READ COMMITTED (TASK-092, R1).
+        TimeRepository.Snapshot snapshot = repository.snapshot(actor.companyId(),
+            parts.stream().map(part -> new TimeRepository.Scope(part.projectId(), part.person(), part.ticket())).toList(), filter.from(),
+            filter.to(), filter.cancelled(), limit + 1, rowsWhenTruncated);
+        Map<UUID, Part> byProject = new HashMap<>();
+        parts.forEach(part -> byProject.put(part.projectId(), part));
         long count = 0;
         long total = 0;
         Map<UUID, Long> perPerson = new LinkedHashMap<>();
         Map<String, TicketSum> perTicket = new LinkedHashMap<>();
+        for (TimeRepository.Sum sum : snapshot.sums()) {
+            count += sum.count();
+            if (sum.minutes() == 0) {
+                continue;
+            }
+            Part part = byProject.get(sum.projectId());
+            total += sum.minutes();
+            perPerson.merge(sum.personId(), sum.minutes(), Long::sum);
+            TicketRef ref = part.tickets().ref(sum.ticketId());
+            String key = part.projectId() + "#" + (ref == null ? "" : ref.number());
+            TicketSum previous = perTicket.get(key);
+            perTicket.put(key, new TicketSum(part.projectId(), part.tickets().projectKey(), ref,
+                (previous == null ? 0 : previous.minutes()) + sum.minutes()));
+        }
         Map<LocalDate, Long> perDate = new HashMap<>();
-        for (Part part : parts) {
-            for (TimeRepository.Sum sum : repository.sums(actor.companyId(), part.projectId(), part.person(), part.ticket(), filter.from(),
-                    filter.to(), filter.cancelled())) {
-                count += sum.count();
-                if (sum.minutes() == 0) {
-                    continue;
-                }
-                total += sum.minutes();
-                perPerson.merge(sum.personId(), sum.minutes(), Long::sum);
-                TicketRef ref = part.tickets().ref(sum.ticketId());
-                String key = part.projectId() + "#" + (ref == null ? "" : ref.number());
-                TicketSum previous = perTicket.get(key);
-                perTicket.put(key, new TicketSum(part.projectId(), part.tickets().projectKey(), ref,
-                    (previous == null ? 0 : previous.minutes()) + sum.minutes()));
-            }
-            for (TimeRepository.DaySum day : repository.days(actor.companyId(), part.projectId(), part.person(), part.ticket(), filter.from(),
-                    filter.to())) {
-                perDate.merge(day.date(), day.minutes(), Long::sum);
-            }
-        }
-        boolean truncated = count > limit;
-        List<TimeEntry> found = new ArrayList<>();
-        if (!truncated || rowsWhenTruncated) {
-            for (Part part : parts) {
-                found.addAll(repository.entries(actor.companyId(), part.projectId(), part.person(), part.ticket(), filter.from(), filter.to(),
-                    filter.cancelled(), limit + 1));
-            }
-        }
+        snapshot.days().forEach(day -> perDate.merge(day.date(), day.minutes(), Long::sum));
+        List<TimeEntry> found = new ArrayList<>(snapshot.rows());
         found.sort(Comparator.comparing(TimeEntry::date).reversed().thenComparing(TimeEntry::createdAt, Comparator.reverseOrder()));
-        Map<UUID, Part> byProject = new HashMap<>();
-        parts.forEach(part -> byProject.put(part.projectId(), part));
+        // The rows read decide as well: more than the limit is never cut silently into a complete looking answer (TASK-092, R1).
+        boolean truncated = count > limit || found.size() > limit;
         List<EntryView> views = new ArrayList<>();
         for (TimeEntry entry : found.subList(0, Math.min(found.size(), limit))) {
             Part part = byProject.get(entry.projectId());

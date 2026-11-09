@@ -18,11 +18,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -33,6 +37,7 @@ import taskmanager.TestDatabase;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
+import taskmanager.time.internal.HeldTimeRepository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -41,9 +46,11 @@ import tools.jackson.databind.json.JsonMapper;
  * PostgreSQL: the three time actions, the calculation example of docs/DOMAIN_MODEL.md, corrections and cancellations with
  * their history, versions, the rules of a booking, hidden tickets and the CSV export. TASK-092 adds the sums beyond the list
  * and export limits (F1), the hidden ticket a correction keeps (F2), the own entries of {@code mine} with the sums per day
- * (F3) and the negative cases of portal accounts and other projects (H2).
+ * (F3) and the negative cases of portal accounts and other projects (H2). Its follow up review adds that count, sums, days and
+ * rows of a list and an export come from one read (R1), held through {@link HeldTimeRepository} while another booking commits.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(HeldTimeRepository.class)
 class TimeApiTest {
     private static final String DATABASE = freshDatabase();
     private static final String STRONG = "Correct-Horse-Battery-9";
@@ -482,6 +489,86 @@ class TimeApiTest {
         assertEquals(200, csv.status(), csv.body().length() > 500 ? csv.body().substring(0, 500) : csv.body());
         String[] lines = csv.body().replace("﻿", "").split("\r\n");
         return List.of(lines).subList(4, lines.length - 1);
+    }
+
+    /**
+     * Holds the next read of the repository through {@code arm}, commits a booking of {@code who} while it is held and then lets
+     * the read go on. Returns the answer of {@code request} and checks that the booking itself succeeded.
+     */
+    private Response whileABookingCommits(java.util.function.Supplier<Response> request, Setup setup, Browser who, String description)
+            throws Exception {
+        CountDownLatch reached = new CountDownLatch(1);
+        CountDownLatch go = new CountDownLatch(1);
+        HeldTimeRepository.beforeNextRead(() -> {
+            reached.countDown();
+            try {
+                assertTrue(go.await(30, TimeUnit.SECONDS), "the held read was let go");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        });
+        CompletableFuture<Response> answer = CompletableFuture.supplyAsync(request);
+        try {
+            assertTrue(reached.await(30, TimeUnit.SECONDS), "the read was reached");
+            Response booked = CompletableFuture.supplyAsync(() -> who.send("POST", "/api/v1/time/projects/" + setup.project() + "/entries",
+                booking(today(), 7, description, null, null), null)).get(30, TimeUnit.SECONDS);
+            assertEquals(201, booked.status(), "the booking commits while the read is held: " + booked.body());
+        } finally {
+            go.countDown();
+        }
+        return answer.get(120, TimeUnit.SECONDS);
+    }
+
+    /**
+     * R1: a booking that commits after the rights of a list were checked and before its entries are read is in count, total,
+     * sums per person, sums per day and rows alike; the parts of one answer always fit each other.
+     */
+    @Test
+    void countSumsDaysAndRowsOfAListFitEachOther() throws Exception {
+        Setup setup = project();
+        Browser reader = member(setup, "time.book", "time.read");
+        Browser other = member(setup, "time.book");
+        for (int i = 0; i < 3; i++) {
+            assertEquals(201, book(setup, reader, 60, "Vorher " + i).status());
+        }
+        Response held = whileABookingCommits(() -> list(reader, setup, ""), setup, other, "Dazwischen");
+        assertEquals(200, held.status(), held.body());
+        JsonNode body = held.json();
+        long perDate = 0;
+        for (JsonNode day : body.get("perDate")) {
+            perDate += day.get("minutes").asLong();
+        }
+        long perPerson = 0;
+        for (JsonNode person : body.get("perPerson")) {
+            perPerson += person.get("minutes").asLong();
+        }
+        long rows = 0;
+        for (JsonNode entry : body.get("entries")) {
+            rows += entry.get("minutes").asLong();
+        }
+        assertEquals(4, body.get("count").asLong(), body.toString());
+        assertEquals(4, body.get("entries").size(), "the rows see the same entries as the count");
+        assertEquals(187, body.get("totalMinutes").asLong());
+        assertEquals(187, perDate, "the sums per day see the same entries as the total");
+        assertEquals(187, perPerson);
+        assertEquals(187, rows);
+        assertFalse(body.get("truncated").asBoolean());
+    }
+
+    /**
+     * R1: an export of 50 000 entries is refused when a further booking commits after its rights were checked and before its
+     * entries are read; it never answers 200 with 50 000 of 50 001 rows.
+     */
+    @Test
+    void anExportIsRefusedWhenABookingMakesItTooLargeWhileItRuns() throws Exception {
+        Setup setup = project();
+        Browser reader = member(setup, "time.book", "time.read");
+        bulk(setup.project(), reader.id, 50_000, "2026-08-01", false);
+        String export = "/api/v1/time/export?project=" + setup.project();
+        Response held = whileABookingCommits(() -> reader.get(export), setup, reader, "Spaet");
+        assertEquals(400, held.status(), held.body().length() > 500 ? held.body().substring(0, 500) : held.body());
+        assertEquals("time.export_too_large", held.code());
     }
 
     /** F1: count and sums cover every matching entry, apart from the 500 rows of a list and the 50 000 rows of an export. */

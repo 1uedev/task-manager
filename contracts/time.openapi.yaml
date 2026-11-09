@@ -106,7 +106,8 @@ paths:
         Ohne `project` gilt die Liste über alle Projekte der Person, in denen sie eine Zeitaktion hat. Ohne `time.read` oder
         `time.manage` enthält sie in einem Projekt nur die eigenen Buchungen, die Summen ebenso. Höchstens 500 Buchungen,
         neueste zuerst; `truncated` sagt, dass es mehr gibt. `count` zählt alle passenden Buchungen (mit `cancelled` auch die
-        stornierten), die Summen umfassen alle passenden, nicht stornierten Buchungen, jeweils ohne Obergrenze. Ein Ticket,
+        stornierten), die Summen umfassen alle passenden, nicht stornierten Buchungen, jeweils ohne Obergrenze. Anzahl, Summen
+        und Zeilen stammen aus demselben Datenstand. Ein Ticket,
         das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne sichtbares Ticket. `mine` beschränkt Liste und
         Summen auf die eigenen Buchungen, auch mit `time.read`; zusammen mit einer anderen `person` ergibt es 400
         `person.with_mine`.
