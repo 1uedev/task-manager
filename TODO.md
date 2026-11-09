@@ -223,7 +223,9 @@ Nicht Teil: die wechselnden Zeitüberschreitungen der Tag Browsertests (Hinweis 
 
 **Prüfung:** Claude Prüfung statt Codex (Sitzung claude-20261108-newanswersfix-review-01) in docs/REVIEW_TASK-091_PR-269.md: R1 und R2 wirksam behoben, drei Gegenproben zu R2 schlagen ohne die Absicherung fehl. Befund B1 [P3]: der Browsertest aus TASK-088 in frontend/tests/browser/helpdesk.test.mjs:547 zählt die Liste, während sie noch lädt, und ist seit TASK-091 unzuverlässig; Hinweise H1 bis H4 ohne Abnahmehindernis. Empfehlung: B1 mit einer Zeile im Test beheben, danach TASK-067, TASK-088 und TASK-091 ohne weitere Nachprüfung abnehmen.
 
-**Nächster Schritt:** Holger entscheidet über B1 und die gemeinsame Abnahme von TASK-067, TASK-088 und TASK-091.
+Nach Holgers „B1 noch beheben“ vom 9. November 2026 im selben PR #272 behoben (helpdesk.test.mjs:547 wartet auf das Ausblenden der Liste; Browsertests 210 von 210 grün).
+
+**Nächster Schritt:** Abnahme von TASK-067, TASK-088 und TASK-091 durch Holger.
 
 ## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
 

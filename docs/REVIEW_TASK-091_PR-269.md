@@ -80,3 +80,9 @@ Nicht ausgeführt: der gepinnte PostgreSQL 18.6 Container (kein Docker in der Pr
 ## Empfehlung
 
 B1 mit einer Zeile im Browsertest beheben, das kann auch im Abnahme-PR geschehen. Danach TASK-067, TASK-088 und TASK-091 gemeinsam abnehmen; eine weitere Nachprüfung halte ich nicht für nötig. H1 bis H4 sind keine Abnahmehindernisse. Aufgabenstatus und fachliche Abnahme bleiben bei Holger.
+
+## Nachtrag vom 9. November 2026: B1 behoben
+
+Holger hat am 9. November 2026 „B1 noch beheben“ geschrieben. Im selben PR #272 ersetzt frontend/tests/browser/helpdesk.test.mjs:547 die sofortige Zählung durch `await page.getByTestId('new-answers').waitFor({ state: 'detached' });`. Der Test wartet damit, bis die Liste fertig geladen und als leer ausgeblendet ist; bliebe sie sichtbar, liefe die Wartezeit ab und der Test schlüge fehl. Produktcode ist nicht geändert.
+
+Nachweis: `npm run verify` grün; der Test 10 Läufe einzeln, alle grün; helpdesk.test.mjs 23 von 23 grün; `npm run test:browser` 210 von 210 grün. Damit ist Abnahmekriterium 2 von TASK-091 erfüllt. Empfehlung jetzt: TASK-067, TASK-088 und TASK-091 abnehmen.
