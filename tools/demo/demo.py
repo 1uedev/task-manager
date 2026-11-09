@@ -221,6 +221,10 @@ ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "att
 PROJECT_ACTIONS_FULL = ["project.read", "project.manage", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_EDIT = ["project.read", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_READ = ["project.read", "ticket.read"]
+# The wiki of the demo projects (TASK-093, TASK-094): project leads publish, development edits, everybody else reads.
+WIKI_ACTIONS_FULL = ["wiki.read", "wiki.edit", "wiki.publish"]
+WIKI_ACTIONS_EDIT = ["wiki.read", "wiki.edit"]
+WIKI_ACTIONS_READ = ["wiki.read"]
 
 
 @dataclass
@@ -391,11 +395,12 @@ def seed_demo(args) -> None:
     people = {username: builder.account(username, display, password) for username, display, _, _ in DEMO_PEOPLE}
     print("groups and rights")
     specs = {
-        "Projektleitung": GroupSpec("Projektleitung", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS),
-        "Entwicklung": GroupSpec("Entwicklung", PROJECT_ACTIONS_EDIT, ALL_FIELDS, ["title", "description", "status", "assignee", "tags", "attachments"]),
-        "Lesen ohne Beschreibung": GroupSpec("Lesen ohne Beschreibung", PROJECT_ACTIONS_READ, ["title", "type", "status", "tags"], []),
+        "Projektleitung": GroupSpec("Projektleitung", PROJECT_ACTIONS_FULL + WIKI_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS),
+        "Entwicklung": GroupSpec("Entwicklung", PROJECT_ACTIONS_EDIT + WIKI_ACTIONS_EDIT, ALL_FIELDS,
+                                 ["title", "description", "status", "assignee", "tags", "attachments"]),
+        "Lesen ohne Beschreibung": GroupSpec("Lesen ohne Beschreibung", PROJECT_ACTIONS_READ + WIKI_ACTIONS_READ, ["title", "type", "status", "tags"], []),
     }
-    builder.group(GroupSpec("Verwaltung Demo", PROJECT_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), [admin_id])
+    builder.group(GroupSpec("Verwaltung Demo", PROJECT_ACTIONS_FULL + WIKI_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), [admin_id])
     for name, spec in specs.items():
         builder.group(spec, [people[u] for u, _, group, _ in DEMO_PEOPLE if group == name])
 
@@ -424,8 +429,50 @@ def seed_demo(args) -> None:
     nordwerk = seed_deadlines(admin, project_ids["HELP"])
     seed_portal(admin, project_ids["HELP"], nordwerk, password)
     seed_mail_template(admin)
+    seed_wiki(admin, project_ids["HELP"])
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
+
+
+def _wiki_doc(*blocks: tuple[str, str]) -> dict:
+    """A wiki document of headings ("h") and paragraphs ("p")."""
+    content = []
+    for kind, text in blocks:
+        node = {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+        if kind == "h":
+            node = {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": text}]}
+        content.append(node)
+    return {"type": "doc", "content": content}
+
+
+WIKI_HANDBOOK = _wiki_doc(("p", "Wie wir Anfragen im internen Helpdesk annehmen, ergänzen und beantworten."))
+WIKI_REQUEST_DE = _wiki_doc(
+    ("h", "Was fehlt oft?"),
+    ("p", "Kunde, Kontakt und Priorität. Ohne Kunde läuft keine Servicefrist."),
+    ("h", "So geht es"),
+    ("p", "Ticket öffnen, Kunde und Kontakt wählen, Priorität setzen und speichern."),
+)
+WIKI_REQUEST_EN = _wiki_doc(
+    ("h", "What is often missing?"),
+    ("p", "Customer, contact and priority. Without a customer no service deadline runs."),
+    ("h", "How to do it"),
+    ("p", "Open the ticket, choose customer and contact, set the priority and save."),
+)
+
+
+def seed_wiki(admin: Client, project: str) -> None:
+    """A small page tree in the helpdesk project (TASK-094): "Helpdesk Handbuch" with the page "Serviceanfrage ergänzen",
+    both published in German; the second page has an English draft that readers do not see."""
+    print("wiki")
+    handbook = admin.call("POST", f"/wiki/projects/{project}/pages",
+                          {"title": "Helpdesk Handbuch", "parentId": None, "content": WIKI_HANDBOOK, "language": "de"}).body["id"]
+    admin.call("POST", f"/wiki/pages/{handbook}/publish", {"revision": 1}, headers={"If-Match": '"1"'})
+    request = admin.call("POST", f"/wiki/projects/{project}/pages",
+                         {"title": "Serviceanfrage ergänzen", "parentId": handbook, "content": WIKI_REQUEST_DE, "language": "de"}).body["id"]
+    admin.call("POST", f"/wiki/pages/{request}/publish", {"revision": 1}, headers={"If-Match": '"1"'})
+    added = admin.call("POST", f"/wiki/pages/{request}/languages", {"language": "en"})
+    admin.call("PUT", f"/wiki/pages/{request}/draft", {"title": "Complete a service request", "content": WIKI_REQUEST_EN},
+               query={"language": "en"}, headers={"If-Match": added.headers.get("etag")})
 
 
 def seed_mail_template(admin: Client) -> None:

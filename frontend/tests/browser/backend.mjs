@@ -1553,8 +1553,29 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     publish: may(account, 'wiki.publish', projectId) });
   const wikiAny = (access) => access.read || access.edit || access.publish;
   const wikiDrafts = (access) => access.edit || access.publish;
-  const wikiRevision = (page, number) => wiki.revisions.find((item) => item.pageId === page.id && item.revision === number);
-  const wikiEvent = (page, kind, revision, account) => wiki.events.push({ pageId: page.id, kind, language: page.language, revision, actorId: account.id, occurredAt: now() });
+  // TASK-094: the page object itself carries the version of its source language, `page.variants` the other languages;
+  // revisions without a language belong to the source language.
+  const WIKI_LANGUAGES = ['de', 'en'];
+  const wikiRevision = (page, number, language = page.language) => wiki.revisions.find((item) => item.pageId === page.id && item.revision === number
+    && (item.language ?? page.language) === language);
+  const wikiEvent = (page, kind, revision, account, language = page.language) => wiki.events.push({ pageId: page.id, kind, language, revision, actorId: account.id, occurredAt: now() });
+  const wikiVariants = (page) => ({ ...(page.variants ?? {}), [page.language]: page });
+  const wikiVariant = (page, language) => wikiVariants(page)[language] ?? null;
+  const wikiPublished = (page) => Object.values(wikiVariants(page)).some((item) => item.publishedRevision !== null);
+  // As the server: with drafts the requested version or else the source, for readers the first published version in the
+  // order requested, source, others.
+  const wikiShown = (page, requested, drafts) => {
+    const versions = wikiVariants(page);
+    if (drafts) return versions[requested ?? page.language] ? (requested ?? page.language) : page.language;
+    const order = [...new Set([requested ?? page.language, page.language, ...WIKI_LANGUAGES])];
+    return order.find((code) => versions[code] && versions[code].publishedRevision !== null) ?? null;
+  };
+  const wikiTitleIn = (page, requested, drafts) => {
+    const code = wikiShown(page, requested, drafts);
+    if (code === null) return null;
+    const version = wikiVariant(page, code);
+    return wikiRevision(page, drafts ? version.draftRevision : version.publishedRevision, code).title;
+  };
   const WIKI_BLOCKS = new Set(['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'horizontalRule', 'table', 'image']);
   const WIKI_KNOWN = new Set([...WIKI_BLOCKS, 'listItem', 'tableRow', 'tableHeader', 'tableCell', 'text', 'hardBreak']);
   const WIKI_TAGS = { paragraph: 'p', blockquote: 'blockquote', bulletList: 'ul', listItem: 'li', tableRow: 'tr', tableHeader: 'th', tableCell: 'td' };
@@ -1592,7 +1613,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const access = wikiAccess(account, projectId);
     const target = (id) => {
       const page = wiki.pages.find((item) => item.id === id && item.projectId === projectId && !item.archived);
-      return page && (wikiDrafts(access) || page.publishedRevision !== null) ? `#/wiki/${projectId}/${page.id}` : null;
+      return page && (wikiDrafts(access) || wikiPublished(page)) ? `#/wiki/${projectId}/${page.id}` : null;
     };
     const render = (node) => {
       const inner = () => (node.content ?? []).map(render).join('');
@@ -1642,35 +1663,52 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   const wikiVisible = (account, page) => {
     const access = wikiAccess(account, page.projectId);
     if (page.archived) return access.publish;
-    return wikiDrafts(access) || (access.read && page.publishedRevision !== null);
+    return wikiDrafts(access) || (access.read && wikiPublished(page));
   };
-  const wikiPageView = (account, page) => {
+  const wikiPageView = (account, page, requested = null) => {
     const access = wikiAccess(account, page.projectId);
     const drafts = wikiDrafts(access);
-    const published = page.publishedRevision === null ? null : wikiRevision(page, page.publishedRevision);
-    const draft = drafts ? wikiRevision(page, page.draftRevision) : null;
+    const code = wikiShown(page, requested, drafts);
+    const variant = wikiVariant(page, code);
+    const published = variant.publishedRevision === null ? null : wikiRevision(page, variant.publishedRevision, code);
+    const draft = drafts ? wikiRevision(page, variant.draftRevision, code) : null;
+    const versions = wikiVariants(page);
+    const languages = WIKI_LANGUAGES.filter((language) => versions[language] && (drafts || versions[language].publishedRevision !== null))
+      .map((language) => ({ language, published: versions[language].publishedRevision !== null,
+        changed: drafts && versions[language].publishedRevision !== versions[language].draftRevision }));
+    let translation = null;
+    if (code !== page.language) {
+      const sourcePublished = page.publishedRevision;
+      const translated = (draft ?? published)?.sourceRevision ?? null;
+      const outdated = translated !== null && sourcePublished !== null && translated < sourcePublished;
+      translation = drafts ? { sourceRevision: translated, sourcePublishedRevision: sourcePublished, outdated }
+        : { sourceRevision: null, sourcePublishedRevision: null, outdated };
+    }
     const path = [];
     let parent = page.parentId;
     while (parent !== null) {
       const above = wiki.pages.find((item) => item.id === parent);
       if (!above) break;
-      if (drafts || above.publishedRevision !== null) {
-        path.unshift({ id: above.id, title: drafts ? wikiRevision(above, above.draftRevision).title : wikiRevision(above, above.publishedRevision).title });
-      }
+      const title = wikiTitleIn(above, requested, drafts);
+      if (title !== null) path.unshift({ id: above.id, title });
+      else if (drafts) break;
       parent = above.parentId;
     }
     return {
-      id: page.id, projectId: page.projectId, parentId: path.at(-1)?.id ?? null, language: page.language, archived: page.archived, version: page.version, access, path,
+      id: page.id, projectId: page.projectId, parentId: page.archived ? page.parentId : path.at(-1)?.id ?? null, language: code, sourceLanguage: page.language,
+      fallback: code !== (requested ?? page.language), languages, translation, archived: page.archived, version: page.version, access, path,
       published: published && { revision: published.revision, title: published.title, html: wikiHtml(published.content, account, page.projectId),
-        publishedAt: page.publishedAt, publishedBy: page.publishedBy },
+        publishedAt: variant.publishedAt, publishedBy: variant.publishedBy },
       draft: draft && { revision: draft.revision, title: draft.title, content: draft.content, html: wikiHtml(draft.content, account, page.projectId),
-        savedAt: draft.savedAt, savedBy: draft.savedBy, changed: page.publishedRevision !== page.draftRevision },
+        savedAt: draft.savedAt, savedBy: draft.savedBy, changed: variant.publishedRevision !== variant.draftRevision },
       createdAt: page.createdAt, createdBy: page.createdBy,
     };
   };
-  // As the controller: the ETag of the draft only for people who see drafts.
-  const wikiAnswer = (account, page) => (wikiDrafts(wikiAccess(account, page.projectId))
-    ? ok(wikiPageView(account, page), `"${page.draftRevision}"`) : ok(wikiPageView(account, page)));
+  // As the controller: the ETag of the draft of the shown language only for people who see drafts.
+  const wikiAnswer = (account, page, requested = null) => {
+    const view = wikiPageView(account, page, requested);
+    return view.draft ? ok(view, `"${view.draft.revision}"`) : ok(view);
+  };
   const wikiTitle = (title, violations) => {
     const clean = (title ?? '').trim();
     if (clean === '') violations.push('title.required');
@@ -1683,25 +1721,25 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return depth;
   };
   const wikiHeight = (id) => 1 + Math.max(0, ...wiki.pages.filter((item) => item.parentId === id && !item.archived).map((item) => wikiHeight(item.id)));
-  const wikiIfMatch = (headers, page) => {
+  const wikiIfMatch = (headers, page, variant = page, language = page.language) => {
     if (!headers['if-match']) return problem(428, 'wiki.precondition_required');
     if (state.wikiConflict !== null) {
       // Someone else saved first: their revision becomes the draft.
       const theirs = state.wikiConflict;
       state.wikiConflict = null;
-      const revision = { pageId: page.id, revision: page.draftRevision + 1, title: theirs.title, content: theirs.content, savedAt: now(), savedBy: theirs.by,
-        basedOn: page.draftRevision, restoredFrom: null };
+      const revision = { pageId: page.id, language, revision: variant.draftRevision + 1, title: theirs.title, content: theirs.content, savedAt: now(), savedBy: theirs.by,
+        basedOn: variant.draftRevision, restoredFrom: null, sourceRevision: wikiRevision(page, variant.draftRevision, language)?.sourceRevision ?? null };
       wiki.revisions.push(revision);
-      page.draftRevision = revision.revision;
+      variant.draftRevision = revision.revision;
     }
-    if (headers['if-match'] !== `"${page.draftRevision}"`) return problem(412, 'wiki.version_conflict');
+    if (headers['if-match'] !== `"${variant.draftRevision}"`) return problem(412, 'wiki.version_conflict');
     return null;
   };
-  function addWikiPage(by, title, content, { parentId = null, publish = false, projectId = project.id } = {}) {
-    const page = { id: uuid(), projectId, parentId, language: 'de', archived: false, version: 1, createdAt: now(), createdBy: by.id, draftRevision: 1,
+  function addWikiPage(by, title, content, { parentId = null, publish = false, projectId = project.id, language = 'de' } = {}) {
+    const page = { id: uuid(), projectId, parentId, language, variants: {}, archived: false, version: 1, createdAt: now(), createdBy: by.id, draftRevision: 1,
       publishedRevision: null, publishedAt: null, publishedBy: null };
     wiki.pages.push(page);
-    wiki.revisions.push({ pageId: page.id, revision: 1, title, content, savedAt: now(), savedBy: by.id, basedOn: null, restoredFrom: null });
+    wiki.revisions.push({ pageId: page.id, language, revision: 1, title, content, savedAt: now(), savedBy: by.id, basedOn: null, restoredFrom: null, sourceRevision: null });
     wikiEvent(page, 'created', 1, by);
     if (publish) {
       page.publishedRevision = 1;
@@ -1711,11 +1749,29 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     return page;
   }
+  // A language version as `POST /languages` makes it, optionally published, or with a translation of an older source revision.
+  function addWikiLanguage(page, language, by, { title, content, publish = false, sourceRevision } = {}) {
+    const base = sourceRevision ?? page.publishedRevision ?? page.draftRevision;
+    const from = wikiRevision(page, base);
+    const variant = { draftRevision: 1, publishedRevision: null, publishedAt: null, publishedBy: null };
+    page.variants = { ...(page.variants ?? {}), [language]: variant };
+    wiki.revisions.push({ pageId: page.id, language, revision: 1, title: title ?? from.title, content: content ?? from.content, savedAt: now(), savedBy: by.id,
+      basedOn: null, restoredFrom: null, sourceRevision: base });
+    wikiEvent(page, 'translated', 1, by, language);
+    if (publish) {
+      Object.assign(variant, { publishedRevision: 1, publishedAt: now(), publishedBy: by.id });
+      wikiEvent(page, 'published', 1, by, language);
+    }
+    return variant;
+  }
   function wikiRoute(account, method, p, query, headers, body) {
     if (p === '/wiki/projects' && method === 'GET') {
       return ok(state.projects.filter((item) => isMember(account, item.id)).map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: wikiAccess(account, item.id) }))
         .filter((item) => wikiAny(item.access)));
     }
+    // As the server: an unknown language is refused before anything else.
+    const requested = query.get('language');
+    if (requested !== null && !WIKI_LANGUAGES.includes(requested)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
     let match = p.match(/^\/wiki\/projects\/([^/]+)\/pages$/);
     if (match) {
       const projectId = match[1];
@@ -1725,15 +1781,17 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         const archived = query.get('archived') === 'true';
         if (archived && !access.publish) return problem(403, 'auth.forbidden');
         const drafts = archived || wikiDrafts(access);
-        const pages = wiki.pages.filter((item) => item.projectId === projectId && item.archived === archived && (drafts || item.publishedRevision !== null))
+        const pages = wiki.pages.filter((item) => item.projectId === projectId && item.archived === archived && wikiShown(item, requested, drafts) !== null)
           .map((item) => {
-            const shown = wikiRevision(item, drafts ? item.draftRevision : item.publishedRevision);
+            const code = wikiShown(item, requested, drafts);
+            const variant = wikiVariant(item, code);
+            const shown = wikiRevision(item, drafts ? variant.draftRevision : variant.publishedRevision, code);
             let parent = item.parentId;
-            while (!drafts && parent !== null && wiki.pages.find((above) => above.id === parent)?.publishedRevision === null) {
+            while (!drafts && parent !== null && !wikiPublished(wiki.pages.find((above) => above.id === parent))) {
               parent = wiki.pages.find((above) => above.id === parent)?.parentId ?? null;
             }
-            return { id: item.id, parentId: parent, title: shown.title, language: item.language, published: item.publishedRevision !== null,
-              changed: wikiDrafts(access) && item.publishedRevision !== item.draftRevision, archived: item.archived, version: item.version,
+            return { id: item.id, parentId: parent, title: shown.title, language: code, published: variant.publishedRevision !== null,
+              changed: wikiDrafts(access) && variant.publishedRevision !== variant.draftRevision, archived: item.archived, version: item.version,
               savedAt: drafts ? shown.savedAt : null, savedBy: drafts ? shown.savedBy : null };
           })
           .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
@@ -1749,8 +1807,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           if (!parent) violations.push('parent.unknown');
           else if (wikiDepth(parentId) >= 6) violations.push('parent.too_deep');
         }
+        const language = body.language ?? 'de';
+        if (!WIKI_LANGUAGES.includes(language)) violations.push('language.invalid');
         if (violations.length > 0) return problem(400, 'request.invalid', { violations });
-        const page = addWikiPage(account, title, body.content ?? { type: 'doc', content: [{ type: 'paragraph' }] }, { parentId, projectId });
+        const page = addWikiPage(account, title, body.content ?? { type: 'doc', content: [{ type: 'paragraph' }] }, { parentId, projectId, language });
         return { ...wikiAnswer(account, page), status: 201 };
       }
     }
@@ -1760,8 +1820,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const page = image && wiki.pages.find((item) => item.id === image.pageId);
       // As the server: drafts for `wiki.edit` and `wiki.publish`, readers only while the published revision shows the image.
       const access = page ? wikiAccess(account, page.projectId) : null;
-      const shown = page && page.publishedRevision !== null && !page.archived
-        && JSON.stringify(wikiRevision(page, page.publishedRevision).content).includes(`/api/v1/wiki/images/${image.id}"`);
+      const shown = page && !page.archived && Object.entries(wikiVariants(page)).some(([code, variant]) => variant.publishedRevision !== null
+        && JSON.stringify(wikiRevision(page, variant.publishedRevision, code).content).includes(`/api/v1/wiki/images/${image.id}"`));
       const visible = page && wikiVisible(account, page) && (wikiDrafts(access) || (access.read && shown));
       return visible ? { status: 200, raw: image.content, type: image.mediaType } : problem(404, 'wiki.image_not_found');
     }
@@ -1771,64 +1831,96 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (!page || !wikiVisible(account, page)) return problem(404, 'wiki.page_not_found');
     const access = wikiAccess(account, page.projectId);
     const rest = match[2] ?? '';
-    if (rest === '' && method === 'GET') return wikiAnswer(account, page);
+    if (rest === '' && method === 'GET') return wikiAnswer(account, page, requested);
+    const code = requested ?? page.language;
+    const variant = wikiVariant(page, code);
+    if (rest === '/languages' && method === 'POST') {
+      if (!access.edit) return problem(403, 'auth.forbidden');
+      if (page.archived) return problem(409, 'wiki.page_archived');
+      if (body?.language === undefined || body?.language === null) return problem(400, 'request.invalid', { violations: ['language.required'] });
+      if (!WIKI_LANGUAGES.includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      if (wikiVariant(page, body.language)) return problem(409, 'wiki.language_exists');
+      addWikiLanguage(page, body.language, account);
+      return { ...wikiAnswer(account, page, body.language), status: 201 };
+    }
     if (rest === '/draft' && method === 'PUT') {
       if (!access.edit) return problem(403, 'auth.forbidden');
       if (page.archived) return problem(409, 'wiki.page_archived');
-      const refused = wikiIfMatch(headers, page);
+      if (!variant) return problem(404, 'wiki.language_not_found');
+      const refused = wikiIfMatch(headers, page, variant, code);
       if (refused) return refused;
       const violations = [];
       const title = wikiTitle(body.title, violations);
       violations.push(...wikiCheck(body.content, page.id, page.projectId));
+      let sourceRevision = null;
+      if (code === page.language) {
+        if (body.sourceRevision !== undefined && body.sourceRevision !== null) violations.push('source_revision.invalid');
+      } else if (body.sourceRevision === undefined || body.sourceRevision === null) {
+        sourceRevision = wikiRevision(page, variant.draftRevision, code)?.sourceRevision ?? null;
+      } else if (!Number.isInteger(body.sourceRevision) || body.sourceRevision < 1 || body.sourceRevision > page.draftRevision) {
+        violations.push('source_revision.invalid');
+      } else {
+        sourceRevision = body.sourceRevision;
+      }
       if (violations.length > 0) return problem(400, 'request.invalid', { violations });
-      const revision = { pageId: page.id, revision: page.draftRevision + 1, title, content: body.content, savedAt: now(), savedBy: account.id, basedOn: page.draftRevision, restoredFrom: null };
+      const revision = { pageId: page.id, language: code, revision: variant.draftRevision + 1, title, content: body.content, savedAt: now(), savedBy: account.id,
+        basedOn: variant.draftRevision, restoredFrom: null, sourceRevision };
       wiki.revisions.push(revision);
-      page.draftRevision = revision.revision;
-      wikiEvent(page, 'saved', revision.revision, account);
-      return wikiAnswer(account, page);
+      variant.draftRevision = revision.revision;
+      wikiEvent(page, 'saved', revision.revision, account, code);
+      return wikiAnswer(account, page, code);
     }
     if (rest === '/publish' && method === 'POST') {
       if (!access.publish) return problem(403, 'auth.forbidden');
       if (page.archived) return problem(409, 'wiki.page_archived');
-      const refused = wikiIfMatch(headers, page);
+      if (!variant) return problem(404, 'wiki.language_not_found');
+      const refused = wikiIfMatch(headers, page, variant, code);
       if (refused) return refused;
-      if (body.revision !== page.draftRevision) return problem(412, 'wiki.version_conflict');
-      Object.assign(page, { publishedRevision: page.draftRevision, publishedAt: now(), publishedBy: account.id });
-      wikiEvent(page, 'published', page.draftRevision, account);
-      return wikiAnswer(account, page);
+      if (body.revision !== variant.draftRevision) return problem(412, 'wiki.version_conflict');
+      if (variant.publishedRevision !== variant.draftRevision) {
+        Object.assign(variant, { publishedRevision: variant.draftRevision, publishedAt: now(), publishedBy: account.id });
+        wikiEvent(page, 'published', variant.draftRevision, account, code);
+      }
+      return wikiAnswer(account, page, code);
     }
     if (rest === '/withdraw' && method === 'POST') {
       if (!access.publish) return problem(403, 'auth.forbidden');
-      if (page.publishedRevision === null) return problem(409, 'wiki.not_published');
-      Object.assign(page, { publishedRevision: null, publishedAt: null, publishedBy: null });
-      wikiEvent(page, 'withdrawn', null, account);
-      return wikiAnswer(account, page);
+      if (!variant) return problem(404, 'wiki.language_not_found');
+      if (variant.publishedRevision === null) return problem(409, 'wiki.not_published');
+      const before = variant.publishedRevision;
+      Object.assign(variant, { publishedRevision: null, publishedAt: null, publishedBy: null });
+      wikiEvent(page, 'withdrawn', before, account, code);
+      return wikiAnswer(account, page, code);
     }
     if (rest === '/history' && method === 'GET') {
       if (!wikiDrafts(access)) return problem(404, 'wiki.page_not_found');
-      const revisions = wiki.revisions.filter((item) => item.pageId === page.id).sort((a, b) => b.revision - a.revision)
-        .map(({ content: _content, pageId: _page, ...item }) => ({ ...item, published: item.revision === page.publishedRevision }));
+      if (!variant) return problem(404, 'wiki.language_not_found');
+      const revisions = wiki.revisions.filter((item) => item.pageId === page.id && (item.language ?? page.language) === code).sort((a, b) => b.revision - a.revision)
+        .map(({ content: _content, pageId: _page, language: _language, ...item }) => ({ ...item, sourceRevision: item.sourceRevision ?? null,
+          published: item.revision === variant.publishedRevision }));
       const events = wiki.events.filter((item) => item.pageId === page.id).map(({ pageId: _page, ...item }) => item).reverse();
-      return ok({ pageId: page.id, draftRevision: page.draftRevision, publishedRevision: page.publishedRevision, revisions, events });
+      return ok({ pageId: page.id, language: code, draftRevision: variant.draftRevision, publishedRevision: variant.publishedRevision, revisions, events });
     }
     match = rest.match(/^\/revisions\/(\d+)(\/restore)?$/);
     if (match) {
       if (!wikiDrafts(access)) return problem(404, 'wiki.page_not_found');
-      const old = wikiRevision(page, Number(match[1]));
+      if (!variant) return problem(404, 'wiki.language_not_found');
+      const old = wikiRevision(page, Number(match[1]), code);
       if (!old) return problem(404, 'wiki.revision_not_found');
       if (!match[2] && method === 'GET') {
-        return ok({ revision: old.revision, title: old.title, content: old.content, html: wikiHtml(old.content, account, page.projectId), savedAt: old.savedAt,
-          savedBy: old.savedBy, published: old.revision === page.publishedRevision });
+        return ok({ revision: old.revision, language: code, title: old.title, content: old.content, html: wikiHtml(old.content, account, page.projectId), savedAt: old.savedAt,
+          savedBy: old.savedBy, published: old.revision === variant.publishedRevision, sourceRevision: old.sourceRevision ?? null });
       }
       if (match[2] && method === 'POST') {
         if (!access.edit) return problem(403, 'auth.forbidden');
-        const refused = wikiIfMatch(headers, page);
+        const refused = wikiIfMatch(headers, page, variant, code);
         if (refused) return refused;
-        const revision = { ...old, revision: page.draftRevision + 1, savedAt: now(), savedBy: account.id, basedOn: page.draftRevision, restoredFrom: old.revision };
+        const revision = { ...old, language: code, revision: variant.draftRevision + 1, savedAt: now(), savedBy: account.id, basedOn: variant.draftRevision,
+          restoredFrom: old.revision };
         wiki.revisions.push(revision);
-        page.draftRevision = revision.revision;
-        wikiEvent(page, 'reverted', revision.revision, account);
-        return wikiAnswer(account, page);
+        variant.draftRevision = revision.revision;
+        wikiEvent(page, 'reverted', revision.revision, account, code);
+        return wikiAnswer(account, page, code);
       }
     }
     if (rest === '/parent' && method === 'PUT') {
@@ -1847,8 +1939,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       }
       if (violations.length > 0) return problem(400, 'request.invalid', { violations });
       Object.assign(page, { parentId, version: page.version + 1 });
-      wikiEvent(page, 'moved', null, account);
-      return wikiAnswer(account, page);
+      wikiEvent(page, 'moved', null, account, null);
+      return wikiAnswer(account, page, requested);
     }
     if ((rest === '/archive' || rest === '/unarchive') && method === 'POST') {
       if (!access.publish) return problem(403, 'auth.forbidden');
@@ -1861,8 +1953,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         page.parentId = null;
       }
       Object.assign(page, { archived: archive, version: page.version + 1 });
-      wikiEvent(page, archive ? 'archived' : 'unarchived', null, account);
-      return wikiAnswer(account, page);
+      wikiEvent(page, archive ? 'archived' : 'unarchived', null, account, null);
+      return wikiAnswer(account, page, requested);
     }
     if (rest === '/images' && method === 'POST') {
       if (!access.edit) return problem(403, 'auth.forbidden');
@@ -2319,6 +2411,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addMail,
     addTicket,
     addWikiPage,
+    addWikiLanguage,
     // A prepared cycle of a ticket, as the server would report it (TASK-068).
     addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {

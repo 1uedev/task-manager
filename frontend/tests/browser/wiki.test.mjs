@@ -27,11 +27,11 @@ function grant(backend, accounts, actions) {
 
 const doc = (...texts) => ({ type: 'doc', content: texts.map((text) => (text === '' ? { type: 'paragraph' } : { type: 'paragraph', content: [{ type: 'text', text }] })) });
 
-async function withApp({ prepare, as = ANNA, hash }, body) {
+async function withApp({ prepare, as = ANNA, hash, locale = 'de-DE' }, body) {
   const backend = createBackend();
   prepare?.(backend);
   const session = await open(browser, `${base()}${typeof hash === 'function' ? hash(backend) : hash ?? '#/wiki'}`,
-    { setup: (context, page) => backend.install(context, page, { as }) });
+    { locale, setup: (context, page) => backend.install(context, page, { as }) });
   try {
     await session.page.waitForSelector('.shell main h1');
     await body(session.page, backend);
@@ -379,6 +379,140 @@ describe('wiki', () => {
         return { etag: read.headers.get('etag'), image: image.status };
       }, { pageId: wikiPage.id, imageId: draftImage.id });
       assert.deepEqual(answers, { etag: null, image: 404 });
+    });
+  });
+
+  // TASK-094: language versions German and English.
+  test('a reader in English gets the published German version with a notice, never an English draft', async () => {
+    let wikiPage;
+    await withApp({
+      as: BEN,
+      locale: 'en-US',
+      prepare: (backend) => {
+        grant(backend, [backend.ben], ['wiki.read']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Serviceanfrage ergänzen', doc('Kunde und Kontakt prüfen'), { publish: true });
+        backend.addWikiLanguage(wikiPage, 'en', backend.anna, { title: 'Complete a service request', content: doc('Not finished yet') });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page, backend) => {
+      await page.getByTestId('wiki-content').getByText('Kunde und Kontakt prüfen').waitFor();
+      assert.equal(await page.getByTestId('wiki-fallback').textContent(), 'This page is not available in English. Showing the German version.');
+      assert.equal(await page.getByTestId('wiki-title').getAttribute('lang'), 'de');
+      assert.equal(await page.getByText('Not finished yet').count(), 0, 'the English draft stays hidden');
+      assert.equal(await page.getByTestId('wiki-languages').count(), 0, 'one readable version needs no choice');
+      assert.equal(await page.getByTestId('wiki-tree').getByRole('link', { name: 'Serviceanfrage ergänzen' }).count(), 1);
+      const read = backend.state.requests.findLast((item) => item.method === 'GET' && item.path.endsWith(`/wiki/pages/${wikiPage.id}`));
+      assert.equal(read.query, '?language=en', 'the page is asked for in the language of the interface');
+    });
+  });
+
+  test('a reader sees the published English version and learns that the German source changed since', async () => {
+    let wikiPage;
+    await withApp({
+      as: BEN,
+      locale: 'en-US',
+      prepare: (backend) => {
+        grant(backend, [backend.ben], ['wiki.read']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Rufbereitschaft', doc('Montag Anna'), { publish: true });
+        backend.addWikiLanguage(wikiPage, 'en', backend.anna, { title: 'On call', content: doc('Monday Anna'), publish: true });
+        backend.state.wiki.revisions.push({ pageId: wikiPage.id, language: 'de', revision: 2, title: 'Rufbereitschaft', content: doc('Montag Ben'),
+          savedAt: '2026-11-09T09:00:00Z', savedBy: backend.anna.id, basedOn: 1, restoredFrom: null, sourceRevision: null });
+        Object.assign(wikiPage, { draftRevision: 2, publishedRevision: 2 });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page) => {
+      await page.getByTestId('wiki-content').getByText('Monday Anna').waitFor();
+      assert.equal(await page.getByTestId('wiki-fallback').count(), 0);
+      assert.equal(await page.getByTestId('wiki-outdated').textContent(), 'The source version (German) has changed since this translation.');
+      assert.equal(await page.getByTestId('wiki-tree').getByRole('link', { name: 'On call' }).count(), 1, 'the tree shows the English title');
+      const languages = page.getByTestId('wiki-languages');
+      await languages.locator('[data-language="de"]').click();
+      await page.getByTestId('wiki-content').getByText('Montag Ben').waitFor();
+      assert.equal(await languages.locator('[data-language="de"]').getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.getByTestId('wiki-outdated').count(), 0);
+      assert.equal(await page.getByTestId('wiki-fallback').count(), 0, 'a chosen version is no fallback');
+    });
+  });
+
+  test('an editor adds the English version as a draft that starts with the published German content', async () => {
+    let wikiPage;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Serviceanfrage ergänzen', doc('Kunde und Kontakt prüfen'), { publish: true });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page, backend) => {
+      const languages = page.getByTestId('wiki-languages');
+      await languages.getByRole('button', { name: 'Fassung Englisch hinzufügen' }).click();
+      await page.getByText('Die Fassung Englisch ist als Entwurf angelegt. Sie beginnt mit dem Inhalt der Ausgangsfassung.').waitFor();
+      const added = backend.state.requests.findLast((item) => item.method === 'POST' && item.path.endsWith('/languages'));
+      assert.deepEqual(JSON.parse(added.body.toString('utf8')), { language: 'en' });
+      assert.equal(await languages.locator('[data-language="en"]').getAttribute('aria-pressed'), 'true');
+      assert.equal((await languages.locator('[data-language="en"]').textContent()).trim(), 'Englisch · Entwurf');
+      assert.equal((await languages.locator('[data-language="de"]').textContent()).trim(), 'Deutsch · Ausgangsfassung');
+      assert.equal(await page.getByTestId('wiki-languages').getByTestId('wiki-language-add').count(), 0);
+
+      await page.getByTestId('wiki-edit-open').click();
+      const editor = page.getByTestId('wiki-editor');
+      assert.equal(await editor.textContent(), 'Kunde und Kontakt prüfen');
+      await page.getByLabel('Titel').fill('Complete a service request');
+      await editor.click();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.type('Check customer and contact');
+      await page.getByTestId('wiki-save').click();
+      await page.getByText('Entwurf als Revision 2 gespeichert.').waitFor();
+      const save = backend.state.requests.findLast((item) => item.method === 'PUT' && item.path.endsWith('/draft'));
+      assert.equal(save.query, '?language=en');
+      assert.equal(save.ifMatch, '"1"', 'the English draft has its own revisions');
+      assert.equal(backend.state.wiki.revisions.find((item) => item.pageId === wikiPage.id && item.language === 'en' && item.revision === 2).sourceRevision, 1,
+        'the translated source revision stays');
+      assert.equal(wikiPage.draftRevision, 1, 'the German draft is untouched');
+
+      await page.getByRole('button', { name: 'Bearbeiten beenden' }).click();
+      await page.getByTestId('wiki-publish').click();
+      const dialog = page.getByTestId('wiki-publish-dialog');
+      await dialog.getByTestId('wiki-publish-language').getByText('Englisch').waitFor();
+      await dialog.getByRole('button', { name: 'Revision 2 veröffentlichen' }).click();
+      await page.getByText('Revision 2 ist veröffentlicht.').waitFor();
+      assert.equal(wikiPage.variants.en.publishedRevision, 2);
+      assert.equal(wikiPage.publishedRevision, 1);
+    });
+  });
+
+  test('a changed source shows its changes to editors, and the aligned translation names the new source revision', async () => {
+    let wikiPage;
+    await withApp({
+      locale: 'en-US',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Rufbereitschaft', doc('Montag Anna', 'Dienstag Ben'), { publish: true });
+        backend.addWikiLanguage(wikiPage, 'en', backend.anna, { title: 'On call', content: doc('Monday Anna', 'Tuesday Ben'), publish: true });
+        backend.state.wiki.revisions.push({ pageId: wikiPage.id, language: 'de', revision: 2, title: 'Rufbereitschaft', content: doc('Montag Anna', 'Dienstag Lea'),
+          savedAt: '2026-11-09T09:00:00Z', savedBy: backend.anna.id, basedOn: 1, restoredFrom: null, sourceRevision: null });
+        Object.assign(wikiPage, { draftRevision: 2, publishedRevision: 2 });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page, backend) => {
+      const changed = page.getByTestId('wiki-source-changed');
+      await changed.getByText('This translation is based on revision 1 of the German version; revision 2 is published now.').waitFor();
+      await changed.getByRole('button', { name: 'Show changes of the source version' }).click();
+      const diff = page.getByTestId('wiki-source-diff');
+      await diff.getByText('Dienstag Lea').waitFor();
+      await diff.getByText('Dienstag Ben').waitFor();
+
+      await page.getByTestId('wiki-edit-open').click();
+      const editor = page.getByTestId('wiki-editor');
+      await editor.getByText('Tuesday Ben').click();
+      await page.keyboard.press('End');
+      for (let index = 0; index < 3; index++) await page.keyboard.press('Backspace');
+      await page.keyboard.type('Lea');
+      await page.getByTestId('wiki-align').getByText('Translation matches revision 2 of the source version').click();
+      await page.getByTestId('wiki-save').click();
+      await page.getByText('Draft saved as revision 2.').waitFor();
+      const save = backend.state.requests.findLast((item) => item.method === 'PUT' && item.path.endsWith('/draft'));
+      assert.equal(JSON.parse(save.body.toString('utf8')).sourceRevision, 2);
+      assert.equal(await page.getByTestId('wiki-align').count(), 0, 'the draft no longer lags behind the source');
     });
   });
 });
