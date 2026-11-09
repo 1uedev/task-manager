@@ -14,7 +14,7 @@ import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, us
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
-import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
+import { blocksOf, diffBlocks, type Block, type DiffEntry } from './wikiDiff.ts';
 import { WikiContent } from './WikiContent.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
 
@@ -149,6 +149,18 @@ function CreateForm({ projectId, tree, parentId, onCancel }: {
 
 // ---------------------------------------------------------------- the editor with save and conflict
 
+function BlockText({ block, refs }: { readonly block: Block; readonly refs: boolean }) {
+  const { t } = useI18n();
+  return (
+    <>
+      {block.text}
+      {refs && block.refs.length > 0 && (
+        <span className="diff-refs" data-testid="wiki-diff-refs">{t('wiki.diff.refs', { refs: block.refs.join(', ') })}</span>
+      )}
+    </>
+  );
+}
+
 function DiffView({ entries, testId }: { readonly entries: readonly DiffEntry[]; readonly testId: string }) {
   const { t } = useI18n();
   const changes = entries.filter((entry) => entry.op !== 'same');
@@ -158,18 +170,24 @@ function DiffView({ entries, testId }: { readonly entries: readonly DiffEntry[];
       {entries.map((entry, index) => {
         if (entry.op === 'same') return <li key={index} className="diff-same">{entry.block.text || ' '}</li>;
         if (entry.op === 'changed') {
+          // Same text with other targets, images or marks: the targets are named, a pure format change is said in words.
+          const refs = entry.before.refs.join(' ') !== entry.after.refs.join(' ');
+          const formatOnly = !refs && entry.before.text === entry.after.text;
           return (
             <li key={index} className="diff-changed" data-op="changed">
               <span className="diff-label">{t('wiki.diff.changed')}</span>
-              <del>{entry.before.text}</del>
-              <ins>{entry.after.text}</ins>
+              {formatOnly && <span className="diff-refs" data-testid="wiki-diff-format">{t('wiki.diff.format')}</span>}
+              <del><BlockText block={entry.before} refs={refs} /></del>
+              <ins><BlockText block={entry.after} refs={refs} /></ins>
             </li>
           );
         }
         return (
           <li key={index} className={`diff-${entry.op}`} data-op={entry.op}>
             <span className="diff-label">{t(entry.op === 'added' ? 'wiki.diff.added' : 'wiki.diff.removed')}</span>
-            {entry.op === 'added' ? <ins>{entry.block.text}</ins> : <del>{entry.block.text}</del>}
+            {entry.op === 'added'
+              ? <ins><BlockText block={entry.block} refs /></ins>
+              : <del><BlockText block={entry.block} refs /></del>}
           </li>
         );
       })}
@@ -239,9 +257,10 @@ function EditorPanel({ page, links, onSaved, onClose }: {
   const [conflict, setConflict] = useState<NonNullable<Page['draft']> | null>(null);
   const [version, setVersion] = useState(0);
   const editor = useWikiEditor(page.draft.content, true, (count) => setPasteNotice(t('wiki.paste.removed', { count })));
-  const baseline = useRef<string>('');
+  // The editor content of the last confirmed revision; as state, so the first comparison after opening already uses it.
+  const [baseline, setBaseline] = useState<string | null>(null);
   useEffect(() => {
-    if (editor !== null) baseline.current = JSON.stringify(editor.getJSON());
+    if (editor !== null) setBaseline(JSON.stringify(editor.getJSON()));
   }, [editor]);
   useEffect(() => {
     if (editor === null) return;
@@ -251,8 +270,8 @@ function EditorPanel({ page, links, onSaved, onClose }: {
       editor.off('update', update);
     };
   }, [editor]);
-  const dirty = useMemo(() => editor !== null && (title !== base.title || JSON.stringify(editor.getJSON()) !== baseline.current),
-    [editor, title, base.title, version]);
+  const dirty = useMemo(() => editor !== null && baseline !== null && (title !== base.title || JSON.stringify(editor.getJSON()) !== baseline),
+    [editor, baseline, title, base.title, version]);
   useUnsavedGuard(dirty);
 
   async function save(event: FormEvent) {
@@ -262,6 +281,7 @@ function EditorPanel({ page, links, onSaved, onClose }: {
     setTitleError(null);
     setBusy(true);
     setNotice(null);
+    const sent = JSON.stringify(editor.getJSON());
     const content = asDocument(editor.getJSON());
     const result = await saveWikiDraft(api, page.id, base.revision, title, content);
     if (result.kind === 'ok') {
@@ -270,8 +290,14 @@ function EditorPanel({ page, links, onSaved, onClose }: {
       if (saved.draft !== null) {
         setBase(saved.draft);
         setTitle(saved.draft.title);
-        editor.commands.setContent(saved.draft.content, { emitUpdate: false });
-        baseline.current = JSON.stringify(editor.getJSON());
+        if (JSON.stringify(editor.getJSON()) === sent) {
+          // Nothing typed meanwhile: the editor shows the document as the server stored it.
+          editor.commands.setContent(saved.draft.content, { emitUpdate: false });
+          setBaseline(JSON.stringify(editor.getJSON()));
+        } else {
+          // Typed while the request ran: that input stays in the editor and remains unsaved against what was sent.
+          setBaseline(sent);
+        }
         setVersion((value) => value + 1);
       }
       setConflict(null);
@@ -303,7 +329,7 @@ function EditorPanel({ page, links, onSaved, onClose }: {
   function takeTheirs() {
     if (conflict === null || editor === null) return;
     editor.commands.setContent(conflict.content, { emitUpdate: false });
-    baseline.current = JSON.stringify(editor.getJSON());
+    setBaseline(JSON.stringify(editor.getJSON()));
     setBase(conflict);
     setTitle(conflict.title);
     setConflict(null);

@@ -1384,6 +1384,8 @@ export const de = {
   'wiki.diff.removed': 'Entfernt',
   'wiki.diff.changed': 'Geändert',
   'wiki.diff.none': 'Keine Unterschiede.',
+  'wiki.diff.refs': 'Verweise und Bilder: {refs}',
+  'wiki.diff.format': 'Gleicher Text, andere Formatierung',
   'wiki.publish.title': 'Seite veröffentlichen',
   'wiki.publish.revision': 'Revision',
   'wiki.publish.revisionValue': 'Revision {revision}, gespeichert von {person} am {time}',

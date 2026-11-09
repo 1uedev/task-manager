@@ -13,9 +13,18 @@ const EXTERNAL = /^(https?:\/\/|mailto:)/i;
 const PLAIN = new Set(['p', 'h1', 'h2', 'h3', 'strong', 'em', 'code', 'pre', 'ul', 'li', 'table', 'tbody', 'tr', 'blockquote']);
 const VOID = new Set(['hr', 'br']);
 
-function count(value: string | null): number | undefined {
-  if (value === null || !/^[1-9][0-9]{0,3}$/.test(value)) return undefined;
-  return Number(value);
+// The same bounds as the server check of the document: list start up to 1000000, column span up to 50, row span up to 500.
+function count(value: string | null, max: number): number | undefined {
+  if (value === null || !/^[1-9][0-9]{0,6}$/.test(value)) return undefined;
+  const number = Number(value);
+  return number <= max ? number : undefined;
+}
+
+/** Whether a link target holds a control character, which the server refuses as well. */
+const CONTROL = new Set([...Array.from({ length: 0x20 }, (_, code) => code), ...Array.from({ length: 0x21 }, (_, offset) => 0x7f + offset)]);
+
+export function hasControl(value: string): boolean {
+  return Array.from(value).some((char) => CONTROL.has(char.charCodeAt(0)));
 }
 
 function convert(node: ChildNode, key: number, unavailable: string): ReactNode {
@@ -35,12 +44,12 @@ function convert(node: ChildNode, key: number, unavailable: string): ReactNode {
   if (tag === 'a') {
     const href = element.getAttribute('href') ?? '';
     if (WIKI_LINK.test(href)) return <a key={key} href={href} data-wiki-page={element.getAttribute('data-wiki-page') ?? undefined}>{children()}</a>;
-    if (EXTERNAL.test(href)) return <a key={key} href={href} rel="noopener noreferrer nofollow" target="_blank">{children()}</a>;
+    if (EXTERNAL.test(href) && !hasControl(href)) return <a key={key} href={href} rel="noopener noreferrer nofollow" target="_blank">{children()}</a>;
     return <Fragment key={key}>{children()}</Fragment>;
   }
-  if (tag === 'ol') return <ol key={key} start={count(element.getAttribute('start'))}>{children()}</ol>;
+  if (tag === 'ol') return <ol key={key} start={count(element.getAttribute('start'), 1_000_000)}>{children()}</ol>;
   if (tag === 'th' || tag === 'td') {
-    return createElement(tag, { key, colSpan: count(element.getAttribute('colspan')), rowSpan: count(element.getAttribute('rowspan')) }, ...children());
+    return createElement(tag, { key, colSpan: count(element.getAttribute('colspan'), 50), rowSpan: count(element.getAttribute('rowspan'), 500) }, ...children());
   }
   if (tag === 'code') {
     const language = /^language-[A-Za-z0-9_+#.-]{1,40}$/.exec(element.getAttribute('class') ?? '');

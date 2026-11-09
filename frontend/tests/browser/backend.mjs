@@ -1577,7 +1577,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           const target = /^wiki:([0-9a-f-]{36})$/.exec(href);
           if (target) {
             if (!wiki.pages.some((item) => item.id === target[1] && item.projectId === projectId)) violations.push('link.unknown_page');
-          } else if (!/^(https?:\/\/\S+|mailto:\S+)$/i.test(href)) violations.push('link.invalid');
+          } else if (/[\u0000-\u001f\u007f-\u009f]/.test(href) || !/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(href.trim())) violations.push('link.invalid');
         }
       }
       (node.content ?? []).forEach(walk);
@@ -1615,8 +1615,21 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           return `<a href="${escapeHtml(link.attrs.href)}" rel="noopener noreferrer nofollow" target="_blank">${text}</a>`;
         }
         case 'heading': return `<h${node.attrs?.level ?? 1}>${inner()}</h${node.attrs?.level ?? 1}>`;
-        case 'orderedList': return `<ol>${inner()}</ol>`;
-        case 'codeBlock': return `<pre><code>${inner()}</code></pre>`;
+        case 'orderedList': {
+          const start = node.attrs?.start ?? 1;
+          return start === 1 ? `<ol>${inner()}</ol>` : `<ol start="${start}">${inner()}</ol>`;
+        }
+        case 'codeBlock': {
+          const language = node.attrs?.language;
+          return typeof language === 'string' && language !== '' ? `<pre><code class="language-${escapeHtml(language)}">${inner()}</code></pre>` : `<pre><code>${inner()}</code></pre>`;
+        }
+        case 'tableCell':
+        case 'tableHeader': {
+          const tag = node.type === 'tableHeader' ? 'th' : 'td';
+          const colspan = node.attrs?.colspan ?? 1;
+          const rowspan = node.attrs?.rowspan ?? 1;
+          return `<${tag}${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''}>${inner()}</${tag}>`;
+        }
         case 'horizontalRule': return '<hr>';
         case 'hardBreak': return '<br>';
         case 'image': return `<img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt ?? '')}" loading="lazy">`;
@@ -1655,7 +1668,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       createdAt: page.createdAt, createdBy: page.createdBy,
     };
   };
-  const wikiAnswer = (account, page) => ok(wikiPageView(account, page), `"${page.draftRevision}"`);
+  // As the controller: the ETag of the draft only for people who see drafts.
+  const wikiAnswer = (account, page) => (wikiDrafts(wikiAccess(account, page.projectId))
+    ? ok(wikiPageView(account, page), `"${page.draftRevision}"`) : ok(wikiPageView(account, page)));
   const wikiTitle = (title, violations) => {
     const clean = (title ?? '').trim();
     if (clean === '') violations.push('title.required');
@@ -1743,7 +1758,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (match && method === 'GET') {
       const image = wiki.images.find((item) => item.id === match[1]);
       const page = image && wiki.pages.find((item) => item.id === image.pageId);
-      return page && wikiVisible(account, page) ? { status: 200, raw: PNG, type: 'image/png' } : problem(404, 'wiki.image_not_found');
+      // As the server: drafts for `wiki.edit` and `wiki.publish`, readers only while the published revision shows the image.
+      const access = page ? wikiAccess(account, page.projectId) : null;
+      const shown = page && page.publishedRevision !== null && !page.archived
+        && JSON.stringify(wikiRevision(page, page.publishedRevision).content).includes(`/api/v1/wiki/images/${image.id}"`);
+      const visible = page && wikiVisible(account, page) && (wikiDrafts(access) || (access.read && shown));
+      return visible ? { status: 200, raw: image.content, type: image.mediaType } : problem(404, 'wiki.image_not_found');
     }
     match = p.match(/^\/wiki\/pages\/([^/]+)(\/.*)?$/);
     if (!match) return problem(404, 'resource.not_found');
@@ -1849,10 +1869,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
       if (content.length === 0) return problem(400, 'image.empty');
       if (content.length > 5 * 1024 * 1024) return problem(413, 'image.too_large');
-      if (!content.subarray(0, 8).equals(PNG.subarray(0, 8))) return problem(415, 'image.type_unsupported');
-      const image = { id: uuid(), pageId: page.id, size: content.length };
+      // The same signatures as the server: PNG, JPEG and WebP.
+      const mediaType = content.subarray(0, 8).equals(PNG.subarray(0, 8)) ? 'image/png'
+        : content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff ? 'image/jpeg'
+          : content.length >= 12 && content.subarray(0, 4).toString('latin1') === 'RIFF' && content.subarray(8, 12).toString('latin1') === 'WEBP' ? 'image/webp'
+            : null;
+      if (mediaType === null) return problem(415, 'image.type_unsupported');
+      const image = { id: uuid(), pageId: page.id, size: content.length, content, mediaType };
       wiki.images.push(image);
-      return { status: 201, body: { id: image.id, src: `/api/v1/wiki/images/${image.id}`, mediaType: 'image/png', size: image.size } };
+      return { status: 201, body: { id: image.id, src: `/api/v1/wiki/images/${image.id}`, mediaType, size: image.size } };
     }
     return problem(404, 'resource.not_found');
   }

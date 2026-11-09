@@ -7,6 +7,7 @@ import { Fragment, Slice, type Node as PmNode } from '@tiptap/pm/model';
 import type { WikiDocument } from '../api/product.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
+import { hasControl } from './WikiContent.tsx';
 
 // The visual editor of a wiki page (TASK-093, DEC-123): Tiptap 3 with exactly the elements of the confirmed rules
 // (paragraphs, headings 1 to 3, bold, italic, inline code, lists, tables with a header row, links, images with
@@ -17,6 +18,7 @@ const IMAGE_PATH = '/api/v1/wiki/images/';
 
 /** Whether a link target is allowed: https, http, mailto or a wiki page of the same project as `wiki:<id>`. */
 export function allowedHref(href: string): boolean {
+  if (hasControl(href)) return false;
   return /^(https?:\/\/[^\s]+|mailto:[^\s]+|wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(href.trim());
 }
 

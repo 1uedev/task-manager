@@ -650,6 +650,7 @@ li.new-answer { border-left: 3px solid var(--brand-primary); padding-left: 0.6re
 .wiki-diff .diff-removed, .wiki-diff del { background: color-mix(in srgb, #dc2626 14%, var(--surface)); }
 .wiki-diff .diff-changed { background: var(--soft); display: flex; flex-direction: column; gap: 0.25rem; }
 .diff-label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-text); }
+.wiki-diff .diff-refs { display: block; font-size: 0.8rem; color: var(--muted); }
 .wiki-conflict { border-color: var(--accent-line); }
 button.danger { color: var(--error); }
 .wiki-layout .stack, .wiki-main .stack { display: flex; flex-direction: column; gap: 1rem; }

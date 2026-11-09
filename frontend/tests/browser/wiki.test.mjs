@@ -287,4 +287,98 @@ describe('wiki', () => {
       assert.ok(JSON.stringify(saved).includes(`/api/v1/wiki/images/${image.id}`));
     });
   });
+  test('an unchanged draft is saved; input typed while a save runs stays and remains unsaved (F1, F3)', async () => {
+    let wikiPage;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Speichern', doc('Start'));
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page, backend) => {
+      await page.getByTestId('wiki-edit-open').click();
+      const state = page.getByTestId('wiki-save-state');
+      await state.getByText('Revision 1', { exact: false }).waitFor();
+      assert.equal(await state.getAttribute('data-dirty'), 'false', 'opening without input is clean');
+      assert.equal(await page.getByTestId('wiki-save').isDisabled(), true);
+
+      const editor = page.getByTestId('wiki-editor');
+      await editor.getByText('Start').click();
+      await page.keyboard.press('End');
+      await page.keyboard.type(' gesendet');
+      let release;
+      backend.state.hold = { [`/api/v1/wiki/pages/${wikiPage.id}/draft`]: new Promise((resolve) => { release = resolve; }) };
+      await page.getByTestId('wiki-save').click();
+      await page.waitForFunction(() => document.querySelector('[data-testid="wiki-save"]')?.disabled === true);
+      await editor.getByText('Start gesendet').click();
+      await page.keyboard.press('End');
+      await page.keyboard.type(' SPAETER');
+      await editor.getByText('Start gesendet SPAETER').waitFor();
+      release();
+      await page.getByText('Entwurf als Revision 2 gespeichert.').waitFor();
+      backend.state.hold = null;
+      await editor.getByText('Start gesendet SPAETER').waitFor();
+      assert.equal(await state.getAttribute('data-dirty'), 'true', 'the later input is still unsaved');
+      assert.equal(backend.state.wiki.revisions.find((item) => item.pageId === wikiPage.id && item.revision === 2).content.content[0].content[0].text, 'Start gesendet');
+      await page.getByTestId('wiki-save').click();
+      await page.getByText('Entwurf als Revision 3 gespeichert.').waitFor();
+      assert.equal(backend.state.wiki.revisions.find((item) => item.pageId === wikiPage.id && item.revision === 3).content.content[0].content[0].text, 'Start gesendet SPAETER');
+      assert.equal(await state.getAttribute('data-dirty'), 'false');
+    });
+  });
+
+  test('the comparison names a changed link target; lists keep a large start (F2, F4)', async () => {
+    let wikiPage;
+    const linked = (href) => ({ type: 'doc', content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'Anleitung', marks: [{ type: 'link', attrs: { href } }] }] },
+      { type: 'orderedList', attrs: { start: 10000 }, content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Fortsetzung' }] }] }] },
+    ] });
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Verweise', linked('https://one.example'), { publish: true });
+        backend.state.wiki.revisions.push({ pageId: wikiPage.id, revision: 2, title: 'Verweise', content: linked('https://two.example'), savedAt: '2026-10-21T09:00:00Z',
+          savedBy: backend.ben.id, basedOn: 1, restoredFrom: null });
+        wikiPage.draftRevision = 2;
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page) => {
+      const list = page.getByTestId('wiki-content').locator('ol');
+      await list.waitFor();
+      assert.equal(await list.evaluate((element) => element.start), 10000);
+      await page.getByTestId('wiki-history-open').click();
+      const compare = page.getByTestId('wiki-history').getByTestId('wiki-compare');
+      await compare.getByLabel('Von').selectOption('1');
+      await compare.getByLabel('Bis').selectOption('2');
+      await compare.getByRole('button', { name: 'Vergleichen' }).click();
+      const changed = compare.getByTestId('wiki-compare-diff').locator('[data-op="changed"]');
+      await changed.first().waitFor();
+      assert.equal(await changed.count(), 1);
+      assert.equal(await changed.locator('del').textContent(), 'AnleitungVerweise und Bilder: https://one.example');
+      assert.equal(await changed.locator('ins').textContent(), 'AnleitungVerweise und Bilder: https://two.example');
+    });
+  });
+
+  test('like the server: readers get no draft ETag and no image that only the draft shows', async () => {
+    let wikiPage;
+    let draftImage;
+    await withApp({
+      as: BEN,
+      prepare: (backend) => {
+        grant(backend, [backend.ben], ['wiki.read']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Bildseite', doc('Text'), { publish: true });
+        draftImage = { id: '00000000-0000-4000-8000-000000009301', pageId: wikiPage.id, size: 3, content: Buffer.from([0xff, 0xd8, 0xff]), mediaType: 'image/jpeg' };
+        backend.state.wiki.images.push(draftImage);
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page) => {
+      await page.getByTestId('wiki-content').getByText('Text').waitFor();
+      const answers = await page.evaluate(async ({ pageId, imageId }) => {
+        const read = await fetch(`/api/v1/wiki/pages/${pageId}`);
+        const image = await fetch(`/api/v1/wiki/images/${imageId}`);
+        return { etag: read.headers.get('etag'), image: image.status };
+      }, { pageId: wikiPage.id, imageId: draftImage.id });
+      assert.deepEqual(answers, { etag: null, image: 404 });
+    });
+  });
 });

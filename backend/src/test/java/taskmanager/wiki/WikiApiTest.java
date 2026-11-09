@@ -548,6 +548,11 @@ class WikiApiTest {
         assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(node("iframe"))), "content.unsupported");
         assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(node("paragraph", text("x", mark("strike"))))), "content.unsupported");
         assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(node("paragraph", text("x", link("javascript:alert(1)"))))), "link.invalid");
+        // H1 of the Codex review: control characters inside a link target are refused, before any normalization.
+        for (char control : new char[] {'\u0000', '\u0001', '\u0008', '\u001B', '\u007F', '\u0085'}) {
+            assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(node("paragraph", text("x", link("https://example.test/a" + control + "b"))))),
+                "link.invalid");
+        }
         assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(withAttrs(node("image"), Map.of("src", "https://example.org/x.png", "alt", "x")))),
             "image.external");
         assertInvalid(save(author, page, "\"1\"", "Prüfung", doc(withAttrs(node("image"), Map.of("src", "/api/v1/wiki/images/" + UUID.randomUUID(),

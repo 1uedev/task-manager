@@ -1384,6 +1384,8 @@ export const en: Record<MessageKey, Message> = {
   'wiki.diff.removed': 'Removed',
   'wiki.diff.changed': 'Changed',
   'wiki.diff.none': 'No differences.',
+  'wiki.diff.refs': 'Links and images: {refs}',
+  'wiki.diff.format': 'Same text, other formatting',
   'wiki.publish.title': 'Publish page',
   'wiki.publish.revision': 'Revision',
   'wiki.publish.revisionValue': 'Revision {revision}, saved by {person} on {time}',

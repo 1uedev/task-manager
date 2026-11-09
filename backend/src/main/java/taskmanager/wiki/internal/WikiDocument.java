@@ -324,7 +324,7 @@ public final class WikiDocument {
 
         /** Links to the web, to mail addresses and to wiki pages as {@code wiki:<id>}; nothing else. */
         private String href(String href) {
-            if (href == null || href.isBlank() || href.length() > MAX_HREF) {
+            if (href == null || href.isBlank() || href.length() > MAX_HREF || href.chars().anyMatch(WikiDocument::control)) {
                 throw new Invalid("link.invalid");
             }
             String value = href.strip();
@@ -341,6 +341,11 @@ public final class WikiDocument {
             }
             return value;
         }
+    }
+
+    /** Control characters of C0, DEL and C1 never belong into a link target, before or after any normalization. */
+    private static boolean control(int c) {
+        return c < 0x20 || (c >= 0x7F && c <= 0x9F);
     }
 
     static UUID imageId(String src) {
