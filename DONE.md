@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -696,6 +696,42 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Abnahme:** Holger, 2026-11-09, im Thread zu Paket A17 mit „alles gut“ auf den Vorschlag, TASK-081, TASK-087, TASK-089 und TASK-090 nach grünem CI und der Empfehlung „abnehmen“ der Nachprüfung zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
 
 **Referenz:** Reservierung mit Bericht der zweiten Nachprüfung von TASK-087 #262 (bff7a72), Ergebnis #263 (6f14fd7), Prüfbericht #264 (6719883); verknüpft mit TASK-087, TASK-090 und DEC-119.
+
+## TASK-092 Befunde der Codex Prüfung von TASK-069 beheben (A6)
+
+**Bezug:** REQ-TIME-001, REQ-TIME-002; DEC-099, DEC-122. **Verantwortlich:** claude-20261108-timefix-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** F1 bis F3 mit API Tests gegen die echte Datenbank und Browsertests in Deutsch, die ohne die jeweilige Behebung fehlschlagen würden; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-122, ohne Migration. Anzahl, Gesamtsumme und Summen je Person, Ticket und Leistungsdatum (`perDate`) gelten für alle erlaubten Treffer ohne Obergrenze; nur die Zeilen sind auf 500 und der Export auf 50 000 begrenzt (F1). Buchung und Revision tragen `ticketHidden`; eine Korrektur ohne Ticketnummer behält ein verborgenes Ticket, nur `removeHiddenTicket: true` entfernt es (F2). `mine=true` und `perDate` speisen „Meine Zeiten“ aus Serversummen mit Hinweis auf eine gekürzte Liste (F3). Die bestätigten Abweichungen 412, UTC und „ohne sichtbares Ticket“ stehen in Regeln, DEC-122, Vertrag und README (H1). Nach R1 der Nachprüfung liest `TimeRepository.snapshot` Anzahl, Summen, Tagessummen und Zeilen in einer einzigen SQL Anweisung und damit aus einem Datenstand unter READ COMMITTED; mehr gelesene Zeilen als die Grenze ergeben eine gekürzte Liste beziehungsweise 400 beim Export.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal (551 Tests), darunter die Mengenränder 500, 501, 50 000 und 50 001, das verborgene Ticket, `mine` mit 501 Wochenbuchungen, Portal und fremde Projekte sowie zwei Gleichzeitigkeitstests über `HeldTimeRepository`. Frontend `npm run verify` und Browsertests (212) mit verborgenem Ticket und 501 Wochenbuchungen. CI auf PR #274 grün.
+
+**Review:** Getrennte Nachprüfungen durch Codex, Sitzungen codex-20261109-task092-review-01 ([Bericht](docs/REVIEW_TASK-092_PR-274.md)) mit R1, im selben PR #274 behoben, und codex-20261109-task092-r1-review-01 ([Bericht](docs/REVIEW_TASK-092-R1_PR-274.md)): R1 behoben, keine Pflichtbefunde.
+
+**Abnahme:** Holger, 2026-11-09, auf der Entscheidungskarte „TASK-069 und TASK-092 jetzt abnehmen?“ mit „Ja, beide abnehmen“; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H1 der Nachprüfung von R1, die gemeinsame CTE materialisiert alle Spalten einschließlich der Beschreibung und schreibt bei 50 000 Buchungen temporäre Dateien; bei einer Leistungsoptimierung eine schmalere CTE mit Beschreibungen nur für die ausgewählten Zeilen in derselben Anweisung prüfen und vor einer Leistungszusage auf PostgreSQL 18.6 nachmessen.
+
+**Referenz:** Prüfbericht zu TASK-069 #267 (38ecc0b), Reservierung #271 (13ee71c), Ergebnis #274 (aa1030c), Nachprüfungsbericht und Abschluss #275; verknüpft mit TASK-069 und DEC-122.
+
+## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
+
+**Bezug:** REQ-TIME-001, REQ-TIME-002; Abgrenzung REQ-TIME-003; OPEN-021; DEC-099, DEC-122. **Verantwortlich:** claude-20261030-time-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** Die bestätigten Zeitregeln 1 bis 14 (Holger, 30. Oktober 2026, mit dem Nachtrag vom 8. November 2026) gelten in API und Oberfläche gleich; Summen entsprechen genau den wirksamen, lesbaren Buchungen (Rechenbeispiel 120, 105, 75 Minuten); ohne passende Aktion verrät weder Liste, Summe, Export noch Ticketansicht eine fremde Buchung; Rechteentzug zwischen Lesen und Speichern verhindert die Änderung; Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Ergebnis:** DEC-099, Migration V0053 (`time_entry`, `time_entry_revision`). Modul `time` mit den Projektaktionen `time.book`, `time.read` und `time.manage`, Buchen, Korrigieren und Stornieren mit eigener Historie, Versionen und Prüfung beim Commit, Auswertung mit Summen je Person und je Ticket, CSV Export, Bereich „Zeiten“ am Ticket und Seite „Zeiten“ mit „Meine Zeiten“ und Auswertung. Bestätigte Abweichungen nach DEC-122: 412 bei veralteter Version, „heute“ in UTC plus ein Tag, Zeit an nicht lesbaren Tickets unter „ohne sichtbares Ticket“. Die Befunde der Prüfung behebt TASK-092.
+
+**Prüfungen:** TimeApiTest (Rechenbeispiel, Rechte, Prüfung beim Commit, Konflikt, Export), TimeContractTest, Browsertests time.test.mjs; CI auf PR #256 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261108-time-review-01 ([Bericht](docs/REVIEW_TASK-069_PR-256.md)) mit F1 bis F3, H1 und H2, behoben mit TASK-092.
+
+**Abnahme:** Holger, 2026-11-09, zusammen mit TASK-092 auf der Entscheidungskarte „TASK-069 und TASK-092 jetzt abnehmen?“ mit „Ja, beide abnehmen“; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Unternehmenszeitzone, Regel für archivierte Projekte mit der Archivierung, Timer, Freigaben, Abrechnung und Suche über Zeiten bleiben außerhalb von A6.
+
+**Referenz:** Reservierung #219 (87f405f), Ergebnis #256 (2222f68); verknüpft mit TASK-092, DEC-099 und DEC-122.
 
 ## TASK-087 Befunde der Prüfung von TASK-081 beheben (A17)
 

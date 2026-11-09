@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -39,10 +39,8 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
-| [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-11-04 |
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
 | [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
-| [TASK-092](#task-092-befunde-der-codex-prüfung-von-task-069-beheben-a6) | Befunde der Codex Prüfung von TASK-069 beheben (A6) | claude-20261108-timefix-01 | 2026-11-09 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -75,66 +73,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Ergebnis (zur Prüfung):** Umgesetzt nach DEC-097 auf Branch claude/project-thread-fde105, Ergebnis-PR nach der Reservierung PR #218. Migration V0052, ursprünglich V0029, beim Einmischen von main umbenannt (`joined_at`, `seen_at`, `seen_by` an `helpdesk_message`); `TicketOpener.append` vermerkt das Anhängen für Abruf und `…/attach`. Neue Endpunkte `GET /api/v1/helpdesk/answers` und `POST /api/v1/helpdesk/answers/{id}/seen` mit If-Match, Rechten wie beim Versand und Audit `answer.seen`; die Mails im Ticket tragen `newAnswer` und `version`. Oberfläche: Liste „Neue Kundenantworten“ in der Prüfwarteschlange, hervorgehobene Antwort mit „Gesehen“ im Ticket. Nachweise: `HelpdeskApiTest.anAnswerThatJoinsATicketIsNewUntilSomeoneMarksItAsSeen` (Liste, Ticketansicht, 403 für Leser und Mitglied ohne Leseregel, 404 für Fremde, 428, 412, 409, Audit, Anhängen über die Prüfwarteschlange), Vertrag gegen Routen (36, nach dem Einmischen von main; berichtigt mit TASK-088), zwei Browsertests. Beschreibung in backend/README.md, Abschnitt „Neue Kundenantworten (TASK-067)“.
 
 **Nächster Schritt:** Gegenprüfung des Ergebnis-PR und Abnahme durch Holger.
-
-## TASK-092 Befunde der Codex Prüfung von TASK-069 beheben (A6)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261108-timefix-01 · **Aktualisiert:** 2026-11-09
-
-**Bezug:** REQ-TIME-001, REQ-TIME-002; DEC-099; docs/REVIEW_TASK-069_PR-256.md. **Abhängigkeiten:** TASK-069 geliefert (PR #256). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-069 (Empfehlung „noch nicht abnehmen“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Beheben, Abweichungen bestätigen“ gewählt. Damit sind die drei Abweichungen aus Hinweis H1 bestätigt: 412 bei veralteter Version (409 bleibt der stornierten Buchung), „heute“ als Datum in UTC ohne Unternehmenszeitzone, und die Zeit an einem nicht lesbaren Ticket zählt unter „ohne sichtbares Ticket“. Branch claude/project-thread-thp5tg; Ergebnis mit eigener DEC-ID, Migration nur falls nötig.
-
-**Umfang:** Befunde F1 bis F3 und Hinweise H1 und H2 aus docs/REVIEW_TASK-069_PR-256.md:
-1. F1: Anzahl, Gesamtsumme und Summen je Person und je Ticket der Auswertung gelten für alle erlaubten Treffer des Filters, unabhängig von der Listengrenze 500 und der Exportgrenze 50 000; der Export lehnt über 50 000 Zeilen weiter ab.
-2. F2: Eine Korrektur entfernt ein Ticket, das die korrigierende Person nicht lesen darf, nie stillschweigend; ein unverändertes verborgenes Ticket bleibt erhalten, ohne dass Nummer oder Titel sichtbar werden.
-3. F3: „Meine Zeiten“ zeigt Wochen und Tagessummen aus Serversummen über alle eigenen Buchungen der Woche und weist auf eine gekürzte Liste hin.
-4. H1: Die bestätigten Abweichungen werden in Regeltext, DEC, README und Vertrag nachgeführt.
-5. H2: Regressionstests für 500, 501, 50 000 und 50 001 Treffer, mehrere Projekte und Stornos, Entzug und Wiedergabe von `ticket.read` bei einer Korrektur, mehr als 500 eigene Buchungen und Negativfälle für Portal und fremde Projekte.
-
-Nicht Teil: Timer, Freigaben, Abrechnung, Unternehmenszeitzone, Suche über Zeitbuchungen.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. F1 bis F3 mit API Tests gegen die echte Datenbank und Browsertests in Deutsch, die ohne die jeweilige Behebung fehlschlagen würden.
-2. Bestehende Backend und Browser Tests bleiben grün.
-
-**Ergebnis (zur Prüfung):** Umgesetzt nach DEC-122 auf Branch claude/project-thread-thp5tg, ohne Migration. (1) F1: `TimeRepository.sums` und `days` bilden Anzahl und Minuten je Person und Ticket sowie je Leistungsdatum als Aggregate in PostgreSQL über alle erlaubten Treffer; nur die zurückgegebenen Zeilen sind auf 500 begrenzt, ein Export über 50 000 Buchungen lädt keine Zeilen und ergibt weiter 400. (2) F2: Buchung und Revision tragen `ticketHidden`; eine Korrektur ohne Ticketnummer behält ein verborgenes Ticket, nur `removeHiddenTicket: true` entfernt es. Das Formular nennt das verborgene Ticket ohne Nummer oder Titel und bietet „Zuordnung zum nicht sichtbaren Ticket entfernen“ an. (3) F3: Die Liste kennt `mine=true` (auch mit `time.read` nur eigene Buchungen; mit einer anderen `person` 400 `person.with_mine`) und `perDate`; „Meine Zeiten“ zeigt Woche und Tage aus diesen Serversummen und weist auf eine gekürzte Liste hin. (4) H1: Nachtrag zu den Regeln in TASK-069, DEC-122, Vertrag und backend/README.md; die Summengruppe heißt „ohne sichtbares Ticket“. (5) H2: `TimeApiTest.countAndSumsCoverEveryEntryBeyondTheListAndTheExportLimit` (500, 501, 50 000, 50 001 Buchungen, zwei Projekte, 600 neuere Stornos), `aCorrectionKeepsAHiddenTicketUnlessItsRemovalIsAsked` (Entzug und Wiedergabe von `ticket.read`, auch mit `time.manage`), `mineGivesTheOwnEntriesAndDaysEvenToAReader` (501 eigene Wochenbuchungen), `otherProjectsAndPortalAccountsAddNothing` (fremde Projekte und ein Portalkonto mit allen drei Zeitaktionen); Browsertests für das verborgene Ticket und 501 eigene Buchungen in der Woche. (6) R1 der Codex Nachprüfung (docs/REVIEW_TASK-092_PR-274.md, Holger am 9. November 2026: „Im selben PR #274 beheben“): `TimeRepository.snapshot` liest Anzahl, Summen je Person und Ticket, Tagessummen und Zeilen in einer einzigen SQL Anweisung und damit aus einem Datenstand; eine höhere Isolationsstufe scheidet aus, weil das Rechtemodul READ COMMITTED verlangt. Mehr gelesene Zeilen als die Grenze kürzen die Liste sichtbar und lehnen den Export mit 400 ab. `TimeApiTest.countSumsDaysAndRowsOfAListFitEachOther` und `anExportIsRefusedWhenABookingMakesItTooLargeWhileItRuns` halten das Lesen nach der Rechteprüfung an, speichern dazwischen eine Buchung und prüfen, dass alle Teile der Antwort zusammenpassen beziehungsweise 50 001 Buchungen abgelehnt werden.
-
-**Nächster Schritt:** Nachprüfung von R1 durch eine zweite KI (Codex oder Claude), danach Abnahme von TASK-069 und TASK-092 durch Holger.
-
-## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261030-time-01 · **Aktualisiert:** 2026-11-04
-
-**Bezug:** REQ-TIME-001, REQ-TIME-002; Abgrenzung REQ-TIME-003; OPEN-021 (Zeitkorrekturen, Exportumfang). **Abhängigkeiten:** Projekte (TASK-026), Ticketkern (TASK-027), Projektkonfiguration (TASK-044), Oberfläche (TASK-030), alle abgenommen. **Arbeitsstand:** Holger hat am 30. Oktober 2026 im Projektgespräch „nach H7 bitte A10 und A6 parallel“ die Umsetzung von Paket A6 beauftragt und am selben Tag die 15 Vorschläge zu den Zeitregeln mit „passt so“ bestätigt. Reservierung mit PR #219 auf main. Ergebnis auf Branch claude/project-thread-thp5tg mit DEC-099 und Migration V0053 (nach V0052 aus TASK-067); Beschreibung in backend/README.md (Abschnitt „Zeiterfassung“), Vertrag contracts/time.openapi.yaml. Abweichungen zur Prüfung: Regel 11 antwortet wie bei Tickets mit 412 statt 409 (409 bleibt der stornierten Buchung), Regel 3 rechnet mangels Unternehmenszeitzone mit dem Datum in UTC.
-
-**Umfang:** Modul Zeiterfassung mit Buchungen, Korrektur und Storno mit Historie, drei Projektaktionen, Auswertung mit CSV Export, API Vertrag, Migration und Oberfläche (Ticketansicht, „Meine Zeiten“, Auswertung) nach den folgenden Regeln.
-
-**Bestätigte Zeitregeln (Holger, 30. Oktober 2026):**
-1. Eine Buchung hat Projekt, optional ein Ticket desselben Projekts, Person, Leistungsdatum, Dauer und Tätigkeitsbeschreibung (Pflicht, höchstens 1000 Zeichen). Buchungen nur auf das Projekt sind erlaubt.
-2. Dauer in vollen Minuten, 1 bis 1440 je Buchung; Eingabe als „1:15“, „75m“, „1,25 h“ oder „1h 15m“, Anzeige als Stunden und Minuten. Zeitzonen ändern weder Datum noch Dauer.
-3. Kein Leistungsdatum in der Zukunft (heutiges Datum der Unternehmenszeitzone plus ein Tag Puffer); rückwirkend ohne Grenze, da V1 keine Periodensperre hat.
-4. Auf geschlossene Tickets darf gebucht werden, das Ticket bleibt geschlossen. Die Regel für archivierte Projekte folgt mit der Archivierung.
-5. Neue Projektaktionen: `time.book` (eigene Zeit buchen, eigene Buchungen lesen, korrigieren und stornieren), `time.read` (Buchungen aller im Projekt lesen, einschließlich Summen und Export), `time.manage` (für andere buchen, fremde Buchungen korrigieren und stornieren, enthält `time.read`). Ohne `time.read` enthalten Summen nur eigene Buchungen.
-6. Ticketleserecht allein zeigt keine Zeiten; externe Kunden sehen keine Zeiten.
-7. Mit `time.manage` wird nur für aktive Mitglieder des Projekts gebucht.
-8. Eine Korrektur ändert Datum, Dauer, Beschreibung oder Ticket; der alte Wert bleibt mit Bearbeiter, Zeitpunkt und Grund in der Historie der Buchung. Grund optional bei eigenen, Pflicht bei fremden Buchungen.
-9. Storno statt Löschen: stornierte Buchungen zählen in keiner Summe, bleiben mit Historie lesbar und lassen sich nicht zurücknehmen.
-10. Keine zeitliche Grenze für eigene Korrekturen in V1.
-11. Korrekturen sind versioniert; eine veraltete Version ergibt 409.
-12. Auswertung: Liste mit Filtern nach Projekt, Person, Ticket und Zeitraum, Summen je Person und je Ticket, CSV Export mit Zeitraum, Filtern und Einheit (Minuten und Stunden mit zwei Nachkommastellen); projektübergreifend nur über lesbare Projekte.
-13. Die Ticketansicht zeigt Summe und Liste der für den Leser sichtbaren Buchungen und ein Formular zum Buchen.
-14. Seite „Meine Zeiten“ mit Wochenansicht der eigenen Buchungen über alle Projekte.
-15. Nicht enthalten: Timer, Freigaben, abrechenbare Zeiten, Stundensätze, Abrechnung, Kontingente, Planung, Verschieben von Tickets, Suche über Zeiten, KI. Buchungen erscheinen in ihrer eigenen Historie, nicht in der Tickethistorie.
-
-**Nachtrag (Holger, 8. November 2026, DEC-122):** Zu Regel 3 gilt bis zu einer Unternehmenszeitzone das heutige Datum in UTC plus ein Tag. Zu Regel 11 ergibt eine veraltete Version 412 wie bei Tickets; 409 bleibt der stornierten Buchung. Die Zeit an einem Ticket, das die Person nicht sehen darf, zählt in den Summen unter „ohne sichtbares Ticket“.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Die Regeln 1 bis 14 gelten in API und Oberfläche gleich; Summen entsprechen genau den wirksamen, für den Aufrufer lesbaren Buchungen (Rechenbeispiel aus docs/DOMAIN_MODEL.md: 90 + 30, Korrektur auf 75, Storno von 30 ergibt 120, 105, 75 Minuten).
-2. Ohne passende Aktion verrät weder Liste, Summe, Export noch Ticketansicht eine fremde Buchung; ein Ticket, das die Person nicht lesen darf, bleibt unsichtbar.
-3. Rechteentzug zwischen Lesen und Speichern verhindert die Änderung (Prüfung beim Commit wie in TASK-043).
-4. Migration, Vertrag gegen Routen, Backend Tests für Rechte, Regeln, Korrektur, Storno, Konflikt und Export, Browser Tests für Buchen am Ticket, Korrigieren, Stornieren, „Meine Zeiten“ und Auswertung.
-
-**Übergabe:** Modul `time` mit Migration V0053, drei Projektaktionen, Buchen, Korrigieren und Stornieren mit eigener Historie, Auswertung mit Summen je Person und je Ticket, CSV Export, Bereich „Zeiten“ am Ticket und Seite „Zeiten“ mit „Meine Zeiten“ und Auswertung. Nachweise im Ergebnis PR: TimeApiTest (Rechenbeispiel 120, 105, 75 Minuten, Rechte, Prüfung beim Commit, Konflikt, Export), TimeContractTest, Browsertests time.test.mjs.
-
-**Nächster Schritt:** Getrennte Prüfung (Codex oder Claude) und fachliche Abnahme durch Holger, danach Übertrag nach DONE.md.
 
 ## TASK-088 Befunde der Prüfung von TASK-067 beheben
 
