@@ -16,7 +16,7 @@ export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
 const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
-const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read'];
+const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -153,6 +153,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // Time entries (TASK-069) with their revisions; `timeConflict` makes the next change fail like a concurrent one.
     time: [],
     timeConflict: false,
+    // The wiki (TASK-093): pages with their revisions, events and uploaded images; `wikiConflict` makes the next save fail
+    // like a save of someone else that came first.
+    wiki: { pages: [], revisions: [], events: [], images: [] },
+    wikiConflict: null,
   };
 
   const addTicket = (title, description, by) => {
@@ -959,6 +963,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     if (p.startsWith('/time')) return timeRoute(account, method, p, query, headers, body);
+    if (p.startsWith('/wiki')) return wikiRoute(account, method, p, query, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -1539,6 +1544,344 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (own === false && !(body.reason ?? '').trim()) violations.push('reason.required');
     return { violations, values: { ticketId, date: body.date, minutes: body.minutes, description } };
   };
+
+  // ------------------------------------------------------------------ wiki (TASK-093)
+  // As the backend: readers see published pages only, `wiki.edit` and `wiki.publish` see drafts and the history, the server
+  // renders the HTML from the checked document and marks links to pages the caller may not read.
+  const wiki = state.wiki;
+  const wikiAccess = (account, projectId) => ({ read: may(account, 'wiki.read', projectId), edit: may(account, 'wiki.edit', projectId),
+    publish: may(account, 'wiki.publish', projectId) });
+  const wikiAny = (access) => access.read || access.edit || access.publish;
+  const wikiDrafts = (access) => access.edit || access.publish;
+  const wikiRevision = (page, number) => wiki.revisions.find((item) => item.pageId === page.id && item.revision === number);
+  const wikiEvent = (page, kind, revision, account) => wiki.events.push({ pageId: page.id, kind, language: page.language, revision, actorId: account.id, occurredAt: now() });
+  const WIKI_BLOCKS = new Set(['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'horizontalRule', 'table', 'image']);
+  const WIKI_KNOWN = new Set([...WIKI_BLOCKS, 'listItem', 'tableRow', 'tableHeader', 'tableCell', 'text', 'hardBreak']);
+  const WIKI_TAGS = { paragraph: 'p', blockquote: 'blockquote', bulletList: 'ul', listItem: 'li', tableRow: 'tr', tableHeader: 'th', tableCell: 'td' };
+  const WIKI_IMAGE = /^\/api\/v1\/wiki\/images\/([0-9a-f-]{36})$/;
+  function wikiCheck(content, pageId, projectId) {
+    const violations = [];
+    const images = [];
+    const walk = (node) => {
+      if (!node || typeof node !== 'object' || !WIKI_KNOWN.has(node.type)) return violations.push('content.unsupported');
+      if (node.type === 'image') {
+        const match = WIKI_IMAGE.exec(node.attrs?.src ?? '');
+        if (!match) return violations.push('image.external');
+        if (!wiki.images.some((image) => image.id === match[1] && image.pageId === pageId)) violations.push('image.unknown');
+        images.push(match[1]);
+      }
+      for (const mark of node.marks ?? []) {
+        if (!['bold', 'italic', 'code', 'link'].includes(mark.type)) violations.push('content.unsupported');
+        if (mark.type === 'link') {
+          const href = mark.attrs?.href ?? '';
+          const target = /^wiki:([0-9a-f-]{36})$/.exec(href);
+          if (target) {
+            if (!wiki.pages.some((item) => item.id === target[1] && item.projectId === projectId)) violations.push('link.unknown_page');
+          } else if (/[\u0000-\u001f\u007f-\u009f]/.test(href) || !/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(href.trim())) violations.push('link.invalid');
+        }
+      }
+      (node.content ?? []).forEach(walk);
+    };
+    if (!content || content.type !== 'doc' || !Array.isArray(content.content)) violations.push('content.invalid');
+    else content.content.forEach((block) => (WIKI_BLOCKS.has(block?.type) ? walk(block) : violations.push('content.unsupported')));
+    if (JSON.stringify(content ?? {}).length > 1_000_000) violations.push('content.too_large');
+    if (images.length > 50) violations.push('content.too_many_images');
+    return [...new Set(violations)];
+  }
+  function wikiHtml(content, account, projectId) {
+    const access = wikiAccess(account, projectId);
+    const target = (id) => {
+      const page = wiki.pages.find((item) => item.id === id && item.projectId === projectId && !item.archived);
+      return page && (wikiDrafts(access) || page.publishedRevision !== null) ? `#/wiki/${projectId}/${page.id}` : null;
+    };
+    const render = (node) => {
+      const inner = () => (node.content ?? []).map(render).join('');
+      switch (node.type) {
+        case 'text': {
+          let text = escapeHtml(node.text ?? '');
+          for (const mark of node.marks ?? []) {
+            if (mark.type === 'bold') text = `<strong>${text}</strong>`;
+            else if (mark.type === 'italic') text = `<em>${text}</em>`;
+            else if (mark.type === 'code') text = `<code>${text}</code>`;
+          }
+          const link = (node.marks ?? []).find((mark) => mark.type === 'link');
+          if (!link) return text;
+          const wikiLink = /^wiki:(.+)$/.exec(link.attrs.href);
+          if (wikiLink) {
+            const address = target(wikiLink[1]);
+            return address === null ? '<span class="wiki-unavailable" data-wiki-unavailable="true"></span>'
+              : `<a href="${address}" data-wiki-page="${wikiLink[1]}">${text}</a>`;
+          }
+          return `<a href="${escapeHtml(link.attrs.href)}" rel="noopener noreferrer nofollow" target="_blank">${text}</a>`;
+        }
+        case 'heading': return `<h${node.attrs?.level ?? 1}>${inner()}</h${node.attrs?.level ?? 1}>`;
+        case 'orderedList': {
+          const start = node.attrs?.start ?? 1;
+          return start === 1 ? `<ol>${inner()}</ol>` : `<ol start="${start}">${inner()}</ol>`;
+        }
+        case 'codeBlock': {
+          const language = node.attrs?.language;
+          return typeof language === 'string' && language !== '' ? `<pre><code class="language-${escapeHtml(language)}">${inner()}</code></pre>` : `<pre><code>${inner()}</code></pre>`;
+        }
+        case 'tableCell':
+        case 'tableHeader': {
+          const tag = node.type === 'tableHeader' ? 'th' : 'td';
+          const colspan = node.attrs?.colspan ?? 1;
+          const rowspan = node.attrs?.rowspan ?? 1;
+          return `<${tag}${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''}>${inner()}</${tag}>`;
+        }
+        case 'horizontalRule': return '<hr>';
+        case 'hardBreak': return '<br>';
+        case 'image': return `<img src="${escapeHtml(node.attrs.src)}" alt="${escapeHtml(node.attrs.alt ?? '')}" loading="lazy">`;
+        case 'table': return `<table><tbody>${inner()}</tbody></table>`;
+        default: return `<${WIKI_TAGS[node.type]}>${inner()}</${WIKI_TAGS[node.type]}>`;
+      }
+    };
+    return (content.content ?? []).map(render).join('');
+  }
+  const wikiVisible = (account, page) => {
+    const access = wikiAccess(account, page.projectId);
+    if (page.archived) return access.publish;
+    return wikiDrafts(access) || (access.read && page.publishedRevision !== null);
+  };
+  const wikiPageView = (account, page) => {
+    const access = wikiAccess(account, page.projectId);
+    const drafts = wikiDrafts(access);
+    const published = page.publishedRevision === null ? null : wikiRevision(page, page.publishedRevision);
+    const draft = drafts ? wikiRevision(page, page.draftRevision) : null;
+    const path = [];
+    let parent = page.parentId;
+    while (parent !== null) {
+      const above = wiki.pages.find((item) => item.id === parent);
+      if (!above) break;
+      if (drafts || above.publishedRevision !== null) {
+        path.unshift({ id: above.id, title: drafts ? wikiRevision(above, above.draftRevision).title : wikiRevision(above, above.publishedRevision).title });
+      }
+      parent = above.parentId;
+    }
+    return {
+      id: page.id, projectId: page.projectId, parentId: path.at(-1)?.id ?? null, language: page.language, archived: page.archived, version: page.version, access, path,
+      published: published && { revision: published.revision, title: published.title, html: wikiHtml(published.content, account, page.projectId),
+        publishedAt: page.publishedAt, publishedBy: page.publishedBy },
+      draft: draft && { revision: draft.revision, title: draft.title, content: draft.content, html: wikiHtml(draft.content, account, page.projectId),
+        savedAt: draft.savedAt, savedBy: draft.savedBy, changed: page.publishedRevision !== page.draftRevision },
+      createdAt: page.createdAt, createdBy: page.createdBy,
+    };
+  };
+  // As the controller: the ETag of the draft only for people who see drafts.
+  const wikiAnswer = (account, page) => (wikiDrafts(wikiAccess(account, page.projectId))
+    ? ok(wikiPageView(account, page), `"${page.draftRevision}"`) : ok(wikiPageView(account, page)));
+  const wikiTitle = (title, violations) => {
+    const clean = (title ?? '').trim();
+    if (clean === '') violations.push('title.required');
+    else if (clean.length > 200) violations.push('title.too_long');
+    return clean;
+  };
+  const wikiDepth = (id) => {
+    let depth = 0;
+    for (let current = id; current !== null; current = wiki.pages.find((item) => item.id === current)?.parentId ?? null) depth++;
+    return depth;
+  };
+  const wikiHeight = (id) => 1 + Math.max(0, ...wiki.pages.filter((item) => item.parentId === id && !item.archived).map((item) => wikiHeight(item.id)));
+  const wikiIfMatch = (headers, page) => {
+    if (!headers['if-match']) return problem(428, 'wiki.precondition_required');
+    if (state.wikiConflict !== null) {
+      // Someone else saved first: their revision becomes the draft.
+      const theirs = state.wikiConflict;
+      state.wikiConflict = null;
+      const revision = { pageId: page.id, revision: page.draftRevision + 1, title: theirs.title, content: theirs.content, savedAt: now(), savedBy: theirs.by,
+        basedOn: page.draftRevision, restoredFrom: null };
+      wiki.revisions.push(revision);
+      page.draftRevision = revision.revision;
+    }
+    if (headers['if-match'] !== `"${page.draftRevision}"`) return problem(412, 'wiki.version_conflict');
+    return null;
+  };
+  function addWikiPage(by, title, content, { parentId = null, publish = false, projectId = project.id } = {}) {
+    const page = { id: uuid(), projectId, parentId, language: 'de', archived: false, version: 1, createdAt: now(), createdBy: by.id, draftRevision: 1,
+      publishedRevision: null, publishedAt: null, publishedBy: null };
+    wiki.pages.push(page);
+    wiki.revisions.push({ pageId: page.id, revision: 1, title, content, savedAt: now(), savedBy: by.id, basedOn: null, restoredFrom: null });
+    wikiEvent(page, 'created', 1, by);
+    if (publish) {
+      page.publishedRevision = 1;
+      page.publishedAt = now();
+      page.publishedBy = by.id;
+      wikiEvent(page, 'published', 1, by);
+    }
+    return page;
+  }
+  function wikiRoute(account, method, p, query, headers, body) {
+    if (p === '/wiki/projects' && method === 'GET') {
+      return ok(state.projects.filter((item) => isMember(account, item.id)).map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: wikiAccess(account, item.id) }))
+        .filter((item) => wikiAny(item.access)));
+    }
+    let match = p.match(/^\/wiki\/projects\/([^/]+)\/pages$/);
+    if (match) {
+      const projectId = match[1];
+      const access = wikiAccess(account, projectId);
+      if (!wikiAny(access)) return problem(404, 'project.not_found');
+      if (method === 'GET') {
+        const archived = query.get('archived') === 'true';
+        if (archived && !access.publish) return problem(403, 'auth.forbidden');
+        const drafts = archived || wikiDrafts(access);
+        const pages = wiki.pages.filter((item) => item.projectId === projectId && item.archived === archived && (drafts || item.publishedRevision !== null))
+          .map((item) => {
+            const shown = wikiRevision(item, drafts ? item.draftRevision : item.publishedRevision);
+            let parent = item.parentId;
+            while (!drafts && parent !== null && wiki.pages.find((above) => above.id === parent)?.publishedRevision === null) {
+              parent = wiki.pages.find((above) => above.id === parent)?.parentId ?? null;
+            }
+            return { id: item.id, parentId: parent, title: shown.title, language: item.language, published: item.publishedRevision !== null,
+              changed: wikiDrafts(access) && item.publishedRevision !== item.draftRevision, archived: item.archived, version: item.version,
+              savedAt: drafts ? shown.savedAt : null, savedBy: drafts ? shown.savedBy : null };
+          })
+          .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+        return ok({ projectId, access, pages });
+      }
+      if (method === 'POST') {
+        if (!access.edit) return problem(403, 'auth.forbidden');
+        const violations = [];
+        const title = wikiTitle(body.title, violations);
+        const parentId = body.parentId ?? null;
+        if (parentId !== null) {
+          const parent = wiki.pages.find((item) => item.id === parentId && item.projectId === projectId && !item.archived);
+          if (!parent) violations.push('parent.unknown');
+          else if (wikiDepth(parentId) >= 6) violations.push('parent.too_deep');
+        }
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        const page = addWikiPage(account, title, body.content ?? { type: 'doc', content: [{ type: 'paragraph' }] }, { parentId, projectId });
+        return { ...wikiAnswer(account, page), status: 201 };
+      }
+    }
+    match = p.match(/^\/wiki\/images\/([^/]+)$/);
+    if (match && method === 'GET') {
+      const image = wiki.images.find((item) => item.id === match[1]);
+      const page = image && wiki.pages.find((item) => item.id === image.pageId);
+      // As the server: drafts for `wiki.edit` and `wiki.publish`, readers only while the published revision shows the image.
+      const access = page ? wikiAccess(account, page.projectId) : null;
+      const shown = page && page.publishedRevision !== null && !page.archived
+        && JSON.stringify(wikiRevision(page, page.publishedRevision).content).includes(`/api/v1/wiki/images/${image.id}"`);
+      const visible = page && wikiVisible(account, page) && (wikiDrafts(access) || (access.read && shown));
+      return visible ? { status: 200, raw: image.content, type: image.mediaType } : problem(404, 'wiki.image_not_found');
+    }
+    match = p.match(/^\/wiki\/pages\/([^/]+)(\/.*)?$/);
+    if (!match) return problem(404, 'resource.not_found');
+    const page = wiki.pages.find((item) => item.id === match[1]);
+    if (!page || !wikiVisible(account, page)) return problem(404, 'wiki.page_not_found');
+    const access = wikiAccess(account, page.projectId);
+    const rest = match[2] ?? '';
+    if (rest === '' && method === 'GET') return wikiAnswer(account, page);
+    if (rest === '/draft' && method === 'PUT') {
+      if (!access.edit) return problem(403, 'auth.forbidden');
+      if (page.archived) return problem(409, 'wiki.page_archived');
+      const refused = wikiIfMatch(headers, page);
+      if (refused) return refused;
+      const violations = [];
+      const title = wikiTitle(body.title, violations);
+      violations.push(...wikiCheck(body.content, page.id, page.projectId));
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      const revision = { pageId: page.id, revision: page.draftRevision + 1, title, content: body.content, savedAt: now(), savedBy: account.id, basedOn: page.draftRevision, restoredFrom: null };
+      wiki.revisions.push(revision);
+      page.draftRevision = revision.revision;
+      wikiEvent(page, 'saved', revision.revision, account);
+      return wikiAnswer(account, page);
+    }
+    if (rest === '/publish' && method === 'POST') {
+      if (!access.publish) return problem(403, 'auth.forbidden');
+      if (page.archived) return problem(409, 'wiki.page_archived');
+      const refused = wikiIfMatch(headers, page);
+      if (refused) return refused;
+      if (body.revision !== page.draftRevision) return problem(412, 'wiki.version_conflict');
+      Object.assign(page, { publishedRevision: page.draftRevision, publishedAt: now(), publishedBy: account.id });
+      wikiEvent(page, 'published', page.draftRevision, account);
+      return wikiAnswer(account, page);
+    }
+    if (rest === '/withdraw' && method === 'POST') {
+      if (!access.publish) return problem(403, 'auth.forbidden');
+      if (page.publishedRevision === null) return problem(409, 'wiki.not_published');
+      Object.assign(page, { publishedRevision: null, publishedAt: null, publishedBy: null });
+      wikiEvent(page, 'withdrawn', null, account);
+      return wikiAnswer(account, page);
+    }
+    if (rest === '/history' && method === 'GET') {
+      if (!wikiDrafts(access)) return problem(404, 'wiki.page_not_found');
+      const revisions = wiki.revisions.filter((item) => item.pageId === page.id).sort((a, b) => b.revision - a.revision)
+        .map(({ content: _content, pageId: _page, ...item }) => ({ ...item, published: item.revision === page.publishedRevision }));
+      const events = wiki.events.filter((item) => item.pageId === page.id).map(({ pageId: _page, ...item }) => item).reverse();
+      return ok({ pageId: page.id, draftRevision: page.draftRevision, publishedRevision: page.publishedRevision, revisions, events });
+    }
+    match = rest.match(/^\/revisions\/(\d+)(\/restore)?$/);
+    if (match) {
+      if (!wikiDrafts(access)) return problem(404, 'wiki.page_not_found');
+      const old = wikiRevision(page, Number(match[1]));
+      if (!old) return problem(404, 'wiki.revision_not_found');
+      if (!match[2] && method === 'GET') {
+        return ok({ revision: old.revision, title: old.title, content: old.content, html: wikiHtml(old.content, account, page.projectId), savedAt: old.savedAt,
+          savedBy: old.savedBy, published: old.revision === page.publishedRevision });
+      }
+      if (match[2] && method === 'POST') {
+        if (!access.edit) return problem(403, 'auth.forbidden');
+        const refused = wikiIfMatch(headers, page);
+        if (refused) return refused;
+        const revision = { ...old, revision: page.draftRevision + 1, savedAt: now(), savedBy: account.id, basedOn: page.draftRevision, restoredFrom: old.revision };
+        wiki.revisions.push(revision);
+        page.draftRevision = revision.revision;
+        wikiEvent(page, 'reverted', revision.revision, account);
+        return wikiAnswer(account, page);
+      }
+    }
+    if (rest === '/parent' && method === 'PUT') {
+      if (!access.edit) return problem(403, 'auth.forbidden');
+      if (body.version !== page.version) return problem(412, 'wiki.version_conflict');
+      const parentId = body.parentId ?? null;
+      const violations = [];
+      if (parentId !== null) {
+        let current = parentId;
+        while (current !== null) {
+          if (current === page.id) { violations.push('parent.cycle'); break; }
+          current = wiki.pages.find((item) => item.id === current)?.parentId ?? null;
+        }
+        if (!wiki.pages.some((item) => item.id === parentId && item.projectId === page.projectId && !item.archived)) violations.push('parent.unknown');
+        else if (violations.length === 0 && wikiDepth(parentId) + wikiHeight(page.id) > 6) violations.push('parent.too_deep');
+      }
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      Object.assign(page, { parentId, version: page.version + 1 });
+      wikiEvent(page, 'moved', null, account);
+      return wikiAnswer(account, page);
+    }
+    if ((rest === '/archive' || rest === '/unarchive') && method === 'POST') {
+      if (!access.publish) return problem(403, 'auth.forbidden');
+      if (body.version !== page.version) return problem(412, 'wiki.version_conflict');
+      const archive = rest === '/archive';
+      if (page.archived === archive) return problem(409, archive ? 'wiki.page_archived' : 'wiki.page_not_archived');
+      if (archive) {
+        for (const child of wiki.pages.filter((item) => item.parentId === page.id && !item.archived)) Object.assign(child, { parentId: page.parentId, version: child.version + 1 });
+      } else if (page.parentId !== null && wiki.pages.find((item) => item.id === page.parentId)?.archived !== false) {
+        page.parentId = null;
+      }
+      Object.assign(page, { archived: archive, version: page.version + 1 });
+      wikiEvent(page, archive ? 'archived' : 'unarchived', null, account);
+      return wikiAnswer(account, page);
+    }
+    if (rest === '/images' && method === 'POST') {
+      if (!access.edit) return problem(403, 'auth.forbidden');
+      const content = Buffer.isBuffer(body) ? body : Buffer.alloc(0);
+      if (content.length === 0) return problem(400, 'image.empty');
+      if (content.length > 5 * 1024 * 1024) return problem(413, 'image.too_large');
+      // The same signatures as the server: PNG, JPEG and WebP.
+      const mediaType = content.subarray(0, 8).equals(PNG.subarray(0, 8)) ? 'image/png'
+        : content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff ? 'image/jpeg'
+          : content.length >= 12 && content.subarray(0, 4).toString('latin1') === 'RIFF' && content.subarray(8, 12).toString('latin1') === 'WEBP' ? 'image/webp'
+            : null;
+      if (mediaType === null) return problem(415, 'image.type_unsupported');
+      const image = { id: uuid(), pageId: page.id, size: content.length, content, mediaType };
+      wiki.images.push(image);
+      return { status: 201, body: { id: image.id, src: `/api/v1/wiki/images/${image.id}`, mediaType, size: image.size } };
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   function timeRoute(account, method, p, query, headers, body) {
     if (p === '/time/projects' && method === 'GET') {
       return ok(state.projects.map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: timeAccess(account, item.id) }))
@@ -1975,6 +2318,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addJob,
     addMail,
     addTicket,
+    addWikiPage,
     // A prepared cycle of a ticket, as the server would report it (TASK-068).
     addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {

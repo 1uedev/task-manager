@@ -1,0 +1,634 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Wiki (TASK-093)
+  version: 0.1.0
+  description: |
+    Wikiseiten in Projekten mit Entwurf, ausdrücklicher Veröffentlichung, Revisionen, Historie, Archiv, Bildern und Verweisen
+    (REQ-DOC-001, REQ-DOC-002, REQ-DOC-004, DEC-033, DEC-123). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
+    Passwortwechsel 403 `auth.password_change_required`). Sitzung, CSRF und `Cache-Control: no-store` gelten wie im
+    Identitätsvertrag.
+
+    Rechte sind Projektaktionen: `wiki.read` liest veröffentlichte Seiten und ihre Bilder; `wiki.edit` liest Entwürfe und
+    Historie, legt Seiten an, speichert den Entwurf, verschiebt Seiten und lädt Bilder hoch; `wiki.publish` veröffentlicht,
+    nimmt Veröffentlichungen zurück, archiviert und stellt wieder her und liest dafür ebenfalls Entwürfe und Historie. Ohne
+    eine dieser Aktionen gibt es für die Person kein Wiki des Projekts (404 `project.not_found`). Portalkonten erhalten nie
+    eine Wikiaktion. Eine Seite, die die Person nicht lesen darf, antwortet wie eine unbekannte (404 `wiki.page_not_found`):
+    Leser sehen nur veröffentlichte Seiten, archivierte Seiten sieht nur, wer `wiki.publish` hat.
+
+    Je Seite gibt es einen gemeinsamen Entwurf. Jedes Speichern legt eine neue Revision an, die nie mehr geändert wird. Der
+    ETag einer Seite ist für Personen mit Entwürfen die Revision des Entwurfs; Speichern, Veröffentlichen und das Übernehmen
+    einer alten Revision verlangen ihn als `If-Match` (fehlt er, 428 `wiki.precondition_required`; ist der Entwurf
+    inzwischen neuer, 412 `wiki.version_conflict`). Es gibt keine Sperren und keine automatische Zusammenführung. Der Titel
+    gehört zur Revision und erreicht Leser erst mit der nächsten Veröffentlichung. Verschieben, Archivieren und
+    Wiederherstellen tragen die Version der Seite im Körper (412 `wiki.version_conflict`, wenn sie nicht mehr passt).
+
+    Der Inhalt ist das strukturierte JSON des Editors (Tiptap, Schemaversion 1). Der Server prüft und normalisiert es selbst:
+    erlaubt sind `paragraph`, `heading` (Stufe 1 bis 3), `bulletList`, `orderedList`, `listItem`, `table`, `tableRow`,
+    `tableHeader`, `tableCell`, `blockquote`, `codeBlock`, `horizontalRule`, `image`, `hardBreak` und `text` mit den
+    Markierungen `bold`, `italic`, `code` und `link`. Unbekannte Attribute entfallen, ein anderes Element wird mit 400
+    `request.invalid` und dem Grund `content.unsupported` abgewiesen, ein falsch gebautes mit `content.invalid`. Links sind
+    nur `https:`, `http:`, `mailto:` und `wiki:<Seitenkennung>` einer Seite desselben Projekts (sonst `link.invalid` oder
+    `link.unknown_page`). Ein Bild verweist auf `/api/v1/wiki/images/<Kennung>` eines Bildes dieser Seite (sonst
+    `image.external` oder `image.unknown`). Eine Revision ist höchstens 1 MB groß (`content.too_large`) und zeigt höchstens
+    50 Bilder (`content.too_many_images`). Der Titel hat 1 bis 200 Zeichen ohne Steuerzeichen (`title.required`,
+    `title.too_long`, `title.invalid`).
+
+    Die Leseansicht `html` schreibt der Server aus dem geprüften Dokument; jeder Text ist maskiert. Ein Verweis auf eine Seite,
+    die die Person nicht lesen darf oder die archiviert ist, wird zu `<span class="wiki-unavailable"
+    data-wiki-unavailable="true"></span>` ohne Titel und ohne Linktext; die Oberfläche zeigt dort „Seite nicht verfügbar“.
+    Ein lesbarer Verweis wird zu `<a href="#/wiki/<Projekt>/<Seite>" data-wiki-page="<Seite>">`.
+
+    Seiten bilden je Projekt einen Baum mit höchstens 6 Ebenen (`parent.too_deep`); eine Seite kann nicht unter sich selbst
+    oder eine ihrer Unterseiten (`parent.cycle`) und nur unter eine nicht archivierte Seite desselben Projekts
+    (`parent.unknown`) gehängt werden. Leser sehen als Elternseite die nächste veröffentlichte Seite darüber. Archivieren
+    hängt die Unterseiten eine Ebene höher; Wiederherstellen bringt die Seite unter ihre frühere Elternseite zurück, oder
+    nach oben, wenn diese archiviert ist. Endgültiges Löschen gibt es nicht.
+
+    Bilder: Der Körper des Hochladens ist der Inhalt. Nur PNG, JPEG und WebP bis 5 MB, erkannt an den ersten Bytes (415
+    `image.type_unsupported`, 413 `image.too_large`, 400 `image.empty`); kann der Dateispeicher nicht schreiben, 503
+    `image.storage_unavailable`. Ausgeliefert wird ein Bild mit seinem geprüften Typ, `X-Content-Type-Options: nosniff` und
+    einer Content-Security-Policy, die nichts erlaubt. Leser erhalten es nur, solange eine veröffentlichte Revision seiner
+    Seite es zeigt; Personen mit Entwürfen, solange es zur Seite gehört.
+
+    Ist die Datenbank kurz belegt, antwortet der Server mit 503 `wiki.busy` und `Retry-After`; die ganze Anfrage darf
+    wiederholt werden.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /wiki/projects:
+    get:
+      operationId: listWikiProjects
+      summary: Projekte der Person mit ihren Wikiaktionen
+      responses:
+        '200':
+          description: Projekte, in denen die Person mindestens eine Wikiaktion hat, nach Schlüssel
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WikiProject'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/projects/{projectId}/pages:
+    get:
+      operationId: listWikiPages
+      summary: Seitenbaum eines Projekts
+      description: |
+        Leser erhalten die veröffentlichten Seiten mit ihrem veröffentlichten Titel, Personen mit Entwürfen alle nicht
+        archivierten Seiten mit dem Titel des Entwurfs. `archived=true` liefert stattdessen die archivierten Seiten und
+        verlangt `wiki.publish`. Sortiert nach Titel ohne Beachtung der Groß und Kleinschreibung.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: archived
+          in: query
+          required: false
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Seitenbaum
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Tree'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createWikiPage
+      summary: Seite anlegen (wiki.edit)
+      description: Legt die Seite mit Revision 1 als Entwurf an. Ohne Inhalt beginnt sie mit einem leeren Absatz.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequest'}
+      responses:
+        '201':
+          description: Angelegte Seite; ETag ist die Revision des Entwurfs
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}:
+    get:
+      operationId: readWikiPage
+      summary: Seite lesen
+      description: |
+        `published` ist die Veröffentlichung, `draft` der Entwurf und nur für Personen mit Entwürfen vorhanden. Der ETag ist die
+        Revision des Entwurfs und fehlt für Leser.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      responses:
+        '200':
+          description: Seite
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/draft:
+    put:
+      operationId: saveWikiDraft
+      summary: Entwurf speichern (wiki.edit)
+      description: Legt eine neue Revision auf Grundlage der Revision aus If-Match an. Eine archivierte Seite antwortet mit 409 `wiki.page_archived`.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DraftRequest'}
+      responses:
+        '200':
+          description: Seite mit dem neuen Entwurf
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/publish:
+    post:
+      operationId: publishWikiPage
+      summary: Revision veröffentlichen (wiki.publish)
+      description: |
+        Veröffentlicht genau die genannte Revision. Sie muss der aktuelle Entwurf sein, und If-Match muss ihn nennen; sonst 412
+        `wiki.version_conflict`. Ist sie schon veröffentlicht, ändert sich nichts.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PublishRequest'}
+      responses:
+        '200':
+          description: Seite mit der neuen Veröffentlichung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/withdraw:
+    post:
+      operationId: withdrawWikiPage
+      summary: Veröffentlichung zurücknehmen (wiki.publish)
+      description: Leser sehen die Seite danach nicht mehr; die Historie bleibt. Ohne Veröffentlichung 409 `wiki.not_published`.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      responses:
+        '200':
+          description: Seite ohne Veröffentlichung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/history:
+    get:
+      operationId: readWikiHistory
+      summary: Revisionen und Ereignisse der Seite (Entwürfe)
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      responses:
+        '200':
+          description: Revisionen und Ereignisse, die neuesten zuerst
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/History'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/revisions/{revision}:
+    get:
+      operationId: readWikiRevision
+      summary: Eine Revision mit Inhalt (Entwürfe)
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/Revision'
+      responses:
+        '200':
+          description: Revision
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RevisionContent'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/revisions/{revision}/restore:
+    post:
+      operationId: restoreWikiRevision
+      summary: Alte Revision als neuen Entwurf übernehmen (wiki.edit)
+      description: Legt eine neue Revision mit Titel und Inhalt der alten an; sie muss erneut veröffentlicht werden.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/Revision'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Seite mit dem neuen Entwurf
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/parent:
+    put:
+      operationId: moveWikiPage
+      summary: Seite verschieben (wiki.edit)
+      description: '`parentId` leer hängt die Seite nach oben.'
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MoveRequest'}
+      responses:
+        '200':
+          description: Verschobene Seite
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/archive:
+    post:
+      operationId: archiveWikiPage
+      summary: Seite archivieren (wiki.publish)
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionRequest'}
+      responses:
+        '200':
+          description: Archivierte Seite
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/unarchive:
+    post:
+      operationId: unarchiveWikiPage
+      summary: Archivierte Seite wiederherstellen (wiki.publish)
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VersionRequest'}
+      responses:
+        '200':
+          description: Wiederhergestellte Seite
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/images:
+    post:
+      operationId: uploadWikiImage
+      summary: Bild für die Seite hochladen (wiki.edit)
+      description: Das Bild gehört danach zur Seite; es erscheint, sobald ein gespeicherter Entwurf es zeigt.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      responses:
+        '201':
+          description: Gespeichertes Bild
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Image'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/images/{imageId}:
+    get:
+      operationId: readWikiImage
+      summary: Bild einer Seite
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Inhalt mit seinem geprüften Typ
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/webp:
+              schema: {type: string, format: binary}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '410': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    PageId:
+      name: pageId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Revision:
+      name: revision
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Revision des Entwurfs aus dem ETag
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, wiki.page_not_found, wiki.revision_not_found,
+        wiki.image_not_found, wiki.version_conflict, wiki.precondition_required, wiki.page_archived, wiki.page_not_archived,
+        wiki.not_published, wiki.busy, image.too_large, image.empty, image.incomplete, image.type_unsupported,
+        image.content_missing, image.storage_unavailable, project.not_found, auth.required, auth.forbidden,
+        auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    Access:
+      type: object
+      required: [read, edit, publish]
+      properties:
+        read: {type: boolean}
+        edit: {type: boolean}
+        publish: {type: boolean}
+    WikiProject:
+      type: object
+      required: [projectId, key, name, access]
+      properties:
+        projectId: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        access: {$ref: '#/components/schemas/Access'}
+    Language:
+      type: string
+      enum: [de, en]
+    Document:
+      type: object
+      description: Strukturiertes Dokument des Editors (Tiptap JSON, Schemaversion 1), wie oben beschrieben
+      required: [type]
+      properties:
+        type: {type: string, const: doc}
+        content:
+          type: array
+          items: {type: object, additionalProperties: true}
+    TreeItem:
+      type: object
+      required: [id, parentId, title, language, published, changed, archived, version, savedAt, savedBy]
+      properties:
+        id: {type: string, format: uuid}
+        parentId: {type: [string, 'null'], format: uuid}
+        title: {type: string}
+        language: {$ref: '#/components/schemas/Language'}
+        published: {type: boolean}
+        changed:
+          type: boolean
+          description: Nur für Personen mit Entwürfen; der Entwurf ist neuer als die Veröffentlichung oder es gibt keine
+        archived: {type: boolean}
+        version: {type: integer, format: int64}
+        savedAt: {type: [string, 'null'], format: date-time}
+        savedBy: {type: [string, 'null'], format: uuid}
+    Tree:
+      type: object
+      required: [projectId, access, pages]
+      properties:
+        projectId: {type: string, format: uuid}
+        access: {$ref: '#/components/schemas/Access'}
+        pages:
+          type: array
+          items: {$ref: '#/components/schemas/TreeItem'}
+    Crumb:
+      type: object
+      required: [id, title]
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string}
+    Published:
+      type: [object, 'null']
+      required: [revision, title, html, publishedAt, publishedBy]
+      properties:
+        revision: {type: integer}
+        title: {type: string}
+        html: {type: string}
+        publishedAt: {type: string, format: date-time}
+        publishedBy: {type: string, format: uuid}
+    Draft:
+      type: [object, 'null']
+      required: [revision, title, content, html, savedAt, savedBy, changed]
+      properties:
+        revision: {type: integer}
+        title: {type: string}
+        content: {$ref: '#/components/schemas/Document'}
+        html: {type: string}
+        savedAt: {type: string, format: date-time}
+        savedBy: {type: string, format: uuid}
+        changed: {type: boolean}
+    Page:
+      type: object
+      required: [id, projectId, parentId, language, archived, version, access, path, published, draft, createdAt, createdBy]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        parentId: {type: [string, 'null'], format: uuid}
+        language: {$ref: '#/components/schemas/Language'}
+        archived: {type: boolean}
+        version: {type: integer, format: int64, description: Version der Seite für Verschieben und Archivieren}
+        access: {$ref: '#/components/schemas/Access'}
+        path:
+          type: array
+          description: Die Seiten darüber, die die Person sieht, von oben
+          items: {$ref: '#/components/schemas/Crumb'}
+        published: {$ref: '#/components/schemas/Published'}
+        draft: {$ref: '#/components/schemas/Draft'}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+    Revision:
+      type: object
+      required: [revision, title, savedAt, savedBy, basedOn, restoredFrom, published]
+      properties:
+        revision: {type: integer}
+        title: {type: string}
+        savedAt: {type: string, format: date-time}
+        savedBy: {type: string, format: uuid}
+        basedOn: {type: [integer, 'null']}
+        restoredFrom: {type: [integer, 'null']}
+        published: {type: boolean}
+    Event:
+      type: object
+      required: [kind, language, revision, actorId, occurredAt]
+      properties:
+        kind: {type: string, enum: [created, saved, published, withdrawn, reverted, moved, archived, unarchived]}
+        language: {type: [string, 'null']}
+        revision: {type: [integer, 'null']}
+        actorId: {type: string, format: uuid}
+        occurredAt: {type: string, format: date-time}
+    History:
+      type: object
+      required: [pageId, draftRevision, publishedRevision, revisions, events]
+      properties:
+        pageId: {type: string, format: uuid}
+        draftRevision: {type: integer}
+        publishedRevision: {type: [integer, 'null']}
+        revisions:
+          type: array
+          items: {$ref: '#/components/schemas/Revision'}
+        events:
+          type: array
+          items: {$ref: '#/components/schemas/Event'}
+    RevisionContent:
+      type: object
+      required: [revision, title, content, html, savedAt, savedBy, published]
+      properties:
+        revision: {type: integer}
+        title: {type: string}
+        content: {$ref: '#/components/schemas/Document'}
+        html: {type: string}
+        savedAt: {type: string, format: date-time}
+        savedBy: {type: string, format: uuid}
+        published: {type: boolean}
+    Image:
+      type: object
+      required: [id, src, mediaType, size]
+      properties:
+        id: {type: string, format: uuid}
+        src: {type: string}
+        mediaType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+        size: {type: integer, format: int64}
+    CreateRequest:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
+        parentId: {type: [string, 'null'], format: uuid}
+        content: {oneOf: [{$ref: '#/components/schemas/Document'}, {type: 'null'}]}
+        language: {$ref: '#/components/schemas/Language'}
+    DraftRequest:
+      type: object
+      required: [title, content]
+      properties:
+        title: {type: string}
+        content: {$ref: '#/components/schemas/Document'}
+    PublishRequest:
+      type: object
+      required: [revision]
+      properties:
+        revision: {type: integer}
+    MoveRequest:
+      type: object
+      required: [parentId, version]
+      properties:
+        parentId: {type: [string, 'null'], format: uuid}
+        version: {type: integer, format: int64}
+    VersionRequest:
+      type: object
+      required: [version]
+      properties:
+        version: {type: integer, format: int64}

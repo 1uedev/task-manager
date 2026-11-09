@@ -26,3 +26,16 @@ test('detail pages carry checked identifiers only', () => {
   assert.equal(section({ name: 'ticket', projectId: ID, number: 3 }), 'projects');
   assert.equal(section({ name: 'group', id: ID }), 'groups');
 });
+
+test('the wiki of a project and its pages carry checked identifiers only (TASK-093)', () => {
+  const PAGE = '1a2b3c4d-5555-4666-8777-888899990000';
+  assert.deepEqual(routeFromHash(`#/wiki/${ID}`), { name: 'wikiPage', projectId: ID, pageId: null });
+  assert.deepEqual(routeFromHash(`#/wiki/${ID}/${PAGE}`), { name: 'wikiPage', projectId: ID, pageId: PAGE });
+  for (const route of [{ name: 'wikiPage', projectId: ID, pageId: null }, { name: 'wikiPage', projectId: ID, pageId: PAGE }] as const) {
+    assert.deepEqual(routeFromHash(hrefFor(route)), route);
+  }
+  for (const bad of ['#/wiki/x', `#/wiki/${ID}/x`, `#/wiki/${ID}/${PAGE}/more`, `#/wiki/${ID.toUpperCase()}`]) {
+    assert.deepEqual(routeFromHash(bad), { name: 'start' }, bad);
+  }
+  assert.equal(section({ name: 'wikiPage', projectId: ID, pageId: PAGE }), 'wiki');
+});
