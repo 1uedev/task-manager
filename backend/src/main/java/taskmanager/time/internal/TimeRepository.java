@@ -96,35 +96,87 @@ class TimeRepository {
             .list();
     }
 
+    /** The sum of one person on one ticket (or without ticket) of one project over the matching entries. */
+    record Sum(UUID projectId, UUID personId, UUID ticketId, long count, long minutes) {
+    }
+
+    /** The minutes of one work date over the matching entries that are not cancelled. */
+    record DaySum(LocalDate date, long minutes) {
+    }
+
+    /** Which entries of one project a listing reads; {@code person} and {@code ticket} limit them when set. */
+    record Scope(UUID projectId, UUID person, UUID ticket) {
+    }
+
+    /** Sums, sums per day and rows of one listing, all read by one statement and so from one snapshot of the database. */
+    record Snapshot(List<Sum> sums, List<DaySum> days, List<TimeEntry> rows) {
+    }
+
     /**
-     * The entries of one project that match; {@code person} limits them to one person, {@code ticket} to one ticket, the dates
-     * include both ends. At most {@code limit} rows, newest work date first.
+     * Reads count and minutes per project, person and ticket (TASK-092, F1), the minutes per work date (F3) and at most
+     * {@code rowLimit} rows, newest work date first, of the matching entries of every scope. It is one SQL statement, so even
+     * under READ COMMITTED all three parts see the same committed entries; an entry stored meanwhile is in all of them or in
+     * none (R1). The dates include both ends; the count includes cancelled entries when {@code cancelled} lists them, the
+     * minutes never do. With {@code rowsWhenOver} false no rows are read once more than {@code rowLimit - 1} entries match.
      */
-    List<TimeEntry> entries(UUID companyId, UUID projectId, UUID person, UUID ticket, LocalDate from, LocalDate to, boolean cancelled,
-            int limit) {
-        StringBuilder sql = new StringBuilder("select " + COLUMNS + " from time_entry where company_id = ? and project_id = ?");
-        List<Object> params = new ArrayList<>(List.of(companyId, projectId));
-        if (person != null) {
-            sql.append(" and person_id = ?");
-            params.add(person);
+    Snapshot snapshot(UUID companyId, List<Scope> scopes, LocalDate from, LocalDate to, boolean cancelled, int rowLimit, boolean rowsWhenOver) {
+        if (scopes.isEmpty()) {
+            return new Snapshot(List.of(), List.of(), List.of());
         }
-        if (ticket != null) {
-            sql.append(" and ticket_id = ?");
-            params.add(ticket);
+        List<Object> params = new ArrayList<>();
+        StringBuilder where = new StringBuilder("company_id = ? and (");
+        params.add(companyId);
+        for (int i = 0; i < scopes.size(); i++) {
+            Scope scope = scopes.get(i);
+            where.append(i == 0 ? "" : " or ").append("(project_id = ?");
+            params.add(scope.projectId());
+            if (scope.person() != null) {
+                where.append(" and person_id = ?");
+                params.add(scope.person());
+            }
+            if (scope.ticket() != null) {
+                where.append(" and ticket_id = ?");
+                params.add(scope.ticket());
+            }
+            where.append(")");
         }
+        where.append(")");
         if (from != null) {
-            sql.append(" and work_date >= ?");
+            where.append(" and work_date >= ?");
             params.add(Date.valueOf(from));
         }
         if (to != null) {
-            sql.append(" and work_date <= ?");
+            where.append(" and work_date <= ?");
             params.add(Date.valueOf(to));
         }
         if (!cancelled) {
-            sql.append(" and cancelled_at is null");
+            where.append(" and cancelled_at is null");
         }
-        sql.append(" order by work_date desc, created_at desc, id limit ?");
-        params.add(limit);
-        return jdbc.sql(sql.toString()).params(params).query(TimeRepository::map).list();
+        params.add(rowsWhenOver);
+        params.add(rowLimit);
+        params.add(rowLimit);
+        String nothing = "null::uuid as id, null::uuid as company_id, %s, null::text as description, null::timestamptz as cancelled_at, "
+            + "null::uuid as cancelled_by, null::timestamptz as created_at, null::uuid as created_by, null::timestamptz as updated_at, "
+            + "null::uuid as updated_by, null::bigint as version";
+        String sql = "with m as materialized (select " + COLUMNS + " from time_entry where " + where + ")\n"
+            + "select 'sum' as kind, " + String.format(nothing, "project_id, ticket_id, person_id, null::date as work_date, null::integer as minutes")
+            + ", count(*) as entries, coalesce(sum(minutes) filter (where cancelled_at is null), 0) as summed from m"
+            + " group by project_id, person_id, ticket_id\n"
+            + "union all select 'day', " + String.format(nothing, "null::uuid, null::uuid, null::uuid, work_date, null::integer")
+            + ", null, sum(minutes) from m where cancelled_at is null group by work_date\n"
+            + "union all (select 'row', " + COLUMNS + ", null, null from m where ? or (select count(*) from m) < ?"
+            + " order by work_date desc, created_at desc, id limit ?)";
+        List<Sum> sums = new ArrayList<>();
+        List<DaySum> days = new ArrayList<>();
+        List<TimeEntry> rows = new ArrayList<>();
+        jdbc.sql(sql).params(params).query((ResultSet rs) -> {
+            switch (rs.getString("kind")) {
+                case "sum" -> sums.add(new Sum(rs.getObject("project_id", UUID.class), rs.getObject("person_id", UUID.class),
+                    rs.getObject("ticket_id", UUID.class), rs.getLong("entries"), rs.getLong("summed")));
+                case "day" -> days.add(new DaySum(rs.getDate("work_date").toLocalDate(), rs.getLong("summed")));
+                default -> rows.add(map(rs, rows.size()));
+            }
+        });
+        return new Snapshot(sums, days, rows);
     }
 }

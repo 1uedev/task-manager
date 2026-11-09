@@ -34,7 +34,7 @@ import taskmanager.time.internal.TimeService;
 /**
  * Time entries (TASK-069, DEC-099). The ETag of an entry is its version; a correction and a cancellation need it as If-Match
  * (428 without, 412 when it is no longer current). The list returns at most {@link TimeService#LIST_LIMIT} entries, while its
- * sums always cover every matching entry that is not cancelled. The export is CSV with a semicolon, the header names period,
+ * count and sums always cover every matching entry (TASK-092). The export is CSV with a semicolon, the header names period,
  * filters and unit.
  */
 @RestController
@@ -62,23 +62,24 @@ class TimeController {
         }
     }
 
-    record EntryBody(UUID id, UUID projectId, String projectKey, TicketBody ticket, UUID personId, LocalDate date, int minutes, String description,
-            boolean cancelled, Instant cancelledAt, UUID cancelledBy, Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy, long version,
-            boolean own, boolean changeable) {
+    record EntryBody(UUID id, UUID projectId, String projectKey, TicketBody ticket, boolean ticketHidden, UUID personId, LocalDate date, int minutes,
+            String description, boolean cancelled, Instant cancelledAt, UUID cancelledBy, Instant createdAt, UUID createdBy, Instant updatedAt,
+            UUID updatedBy, long version, boolean own, boolean changeable) {
         static EntryBody of(TimeService.EntryView view) {
             TimeEntry e = view.entry();
-            return new EntryBody(e.id(), e.projectId(), view.projectKey(), TicketBody.of(view.ticket()), e.personId(), e.date(), e.minutes(),
+            return new EntryBody(e.id(), e.projectId(), view.projectKey(), TicketBody.of(view.ticket()), view.ticketHidden(), e.personId(), e.date(),
+                e.minutes(),
                 e.description(), e.cancelled(), e.cancelledAt(), e.cancelledBy(), e.createdAt(), e.createdBy(), e.updatedAt(), e.updatedBy(),
                 e.version(), view.own(), view.changeable());
         }
     }
 
-    record RevisionBody(int revision, String kind, Instant occurredAt, UUID actorId, TicketBody ticket, LocalDate date, int minutes, String description,
-            String reason) {
+    record RevisionBody(int revision, String kind, Instant occurredAt, UUID actorId, TicketBody ticket, boolean ticketHidden, LocalDate date,
+            int minutes, String description, String reason) {
         static RevisionBody of(TimeService.RevisionView view) {
             TimeRevision r = view.revision();
-            return new RevisionBody(r.revision(), r.kind(), r.occurredAt(), r.actorId(), TicketBody.of(view.ticket()), r.date(), r.minutes(),
-                r.description(), r.reason());
+            return new RevisionBody(r.revision(), r.kind(), r.occurredAt(), r.actorId(), TicketBody.of(view.ticket()), view.ticketHidden(), r.date(),
+                r.minutes(), r.description(), r.reason());
         }
     }
 
@@ -94,20 +95,24 @@ class TimeController {
     record TicketSumBody(UUID projectId, String projectKey, TicketBody ticket, long minutes) {
     }
 
+    record DaySumBody(LocalDate date, long minutes) {
+    }
+
     record ListBody(List<EntryBody> entries, boolean truncated, long count, long totalMinutes, List<PersonSumBody> perPerson,
-            List<TicketSumBody> perTicket) {
+            List<TicketSumBody> perTicket, List<DaySumBody> perDate) {
         static ListBody of(TimeService.Listing listing) {
             return new ListBody(listing.entries().stream().map(EntryBody::of).toList(), listing.truncated(), listing.count(), listing.totalMinutes(),
                 listing.perPerson().stream().map(sum -> new PersonSumBody(sum.personId(), sum.minutes())).toList(),
                 listing.perTicket().stream().map(sum -> new TicketSumBody(sum.projectId(), sum.projectKey(), TicketBody.of(sum.ticket()), sum.minutes()))
-                    .toList());
+                    .toList(),
+                listing.perDate().stream().map(sum -> new DaySumBody(sum.date(), sum.minutes())).toList());
         }
     }
 
     record BookRequest(String date, Integer minutes, String description, Long ticketNumber, UUID personId) {
     }
 
-    record CorrectRequest(String date, Integer minutes, String description, Long ticketNumber, String reason) {
+    record CorrectRequest(String date, Integer minutes, String description, Long ticketNumber, String reason, Boolean removeHiddenTicket) {
     }
 
     record CancelRequest(String reason) {
@@ -132,7 +137,7 @@ class TimeController {
         AccessContext actor = requests.actor();
         BookRequest request = body == null ? new BookRequest(null, null, null, null, null) : body;
         TimeService.Input input = new TimeService.Input(date(request.date()), request.minutes(), request.description(), request.ticketNumber(),
-            request.personId(), null);
+            request.personId(), null, false);
         TimeService.Detail detail = TimeRequests.retrying(() -> service.book(actor, projectId, input));
         return ResponseEntity.status(201).eTag(TimeRequests.etag(detail.entry().entry().version())).body(DetailBody.of(detail));
     }
@@ -140,9 +145,9 @@ class TimeController {
     @GetMapping("/entries")
     ListBody list(@RequestParam(required = false) UUID project, @RequestParam(required = false) Long ticket,
             @RequestParam(required = false) UUID person, @RequestParam(required = false) String from, @RequestParam(required = false) String to,
-            @RequestParam(defaultValue = "false") boolean cancelled) {
+            @RequestParam(defaultValue = "false") boolean cancelled, @RequestParam(defaultValue = "false") boolean mine) {
         AccessContext actor = requests.actor();
-        TimeService.Filter filter = new TimeService.Filter(project, ticket, person, date(from), date(to), cancelled);
+        TimeService.Filter filter = new TimeService.Filter(project, ticket, person, date(from), date(to), cancelled, mine);
         return ListBody.of(TimeRequests.retrying(() -> service.list(actor, filter)));
     }
 
@@ -158,9 +163,9 @@ class TimeController {
             @RequestBody(required = false) CorrectRequest body) {
         AccessContext actor = requests.actor();
         long version = TimeRequests.expectedVersion(ifMatch);
-        CorrectRequest request = body == null ? new CorrectRequest(null, null, null, null, null) : body;
+        CorrectRequest request = body == null ? new CorrectRequest(null, null, null, null, null, null) : body;
         TimeService.Input input = new TimeService.Input(date(request.date()), request.minutes(), request.description(), request.ticketNumber(), null,
-            request.reason());
+            request.reason(), Boolean.TRUE.equals(request.removeHiddenTicket()));
         TimeService.Detail detail = TimeRequests.retrying(() -> service.correct(actor, id, version, input));
         return ResponseEntity.ok().eTag(TimeRequests.etag(detail.entry().entry().version())).body(DetailBody.of(detail));
     }
@@ -180,7 +185,7 @@ class TimeController {
     ResponseEntity<byte[]> export(@RequestParam(required = false) UUID project, @RequestParam(required = false) Long ticket,
             @RequestParam(required = false) UUID person, @RequestParam(required = false) String from, @RequestParam(required = false) String to) {
         AccessContext actor = requests.actor();
-        TimeService.Filter filter = new TimeService.Filter(project, ticket, person, date(from), date(to), false);
+        TimeService.Filter filter = new TimeService.Filter(project, ticket, person, date(from), date(to), false, false);
         TimeService.Listing listing = TimeRequests.retrying(() -> service.export(actor, filter));
         if (listing.truncated()) {
             throw ApiProblemException.of(400, "time.export_too_large");

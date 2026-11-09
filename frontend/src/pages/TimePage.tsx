@@ -7,7 +7,7 @@ import { useBrand } from '../brand/BrandProvider.tsx';
 import { durationInput, formatHours, formatMinutes, parseDuration } from '../app/duration.ts';
 import { useLoad } from '../app/hooks.ts';
 import { hrefFor } from '../app/route.ts';
-import { useAccountName, useSession } from '../app/session.tsx';
+import { useAccountName } from '../app/session.tsx';
 import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, useProblemText, type Notice } from '../app/ui.tsx';
 import { formatDate, formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -62,7 +62,7 @@ function useViolationText() {
 // ---------------------------------------------------------------- the form of a booking or a correction
 
 interface Submit {
-  (projectId: string, input: TimeInput, person: string | null, reason: string | null): Promise<Notice | null>;
+  (projectId: string, input: TimeInput, person: string | null, reason: string | null, removeHiddenTicket: boolean): Promise<Notice | null>;
 }
 
 function EntryForm({ initial, projects, fixedProject, fixedTicket, people, correcting, onSubmit, onCancel, testId }: {
@@ -71,7 +71,7 @@ function EntryForm({ initial, projects, fixedProject, fixedTicket, people, corre
   readonly fixedProject: boolean;
   readonly fixedTicket: boolean;
   readonly people: ((projectId: string) => readonly string[]) | null;
-  readonly correcting: { readonly reasonRequired: boolean } | null;
+  readonly correcting: { readonly reasonRequired: boolean; readonly ticketHidden: boolean } | null;
   readonly onSubmit: Submit;
   readonly onCancel?: () => void;
   readonly testId: string;
@@ -85,10 +85,13 @@ function EntryForm({ initial, projects, fixedProject, fixedTicket, people, corre
   const [ticket, setTicket] = useState(initial.ticket === null ? '' : String(initial.ticket));
   const [person, setPerson] = useState('');
   const [reason, setReason] = useState('');
+  // A ticket the person may not see stays at a correction unless they ask to remove it (TASK-092, F2).
+  const [removeHidden, setRemoveHidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const minutes = parseDuration(duration, language);
+  const hiddenTicket = correcting?.ticketHidden === true && ticket === '';
   const project = projects.find((item) => item.projectId === projectId);
   const others = project?.access.manage && people !== null ? people(projectId) : [];
 
@@ -104,7 +107,7 @@ function EntryForm({ initial, projects, fixedProject, fixedTicket, people, corre
     if (Object.keys(found).length > 0 || minutes === null) return;
     setBusy(true);
     const result = await onSubmit(projectId, { date, minutes, description, ticketNumber: ticket === '' ? null : Number(ticket) }, person === '' ? null : person,
-      reason.trim() === '' ? null : reason);
+      reason.trim() === '' ? null : reason, hiddenTicket && removeHidden);
     setBusy(false);
     setNotice(result);
     if (result?.kind === 'success' && correcting === null) {
@@ -130,7 +133,14 @@ function EntryForm({ initial, projects, fixedProject, fixedTicket, people, corre
       <TextField label={t('time.duration')} value={duration} onChange={setDuration} required error={errors.duration ?? null} disabled={busy}
         hint={minutes === null ? t('time.durationHint') : t('time.durationParsed', { duration: formatMinutes(minutes, language) })} />
       {!fixedTicket && (
-        <TextField label={t('time.ticket')} value={ticket} onChange={setTicket} error={errors.ticket ?? null} disabled={busy} hint={t('time.ticketHint')} />
+        <TextField label={t('time.ticket')} value={ticket} onChange={setTicket} error={errors.ticket ?? null} disabled={busy}
+          hint={hiddenTicket ? t('time.hiddenTicketKept') : t('time.ticketHint')} />
+      )}
+      {!fixedTicket && hiddenTicket && (
+        <label className="check" data-testid="time-remove-hidden">
+          <input type="checkbox" checked={removeHidden} onChange={(event) => setRemoveHidden(event.target.checked)} disabled={busy} />
+          {' '}{t('time.removeHiddenTicket')}
+        </label>
       )}
       <TextField label={t('time.description')} value={description} onChange={setDescription} required maxLength={1000} multiline
         error={errors.description ?? null} disabled={busy} />
@@ -189,6 +199,7 @@ function EntryItem({ entry, projects, showProject, onChanged }: {
       {ticketText !== null && entry.ticket !== null && (
         <p className="hint"><a href={hrefFor({ name: 'ticket', projectId: entry.projectId, number: entry.ticket.number })}>{ticketText}</a></p>
       )}
+      {entry.ticketHidden && <p className="hint" data-testid="time-ticket-hidden">{t('time.hiddenTicket')}</p>}
       <p className="pre-wrap">{entry.description}</p>
       <NoticeView notice={notice} />
       {mode === 'view' && (
@@ -201,9 +212,9 @@ function EntryItem({ entry, projects, showProject, onChanged }: {
       {mode === 'correct' && (
         <EntryForm testId="time-correct" projects={projects} fixedProject fixedTicket={false} people={null}
           initial={{ projectId: entry.projectId, date: entry.date, minutes: entry.minutes, description: entry.description, ticket: entry.ticket?.number ?? null }}
-          correcting={{ reasonRequired: !entry.own }} onCancel={() => setMode('view')}
-          onSubmit={async (_project, input, _person, why) => {
-            const result = await correctTime(api, entry.id, entry.version, input, why);
+          correcting={{ reasonRequired: !entry.own, ticketHidden: entry.ticketHidden }} onCancel={() => setMode('view')}
+          onSubmit={async (_project, input, _person, why, removeHidden) => {
+            const result = await correctTime(api, entry.id, entry.version, input, why, removeHidden);
             if (result.kind !== 'ok') return { kind: 'info', text: violation(result.problem) };
             setMode('view');
             onChanged();
@@ -231,6 +242,7 @@ function EntryItem({ entry, projects, showProject, onChanged }: {
                     {t(`time.revision.${revision.kind}` as MessageKey, { by: name(revision.actorId), date: formatDateTime(revision.occurredAt, language) })}
                     {': '}{formatMinutes(revision.minutes, language)}, {formatDate(revision.date, language)}, {revision.description}
                     {revision.ticket && `, ${entry.projectKey}-${revision.ticket.number}`}
+                    {revision.ticketHidden && `, ${t('time.hiddenTicket')}`}
                     {revision.reason && ` (${t('time.reasonShown', { reason: revision.reason })})`}
                   </li>
                 ))}
@@ -353,15 +365,13 @@ export function TimePage() {
 function MyWeek({ projects }: { readonly projects: readonly TimeProject[] }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
-  const { view, directory } = useSession();
   const violation = useViolationText();
   const [anchor, setAnchor] = useState(today());
   const [changes, setChanges] = useState(0);
   const days = weekOf(anchor);
-  const username = view.state === 'ready' ? view.session.username : null;
-  const me = [...directory.values()].find((entry) => entry.username === username)?.id;
-  const filter: TimeFilter = { from: days[0] ?? anchor, to: days[6] ?? anchor, ...(me === undefined ? {} : { person: me }) };
-  const [entries, reload] = useLoad(() => listTimeEntries(api, filter), [api, filter.from, filter.to, me, changes]);
+  // The server limits the week to the own entries itself, so a reader with time.read never sees foreign sums here (TASK-092, F3).
+  const filter: TimeFilter = { from: days[0] ?? anchor, to: days[6] ?? anchor, mine: true };
+  const [entries, reload] = useLoad(() => listTimeEntries(api, filter), [api, filter.from, filter.to, changes]);
   const bookable = projects.filter((item) => item.access.book || item.access.manage);
   const changed = () => setChanges((value) => value + 1);
 
@@ -376,15 +386,17 @@ function MyWeek({ projects }: { readonly projects: readonly TimeProject[] }) {
       <p className="hint" data-testid="time-week-range">{t('time.weekRange', { from: formatDate(days[0] ?? anchor, language), to: formatDate(days[6] ?? anchor, language) })}</p>
       <LoadedView loaded={entries} retry={reload}>
         {(list) => {
+          // Week and day sums come from the server over every own entry; only the list of entries may be shortened.
           const own = list.entries.filter((entry) => entry.own && !entry.cancelled);
-          const week = own.reduce((sum, entry) => sum + entry.minutes, 0);
+          const week = list.totalMinutes;
           return (
             <>
               <p data-testid="time-week-total" data-minutes={week}>{t('time.weekTotal', { duration: formatMinutes(week, language), hours: formatHours(week, language) })}</p>
+              {list.truncated && <p className="hint" data-testid="time-week-truncated">{t('time.weekTruncated', { shown: list.entries.length, count: list.count })}</p>}
               <ol className="plain-list" data-testid="time-days">
                 {days.map((day) => {
                   const ofDay = own.filter((entry) => entry.date === day);
-                  const sum = ofDay.reduce((total, entry) => total + entry.minutes, 0);
+                  const sum = list.perDate.find((item) => item.date === day)?.minutes ?? 0;
                   return (
                     <li key={day} data-day={day} data-minutes={sum}>
                       <h3>{formatDate(day, language)}{sum > 0 && ` · ${formatMinutes(sum, language)}`}</h3>

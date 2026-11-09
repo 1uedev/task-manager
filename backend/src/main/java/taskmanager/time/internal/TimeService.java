@@ -48,9 +48,9 @@ public class TimeService {
     public static final int MAX_MINUTES = 1440;
     public static final int MAX_DESCRIPTION = 1000;
     public static final int MAX_REASON = 500;
-    /** Entries a list returns; the sums always cover every matching entry. */
+    /** Entries a list returns; count and sums always cover every matching entry (TASK-092, F1). */
     public static final int LIST_LIMIT = 500;
-    /** Entries an export or a sum covers at most. */
+    /** Entries an export contains at most; a larger export is refused, the sums of a list have no limit. */
     public static final int EXPORT_LIMIT = 50_000;
     private static final String TICKET_READ = "ticket.read";
     private static final String TITLE = "title";
@@ -93,11 +93,14 @@ public class TimeService {
     public record TicketRef(long number, String title) {
     }
 
-    /** An entry as the caller sees it; {@code changeable} says whether the caller may correct or cancel it. */
-    public record EntryView(TimeEntry entry, String projectKey, TicketRef ticket, boolean own, boolean changeable) {
+    /**
+     * An entry as the caller sees it; {@code changeable} says whether the caller may correct or cancel it. {@code ticketHidden}
+     * says that the entry has a ticket the caller may not see, without saying which (TASK-092, F2).
+     */
+    public record EntryView(TimeEntry entry, String projectKey, TicketRef ticket, boolean ticketHidden, boolean own, boolean changeable) {
     }
 
-    public record RevisionView(TimeRevision revision, TicketRef ticket) {
+    public record RevisionView(TimeRevision revision, TicketRef ticket, boolean ticketHidden) {
     }
 
     public record Detail(EntryView entry, List<RevisionView> revisions) {
@@ -110,15 +113,25 @@ public class TimeService {
     public record TicketSum(UUID projectId, String projectKey, TicketRef ticket, long minutes) {
     }
 
+    /** The minutes of one work date. */
+    public record DaySum(LocalDate date, long minutes) {
+    }
+
     public record Listing(List<EntryView> entries, boolean truncated, long count, long totalMinutes, List<PersonSum> perPerson,
-            List<TicketSum> perTicket) {
+            List<TicketSum> perTicket, List<DaySum> perDate) {
     }
 
-    public record Filter(UUID projectId, Long ticketNumber, UUID personId, LocalDate from, LocalDate to, boolean cancelled) {
+    /** The filter of a list or an export; {@code mine} limits it to the entries of the caller, whatever the caller may read. */
+    public record Filter(UUID projectId, Long ticketNumber, UUID personId, LocalDate from, LocalDate to, boolean cancelled, boolean mine) {
     }
 
-    /** What a booking or a correction sets; {@code personId} only at a booking, {@code reason} only at a correction. */
-    public record Input(LocalDate date, Integer minutes, String description, Long ticketNumber, UUID personId, String reason) {
+    /**
+     * What a booking or a correction sets; {@code personId} only at a booking, {@code reason} and {@code removeHiddenTicket} only
+     * at a correction. Without a ticket number a correction keeps a ticket the caller may not see, unless
+     * {@code removeHiddenTicket} asks to remove it (TASK-092, F2).
+     */
+    public record Input(LocalDate date, Integer minutes, String description, Long ticketNumber, UUID personId, String reason,
+            boolean removeHiddenTicket) {
     }
 
     // ------------------------------------------------------------------------------------------------ reading
@@ -156,31 +169,45 @@ public class TimeService {
 
     @Transactional
     public Listing list(AccessContext actor, Filter filter) {
-        return listing(actor, filter, LIST_LIMIT);
+        return listing(actor, filter, LIST_LIMIT, true);
     }
 
-    /** Every effective matching entry for the export, oldest work date first, with the sums. */
+    /**
+     * Every effective matching entry for the export, oldest work date first, with the sums. Above {@link #EXPORT_LIMIT} entries
+     * the listing is truncated and carries no entries; the caller refuses it.
+     */
     @Transactional
     public Listing export(AccessContext actor, Filter filter) {
-        Listing listing = listing(actor, new Filter(filter.projectId(), filter.ticketNumber(), filter.personId(), filter.from(), filter.to(), false),
-            EXPORT_LIMIT);
+        Listing listing = listing(actor, new Filter(filter.projectId(), filter.ticketNumber(), filter.personId(), filter.from(), filter.to(), false,
+            filter.mine()), EXPORT_LIMIT, false);
         List<EntryView> entries = new ArrayList<>(listing.entries());
         entries.sort(Comparator.comparing((EntryView view) -> view.entry().date()).thenComparing(view -> view.entry().createdAt()));
-        return new Listing(entries, listing.truncated(), listing.count(), listing.totalMinutes(), listing.perPerson(), listing.perTicket());
+        return new Listing(entries, listing.truncated(), listing.count(), listing.totalMinutes(), listing.perPerson(), listing.perTicket(),
+            listing.perDate());
     }
 
-    private Listing listing(AccessContext actor, Filter filter, int limit) {
+    /** One project of a listing with what the caller may see there. */
+    private record Part(UUID projectId, Access access, Tickets tickets, UUID person, UUID ticket) {
+    }
+
+    /**
+     * Count and sums come from aggregates over every matching entry the caller may read, in the database and without a limit;
+     * only the returned rows are limited to {@code limit} (TASK-092, F1). With {@code rowsWhenTruncated} false a listing above
+     * the limit loads no rows at all.
+     */
+    private Listing listing(AccessContext actor, Filter filter, int limit, boolean rowsWhenTruncated) {
         if (filter.from() != null && filter.to() != null && filter.from().isAfter(filter.to())) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("to.before_from"));
         }
         if (filter.ticketNumber() != null && filter.projectId() == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("ticket.without_project"));
         }
+        if (filter.mine() && filter.personId() != null && !filter.personId().equals(actor.userId())) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("person.with_mine"));
+        }
         List<UUID> scope = filter.projectId() != null ? List.of(filter.projectId())
             : actor.external() ? List.of() : projects.memberships(actor.companyId(), actor.userId());
-        List<TimeEntry> found = new ArrayList<>();
-        Map<UUID, Access> accesses = new HashMap<>();
-        Map<UUID, Tickets> visible = new HashMap<>();
+        List<Part> parts = new ArrayList<>();
         for (UUID projectId : scope) {
             Access access = access(actor, projectId);
             if (!access.any()) {
@@ -197,46 +224,56 @@ public class TimeService {
                     throw ApiProblemException.of(404, "ticket.not_found");
                 }
             }
-            UUID person = filter.personId();
+            UUID person = filter.mine() ? actor.userId() : filter.personId();
             if (!access.readsAll()) {
                 if (person != null && !person.equals(actor.userId())) {
                     continue;
                 }
                 person = actor.userId();
             }
-            accesses.put(projectId, access);
-            visible.put(projectId, ticketsOf);
-            found.addAll(repository.entries(actor.companyId(), projectId, person, ticket, filter.from(), filter.to(), filter.cancelled(),
-                EXPORT_LIMIT + 1));
+            parts.add(new Part(projectId, access, ticketsOf, person, ticket));
         }
-        found.sort(Comparator.comparing(TimeEntry::date).reversed().thenComparing(TimeEntry::createdAt, Comparator.reverseOrder()));
-        boolean truncated = found.size() > EXPORT_LIMIT;
-        if (truncated) {
-            found = found.subList(0, EXPORT_LIMIT);
-        }
+        // One statement reads count, sums, days and rows, so they come from one snapshot even under READ COMMITTED (TASK-092, R1).
+        TimeRepository.Snapshot snapshot = repository.snapshot(actor.companyId(),
+            parts.stream().map(part -> new TimeRepository.Scope(part.projectId(), part.person(), part.ticket())).toList(), filter.from(),
+            filter.to(), filter.cancelled(), limit + 1, rowsWhenTruncated);
+        Map<UUID, Part> byProject = new HashMap<>();
+        parts.forEach(part -> byProject.put(part.projectId(), part));
+        long count = 0;
+        long total = 0;
         Map<UUID, Long> perPerson = new LinkedHashMap<>();
         Map<String, TicketSum> perTicket = new LinkedHashMap<>();
-        long total = 0;
-        List<EntryView> views = new ArrayList<>();
-        for (TimeEntry entry : found) {
-            EntryView view = view(actor, entry, accesses.get(entry.projectId()), visible.get(entry.projectId()));
-            if (views.size() < limit) {
-                views.add(view);
-            }
-            if (entry.cancelled()) {
+        for (TimeRepository.Sum sum : snapshot.sums()) {
+            count += sum.count();
+            if (sum.minutes() == 0) {
                 continue;
             }
-            total += entry.minutes();
-            perPerson.merge(entry.personId(), (long) entry.minutes(), Long::sum);
-            String key = entry.projectId() + "#" + (view.ticket() == null ? "" : view.ticket().number());
+            Part part = byProject.get(sum.projectId());
+            total += sum.minutes();
+            perPerson.merge(sum.personId(), sum.minutes(), Long::sum);
+            TicketRef ref = part.tickets().ref(sum.ticketId());
+            String key = part.projectId() + "#" + (ref == null ? "" : ref.number());
             TicketSum previous = perTicket.get(key);
-            perTicket.put(key, new TicketSum(entry.projectId(), view.projectKey(), view.ticket(),
-                (previous == null ? 0 : previous.minutes()) + entry.minutes()));
+            perTicket.put(key, new TicketSum(part.projectId(), part.tickets().projectKey(), ref,
+                (previous == null ? 0 : previous.minutes()) + sum.minutes()));
+        }
+        Map<LocalDate, Long> perDate = new HashMap<>();
+        snapshot.days().forEach(day -> perDate.merge(day.date(), day.minutes(), Long::sum));
+        List<TimeEntry> found = new ArrayList<>(snapshot.rows());
+        found.sort(Comparator.comparing(TimeEntry::date).reversed().thenComparing(TimeEntry::createdAt, Comparator.reverseOrder()));
+        // The rows read decide as well: more than the limit is never cut silently into a complete looking answer (TASK-092, R1).
+        boolean truncated = count > limit || found.size() > limit;
+        List<EntryView> views = new ArrayList<>();
+        for (TimeEntry entry : found.subList(0, Math.min(found.size(), limit))) {
+            Part part = byProject.get(entry.projectId());
+            views.add(view(actor, entry, part.access(), part.tickets()));
         }
         List<PersonSum> persons = perPerson.entrySet().stream().map(e -> new PersonSum(e.getKey(), e.getValue()))
             .sorted(Comparator.comparing(PersonSum::minutes).reversed()).toList();
         List<TicketSum> ticketSums = perTicket.values().stream().sorted(Comparator.comparing(TicketSum::minutes).reversed()).toList();
-        return new Listing(views, truncated || found.size() > limit, found.size(), total, persons, ticketSums);
+        List<DaySum> days = perDate.entrySet().stream().map(e -> new DaySum(e.getKey(), e.getValue()))
+            .sorted(Comparator.comparing(DaySum::date)).toList();
+        return new Listing(views, truncated, count, total, persons, ticketSums, days);
     }
 
     @Transactional
@@ -245,7 +282,7 @@ public class TimeService {
         Access access = access(actor, entry.projectId());
         Tickets ticketsOf = tickets(actor, entry.projectId());
         List<RevisionView> revisions = repository.revisions(id).stream()
-            .map(revision -> new RevisionView(revision, ticketsOf.ref(revision.ticketId()))).toList();
+            .map(revision -> new RevisionView(revision, ticketsOf.ref(revision.ticketId()), ticketsOf.hidden(revision.ticketId()))).toList();
         return new Detail(view(actor, entry, access, ticketsOf), revisions);
     }
 
@@ -289,7 +326,9 @@ public class TimeService {
         List<String> violations = new ArrayList<>();
         Values values = validate(input, violations);
         String reason = reason(input.reason(), own, violations);
-        UUID ticket = ticketOf(actor, entry.projectId(), input.ticketNumber(), violations);
+        // A ticket the caller may not see stays unless a new one is chosen or its removal is asked for (TASK-092, F2).
+        boolean keep = input.ticketNumber() == null && !input.removeHiddenTicket() && tickets(actor, entry.projectId()).hidden(entry.ticketId());
+        UUID ticket = keep ? entry.ticketId() : ticketOf(actor, entry.projectId(), input.ticketNumber(), violations);
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
@@ -405,7 +444,7 @@ public class TimeService {
     private EntryView view(AccessContext actor, TimeEntry entry, Access access, Tickets ticketsOf) {
         boolean own = entry.personId().equals(actor.userId());
         boolean changeable = !entry.cancelled() && (own ? access.book() || access.manage() : access.manage());
-        return new EntryView(entry, ticketsOf.projectKey(), ticketsOf.ref(entry.ticketId()), own, changeable);
+        return new EntryView(entry, ticketsOf.projectKey(), ticketsOf.ref(entry.ticketId()), ticketsOf.hidden(entry.ticketId()), own, changeable);
     }
 
     private Access access(AccessContext actor, UUID projectId) {
@@ -447,6 +486,11 @@ public class TimeService {
 
         boolean readable() {
             return readable;
+        }
+
+        /** The entry has a ticket the caller may not see. */
+        boolean hidden(UUID ticketId) {
+            return ticketId != null && ref(ticketId) == null;
         }
 
         TicketRef ref(UUID ticketId) {

@@ -203,4 +203,59 @@ describe('time entries', () => {
       assert.equal(new URLSearchParams((await evaluation.getByTestId('time-export').getAttribute('href')).split('?')[1]).get('person'), backend.ben.id);
     });
   });
+
+  // TASK-092, F2: the server masks a ticket the person may not read; a correction keeps it unless its removal is chosen.
+  test('a correction keeps a ticket the person may not see unless they remove it on purpose', async () => {
+    await withApp({ prepare: (backend) => {
+      grant(backend, [backend.ben], ['time.book']);
+      const reading = backend.state.groups.find((group) => group.name === 'Lesen');
+      reading.members = reading.members.filter((id) => id !== backend.ben.id);
+      backend.state.time.push(seeded(backend, backend.ben, today(), 30, 'Am verborgenen Ticket', backend.state.tickets[0].id));
+    } }, async (page, backend) => {
+      const week = page.getByTestId('time-week');
+      const entry = week.getByTestId('time-entry');
+      await entry.getByTestId('time-ticket-hidden').waitFor();
+      assert.equal(await entry.getByRole('link').count(), 0, 'nothing of the hidden ticket is shown');
+      await entry.getByRole('button', { name: 'Korrigieren' }).click();
+      const correct = entry.getByTestId('time-correct');
+      await correct.getByText('Diese Buchung hat ein Ticket, das du nicht sehen darfst. Es bleibt erhalten, solange du keine Nummer einträgst.').waitFor();
+      await correct.getByLabel('Dauer').fill('40m');
+      await correct.getByRole('button', { name: 'Korrektur speichern' }).click();
+      await week.locator('[data-testid="time-week-total"][data-minutes="40"]').waitFor();
+      assert.equal(backend.state.time[0].ticketId, backend.state.tickets[0].id, 'the duration changed, the ticket stayed');
+
+      await week.getByTestId('time-entry').getByRole('button', { name: 'Korrigieren' }).click();
+      const again = week.getByTestId('time-correct');
+      await again.getByLabel('Zuordnung zum nicht sichtbaren Ticket entfernen').check();
+      await again.getByRole('button', { name: 'Korrektur speichern' }).click();
+      await week.getByTestId('time-entry').getByRole('button', { name: 'Korrigieren' }).waitFor();
+      await page.waitForFunction(() => document.querySelector('[data-testid="time-ticket-hidden"]') === null);
+      assert.equal(backend.state.time[0].ticketId, null, 'only the explicit choice removed it');
+      assert.equal(backend.state.time[0].minutes, 40);
+    });
+  });
+
+  // TASK-092, F3: the week takes its sums from the server, so 501 own entries count fully and foreign ones never.
+  test('my week sums every own entry from the server and says when the list is shortened', async () => {
+    await withApp({ prepare: (backend) => {
+      grant(backend, [backend.ben], ['time.book', 'time.read']);
+      for (let i = 0; i < 501; i += 1) backend.state.time.push(seeded(backend, backend.ben, today(), 1, `Eintrag ${i}`, null));
+      backend.state.time.push(seeded(backend, backend.anna, today(), 40, 'Fremd', null));
+    } }, async (page) => {
+      const week = page.getByTestId('time-week');
+      await week.locator('[data-testid="time-week-total"][data-minutes="501"]').waitFor();
+      await week.locator(`[data-testid="time-days"] li[data-day="${today()}"][data-minutes="501"]`).waitFor();
+      await week.getByText('Es werden 500 von 501 Einträgen gezeigt. Die Summen umfassen alle Einträge der Woche.').waitFor();
+      assert.match(await week.getByTestId('time-week-total').innerText(), /8 Std\. 21 Min\./);
+      assert.equal(await week.getByTestId('time-entry').count(), 500);
+    });
+  });
 });
+
+// One entry as the backend stores it, with its first revision.
+function seeded(backend, account, date, minutes, description, ticketId) {
+  const at = new Date(Date.now() - backend.state.time.length).toISOString();
+  return { id: `00000000-0000-4000-8000-0000009${String(backend.state.time.length).padStart(5, '0')}`, projectId: backend.project.id, personId: account.id, ticketId,
+    date, minutes, description, cancelledAt: null, cancelledBy: null, createdAt: at, createdBy: account.id, updatedAt: at, updatedBy: account.id, version: 1,
+    revisions: [{ revision: 1, kind: 'created', occurredAt: at, actorId: account.id, ticketId, date, minutes, description, reason: null }] };
+}
