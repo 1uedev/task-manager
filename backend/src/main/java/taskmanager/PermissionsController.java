@@ -68,7 +68,7 @@ class PermissionsController {
         "permissions.audit.read", "permissions.manage", "projects.manage", "session_duration.manage", "sla.manage");
     /** For one project, or for every project the account is a member of when granted without a project. */
     static final List<String> PROJECT_ACTIONS = List.of("helpdesk.reply", "helpdesk.review", "portal.answer", "project.manage", "project.read", "tag.create", "tags.manage",
-        "ticket.create", "ticket.edit", "ticket.read", "time.book", "time.manage", "time.read");
+        "ticket.create", "ticket.edit", "ticket.read", "time.book", "time.manage", "time.read", "wiki.edit", "wiki.publish", "wiki.read");
     static final Map<String, List<String>> FIELDS = Map.of(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "mail",
         "priority", "status", "tags", "title", "type"));
     private static final String MANAGE = "permissions.manage";

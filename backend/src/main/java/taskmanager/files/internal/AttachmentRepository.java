@@ -90,13 +90,13 @@ class AttachmentRepository {
         jdbc.sql("update file_attachment set purged_at = ? where id = ?").params(Timestamp.from(at), id).update();
     }
 
-    /** Which of the identifiers belong to an attachment row, removed or not. */
+    /** Which of the identifiers belong to an attachment row, removed or not, or to an image of another module (TASK-093). */
     Set<UUID> known(Collection<UUID> ids) {
         if (ids.isEmpty()) {
             return Set.of();
         }
-        return new HashSet<>(jdbc.sql("select id from file_attachment where id = any (?)")
-            .param(ids.toArray(UUID[]::new)).query(UUID.class).list());
+        return new HashSet<>(jdbc.sql("select id from file_attachment where id = any (?) union select id from file_image where id = any (?)")
+            .params(ids.toArray(UUID[]::new), ids.toArray(UUID[]::new)).query(UUID.class).list());
     }
 
     void audit(UUID companyId, UUID attachmentId, UUID ticketId, String operation, String detail, UUID actor, Instant at) {

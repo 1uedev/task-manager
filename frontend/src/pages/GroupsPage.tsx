@@ -157,6 +157,9 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'time.book': 'right.time.book',
   'time.manage': 'right.time.manage',
   'time.read': 'right.time.read',
+  'wiki.edit': 'right.wiki.edit',
+  'wiki.publish': 'right.wiki.publish',
+  'wiki.read': 'right.wiki.read',
 };
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {

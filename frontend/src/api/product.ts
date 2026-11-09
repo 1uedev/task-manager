@@ -12,6 +12,7 @@ import type { components as SlaTypes } from './generated/sla';
 import type { components as TagTypes } from './generated/tags';
 import type { components as TicketTypes } from './generated/tickets';
 import type { components as TimeTypes } from './generated/time';
+import type { components as WikiTypes } from './generated/wiki';
 import { readProblem, type ProblemInfo } from './problem.ts';
 
 // The product API of TASK-030. Types come from the published contracts; every answer is checked again at runtime for
@@ -94,6 +95,14 @@ export type TimeEntry = TimeTypes['schemas']['Entry'];
 export type TimeRevision = TimeTypes['schemas']['Revision'];
 export type TimeEntryDetail = TimeTypes['schemas']['EntryDetail'];
 export type TimeEntryList = TimeTypes['schemas']['EntryList'];
+export type WikiProject = WikiTypes['schemas']['WikiProject'];
+export type WikiTree = WikiTypes['schemas']['Tree'];
+export type WikiTreeItem = WikiTypes['schemas']['TreeItem'];
+export type WikiPage = WikiTypes['schemas']['Page'];
+export type WikiHistory = WikiTypes['schemas']['History'];
+export type WikiRevisionContent = WikiTypes['schemas']['RevisionContent'];
+export type WikiImage = WikiTypes['schemas']['Image'];
+export type WikiDocument = WikiTypes['schemas']['Document'];
 export type PortalAccount = PortalTypes['schemas']['PortalAccount'];
 export type IssuedPortalAccount = PortalTypes['schemas']['IssuedPortalAccount'];
 export type PortalOption = PortalTypes['schemas']['Option'];
@@ -799,6 +808,60 @@ export const cancelTime = (api: ServerApi, id: string, version: number, reason: 
 // The export is a file to save; the browser fetches it with the session cookie like any other download.
 export const timeExportHref = (filter: TimeFilter) => `/api/v1/time/export?${new URLSearchParams(
   Object.entries(timeQuery({ ...filter, cancelled: false, mine: false })).map(([key, value]) => [key, String(value)])).toString()}`;
+
+// ---------------------------------------------------------------- wiki (TASK-093)
+
+const isWikiAccess = (v: unknown) => record(v) && typeof v.read === 'boolean' && typeof v.edit === 'boolean' && typeof v.publish === 'boolean';
+const isWikiProject = (v: unknown) => hasStrings(v, 'projectId', 'key', 'name') && isWikiAccess((v as WikiProject).access);
+const isWikiTreeItem = (v: unknown) => hasStrings(v, 'id', 'title') && typeof (v as WikiTreeItem).published === 'boolean'
+  && typeof (v as WikiTreeItem).version === 'number';
+const isWikiTree = (v: unknown) => record(v) && isWikiAccess(v.access) && Array.isArray(v.pages) && v.pages.every(isWikiTreeItem);
+const isWikiDocument = (v: unknown) => record(v) && v.type === 'doc';
+const isWikiPage = (v: unknown) => hasStrings(v, 'id', 'projectId', 'language') && typeof (v as WikiPage).version === 'number'
+  && isWikiAccess((v as WikiPage).access) && Array.isArray((v as WikiPage).path)
+  && ((v as WikiPage).published === null || hasStrings((v as WikiPage).published, 'title', 'html'))
+  && ((v as WikiPage).draft === null || (hasStrings((v as WikiPage).draft, 'title', 'html') && isWikiDocument((v as WikiPage).draft?.content)));
+const isWikiHistory = (v: unknown) => record(v) && Array.isArray(v.revisions) && Array.isArray(v.events) && typeof v.draftRevision === 'number';
+const isWikiRevision = (v: unknown) => hasStrings(v, 'title', 'html') && isWikiDocument((v as WikiRevisionContent).content);
+const isWikiImage = (v: unknown) => hasStrings(v, 'id', 'src', 'mediaType');
+
+export const listWikiProjects = (api: ServerApi) => run(() => api.wiki.GET('/wiki/projects'), listOf<WikiProject>(isWikiProject));
+export const readWikiTree = (api: ServerApi, projectId: string, archived = false) =>
+  run(() => api.wiki.GET('/wiki/projects/{projectId}/pages', { params: { path: { projectId }, query: { archived } } }), one<WikiTree>(isWikiTree));
+export const createWikiPage = (api: ServerApi, projectId: string, title: string, parentId: string | null) =>
+  run(() => api.wiki.POST('/wiki/projects/{projectId}/pages', { params: { path: { projectId } }, body: { title, parentId, content: null } }),
+    one<WikiPage>(isWikiPage));
+export const readWikiPage = (api: ServerApi, pageId: string) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}', { params: { path: { pageId } } }), one<WikiPage>(isWikiPage));
+// The draft is saved on the basis of the revision the editor started from; a newer draft answers 412.
+export const saveWikiDraft = (api: ServerApi, pageId: string, revision: number, title: string, content: WikiDocument) =>
+  run(() => api.wiki.PUT('/wiki/pages/{pageId}/draft', { params: { path: { pageId }, ...ifMatch(`"${revision}"`) }, body: { title, content } }),
+    one<WikiPage>(isWikiPage));
+export const publishWikiPage = (api: ServerApi, pageId: string, revision: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/publish', { params: { path: { pageId }, ...ifMatch(`"${revision}"`) }, body: { revision } }),
+    one<WikiPage>(isWikiPage));
+export const withdrawWikiPage = (api: ServerApi, pageId: string) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/withdraw', { params: { path: { pageId } } }), one<WikiPage>(isWikiPage));
+export const readWikiHistory = (api: ServerApi, pageId: string) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}/history', { params: { path: { pageId } } }), one<WikiHistory>(isWikiHistory));
+export const readWikiRevision = (api: ServerApi, pageId: string, revision: number) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}/revisions/{revision}', { params: { path: { pageId, revision } } }), one<WikiRevisionContent>(isWikiRevision));
+export const restoreWikiRevision = (api: ServerApi, pageId: string, revision: number, draft: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/revisions/{revision}/restore', { params: { path: { pageId, revision }, ...ifMatch(`"${draft}"`) } }),
+    one<WikiPage>(isWikiPage));
+export const moveWikiPage = (api: ServerApi, pageId: string, version: number, parentId: string | null) =>
+  run(() => api.wiki.PUT('/wiki/pages/{pageId}/parent', { params: { path: { pageId } }, body: { parentId, version } }), one<WikiPage>(isWikiPage));
+export const archiveWikiPage = (api: ServerApi, pageId: string, version: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/archive', { params: { path: { pageId } }, body: { version } }), one<WikiPage>(isWikiPage));
+export const unarchiveWikiPage = (api: ServerApi, pageId: string, version: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/unarchive', { params: { path: { pageId } }, body: { version } }), one<WikiPage>(isWikiPage));
+export const uploadWikiImage = (api: ServerApi, pageId: string, file: Blob) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/images', {
+    params: { path: { pageId } },
+    body: file as unknown as string,
+    bodySerializer: (body) => body as unknown as BodyInit,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  }), one<WikiImage>(isWikiImage));
 
 // ---------------------------------------------------------------- mail template (TASK-082)
 

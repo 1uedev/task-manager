@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-093](#task-093-wikiseiten-mit-entwurf-veröffentlichung-und-historie-a12-teil-1) | Wikiseiten mit Entwurf, Veröffentlichung und Historie (A12 Teil 1) | claude-20261109-wiki-01 | 2026-11-09 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -40,7 +38,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-093](#task-093-wikiseiten-mit-entwurf-veröffentlichung-und-historie-a12-teil-1) | Wikiseiten mit Entwurf, Veröffentlichung und Historie (A12 Teil 1) | claude-20261109-wiki-01 | 2026-11-09 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -55,9 +55,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-093 Wikiseiten mit Entwurf, Veröffentlichung und Historie (A12 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261109-wiki-01 · **Aktualisiert:** 2026-11-09
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261109-wiki-01 · **Aktualisiert:** 2026-11-09
 
-**Bezug:** REQ-DOC-001, REQ-DOC-002, REQ-DOC-004; OPEN-011; DEC-033; docs/WIKI_I18N_BRANDING.md (Prüffälle W01 bis W06, W09 bis W11). **Abhängigkeiten:** TASK-026, TASK-051, TASK-043, geliefert. **Arbeitsstand:** Holger hat am 9. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A12 bestätigt und am selben Tag die 21 Vorschläge mit „Passt so“ übernommen (Regeln unten und bei TASK-094). Geplanter Branch claude/project-thread-ipd3h4, Entscheidung DEC-123, Migrationen ab V0055.
+**Bezug:** REQ-DOC-001, REQ-DOC-002, REQ-DOC-004; OPEN-011; DEC-033; docs/WIKI_I18N_BRANDING.md (Prüffälle W01 bis W06, W09 bis W11). **Abhängigkeiten:** TASK-026, TASK-051, TASK-043, geliefert. **Arbeitsstand:** Holger hat am 9. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A12 bestätigt und am selben Tag die 21 Vorschläge mit „Passt so“ übernommen (Regeln unten und bei TASK-094). Branch claude/project-thread-ipd3h4, Entscheidung DEC-123, Migrationen V0055 (`file_image`) und V0056 (Wikitabellen). Übergabe 9. November 2026: Wikimodul mit Vertrag `contracts/wiki.openapi.yaml`, Port `files.ImageStore`, Oberfläche „Wiki“ mit Tiptap 3.32.0 (nur MIT Pakete), Beschreibung in backend/README.md unter „Wiki (TASK-093)“. Nachweise im Ergebnis PR: `WikiApiTest` (8 Fälle, darunter 6 gleichzeitige Speicherungen mit genau einer neuen Revision, dreimaliges Bearbeiten der Beispielseite, fremde Inhalte, Rechte für Seiten, Bilder und Verweise, Portalkonten, Baumregeln, Übernahme alter Revisionen) und `WikiContractTest`, die Unit Tests des Blockvergleichs und der Wiki Routen sowie 7 Browsertests für Leser, Anlegen und Veröffentlichen, Konflikt mit Warnung beim Verlassen, Einfügefilter, Historie, Archiv und Bilder. Offen für die Prüfung: hochgeladene, nie gespeicherte Bilder bleiben bis zu den Aufbewahrungsregeln im Dateispeicher; die Konfliktansicht vergleicht nach Blöcken, nicht nach Wörtern.
 
 **Umfang:** Wiki je Projekt mit Seitenbaum, gemeinsamer Entwurf, ausdrückliche Veröffentlichung, Zurücknehmen, Archivieren und Wiederherstellen, Revisionen mit Historie und Vergleich, Konfliktschutz über die Version, visueller Editor mit festem Elementumfang, Bilder in Seiten, Verweise zwischen Wikiseiten, die Projektaktionen `wiki.read`, `wiki.edit` und `wiki.publish`, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Sprachfassungen (TASK-094), Suche (A14), Wiki im Kundenportal, KI Überarbeitung (A16), Import und Export, Beziehungen zu Tickets und Anforderungen, Echtzeitbearbeitung, Kommentare, endgültiges Löschen, Verschieben in ein anderes Projekt, Unternehmenswiki.
 
@@ -85,7 +85,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Ohne `wiki.read` keine Seite, kein Bild, kein Verweistitel; ohne `wiki.edit` kein Entwurf und keine Historie (W09); Umbenennen und Verschieben erhalten Verweise (W11).
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Baum, Editor, Konflikt, Veröffentlichung und Historie.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-094 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Nächster Schritt:** Gegenseitige KI Prüfung des Ergebnis PR (Codex Prüfauftrag liegt bereit), danach fachliche Abnahme durch Holger; nach dem Merge des Ergebnisses TASK-094 freigeben.
 
 ## TASK-094 Sprachfassungen im Wiki (A12 Teil 2)
 
