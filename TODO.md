@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-092](#task-092-befunde-der-codex-prüfung-von-task-069-beheben-a6) | Befunde der Codex Prüfung von TASK-069 beheben (A6) | claude-20261108-timefix-01 | 2026-11-08 |
 
 ### Blockiert – BLOCKIERT
 
@@ -74,6 +76,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Ergebnis (zur Prüfung):** Umgesetzt nach DEC-097 auf Branch claude/project-thread-fde105, Ergebnis-PR nach der Reservierung PR #218. Migration V0052, ursprünglich V0029, beim Einmischen von main umbenannt (`joined_at`, `seen_at`, `seen_by` an `helpdesk_message`); `TicketOpener.append` vermerkt das Anhängen für Abruf und `…/attach`. Neue Endpunkte `GET /api/v1/helpdesk/answers` und `POST /api/v1/helpdesk/answers/{id}/seen` mit If-Match, Rechten wie beim Versand und Audit `answer.seen`; die Mails im Ticket tragen `newAnswer` und `version`. Oberfläche: Liste „Neue Kundenantworten“ in der Prüfwarteschlange, hervorgehobene Antwort mit „Gesehen“ im Ticket. Nachweise: `HelpdeskApiTest.anAnswerThatJoinsATicketIsNewUntilSomeoneMarksItAsSeen` (Liste, Ticketansicht, 403 für Leser und Mitglied ohne Leseregel, 404 für Fremde, 428, 412, 409, Audit, Anhängen über die Prüfwarteschlange), Vertrag gegen Routen (36, nach dem Einmischen von main; berichtigt mit TASK-088), zwei Browsertests. Beschreibung in backend/README.md, Abschnitt „Neue Kundenantworten (TASK-067)“.
 
 **Nächster Schritt:** Gegenprüfung des Ergebnis-PR und Abnahme durch Holger.
+
+## TASK-092 Befunde der Codex Prüfung von TASK-069 beheben (A6)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261108-timefix-01 · **Aktualisiert:** 2026-11-08
+
+**Bezug:** REQ-TIME-001, REQ-TIME-002; DEC-099; docs/REVIEW_TASK-069_PR-256.md. **Abhängigkeiten:** TASK-069 geliefert (PR #256). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-069 (Empfehlung „noch nicht abnehmen“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Beheben, Abweichungen bestätigen“ gewählt. Damit sind die drei Abweichungen aus Hinweis H1 bestätigt: 412 bei veralteter Version (409 bleibt der stornierten Buchung), „heute“ als Datum in UTC ohne Unternehmenszeitzone, und die Zeit an einem nicht lesbaren Ticket zählt unter „ohne sichtbares Ticket“. Branch claude/project-thread-thp5tg; Ergebnis mit eigener DEC-ID, Migration nur falls nötig.
+
+**Umfang:** Befunde F1 bis F3 und Hinweise H1 und H2 aus docs/REVIEW_TASK-069_PR-256.md:
+1. F1: Anzahl, Gesamtsumme und Summen je Person und je Ticket der Auswertung gelten für alle erlaubten Treffer des Filters, unabhängig von der Listengrenze 500 und der Exportgrenze 50 000; der Export lehnt über 50 000 Zeilen weiter ab.
+2. F2: Eine Korrektur entfernt ein Ticket, das die korrigierende Person nicht lesen darf, nie stillschweigend; ein unverändertes verborgenes Ticket bleibt erhalten, ohne dass Nummer oder Titel sichtbar werden.
+3. F3: „Meine Zeiten“ zeigt Wochen und Tagessummen aus Serversummen über alle eigenen Buchungen der Woche und weist auf eine gekürzte Liste hin.
+4. H1: Die bestätigten Abweichungen werden in Regeltext, DEC, README und Vertrag nachgeführt.
+5. H2: Regressionstests für 500, 501, 50 000 und 50 001 Treffer, mehrere Projekte und Stornos, Entzug und Wiedergabe von `ticket.read` bei einer Korrektur, mehr als 500 eigene Buchungen und Negativfälle für Portal und fremde Projekte.
+
+Nicht Teil: Timer, Freigaben, Abrechnung, Unternehmenszeitzone, Suche über Zeitbuchungen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F3 mit API Tests gegen die echte Datenbank und Browsertests in Deutsch, die ohne die jeweilige Behebung fehlschlagen würden.
+2. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung und Ergebnis PR.
 
 ## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
 
