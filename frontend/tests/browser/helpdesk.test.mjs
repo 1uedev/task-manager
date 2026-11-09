@@ -544,7 +544,7 @@ describe('replies to customers', () => {
       assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'E-Mail Verlauf');
       await page.goto(`${base()}#/inbox`);
       await page.getByRole('heading', { name: 'Prüfwarteschlange' }).waitFor();
-      assert.equal(await page.getByTestId('new-answers').count(), 0);
+      await page.getByTestId('new-answers').waitFor({ state: 'detached' });
     });
   });
 
