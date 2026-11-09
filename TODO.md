@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -40,11 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-067](#task-067-neue-kundenantworten-an-bestehenden-tickets-sichtbar-machen) | Neue Kundenantworten an bestehenden Tickets sichtbar machen | claude-20261030-newanswers-01 | 2026-10-30 |
 | [TASK-069](#task-069-zeiterfassung-im-projekt-und-ticketzusammenhang-paket-a6) | Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6) | claude-20261030-time-01 | 2026-11-04 |
-| [TASK-081](#task-081-auftritt-für-anmeldung-und-portal-a17-teil-1) | Auftritt für Anmeldung und Portal (A17 Teil 1) | claude-20261102-branding-01 | 2026-11-02 |
-| [TASK-087](#task-087-befunde-der-prüfung-von-task-081-beheben-a17) | Befunde der Prüfung von TASK-081 beheben (A17) | claude-20261102-branding-01 | 2026-11-04 |
 | [TASK-088](#task-088-befunde-der-prüfung-von-task-067-beheben) | Befunde der Prüfung von TASK-067 beheben | claude-20261104-newanswersfix-01 | 2026-11-04 |
-| [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
-| [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
 | [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
 | [TASK-092](#task-092-befunde-der-codex-prüfung-von-task-069-beheben-a6) | Befunde der Codex Prüfung von TASK-069 beheben (A6) | claude-20261108-timefix-01 | 2026-11-09 |
 
@@ -140,70 +136,6 @@ Nicht Teil: Timer, Freigaben, Abrechnung, Unternehmenszeitzone, Suche über Zeit
 
 **Nächster Schritt:** Getrennte Prüfung (Codex oder Claude) und fachliche Abnahme durch Holger, danach Übertrag nach DONE.md.
 
-## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-02
-
-**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; OPEN-015; DEC-060, DEC-064; docs/WIKI_I18N_BRANDING.md (Logo, Farben und Vorlagen, Prüffall W14). **Abhängigkeiten:** TASK-036, TASK-040, TASK-075, TASK-076, geliefert. **Arbeitsstand:** Holger hat am 2. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A17 nach A11 bestätigt und am selben Tag die 20 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-082). Reservierung mit PR #242 gemergt. Ergebnis auf Branch claude/project-thread-tzp0cw mit DEC-111 und der Migration V0046; Beschreibung in backend/README.md (Abschnitt „Erscheinungsbild“), Vertrag appearance 0.2.0.
-
-**Umfang:** Einstellbarer Name im Auftritt, öffentlicher Lesepfad für Name, Akzentfarbe und Logo vor der Anmeldung, Auftritt auf Anmeldeseite, Pflichtwechsel des Passworts, Seite nach dem Abmelden und im Portal, „Alles zurücksetzen“, Vorschau aller Bereiche auf der Seite „Erscheinungsbild“, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Mailvorlagen (TASK-082), PDFs, weitere Farben, SVG Logos, Entwurf und Freigabe des Auftritts, eigener Auftritt nur für das Portal, Mandanten.
-
-**Fachliche Regeln** (von Holger am 2. November 2026 bestätigt):
-1. Der Auftritt erhält einen Namen mit 1 bis 80 Zeichen, Vorgabe „Task Manager“. Er erscheint im Seitenkopf, im Fenstertitel, auf der Anmeldeseite, im Portal und in Mails.
-2. Ein öffentlicher Lesepfad liefert ohne Anmeldung nur Name, Akzentfarbe und Logo, ohne Version, Zeitpunkt oder bearbeitende Person. Er gilt für die Installation und wird nicht über Eingaben des Besuchers gewählt. Fällt er aus, zeigt die Seite den Standard.
-3. Anmeldung, Pflichtwechsel des Passworts und die Seite nach dem Abmelden zeigen Logo, Name und Akzentfarbe; Hell und Dunkel bleiben wählbar.
-4. Das Portal nutzt denselben Auftritt wie die Anwendung, im Kopf mit dem Zusatz „Kundenportal“.
-5. Es bleibt bei Akzentfarbe und Logo; die Schrift auf Akzentflächen wird automatisch schwarz oder weiß gewählt. Fehler, Status und Fokus hängen nie allein an der Akzentfarbe.
-6. Logo als PNG, JPEG oder WebP bis 512 KB, keine SVG Dateien; dasselbe Logo dient Anwendung, Anmeldung, Portal und Mails.
-7. Änderungen wirken sofort, ohne Entwurf; Version mit If-Match und Audit bleiben. „Alles zurücksetzen“ setzt Name, Farbe und Logo in einem Schritt auf den Standard.
-8. Die Seite „Erscheinungsbild“ zeigt die ungespeicherte Wahl in Anwendung, Anmeldeseite, Portal und einer Beispielmail in Deutsch und Englisch mit synthetischen Daten. Die Beispielmail zeigt bis TASK-082 den Kopf mit Logo und Name.
-9. Das Recht bleibt `appearance.manage`.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Eine Änderung von Name, Farbe und Logo wirkt auf Anwendung, Anmeldeseite und Portal und lässt sich zurücksetzen (W14).
-2. Der öffentliche Lesepfad gibt nur Name, Farbe und Logo preis; ungültige Namen werden mit 400 abgelehnt; Änderungen ohne `appearance.manage` oder mit veralteter Version werden abgelehnt.
-3. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anmeldeseite, Portal und Vorschau in Hell und Dunkel.
-
-**Übergabe zur Prüfung (2026-11-02):**
-1. Ergebnis: Spalte `name` mit V0046; `PUT /api/v1/appearance` nimmt Farbe, Name oder beides (400 `appearance.name_invalid`, 400 `appearance.change_empty`), `DELETE /api/v1/appearance` setzt alles zurück (Audit `appearance.reset`); `GET /api/v1/appearance/public` und `/public/logo` ohne Sitzung mit nur Name, Farbe und Logo, im Filter genau für `GET` und `HEAD` freigegeben. Oberfläche: Anmeldeseite, Passwortwechsel und Seite nach dem Abmelden mit dem öffentlichen Auftritt, Portal mit Zusatz „Kundenportal“, Seite „Erscheinungsbild“ mit Name, „Alles zurücksetzen“ mit Rückfrage und Vorschau von Anwendung, Anmeldeseite, Portal und Beispielmail auf Deutsch und Englisch.
-2. Nachweise: `AppearanceApiTest` (Name, Kürzen, Grenzen in Codepunkten, Steuer- und Richtungszeichen, Audit je Teil, Zurücksetzen mit Version, öffentlicher Lesepfad ohne Cookie, mit abgelaufenem Cookie und bei ausstehendem Passwortwechsel, nichts sonst geöffnet), `AppearanceContractTest` mit acht Routen, `DatabaseFoundationTest`, `ApplicationLifecycleTest` und `lifecycle-check.sh` mit V0046, voller Backendlauf mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich neuer Fälle in `design.test.mjs` und `portal.test.mjs` sowie 320 px und Kontrast hell und dunkel.
-3. Grenzen: Die Beispielmail zeigt bis TASK-082 nur Kopf, Beispieltext und Name; echte Mails bleiben bis dahin reiner Text. Mit Logo bleibt der Name im Kopf wie bisher nur für Screenreader sichtbar. Ein geändertes Logo erscheint auf geöffneten Anmeldeseiten erst beim nächsten Laden.
-
-**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-081_PR-243.md, 4. November 2026) empfiehlt „nachbessern“; die Befunde behebt TASK-087. Abnahme durch Holger danach zusammen mit TASK-087. TASK-082 und TASK-085 sind am 3. November 2026 abgenommen (DONE.md).
-
-## TASK-087 Befunde der Prüfung von TASK-081 beheben (A17)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-04
-
-**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; DEC-111; docs/REVIEW_TASK-081_PR-243.md. **Abhängigkeiten:** TASK-081 geliefert (PR #243). **Arbeitsstand:** Holger hat am 4. November 2026 den Codex Prüfbericht zu TASK-081 (Empfehlung „nachbessern“) in das Projektgespräch gestellt; Umfang nach seiner Wahl „F1 bis F4 und H1 bis H3 beheben“ vom selben Tag. Branch claude/project-thread-tzp0cw, Umsetzung voraussichtlich mit DEC-117 und der Migration V0054 (V0053 ist für TASK-069 vorgemerkt; vor dem Ergebnis die nächste freie Nummer prüfen).
-
-**Umfang:** Befunde F1 bis F4 und Hinweise H1 bis H3 aus docs/REVIEW_TASK-081_PR-243.md:
-1. F1: eine gemeinsame Regel für den Namen in Backend und Oberfläche, die auch geschützte Leerzeichen am Rand entfernt und ungültige Unicode Folgen mit 400 ablehnt; vorhandene betroffene Namen korrigiert eine neue Migration, V0046 bleibt unverändert.
-2. F2: das Speichern von Name, Farbe oder Logo verwirft keine ungespeicherte Eingabe eines anderen Teils; nur „Alles zurücksetzen“ setzt alles zurück.
-3. F3: der Fokus geht nach dem Speichern auf die Bestätigung und nach dem Abbrechen der Rückfrage zurück auf „Alles zurücksetzen“.
-4. F4: der Name ist im Kopf von Anwendung, Anmeldeseite, Pflichtwechsel und Portal neben dem Logo und auf schmalen Ansichten sichtbar, wie in der Vorschau.
-5. H1: die Datenbank prüft dieselben Zeichenverbote wie die Anwendung (in derselben Migration).
-6. H2: das Audit nennt nur Teile, die sich wirklich geändert haben.
-7. H3: der Vertrag beschreibt die öffentlichen HEAD Aufrufe und die Normalisierung des Namens.
-
-Nicht Teil: weitere Funktionen des Auftritts; die Stabilisierung der Tagtests (H4) gehört zur Testpflege.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. F1 und H1 mit API und Migrationstests für U+00A0, U+2007, U+202F und einen einzelnen Surrogaten; F2, F3 und F4 mit Browsertests (verlorene Eingabe, Fokus über `document.activeElement`, sichtbare Ausdehnung des Namens mit und ohne Logo bei 1100 und 320 px); H2 mit einem API Test für ein identisches PUT.
-2. Bestehende Backend und Browser Tests bleiben grün.
-
-**Übergabe zur Prüfung (2026-11-04):**
-1. Ergebnis: DEC-117, Migration V0054 (nach V0053 von TASK-069). Die Regel des Namens steht ausgeschrieben gleich in `AppearanceService` (`EDGE`, `FORBIDDEN`), in V0054 als Datenbankprüfung, in `frontend/src/api/client.ts` (`normalizeBrandName`, `isBrandName`) und im Testersatz: Leerzeichen jeder Art an den Rändern fallen weg, Steuer-, Trenn- und Formatzeichen (Unicode 15.1, Cf) und halbe Surrogatpaare werden mit 400 `appearance.name_invalid` abgelehnt. V0054 kürzt gespeicherte Namen an den Rändern und setzt einen danach ungültigen auf „Task Manager“. Ein `PUT` ohne Änderung lässt Version und Audit stehen; das Audit nennt nur geänderte Teile. `AppearancePage.tsx` übernimmt nach dem Speichern nur den Wert des gespeicherten Teils, setzt den Fokus auf die Rückmeldung und nach „Abbrechen“ auf „Alles zurücksetzen“. `styles.css` blendet den Namen neben dem Logo und bis 30 rem nicht mehr aus; dort erhält der Kopf für ihn eine eigene Zeile. Vertrag appearance 0.3.1 mit `HEAD` der öffentlichen Pfade und der Normalisierung des Namens; `AppearanceContractTest` prüft HEAD genau für diese beiden Pfade. backend/README.md ergänzt.
-2. Nachweise (lokal, JDK 21, PostgreSQL 16): `./mvnw clean verify` 522 Tests, davon einer rot (`JobExecutorTest.anExpiredLeaseOnTheLastAttemptFailsTheJob`, ohne Bezug, in der Wiederholung der Klasse 26 von 26 grün). Neu: in `AppearanceApiTest` geschützte Leerzeichen, ungültige Folgen und Surrogate über die API, die Datenbankprüfung und das unveränderte `PUT`; `AppearanceNameMigrationTest` mit sieben gespeicherten Namen von V0052 auf V0054. Frontend `npm run verify` 80 Tests, `npm run test:browser` 191 Tests, davon 190 grün; rot war nur `ldap.test.mjs` wegen einer Routenantwort nach dem Schließen des Browsers, ohne Bezug, einzeln zweimal 12 von 12 grün. Neu im Browser: erhaltene Eingaben bei Farbe, Name und Logo, Ränder mit geschützten Leerzeichen, Fokus nach Speichern, Abbrechen und Zurücksetzen per Tastatur, sichtbarer Name bei 1100 und 320 px mit und ohne Logo vor und nach der Anmeldung; ohne die Behebung waren fünf dieser Tests rot. Repositoryprüfungen grün. Nicht lokal: `lifecycle-check.sh` mit Docker (läuft in CI).
-3. Grenzen: Die Liste der Formatzeichen folgt Unicode 15.1 und wird bei neuen Unicode Versionen nicht von selbst länger. Emoji Folgen mit Verbindungszeichen (U+200D) und Flaggen aus Tag Zeichen bleiben wie bisher abgelehnt. V0054 schreibt für eine Bereinigung keinen Auditeintrag.
-
-**Nachbesserung nach der Codex Nachprüfung (docs/REVIEW_TASK-087_PR-259.md, 4. November 2026, Empfehlung „nachbessern“) im selben PR #259:**
-1. R1: „Aktuellen Stand laden“ nach einem Versionskonflikt übernimmt den gespeicherten Wert nur für den Teil, dessen Speichern scheiterte; die ungespeicherte Eingabe der anderen Teile bleibt. Browsertest „after a conflict on the name the current version is loaded and the unsaved color stays“, der ohne die Korrektur scheitert.
-2. R2: Zurücksetzen im Standardzustand, Logo entfernen ohne Logo und dasselbe Logo noch einmal lassen Version und Audit stehen wie ein `PUT` ohne Änderung. API Test `resetRemoveAndTheSameLogoAgainChangeNothingWhenNothingChanges`, der ohne die Korrektur scheitert.
-3. H1: Der Testersatz behandelt `null` wie einen nicht gesendeten Teil, antwortet auf eine Anfrage ohne Teile mit 400 `appearance.change_empty` und prüft die Werte vor der Version wie der Server. H2: `MailTemplatePreviewRequest.name` beschreibt die Normalisierung statt einer Länge am Rohwert (Vertrag appearance 0.3.2).
-
-**Nächster Schritt:** Die zweite Codex Nachprüfung (docs/REVIEW_TASK-087_PR-259_2.md, 6. November 2026) empfiehlt „nachbessern“; die Befunde behebt TASK-089. Abnahme durch Holger danach zusammen mit TASK-081 und TASK-089.
-
 ## TASK-088 Befunde der Prüfung von TASK-067 beheben
 
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261104-newanswersfix-01 · **Aktualisiert:** 2026-11-04
@@ -252,55 +184,3 @@ Nicht Teil: die wechselnden Zeitüberschreitungen der Tag Browsertests (Hinweis 
 Nach Holgers „B1 noch beheben“ vom 9. November 2026 im selben PR #272 behoben (helpdesk.test.mjs:547 wartet auf das Ausblenden der Liste; Browsertests 210 von 210 grün).
 
 **Nächster Schritt:** Abnahme von TASK-067, TASK-088 und TASK-091 durch Holger.
-
-## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-06
-
-**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117; docs/REVIEW_TASK-087_PR-259_2.md. **Abhängigkeiten:** TASK-087 geliefert (PR #259). **Arbeitsstand:** Holger hat am 6. November 2026 den Codex Bericht der zweiten Nachprüfung von TASK-087 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „S1, S2, H1 und H2 beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
-
-**Umfang:** Befunde S1 und S2 und Hinweise H1 und H2 aus docs/REVIEW_TASK-087_PR-259_2.md:
-1. S1: „Aktuellen Stand laden“ nach einem Versionskonflikt ist an genau diesen Ladevorgang gebunden. Auch eine Antwort mit gleicher Version schließt ihn ab; scheitert das Laden, bleiben die Eingaben und eine wiederholbare Fehlermeldung, und kein offener Auftrag wirkt auf eine spätere Ladung oder Teiländerung.
-2. S2: Der Testersatz antwortet auf falsche JSON Typen bei Name und Farbe mit einer regulären Fehlerantwort wie der Server.
-3. H1: Ein API Test mit gleichzeitigen unveränderten Anfragen zum Zurücksetzen, Entfernen und gleichen Logo sowie mit veralteter Version.
-4. H2: Der Testersatz prüft beim Logo den angegebenen Typ wie der Server, bevor er Inhalte vergleicht.
-
-Nicht Teil: weitere Änderungen am Auftritt.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. S1 mit Browsertests für gleiche Version, Ladefehler und eine danach folgende Bearbeitung eines anderen Teils; S2 und H2 mit Browsertests oder direkten Aufrufen des Testersatzes; H1 mit einem API Test gegen die echte Datenbank.
-2. Bestehende Backend und Browser Tests bleiben grün.
-
-**Übergabe zur Prüfung (2026-11-06):**
-1. Ergebnis: DEC-119, ohne Migration. S1: `AppearancePage.tsx` liest nach „Aktuellen Stand laden“ den Auftritt selbst (`loadCurrent`) und übernimmt genau diese Antwort nur für den gescheiterten Teil (`take`), auch bei gleicher Version, mit der Meldung „Der aktuelle Stand ist geladen. Ungespeicherte Eingaben anderer Teile bleiben erhalten.“; ein Lesefehler zeigt „Erneut versuchen“, alle Eingaben bleiben, kein Auftrag wirkt später nach. Der Provider wird dafür nicht mehr neu geladen. S2: Testersatz für Objekte, Listen, `null`, Zahlen und Wahrheitswerte wie der Server, festgehalten in `AppearanceApiTest.wrongJsonTypesAreRefusedLikeTheTestStandIn`. H1: `concurrentRequestsWithoutAChangeLeaveVersionAndAuditAndAStaleOneIsRefused`. H2: Testersatz prüft Leere, Größe, erkannten und angegebenen Typ des Logos vor der Version.
-2. Nachweise (lokal, JDK 21, PostgreSQL 16): die beiden neuen Browsertests zu S1 scheitern mit der Seite von main und laufen mit der Korrektur; die Ergebnisse der Gesamtläufe stehen im Ergebnis PR.
-3. Grenzen: Der Testersatz prüft das Logo nicht durch Dekodieren (`appearance.logo_unreadable` bleibt dem Server vorbehalten).
-
-**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-089_PR-263.md, 6. und 8. November 2026) empfiehlt „nachbessern“; T1, T2 und die Hinweise 1 und 2 behebt TASK-090. Abnahme durch Holger danach zusammen mit TASK-081, TASK-087 und TASK-090.
-
-## TASK-090 Befunde der Prüfung von TASK-089 beheben (A17)
-
-**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261102-branding-01 · **Aktualisiert:** 2026-11-08
-
-**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-119, DEC-120; docs/REVIEW_TASK-089_PR-263.md, docs/REVIEW_TASK-090_PR-268.md. **Abhängigkeiten:** TASK-089 geliefert (PR #263). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-089 (Empfehlung „nachbessern“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „T1, T2 und beide Hinweise beheben“ gewählt. Branch claude/project-thread-tzp0cw; ohne Migration.
-
-**Umfang:** Befunde T1 und T2 und die Hinweise 1 und 2 aus docs/REVIEW_TASK-089_PR-263.md:
-1. T1: Das Laden nach einem Versionskonflikt ist an die Lebensdauer der Seite gebunden. Eine Antwort, die nach dem Verlassen der Seite eintrifft, übernimmt nichts, auch nicht in den gemeinsamen Auftritt.
-2. T2: Logo Ablage und Dateiauswahl beachten dieselbe Sperre wie die Schaltflächen, und eine überholte Antwort überschreibt keinen neueren Stand.
-3. Hinweis 1: Der Test gleichzeitiger unveränderter Anfragen wartet auf die Bereitschaft beider Aufträge und belegt das Warten auf die Sperre der Zeile; der Kommentar beschreibt genau das.
-4. Hinweis 2: Dauerhafte Tests für Wahrheitswerte in Name und Farbe am Server und für den Vorrang des Logotypfehlers vor einer veralteten Version im Testersatz.
-
-Nicht Teil: weitere Änderungen am Auftritt.
-
-**Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. T1 und T2 mit Browsertests, die die alte Antwort erst nach einem neueren gespeicherten Stand freigeben und prüfen, dass Name, Logo, Farbe und Version den neueren Stand behalten; dazu ein Test, dass eine Logo Ablage während des Ladens keine Änderung sendet.
-2. Hinweise 1 und 2 mit API und Browsertests.
-3. Bestehende Backend und Browser Tests bleiben grün.
-
-**Übergabe zur Prüfung (2026-11-08):**
-1. Ergebnis: DEC-120, ohne Migration. T1: `AppearancePage.tsx` übernimmt nach dem Verlassen der Seite keine Antwort mehr (`alive`), und `BrandProvider.accept` verwirft eine Antwort mit älterer Version als der bekannten. T2: Alle Schritte der Seite, auch Logo Ablage und Dateiauswahl, laufen über dieselbe Sperre (`working`, `begin`, `end`); eine Ablage während eines Vorgangs sendet nichts. Hinweis 1: `AppearanceApiTest.together` hält die Zeile gesperrt, wartet auf die Bereitschaft beider Aufträge und gibt die Sperre erst frei, wenn `pg_stat_activity` beide Anfragen wartend zeigt. Hinweis 2: Wahrheitswerte bei Name und Farbe und der Vorrang von 415 vor 412 beim Logo in `wrongJsonTypesAreRefusedLikeTheTestStandIn` und im Browsertest des Testersatzes.
-2. Nachweise (lokal, JDK 21, PostgreSQL 16): die Browsertests „a late answer of a page that was left takes nothing and keeps the newer saved version“ und „no logo can be dropped while the current version is loading and the old answer takes nothing back“ scheitern mit der Seite von main und laufen mit der Korrektur; die Ergebnisse der Gesamtläufe stehen im Ergebnis PR.
-3. Grenzen: Ein Lesevorgang wird beim Verlassen der Seite nicht abgebrochen; seine Antwort ändert die Seite nicht mehr, eine gleiche oder neuere Version erreicht aber den gemeinsamen Auftritt. Eine Ablage während eines Vorgangs wird ohne eigene Meldung übergangen; die Seite zeigt den laufenden Vorgang durch gesperrte Schaltflächen.
-4. Nachtrag nach der Claude Prüfung (docs/REVIEW_TASK-090_PR-268.md, Holgers Wahl „B1 beheben lassen“ vom 8. November 2026): B1: Ein erfolgreiches Speichern oder Laden, dessen Antwort nach dem Verlassen der Seite eintrifft, geht weiter an `accept` (`keep`), nur die Zustände der Seite bleiben unberührt; Browsertest „a save whose answer arrives after leaving the page is kept for the next visit“ scheitert ohne die Behebung. Hinweis 1: `newerOrSame` und `etagVersion` liegen in `brand.ts` mit eigenem Test in tests/brand.test.ts. Hinweis 2: Das eigene Laden des Providers nutzt denselben Vergleich. Hinweis 3: `together` nennt die Grenze durch `lock_timeout` von 5 Sekunden, gibt die Sperre vor dem Pool frei und öffnet den Start auch nach einem Fehlschlag. Dazu `{"name":false}` im Testersatz.
-
-**Nächster Schritt:** Prüfung durch eine zweite KI, danach Abnahme von TASK-081, TASK-087, TASK-089 und TASK-090 durch Holger.
