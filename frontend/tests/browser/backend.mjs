@@ -1676,8 +1676,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const languages = WIKI_LANGUAGES.filter((language) => versions[language] && (drafts || versions[language].publishedRevision !== null))
       .map((language) => ({ language, published: versions[language].publishedRevision !== null,
         changed: drafts && versions[language].publishedRevision !== versions[language].draftRevision }));
+    // As the server (F1 of the review): readers learn of the source and the translation only while the source is published.
+    const sourceVisible = drafts || page.publishedRevision !== null;
     let translation = null;
-    if (code !== page.language) {
+    if (code !== page.language && sourceVisible) {
       const sourcePublished = page.publishedRevision;
       const translated = (draft ?? published)?.sourceRevision ?? null;
       const outdated = translated !== null && sourcePublished !== null && translated < sourcePublished;
@@ -1695,8 +1697,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       parent = above.parentId;
     }
     return {
-      id: page.id, projectId: page.projectId, parentId: page.archived ? page.parentId : path.at(-1)?.id ?? null, language: code, sourceLanguage: page.language,
-      fallback: code !== (requested ?? page.language), languages, translation, archived: page.archived, version: page.version, access, path,
+      id: page.id, projectId: page.projectId, parentId: page.archived ? page.parentId : path.at(-1)?.id ?? null, language: code, sourceLanguage: sourceVisible ? page.language : null,
+      fallback: requested === null ? sourceVisible && code !== page.language : code !== requested, languages, translation, archived: page.archived, version: page.version, access, path,
       published: published && { revision: published.revision, title: published.title, html: wikiHtml(published.content, account, page.projectId),
         publishedAt: variant.publishedAt, publishedBy: variant.publishedBy },
       draft: draft && { revision: draft.revision, title: draft.title, content: draft.content, html: wikiHtml(draft.content, account, page.projectId),
@@ -1835,10 +1837,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const code = requested ?? page.language;
     const variant = wikiVariant(page, code);
     if (rest === '/languages' && method === 'POST') {
-      if (!access.edit) return problem(403, 'auth.forbidden');
-      if (page.archived) return problem(409, 'wiki.page_archived');
+      // As the server (H1 of the review): the language is checked before the right and the archive.
       if (body?.language === undefined || body?.language === null) return problem(400, 'request.invalid', { violations: ['language.required'] });
       if (!WIKI_LANGUAGES.includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      if (!access.edit) return problem(403, 'auth.forbidden');
+      if (page.archived) return problem(409, 'wiki.page_archived');
       if (wikiVariant(page, body.language)) return problem(409, 'wiki.language_exists');
       addWikiLanguage(page, body.language, account);
       return { ...wikiAnswer(account, page, body.language), status: 201 };
@@ -1885,6 +1888,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (rest === '/withdraw' && method === 'POST') {
       if (!access.publish) return problem(403, 'auth.forbidden');
+      if (page.archived) return problem(409, 'wiki.page_archived');
       if (!variant) return problem(404, 'wiki.language_not_found');
       if (variant.publishedRevision === null) return problem(409, 'wiki.not_published');
       const before = variant.publishedRevision;
@@ -2412,6 +2416,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addTicket,
     addWikiPage,
     addWikiLanguage,
+    // The wiki routes without a browser, for checks of the same answers as the server (H1 of the TASK-094 review).
+    wikiCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => wikiRoute(account, method, path, new URLSearchParams(query), headers, body),
     // A prepared cycle of a ticket, as the server would report it (TASK-068).
     addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {

@@ -120,7 +120,8 @@ public class WikiService {
 
     /**
      * A page in the shown {@code language}; {@code fallback} when that is not the requested language. {@code translation} is
-     * empty for the source language.
+     * empty for the source language. Readers get {@code sourceLanguage} and {@code translation} only while the source language
+     * is published, so that an unpublished version stays unknown to them.
      */
     public record PageView(UUID id, UUID projectId, UUID parentId, String language, String sourceLanguage, boolean fallback,
             List<LanguageView> languages, TranslationView translation, boolean archived, long version, Access access, List<Crumb> path,
@@ -608,9 +609,12 @@ public class WikiService {
                     access.drafts() && (!version.published() || version.publishedRevision() != version.draftRevision())));
             }
         }
+        // F1 of the review: readers learn of the source language and the translation only while the source is published.
+        WikiRepository.Variant sourceVariant = variants.get(page.language());
+        boolean sourceVisible = access.drafts() || (sourceVariant != null && sourceVariant.published());
         TranslationView translation = null;
-        if (!code.equals(page.language())) {
-            WikiRepository.Variant source = variants.get(page.language());
+        if (!code.equals(page.language()) && sourceVisible) {
+            WikiRepository.Variant source = sourceVariant;
             Integer sourcePublished = source != null && source.published() ? source.publishedRevision() : null;
             WikiRepository.Revision basis = draftRevision != null ? draftRevision : publishedRevision;
             Integer translated = basis == null ? null : basis.sourceRevision();
@@ -634,8 +638,8 @@ public class WikiService {
         if (page.archived()) {
             shownParent = page.parentId();
         }
-        boolean fallback = !code.equals(requested == null ? page.language() : requested);
-        return new PageView(page.id(), page.projectId(), shownParent, code, page.language(), fallback, languages, translation, page.archived(),
+        boolean fallback = requested == null ? sourceVisible && !code.equals(page.language()) : !code.equals(requested);
+        return new PageView(page.id(), page.projectId(), shownParent, code, sourceVisible ? page.language() : null, fallback, languages, translation, page.archived(),
             page.version(), access, path, published, draft, page.createdAt(), page.createdBy());
     }
 

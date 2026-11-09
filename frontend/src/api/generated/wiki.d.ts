@@ -389,7 +389,7 @@ export interface components {
             /** @description Nur für Personen mit Entwürfen; der Entwurf dieser Fassung ist neuer als ihre Veröffentlichung */
             changed: boolean;
         };
-        /** @description Nur für eine Übersetzung; fehlt (null) für die Ausgangssprache */
+        /** @description Nur für eine Übersetzung; null für die Ausgangssprache und für Leser, solange die Ausgangsfassung nicht veröffentlicht ist */
         Translation: {
             /** @description Übersetzte Revision der Ausgangssprache; für Leser null */
             sourceRevision: number | null;
@@ -407,7 +407,11 @@ export interface components {
             parentId: string | null;
             /** @description Gezeigte Sprachfassung */
             language: components["schemas"]["Language"];
-            sourceLanguage: components["schemas"]["Language"];
+            /**
+             * @description Ausgangssprache der Seite. Leser erhalten sie nur, solange die Ausgangsfassung veröffentlicht ist, sonst null
+             * @enum {string|null}
+             */
+            sourceLanguage: "de" | "en" | null;
             /** @description Die gezeigte Fassung ist nicht die gewünschte */
             fallback: boolean;
             /** @description Fassungen der Seite; Leser erhalten nur veröffentlichte */

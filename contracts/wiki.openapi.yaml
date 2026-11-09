@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Wiki (TASK-093, TASK-094)
-  version: 0.2.0
+  version: 0.2.1
   description: |
     Wikiseiten in Projekten mit Entwurf, ausdrücklicher Veröffentlichung, Revisionen, Historie, Archiv, Bildern und Verweisen
     (REQ-DOC-001, REQ-DOC-002, REQ-DOC-004, DEC-033, DEC-123). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -600,7 +600,7 @@ components:
         changed: {type: boolean, description: Nur für Personen mit Entwürfen; der Entwurf dieser Fassung ist neuer als ihre Veröffentlichung}
     Translation:
       type: [object, 'null']
-      description: Nur für eine Übersetzung; fehlt (null) für die Ausgangssprache
+      description: Nur für eine Übersetzung; null für die Ausgangssprache und für Leser, solange die Ausgangsfassung nicht veröffentlicht ist
       required: [sourceRevision, sourcePublishedRevision, outdated]
       properties:
         sourceRevision: {type: [integer, 'null'], description: Übersetzte Revision der Ausgangssprache; für Leser null}
@@ -615,7 +615,10 @@ components:
         projectId: {type: string, format: uuid}
         parentId: {type: [string, 'null'], format: uuid}
         language: {$ref: '#/components/schemas/Language', description: Gezeigte Sprachfassung}
-        sourceLanguage: {$ref: '#/components/schemas/Language'}
+        sourceLanguage:
+          type: [string, 'null']
+          enum: [de, en, null]
+          description: Ausgangssprache der Seite. Leser erhalten sie nur, solange die Ausgangsfassung veröffentlicht ist, sonst null
         fallback: {type: boolean, description: Die gezeigte Fassung ist nicht die gewünschte}
         languages:
           type: array

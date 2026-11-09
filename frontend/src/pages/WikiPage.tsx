@@ -173,14 +173,15 @@ function BlockText({ block, refs }: { readonly block: Block; readonly refs: bool
   );
 }
 
-function DiffView({ entries, testId }: { readonly entries: readonly DiffEntry[]; readonly testId: string }) {
+/** `lang` marks the compared texts when they are in another language than the interface (H2 of the TASK-094 review). */
+function DiffView({ entries, testId, lang }: { readonly entries: readonly DiffEntry[]; readonly testId: string; readonly lang?: string }) {
   const { t } = useI18n();
   const changes = entries.filter((entry) => entry.op !== 'same');
   if (changes.length === 0) return <p className="hint" data-testid={`${testId}-none`}>{t('wiki.diff.none')}</p>;
   return (
     <ol className="wiki-diff" data-testid={testId}>
       {entries.map((entry, index) => {
-        if (entry.op === 'same') return <li key={index} className="diff-same">{entry.block.text || ' '}</li>;
+        if (entry.op === 'same') return <li key={index} className="diff-same" lang={lang}>{entry.block.text || ' '}</li>;
         if (entry.op === 'changed') {
           // Same text with other targets, images or marks: the targets are named, a pure format change is said in words.
           const refs = entry.before.refs.join(' ') !== entry.after.refs.join(' ');
@@ -189,8 +190,8 @@ function DiffView({ entries, testId }: { readonly entries: readonly DiffEntry[];
             <li key={index} className="diff-changed" data-op="changed">
               <span className="diff-label">{t('wiki.diff.changed')}</span>
               {formatOnly && <span className="diff-refs" data-testid="wiki-diff-format">{t('wiki.diff.format')}</span>}
-              <del><BlockText block={entry.before} refs={refs} /></del>
-              <ins><BlockText block={entry.after} refs={refs} /></ins>
+              <del lang={lang}><BlockText block={entry.before} refs={refs} /></del>
+              <ins lang={lang}><BlockText block={entry.after} refs={refs} /></ins>
             </li>
           );
         }
@@ -198,8 +199,8 @@ function DiffView({ entries, testId }: { readonly entries: readonly DiffEntry[];
           <li key={index} className={`diff-${entry.op}`} data-op={entry.op}>
             <span className="diff-label">{t(entry.op === 'added' ? 'wiki.diff.added' : 'wiki.diff.removed')}</span>
             {entry.op === 'added'
-              ? <ins><BlockText block={entry.block} refs /></ins>
-              : <del><BlockText block={entry.block} refs /></del>}
+              ? <ins lang={lang}><BlockText block={entry.block} refs /></ins>
+              : <del lang={lang}><BlockText block={entry.block} refs /></del>}
           </li>
         );
       })}
@@ -529,7 +530,7 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
               {shown !== null && (
                 <section className="card stack" data-testid="wiki-revision-view">
                   <h3>{t('wiki.history.viewing', { revision: shown.revision, title: shown.title })}</h3>
-                  <Content html={shown.html} testId="wiki-revision-content" />
+                  <div lang={page.language}><Content html={shown.html} testId="wiki-revision-content" /></div>
                   <div className="actions"><button type="button" className="secondary" onClick={() => setShown(null)}>{t('wiki.history.hide')}</button></div>
                 </section>
               )}
@@ -626,21 +627,30 @@ function LanguageBar({ page, onChoose, onAdded }: {
   const problem = useWikiProblem();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // H2 of the review: the add button disappears, so the focus moves to the button of the added version.
+  const [focusOn, setFocusOn] = useState<WikiLanguage | null>(null);
+  const group = useRef<HTMLDivElement>(null);
   const known = new Set(page.languages.map((item) => item.language));
   const missing = page.access.edit && !page.archived ? LANGUAGES.filter((code) => !known.has(code)) : [];
+  useEffect(() => {
+    if (focusOn === null || focusOn !== page.language) return;
+    group.current?.querySelector<HTMLButtonElement>(`button[data-language="${focusOn}"]`)?.focus();
+    setFocusOn(null);
+  }, [focusOn, page.language]);
 
   async function add(language: WikiLanguage) {
     setBusy(true);
     const result = await addWikiLanguage(api, page.id, language);
     setBusy(false);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: problem(result.problem) });
+    setFocusOn(language);
     onAdded(result.data.value);
   }
 
   if (page.languages.length < 2 && missing.length === 0) return null;
   return (
     <div className="stack" data-testid="wiki-languages">
-      <div className="actions" role="group" aria-label={t('wiki.languages')}>
+      <div className="actions" role="group" aria-label={t('wiki.languages')} ref={group}>
         {page.languages.map((item) => (
           <button key={item.language} type="button" className={item.language === page.language ? undefined : 'secondary'}
             aria-pressed={item.language === page.language} data-language={item.language} onClick={() => onChoose(item.language)}>
@@ -660,32 +670,75 @@ function LanguageBar({ page, onChoose, onAdded }: {
   );
 }
 
-/** For people with drafts: the source was published again after the revision this translation translates, with the changes. */
+/** The compared source revisions: their pair, a changed title and the changed blocks. */
+type SourceDiff = {
+  readonly pair: string;
+  readonly title: { readonly before: string; readonly after: string } | null;
+  readonly entries: readonly DiffEntry[];
+};
+
+/**
+ * For people with drafts: the source was published again after the revision this translation translates, with the changes
+ * of title and content (F3 of the review). A comparison belongs to its pair of revisions; when the pair changes it is
+ * dropped, and a late answer of an older pair is not taken (F4).
+ */
 function SourceChange({ page }: { readonly page: Page }) {
   const { t } = useI18n();
   const { api } = useBrand();
   const problem = useWikiProblem();
-  const [entries, setEntries] = useState<DiffEntry[] | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
   const from = page.translation?.sourceRevision ?? null;
   const to = page.translation?.sourcePublishedRevision ?? null;
-  if (from === null || to === null) return null;
+  const source = page.sourceLanguage;
+  const pair = `${page.id} ${source ?? ''} ${from ?? ''} ${to ?? ''}`;
+  const current = useRef(pair);
+  current.current = pair;
+  const [diff, setDiff] = useState<SourceDiff | null>(null);
+  const [notice, setNotice] = useState<{ readonly pair: string; readonly notice: Notice } | null>(null);
+  const result = useRef<HTMLDivElement>(null);
+  const shown = diff !== null && diff.pair === pair ? diff : null;
+  useEffect(() => {
+    if (shown !== null) result.current?.focus();
+  }, [shown]);
+  if (from === null || to === null || source === null) return null;
 
-  async function compare(left: number, right: number) {
-    const [a, b] = await Promise.all([readWikiRevision(api, page.id, page.sourceLanguage, left), readWikiRevision(api, page.id, page.sourceLanguage, right)]);
-    if (a.kind !== 'ok') return setNotice({ kind: 'info', text: problem(a.problem) });
-    if (b.kind !== 'ok') return setNotice({ kind: 'info', text: problem(b.problem) });
-    setEntries(diffBlocks(blocksOf(a.data.value.content), blocksOf(b.data.value.content)));
+  async function compare(asked: string, language: WikiLanguage, left: number, right: number) {
+    const [a, b] = await Promise.all([readWikiRevision(api, page.id, language, left), readWikiRevision(api, page.id, language, right)]);
+    if (current.current !== asked) return;
+    if (a.kind !== 'ok') return setNotice({ pair: asked, notice: { kind: 'info', text: problem(a.problem) } });
+    if (b.kind !== 'ok') return setNotice({ pair: asked, notice: { kind: 'info', text: problem(b.problem) } });
+    const before = a.data.value.title;
+    const after = b.data.value.title;
+    setDiff({ pair: asked, title: before === after ? null : { before, after },
+      entries: diffBlocks(blocksOf(a.data.value.content), blocksOf(b.data.value.content)) });
   }
 
+  const contentChanged = shown !== null && shown.entries.some((entry) => entry.op !== 'same');
   return (
     <section className="card stack" data-testid="wiki-source-changed" aria-labelledby="wiki-source-changed-title">
       <h3 id="wiki-source-changed-title">{t('wiki.translation.changed')}</h3>
-      <p>{t('wiki.translation.changedText', { from, to, language: t(languageName(page.sourceLanguage)) })}</p>
-      <NoticeView notice={notice} />
-      {entries === null
-        ? <div className="actions"><button type="button" className="secondary" onClick={() => void compare(from, to)}>{t('wiki.translation.compare')}</button></div>
-        : <DiffView entries={entries} testId="wiki-source-diff" />}
+      <p>{t('wiki.translation.changedText', { from, to, language: t(languageName(source)) })}</p>
+      <NoticeView notice={notice !== null && notice.pair === pair ? notice.notice : null} />
+      {shown === null
+        ? (
+          <div className="actions">
+            <button type="button" className="secondary" onClick={() => void compare(pair, source, from, to)}>{t('wiki.translation.compare')}</button>
+          </div>
+        )
+        : (
+          <div className="stack" ref={result} tabIndex={-1} data-testid="wiki-source-result" aria-label={t('wiki.translation.result', { from, to })}>
+            {shown.title !== null && (
+              <dl className="wiki-source-title" data-testid="wiki-source-title">
+                <dt>{t('wiki.translation.titleBefore')}</dt>
+                <dd lang={source}>{shown.title.before}</dd>
+                <dt>{t('wiki.translation.titleAfter')}</dt>
+                <dd lang={source}>{shown.title.after}</dd>
+              </dl>
+            )}
+            {shown.title !== null && !contentChanged
+              ? <p className="hint" data-testid="wiki-source-diff-none">{t('wiki.translation.contentSame')}</p>
+              : <DiffView entries={shown.entries} testId="wiki-source-diff" lang={source} />}
+          </div>
+        )}
     </section>
   );
 }
@@ -707,10 +760,16 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
   const { api } = useBrand();
   const name = useAccountName();
   const problem = useWikiProblem();
-  // The language asked for: first the one of the interface, then the version the person chose.
-  const [wanted, setWanted] = useState<WikiLanguage>(wikiLanguage(language));
+  // The language asked for (F2 of the review): the version the person chose on this page, else the current language of the
+  // interface. While the editor is open the version stays fixed, so that a change of the interface language keeps the input.
+  const [chosen, setChosen] = useState<{ readonly pageId: string; readonly language: WikiLanguage } | null>(null);
+  const [pinned, setPinned] = useState<WikiLanguage | null>(null);
+  const wanted = pinned ?? (chosen !== null && chosen.pageId === pageId ? chosen.language : wikiLanguage(language));
   const [loaded, retry, replace] = useLoad(() => readWikiPage(api, pageId, wanted), [api, pageId, wanted]);
   const [mode, setMode] = useState<Mode>('read');
+  useEffect(() => {
+    if (mode !== 'edit') setPinned(null);
+  }, [mode]);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const nodes = useMemo(() => buildTree(tree.pages, language), [tree.pages, language]);
@@ -718,7 +777,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
   const depth = flat.find((row) => row.item.id === pageId)?.depth ?? 1;
 
   function changed(page: Page, text: string | null, next: Mode = 'read') {
-    if (page.language !== wanted) setWanted(page.language);
+    if (page.language !== wanted) setChosen({ pageId: page.id, language: page.language });
     replace({ value: page, etag: page.draft === null ? null : `"${page.draft.revision}"` });
     setMode(next);
     setNotice(text === null ? null : { kind: 'success', text });
@@ -754,7 +813,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
             )}
             <h2 className="wiki-title" data-testid="wiki-title" lang={page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
-              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setWanted(code); }}
+              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setChosen({ pageId: page.id, language: code }); }}
                 onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
             )}
             {page.fallback && (
@@ -762,7 +821,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
                 {t('wiki.language.fallback', { wanted: t(languageName(wanted)), shown: t(languageName(page.language)) })}
               </p>
             )}
-            {page.translation?.outdated === true && !drafts && (
+            {page.translation?.outdated === true && !drafts && page.sourceLanguage !== null && (
               <p className="hint" data-testid="wiki-outdated">{t('wiki.translation.outdatedReader', { language: t(languageName(page.sourceLanguage)) })}</p>
             )}
             {page.translation?.outdated === true && drafts && mode !== 'edit' && <SourceChange page={page} />}
@@ -779,7 +838,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
               <div className="actions" data-testid="wiki-actions">
                 {mode !== 'read' && <button type="button" className="secondary" onClick={() => setMode('read')}>{t('wiki.action.read')}</button>}
                 {page.access.edit && !page.archived && draft !== null && (
-                  <button type="button" onClick={() => { setNotice(null); setMode('edit'); }} data-testid="wiki-edit-open">{t('wiki.action.edit')}</button>
+                  <button type="button" onClick={() => { setNotice(null); setPinned(page.language); setMode('edit'); }} data-testid="wiki-edit-open">{t('wiki.action.edit')}</button>
                 )}
                 {page.access.publish && !page.archived && draft !== null && (page.published === null || draft.changed) && (
                   <button type="button" onClick={() => setMode('publish')} data-testid="wiki-publish">{t('wiki.action.publish')}</button>
