@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,78 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-090 Befunde der Prüfung von TASK-089 beheben (A17)
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-119, DEC-120. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** T1 und T2 mit Browsertests, die die alte Antwort erst nach einem neueren gespeicherten Stand freigeben und prüfen, dass Name, Logo, Farbe und Version den neueren Stand behalten; ein Test, dass eine Logo Ablage während des Ladens keine Änderung sendet; Hinweise 1 und 2 mit API und Browsertests; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-120 mit Nachtrag, ohne Migration. Die Seite „Erscheinungsbild“ ändert nach dem Verlassen keinen eigenen Zustand mehr; eine erfolgreiche Antwort erreicht aber weiter den gemeinsamen Auftritt (B1). `BrandProvider.accept` und das eigene Laden des Providers nehmen nie eine ältere Version als die bekannte (`newerOrSame` in `brand.ts`). Alle Schritte der Seite, auch Logo Ablage und Dateiauswahl, laufen über eine gemeinsame Sperre. `AppearanceApiTest.together` hält die Zeile gesperrt, bis `pg_stat_activity` beide Anfragen wartend zeigt, und nennt die Grenze durch `lock_timeout`. Wahrheitswerte und der Vorrang von 415 vor 412 beim Logo sind an Server und Testersatz getestet.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (545 Tests, `AppearanceApiTest` 25). Frontend `npm test` 84 Tests, `npm run verify`, `npm run test:browser` 210 von 210. Die Browsertests zu T1 und T2 scheitern mit der Seite von main, der Test zu B1 ohne die Behebung. CI auf PR #268 grün.
+
+**Review:** Getrennte Prüfung durch Claude an Stelle von Codex, Sitzung claude-20261108-task090-review-01 ([Bericht](docs/REVIEW_TASK-090_PR-268.md), PR #270): zunächst „nachbessern“ mit B1 (gespeicherte Antwort nach dem Verlassen ging verloren) und drei Hinweisen, nach der Behebung in PR #268 Empfehlung „abnehmen“ mit eigenen Proben P1 bis P5.
+
+**Abnahme:** Holger, 2026-11-09, im Thread zu Paket A17 mit „alles gut“ auf den Vorschlag, TASK-081, TASK-087, TASK-089 und TASK-090 nach grünem CI und der Empfehlung „abnehmen“ der Nachprüfung zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein Sperrablauf am Auftritt endet als 500 statt als wiederholbares 503 (Hinweis 4 der Prüfung). Ein Lesevorgang wird beim Verlassen der Seite nicht abgebrochen; eine Ablage während eines Vorgangs wird ohne eigene Meldung übergangen.
+
+**Referenz:** Reservierung mit Codex Bericht zu TASK-089 #265 (7512d2a), Ergebnis #268 (62007bf), Prüfbericht #270 (da3c1e7); verknüpft mit TASK-089 und DEC-120.
+
+## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001; DEC-117, DEC-119. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** S1 mit Browsertests für gleiche Version, Ladefehler und eine danach folgende Bearbeitung eines anderen Teils; S2 und H2 mit Browsertests oder direkten Aufrufen des Testersatzes; H1 mit einem API Test gegen die echte Datenbank; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-119, ohne Migration. „Aktuellen Stand laden“ nach einem Versionskonflikt liest den Auftritt in der Seite selbst und übernimmt genau diese Antwort für den gescheiterten Teil, auch bei gleicher Version; ein Lesefehler lässt alle Eingaben stehen und bietet „Erneut versuchen“. Der Testersatz antwortet auf falsche JSON Typen und Logotypen wie der Server; ein API Test belegt gleichzeitige Anfragen ohne Änderung und die Ablehnung einer veralteten Version.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal grün (542 Tests). Frontend `npm run verify`, `npm run test:browser` 205 von 205. CI auf PR #263 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzungen codex-20261106-task089-review-01 und codex-20261108-task089-review-01 ([Bericht](docs/REVIEW_TASK-089_PR-263.md), PR #264 und Nachtrag in #265): S1, S2, H1 und H2 wirksam, aber „nachbessern“ mit T1 und T2 und zwei Hinweisen; alle mit TASK-090 behoben und nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-09, im Thread zu Paket A17 mit „alles gut“ auf den Vorschlag, TASK-081, TASK-087, TASK-089 und TASK-090 nach grünem CI und der Empfehlung „abnehmen“ der Nachprüfung zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Referenz:** Reservierung mit Bericht der zweiten Nachprüfung von TASK-087 #262 (bff7a72), Ergebnis #263 (6f14fd7), Prüfbericht #264 (6719883); verknüpft mit TASK-087, TASK-090 und DEC-119.
+
+## TASK-087 Befunde der Prüfung von TASK-081 beheben (A17)
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; DEC-111, DEC-117. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** F1 und H1 mit API und Migrationstests für U+00A0, U+2007, U+202F und einen einzelnen Surrogaten; F2, F3 und F4 mit Browsertests (verlorene Eingabe, Fokus über `document.activeElement`, sichtbare Ausdehnung des Namens mit und ohne Logo bei 1100 und 320 px); H2 mit einem API Test für ein identisches PUT; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-117, Migration V0054. Eine ausgeschriebene Regel des Namens gilt gleich in `AppearanceService`, als Datenbankprüfung in V0054, in `frontend/src/api/client.ts` und im Testersatz; V0054 bereinigt gespeicherte Namen. Ein unverändertes `PUT`, Zurücksetzen im Standardzustand, Logo entfernen ohne Logo und dasselbe Logo lassen Version und Audit stehen; das Audit nennt nur geänderte Teile. Speichern und „Aktuellen Stand laden“ übernehmen nur den betroffenen Teil, der Fokus geht auf die Rückmeldung und nach „Abbrechen“ auf „Alles zurücksetzen“. Der Name ist neben dem Logo und bei schmaler Ansicht sichtbar. Vertrag appearance 0.3.2 mit HEAD der öffentlichen Pfade und der Normalisierung des Namens.
+
+**Prüfungen:** Backend vollständig gegen PostgreSQL 16 lokal (522 Tests, ein Lauf ohne Bezug rot und in der Wiederholung grün), `AppearanceNameMigrationTest` von V0052 auf V0054. Frontend `npm run verify`, Browsertests mit erhaltenen Eingaben, Fokus und sichtbarem Namen. CI auf PR #259 grün einschließlich Lifecycle.
+
+**Review:** Getrennte Nachprüfungen durch Codex, Sitzungen codex-20261104-branding-followup-01 ([Bericht](docs/REVIEW_TASK-087_PR-259.md)) mit R1, R2, H1 und H2, im selben PR #259 behoben, und codex-20261106-task087-followup-02 ([Bericht](docs/REVIEW_TASK-087_PR-259_2.md)) mit S1, S2, H1 und H2, behoben mit TASK-089.
+
+**Abnahme:** Holger, 2026-11-09, im Thread zu Paket A17 mit „alles gut“ auf den Vorschlag, TASK-081, TASK-087, TASK-089 und TASK-090 nach grünem CI und der Empfehlung „abnehmen“ der Nachprüfung zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Die Liste der Formatzeichen folgt Unicode 15.1; V0054 schreibt für eine Bereinigung keinen Auditeintrag; die Stabilisierung der Tagtests (H4 der Prüfung von TASK-081) gehört zur Testpflege.
+
+**Referenz:** Reservierung mit Codex Prüfbericht zu TASK-081 #255 (faf73a1), Ergebnis #259 (b783b35); verknüpft mit TASK-081, TASK-089 und DEC-117.
+
+## TASK-081 Auftritt für Anmeldung und Portal (A17 Teil 1)
+
+**Bezug:** REQ-BRAND-001, REQ-UX-001, REQ-PORTAL-001; OPEN-015; DEC-060, DEC-064, DEC-111. **Verantwortlich:** claude-20261102-branding-01. **Abgeschlossen:** 2026-11-09.
+
+**Abnahmekriterien:** Eine Änderung von Name, Farbe und Logo wirkt auf Anwendung, Anmeldeseite und Portal und lässt sich zurücksetzen (W14); der öffentliche Lesepfad gibt nur Name, Farbe und Logo preis; ungültige Namen werden mit 400 abgelehnt; Änderungen ohne `appearance.manage` oder mit veralteter Version werden abgelehnt; Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Anmeldeseite, Portal und Vorschau in Hell und Dunkel.
+
+**Fachliche Regeln** (von Holger am 2. November 2026 mit den Vorschlägen zu A17 bestätigt): Name mit 1 bis 80 Zeichen, Vorgabe „Task Manager“; öffentlicher Lesepfad nur für Name, Akzentfarbe und Logo; Auftritt auf Anmeldung, Pflichtwechsel und der Seite nach dem Abmelden; das Portal nutzt denselben Auftritt mit dem Zusatz „Kundenportal“; Schrift auf Akzentflächen automatisch schwarz oder weiß; Logo als PNG, JPEG oder WebP bis 512 KB; Änderungen sofort mit Version und Audit, „Alles zurücksetzen“ in einem Schritt; Vorschau von Anwendung, Anmeldeseite, Portal und Beispielmail auf Deutsch und Englisch; Recht `appearance.manage`.
+
+**Ergebnis:** DEC-111, Migration V0046. `PUT /api/v1/appearance` für Farbe, Name oder beides, `DELETE /api/v1/appearance` setzt alles zurück, `GET` und `HEAD` von `/api/v1/appearance/public` und `/public/logo` ohne Sitzung. Oberfläche: Anmeldeseite, Passwortwechsel und Seite nach dem Abmelden mit dem öffentlichen Auftritt, Portal mit „Kundenportal“, Seite „Erscheinungsbild“ mit Name, „Alles zurücksetzen“ und Vorschau. Die Befunde der Prüfung wurden mit TASK-087, TASK-089 und TASK-090 behoben.
+
+**Prüfungen:** `AppearanceApiTest`, `AppearanceContractTest`, `DatabaseFoundationTest`, `ApplicationLifecycleTest` und `lifecycle-check.sh` mit V0046, voller Backendlauf mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich neuer Fälle in `design.test.mjs` und `portal.test.mjs` bei 320 px und mit Kontrast hell und dunkel. CI auf PR #243 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261102-branding-review-01 ([Bericht](docs/REVIEW_TASK-081_PR-243.md), PR #255): „nachbessern“ mit F1 bis F4 und H1 bis H4; F1 bis F4 und H1 bis H3 mit TASK-087 behoben, die Folgebefunde mit TASK-089 und TASK-090, jeweils nachgeprüft.
+
+**Abnahme:** Holger, 2026-11-09, im Thread zu Paket A17 mit „alles gut“ auf den Vorschlag, TASK-081, TASK-087, TASK-089 und TASK-090 nach grünem CI und der Empfehlung „abnehmen“ der Nachprüfung zusammen abzunehmen; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ein geändertes Logo erscheint auf geöffneten Anmeldeseiten erst beim nächsten Laden.
+
+**Referenz:** Reservierung #242 (e450c14), Ergebnis #243 (db2b62d), Prüfbericht mit der Reservierung von TASK-087 #255; verknüpft mit TASK-082, TASK-087, TASK-089, TASK-090 und DEC-111.
 
 ## TASK-086 Befunde beider Prüfungen von TASK-072 und TASK-073 beheben (A3)
 
