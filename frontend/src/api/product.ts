@@ -825,36 +825,45 @@ const isWikiHistory = (v: unknown) => record(v) && Array.isArray(v.revisions) &&
 const isWikiRevision = (v: unknown) => hasStrings(v, 'title', 'html') && isWikiDocument((v as WikiRevisionContent).content);
 const isWikiImage = (v: unknown) => hasStrings(v, 'id', 'src', 'mediaType');
 
+export type WikiLanguage = WikiTypes['schemas']['Language'];
+
 export const listWikiProjects = (api: ServerApi) => run(() => api.wiki.GET('/wiki/projects'), listOf<WikiProject>(isWikiProject));
-export const readWikiTree = (api: ServerApi, projectId: string, archived = false) =>
-  run(() => api.wiki.GET('/wiki/projects/{projectId}/pages', { params: { path: { projectId }, query: { archived } } }), one<WikiTree>(isWikiTree));
-export const createWikiPage = (api: ServerApi, projectId: string, title: string, parentId: string | null) =>
-  run(() => api.wiki.POST('/wiki/projects/{projectId}/pages', { params: { path: { projectId } }, body: { title, parentId, content: null } }),
+export const readWikiTree = (api: ServerApi, projectId: string, language: WikiLanguage, archived = false) =>
+  run(() => api.wiki.GET('/wiki/projects/{projectId}/pages', { params: { path: { projectId }, query: { archived, language } } }), one<WikiTree>(isWikiTree));
+export const createWikiPage = (api: ServerApi, projectId: string, title: string, parentId: string | null, language: WikiLanguage) =>
+  run(() => api.wiki.POST('/wiki/projects/{projectId}/pages', { params: { path: { projectId } }, body: { title, parentId, content: null, language } }),
     one<WikiPage>(isWikiPage));
-export const readWikiPage = (api: ServerApi, pageId: string) =>
-  run(() => api.wiki.GET('/wiki/pages/{pageId}', { params: { path: { pageId } } }), one<WikiPage>(isWikiPage));
-// The draft is saved on the basis of the revision the editor started from; a newer draft answers 412.
-export const saveWikiDraft = (api: ServerApi, pageId: string, revision: number, title: string, content: WikiDocument) =>
-  run(() => api.wiki.PUT('/wiki/pages/{pageId}/draft', { params: { path: { pageId }, ...ifMatch(`"${revision}"`) }, body: { title, content } }),
+export const readWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}', { params: { path: { pageId }, query: { language } } }), one<WikiPage>(isWikiPage));
+// The draft of one language is saved on the basis of the revision the editor started from; a newer draft answers 412.
+export const saveWikiDraft = (api: ServerApi, pageId: string, language: WikiLanguage, revision: number, title: string, content: WikiDocument,
+  sourceRevision: number | null = null) =>
+  run(() => api.wiki.PUT('/wiki/pages/{pageId}/draft', { params: { path: { pageId }, query: { language }, ...ifMatch(`"${revision}"`) },
+    body: sourceRevision === null ? { title, content } : { title, content, sourceRevision } }), one<WikiPage>(isWikiPage));
+export const publishWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage, revision: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/publish', { params: { path: { pageId }, query: { language }, ...ifMatch(`"${revision}"`) }, body: { revision } }),
     one<WikiPage>(isWikiPage));
-export const publishWikiPage = (api: ServerApi, pageId: string, revision: number) =>
-  run(() => api.wiki.POST('/wiki/pages/{pageId}/publish', { params: { path: { pageId }, ...ifMatch(`"${revision}"`) }, body: { revision } }),
+export const withdrawWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/withdraw', { params: { path: { pageId }, query: { language } } }), one<WikiPage>(isWikiPage));
+export const addWikiLanguage = (api: ServerApi, pageId: string, language: WikiLanguage) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/languages', { params: { path: { pageId } }, body: { language } }), one<WikiPage>(isWikiPage));
+export const readWikiHistory = (api: ServerApi, pageId: string, language: WikiLanguage) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}/history', { params: { path: { pageId }, query: { language } } }), one<WikiHistory>(isWikiHistory));
+export const readWikiRevision = (api: ServerApi, pageId: string, language: WikiLanguage, revision: number) =>
+  run(() => api.wiki.GET('/wiki/pages/{pageId}/revisions/{revision}', { params: { path: { pageId, revision }, query: { language } } }),
+    one<WikiRevisionContent>(isWikiRevision));
+export const restoreWikiRevision = (api: ServerApi, pageId: string, language: WikiLanguage, revision: number, draft: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/revisions/{revision}/restore', { params: { path: { pageId, revision }, query: { language },
+    ...ifMatch(`"${draft}"`) } }), one<WikiPage>(isWikiPage));
+export const moveWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage, version: number, parentId: string | null) =>
+  run(() => api.wiki.PUT('/wiki/pages/{pageId}/parent', { params: { path: { pageId }, query: { language } }, body: { parentId, version } }),
     one<WikiPage>(isWikiPage));
-export const withdrawWikiPage = (api: ServerApi, pageId: string) =>
-  run(() => api.wiki.POST('/wiki/pages/{pageId}/withdraw', { params: { path: { pageId } } }), one<WikiPage>(isWikiPage));
-export const readWikiHistory = (api: ServerApi, pageId: string) =>
-  run(() => api.wiki.GET('/wiki/pages/{pageId}/history', { params: { path: { pageId } } }), one<WikiHistory>(isWikiHistory));
-export const readWikiRevision = (api: ServerApi, pageId: string, revision: number) =>
-  run(() => api.wiki.GET('/wiki/pages/{pageId}/revisions/{revision}', { params: { path: { pageId, revision } } }), one<WikiRevisionContent>(isWikiRevision));
-export const restoreWikiRevision = (api: ServerApi, pageId: string, revision: number, draft: number) =>
-  run(() => api.wiki.POST('/wiki/pages/{pageId}/revisions/{revision}/restore', { params: { path: { pageId, revision }, ...ifMatch(`"${draft}"`) } }),
+export const archiveWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage, version: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/archive', { params: { path: { pageId }, query: { language } }, body: { version } }),
     one<WikiPage>(isWikiPage));
-export const moveWikiPage = (api: ServerApi, pageId: string, version: number, parentId: string | null) =>
-  run(() => api.wiki.PUT('/wiki/pages/{pageId}/parent', { params: { path: { pageId } }, body: { parentId, version } }), one<WikiPage>(isWikiPage));
-export const archiveWikiPage = (api: ServerApi, pageId: string, version: number) =>
-  run(() => api.wiki.POST('/wiki/pages/{pageId}/archive', { params: { path: { pageId } }, body: { version } }), one<WikiPage>(isWikiPage));
-export const unarchiveWikiPage = (api: ServerApi, pageId: string, version: number) =>
-  run(() => api.wiki.POST('/wiki/pages/{pageId}/unarchive', { params: { path: { pageId } }, body: { version } }), one<WikiPage>(isWikiPage));
+export const unarchiveWikiPage = (api: ServerApi, pageId: string, language: WikiLanguage, version: number) =>
+  run(() => api.wiki.POST('/wiki/pages/{pageId}/unarchive', { params: { path: { pageId }, query: { language } }, body: { version } }),
+    one<WikiPage>(isWikiPage));
 export const uploadWikiImage = (api: ServerApi, pageId: string, file: Blob) =>
   run(() => api.wiki.POST('/wiki/pages/{pageId}/images', {
     params: { path: { pageId } },

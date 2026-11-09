@@ -39,11 +39,12 @@ class WikiRepository {
         }
     }
 
+    /** {@code sourceRevision}: the revision of the source language a translation translates; empty for the source language. */
     record Revision(UUID pageId, String language, int revision, String title, String content, int schemaVersion, Instant savedAt, UUID savedBy,
-            Integer basedOn, Integer restoredFrom) {
+            Integer basedOn, Integer restoredFrom, Integer sourceRevision) {
     }
 
-    /** A page of the tree with the titles of its draft and of its publication. */
+    /** One language version of a page of the tree with the titles of its draft and of its publication. */
     record TreeRow(Page page, Variant variant, String draftTitle, String publishedTitle, Instant savedAt, UUID savedBy) {
     }
 
@@ -74,10 +75,16 @@ class WikiRepository {
             instant(rs.getTimestamp("published_at")), rs.getObject("published_by", UUID.class));
     }
 
+    private static Variant treeVariant(ResultSet rs) throws SQLException {
+        Variant variant = variant(rs);
+        return new Variant(variant.pageId(), rs.getString("variant_language"), variant.draftRevision(), variant.publishedRevision(),
+            variant.publishedAt(), variant.publishedBy());
+    }
+
     private static Revision revision(ResultSet rs, boolean content) throws SQLException {
         return new Revision(rs.getObject("page_id", UUID.class), rs.getString("language"), rs.getInt("revision"), rs.getString("title"),
             content ? rs.getString("content") : null, rs.getInt("schema_version"), instant(rs.getTimestamp("saved_at")), rs.getObject("saved_by", UUID.class),
-            integer(rs, "based_on"), integer(rs, "restored_from"));
+            integer(rs, "based_on"), integer(rs, "restored_from"), integer(rs, "source_revision"));
     }
 
     // ------------------------------------------------------------------------------------------------ pages
@@ -118,18 +125,19 @@ class WikiRepository {
         jdbc.sql("update wiki_page set parent_id = ?, version = version + 1 where parent_id = ? and archived_at is null").params(to, from).update();
     }
 
-    /** Every page of the project with its main language version, archived ones only when asked for. */
+    /** Every language version of the pages of the project, archived pages only when asked for. */
     List<TreeRow> tree(UUID companyId, UUID projectId, boolean archived) {
         return jdbc.sql("select " + PAGE + ", " + VARIANT + """
-                , d.title as draft_title, d.saved_at, d.saved_by, r.title as published_title
+                , v.language as variant_language, d.title as draft_title, d.saved_at, d.saved_by, r.title as published_title
                 from wiki_page p
-                join wiki_variant v on v.page_id = p.id and v.language = p.language
-                join wiki_revision d on d.page_id = p.id and d.language = p.language and d.revision = v.draft_revision
-                left join wiki_revision r on r.page_id = p.id and r.language = p.language and r.revision = v.published_revision
+                join wiki_variant v on v.page_id = p.id
+                join wiki_revision d on d.page_id = p.id and d.language = v.language and d.revision = v.draft_revision
+                left join wiki_revision r on r.page_id = p.id and r.language = v.language and r.revision = v.published_revision
                 where p.company_id = ? and p.project_id = ? and (p.archived_at is null) <> ?
                 """)
             .params(companyId, projectId, archived)
-            .query((rs, n) -> new TreeRow(page(rs), variant(rs), rs.getString("draft_title"), rs.getString("published_title"),
+            // Page and variant both have a column "language"; the one of the variant is read under its own name.
+            .query((rs, n) -> new TreeRow(page(rs), treeVariant(rs), rs.getString("draft_title"), rs.getString("published_title"),
                 instant(rs.getTimestamp("saved_at")), rs.getObject("saved_by", UUID.class)))
             .list();
     }
@@ -139,6 +147,12 @@ class WikiRepository {
     Optional<Variant> variant(UUID pageId, String language) {
         return jdbc.sql("select " + VARIANT + " from wiki_variant v where v.page_id = ? and v.language = ?").params(pageId, language)
             .query((rs, n) -> variant(rs)).optional();
+    }
+
+    /** The language versions of a page. */
+    List<Variant> variants(UUID pageId) {
+        return jdbc.sql("select " + VARIANT + " from wiki_variant v where v.page_id = ? order by v.language").param(pageId)
+            .query((rs, n) -> variant(rs)).list();
     }
 
     Optional<Variant> lockVariant(UUID pageId, String language) {
@@ -168,11 +182,12 @@ class WikiRepository {
 
     void insert(Revision revision, Collection<UUID> images) {
         jdbc.sql("""
-                insert into wiki_revision (page_id, language, revision, title, content, schema_version, saved_at, saved_by, based_on, restored_from)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                insert into wiki_revision (page_id, language, revision, title, content, schema_version, saved_at, saved_by, based_on, restored_from,
+                    source_revision)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(revision.pageId(), revision.language(), revision.revision(), revision.title(), revision.content(), revision.schemaVersion(),
-                ts(revision.savedAt()), revision.savedBy(), revision.basedOn(), revision.restoredFrom())
+                ts(revision.savedAt()), revision.savedBy(), revision.basedOn(), revision.restoredFrom(), revision.sourceRevision())
             .update();
         for (UUID image : images) {
             jdbc.sql("insert into wiki_revision_image (page_id, language, revision, image_id) values (?, ?, ?, ?)")
@@ -188,7 +203,7 @@ class WikiRepository {
     /** The revisions of one language without their content, newest first. */
     List<Revision> revisions(UUID pageId, String language) {
         return jdbc.sql("""
-                select page_id, language, revision, title, schema_version, saved_at, saved_by, based_on, restored_from
+                select page_id, language, revision, title, schema_version, saved_at, saved_by, based_on, restored_from, source_revision
                 from wiki_revision where page_id = ? and language = ? order by revision desc
                 """)
             .params(pageId, language).query((rs, n) -> revision(rs, false)).list();

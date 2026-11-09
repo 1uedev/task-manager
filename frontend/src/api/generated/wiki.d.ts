@@ -237,6 +237,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wiki/pages/{pageId}/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sprachfassung hinzufügen (wiki.edit)
+         * @description Legt die Fassung in der anderen Sprache als Entwurf mit Revision 1 an, mit Titel und Inhalt der veröffentlichten
+         *     Ausgangsrevision oder sonst des Entwurfs, und merkt sich diese Revision als übersetzte. Gibt es die Fassung schon oder ist
+         *     es die Ausgangssprache, 409 `wiki.language_exists`; fehlt die Sprache, 400 `language.required`.
+         */
+        post: operations["addWikiLanguage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wiki/pages/{pageId}/images": {
         parameters: {
             query?: never;
@@ -361,6 +383,21 @@ export interface components {
             savedBy: string;
             changed: boolean;
         } | null;
+        PageLanguage: {
+            language: components["schemas"]["Language"];
+            published: boolean;
+            /** @description Nur für Personen mit Entwürfen; der Entwurf dieser Fassung ist neuer als ihre Veröffentlichung */
+            changed: boolean;
+        };
+        /** @description Nur für eine Übersetzung; null für die Ausgangssprache und für Leser, solange die Ausgangsfassung nicht veröffentlicht ist */
+        Translation: {
+            /** @description Übersetzte Revision der Ausgangssprache; für Leser null */
+            sourceRevision: number | null;
+            /** @description Veröffentlichte Revision der Ausgangssprache; für Leser null */
+            sourcePublishedRevision: number | null;
+            /** @description Die Ausgangssprache wurde nach der übersetzten Revision neu veröffentlicht */
+            outdated: boolean;
+        } | null;
         Page: {
             /** Format: uuid */
             id: string;
@@ -368,7 +405,18 @@ export interface components {
             projectId: string;
             /** Format: uuid */
             parentId: string | null;
+            /** @description Gezeigte Sprachfassung */
             language: components["schemas"]["Language"];
+            /**
+             * @description Ausgangssprache der Seite. Leser erhalten sie nur, solange die Ausgangsfassung veröffentlicht ist, sonst null
+             * @enum {string|null}
+             */
+            sourceLanguage: "de" | "en" | null;
+            /** @description Die gezeigte Fassung ist nicht die gewünschte */
+            fallback: boolean;
+            /** @description Fassungen der Seite; Leser erhalten nur veröffentlichte */
+            languages: components["schemas"]["PageLanguage"][];
+            translation: components["schemas"]["Translation"];
             archived: boolean;
             /**
              * Format: int64
@@ -395,10 +443,12 @@ export interface components {
             basedOn: number | null;
             restoredFrom: number | null;
             published: boolean;
+            /** @description Übersetzte Revision der Ausgangssprache */
+            sourceRevision: number | null;
         };
         Event: {
             /** @enum {string} */
-            kind: "created" | "saved" | "published" | "withdrawn" | "reverted" | "moved" | "archived" | "unarchived";
+            kind: "created" | "saved" | "published" | "withdrawn" | "reverted" | "moved" | "archived" | "unarchived" | "translated";
             language: string | null;
             revision: number | null;
             /** Format: uuid */
@@ -409,6 +459,7 @@ export interface components {
         History: {
             /** Format: uuid */
             pageId: string;
+            language: components["schemas"]["Language"];
             draftRevision: number;
             publishedRevision: number | null;
             revisions: components["schemas"]["Revision"][];
@@ -416,6 +467,7 @@ export interface components {
         };
         RevisionContent: {
             revision: number;
+            language: components["schemas"]["Language"];
             title: string;
             content: components["schemas"]["Document"];
             html: string;
@@ -424,6 +476,7 @@ export interface components {
             /** Format: uuid */
             savedBy: string;
             published: boolean;
+            sourceRevision: number | null;
         };
         Image: {
             /** Format: uuid */
@@ -444,6 +497,15 @@ export interface components {
         DraftRequest: {
             title: string;
             content: components["schemas"]["Document"];
+            /**
+             * @description Nur für eine Übersetzung: die Revision der Ausgangssprache, die sie jetzt übersetzt (1 bis Entwurf der
+             *     Ausgangssprache, sonst `source_revision.invalid`); fehlt sie, bleibt die bisherige. Für die Ausgangssprache
+             *     `source_revision.invalid`.
+             */
+            sourceRevision?: number | null;
+        };
+        LanguageRequest: {
+            language: components["schemas"]["Language"];
         };
         PublishRequest: {
             revision: number;
@@ -463,7 +525,7 @@ export interface components {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, wiki.page_not_found, wiki.revision_not_found,
          *     wiki.image_not_found, wiki.version_conflict, wiki.precondition_required, wiki.page_archived, wiki.page_not_archived,
-         *     wiki.not_published, wiki.busy, image.too_large, image.empty, image.incomplete, image.type_unsupported,
+         *     wiki.not_published, wiki.language_exists, wiki.language_not_found, wiki.busy, image.too_large, image.empty, image.incomplete, image.type_unsupported,
          *     image.content_missing, image.storage_unavailable, project.not_found, auth.required, auth.forbidden,
          *     auth.csrf_invalid, auth.password_change_required.
          */
@@ -480,6 +542,8 @@ export interface components {
     parameters: {
         ProjectId: string;
         PageId: string;
+        /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+        LanguageQuery: components["schemas"]["Language"];
         Revision: number;
         /** @description Revision des Entwurfs aus dem ETag */
         IfMatch: string;
@@ -517,6 +581,8 @@ export interface operations {
         parameters: {
             query?: {
                 archived?: boolean;
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
             };
             header?: never;
             path: {
@@ -575,7 +641,10 @@ export interface operations {
     };
     readWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -602,7 +671,10 @@ export interface operations {
     };
     saveWikiDraft: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header: {
                 /** @description Revision des Entwurfs aus dem ETag */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -640,7 +712,10 @@ export interface operations {
     };
     publishWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header: {
                 /** @description Revision des Entwurfs aus dem ETag */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -677,7 +752,10 @@ export interface operations {
     };
     withdrawWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -704,7 +782,10 @@ export interface operations {
     };
     readWikiHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -730,7 +811,10 @@ export interface operations {
     };
     readWikiRevision: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -757,7 +841,10 @@ export interface operations {
     };
     restoreWikiRevision: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header: {
                 /** @description Revision des Entwurfs aus dem ETag */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -791,7 +878,10 @@ export interface operations {
     };
     moveWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -824,7 +914,10 @@ export interface operations {
     };
     archiveWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -857,7 +950,10 @@ export interface operations {
     };
     unarchiveWikiPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite) */
+                language?: components["parameters"]["LanguageQuery"];
+            };
             header?: never;
             path: {
                 pageId: components["parameters"]["PageId"];
@@ -885,6 +981,39 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             412: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    addWikiLanguage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageRequest"];
+            };
+        };
+        responses: {
+            /** @description Seite in der neuen Sprachfassung; ETag ist die Revision ihres Entwurfs */
+            201: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

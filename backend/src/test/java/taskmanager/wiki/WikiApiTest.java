@@ -781,4 +781,262 @@ class WikiApiTest {
         assertEquals(1, revisions.get(0).get("restoredFrom").asInt());
         assertEquals(2, revisions.get(0).get("basedOn").asInt());
     }
+
+    // ---------------------------------------------------------------- language versions (TASK-094)
+
+    private Response saveIn(Browser who, UUID page, String language, String etag, String title, Object content, Integer sourceRevision) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("title", title);
+        body.put("content", content);
+        if (sourceRevision != null) {
+            body.put("sourceRevision", sourceRevision);
+        }
+        return who.send("PUT", "/api/v1/wiki/pages/" + page + "/draft?language=" + language, body, etag);
+    }
+
+    private static List<String> languages(Response page) {
+        List<String> codes = new ArrayList<>();
+        page.json().get("languages").forEach(l -> codes.add(l.get("language").asString()));
+        return codes;
+    }
+
+    /** W01, W07, W08: a German page is complete alone, a draft is never the fallback, a new source marks the translation. */
+    @Test
+    void languageVersionsFollowTheConfirmedRules() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        UUID page = id(create(author, setup, "Anleitung", null, doc(paragraph("Deutsch eins"))));
+        assertEquals(200, publish(author, page, "\"1\"", 1).status());
+        String path = "/api/v1/wiki/pages/" + page;
+
+        // W01: only German, every request gets it, a requested English one with the language named.
+        Response german = reader.get(path);
+        assertEquals("de", german.json().get("language").asString());
+        assertEquals("de", german.json().get("sourceLanguage").asString());
+        assertFalse(german.json().get("fallback").asBoolean());
+        assertTrue(german.json().get("translation").isNull());
+        Response wanted = reader.get(path + "?language=en");
+        assertEquals("de", wanted.json().get("language").asString());
+        assertTrue(wanted.json().get("fallback").asBoolean());
+        assertEquals(List.of("de"), languages(wanted));
+        assertInvalid(reader.get(path + "?language=fr"), "language.invalid");
+
+        // Adding English copies the published German revision as the first English draft.
+        assertInvalid(author.send("POST", path + "/languages", Map.of(), null), "language.required");
+        assertInvalid(author.send("POST", path + "/languages", Map.of("language", "fr"), null), "language.invalid");
+        assertEquals(409, author.send("POST", path + "/languages", Map.of("language", "de"), null).status());
+        assertEquals(403, reader.send("POST", path + "/languages", Map.of("language", "en"), null).status());
+        assertEquals(404, saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("x")), null).status(), "no English version yet");
+        Response added = author.send("POST", path + "/languages", Map.of("language", "en"), null);
+        assertEquals(201, added.status(), added.body());
+        assertEquals("en", added.json().get("language").asString());
+        assertEquals("\"1\"", added.etag());
+        assertEquals("Anleitung", added.json().get("draft").get("title").asString());
+        assertEquals("<p>Deutsch eins</p>", added.json().get("draft").get("html").asString());
+        assertEquals(1, added.json().get("translation").get("sourceRevision").asInt());
+        assertFalse(added.json().get("translation").get("outdated").asBoolean());
+        assertEquals(409, author.send("POST", path + "/languages", Map.of("language", "en"), null).status());
+
+        // W08: the English draft is neither shown to readers nor named.
+        Response stillGerman = reader.get(path + "?language=en");
+        assertEquals("de", stillGerman.json().get("language").asString());
+        assertEquals(List.of("de"), languages(stillGerman));
+        assertFalse(stillGerman.body().contains("\"en\""), "readers learn nothing of the English draft");
+        assertEquals("Anleitung", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=en").json().get("pages").get(0).get("title")
+            .asString());
+        assertEquals(404, reader.get(path + "/history?language=en").status());
+
+        Response english = saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("English one")), null);
+        assertEquals(200, english.status(), english.body());
+        assertEquals(1, english.json().get("translation").get("sourceRevision").asInt(), "the translated revision stays without a new one");
+        assertEquals(200, author.send("POST", path + "/publish?language=en", Map.of("revision", 2), "\"2\"").status());
+        Response read = reader.get(path + "?language=en");
+        assertEquals("en", read.json().get("language").asString());
+        assertFalse(read.json().get("fallback").asBoolean());
+        assertEquals("Guide", read.json().get("published").get("title").asString());
+        assertEquals(List.of("de", "en"), languages(read));
+        assertFalse(read.json().get("translation").get("outdated").asBoolean());
+        assertTrue(read.json().get("translation").get("sourceRevision").isNull(), "readers get no revision numbers");
+        assertEquals("Guide", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=en").json().get("pages").get(0).get("title")
+            .asString());
+        assertEquals("Anleitung", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=de").json().get("pages").get(0).get("title")
+            .asString());
+
+        // W07: German is published again; the translation stays and is marked for both.
+        assertEquals(200, save(author, page, "\"1\"", "Anleitung", doc(paragraph("Deutsch zwei"))).status());
+        assertEquals(200, publish(author, page, "\"2\"", 2).status());
+        assertTrue(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean());
+        JsonNode marked = author.get(path + "?language=en").json().get("translation");
+        assertEquals(1, marked.get("sourceRevision").asInt());
+        assertEquals(2, marked.get("sourcePublishedRevision").asInt());
+        assertTrue(marked.get("outdated").asBoolean());
+        assertEquals("<p>Deutsch eins</p>", author.get(path + "/revisions/1?language=de").json().get("html").asString(), "the comparison reads the source");
+
+        assertInvalid(saveIn(author, page, "en", "\"2\"", "Guide", doc(paragraph("English two")), 5), "source_revision.invalid");
+        assertInvalid(saveIn(author, page, "de", "\"2\"", "Anleitung", doc(paragraph("Deutsch")), 1), "source_revision.invalid");
+        Response aligned = saveIn(author, page, "en", "\"2\"", "Guide", doc(paragraph("English two")), 2);
+        assertEquals(200, aligned.status(), aligned.body());
+        assertFalse(aligned.json().get("translation").get("outdated").asBoolean());
+        assertTrue(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean(), "until the English one is published");
+        assertEquals(200, author.send("POST", path + "/publish?language=en", Map.of("revision", 3), "\"3\"").status());
+        assertFalse(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean());
+
+        JsonNode history = author.get(path + "/history?language=en").json();
+        assertEquals("en", history.get("language").asString());
+        assertEquals(2, history.get("revisions").get(0).get("sourceRevision").asInt());
+        List<String> kinds = new ArrayList<>();
+        history.get("events").forEach(e -> kinds.add(e.get("kind").asString() + ":" + e.get("language").asString()));
+        assertTrue(kinds.contains("translated:en"), kinds.toString());
+
+        // Without the published German version readers get the English one, with the language named.
+        assertEquals(200, author.send("POST", path + "/withdraw?language=de", null, null).status());
+        Response fallback = reader.get(path + "?language=de");
+        assertEquals("en", fallback.json().get("language").asString());
+        assertTrue(fallback.json().get("fallback").asBoolean());
+        assertEquals(List.of("en"), languages(fallback));
+        // F1 of the review: the withdrawn source is not named to readers, neither is the translation relation.
+        assertTrue(fallback.json().get("sourceLanguage").isNull(), fallback.body());
+        assertTrue(fallback.json().get("translation").isNull(), fallback.body());
+        Response plain = reader.get(path);
+        assertEquals("en", plain.json().get("language").asString());
+        assertFalse(plain.json().get("fallback").asBoolean(), "without a wish there is no fallback that would hint at the source");
+        assertTrue(plain.json().get("sourceLanguage").isNull());
+        assertEquals("de", author.get(path).json().get("sourceLanguage").asString(), "people with drafts keep the source language");
+        assertEquals(200, author.send("POST", path + "/withdraw?language=en", null, null).status());
+        assertEquals(404, reader.get(path + "?language=en").status(), "no published version, no page for readers");
+    }
+
+    private Response createIn(Browser who, Setup setup, String title, String language, Object content) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("title", title);
+        body.put("parentId", null);
+        body.put("content", content);
+        body.put("language", language);
+        return who.send("POST", "/api/v1/wiki/projects/" + setup.project() + "/pages", body, null);
+    }
+
+    /** F1 of the review: an English source page that was never published stays unknown to readers of the German version. */
+    @Test
+    void anUnpublishedSourceStaysUnknownToReaders() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        UUID page = id(createIn(author, setup, "Guide", "en", doc(paragraph("English draft"))));
+        String path = "/api/v1/wiki/pages/" + page;
+        assertEquals("en", author.get(path).json().get("sourceLanguage").asString());
+        Response added = author.send("POST", path + "/languages", Map.of("language", "de"), null);
+        assertEquals(201, added.status(), added.body());
+        assertEquals(1, added.json().get("translation").get("sourceRevision").asInt(), "the unpublished source draft is the basis");
+        assertTrue(added.json().get("translation").get("sourcePublishedRevision").isNull());
+        assertEquals(200, author.send("POST", path + "/publish?language=de", Map.of("revision", 1), "\"1\"").status());
+
+        for (String query : List.of("", "?language=de", "?language=en")) {
+            Response read = reader.get(path + query);
+            assertEquals(200, read.status(), read.body());
+            JsonNode json = read.json();
+            assertEquals("de", json.get("language").asString(), query);
+            assertTrue(json.get("sourceLanguage").isNull(), query + " " + read.body());
+            assertTrue(json.get("translation").isNull(), query + " " + read.body());
+            assertEquals(List.of("de"), languages(read), query);
+            assertEquals(query.equals("?language=en"), json.get("fallback").asBoolean(), query);
+            assertFalse(read.body().contains("\"en\""), query + " names no English version: " + read.body());
+        }
+        assertEquals("de", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=en").json().get("pages").get(0).get("language")
+            .asString());
+
+        // Once the English source is published, readers learn of it and of the translation; after withdrawing it, no longer.
+        assertEquals(200, author.send("POST", path + "/publish?language=en", Map.of("revision", 1), "\"1\"").status());
+        JsonNode both = reader.get(path + "?language=de").json();
+        assertEquals("en", both.get("sourceLanguage").asString());
+        assertFalse(both.get("translation").get("outdated").asBoolean());
+        assertEquals(200, author.send("POST", path + "/withdraw?language=en", null, null).status());
+        JsonNode again = reader.get(path + "?language=de").json();
+        assertTrue(again.get("sourceLanguage").isNull());
+        assertTrue(again.get("translation").isNull());
+    }
+
+    /** H4 of the review: who only publishes compares and reads the source, but saves no translation; old revisions keep their source. */
+    @Test
+    void translationsKeepTheirSourceAcrossRightsAndRevisions() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser publisher = member(setup, "wiki.publish");
+        UUID page = id(create(author, setup, "Anleitung", null, doc(paragraph("Eins"))));
+        String path = "/api/v1/wiki/pages/" + page;
+        assertEquals(200, publish(author, page, "\"1\"", 1).status());
+        assertEquals(201, author.send("POST", path + "/languages", Map.of("language", "en"), null).status());
+        assertEquals(200, save(author, page, "\"1\"", "Anleitung", doc(paragraph("Zwei"))).status());
+        // A source revision up to the unpublished source draft may be named, a later one not.
+        assertInvalid(saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("Two")), 3), "source_revision.invalid");
+        assertInvalid(saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("Two")), 0), "source_revision.invalid");
+        assertEquals(200, saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("Two")), 2).status());
+        assertEquals(200, publish(author, page, "\"2\"", 2).status());
+        assertEquals(200, saveIn(author, page, "en", "\"2\"", "Guide", doc(paragraph("Two later")), null).status());
+
+        JsonNode seen = publisher.get(path + "?language=en").json();
+        assertEquals(2, seen.get("translation").get("sourceRevision").asInt());
+        assertEquals(2, seen.get("translation").get("sourcePublishedRevision").asInt());
+        assertEquals("<p>Eins</p>", publisher.get(path + "/revisions/1?language=de").json().get("html").asString());
+        assertEquals(403, saveIn(publisher, page, "en", "\"3\"", "Guide", doc(paragraph("x")), 2).status());
+        assertEquals(403, publisher.send("POST", path + "/languages", Map.of("language", "de"), null).status());
+
+        // Taking over English revision 1 brings back its source revision 1, and the translation counts as outdated again.
+        Response restored = author.send("POST", path + "/revisions/1/restore?language=en", null, "\"3\"");
+        assertEquals(200, restored.status(), restored.body());
+        assertEquals(4, draft(restored));
+        assertEquals(1, restored.json().get("translation").get("sourceRevision").asInt());
+        assertTrue(restored.json().get("translation").get("outdated").asBoolean());
+        assertEquals(2, author.get(path).json().get("draft").get("revision").asInt(), "the German draft is untouched");
+    }
+
+    /** H4 of the review: adding the same language twice at once gives one version; saves of both languages keep their own counters. */
+    @Test
+    void concurrentLanguageChangesStaySeparate() {
+        Setup setup = project();
+        Browser anna = member(setup, "wiki.edit", "wiki.publish");
+        Browser ben = member(setup, "wiki.edit");
+        UUID page = id(create(anna, setup, "Gleichzeitig", null, doc(paragraph("Basis"))));
+        String path = "/api/v1/wiki/pages/" + page;
+
+        CountDownLatch start = new CountDownLatch(1);
+        List<CompletableFuture<Integer>> adds = new ArrayList<>();
+        for (Browser who : List.of(anna, ben, anna, ben)) {
+            adds.add(CompletableFuture.supplyAsync(() -> {
+                awaitStart(start);
+                return who.send("POST", path + "/languages", Map.of("language", "en"), null).status();
+            }));
+        }
+        start.countDown();
+        List<Integer> statuses = adds.stream().map(CompletableFuture::join).toList();
+        assertEquals(1, statuses.stream().filter(status -> status == 201).count(), statuses.toString());
+        assertTrue(statuses.stream().allMatch(status -> status == 201 || status == 409 || status == 503), statuses.toString());
+        assertEquals(1, anna.get(path + "/history?language=en").json().get("revisions").size());
+
+        CountDownLatch again = new CountDownLatch(1);
+        List<CompletableFuture<Integer>> saves = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            int n = i;
+            String language = n % 2 == 0 ? "de" : "en";
+            Browser who = n % 3 == 0 ? anna : ben;
+            saves.add(CompletableFuture.supplyAsync(() -> {
+                awaitStart(again);
+                return saveIn(who, page, language, "\"1\"", "Gleichzeitig " + n, doc(paragraph("Lauf " + n)), null).status();
+            }));
+        }
+        again.countDown();
+        List<Integer> saved = saves.stream().map(CompletableFuture::join).toList();
+        assertTrue(saved.stream().allMatch(status -> status == 200 || status == 412 || status == 503), saved.toString());
+        assertEquals(2, anna.get(path + "/history?language=de").json().get("draftRevision").asInt(), saved.toString());
+        assertEquals(2, anna.get(path + "/history?language=en").json().get("draftRevision").asInt(), saved.toString());
+        assertEquals(2, saved.stream().filter(status -> status == 200).count(), "one save per language: " + saved);
+    }
+
+    private static void awaitStart(CountDownLatch start) {
+        try {
+            start.await(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }

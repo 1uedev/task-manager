@@ -30,7 +30,8 @@ import tools.jackson.databind.JsonNode;
  * The wiki (TASK-093, DEC-123). The ETag of a page is the revision of its draft for people with drafts; saving, publishing and
  * taking over an older revision need it as If-Match (428 without, 412 when the draft is newer). Moving, archiving and restoring
  * carry the version of the page in the body. Images are delivered inline only with their checked type, without sniffing and
- * in a sandbox.
+ * in a sandbox. Every page endpoint takes the optional {@code language} (TASK-094); without it the source language of the page
+ * is meant.
  */
 @RestController
 @RequestMapping("/api/v1/wiki")
@@ -68,12 +69,23 @@ class WikiController {
     record DraftBody(int revision, String title, JsonNode content, String html, Instant savedAt, UUID savedBy, boolean changed) {
     }
 
-    record PageBody(UUID id, UUID projectId, UUID parentId, String language, boolean archived, long version, AccessBody access, List<CrumbBody> path,
-            PublishedBody published, DraftBody draft, Instant createdAt, UUID createdBy) {
+    record LanguageBody(String language, boolean published, boolean changed) {
+    }
+
+    record TranslationBody(Integer sourceRevision, Integer sourcePublishedRevision, boolean outdated) {
+    }
+
+    record PageBody(UUID id, UUID projectId, UUID parentId, String language, String sourceLanguage, boolean fallback, List<LanguageBody> languages,
+            TranslationBody translation, boolean archived, long version, AccessBody access, List<CrumbBody> path, PublishedBody published,
+            DraftBody draft, Instant createdAt, UUID createdBy) {
         static PageBody of(WikiService.PageView v) {
             WikiService.Published p = v.published();
             WikiService.Draft d = v.draft();
-            return new PageBody(v.id(), v.projectId(), v.parentId(), v.language(), v.archived(), v.version(), AccessBody.of(v.access()),
+            WikiService.TranslationView t = v.translation();
+            return new PageBody(v.id(), v.projectId(), v.parentId(), v.language(), v.sourceLanguage(), v.fallback(),
+                v.languages().stream().map(l -> new LanguageBody(l.language(), l.published(), l.changed())).toList(),
+                t == null ? null : new TranslationBody(t.sourceRevision(), t.sourcePublishedRevision(), t.outdated()), v.archived(), v.version(),
+                AccessBody.of(v.access()),
                 v.path().stream().map(c -> new CrumbBody(c.id(), c.title())).toList(),
                 p == null ? null : new PublishedBody(p.revision(), p.title(), p.html(), p.publishedAt(), p.publishedBy()),
                 d == null ? null : new DraftBody(d.revision(), d.title(), d.content(), d.html(), d.savedAt(), d.savedBy(), d.changed()),
@@ -81,16 +93,19 @@ class WikiController {
         }
     }
 
-    record RevisionBody(int revision, String title, Instant savedAt, UUID savedBy, Integer basedOn, Integer restoredFrom, boolean published) {
+    record RevisionBody(int revision, String title, Instant savedAt, UUID savedBy, Integer basedOn, Integer restoredFrom, boolean published,
+            Integer sourceRevision) {
     }
 
     record EventBody(String kind, String language, Integer revision, UUID actorId, Instant occurredAt) {
     }
 
-    record HistoryBody(UUID pageId, int draftRevision, Integer publishedRevision, List<RevisionBody> revisions, List<EventBody> events) {
+    record HistoryBody(UUID pageId, String language, int draftRevision, Integer publishedRevision, List<RevisionBody> revisions,
+            List<EventBody> events) {
     }
 
-    record RevisionContentBody(int revision, String title, JsonNode content, String html, Instant savedAt, UUID savedBy, boolean published) {
+    record RevisionContentBody(int revision, String language, String title, JsonNode content, String html, Instant savedAt, UUID savedBy,
+            boolean published, Integer sourceRevision) {
     }
 
     record ImageBody(UUID id, String src, String mediaType, long size) {
@@ -99,7 +114,10 @@ class WikiController {
     record CreateRequest(String title, UUID parentId, JsonNode content, String language) {
     }
 
-    record DraftRequest(String title, JsonNode content) {
+    record DraftRequest(String title, JsonNode content, Integer sourceRevision) {
+    }
+
+    record LanguageRequest(String language) {
     }
 
     record PublishRequest(Integer revision) {
@@ -119,9 +137,10 @@ class WikiController {
     }
 
     @GetMapping("/projects/{projectId}/pages")
-    TreeBody tree(@PathVariable UUID projectId, @RequestParam(defaultValue = "false") boolean archived) {
+    TreeBody tree(@PathVariable UUID projectId, @RequestParam(defaultValue = "false") boolean archived,
+            @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        WikiService.Tree tree = WikiRequests.retrying(() -> service.tree(actor, projectId, archived));
+        WikiService.Tree tree = WikiRequests.retrying(() -> service.tree(actor, projectId, archived, language));
         return new TreeBody(tree.projectId(), AccessBody.of(tree.access()), tree.pages().stream()
             .map(i -> new TreeItemBody(i.id(), i.parentId(), i.title(), i.language(), i.published(), i.changed(), i.archived(), i.version(), i.savedAt(),
                 i.savedBy()))
@@ -138,91 +157,106 @@ class WikiController {
     }
 
     @GetMapping("/pages/{pageId}")
-    ResponseEntity<PageBody> page(@PathVariable UUID pageId) {
+    ResponseEntity<PageBody> page(@PathVariable UUID pageId, @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        WikiService.PageView page = WikiRequests.retrying(() -> service.page(actor, pageId));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.page(actor, pageId, language));
         return ResponseEntity.ok().headers(etag(page)).cacheControl(CacheControl.noStore()).body(PageBody.of(page));
     }
 
     @PutMapping("/pages/{pageId}/draft")
-    ResponseEntity<PageBody> save(@PathVariable UUID pageId, @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @RequestBody(required = false) DraftRequest body) {
+    ResponseEntity<PageBody> save(@PathVariable UUID pageId, @RequestParam(required = false) String language,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch, @RequestBody(required = false) DraftRequest body) {
         AccessContext actor = requests.actor();
         int basedOn = revision(ifMatch);
-        DraftRequest request = body == null ? new DraftRequest(null, null) : body;
-        WikiService.PageView page = WikiRequests.retrying(() -> service.save(actor, pageId, basedOn, request.title(), request.content()));
+        DraftRequest request = body == null ? new DraftRequest(null, null, null) : body;
+        WikiService.PageView page = WikiRequests.retrying(() -> service.save(actor, pageId, language, basedOn, request.title(), request.content(),
+            request.sourceRevision()));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @PostMapping("/pages/{pageId}/publish")
-    ResponseEntity<PageBody> publish(@PathVariable UUID pageId, @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @RequestBody(required = false) PublishRequest body) {
+    ResponseEntity<PageBody> publish(@PathVariable UUID pageId, @RequestParam(required = false) String language,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch, @RequestBody(required = false) PublishRequest body) {
         AccessContext actor = requests.actor();
         int basedOn = revision(ifMatch);
         Integer revision = body == null ? null : body.revision();
         if (revision == null) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("revision.required"));
         }
-        WikiService.PageView page = WikiRequests.retrying(() -> service.publish(actor, pageId, basedOn, revision));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.publish(actor, pageId, language, basedOn, revision));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @PostMapping("/pages/{pageId}/withdraw")
-    ResponseEntity<PageBody> withdraw(@PathVariable UUID pageId) {
+    ResponseEntity<PageBody> withdraw(@PathVariable UUID pageId, @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        WikiService.PageView page = WikiRequests.retrying(() -> service.withdraw(actor, pageId));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.withdraw(actor, pageId, language));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @GetMapping("/pages/{pageId}/history")
-    HistoryBody history(@PathVariable UUID pageId) {
+    HistoryBody history(@PathVariable UUID pageId, @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        WikiService.History h = WikiRequests.retrying(() -> service.history(actor, pageId));
-        return new HistoryBody(h.pageId(), h.draftRevision(), h.publishedRevision(),
-            h.revisions().stream().map(r -> new RevisionBody(r.revision(), r.title(), r.savedAt(), r.savedBy(), r.basedOn(), r.restoredFrom(), r.published()))
-                .toList(),
+        WikiService.History h = WikiRequests.retrying(() -> service.history(actor, pageId, language));
+        return new HistoryBody(h.pageId(), h.language(), h.draftRevision(), h.publishedRevision(),
+            h.revisions().stream().map(r -> new RevisionBody(r.revision(), r.title(), r.savedAt(), r.savedBy(), r.basedOn(), r.restoredFrom(), r.published(),
+                r.sourceRevision())).toList(),
             h.events().stream().map(e -> new EventBody(e.kind(), e.language(), e.revision(), e.actorId(), e.occurredAt())).toList());
     }
 
     @GetMapping("/pages/{pageId}/revisions/{revision}")
-    RevisionContentBody revision(@PathVariable UUID pageId, @PathVariable int revision) {
+    RevisionContentBody revision(@PathVariable UUID pageId, @PathVariable int revision, @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        WikiService.RevisionContent r = WikiRequests.retrying(() -> service.revision(actor, pageId, revision));
-        return new RevisionContentBody(r.revision(), r.title(), r.content(), r.html(), r.savedAt(), r.savedBy(), r.published());
+        WikiService.RevisionContent r = WikiRequests.retrying(() -> service.revision(actor, pageId, language, revision));
+        return new RevisionContentBody(r.revision(), r.language(), r.title(), r.content(), r.html(), r.savedAt(), r.savedBy(), r.published(),
+            r.sourceRevision());
     }
 
     @PostMapping("/pages/{pageId}/revisions/{revision}/restore")
-    ResponseEntity<PageBody> revert(@PathVariable UUID pageId, @PathVariable int revision,
+    ResponseEntity<PageBody> revert(@PathVariable UUID pageId, @PathVariable int revision, @RequestParam(required = false) String language,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
         AccessContext actor = requests.actor();
         int basedOn = revision(ifMatch);
-        WikiService.PageView page = WikiRequests.retrying(() -> service.revert(actor, pageId, revision, basedOn));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.revert(actor, pageId, language, revision, basedOn));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @PutMapping("/pages/{pageId}/parent")
-    ResponseEntity<PageBody> move(@PathVariable UUID pageId, @RequestBody(required = false) MoveRequest body) {
+    ResponseEntity<PageBody> move(@PathVariable UUID pageId, @RequestParam(required = false) String language,
+            @RequestBody(required = false) MoveRequest body) {
         AccessContext actor = requests.actor();
         long version = version(body == null ? null : body.version());
         UUID parent = body == null ? null : body.parentId();
-        WikiService.PageView page = WikiRequests.retrying(() -> service.move(actor, pageId, version, parent));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.move(actor, pageId, version, parent, language));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @PostMapping("/pages/{pageId}/archive")
-    ResponseEntity<PageBody> archive(@PathVariable UUID pageId, @RequestBody(required = false) VersionRequest body) {
+    ResponseEntity<PageBody> archive(@PathVariable UUID pageId, @RequestParam(required = false) String language,
+            @RequestBody(required = false) VersionRequest body) {
         AccessContext actor = requests.actor();
         long version = version(body == null ? null : body.version());
-        WikiService.PageView page = WikiRequests.retrying(() -> service.archive(actor, pageId, version));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.archive(actor, pageId, version, language));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
     }
 
     @PostMapping("/pages/{pageId}/unarchive")
-    ResponseEntity<PageBody> unarchive(@PathVariable UUID pageId, @RequestBody(required = false) VersionRequest body) {
+    ResponseEntity<PageBody> unarchive(@PathVariable UUID pageId, @RequestParam(required = false) String language,
+            @RequestBody(required = false) VersionRequest body) {
         AccessContext actor = requests.actor();
         long version = version(body == null ? null : body.version());
-        WikiService.PageView page = WikiRequests.retrying(() -> service.unarchive(actor, pageId, version));
+        WikiService.PageView page = WikiRequests.retrying(() -> service.unarchive(actor, pageId, version, language));
         return ResponseEntity.ok().headers(etag(page)).body(PageBody.of(page));
+    }
+
+    /** Adds the version of the page in another language (TASK-094); it starts as a draft copy of the source language. */
+    @PostMapping("/pages/{pageId}/languages")
+    ResponseEntity<PageBody> addLanguage(@PathVariable UUID pageId, @RequestBody(required = false) LanguageRequest body) {
+        AccessContext actor = requests.actor();
+        String language = body == null ? null : body.language();
+        WikiService.PageView page = WikiRequests.retrying(() -> service.addLanguage(actor, pageId, language));
+        return ResponseEntity.created(URI.create("/api/v1/wiki/pages/" + page.id() + "?language=" + page.language())).headers(etag(page))
+            .body(PageBody.of(page));
     }
 
     /** The raw image as the body; its type is decided by its first bytes, not by a header of the client. */

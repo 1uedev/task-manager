@@ -219,3 +219,33 @@ class ComplexSearchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WikiSeedTests(unittest.TestCase):
+    """TASK-094: the demo wiki has a published German page with an English draft below a published parent."""
+
+    def test_page_tree_with_english_draft(self):
+        calls = []
+
+        def call(method, path, body=None, query=None, headers=None, **_):
+            calls.append((method, path, body, query, headers))
+            if method == "POST" and path.endswith("/pages"):
+                return demo.Response(201, {"etag": '"1"'}, {"id": f"page-{len(calls)}"}, 0.0)
+            return demo.Response(201 if path.endswith("/languages") else 200, {"etag": '"1"'}, {}, 0.0)
+
+        admin = mock.Mock()
+        admin.call.side_effect = call
+        demo.seed_wiki(admin, "help")
+        created = [(body["title"], body["parentId"], body["language"]) for method, path, body, _, _ in calls if path == "/wiki/projects/help/pages"]
+        self.assertEqual(created, [("Helpdesk Handbuch", None, "de"), ("Serviceanfrage ergänzen", "page-1", "de")])
+        published = [path for method, path, *_ in calls if path.endswith("/publish")]
+        self.assertEqual(published, ["/wiki/pages/page-1/publish", "/wiki/pages/page-3/publish"])
+        self.assertIn(("POST", "/wiki/pages/page-3/languages", {"language": "en"}, None, None), calls)
+        method, path, body, query, headers = calls[-1]
+        self.assertEqual((method, path, query, headers), ("PUT", "/wiki/pages/page-3/draft", {"language": "en"}, {"If-Match": '"1"'}))
+        self.assertEqual(body["title"], "Complete a service request")
+        self.assertFalse(any(path.endswith("/publish") and query for method, path, body, query, headers in calls), "the English version stays a draft")
+
+    def test_demo_groups_carry_wiki_rights(self):
+        self.assertEqual(demo.WIKI_ACTIONS_READ, ["wiki.read"])
+        self.assertTrue(set(demo.WIKI_ACTIONS_READ) < set(demo.WIKI_ACTIONS_EDIT) < set(demo.WIKI_ACTIONS_FULL))
