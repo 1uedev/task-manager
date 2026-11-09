@@ -221,7 +221,11 @@ Nicht Teil: die wechselnden Zeitüberschreitungen der Tag Browsertests (Hinweis 
 
 **Ergebnis (zur Prüfung):** Umgesetzt nach DEC-121 auf Branch claude/project-thread-fde105, ohne Migration. (1) R1: `NewAnswers` in frontend/src/pages/InboxPage.tsx zeigt beim Laden Überschrift und Ladeanzeige mit `aria-busy`; Browsertests halten den Abruf im Testersatz zurück (`state.hold`) und prüfen ladend, dann leer (Abschnitt verschwindet) und gefüllt. (2) R2: `NewAnswersMigrationTest` migriert bis V0051, legt eine eröffnende Mail, eine später angehängte Antwort und eine wartende Mail an und prüft nach dem Upgrade, dass keine neu ist; ein Nachfüllen von `joined_at` in V0052 lässt ihn fehlschlagen. In `HelpdeskApiTest`: `twoPeopleWhoMarkAnAnswerAtOnceLeaveOneMarking` hält die Mail, wartet auf zwei wartende Markierungen und verlangt 200 und 412, eine Versionserhöhung und ein Audit des Gewinners; `attachingAndMarkingThatWaitForTheSameMailEndInEitherOrder` prüft beide Reihenfolgen (Anhängen zuerst: 200 und 412; Markieren zuerst: 409 und 200, danach neu); `aTicketThatLeavesTheProjectWhileTheMarkingWaitsMakesTheAnswerUnknown` hält den Projektwechsel offen, bis das Markieren auf die Ticketsperre wartet, und verlangt 404 ohne Änderung und Audit; ohne die zweite Prüfung unter der Sperre schlägt er mit 200 fehl.
 
-**Nächster Schritt:** Kurze Nachprüfung durch eine zweite KI, danach Abnahme von TASK-067, TASK-088 und TASK-091 durch Holger.
+**Prüfung:** Claude Prüfung statt Codex (Sitzung claude-20261108-newanswersfix-review-01) in docs/REVIEW_TASK-091_PR-269.md: R1 und R2 wirksam behoben, drei Gegenproben zu R2 schlagen ohne die Absicherung fehl. Befund B1 [P3]: der Browsertest aus TASK-088 in frontend/tests/browser/helpdesk.test.mjs:547 zählt die Liste, während sie noch lädt, und ist seit TASK-091 unzuverlässig; Hinweise H1 bis H4 ohne Abnahmehindernis. Empfehlung: B1 mit einer Zeile im Test beheben, danach TASK-067, TASK-088 und TASK-091 ohne weitere Nachprüfung abnehmen.
+
+Nach Holgers „B1 noch beheben“ vom 9. November 2026 im selben PR #272 behoben (helpdesk.test.mjs:547 wartet auf das Ausblenden der Liste; Browsertests 210 von 210 grün).
+
+**Nächster Schritt:** Abnahme von TASK-067, TASK-088 und TASK-091 durch Holger.
 
 ## TASK-089 Befunde der zweiten Nachprüfung von TASK-087 beheben (A17)
 
