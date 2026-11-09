@@ -4,16 +4,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -139,6 +144,56 @@ class WikiApiTest {
                 HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
                 return new Response(response.statusCode(), response.body(), response.headers().firstValue("ETag").orElse(null));
             } catch (IOException | InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        /**
+         * Announces an upload of {@code declaredLength} bytes and sends none of them, so the refusal of the declared length is
+         * read without a client that is still writing a large body while the server already answers and closes.
+         */
+        Response announce(String path, long declaredLength) {
+            try (Socket socket = new Socket("localhost", port)) {
+                socket.setSoTimeout(10_000);
+                List<String> pairs = new ArrayList<>();
+                cookies.forEach((name, value) -> pairs.add(name + "=" + value));
+                String head = "POST " + path + " HTTP/1.1\r\nHost: localhost:" + port + "\r\nContent-Type: application/octet-stream\r\n"
+                    + "Content-Length: " + declaredLength + "\r\nCookie: " + String.join("; ", pairs) + "\r\nX-CSRF-Token: "
+                    + cookies.get("__Host-tm-csrf") + "\r\nConnection: close\r\n\r\n";
+                socket.getOutputStream().write(head.getBytes(StandardCharsets.US_ASCII));
+                socket.getOutputStream().flush();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                int status = Integer.parseInt(reader.readLine().split(" ")[1]);
+                boolean chunked = false;
+                for (String line = reader.readLine(); line != null && !line.isEmpty(); line = reader.readLine()) {
+                    chunked |= line.toLowerCase(Locale.ROOT).startsWith("transfer-encoding:") && line.toLowerCase(Locale.ROOT).contains("chunked");
+                }
+                StringBuilder body = new StringBuilder();
+                if (chunked) {
+                    for (String size = reader.readLine(); size != null && !size.isBlank(); size = reader.readLine()) {
+                        int remaining = Integer.parseInt(size.trim(), 16);
+                        if (remaining == 0) {
+                            break;
+                        }
+                        char[] chunk = new char[remaining];
+                        int read = 0;
+                        while (read < remaining) {
+                            int n = reader.read(chunk, read, remaining - read);
+                            if (n < 0) {
+                                break;
+                            }
+                            read += n;
+                        }
+                        body.append(chunk, 0, read);
+                        reader.readLine();
+                    }
+                } else {
+                    for (int c = reader.read(); c >= 0; c = reader.read()) {
+                        body.append((char) c);
+                    }
+                }
+                return new Response(status, body.toString(), null);
+            } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
         }
@@ -515,7 +570,7 @@ class WikiApiTest {
         assertEquals(415, text.status(), text.body());
         assertEquals("image.type_unsupported", text.code());
         assertEquals(400, author.upload("/api/v1/wiki/pages/" + page + "/images", new byte[0]).status());
-        Response large = author.upload("/api/v1/wiki/pages/" + page + "/images", new byte[5 * 1024 * 1024 + 1]);
+        Response large = author.announce("/api/v1/wiki/pages/" + page + "/images", 5L * 1024 * 1024 + 1);
         assertEquals(413, large.status(), large.body());
         assertEquals("image.too_large", large.code());
 
