@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Wiki (TASK-093)
-  version: 0.1.0
+  title: Task Manager API, Wiki (TASK-093, TASK-094)
+  version: 0.2.0
   description: |
     Wikiseiten in Projekten mit Entwurf, ausdrücklicher Veröffentlichung, Revisionen, Historie, Archiv, Bildern und Verweisen
     (REQ-DOC-001, REQ-DOC-002, REQ-DOC-004, DEC-033, DEC-123). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -50,6 +50,20 @@ info:
     einer Content-Security-Policy, die nichts erlaubt. Leser erhalten es nur, solange eine veröffentlichte Revision seiner
     Seite es zeigt; Personen mit Entwürfen, solange es zur Seite gehört.
 
+    Sprachfassungen (TASK-094, DEC-124): Die Sprache der Seite ist ihre Ausgangssprache. `POST /wiki/pages/{pageId}/languages`
+    legt die Fassung in der anderen Sprache an (wiki.edit); ihre erste Revision übernimmt Titel und Inhalt der veröffentlichten
+    Ausgangsrevision, sonst des Entwurfs. Jede Fassung hat eigenen Titel, Entwurf, Revisionen, ETag und Veröffentlichung. Alle
+    Seitenendpunkte nehmen den Parameter `language` (`de` oder `en`, sonst 400 `language.invalid`); ohne ihn ist die
+    Ausgangssprache gemeint. Ändernde Aufrufe für eine fehlende Fassung antworten mit 404 `wiki.language_not_found`. Leser
+    erhalten die veröffentlichte Fassung der gewünschten Sprache, sonst die veröffentlichte Ausgangssprache, sonst die andere
+    veröffentlichte Fassung; `language` nennt die gezeigte Sprache und `fallback` ist dann wahr. Ein Entwurf ist nie
+    Rückfallinhalt, und Leser erfahren nicht, dass es ihn gibt: `languages` nennt ihnen nur veröffentlichte Fassungen. Eine
+    Seite ohne veröffentlichte Fassung gibt es für Leser nicht. Personen mit Entwürfen erhalten die gewünschte Fassung,
+    sonst die Ausgangssprache mit `fallback`. Jede Revision einer Übersetzung merkt sich die übersetzte Revision der
+    Ausgangssprache (`sourceRevision`); ist die Ausgangssprache danach neu veröffentlicht, ist `translation.outdated` wahr,
+    für Personen mit Entwürfen nach ihrem Entwurf und mit beiden Revisionsnummern, für Leser nach der Veröffentlichung und ohne
+    Nummern.
+
     Ist die Datenbank kurz belegt, antwortet der Server mit 503 `wiki.busy` und `Retry-After`; die ganze Anfrage darf
     wiederholt werden.
 servers:
@@ -86,6 +100,7 @@ paths:
           in: query
           required: false
           schema: {type: boolean, default: false}
+        - $ref: '#/components/parameters/LanguageQuery'
       responses:
         '200':
           description: Seitenbaum
@@ -129,6 +144,7 @@ paths:
         Revision des Entwurfs und fehlt für Leser.
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       responses:
         '200':
           description: Seite
@@ -148,6 +164,7 @@ paths:
       description: Legt eine neue Revision auf Grundlage der Revision aus If-Match an. Eine archivierte Seite antwortet mit 409 `wiki.page_archived`.
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
@@ -179,6 +196,7 @@ paths:
         `wiki.version_conflict`. Ist sie schon veröffentlicht, ändert sich nichts.
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
@@ -206,6 +224,7 @@ paths:
       description: Leser sehen die Seite danach nicht mehr; die Historie bleibt. Ohne Veröffentlichung 409 `wiki.not_published`.
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       responses:
         '200':
           description: Seite ohne Veröffentlichung
@@ -223,6 +242,7 @@ paths:
       summary: Revisionen und Ereignisse der Seite (Entwürfe)
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       responses:
         '200':
           description: Revisionen und Ereignisse, die neuesten zuerst
@@ -239,6 +259,7 @@ paths:
       summary: Eine Revision mit Inhalt (Entwürfe)
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
         - $ref: '#/components/parameters/Revision'
       responses:
         '200':
@@ -257,6 +278,7 @@ paths:
       description: Legt eine neue Revision mit Titel und Inhalt der alten an; sie muss erneut veröffentlicht werden.
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
         - $ref: '#/components/parameters/Revision'
         - $ref: '#/components/parameters/IfMatch'
       responses:
@@ -281,6 +303,7 @@ paths:
       description: '`parentId` leer hängt die Seite nach oben.'
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       requestBody:
         required: true
         content:
@@ -305,6 +328,7 @@ paths:
       summary: Seite archivieren (wiki.publish)
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       requestBody:
         required: true
         content:
@@ -329,6 +353,7 @@ paths:
       summary: Archivierte Seite wiederherstellen (wiki.publish)
       parameters:
         - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/LanguageQuery'
       requestBody:
         required: true
         content:
@@ -346,6 +371,35 @@ paths:
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
         '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/languages:
+    post:
+      operationId: addWikiLanguage
+      summary: Sprachfassung hinzufügen (wiki.edit)
+      description: |
+        Legt die Fassung in der anderen Sprache als Entwurf mit Revision 1 an, mit Titel und Inhalt der veröffentlichten
+        Ausgangsrevision oder sonst des Entwurfs, und merkt sich diese Revision als übersetzte. Gibt es die Fassung schon oder ist
+        es die Ausgangssprache, 409 `wiki.language_exists`; fehlt die Sprache, 400 `language.required`.
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LanguageRequest'}
+      responses:
+        '201':
+          description: Seite in der neuen Sprachfassung; ETag ist die Revision ihres Entwurfs
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Page'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /wiki/pages/{pageId}/images:
     post:
@@ -414,6 +468,12 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    LanguageQuery:
+      name: language
+      in: query
+      required: false
+      description: Gewünschte Sprachfassung; ohne Angabe die Ausgangssprache der Seite (im Baum die Ausgangssprache jeder Seite)
+      schema: {$ref: '#/components/schemas/Language'}
     Revision:
       name: revision
       in: path
@@ -430,7 +490,7 @@ components:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, wiki.page_not_found, wiki.revision_not_found,
         wiki.image_not_found, wiki.version_conflict, wiki.precondition_required, wiki.page_archived, wiki.page_not_archived,
-        wiki.not_published, wiki.busy, image.too_large, image.empty, image.incomplete, image.type_unsupported,
+        wiki.not_published, wiki.language_exists, wiki.language_not_found, wiki.busy, image.too_large, image.empty, image.incomplete, image.type_unsupported,
         image.content_missing, image.storage_unavailable, project.not_found, auth.required, auth.forbidden,
         auth.csrf_invalid, auth.password_change_required.
       headers:
@@ -531,14 +591,37 @@ components:
         savedAt: {type: string, format: date-time}
         savedBy: {type: string, format: uuid}
         changed: {type: boolean}
+    PageLanguage:
+      type: object
+      required: [language, published, changed]
+      properties:
+        language: {$ref: '#/components/schemas/Language'}
+        published: {type: boolean}
+        changed: {type: boolean, description: Nur für Personen mit Entwürfen; der Entwurf dieser Fassung ist neuer als ihre Veröffentlichung}
+    Translation:
+      type: [object, 'null']
+      description: Nur für eine Übersetzung; fehlt (null) für die Ausgangssprache
+      required: [sourceRevision, sourcePublishedRevision, outdated]
+      properties:
+        sourceRevision: {type: [integer, 'null'], description: Übersetzte Revision der Ausgangssprache; für Leser null}
+        sourcePublishedRevision: {type: [integer, 'null'], description: Veröffentlichte Revision der Ausgangssprache; für Leser null}
+        outdated: {type: boolean, description: Die Ausgangssprache wurde nach der übersetzten Revision neu veröffentlicht}
     Page:
       type: object
-      required: [id, projectId, parentId, language, archived, version, access, path, published, draft, createdAt, createdBy]
+      required: [id, projectId, parentId, language, sourceLanguage, fallback, languages, translation, archived, version, access, path, published,
+        draft, createdAt, createdBy]
       properties:
         id: {type: string, format: uuid}
         projectId: {type: string, format: uuid}
         parentId: {type: [string, 'null'], format: uuid}
-        language: {$ref: '#/components/schemas/Language'}
+        language: {$ref: '#/components/schemas/Language', description: Gezeigte Sprachfassung}
+        sourceLanguage: {$ref: '#/components/schemas/Language'}
+        fallback: {type: boolean, description: Die gezeigte Fassung ist nicht die gewünschte}
+        languages:
+          type: array
+          description: Fassungen der Seite; Leser erhalten nur veröffentlichte
+          items: {$ref: '#/components/schemas/PageLanguage'}
+        translation: {$ref: '#/components/schemas/Translation'}
         archived: {type: boolean}
         version: {type: integer, format: int64, description: Version der Seite für Verschieben und Archivieren}
         access: {$ref: '#/components/schemas/Access'}
@@ -552,7 +635,7 @@ components:
         createdBy: {type: string, format: uuid}
     Revision:
       type: object
-      required: [revision, title, savedAt, savedBy, basedOn, restoredFrom, published]
+      required: [revision, title, savedAt, savedBy, basedOn, restoredFrom, published, sourceRevision]
       properties:
         revision: {type: integer}
         title: {type: string}
@@ -561,20 +644,22 @@ components:
         basedOn: {type: [integer, 'null']}
         restoredFrom: {type: [integer, 'null']}
         published: {type: boolean}
+        sourceRevision: {type: [integer, 'null'], description: Übersetzte Revision der Ausgangssprache, nur bei Übersetzungen}
     Event:
       type: object
       required: [kind, language, revision, actorId, occurredAt]
       properties:
-        kind: {type: string, enum: [created, saved, published, withdrawn, reverted, moved, archived, unarchived]}
+        kind: {type: string, enum: [created, saved, published, withdrawn, reverted, moved, archived, unarchived, translated]}
         language: {type: [string, 'null']}
         revision: {type: [integer, 'null']}
         actorId: {type: string, format: uuid}
         occurredAt: {type: string, format: date-time}
     History:
       type: object
-      required: [pageId, draftRevision, publishedRevision, revisions, events]
+      required: [pageId, language, draftRevision, publishedRevision, revisions, events]
       properties:
         pageId: {type: string, format: uuid}
+        language: {$ref: '#/components/schemas/Language'}
         draftRevision: {type: integer}
         publishedRevision: {type: [integer, 'null']}
         revisions:
@@ -585,15 +670,17 @@ components:
           items: {$ref: '#/components/schemas/Event'}
     RevisionContent:
       type: object
-      required: [revision, title, content, html, savedAt, savedBy, published]
+      required: [revision, language, title, content, html, savedAt, savedBy, published, sourceRevision]
       properties:
         revision: {type: integer}
+        language: {$ref: '#/components/schemas/Language'}
         title: {type: string}
         content: {$ref: '#/components/schemas/Document'}
         html: {type: string}
         savedAt: {type: string, format: date-time}
         savedBy: {type: string, format: uuid}
         published: {type: boolean}
+        sourceRevision: {type: [integer, 'null']}
     Image:
       type: object
       required: [id, src, mediaType, size]
@@ -616,6 +703,17 @@ components:
       properties:
         title: {type: string}
         content: {$ref: '#/components/schemas/Document'}
+        sourceRevision:
+          type: [integer, 'null']
+          description: |
+            Nur für eine Übersetzung: die Revision der Ausgangssprache, die sie jetzt übersetzt (1 bis Entwurf der
+            Ausgangssprache, sonst `source_revision.invalid`); fehlt sie, bleibt die bisherige. Für die Ausgangssprache
+            `source_revision.invalid`.
+    LanguageRequest:
+      type: object
+      required: [language]
+      properties:
+        language: {$ref: '#/components/schemas/Language'}
     PublishRequest:
       type: object
       required: [revision]

@@ -65,7 +65,7 @@ class WikiContractTest {
     @Test
     void everyMappedRouteIsDocumentedAndEveryDocumentedRouteExists() throws IOException {
         Set<String> mapped = mapped();
-        assertEquals(15, mapped.size(), mapped.toString());
+        assertEquals(16, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
     }
 }

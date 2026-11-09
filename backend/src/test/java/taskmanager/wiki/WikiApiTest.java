@@ -781,4 +781,121 @@ class WikiApiTest {
         assertEquals(1, revisions.get(0).get("restoredFrom").asInt());
         assertEquals(2, revisions.get(0).get("basedOn").asInt());
     }
+
+    // ---------------------------------------------------------------- language versions (TASK-094)
+
+    private Response saveIn(Browser who, UUID page, String language, String etag, String title, Object content, Integer sourceRevision) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("title", title);
+        body.put("content", content);
+        if (sourceRevision != null) {
+            body.put("sourceRevision", sourceRevision);
+        }
+        return who.send("PUT", "/api/v1/wiki/pages/" + page + "/draft?language=" + language, body, etag);
+    }
+
+    private static List<String> languages(Response page) {
+        List<String> codes = new ArrayList<>();
+        page.json().get("languages").forEach(l -> codes.add(l.get("language").asString()));
+        return codes;
+    }
+
+    /** W01, W07, W08: a German page is complete alone, a draft is never the fallback, a new source marks the translation. */
+    @Test
+    void languageVersionsFollowTheConfirmedRules() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        UUID page = id(create(author, setup, "Anleitung", null, doc(paragraph("Deutsch eins"))));
+        assertEquals(200, publish(author, page, "\"1\"", 1).status());
+        String path = "/api/v1/wiki/pages/" + page;
+
+        // W01: only German, every request gets it, a requested English one with the language named.
+        Response german = reader.get(path);
+        assertEquals("de", german.json().get("language").asString());
+        assertEquals("de", german.json().get("sourceLanguage").asString());
+        assertFalse(german.json().get("fallback").asBoolean());
+        assertTrue(german.json().get("translation").isNull());
+        Response wanted = reader.get(path + "?language=en");
+        assertEquals("de", wanted.json().get("language").asString());
+        assertTrue(wanted.json().get("fallback").asBoolean());
+        assertEquals(List.of("de"), languages(wanted));
+        assertInvalid(reader.get(path + "?language=fr"), "language.invalid");
+
+        // Adding English copies the published German revision as the first English draft.
+        assertInvalid(author.send("POST", path + "/languages", Map.of(), null), "language.required");
+        assertInvalid(author.send("POST", path + "/languages", Map.of("language", "fr"), null), "language.invalid");
+        assertEquals(409, author.send("POST", path + "/languages", Map.of("language", "de"), null).status());
+        assertEquals(403, reader.send("POST", path + "/languages", Map.of("language", "en"), null).status());
+        assertEquals(404, saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("x")), null).status(), "no English version yet");
+        Response added = author.send("POST", path + "/languages", Map.of("language", "en"), null);
+        assertEquals(201, added.status(), added.body());
+        assertEquals("en", added.json().get("language").asString());
+        assertEquals("\"1\"", added.etag());
+        assertEquals("Anleitung", added.json().get("draft").get("title").asString());
+        assertEquals("<p>Deutsch eins</p>", added.json().get("draft").get("html").asString());
+        assertEquals(1, added.json().get("translation").get("sourceRevision").asInt());
+        assertFalse(added.json().get("translation").get("outdated").asBoolean());
+        assertEquals(409, author.send("POST", path + "/languages", Map.of("language", "en"), null).status());
+
+        // W08: the English draft is neither shown to readers nor named.
+        Response stillGerman = reader.get(path + "?language=en");
+        assertEquals("de", stillGerman.json().get("language").asString());
+        assertEquals(List.of("de"), languages(stillGerman));
+        assertFalse(stillGerman.body().contains("\"en\""), "readers learn nothing of the English draft");
+        assertEquals("Anleitung", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=en").json().get("pages").get(0).get("title")
+            .asString());
+        assertEquals(404, reader.get(path + "/history?language=en").status());
+
+        Response english = saveIn(author, page, "en", "\"1\"", "Guide", doc(paragraph("English one")), null);
+        assertEquals(200, english.status(), english.body());
+        assertEquals(1, english.json().get("translation").get("sourceRevision").asInt(), "the translated revision stays without a new one");
+        assertEquals(200, author.send("POST", path + "/publish?language=en", Map.of("revision", 2), "\"2\"").status());
+        Response read = reader.get(path + "?language=en");
+        assertEquals("en", read.json().get("language").asString());
+        assertFalse(read.json().get("fallback").asBoolean());
+        assertEquals("Guide", read.json().get("published").get("title").asString());
+        assertEquals(List.of("de", "en"), languages(read));
+        assertFalse(read.json().get("translation").get("outdated").asBoolean());
+        assertTrue(read.json().get("translation").get("sourceRevision").isNull(), "readers get no revision numbers");
+        assertEquals("Guide", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=en").json().get("pages").get(0).get("title")
+            .asString());
+        assertEquals("Anleitung", reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages?language=de").json().get("pages").get(0).get("title")
+            .asString());
+
+        // W07: German is published again; the translation stays and is marked for both.
+        assertEquals(200, save(author, page, "\"1\"", "Anleitung", doc(paragraph("Deutsch zwei"))).status());
+        assertEquals(200, publish(author, page, "\"2\"", 2).status());
+        assertTrue(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean());
+        JsonNode marked = author.get(path + "?language=en").json().get("translation");
+        assertEquals(1, marked.get("sourceRevision").asInt());
+        assertEquals(2, marked.get("sourcePublishedRevision").asInt());
+        assertTrue(marked.get("outdated").asBoolean());
+        assertEquals("<p>Deutsch eins</p>", author.get(path + "/revisions/1?language=de").json().get("html").asString(), "the comparison reads the source");
+
+        assertInvalid(saveIn(author, page, "en", "\"2\"", "Guide", doc(paragraph("English two")), 5), "source_revision.invalid");
+        assertInvalid(saveIn(author, page, "de", "\"2\"", "Anleitung", doc(paragraph("Deutsch")), 1), "source_revision.invalid");
+        Response aligned = saveIn(author, page, "en", "\"2\"", "Guide", doc(paragraph("English two")), 2);
+        assertEquals(200, aligned.status(), aligned.body());
+        assertFalse(aligned.json().get("translation").get("outdated").asBoolean());
+        assertTrue(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean(), "until the English one is published");
+        assertEquals(200, author.send("POST", path + "/publish?language=en", Map.of("revision", 3), "\"3\"").status());
+        assertFalse(reader.get(path + "?language=en").json().get("translation").get("outdated").asBoolean());
+
+        JsonNode history = author.get(path + "/history?language=en").json();
+        assertEquals("en", history.get("language").asString());
+        assertEquals(2, history.get("revisions").get(0).get("sourceRevision").asInt());
+        List<String> kinds = new ArrayList<>();
+        history.get("events").forEach(e -> kinds.add(e.get("kind").asString() + ":" + e.get("language").asString()));
+        assertTrue(kinds.contains("translated:en"), kinds.toString());
+
+        // Without the published German version readers get the English one, with the language named.
+        assertEquals(200, author.send("POST", path + "/withdraw?language=de", null, null).status());
+        Response fallback = reader.get(path);
+        assertEquals("en", fallback.json().get("language").asString());
+        assertTrue(fallback.json().get("fallback").asBoolean());
+        assertEquals(List.of("en"), languages(fallback));
+        assertEquals(200, author.send("POST", path + "/withdraw?language=en", null, null).status());
+        assertEquals(404, reader.get(path + "?language=en").status(), "no published version, no page for readers");
+    }
 }
