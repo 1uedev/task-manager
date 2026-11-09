@@ -433,6 +433,11 @@ class WikiApiTest {
         assertEquals("Anleitung", read.json().get("published").get("title").asString(), "a new title waits for the publication as well");
         JsonNode tree = reader.get("/api/v1/wiki/projects/" + setup.project() + "/pages").json().get("pages");
         assertEquals("Anleitung", tree.get(0).get("title").asString());
+        // F5 of the Codex review, rule 3 as extended by Holger: wiki.publish alone sees the draft it is about to publish.
+        Response forPublisher = editor.get("/api/v1/wiki/pages/" + page);
+        assertEquals(2, forPublisher.json().get("draft").get("revision").asInt());
+        assertEquals("\"2\"", forPublisher.etag());
+        assertEquals(200, editor.get("/api/v1/wiki/pages/" + page + "/history").status());
 
         assertEquals(412, publish(editor, page, "\"1\"", 1).status(), "W06: the revision shown before the save is no longer the draft");
         assertEquals(412, publish(editor, page, "\"2\"", 1).status(), "only the current draft is published");
