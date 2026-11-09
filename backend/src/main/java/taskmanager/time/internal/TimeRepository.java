@@ -96,14 +96,57 @@ class TimeRepository {
             .list();
     }
 
+    /** The sum of one person on one ticket (or without ticket) over the matching entries. */
+    record Sum(UUID personId, UUID ticketId, long count, long minutes) {
+    }
+
+    /** The minutes of one work date over the matching entries that are not cancelled. */
+    record DaySum(LocalDate date, long minutes) {
+    }
+
     /**
      * The entries of one project that match; {@code person} limits them to one person, {@code ticket} to one ticket, the dates
      * include both ends. At most {@code limit} rows, newest work date first.
      */
     List<TimeEntry> entries(UUID companyId, UUID projectId, UUID person, UUID ticket, LocalDate from, LocalDate to, boolean cancelled,
             int limit) {
-        StringBuilder sql = new StringBuilder("select " + COLUMNS + " from time_entry where company_id = ? and project_id = ?");
-        List<Object> params = new ArrayList<>(List.of(companyId, projectId));
+        List<Object> params = new ArrayList<>();
+        String where = where(companyId, projectId, person, ticket, from, to, cancelled, params);
+        params.add(limit);
+        return jdbc.sql("select " + COLUMNS + " from time_entry where " + where + " order by work_date desc, created_at desc, id limit ?")
+            .params(params).query(TimeRepository::map).list();
+    }
+
+    /**
+     * Count and minutes of every matching entry of one project per person and ticket, without any limit (TASK-092, F1). The
+     * count includes cancelled entries when the filter lists them, the minutes never do.
+     */
+    List<Sum> sums(UUID companyId, UUID projectId, UUID person, UUID ticket, LocalDate from, LocalDate to, boolean cancelled) {
+        List<Object> params = new ArrayList<>();
+        String where = where(companyId, projectId, person, ticket, from, to, cancelled, params);
+        return jdbc.sql("select person_id, ticket_id, count(*) as entries, coalesce(sum(minutes) filter (where cancelled_at is null), 0) as minutes"
+                + " from time_entry where " + where + " group by person_id, ticket_id")
+            .params(params)
+            .query((rs, row) -> new Sum(rs.getObject("person_id", UUID.class), rs.getObject("ticket_id", UUID.class), rs.getLong("entries"),
+                rs.getLong("minutes")))
+            .list();
+    }
+
+    /** The minutes of the matching entries of one project per work date, cancelled ones never counted (TASK-092, F3). */
+    List<DaySum> days(UUID companyId, UUID projectId, UUID person, UUID ticket, LocalDate from, LocalDate to) {
+        List<Object> params = new ArrayList<>();
+        String where = where(companyId, projectId, person, ticket, from, to, false, params);
+        return jdbc.sql("select work_date, sum(minutes) as minutes from time_entry where " + where + " group by work_date")
+            .params(params)
+            .query((rs, row) -> new DaySum(rs.getDate("work_date").toLocalDate(), rs.getLong("minutes")))
+            .list();
+    }
+
+    private static String where(UUID companyId, UUID projectId, UUID person, UUID ticket, LocalDate from, LocalDate to, boolean cancelled,
+            List<Object> params) {
+        StringBuilder sql = new StringBuilder("company_id = ? and project_id = ?");
+        params.add(companyId);
+        params.add(projectId);
         if (person != null) {
             sql.append(" and person_id = ?");
             params.add(person);
@@ -123,8 +166,6 @@ class TimeRepository {
         if (!cancelled) {
             sql.append(" and cancelled_at is null");
         }
-        sql.append(" order by work_date desc, created_at desc, id limit ?");
-        params.add(limit);
-        return jdbc.sql(sql.toString()).params(params).query(TimeRepository::map).list();
+        return sql.toString();
     }
 }

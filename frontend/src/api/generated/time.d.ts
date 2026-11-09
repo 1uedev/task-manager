@@ -71,8 +71,11 @@ export interface paths {
          * Buchungen mit Summen nach Projekt, Person, Ticket und Zeitraum
          * @description Ohne `project` gilt die Liste über alle Projekte der Person, in denen sie eine Zeitaktion hat. Ohne `time.read` oder
          *     `time.manage` enthält sie in einem Projekt nur die eigenen Buchungen, die Summen ebenso. Höchstens 500 Buchungen,
-         *     neueste zuerst; `truncated` sagt, dass es mehr gibt. Die Summen umfassen immer alle passenden, nicht stornierten
-         *     Buchungen. Ein Ticket, das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne Ticket.
+         *     neueste zuerst; `truncated` sagt, dass es mehr gibt. `count` zählt alle passenden Buchungen (mit `cancelled` auch die
+         *     stornierten), die Summen umfassen alle passenden, nicht stornierten Buchungen, jeweils ohne Obergrenze. Ein Ticket,
+         *     das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne sichtbares Ticket. `mine` beschränkt Liste und
+         *     Summen auf die eigenen Buchungen, auch mit `time.read`; zusammen mit einer anderen `person` ergibt es 400
+         *     `person.with_mine`.
          */
         get: operations["listTimeEntries"];
         put?: never;
@@ -191,6 +194,8 @@ export interface components {
             projectId: string;
             projectKey: string;
             ticket: components["schemas"]["TicketRef"];
+            /** @description Die Buchung hat ein Ticket */
+            ticketHidden: boolean;
             /** Format: uuid */
             personId: string;
             /** Format: date */
@@ -226,6 +231,7 @@ export interface components {
             /** Format: uuid */
             actorId: string;
             ticket: components["schemas"]["TicketRef"];
+            ticketHidden: boolean;
             /** Format: date */
             date: string;
             minutes: number;
@@ -241,7 +247,7 @@ export interface components {
             truncated: boolean;
             /**
              * Format: int64
-             * @description Zahl der passenden Buchungen
+             * @description Zahl aller passenden Buchungen
              */
             count: number;
             /** Format: int64 */
@@ -257,6 +263,13 @@ export interface components {
                 projectId: string;
                 projectKey: string;
                 ticket: components["schemas"]["TicketRef"];
+                /** Format: int64 */
+                minutes: number;
+            }[];
+            /** @description Minuten der nicht stornierten passenden Buchungen je Leistungsdatum, ältestes zuerst */
+            perDate: {
+                /** Format: date */
+                date: string;
                 /** Format: int64 */
                 minutes: number;
             }[];
@@ -279,6 +292,8 @@ export interface components {
             /** Format: int64 */
             ticketNumber?: number | null;
             reason?: string | null;
+            /** @description Ohne ticketNumber entfernt es ein Ticket, das die Person nicht sehen darf; sonst bleibt es erhalten */
+            removeHiddenTicket?: boolean;
         };
     };
     responses: {
@@ -414,6 +429,8 @@ export interface operations {
                 to?: string;
                 /** @description auch stornierte Buchungen auflisten */
                 cancelled?: boolean;
+                /** @description nur die eigenen Buchungen */
+                mine?: boolean;
             };
             header?: never;
             path?: never;

@@ -39,7 +39,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * TASK-069: time entries through the real HTTP interface with the real permissions, projects and tickets modules and a real
  * PostgreSQL: the three time actions, the calculation example of docs/DOMAIN_MODEL.md, corrections and cancellations with
- * their history, versions, the rules of a booking, hidden tickets and the CSV export.
+ * their history, versions, the rules of a booking, hidden tickets and the CSV export. TASK-092 adds the sums beyond the list
+ * and export limits (F1), the hidden ticket a correction keeps (F2), the own entries of {@code mine} with the sums per day
+ * (F3) and the negative cases of portal accounts and other projects (H2).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class TimeApiTest {
@@ -460,5 +462,218 @@ class TimeApiTest {
         assertEquals("\"Summe\";\"\";\"\";\"\";\"95\";\"1,58\";\"\"", lines[6]);
         assertEquals(7, lines.length, "the cancelled entry is not exported");
         assertInvalid(worker.get("/api/v1/time/entries?from=2026-10-31&to=2026-10-01"), "to.before_from");
+    }
+
+    // ---------------------------------------------------------------- TASK-092
+
+    /** Stores {@code count} entries of one minute each straight in the table, newest first by creation time. */
+    private void bulk(UUID project, UUID person, int count, String date, boolean cancelled) {
+        UUID company = companies.find().orElseThrow();
+        jdbc.update("""
+                insert into time_entry (id, company_id, project_id, ticket_id, person_id, work_date, minutes, description, cancelled_at,
+                    cancelled_by, created_at, created_by, updated_at, updated_by, version)
+                select gen_random_uuid(), ?, ?, null, ?, ?::date, 1, 'Masse', case when ? then now() end, case when ? then ?::uuid end,
+                    now() - g * interval '1 millisecond', ?, now(), ?, 1
+                from generate_series(1, ?) g
+                """, company, project, person, date, cancelled, cancelled, person, person, person, count);
+    }
+
+    private static List<String> dataLines(Response csv) {
+        assertEquals(200, csv.status(), csv.body().length() > 500 ? csv.body().substring(0, 500) : csv.body());
+        String[] lines = csv.body().replace("﻿", "").split("\r\n");
+        return List.of(lines).subList(4, lines.length - 1);
+    }
+
+    /** F1: count and sums cover every matching entry, apart from the 500 rows of a list and the 50 000 rows of an export. */
+    @Test
+    void countAndSumsCoverEveryEntryBeyondTheListAndTheExportLimit() {
+        Setup setup = project();
+        Browser reader = member(setup, "time.book", "time.read");
+        bulk(setup.project(), reader.id, 500, "2026-09-01", false);
+        JsonNode exactly = list(reader, setup, "").json();
+        assertEquals(500, exactly.get("entries").size());
+        assertFalse(exactly.get("truncated").asBoolean());
+        assertEquals(500, exactly.get("count").asLong());
+        assertEquals(500, exactly.get("totalMinutes").asLong());
+
+        bulk(setup.project(), reader.id, 1, "2026-09-01", false);
+        JsonNode above = list(reader, setup, "").json();
+        assertEquals(500, above.get("entries").size());
+        assertTrue(above.get("truncated").asBoolean());
+        assertEquals(501, above.get("count").asLong());
+        assertEquals(501, above.get("totalMinutes").asLong());
+        assertEquals(501, above.get("perPerson").get(0).get("minutes").asLong());
+        assertEquals(501, above.get("perTicket").get(0).get("minutes").asLong());
+        assertEquals("2026-09-01", above.get("perDate").get(0).get("date").asString());
+        assertEquals(501, above.get("perDate").get(0).get("minutes").asLong());
+
+        bulk(setup.project(), reader.id, 49_499, "2026-09-02", false);
+        String export = "/api/v1/time/export?project=" + setup.project();
+        List<String> rows = dataLines(reader.get(export));
+        assertEquals(50_000, rows.size(), "an export of exactly 50 000 entries is complete");
+        assertEquals(50_000, list(reader, setup, "").json().get("totalMinutes").asLong());
+
+        bulk(setup.project(), reader.id, 1, "2026-09-02", false);
+        JsonNode beyond = list(reader, setup, "").json();
+        assertEquals(500, beyond.get("entries").size());
+        assertEquals(50_001, beyond.get("count").asLong(), "the count has no limit");
+        assertEquals(50_001, beyond.get("totalMinutes").asLong(), "the sum has no limit");
+        assertEquals(50_001, beyond.get("perPerson").get(0).get("minutes").asLong());
+        Response tooLarge = reader.get(export);
+        assertEquals(400, tooLarge.status(), tooLarge.body());
+        assertEquals("time.export_too_large", tooLarge.code());
+
+        Setup second = project();
+        add(second, reader.id);
+        grant(reader.id, second.project(), "time.book", "time.read");
+        bulk(second.project(), reader.id, 10, "2026-09-03", false);
+        bulk(second.project(), reader.id, 600, "2026-10-01", true);
+        JsonNode both = reader.get("/api/v1/time/entries").json();
+        assertEquals(50_011, both.get("count").asLong(), "every project of the caller counts");
+        assertEquals(50_011, both.get("totalMinutes").asLong());
+        assertEquals(2, both.get("perTicket").size(), "one sum without ticket per project");
+        JsonNode withCancelled = list(reader, second, "&cancelled=true").json();
+        assertEquals(500, withCancelled.get("entries").size());
+        assertTrue(withCancelled.get("entries").get(0).get("cancelled").asBoolean(), "the newer cancelled entries come first");
+        assertEquals(610, withCancelled.get("count").asLong(), "listed cancelled entries count");
+        assertEquals(10, withCancelled.get("totalMinutes").asLong(), "but never add minutes");
+        assertEquals(10, list(reader, second, "").json().get("count").asLong());
+        assertEquals(10, dataLines(reader.get("/api/v1/time/export?project=" + second.project())).size());
+    }
+
+    /** F2: a correction without a ticket number keeps a ticket the caller may not see; only an explicit removal drops it. */
+    @Test
+    void aCorrectionKeepsAHiddenTicketUnlessItsRemovalIsAsked() {
+        Setup setup = project();
+        Browser author = member(setup, "ticket.read", "ticket.create", "READ:title", "WRITE:title", "WRITE:type", "READ:type");
+        long number = ticket(setup, author, "Verborgen");
+        Browser worker = person();
+        add(setup, worker.id);
+        grant(worker.id, setup.project(), "time.book");
+        UUID tickets = grant(worker.id, setup.project(), "ticket.read", "READ:title");
+        Response booked = worker.send("POST", "/api/v1/time/projects/" + setup.project() + "/entries", booking(today(), 30, "am Ticket", number, null),
+            null);
+        assertEquals(201, booked.status(), booked.body());
+        assertFalse(booked.json().get("entry").get("ticketHidden").asBoolean());
+        String path = "/api/v1/time/entries/" + id(booked);
+
+        revoke(tickets);
+        JsonNode hidden = worker.get(path).json().get("entry");
+        assertTrue(hidden.get("ticket").isNull());
+        assertTrue(hidden.get("ticketHidden").asBoolean(), "the entry says that it has a ticket, not which");
+        Response corrected = worker.send("PUT", path, correction(today(), 40, "am Ticket", null, null), booked.etag());
+        assertEquals(200, corrected.status(), corrected.body());
+        assertTrue(corrected.json().get("entry").get("ticketHidden").asBoolean(), "the empty number of the form keeps the hidden ticket");
+        assertFalse(corrected.body().contains("Verborgen"), "nothing of the hidden ticket is shown");
+
+        Browser lead = member(setup, "time.manage");
+        Response byLead = lead.send("PUT", path, correction(today(), 45, "am Ticket", null, "nachgetragen"), corrected.etag());
+        assertEquals(200, byLead.status(), byLead.body());
+        assertTrue(byLead.json().get("entry").get("ticketHidden").asBoolean(), "time.manage without ticket.read keeps it too");
+
+        UUID again = grant(worker.id, setup.project(), "ticket.read", "READ:title");
+        JsonNode visible = worker.get(path).json();
+        assertEquals(number, visible.get("entry").get("ticket").get("number").asLong(), "after the right returns the ticket is still there");
+        assertEquals(45, visible.get("entry").get("minutes").asInt());
+        for (JsonNode revision : visible.get("revisions")) {
+            assertEquals(number, revision.get("ticket").get("number").asLong(), "every revision kept the ticket");
+        }
+
+        revoke(again);
+        Response removed = worker.send("PUT", path, Map.of("date", today(), "minutes", 45, "description", "am Ticket", "removeHiddenTicket", true),
+            byLead.etag());
+        assertEquals(200, removed.status(), removed.body());
+        assertFalse(removed.json().get("entry").get("ticketHidden").asBoolean());
+        grant(worker.id, setup.project(), "ticket.read", "READ:title");
+        JsonNode after = worker.get(path).json();
+        assertTrue(after.get("entry").get("ticket").isNull(), "an explicit removal drops the ticket");
+        JsonNode revisions = after.get("revisions");
+        assertTrue(revisions.get(revisions.size() - 1).get("ticket").isNull());
+        assertEquals(number, revisions.get(revisions.size() - 2).get("ticket").get("number").asLong());
+    }
+
+    /** F3: {@code mine} gives the own entries with sums per day even to a caller who reads everybody, beyond 500 entries. */
+    @Test
+    void mineGivesTheOwnEntriesAndDaysEvenToAReader() {
+        Setup setup = project();
+        Browser reader = member(setup, "time.book", "time.read");
+        Browser other = member(setup, "time.book");
+        bulk(setup.project(), reader.id, 300, "2026-11-02", false);
+        bulk(setup.project(), reader.id, 201, "2026-11-03", false);
+        bulk(setup.project(), reader.id, 7, "2026-11-04", true);
+        bulk(setup.project(), other.id, 40, "2026-11-02", false);
+        bulk(setup.project(), reader.id, 5, "2026-10-30", false);
+        String week = "&from=2026-11-02&to=2026-11-08";
+        JsonNode everybody = list(reader, setup, week).json();
+        assertEquals(541, everybody.get("totalMinutes").asLong());
+        JsonNode mine = list(reader, setup, week + "&mine=true").json();
+        assertEquals(500, mine.get("entries").size());
+        assertTrue(mine.get("truncated").asBoolean());
+        assertEquals(501, mine.get("count").asLong());
+        assertEquals(501, mine.get("totalMinutes").asLong());
+        assertEquals(1, mine.get("perPerson").size());
+        assertEquals(2, mine.get("perDate").size(), "cancelled entries and other weeks add no day");
+        assertEquals("2026-11-02", mine.get("perDate").get(0).get("date").asString());
+        assertEquals(300, mine.get("perDate").get(0).get("minutes").asLong());
+        assertEquals("2026-11-03", mine.get("perDate").get(1).get("date").asString());
+        assertEquals(201, mine.get("perDate").get(1).get("minutes").asLong());
+        for (JsonNode entry : mine.get("entries")) {
+            assertTrue(entry.get("own").asBoolean());
+        }
+        assertInvalid(list(reader, setup, week + "&mine=true&person=" + other.id), "person.with_mine");
+        assertEquals(40, list(other, setup, week + "&mine=true").json().get("totalMinutes").asLong());
+    }
+
+    /** H2: other projects and portal accounts never add entries or sums, whatever actions they were given. */
+    @Test
+    void otherProjectsAndPortalAccountsAddNothing() {
+        Setup setup = project();
+        Browser booker = member(setup, "time.book");
+        Browser colleague = member(setup, "time.book");
+        bulk(setup.project(), booker.id, 3, "2026-10-01", false);
+        bulk(setup.project(), colleague.id, 4, "2026-10-01", false);
+        Setup foreign = project();
+        Browser foreigner = member(foreign, "time.book", "time.read");
+        bulk(foreign.project(), foreigner.id, 9, "2026-10-01", false);
+        Setup read = project();
+        add(read, booker.id);
+        grant(booker.id, read.project(), "time.read");
+        bulk(read.project(), colleague.id, 6, "2026-10-01", false);
+
+        JsonNode all = booker.get("/api/v1/time/entries").json();
+        assertEquals(9, all.get("count").asLong(), "own entries where only time.book holds, every entry where time.read holds");
+        assertEquals(9, all.get("totalMinutes").asLong());
+        assertEquals(0, booker.get("/api/v1/time/entries?project=" + setup.project() + "&person=" + colleague.id).json().get("count").asLong(),
+            "without time.read a foreign person gives nothing");
+        assertEquals(404, list(booker, foreign, "").status(), "a project without a time action does not exist");
+        assertEquals(404, booker.get("/api/v1/time/export?project=" + foreign.project()).status());
+
+        Browser admin = person(AdministrationRight.ACCOUNTS_MANAGE, AdministrationRight.HELPDESK_MANAGE);
+        Response customer = admin.send("POST", "/api/v1/helpdesk/customers", Map.of("name", "Kunde " + COUNTER.incrementAndGet(),
+            "projects", List.of(setup.project())), null);
+        assertEquals(201, customer.status(), customer.body());
+        Map<String, Object> body = new HashMap<>();
+        body.put("username", "zeitkunde-" + COUNTER.incrementAndGet());
+        body.put("displayName", "Kunde");
+        body.put("organizationId", UUID.fromString(customer.json().get("id").asString()));
+        body.put("contactId", null);
+        body.put("projectIds", List.of(setup.project()));
+        Response created = admin.send("POST", "/api/v1/portal-accounts", body, null);
+        assertEquals(201, created.status(), created.body());
+        UUID portalId = UUID.fromString(created.json().get("account").get("id").asString());
+        grant(portalId, setup.project(), "time.book", "time.read", "time.manage");
+        Browser portal = new Browser();
+        assertEquals(200, portal.get("/api/v1/session").status());
+        assertEquals(200, portal.send("POST", "/api/v1/session", Map.of("username", created.json().get("account").get("username").asString(),
+            "password", created.json().get("oneTimePassword").asString()), null).status());
+        assertEquals(200, portal.send("POST", "/api/v1/session/password", Map.of("currentPassword", created.json().get("oneTimePassword").asString(),
+            "newPassword", STRONG), null).status());
+        assertEquals(0, portal.get("/api/v1/time/projects").json().size());
+        JsonNode portalList = portal.get("/api/v1/time/entries").json();
+        assertEquals(0, portalList.get("count").asLong());
+        assertEquals(0, portalList.get("totalMinutes").asLong());
+        assertEquals(404, list(portal, setup, "").status());
+        assertEquals(404, book(setup, portal, 10, "Kunde").status());
+        assertEquals(404, portal.get("/api/v1/time/export?project=" + setup.project()).status());
     }
 }

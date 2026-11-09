@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-092](#task-092-befunde-der-codex-prüfung-von-task-069-beheben-a6) | Befunde der Codex Prüfung von TASK-069 beheben (A6) | claude-20261108-timefix-01 | 2026-11-08 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -48,6 +46,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-089](#task-089-befunde-der-zweiten-nachprüfung-von-task-087-beheben-a17) | Befunde der zweiten Nachprüfung von TASK-087 beheben (A17) | claude-20261102-branding-01 | 2026-11-06 |
 | [TASK-090](#task-090-befunde-der-prüfung-von-task-089-beheben-a17) | Befunde der Prüfung von TASK-089 beheben (A17) | claude-20261102-branding-01 | 2026-11-08 |
 | [TASK-091](#task-091-befunde-der-nachprüfung-von-task-088-beheben) | Befunde der Nachprüfung von TASK-088 beheben | claude-20261108-newanswersfix-02 | 2026-11-08 |
+| [TASK-092](#task-092-befunde-der-codex-prüfung-von-task-069-beheben-a6) | Befunde der Codex Prüfung von TASK-069 beheben (A6) | claude-20261108-timefix-01 | 2026-11-09 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -83,7 +82,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-092 Befunde der Codex Prüfung von TASK-069 beheben (A6)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261108-timefix-01 · **Aktualisiert:** 2026-11-08
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261108-timefix-01 · **Aktualisiert:** 2026-11-09
 
 **Bezug:** REQ-TIME-001, REQ-TIME-002; DEC-099; docs/REVIEW_TASK-069_PR-256.md. **Abhängigkeiten:** TASK-069 geliefert (PR #256). **Arbeitsstand:** Holger hat am 8. November 2026 den Codex Bericht zu TASK-069 (Empfehlung „noch nicht abnehmen“) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Beheben, Abweichungen bestätigen“ gewählt. Damit sind die drei Abweichungen aus Hinweis H1 bestätigt: 412 bei veralteter Version (409 bleibt der stornierten Buchung), „heute“ als Datum in UTC ohne Unternehmenszeitzone, und die Zeit an einem nicht lesbaren Ticket zählt unter „ohne sichtbares Ticket“. Branch claude/project-thread-thp5tg; Ergebnis mit eigener DEC-ID, Migration nur falls nötig.
 
@@ -100,7 +99,9 @@ Nicht Teil: Timer, Freigaben, Abrechnung, Unternehmenszeitzone, Suche über Zeit
 1. F1 bis F3 mit API Tests gegen die echte Datenbank und Browsertests in Deutsch, die ohne die jeweilige Behebung fehlschlagen würden.
 2. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung und Ergebnis PR.
+**Ergebnis (zur Prüfung):** Umgesetzt nach DEC-122 auf Branch claude/project-thread-thp5tg, ohne Migration. (1) F1: `TimeRepository.sums` und `days` bilden Anzahl und Minuten je Person und Ticket sowie je Leistungsdatum als Aggregate in PostgreSQL über alle erlaubten Treffer; nur die zurückgegebenen Zeilen sind auf 500 begrenzt, ein Export über 50 000 Buchungen lädt keine Zeilen und ergibt weiter 400. (2) F2: Buchung und Revision tragen `ticketHidden`; eine Korrektur ohne Ticketnummer behält ein verborgenes Ticket, nur `removeHiddenTicket: true` entfernt es. Das Formular nennt das verborgene Ticket ohne Nummer oder Titel und bietet „Zuordnung zum nicht sichtbaren Ticket entfernen“ an. (3) F3: Die Liste kennt `mine=true` (auch mit `time.read` nur eigene Buchungen; mit einer anderen `person` 400 `person.with_mine`) und `perDate`; „Meine Zeiten“ zeigt Woche und Tage aus diesen Serversummen und weist auf eine gekürzte Liste hin. (4) H1: Nachtrag zu den Regeln in TASK-069, DEC-122, Vertrag und backend/README.md; die Summengruppe heißt „ohne sichtbares Ticket“. (5) H2: `TimeApiTest.countAndSumsCoverEveryEntryBeyondTheListAndTheExportLimit` (500, 501, 50 000, 50 001 Buchungen, zwei Projekte, 600 neuere Stornos), `aCorrectionKeepsAHiddenTicketUnlessItsRemovalIsAsked` (Entzug und Wiedergabe von `ticket.read`, auch mit `time.manage`), `mineGivesTheOwnEntriesAndDaysEvenToAReader` (501 eigene Wochenbuchungen), `otherProjectsAndPortalAccountsAddNothing` (fremde Projekte und ein Portalkonto mit allen drei Zeitaktionen); Browsertests für das verborgene Ticket und 501 eigene Buchungen in der Woche.
+
+**Nächster Schritt:** Nachprüfung durch eine zweite KI (Codex oder Claude), danach Abnahme von TASK-069 und TASK-092 durch Holger.
 
 ## TASK-069 Zeiterfassung im Projekt und Ticketzusammenhang (Paket A6)
 
@@ -126,6 +127,8 @@ Nicht Teil: Timer, Freigaben, Abrechnung, Unternehmenszeitzone, Suche über Zeit
 13. Die Ticketansicht zeigt Summe und Liste der für den Leser sichtbaren Buchungen und ein Formular zum Buchen.
 14. Seite „Meine Zeiten“ mit Wochenansicht der eigenen Buchungen über alle Projekte.
 15. Nicht enthalten: Timer, Freigaben, abrechenbare Zeiten, Stundensätze, Abrechnung, Kontingente, Planung, Verschieben von Tickets, Suche über Zeiten, KI. Buchungen erscheinen in ihrer eigenen Historie, nicht in der Tickethistorie.
+
+**Nachtrag (Holger, 8. November 2026, DEC-122):** Zu Regel 3 gilt bis zu einer Unternehmenszeitzone das heutige Datum in UTC plus ein Tag. Zu Regel 11 ergibt eine veraltete Version 412 wie bei Tickets; 409 bleibt der stornierten Buchung. Die Zeit an einem Ticket, das die Person nicht sehen darf, zählt in den Summen unter „ohne sichtbares Ticket“.
 
 **Abnahmekriterien:** Vorschlag, zur Prüfung:
 1. Die Regeln 1 bis 14 gelten in API und Oberfläche gleich; Summen entsprechen genau den wirksamen, für den Aufrufer lesbaren Buchungen (Rechenbeispiel aus docs/DOMAIN_MODEL.md: 90 + 30, Korrektur auf 75, Storno von 30 ergibt 120, 105, 75 Minuten).

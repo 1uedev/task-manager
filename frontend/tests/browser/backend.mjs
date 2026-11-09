@@ -1513,12 +1513,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const access = timeAccess(account, entry.projectId);
     const own = entry.personId === account.id;
     const { ticketId, revisions, ...rest } = entry;
-    return { ...rest, projectKey: state.projects.find((item) => item.id === entry.projectId)?.key ?? '', ticket: timeTicket(account, entry),
+    const ticket = timeTicket(account, entry);
+    return { ...rest, projectKey: state.projects.find((item) => item.id === entry.projectId)?.key ?? '', ticket, ticketHidden: ticketId !== null && ticket === null,
       cancelled: entry.cancelledAt !== null, own, changeable: entry.cancelledAt === null && (access.manage || (own && access.book)) };
   };
   // Every answer about one entry carries its revisions, as GET, POST and PUT of the backend.
-  const timeDetail = (account, entry) => ({ entry: timeView(account, entry), revisions: entry.revisions.map(({ ticketId, ...revision }) => ({ ...revision,
-    ticket: timeTicket(account, { ticketId }) })) });
+  const timeDetail = (account, entry) => ({ entry: timeView(account, entry), revisions: entry.revisions.map(({ ticketId, ...revision }) => {
+    const ticket = timeTicket(account, { ticketId });
+    return { ...revision, ticket, ticketHidden: ticketId !== null && ticket === null };
+  }) });
   const timeCheck = (account, projectId, body, own) => {
     const violations = [];
     if (!body.date) violations.push('date.required');
@@ -1566,7 +1569,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (p === '/time/entries' && method === 'GET') {
       const project = query.get('project');
-      const person = query.get('person');
+      const mine = query.get('mine') === 'true';
+      if (mine && query.get('person') && query.get('person') !== account.id) return problem(400, 'request.invalid', { violations: ['person.with_mine'] });
+      // As the backend (TASK-092): mine limits to the own entries; count and sums cover every match, only the rows stop at 500.
+      const person = mine ? account.id : query.get('person');
       const ticketNumber = query.get('ticket');
       const from = query.get('from');
       const to = query.get('to');
@@ -1579,17 +1585,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const counted = entries.filter((entry) => entry.cancelledAt === null);
       const perPerson = new Map();
       const perTicket = new Map();
+      const perDate = new Map();
       for (const entry of counted) {
         perPerson.set(entry.personId, (perPerson.get(entry.personId) ?? 0) + entry.minutes);
+        perDate.set(entry.date, (perDate.get(entry.date) ?? 0) + entry.minutes);
         const ticket = timeTicket(account, entry);
         const key = `${entry.projectId}#${ticket?.number ?? ''}`;
         const sum = perTicket.get(key) ?? { projectId: entry.projectId, projectKey: state.projects.find((item) => item.id === entry.projectId)?.key ?? '', ticket, minutes: 0 };
         sum.minutes += entry.minutes;
         perTicket.set(key, sum);
       }
-      return ok({ entries: entries.slice(0, 500).map((entry) => timeView(account, entry)), truncated: entries.length > 500, count: counted.length,
+      return ok({ entries: entries.slice(0, 500).map((entry) => timeView(account, entry)), truncated: entries.length > 500, count: entries.length,
         totalMinutes: counted.reduce((total, entry) => total + entry.minutes, 0), perPerson: [...perPerson].map(([personId, minutes]) => ({ personId, minutes })),
-        perTicket: [...perTicket.values()] });
+        perTicket: [...perTicket.values()],
+        perDate: [...perDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, minutes]) => ({ date, minutes })) });
     }
     match = p.match(/^\/time\/entries\/([^/]+)(\/cancel)?$/);
     if (match) {
@@ -1618,6 +1627,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (!match[2] && method === 'PUT') {
         const { violations, values } = timeCheck(account, entry.projectId, body, view.own);
         if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        // A hidden ticket stays unless a number is given or its removal is asked for (TASK-092, F2).
+        if ((body.ticketNumber ?? null) === null && view.ticketHidden && body.removeHiddenTicket !== true) values.ticketId = entry.ticketId;
         Object.assign(entry, values, { updatedAt: at, updatedBy: account.id, version: entry.version + 1 });
         entry.revisions.push({ revision: entry.revisions.length + 1, kind: 'corrected', occurredAt: at, actorId: account.id, ...values, reason: (body.reason ?? '').trim() || null });
         return ok(timeDetail(account, entry), `"${entry.version}"`);

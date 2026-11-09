@@ -11,7 +11,8 @@ info:
     und korrigiert oder storniert fremde Buchungen und enthält `time.read`. Ohne eine dieser Aktionen gibt es für die Person
     keine Zeiten des Projekts (404 `project.not_found`), auch wenn sie Tickets lesen darf. Portalkonten sehen keine Zeiten.
     Das Ticket einer Buchung erscheint nur mit `ticket.read` im Projekt, sein Titel nur mit der Leseregel `title`; sonst
-    ist `ticket` leer.
+    ist `ticket` leer und `ticketHidden` sagt, dass die Buchung ein Ticket hat, ohne es zu nennen. Eine Korrektur ohne
+    Ticketnummer behält ein solches verborgenes Ticket; nur `removeHiddenTicket` entfernt es (TASK-092).
 
     Eine Buchung wird nie gelöscht. Eine Korrektur ersetzt die wirksamen Werte, ein Storno nimmt die Buchung aus allen
     Summen; beide behalten den vorigen Stand als Revision mit Person, Zeitpunkt und Grund. Der Grund ist bei fremden
@@ -21,7 +22,10 @@ info:
     Identitätsvertrag.
 
     Das Leistungsdatum ist ein Kalenderdatum ohne Zeitzone und die Dauer eine ganze Zahl Minuten von 1 bis 1440. Ein
-    Leistungsdatum nach dem heutigen Datum in UTC plus einem Tag wird abgewiesen; rückwirkend gibt es keine Grenze.
+    Leistungsdatum nach dem heutigen Datum in UTC plus einem Tag wird abgewiesen; rückwirkend gibt es keine Grenze. Holger
+    hat am 8. November 2026 bestätigt (DEC-122): 412 statt 409 bei einer veralteten Version, das Datum in UTC, solange es
+    keine Unternehmenszeitzone gibt, und die Zeit an einem nicht sichtbaren Ticket zählt in den Summen zu „ohne sichtbares
+    Ticket“.
 servers:
   - url: /api/v1
 security:
@@ -101,8 +105,11 @@ paths:
       description: |
         Ohne `project` gilt die Liste über alle Projekte der Person, in denen sie eine Zeitaktion hat. Ohne `time.read` oder
         `time.manage` enthält sie in einem Projekt nur die eigenen Buchungen, die Summen ebenso. Höchstens 500 Buchungen,
-        neueste zuerst; `truncated` sagt, dass es mehr gibt. Die Summen umfassen immer alle passenden, nicht stornierten
-        Buchungen. Ein Ticket, das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne Ticket.
+        neueste zuerst; `truncated` sagt, dass es mehr gibt. `count` zählt alle passenden Buchungen (mit `cancelled` auch die
+        stornierten), die Summen umfassen alle passenden, nicht stornierten Buchungen, jeweils ohne Obergrenze. Ein Ticket,
+        das die Person nicht sieht, zählt in `perTicket` zum Eintrag ohne sichtbares Ticket. `mine` beschränkt Liste und
+        Summen auf die eigenen Buchungen, auch mit `time.read`; zusammen mit einer anderen `person` ergibt es 400
+        `person.with_mine`.
       parameters:
         - {name: project, in: query, required: false, schema: {type: string, format: uuid}}
         - {name: ticket, in: query, required: false, description: Ticketnummer, nur mit project, schema: {type: integer, format: int64}}
@@ -110,6 +117,7 @@ paths:
         - {name: from, in: query, required: false, description: erster Tag, schema: {type: string, format: date}}
         - {name: to, in: query, required: false, description: letzter Tag, schema: {type: string, format: date}}
         - {name: cancelled, in: query, required: false, description: auch stornierte Buchungen auflisten, schema: {type: boolean}}
+        - {name: mine, in: query, required: false, description: nur die eigenen Buchungen, schema: {type: boolean}}
       responses:
         '200':
           description: Buchungen und Summen
@@ -306,13 +314,14 @@ components:
         title: {type: [string, 'null']}
     Entry:
       type: object
-      required: [id, projectId, projectKey, ticket, personId, date, minutes, description, cancelled, cancelledAt, cancelledBy, createdAt,
-        createdBy, updatedAt, updatedBy, version, own, changeable]
+      required: [id, projectId, projectKey, ticket, ticketHidden, personId, date, minutes, description, cancelled, cancelledAt, cancelledBy,
+        createdAt, createdBy, updatedAt, updatedBy, version, own, changeable]
       properties:
         id: {type: string, format: uuid}
         projectId: {type: string, format: uuid}
         projectKey: {type: string}
         ticket: {$ref: '#/components/schemas/TicketRef'}
+        ticketHidden: {type: boolean, description: Die Buchung hat ein Ticket, das die Person nicht sehen darf}
         personId: {type: string, format: uuid}
         date: {type: string, format: date}
         minutes: {type: integer, minimum: 1, maximum: 1440}
@@ -329,13 +338,14 @@ components:
         changeable: {type: boolean, description: Die Person darf sie korrigieren und stornieren}
     Revision:
       type: object
-      required: [revision, kind, occurredAt, actorId, ticket, date, minutes, description, reason]
+      required: [revision, kind, occurredAt, actorId, ticket, ticketHidden, date, minutes, description, reason]
       properties:
         revision: {type: integer}
         kind: {type: string, enum: [created, corrected, cancelled]}
         occurredAt: {type: string, format: date-time}
         actorId: {type: string, format: uuid}
         ticket: {$ref: '#/components/schemas/TicketRef'}
+        ticketHidden: {type: boolean}
         date: {type: string, format: date}
         minutes: {type: integer}
         description: {type: string}
@@ -350,13 +360,13 @@ components:
           items: {$ref: '#/components/schemas/Revision'}
     EntryList:
       type: object
-      required: [entries, truncated, count, totalMinutes, perPerson, perTicket]
+      required: [entries, truncated, count, totalMinutes, perPerson, perTicket, perDate]
       properties:
         entries:
           type: array
           items: {$ref: '#/components/schemas/Entry'}
         truncated: {type: boolean}
-        count: {type: integer, format: int64, description: Zahl der passenden Buchungen}
+        count: {type: integer, format: int64, description: Zahl aller passenden Buchungen, ohne Obergrenze}
         totalMinutes: {type: integer, format: int64}
         perPerson:
           type: array
@@ -376,6 +386,15 @@ components:
               projectKey: {type: string}
               ticket: {$ref: '#/components/schemas/TicketRef'}
               minutes: {type: integer, format: int64}
+        perDate:
+          type: array
+          description: Minuten der nicht stornierten passenden Buchungen je Leistungsdatum, ältestes zuerst
+          items:
+            type: object
+            required: [date, minutes]
+            properties:
+              date: {type: string, format: date}
+              minutes: {type: integer, format: int64}
     BookRequest:
       type: object
       required: [date, minutes, description]
@@ -394,3 +413,6 @@ components:
         description: {type: string, maxLength: 1000}
         ticketNumber: {type: [integer, 'null'], format: int64}
         reason: {type: [string, 'null'], maxLength: 500}
+        removeHiddenTicket:
+          type: boolean
+          description: Ohne ticketNumber entfernt es ein Ticket, das die Person nicht sehen darf; sonst bleibt es erhalten

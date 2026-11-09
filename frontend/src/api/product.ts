@@ -761,6 +761,8 @@ export interface TimeFilter {
   readonly from?: string;
   readonly to?: string;
   readonly cancelled?: boolean;
+  /** Only the own entries, even with time.read (TASK-092). */
+  readonly mine?: boolean;
 }
 export interface TimeInput {
   readonly date: string;
@@ -773,7 +775,7 @@ const isTimeEntry = (v: unknown) => hasStrings(v, 'id', 'projectId', 'personId',
   && typeof (v as TimeEntry).version === 'number';
 const isTimeDetail = (v: unknown) => record(v) && isTimeEntry(v.entry) && Array.isArray(v.revisions);
 const isTimeList = (v: unknown) => record(v) && Array.isArray(v.entries) && v.entries.every(isTimeEntry) && typeof v.totalMinutes === 'number'
-  && Array.isArray(v.perPerson) && Array.isArray(v.perTicket);
+  && Array.isArray(v.perPerson) && Array.isArray(v.perTicket) && Array.isArray(v.perDate);
 const timeQuery = (filter: TimeFilter) => Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== undefined && value !== '' && value !== false));
 
 export const listTimeProjects = (api: ServerApi) => run(() => api.time.GET('/time/projects'), listOf<TimeProject>(isTimeProject));
@@ -786,15 +788,17 @@ export const readTimeEntry = (api: ServerApi, id: string) =>
 export const bookTime = (api: ServerApi, projectId: string, input: TimeInput, personId: string | null) =>
   run(() => api.time.POST('/time/projects/{projectId}/entries', { params: { path: { projectId } }, body: { ...input, personId } }),
     one<TimeEntryDetail>(isTimeDetail));
-export const correctTime = (api: ServerApi, id: string, version: number, input: TimeInput, reason: string | null) =>
-  run(() => api.time.PUT('/time/entries/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { ...input, reason } }),
+// Without a ticket number a correction keeps a ticket the caller may not see, unless removeHiddenTicket asks to drop it (TASK-092).
+export const correctTime = (api: ServerApi, id: string, version: number, input: TimeInput, reason: string | null, removeHiddenTicket = false) =>
+  run(() => api.time.PUT('/time/entries/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) },
+    body: { ...input, reason, ...(removeHiddenTicket ? { removeHiddenTicket: true } : {}) } }),
     one<TimeEntryDetail>(isTimeDetail));
 export const cancelTime = (api: ServerApi, id: string, version: number, reason: string | null) =>
   run(() => api.time.POST('/time/entries/{id}/cancel', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body: { reason } }),
     one<TimeEntryDetail>(isTimeDetail));
 // The export is a file to save; the browser fetches it with the session cookie like any other download.
 export const timeExportHref = (filter: TimeFilter) => `/api/v1/time/export?${new URLSearchParams(
-  Object.entries(timeQuery({ ...filter, cancelled: false })).map(([key, value]) => [key, String(value)])).toString()}`;
+  Object.entries(timeQuery({ ...filter, cancelled: false, mine: false })).map(([key, value]) => [key, String(value)])).toString()}`;
 
 // ---------------------------------------------------------------- mail template (TASK-082)
 
