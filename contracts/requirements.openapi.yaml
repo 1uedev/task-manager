@@ -1,0 +1,602 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Anforderungen (TASK-096)
+  version: 0.1.0
+  description: |
+    Anforderungen in Projekten mit Abnahmekriterien, fachlichen Revisionen und der Freigabe genau einer Revision
+    (REQ-REQ-001, REQ-REQ-002, DEC-030, DEC-126). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
+    Passwortwechsel 403 `auth.password_change_required`). Sitzung, CSRF und `Cache-Control: no-store` gelten wie im
+    Identitätsvertrag.
+
+    Rechte sind Projektaktionen: `requirement.read` liest Anforderungen, Revisionen und Historie; `requirement.edit` legt an,
+    ändert, gibt zur Prüfung, verwirft und stellt wieder her; `requirement.approve` gibt frei und gibt zurück. Beide ändernden
+    Aktionen setzen `requirement.read` voraus: ohne sie gibt es die Anforderungen eines Projekts für die Person nicht (404
+    `project.not_found` beziehungsweise `requirement.not_found`). Portalkonten erhalten nie eine Anforderungsaktion. Fehlt die
+    nötige Aktion für eine Änderung, antwortet der Server mit 403 `auth.forbidden`.
+
+    Feldrechte: Der Ressourcentyp `requirement` hat die Felder `title`, `description`, `criteria`, `priority` und `owner`,
+    jedes mit eigener Lese und Schreibregel in der Rechteverwaltung. Ein Feld ohne Leseregel ist in jeder Antwort `null`,
+    erscheint nicht in der Historie und nicht im Vergleich. Ändern verlangt die Schreibregel jedes genannten Felds, Anlegen
+    zusätzlich die für `title` (sonst 403 `auth.forbidden`). Status, Kennung, Revisionen und Freigaben sieht jede Person mit
+    `requirement.read`. Freigeben verlangt die Leseregel aller Inhaltsfelder `title`, `description`, `criteria` und
+    `priority` (sonst 403 `requirement.content_not_readable`).
+
+    Kennung: Jedes Projekt zählt seine Anforderungen eigenständig ab 1; `key` ist `ANF-<Nummer>` und ändert sich nie.
+
+    Ablauf (fest, nicht je Projekt einstellbar): `draft` (Entwurf) nach `review` (Zur Prüfung) mit mindestens einem
+    Kriterium (sonst 400 `criteria.required`); `review` nach `approved` (Freigegeben) oder mit Pflichtbegründung zurück nach
+    `draft`; jeder Stand nach `discarded` (Verworfen) und von dort zurück nach `draft`, bei einer freigegebenen laufenden
+    Revision nach `approved`. Ein anderer Übergang antwortet mit 409 `requirement.status_invalid`. Eine verworfene Anforderung
+    lässt sich nicht ändern (409 `requirement.discarded`).
+
+    Revisionen nach DEC-030: Inhalt sind Titel, Beschreibung, Kriterien und Priorität. Solange die laufende Revision nicht
+    freigegeben ist, ändert Speichern sie und schreibt die Historie. Die erste inhaltliche Änderung nach einer Freigabe legt
+    die nächste Revision als Entwurf an; die freigegebene Revision bleibt mit freigebender Person und Zeitpunkt unverändert
+    (`approval`). Die verantwortliche Person ist organisatorisch: keine neue Revision, aber ein Historieneintrag. Eine Anfrage
+    ohne tatsächliche Änderung lässt Version und Historie unverändert.
+
+    Konflikte: Der ETag einer Anforderung ist ihre Version. Jede Änderung verlangt ihn als `If-Match` (fehlt er, 428
+    `requirement.precondition_required`; ist die Anforderung inzwischen neuer, 412 `requirement.version_conflict`). Freigeben
+    nennt zusätzlich die Revision im Körper; ist sie nicht mehr die laufende, ebenfalls 412.
+
+    Werte: Titel 1 bis 200 Zeichen ohne Steuerzeichen (`title.required`, `title.too_long`, `title.invalid`); Priorität `low`,
+    `normal`, `high` oder `critical` (`priority.invalid`, Vorgabe `normal`); verantwortliche Person ein aktives internes
+    Mitglied des Projekts (`owner.not_member`); höchstens 50 Kriterien (`criteria.too_many`) mit je 1 bis 2000 Zeichen
+    Klartext, Zeilenumbrüche erlaubt (`criteria.text_required`, `criteria.text_too_long`, `criteria.text_invalid`).
+    Kriterien tragen eine feste Nummer innerhalb der Anforderung, die nie neu vergeben wird; eine Änderung nennt die
+    Nummer jedes bleibenden Kriteriums, ein Kriterium ohne Nummer ist neu, ein fehlendes entfällt, die Reihenfolge der Liste
+    ist die neue Reihenfolge (`criteria.unknown` für eine fremde oder doppelte Nummer). Die Beschreibung ist das Dokument des
+    Wikieditors mit denselben Regeln wie eine Wikiseite, jedoch ohne Bilder (`description.image_not_allowed`) und ohne
+    Verweise auf Wikiseiten (`description.page_link_not_allowed`); ein leeres Dokument wird als leer gespeichert. Die
+    Codes der Wikiprüfung erscheinen mit dem Präfix `description.`: `content.x` als `description.x`, `link.invalid` als
+    `description.link_invalid`. Zeilenumbrüche CRLF und CR in Kriterien und Begründungen werden vor der Prüfung zu LF.
+    `descriptionHtml` ist die vom Server geschriebene Leseansicht. Begründungen haben höchstens 2000 Zeichen
+    (`reason.required`, `reason.too_long`, `reason.invalid`).
+
+    Ist die Datenbank kurz belegt, antwortet der Server mit 503 `requirement.busy` und `Retry-After`; die ganze Anfrage darf
+    wiederholt werden.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /requirements/projects:
+    get:
+      operationId: listRequirementProjects
+      summary: Projekte, in denen die Person Anforderungen lesen darf
+      responses:
+        '200':
+          description: Projekte mit ihren Anforderungsrechten, nach Schlüssel
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/RequirementProject'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/projects/{projectId}/requirements:
+    get:
+      operationId: listRequirements
+      summary: Anforderungen eines Projekts
+      description: |
+        Seitenweise nach Nummer. Ohne `status` fehlen verworfene Anforderungen. `text` sucht im Titel der laufenden Revision
+        ohne Beachtung der Groß und Kleinschreibung. Ein Filter über ein Feld ohne Leseregel antwortet mit 400
+        (`priority.not_readable`, `owner.not_readable`, `text.not_readable`). `nextAfter` ist die Nummer, nach der die
+        nächste Seite beginnt, oder `null`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - {name: status, in: query, required: false, schema: {$ref: '#/components/schemas/Status'}}
+        - {name: priority, in: query, required: false, schema: {$ref: '#/components/schemas/Priority'}}
+        - {name: owner, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: text, in: query, required: false, schema: {type: string, maxLength: 200}}
+        - {name: after, in: query, required: false, schema: {type: integer, format: int64, minimum: 0, default: 0}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        '200':
+          description: Eine Seite der Liste
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RequirementList'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createRequirement
+      summary: Anforderung anlegen (requirement.edit)
+      description: Legt die Anforderung mit Revision 1 im Status Entwurf und der nächsten Nummer des Projekts an.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RequirementInput'}
+      responses:
+        '201':
+          description: Angelegte Anforderung; ETag ist ihre Version
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/projects/{projectId}/owners:
+    get:
+      operationId: listRequirementOwners
+      summary: Mögliche verantwortliche Personen
+      description: Aktive interne Mitglieder des Projekts; nur für Personen mit `requirement.edit` und der Schreibregel für `owner`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Kontokennungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string, format: uuid}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}:
+    get:
+      operationId: readRequirement
+      summary: Anforderung lesen
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+      responses:
+        '200':
+          description: Anforderung mit ihrer laufenden Revision; ETag ist ihre Version
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Requirement'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateRequirement
+      summary: Felder ändern (requirement.edit)
+      description: |
+        Ändert die genannten Felder; nicht genannte bleiben. `null` leert Beschreibung oder verantwortliche Person. Eine
+        Anfrage ohne Feld antwortet mit 400 `changes.required`.
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RequirementInput'}
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/submit:
+    post:
+      operationId: submitRequirement
+      summary: Zur Prüfung geben (requirement.edit)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/approve:
+    post:
+      operationId: approveRequirement
+      summary: Genau die gezeigte Revision freigeben (requirement.approve)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                revision: {type: integer, minimum: 1}
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/return:
+    post:
+      operationId: returnRequirement
+      summary: Mit Begründung zurück in den Entwurf (requirement.approve)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/discard:
+    post:
+      operationId: discardRequirement
+      summary: Verwerfen, mit freiwilliger Begründung (requirement.edit)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/restore:
+    post:
+      operationId: restoreRequirement
+      summary: Verworfene Anforderung wiederherstellen (requirement.edit)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': {$ref: '#/components/responses/Requirement'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/history:
+    get:
+      operationId: readRequirementHistory
+      summary: Revisionen und Historie
+      description: Einträge zu Feldern ohne Leseregel fehlen.
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+      responses:
+        '200':
+          description: Revisionen und Ereignisse in ihrer Reihenfolge
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/History'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/revisions/{revision}:
+    get:
+      operationId: readRequirementRevision
+      summary: Inhalt einer Revision, für Ansicht und Vergleich
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/Revision'
+      responses:
+        '200':
+          description: Revision mit den lesbaren Feldern
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Revision'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    RequirementId:
+      name: requirementId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Revision:
+      name: revision
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Version der Anforderung aus dem ETag
+      schema: {type: string}
+  responses:
+    Requirement:
+      description: Anforderung nach der Änderung; ETag ist ihre Version
+      headers:
+        ETag: {schema: {type: string}}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Requirement'}
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, requirement.not_found, requirement.revision_not_found,
+        requirement.version_conflict, requirement.precondition_required, requirement.status_invalid, requirement.discarded,
+        requirement.content_not_readable, requirement.busy, project.not_found, auth.required, auth.forbidden, auth.csrf_invalid,
+        auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    Status:
+      type: string
+      enum: [draft, review, approved, discarded]
+    Priority:
+      type: string
+      enum: [low, normal, high, critical]
+    Field:
+      type: string
+      enum: [title, description, criteria, priority, owner]
+    Access:
+      type: object
+      required: [read, edit, approve, readableFields, writableFields]
+      properties:
+        read: {type: boolean}
+        edit: {type: boolean}
+        approve: {type: boolean}
+        readableFields:
+          type: array
+          items: {$ref: '#/components/schemas/Field'}
+        writableFields:
+          type: array
+          description: Leer ohne `requirement.edit`
+          items: {$ref: '#/components/schemas/Field'}
+    RequirementProject:
+      type: object
+      required: [projectId, key, name, access]
+      properties:
+        projectId: {type: string, format: uuid}
+        key: {type: string}
+        name: {type: string}
+        access: {$ref: '#/components/schemas/Access'}
+    Document:
+      type: object
+      description: Strukturiertes Dokument des Wikieditors (Tiptap JSON, Schemaversion 1) ohne Bilder und Wikiverweise
+      required: [type]
+      properties:
+        type: {type: string, const: doc}
+        content:
+          type: array
+          items: {type: object, additionalProperties: true}
+    Criterion:
+      type: object
+      required: [id, text]
+      properties:
+        id: {type: integer, minimum: 1, description: Feste Nummer innerhalb der Anforderung (K1, K2 und so weiter)}
+        text: {type: string}
+    CriterionInput:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        id: {type: [integer, 'null'], minimum: 1, description: Nummer eines bleibenden Kriteriums; ohne sie ist das Kriterium neu}
+        text: {type: string, minLength: 1, maxLength: 2000}
+    Content:
+      type: object
+      description: Inhalt einer Revision; ein Teil ohne Leseregel ist `null`
+      required: [title, description, descriptionHtml, criteria, priority]
+      properties:
+        title: {type: [string, 'null']}
+        description:
+          oneOf:
+            - {$ref: '#/components/schemas/Document'}
+            - {type: 'null'}
+        descriptionHtml: {type: [string, 'null']}
+        criteria:
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/Criterion'}
+        priority:
+          oneOf:
+            - {$ref: '#/components/schemas/Priority'}
+            - {type: 'null'}
+    Approval:
+      type: object
+      description: Die neueste Freigabe mit der freigegebenen Revision, unveränderlich
+      required: [revision, approvedAt, approvedBy]
+      properties:
+        revision: {type: integer}
+        approvedAt: {type: string, format: date-time}
+        approvedBy: {type: string, format: uuid}
+    Requirement:
+      type: object
+      required: [id, projectId, projectKey, number, key, status, revision, approvedRevision, approval, content, ownerId, access, editors,
+        version, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        number: {type: integer, format: int64}
+        key: {type: string, description: '`ANF-<Nummer>`'}
+        status: {$ref: '#/components/schemas/Status'}
+        revision: {type: integer, description: Laufende Revision}
+        approvedRevision:
+          type: [integer, 'null']
+          description: Zuletzt freigegebene Revision; kleiner als `revision`, wenn eine neue Revision in Bearbeitung ist
+        approval:
+          oneOf:
+            - {$ref: '#/components/schemas/Approval'}
+            - {type: 'null'}
+        content: {$ref: '#/components/schemas/Content'}
+        ownerId: {type: [string, 'null'], format: uuid, description: '`null` ohne Leseregel für `owner` oder ohne verantwortliche Person'}
+        access: {$ref: '#/components/schemas/Access'}
+        editors:
+          type: array
+          description: Personen, die den Inhalt der laufenden Revision geändert haben, für den Freigabedialog; nur Änderungen an Feldern, die der Aufrufer lesen darf, nennen ihre Person
+          items: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+        createdAt: {type: string, format: date-time}
+        createdBy: {type: string, format: uuid}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    RequirementInput:
+      type: object
+      additionalProperties: false
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        description:
+          oneOf:
+            - {$ref: '#/components/schemas/Document'}
+            - {type: 'null'}
+        priority: {$ref: '#/components/schemas/Priority'}
+        ownerId: {type: [string, 'null'], format: uuid}
+        criteria:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/CriterionInput'}
+    RequirementItem:
+      type: object
+      required: [id, number, key, status, revision, approvedRevision, title, priority, ownerId, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        key: {type: string}
+        status: {$ref: '#/components/schemas/Status'}
+        revision: {type: integer}
+        approvedRevision: {type: [integer, 'null']}
+        title: {type: [string, 'null']}
+        priority:
+          oneOf:
+            - {$ref: '#/components/schemas/Priority'}
+            - {type: 'null'}
+        ownerId: {type: [string, 'null'], format: uuid}
+        updatedAt: {type: string, format: date-time}
+    RequirementList:
+      type: object
+      required: [projectId, projectKey, access, items, nextAfter]
+      properties:
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        access: {$ref: '#/components/schemas/Access'}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/RequirementItem'}
+        nextAfter: {type: [integer, 'null'], format: int64}
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: {type: [string, 'null'], maxLength: 2000}
+    RevisionInfo:
+      type: object
+      required: [revision, openedAt, openedBy, savedAt, savedBy, approvedAt, approvedBy]
+      properties:
+        revision: {type: integer}
+        openedAt: {type: string, format: date-time}
+        openedBy: {type: string, format: uuid}
+        savedAt: {type: string, format: date-time}
+        savedBy: {type: string, format: uuid}
+        approvedAt: {type: [string, 'null'], format: date-time}
+        approvedBy: {type: [string, 'null'], format: uuid}
+    Event:
+      type: object
+      description: |
+        `kind`: created, changed (Feld mit `from` und `to`; die Beschreibung ohne Werte), criterion_added,
+        criterion_changed, criterion_removed (mit `criterion`), criteria_moved (alte und neue Reihenfolge), revision_opened
+        (`from` und `to` sind die Revisionen), submitted, approved, returned (mit `reason`), discarded (mit freiwilliger
+        `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status.
+      required: [kind, revision, field, criterion, from, to, reason, actorId, occurredAt]
+      properties:
+        kind: {type: string}
+        revision: {type: integer}
+        field:
+          oneOf:
+            - {$ref: '#/components/schemas/Field'}
+            - {type: 'null'}
+        criterion: {type: [integer, 'null']}
+        from: {type: [string, 'null']}
+        to: {type: [string, 'null']}
+        reason: {type: [string, 'null']}
+        actorId: {type: string, format: uuid}
+        occurredAt: {type: string, format: date-time}
+    History:
+      type: object
+      required: [requirementId, revisions, events]
+      properties:
+        requirementId: {type: string, format: uuid}
+        revisions:
+          type: array
+          items: {$ref: '#/components/schemas/RevisionInfo'}
+        events:
+          type: array
+          items: {$ref: '#/components/schemas/Event'}
+    Revision:
+      type: object
+      required: [revision, current, savedAt, savedBy, approvedAt, approvedBy, content]
+      properties:
+        revision: {type: integer}
+        current: {type: boolean}
+        savedAt: {type: string, format: date-time}
+        savedBy: {type: string, format: uuid}
+        approvedAt: {type: [string, 'null'], format: date-time}
+        approvedBy: {type: [string, 'null'], format: uuid}
+        content: {$ref: '#/components/schemas/Content'}

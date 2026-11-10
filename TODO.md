@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -41,7 +39,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -56,9 +56,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-096 Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
 
-**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-030; OPEN-021; ACC-006; docs/DOMAIN_MODEL.md (Anforderungsrevisionen und Freigabe, Prüffall F-13). **Abhängigkeiten:** TASK-026, TASK-027, TASK-043, TASK-068 und TASK-093, geliefert. **Arbeitsstand:** Holger hat am 10. November 2026 im Projektgespräch mit „ja mache mit A13 weiter“ den Beginn von Paket A13 beauftragt und am selben Tag die 24 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-097 und TASK-098). Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-126, Migrationen ab V0058.
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-030; OPEN-021; ACC-006; docs/DOMAIN_MODEL.md (Anforderungsrevisionen und Freigabe, Prüffall F-13). **Abhängigkeiten:** TASK-026, TASK-027, TASK-043, TASK-068 und TASK-093, geliefert. **Arbeitsstand:** Holger hat am 10. November 2026 im Projektgespräch mit „ja mache mit A13 weiter“ den Beginn von Paket A13 beauftragt und am selben Tag die 24 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-097 und TASK-098). Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-126, Migrationen ab V0058. Übergabe 10. November 2026: Ergebnis in PR #286 von claude/project-thread-dyiimb mit Modul `requirements`, Migration V0058, Vertrag `contracts/requirements.openapi.yaml` 0.1.0, Rechtekatalog mit Ressourcentyp `requirement` (`contracts/permissions.openapi.yaml` 0.4.0), Seite „Anforderungen“ mit Liste, Filtern, Bearbeitung, Kriterien per Ziehen und Tastatur, Konflikt mit markierten Unterschieden, Freigabedialog, Zurückgeben, Verwerfen, Wiederherstellen, Historie und Vergleich sowie Feldregeln für Anforderungen in Gruppen und Projektrechten. Fünf Auslegungen stehen zur Bestätigung in DEC-126, darunter Wiederherstellen nach Freigegeben, wenn die laufende Revision schon freigegeben ist. Belege und Grenzen in PR #286. Nachbesserung 10. November 2026 nach der Codex Prüfung (docs/REVIEW_TASK-096_PR-286.md, Empfehlung nachbessern) im selben PR: F1 „Meine Eingaben behalten“ übernimmt Kriterien je fester Nummer, fremde Änderungen und Ergänzungen bleiben; F2 Titel und Priorität im Freigabedialog; F3 Linkziele im Beschreibungsvergleich über die gemeinsame Vergleichsansicht des Wikis; F4 die Seitenleiste rollt in niedrigen Fenstern, Sprache und Darstellung bleiben erreichbar; F5 Ansage auch bei den Pfeilschaltflächen; F6 Schutz der Eingaben im Anlegeformular; F7 Kriterienkennungen der Historie ohne doppeltes K; H1 CRLF und CR werden vor der Prüfung zu LF; H2 der Testersatz prüft Kriteriennummern, Verantwortliche, Linkziele und Codes wie der Server, die Codes der Beschreibung heißen durchgehend `description.*`; H3 nach Holgers Wahl „Ja, nach lesbaren Feldern“: `editors` nennt nur Personen lesbarer Inhaltsänderungen.
 
 **Umfang:** Anforderungen je Projekt mit Kennung, festen Feldern, Abnahmekriterien, festem Ablauf, fachlichen Revisionen, Freigabe genau einer Revision nach DEC-030, Historie, Vergleich, Liste, Feldrechten und den Projektaktionen `requirement.read`, `requirement.edit` und `requirement.approve`, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Verknüpfungen (TASK-097), eigene Felder (TASK-098), Git Objekte (A15), Suche (A14), KI (A16), Portal, formale Stände und Änderungsanträge (REQ-REQ-004), Testfälle, Beziehungen zwischen Anforderungen, Import und Export, Kommentare, endgültiges Löschen, Verschieben in ein anderes Projekt, Bilder in der Beschreibung, Vier Augen Pflicht.
 
@@ -86,7 +86,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Ohne `requirement.read` keine Anforderung, ohne Leserecht eines Felds weder Wert noch Historie noch Vergleich dieses Felds.
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-097 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Nächster Schritt:** Nach Holgers Wahl eine Codex Nachprüfung der Nachbesserung, dann fachliche Abnahme durch Holger, dabei die Auslegungen (a) bis (e) in DEC-126 bestätigen; nach dem Merge des Ergebnisses TASK-097 in derselben Sitzung.
 
 ## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
 

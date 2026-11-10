@@ -62,17 +62,25 @@ import taskmanager.projects.ProjectAccess;
 class PermissionsController {
     private static final Set<String> RETRYABLE_STATES = Set.of("55P03", "40P01", "40001");
     static final String TICKET = "ticket";
+    static final String REQUIREMENT = "requirement";
     private static final String CUSTOM_FIELD = "custom\\.[a-z][a-z0-9_]{0,39}";
     /** Company wide only: no project can narrow them. */
     static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "helpdesk.manage", "jobs.manage",
         "permissions.audit.read", "permissions.manage", "projects.manage", "session_duration.manage", "sla.manage");
     /** For one project, or for every project the account is a member of when granted without a project. */
-    static final List<String> PROJECT_ACTIONS = List.of("helpdesk.reply", "helpdesk.review", "portal.answer", "project.manage", "project.read", "tag.create", "tags.manage",
+    static final List<String> PROJECT_ACTIONS = List.of("helpdesk.reply", "helpdesk.review", "portal.answer", "project.manage", "project.read", "requirement.approve", "requirement.edit", "requirement.read", "tag.create", "tags.manage",
         "ticket.create", "ticket.edit", "ticket.read", "time.book", "time.manage", "time.read", "wiki.edit", "wiki.publish", "wiki.read");
-    static final Map<String, List<String>> FIELDS = Map.of(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "mail",
-        "priority", "status", "tags", "title", "type"));
+    // Tickets first, then requirements (TASK-096): a fixed order, so catalog and project rights list the kinds of objects alike.
+    static final Map<String, List<String>> FIELDS = fields();
     private static final String MANAGE = "permissions.manage";
     private static final int NAME_MAX = 80;
+
+    private static Map<String, List<String>> fields() {
+        Map<String, List<String>> fields = new java.util.LinkedHashMap<>();
+        fields.put(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "mail", "priority", "status", "tags", "title", "type"));
+        fields.put(REQUIREMENT, List.of("criteria", "description", "owner", "priority", "title"));
+        return java.util.Collections.unmodifiableMap(fields);
+    }
 
     private final PermissionAdministration administration;
     private final Permissions permissions;

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   AUDIT_PAGE, createGroup, listGroups, listProjects, permissionCatalog, readAudit, readGroup, setGroupAction, setGroupField, setGroupMember,
-  type AuditEntry, type Group, type GroupDetail, type ProjectSummary, type Result, type TicketField,
+  type AuditEntry, type FieldResource, type Group, type GroupDetail, type ProjectSummary, type Result, type TicketField,
 } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
@@ -160,12 +160,23 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'wiki.edit': 'right.wiki.edit',
   'wiki.publish': 'right.wiki.publish',
   'wiki.read': 'right.wiki.read',
+  'requirement.read': 'right.requirement.read',
+  'requirement.edit': 'right.requirement.edit',
+  'requirement.approve': 'right.requirement.approve',
 };
 
 export const FIELD_LABEL: Readonly<Record<string, MessageKey>> = {
   title: 'field.title', description: 'field.description', type: 'field.type', status: 'field.status', assignee: 'field.assignee', tags: 'field.tags', attachments: 'field.attachments',
   customer: 'field.customer', contact: 'field.contact', mail: 'field.mail', priority: 'field.priority',
 };
+
+export const FIELD_RESOURCES: readonly FieldResource[] = ['ticket', 'requirement'];
+// Requirements name their fields in their own words where a ticket field of the same key means something else (TASK-096).
+const REQUIREMENT_FIELD_LABEL: Readonly<Record<string, MessageKey>> = { criteria: 'requirements.field.criteria', owner: 'requirements.field.owner' };
+export function fieldLabel(t: (key: MessageKey) => string, resource: FieldResource, field: string): string {
+  const key = (resource === 'requirement' ? REQUIREMENT_FIELD_LABEL[field] : undefined) ?? FIELD_LABEL[field] ?? 'field.title';
+  return t(key);
+}
 
 type GroupAnswer = Promise<Result<GroupDetail | 'gone'>>;
 
@@ -207,10 +218,14 @@ export function GroupPage({ id }: { readonly id: string }) {
         const members = new Set(detail.members);
         const candidates = [...directory.values()].filter((entry) => entry.active && !members.has(entry.id));
         const held = new Set(detail.actions.filter((rule) => (rule.projectId ?? null) === projectId).map((rule) => rule.action));
-        const rule = (field: string, operation: 'read' | 'write') =>
-          detail.fields.find((item) => item.field === field && item.operation === operation && (item.projectId ?? null) === projectId)?.effect ?? '';
+        const rule = (resource: FieldResource, field: string, operation: 'read' | 'write') =>
+          detail.fields.find((item) => (item.resourceType ?? 'ticket') === resource && item.field === field && item.operation === operation
+            && (item.projectId ?? null) === projectId)?.effect ?? '';
         const actions = catalog.state === 'ok' ? [...(projectId === null ? catalog.value.companyActions : []), ...catalog.value.projectActions] : [];
-        const fields = catalog.state === 'ok' ? catalog.value.fields.find((item) => item.resourceType === 'ticket')?.fields ?? [] : [];
+        // One table per kind of object: tickets and requirements (TASK-096).
+        const resources = catalog.state === 'ok'
+          ? catalog.value.fields.filter((item): item is typeof item & { resourceType: FieldResource } => FIELD_RESOURCES.includes(item.resourceType as FieldResource))
+          : [];
         return (
           <>
             <p className="breadcrumb"><a href={hrefFor('groups')}>{t('groups.title')}</a></p>
@@ -261,33 +276,36 @@ export function GroupPage({ id }: { readonly id: string }) {
                   </label>
                 ))}
               </fieldset>
-              <div className="table-scroll">
-                <table data-testid="group-fields">
-                  <caption>{t('group.fields')}</caption>
-                  <thead><tr><th scope="col">{t('group.field')}</th><th scope="col">{t('group.read')}</th><th scope="col">{t('group.write')}</th></tr></thead>
-                  <tbody>
-                    {fields.map((field) => (
-                      <tr key={field}>
-                        <th scope="row">{t(FIELD_LABEL[field] ?? 'field.title')}</th>
-                        {(['read', 'write'] as const).map((operation) => (
-                          <td key={operation}>
-                            <select aria-label={t(operation === 'read' ? 'group.readOf' : 'group.writeOf', { field: t(FIELD_LABEL[field] ?? 'field.title') })}
-                              value={rule(field, operation)} disabled={busy}
-                              onChange={(event) => {
-                                const effect = event.target.value === '' ? 'remove' : event.target.value as 'allow' | 'deny';
-                                void apply(() => setGroupField(api, id, field as TicketField, projectId, operation, effect), t('group.fieldSaved'));
-                              }}>
-                              <option value="">{t('group.effect.none')}</option>
-                              <option value="allow">{t('group.effect.allow')}</option>
-                              <option value="deny">{t('group.effect.deny')}</option>
-                            </select>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {resources.map(({ resourceType, fields }) => (
+                <div className="table-scroll" key={resourceType}>
+                  <table data-testid={resourceType === 'ticket' ? 'group-fields' : `group-fields-${resourceType}`}>
+                    <caption>{t(resourceType === 'ticket' ? 'group.fields' : 'group.fieldsRequirement')}</caption>
+                    <thead><tr><th scope="col">{t('group.field')}</th><th scope="col">{t('group.read')}</th><th scope="col">{t('group.write')}</th></tr></thead>
+                    <tbody>
+                      {fields.map((field) => (
+                        <tr key={field}>
+                          <th scope="row">{fieldLabel(t, resourceType, field)}</th>
+                          {(['read', 'write'] as const).map((operation) => (
+                            <td key={operation}>
+                              <select aria-label={t(resourceType === 'ticket' ? (operation === 'read' ? 'group.readOf' : 'group.writeOf')
+                                : (operation === 'read' ? 'group.readOfRequirement' : 'group.writeOfRequirement'), { field: fieldLabel(t, resourceType, field) })}
+                                value={rule(resourceType, field, operation)} disabled={busy}
+                                onChange={(event) => {
+                                  const effect = event.target.value === '' ? 'remove' : event.target.value as 'allow' | 'deny';
+                                  void apply(() => setGroupField(api, id, field as TicketField, projectId, operation, effect, resourceType), t('group.fieldSaved'));
+                                }}>
+                                <option value="">{t('group.effect.none')}</option>
+                                <option value="allow">{t('group.effect.allow')}</option>
+                                <option value="deny">{t('group.effect.deny')}</option>
+                              </select>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
               <p className="hint">{t('group.fieldsHint')}</p>
             </section>
           </>

@@ -72,6 +72,23 @@ describe('light and dark', () => {
     });
   });
 
+  // F4 of the TASK-096 review: with every navigation entry the sidebar scrolls inside itself in a low window, so language and
+  // display can be brought fully into view and used.
+  for (const height of [800, 600, 480]) {
+    test(`the display choice stays reachable in a window of 1100 by ${height} pixels`, async () => {
+      await withPage({ viewport: { width: 1100, height } }, async (page) => {
+        const light = page.getByRole('button', { name: 'Hell' });
+        await light.click();
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+        await light.scrollIntoViewIfNeeded();
+        const box = await light.boundingBox();
+        assert.ok(box !== null && box.y >= 0 && box.y + box.height <= height + 1, `the button lies inside the window: ${JSON.stringify(box)}`);
+        await page.getByLabel('Sprache').selectOption('en');
+        await page.getByRole('button', { name: 'Light' }).waitFor();
+      });
+    });
+  }
+
   for (const colorScheme of ['light', 'dark']) {
     for (const route of Object.keys(ROUTES(fake()))) {
       test(`every visible text on ${route} reaches its contrast in ${colorScheme}`, async () => {
@@ -592,19 +609,19 @@ describe('drag and drop', () => {
       await page.keyboard.press('Alt+ArrowUp');
       await page.keyboard.press('Alt+ArrowUp');
       const order = () => page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route));
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki']);
-      assert.match(await live(page), /Board steht jetzt an Position 2 von 8/);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki', 'requirements']);
+      assert.match(await live(page), /Board steht jetzt an Position 2 von 9/);
       assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Board');
       await page.reload();
       await page.waitForSelector('.shell main h1');
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki']);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki', 'requirements']);
     });
   });
 
   test('navigation entries can be dragged with the mouse', async () => {
     await withPage({}, async (page) => {
       await page.dragAndDrop('.nav-main li[data-route="search"]', '.nav-main li[data-route="start"]');
-      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board', 'escalations', 'time', 'wiki']);
+      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board', 'escalations', 'time', 'wiki', 'requirements']);
     });
   });
 

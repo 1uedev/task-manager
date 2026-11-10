@@ -121,6 +121,11 @@ export interface paths {
          *     des Projekts stehen, sonst antwortet der Server mit 400 und `field.unknown`. Eine Regel ohne Projekt gilt nur für die
          *     festen Felder. Die Felder eines Projekts, die eine Projektverwaltung vergeben darf, nennt
          *     `GET /permissions/projects/{projectId}/groups` unter `fields`.
+         *
+         *     Seit Version 0.4.0 (TASK-096, DEC-126) gibt es den Ressourcentyp `requirement` mit den Feldern `title`,
+         *     `description`, `criteria`, `priority` und `owner` einer Anforderung; ein Feld eines anderen Typs antwortet mit 400 und
+         *     `field.unknown`. Der Katalog nennt die Projektaktionen `requirement.read`, `requirement.edit` und
+         *     `requirement.approve`.
          */
         put: operations["setGroupField"];
         post?: never;
@@ -531,7 +536,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    resourceType: "ticket";
+                    resourceType: "ticket" | "requirement";
                     field: string;
                     /** Format: uuid */
                     projectId?: string | null;

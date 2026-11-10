@@ -16,7 +16,9 @@ export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
 const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
 const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
-const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read'];
+const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read', 'requirement.approve', 'requirement.edit', 'requirement.read'];
+// The fields of requirements in the rights core (TASK-096).
+const REQUIREMENT_FIELDS = ['criteria', 'description', 'owner', 'priority', 'title'];
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -156,6 +158,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // The wiki (TASK-093): pages with their revisions, events and uploaded images; `wikiConflict` makes the next save fail
     // like a save of someone else that came first.
     wiki: { pages: [], revisions: [], events: [], images: [] },
+    // The requirements (TASK-096) with their revisions and events, and the last number per project.
+    requirements: { items: [], revisions: [], events: [], counters: new Map() },
     wikiConflict: null,
   };
 
@@ -184,7 +188,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return groupsOf(account).some((group) => group.actions.some((rule) => rule.action === action && (rule.projectId === null || rule.projectId === projectId)));
   };
   const field = (account, projectId, name, operation) => {
-    const rules = groupsOf(account).flatMap((group) => group.fields).filter((rule) => rule.field === name && rule.operation === operation && (rule.projectId === null || rule.projectId === projectId));
+    const rules = groupsOf(account).flatMap((group) => group.fields).filter((rule) => (rule.resourceType ?? 'ticket') === 'ticket' && rule.field === name
+      && rule.operation === operation && (rule.projectId === null || rule.projectId === projectId));
+    return rules.some((rule) => rule.effect === 'allow') && !rules.some((rule) => rule.effect === 'deny');
+  };
+  // The field rules of requirements (TASK-096): their own resource type, the same policy.
+  const requirementField = (account, projectId, name, operation) => {
+    const rules = groupsOf(account).flatMap((group) => group.fields).filter((rule) => rule.resourceType === 'requirement' && rule.field === name
+      && rule.operation === operation && (rule.projectId === null || rule.projectId === projectId));
     return rules.some((rule) => rule.effect === 'allow') && !rules.some((rule) => rule.effect === 'deny');
   };
   const readable = (account, projectId) => FIELDS.filter((name) => field(account, projectId, name, 'read'));
@@ -964,6 +975,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     if (p.startsWith('/time')) return timeRoute(account, method, p, query, headers, body);
     if (p.startsWith('/wiki')) return wikiRoute(account, method, p, query, headers, body);
+    if (p.startsWith('/requirements')) return requirementRoute(account, method, p, query, headers, body);
     return problem(404, 'resource.not_found');
   }
 
@@ -1254,7 +1266,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const company = may(account, 'permissions.manage');
       return ok({
         actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
-        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) }],
+        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) },
+          { resourceType: 'requirement', fields: REQUIREMENT_FIELDS.filter((name) => company || requirementField(account, projectId, name, 'write')) }],
         groups: state.groups.map((group) => ({ id: group.id, name: group.name,
           actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
           fields: group.fields.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })) })),
@@ -1263,7 +1276,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const delegated = method === 'PUT' && /^\/permissions\/groups\/[^/]+\/(actions|fields)$/.test(p) && body?.projectId && managesProject(account, body.projectId);
     if (!may(account, 'permissions.manage') && !delegated) return problem(403, 'auth.forbidden');
     const detail = (group) => ({ id: group.id, name: group.name, members: [...group.members], actions: group.actions.map((rule) => ({ ...rule })), fields: group.fields.map((rule) => ({ ...rule })) });
-    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort() }] });
+    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort() },
+      { resourceType: 'requirement', fields: REQUIREMENT_FIELDS }] });
     if (p === '/permissions/groups' && method === 'GET') return ok(state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
     if (p === '/permissions/groups' && method === 'POST') {
       if (state.groups.some((entry) => entry.name.toLowerCase() === body.name.toLowerCase())) return problem(409, 'permissions.group_name_taken');
@@ -1286,8 +1300,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (body.enabled) group.actions.push({ action: body.action, projectId: body.projectId });
     }
     if (part === 'fields') {
-      group.fields = group.fields.filter((rule) => !(rule.field === body.field && rule.operation === body.operation && rule.projectId === body.projectId));
-      if (body.effect !== 'remove') group.fields.push({ resourceType: 'ticket', field: body.field, projectId: body.projectId, operation: body.operation, effect: body.effect });
+      const resourceType = body.resourceType ?? 'ticket';
+      if (!['ticket', 'requirement'].includes(resourceType)) return problem(400, 'request.invalid', { violations: ['resourceType.unknown'] });
+      if (resourceType === 'requirement' && !REQUIREMENT_FIELDS.includes(body.field)) return problem(400, 'request.invalid', { violations: ['field.unknown'] });
+      group.fields = group.fields.filter((rule) => !((rule.resourceType ?? 'ticket') === resourceType && rule.field === body.field && rule.operation === body.operation
+        && rule.projectId === body.projectId));
+      if (body.effect !== 'remove') group.fields.push({ resourceType, field: body.field, projectId: body.projectId, operation: body.operation, effect: body.effect });
     }
     return may(account, 'permissions.manage') ? ok(detail(group)) : empty();
   }
@@ -1737,6 +1755,267 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (headers['if-match'] !== `"${variant.draftRevision}"`) return problem(412, 'wiki.version_conflict');
     return null;
   };
+  // ------------------------------------------------------------------ requirements (TASK-096)
+  // As the backend: `requirement.read` sees a requirement, its fields after the read rules of the resource type requirement;
+  // `requirement.edit` changes what it may write, `requirement.approve` approves exactly the shown revision. A content change
+  // after an approval opens the next revision as draft. Every change needs the version as If-Match.
+  const req = state.requirements;
+  const REQ_CONTENT = ['title', 'description', 'criteria', 'priority'];
+  const requirementAccess = (account, projectId) => {
+    const read = may(account, 'requirement.read', projectId);
+    const readableFields = read ? REQUIREMENT_FIELDS.filter((name) => requirementField(account, projectId, name, 'read')) : [];
+    const edit = read && may(account, 'requirement.edit', projectId);
+    return { read, edit, approve: read && may(account, 'requirement.approve', projectId), readableFields,
+      writableFields: edit ? readableFields.filter((name) => requirementField(account, projectId, name, 'write')) : [] };
+  };
+  const requirementRevision = (item, number) => req.revisions.find((entry) => entry.requirementId === item.id && entry.revision === number);
+  const requirementEvent = (item, kind, account, extra = {}) => req.events.push({ requirementId: item.id, revision: item.revision, kind, field: null, criterion: null,
+    from: null, to: null, reason: null, actorId: account.id, occurredAt: now(), ...extra });
+  const requirementContent = (revision, access) => {
+    const shown = (name) => access.readableFields.includes(name);
+    return { title: shown('title') ? revision.title : null, description: shown('description') ? (revision.description ?? { type: 'doc', content: [] }) : null,
+      descriptionHtml: shown('description') ? (revision.description ? wikiHtml(revision.description, null, null) : '') : null,
+      criteria: shown('criteria') ? revision.criteria.map((criterion) => ({ ...criterion })) : null, priority: shown('priority') ? revision.priority : null };
+  };
+  const requirementView = (account, item) => {
+    const access = requirementAccess(account, item.projectId);
+    const current = requirementRevision(item, item.revision);
+    const approved = item.approvedRevision === null ? null : requirementRevision(item, item.approvedRevision);
+    const editors = [...new Set(req.events.filter((event) => event.requirementId === item.id && event.revision === item.revision
+      && ['created', 'changed', 'criterion_added', 'criterion_changed', 'criterion_removed', 'criteria_moved'].includes(event.kind)
+      && event.field !== 'owner' && (event.field === null || access.readableFields.includes(event.field))).map((event) => event.actorId))];
+    const key = state.projects.find((entry) => entry.id === item.projectId)?.key ?? '';
+    return { id: item.id, projectId: item.projectId, projectKey: key, number: item.number, key: `ANF-${item.number}`, status: item.status, revision: item.revision,
+      approvedRevision: item.approvedRevision, approval: approved ? { revision: approved.revision, approvedAt: approved.approvedAt, approvedBy: approved.approvedBy } : null,
+      content: requirementContent(current, access), ownerId: access.readableFields.includes('owner') ? item.ownerId : null, access, editors, version: item.version,
+      createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy };
+  };
+  const requirementAnswer = (account, item, status = 200) => ({ status, body: requirementView(account, item), etag: `"${item.version}"` });
+  function addRequirement(by, title, { projectId = project.id, criteria = [], priority = 'normal', description = null, status = 'draft', ownerId = null, approvedBy = null } = {}) {
+    req.counters.set(projectId, (req.counters.get(projectId) ?? 0) + 1);
+    const item = { id: uuid(), projectId, number: req.counters.get(projectId), status: 'draft', ownerId, revision: 1, approvedRevision: null,
+      nextCriterion: criteria.length + 1, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id };
+    req.items.push(item);
+    req.revisions.push({ requirementId: item.id, revision: 1, title, description, priority, criteria: criteria.map((text, index) => ({ id: index + 1, text })),
+      openedAt: now(), openedBy: by.id, savedAt: now(), savedBy: by.id, approvedAt: null, approvedBy: null });
+    requirementEvent(item, 'created', by);
+    if (status === 'review' || status === 'approved') {
+      item.status = 'review';
+      requirementEvent(item, 'submitted', by, { from: 'draft', to: 'review' });
+    }
+    if (status === 'approved') {
+      const approver = approvedBy ?? by;
+      Object.assign(requirementRevision(item, 1), { approvedAt: now(), approvedBy: approver.id });
+      Object.assign(item, { status: 'approved', approvedRevision: 1 });
+      requirementEvent(item, 'approved', approver, { from: 'review', to: 'approved' });
+    }
+    return item;
+  }
+  // Checks like the server (H2 of the TASK-096 review): fixed criterion numbers, owners from the active internal members, the
+  // description codes with the prefix description. and only http, https and mailto as link targets; line breaks become LF.
+  function requirementChanges(body, access, violations, context) {
+    const known = ['title', 'description', 'priority', 'ownerId', 'criteria'];
+    for (const name of Object.keys(body ?? {})) if (!known.includes(name)) violations.push(`${name}.unknown`);
+    if (body.title !== undefined && (typeof body.title !== 'string' || body.title.trim() === '')) violations.push('title.required');
+    else if (body.title !== undefined && body.title.length > 200) violations.push('title.too_long');
+    if (body.priority !== undefined && !PRIORITIES.includes(body.priority)) violations.push('priority.invalid');
+    if (body.criteria !== undefined) {
+      if (!Array.isArray(body.criteria)) violations.push('criteria.invalid');
+      else {
+        if (body.criteria.length > 50) violations.push('criteria.too_many');
+        const seen = new Set();
+        for (const criterion of body.criteria) {
+          if (criterion?.id != null && (!context.known.has(criterion.id) || seen.has(criterion.id))) violations.push('criteria.unknown');
+          if (criterion?.id != null) seen.add(criterion.id);
+          if (typeof criterion?.text === 'string') criterion.text = criterion.text.replace(/\r\n?/g, '\n').trim();
+          if (typeof criterion?.text !== 'string' || criterion.text === '') violations.push('criteria.text_required');
+          else if ([...criterion.text].length > 2000) violations.push('criteria.text_too_long');
+          // eslint-disable-next-line no-control-regex
+          else if (/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(criterion.text)) violations.push('criteria.text_invalid');
+        }
+      }
+    }
+    if (body.description !== undefined && body.description !== null) {
+      const text = JSON.stringify(body.description);
+      if (text.includes('"image"')) violations.push('description.image_not_allowed');
+      if (text.includes('"wiki:')) violations.push('description.page_link_not_allowed');
+      for (const [, href] of text.matchAll(/"href":"([^"]*)"/g)) {
+        if (!href.startsWith('wiki:') && !/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(href.trim())) violations.push('description.link_invalid');
+      }
+    }
+    if (body.ownerId !== undefined && body.ownerId !== null) {
+      const member = (state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === body.ownerId)
+        && state.accounts.some((entry) => entry.id === body.ownerId && entry.active && entry.kind !== 'portal');
+      if (!member) violations.push('owner.not_member');
+    }
+    const fields = known.filter((name) => body[name] !== undefined).map((name) => (name === 'ownerId' ? 'owner' : name));
+    return fields.filter((name) => !access.writableFields.includes(name));
+  }
+  function requirementRoute(account, method, p, query, headers, body) {
+    if (p === '/requirements/projects' && method === 'GET') {
+      return ok(state.projects.filter((item) => requirementAccess(account, item.id).read)
+        .map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: requirementAccess(account, item.id) })));
+    }
+    const inProject = p.match(/^\/requirements\/projects\/([^/]+)\/(requirements|owners)$/);
+    if (inProject) {
+      const projectId = inProject[1];
+      const access = requirementAccess(account, projectId);
+      if (!access.read) return problem(404, 'project.not_found');
+      if (inProject[2] === 'owners') {
+        if (!access.writableFields.includes('owner')) return problem(403, 'auth.forbidden');
+        return ok((state.members.get(projectId) ?? []).map((member) => member.accountId)
+          .filter((id) => state.accounts.some((entry) => entry.id === id && entry.active && entry.kind !== 'portal')));
+      }
+      if (method === 'GET') {
+        req.listCalls = (req.listCalls ?? 0) + 1;
+        const status = query.get('status');
+        const priority = query.get('priority');
+        const owner = query.get('owner');
+        const text = query.get('text');
+        if (priority !== null && !access.readableFields.includes('priority')) return problem(400, 'request.invalid', { violations: ['priority.not_readable'] });
+        if (owner !== null && !access.readableFields.includes('owner')) return problem(400, 'request.invalid', { violations: ['owner.not_readable'] });
+        if (text !== null && !access.readableFields.includes('title')) return problem(400, 'request.invalid', { violations: ['text.not_readable'] });
+        const after = Number(query.get('after') ?? 0);
+        const limit = Number(query.get('limit') ?? 50);
+        const matches = req.items.filter((item) => item.projectId === projectId && item.number > after)
+          .filter((item) => (status === null ? item.status !== 'discarded' : item.status === status))
+          .filter((item) => priority === null || requirementRevision(item, item.revision).priority === priority)
+          .filter((item) => owner === null || item.ownerId === owner)
+          .filter((item) => text === null || requirementRevision(item, item.revision).title.toLowerCase().includes(text.toLowerCase()))
+          .sort((a, b) => a.number - b.number);
+        const page = matches.slice(0, limit);
+        const answer = ok({ projectId, projectKey: state.projects.find((item) => item.id === projectId)?.key ?? '', access,
+          items: page.map((item) => {
+            const view = requirementView(account, item);
+            return { id: item.id, number: item.number, key: view.key, status: item.status, revision: item.revision, approvedRevision: item.approvedRevision,
+              title: view.content.title, priority: view.content.priority, ownerId: view.ownerId, updatedAt: item.updatedAt };
+          }), nextAfter: matches.length > limit ? page.at(-1).number : null });
+        // A test can hold back the answer of one list request to check that a late answer of an older filter is dropped.
+        return req.delayList ? req.delayList(answer, query) : answer;
+      }
+      if (method === 'POST') {
+        if (!access.edit) return problem(403, 'auth.forbidden');
+        const violations = [];
+        const denied = requirementChanges(body ?? {}, access, violations, { projectId, known: new Set() });
+        if (body?.title === undefined) violations.push('title.required');
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
+        if (denied.length > 0 || !access.writableFields.includes('title')) return problem(403, 'auth.forbidden');
+        const item = addRequirement(account, body.title, { projectId, priority: body.priority ?? 'normal', description: body.description ?? null,
+          criteria: (body.criteria ?? []).map((criterion) => criterion.text), ownerId: body.ownerId ?? null });
+        return requirementAnswer(account, item, 201);
+      }
+    }
+    const match = p.match(/^\/requirements\/([^/]+)(\/(submit|approve|return|discard|restore|history|revisions\/(\d+)))?$/);
+    const item = req.items.find((entry) => entry.id === match?.[1]);
+    if (!item || !requirementAccess(account, item.projectId).read) return problem(404, 'requirement.not_found');
+    const access = requirementAccess(account, item.projectId);
+    const part = match[3];
+    if (!part && method === 'GET') return requirementAnswer(account, item);
+    if (part === 'history' && method === 'GET') {
+      const fieldShown = (event) => event.field === null || access.readableFields.includes(event.field);
+      return ok({ requirementId: item.id, revisions: req.revisions.filter((entry) => entry.requirementId === item.id)
+        .map(({ revision, openedAt, openedBy, savedAt, savedBy, approvedAt, approvedBy }) => ({ revision, openedAt, openedBy, savedAt, savedBy, approvedAt, approvedBy })),
+      events: req.events.filter((event) => event.requirementId === item.id && fieldShown(event)).map(({ requirementId, ...event }) => event) });
+    }
+    if (part?.startsWith('revisions/') && method === 'GET') {
+      const revision = requirementRevision(item, Number(match[4]));
+      if (!revision) return problem(404, 'requirement.revision_not_found');
+      return ok({ revision: revision.revision, current: revision.revision === item.revision, savedAt: revision.savedAt, savedBy: revision.savedBy,
+        approvedAt: revision.approvedAt, approvedBy: revision.approvedBy, content: requirementContent(revision, access) });
+    }
+    const needed = part === 'approve' || part === 'return' ? 'approve' : 'edit';
+    if (!access[needed]) return problem(403, 'auth.forbidden');
+    if (part === 'approve' && !REQ_CONTENT.every((name) => access.readableFields.includes(name))) return problem(403, 'requirement.content_not_readable');
+    if (headers['if-match'] === undefined) return problem(428, 'requirement.precondition_required');
+    if (headers['if-match'] !== `"${item.version}"`) return problem(412, 'requirement.version_conflict');
+    const touch = () => Object.assign(item, { version: item.version + 1, updatedAt: now(), updatedBy: account.id });
+    const move = (kind, to, reason = null) => {
+      const from = item.status;
+      item.status = to;
+      requirementEvent(item, kind, account, { from, to, reason });
+      touch();
+      return requirementAnswer(account, item);
+    };
+    if (!part && method === 'PATCH') {
+      if (item.status === 'discarded') return problem(409, 'requirement.discarded');
+      const violations = [];
+      if (Object.keys(body ?? {}).length === 0) return problem(400, 'request.invalid', { violations: ['changes.required'] });
+      const denied = requirementChanges(body, access, violations,
+        { projectId: item.projectId, known: new Set(requirementRevision(item, item.revision).criteria.map((criterion) => criterion.id)) });
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
+      if (denied.length > 0) return problem(403, 'auth.forbidden');
+      let current = requirementRevision(item, item.revision);
+      const before = { ...current, criteria: current.criteria.map((criterion) => ({ ...criterion })) };
+      const next = { title: body.title ?? current.title, priority: body.priority ?? current.priority,
+        description: body.description !== undefined ? body.description : current.description, criteria: current.criteria };
+      if (body.criteria !== undefined) {
+        const known = new Set(current.criteria.map((criterion) => criterion.id));
+        if (body.criteria.some((criterion) => criterion.id != null && !known.has(criterion.id))) return problem(400, 'request.invalid', { violations: ['criteria.unknown'] });
+        next.criteria = body.criteria.map((criterion) => (criterion.id == null ? { id: item.nextCriterion++, text: criterion.text } : { id: criterion.id, text: criterion.text }));
+      }
+      const contentChanged = next.title !== before.title || next.priority !== before.priority
+        || JSON.stringify(next.description) !== JSON.stringify(before.description) || JSON.stringify(next.criteria) !== JSON.stringify(before.criteria);
+      const ownerChanged = body.ownerId !== undefined && body.ownerId !== item.ownerId;
+      if (!contentChanged && !ownerChanged) return requirementAnswer(account, item);
+      if (contentChanged && current.approvedAt !== null) {
+        const opened = item.revision + 1;
+        current = { ...before, revision: opened, openedAt: now(), openedBy: account.id, approvedAt: null, approvedBy: null };
+        req.revisions.push(current);
+        item.revision = opened;
+        item.status = 'draft';
+        requirementEvent(item, 'revision_opened', account, { from: String(opened - 1), to: String(opened) });
+      }
+      if (contentChanged) {
+        if (next.title !== before.title) requirementEvent(item, 'changed', account, { field: 'title', from: before.title, to: next.title });
+        if (JSON.stringify(next.description) !== JSON.stringify(before.description)) requirementEvent(item, 'changed', account, { field: 'description' });
+        if (next.priority !== before.priority) requirementEvent(item, 'changed', account, { field: 'priority', from: before.priority, to: next.priority });
+        const old = new Map(before.criteria.map((criterion) => [criterion.id, criterion]));
+        const kept = new Set(next.criteria.map((criterion) => criterion.id));
+        for (const criterion of before.criteria) if (!kept.has(criterion.id)) requirementEvent(item, 'criterion_removed', account, { field: 'criteria', criterion: criterion.id, from: criterion.text });
+        for (const criterion of next.criteria) {
+          const previous = old.get(criterion.id);
+          if (!previous) requirementEvent(item, 'criterion_added', account, { field: 'criteria', criterion: criterion.id, to: criterion.text });
+          else if (previous.text !== criterion.text) requirementEvent(item, 'criterion_changed', account, { field: 'criteria', criterion: criterion.id, from: previous.text, to: criterion.text });
+        }
+        const order = (list) => list.filter((criterion) => old.has(criterion.id) && kept.has(criterion.id)).map((criterion) => `K${criterion.id}`).join(',');
+        if (order(before.criteria) !== order(next.criteria)) requirementEvent(item, 'criteria_moved', account, { field: 'criteria', from: order(before.criteria), to: order(next.criteria) });
+        Object.assign(current, next, { savedAt: now(), savedBy: account.id });
+      }
+      if (ownerChanged) {
+        requirementEvent(item, 'changed', account, { field: 'owner', from: item.ownerId, to: body.ownerId });
+        item.ownerId = body.ownerId;
+      }
+      touch();
+      return requirementAnswer(account, item);
+    }
+    if (part === 'submit' && method === 'POST') {
+      if (item.status !== 'draft') return problem(409, 'requirement.status_invalid');
+      if (requirementRevision(item, item.revision).criteria.length === 0) return problem(400, 'request.invalid', { violations: ['criteria.required'] });
+      return move('submitted', 'review');
+    }
+    if (part === 'approve' && method === 'POST') {
+      if (item.status !== 'review') return problem(409, 'requirement.status_invalid');
+      if (body?.revision !== item.revision) return problem(412, 'requirement.version_conflict');
+      Object.assign(requirementRevision(item, item.revision), { approvedAt: now(), approvedBy: account.id });
+      item.approvedRevision = item.revision;
+      return move('approved', 'approved');
+    }
+    if (part === 'return' && method === 'POST') {
+      if (item.status !== 'review') return problem(409, 'requirement.status_invalid');
+      if (typeof body?.reason !== 'string' || body.reason.trim() === '') return problem(400, 'request.invalid', { violations: ['reason.required'] });
+      return move('returned', 'draft', body.reason);
+    }
+    if (part === 'discard' && method === 'POST') {
+      if (item.status === 'discarded') return problem(409, 'requirement.status_invalid');
+      return move('discarded', 'discarded', body?.reason ?? null);
+    }
+    if (part === 'restore' && method === 'POST') {
+      if (item.status !== 'discarded') return problem(409, 'requirement.status_invalid');
+      return move('restored', item.approvedRevision === item.revision ? 'approved' : 'draft');
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   function addWikiPage(by, title, content, { parentId = null, publish = false, projectId = project.id, language = 'de' } = {}) {
     const page = { id: uuid(), projectId, parentId, language, variants: {}, archived: false, version: 1, createdAt: now(), createdBy: by.id, draftRevision: 1,
       publishedRevision: null, publishedAt: null, publishedBy: null };
@@ -2388,7 +2667,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const unsafe = !['GET', 'HEAD'].includes(request.method());
       const answer = unsafe && headers['x-csrf-token'] !== TOKEN ? problem(403, 'auth.csrf_invalid')
         : anonymousAppearance && url.pathname === '/api/v1/session' ? ok({ authenticated: false })
-          : handle(session, request.method(), url.pathname, url.searchParams, headers, json ?? {});
+          : await handle(session, request.method(), url.pathname, url.searchParams, headers, json ?? {});
       // Like the server: logging out removes the CSRF cookie, GET /session issues a new one.
       if (url.pathname === '/api/v1/session' && request.method() === 'DELETE' && answer.status === 204) {
         await context.clearCookies({ name: '__Host-tm-csrf' });
@@ -2419,6 +2698,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addMail,
     addTicket,
     addWikiPage,
+    addRequirement,
+    // The requirement routes without a browser, for a change of someone else in between (TASK-096).
+    requirementCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => requirementRoute(account, method, path, new URLSearchParams(query), headers, body),
     addWikiLanguage,
     // The wiki routes without a browser, for checks of the same answers as the server (H1 of the TASK-094 review).
     wikiCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => wikiRoute(account, method, path, new URLSearchParams(query), headers, body),

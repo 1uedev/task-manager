@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { setGroupAction, setGroupField, type ProjectRights, type Result } from '../api/product.ts';
+import { setGroupAction, setGroupField, type FieldResource, type ProjectRights, type Result } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { EmptyText, NoticeView, SelectField, useProblemText, type Notice } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
-import { ACTION_LABEL, FIELD_LABEL } from './GroupsPage.tsx';
+import { ACTION_LABEL, FIELD_LABEL, FIELD_RESOURCES, fieldLabel } from './GroupsPage.tsx';
 
 type Answer = Promise<Result<unknown>>;
 
@@ -24,6 +24,9 @@ export function ProjectRightsTab({ projectId, rights, reload, customNames }: {
   const [busy, setBusy] = useState(false);
   const group = rights.groups.find((item) => item.id === groupId) ?? null;
   const fields = rights.fields.find((item) => item.resourceType === 'ticket')?.fields ?? [];
+  // The fields of requirements in this project the person may hand out (TASK-096).
+  const others = rights.fields.filter((item): item is typeof item & { resourceType: FieldResource } =>
+    item.resourceType !== 'ticket' && FIELD_RESOURCES.includes(item.resourceType as FieldResource) && item.fields.length > 0);
 
   async function apply(call: () => Answer) {
     setBusy(true);
@@ -35,15 +38,15 @@ export function ProjectRightsTab({ projectId, rights, reload, customNames }: {
   }
 
   const label = (field: string) => customNames[field] ?? t(FIELD_LABEL[field] ?? 'field.title');
-  const rule = (field: string, operation: 'read' | 'write') =>
-    group?.fields.find((item) => item.field === field && item.operation === operation)?.effect ?? '';
+  const rule = (field: string, operation: 'read' | 'write', resource: FieldResource = 'ticket') =>
+    group?.fields.find((item) => (item.resourceType ?? 'ticket') === resource && item.field === field && item.operation === operation)?.effect ?? '';
 
   return (
     <section aria-labelledby="project-rights" className="panel">
       <h2 id="project-rights" className="visually-hidden">{t('project.tab.rights')}</h2>
       <p className="hint">{t('rights.intro')}</p>
       <NoticeView notice={notice} />
-      {rights.actions.length === 0 && fields.length === 0 ? <EmptyText text={t('rights.nothing')} /> : (
+      {rights.actions.length === 0 && fields.length === 0 && others.length === 0 ? <EmptyText text={t('rights.nothing')} /> : (
         <>
           <SelectField label={t('rights.group')} value={groupId} onChange={setGroupId}
             options={[{ value: '', label: t('rights.chooseGroup') }, ...rights.groups.map((item) => ({ value: item.id, label: item.name }))]} />
@@ -92,6 +95,35 @@ export function ProjectRightsTab({ projectId, rights, reload, customNames }: {
                   </table>
                 </div>
               )}
+              {others.map(({ resourceType, fields: offered }) => (
+                <div className="table-scroll" key={resourceType}>
+                  <table data-testid={`project-rights-fields-${resourceType}`}>
+                    <caption>{t('group.fieldsRequirement')}</caption>
+                    <thead><tr><th scope="col">{t('group.field')}</th><th scope="col">{t('group.read')}</th><th scope="col">{t('group.write')}</th></tr></thead>
+                    <tbody>
+                      {offered.map((field) => (
+                        <tr key={field}>
+                          <th scope="row">{fieldLabel(t, resourceType, field)}</th>
+                          {(['read', 'write'] as const).map((operation) => (
+                            <td key={operation}>
+                              <select aria-label={t(operation === 'read' ? 'group.readOfRequirement' : 'group.writeOfRequirement', { field: fieldLabel(t, resourceType, field) })}
+                                value={rule(field, operation, resourceType)} disabled={busy}
+                                onChange={(event) => {
+                                  const effect = event.target.value === '' ? 'remove' : event.target.value as 'allow' | 'deny';
+                                  void apply(() => setGroupField(api, group.id, field, projectId, operation, effect, resourceType));
+                                }}>
+                                <option value="">{t('group.effect.none')}</option>
+                                <option value="allow">{t('group.effect.allow')}</option>
+                                <option value="deny">{t('group.effect.deny')}</option>
+                              </select>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
               <p className="hint">{t('group.fieldsHint')}</p>
             </>
           )}

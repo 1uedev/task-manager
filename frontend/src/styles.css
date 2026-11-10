@@ -58,11 +58,14 @@ h1:focus-visible, .error-summary:focus-visible, .success:focus-visible { outline
 .shell { display: grid; grid-template-columns: 15.5rem 1fr; min-height: 100vh; }
 .sidebar {
   position: sticky; top: 0; height: 100vh;
-  display: flex; flex-direction: column; gap: 1.5rem;
+  /* A longer navigation in a low window scrolls inside the sidebar, so language and display stay reachable (F4 of the TASK-096 review). */
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 1.25rem;
   padding: 1.25rem 0.9rem;
   background: var(--sidebar);
   border-right: 1px solid var(--hairline);
 }
+.sidebar > * { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 0.65rem; padding: 0.25rem 0.5rem; font-weight: 700; font-size: 1.02rem; letter-spacing: -0.015em; min-width: 0; }
 /* A name of up to 80 characters breaks instead of pushing the head apart (TASK-081). */
 .brand-name { min-width: 0; overflow-wrap: anywhere; }
@@ -222,10 +225,11 @@ form:not(.inline-form) {
 @media (max-width: 48rem) {
   .shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: sticky; height: auto; z-index: 5;
+    position: sticky; height: auto; z-index: 5; overflow: visible;
     flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
     padding: 0.7rem 1rem; border-right: 0; border-bottom: 1px solid var(--hairline);
   }
+  .sidebar > * { flex-shrink: 1; }
   .sidebar nav { order: 3; width: 100%; }
   .sidebar nav ul { grid-auto-flow: column; grid-auto-columns: 1fr; }
   .sidebar nav a { justify-content: center; gap: 0.4rem; padding: 0.5rem; }

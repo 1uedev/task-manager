@@ -65,5 +65,6 @@ export function useReorder<T>(
       },
     };
   }
-  return { itemProps, dragging, announcement };
+  // Buttons that move an entry use `moveItem`, so their moves are announced like the others.
+  return { itemProps, dragging, announcement, moveItem: commit };
 }

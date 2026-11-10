@@ -113,7 +113,8 @@ export interface LinkChoice {
 export function WikiToolbar({ editor, pages, onImage, disabled }: {
   readonly editor: Editor;
   readonly pages: readonly LinkChoice[];
-  readonly onImage: () => void;
+  // Without it the tool bar has no image tool: requirements keep their description free of images (TASK-096).
+  readonly onImage?: () => void;
   readonly disabled: boolean;
 }) {
   const { t } = useI18n();
@@ -170,7 +171,7 @@ export function WikiToolbar({ editor, pages, onImage, disabled }: {
         <ToolButton label={tool('wiki.tool.quote')} active={state.quote} disabled={disabled} onClick={() => chain().toggleBlockquote().run()}>❝</ToolButton>
         <ToolButton label={tool('wiki.tool.codeBlock')} active={state.codeBlock} disabled={disabled} onClick={() => chain().toggleCodeBlock().run()}>{'{ }'}</ToolButton>
         <ToolButton label={tool('wiki.tool.rule')} disabled={disabled} onClick={() => chain().setHorizontalRule().run()}>―</ToolButton>
-        <ToolButton label={tool('wiki.tool.image')} disabled={disabled} onClick={onImage}>🖼</ToolButton>
+        {onImage !== undefined && <ToolButton label={tool('wiki.tool.image')} disabled={disabled} onClick={onImage}>🖼</ToolButton>}
         <ToolButton label={tool('wiki.tool.table')} disabled={disabled || state.table}
           onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>▦</ToolButton>
         {state.table && (
