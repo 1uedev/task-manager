@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
 
 ### Blockiert – BLOCKIERT
 
@@ -88,6 +89,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
 
 **Nächster Schritt:** Nach Holgers Wahl eine Codex Nachprüfung der Nachbesserung, dann fachliche Abnahme durch Holger, dabei die Auslegungen (a) bis (e) in DEC-126 bestätigen; nach dem Merge des Ergebnisses TASK-097 in derselben Sitzung.
+
+## TASK-099 Befunde der Codex Nachprüfung von TASK-096 beheben (A13)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-126; docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-096 geliefert (PR #286). **Arbeitsstand:** Holger hat am 10. November 2026 den Bericht der Codex Nachprüfung von TASK-096 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Ja, alles als TASK-099“ gewählt. Branch claude/project-thread-dyiimb; Ergebnis mit DEC-129, ohne Migration.
+
+**Umfang:** Befunde R1 und R2 und Hinweis N1 aus docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md:
+1. R1: „Meine Eingaben behalten“ erhält die selbst gewählte Position neuer Kriterien, auch wenn die alten Kriterien ihre Reihenfolge behalten.
+2. R2: `editors` nennt die anlegende Person nur, wenn der Aufrufer mindestens ein Inhaltsfeld lesen darf; Server und Testersatz gleich.
+3. N1: Der Testersatz prüft die Beschreibung über die Dokumentstruktur (Knotentypen, Linkmarkierungen, tatsächliche Linkziele) statt über den serialisierten Text.
+
+Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. R1 mit Unittests für `[K1, Neu, K2]` und `[Neu, K1, K2]` und einem Browsertest bis zum gespeicherten Ergebnis.
+2. R2 mit Backendtest und Testersatz für Konten ohne Feldleseregel und nur mit `owner`.
+3. N1 mit den drei Paritätsfällen des Berichts gegen Server und Testersatz.
+4. Bestehende Backend und Browser Tests bleiben grün.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung und Ergebnis PR.
 
 ## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
 
