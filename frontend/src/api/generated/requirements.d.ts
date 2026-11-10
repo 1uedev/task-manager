@@ -356,7 +356,7 @@ export interface components {
         /** @enum {string} */
         Priority: "low" | "normal" | "high" | "critical";
         /** @description Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098) */
-        Field: string | ("title" | "description" | "criteria" | "priority" | "owner") | unknown;
+        Field: string | ("title" | "description" | "criteria" | "priority" | "owner");
         CustomFieldValue: string | number | boolean;
         CustomFieldOption: {
             key: string;
@@ -368,7 +368,7 @@ export interface components {
             key: string;
             name: string;
             /** @enum {string} */
-            type: "text" | "integer" | "boolean" | "select" | "user";
+            type: "text" | "longtext" | "integer" | "date" | "boolean" | "select" | "user";
             /** @description Pflicht beim Übergang nach Zur Prüfung */
             required: boolean;
             active: boolean;

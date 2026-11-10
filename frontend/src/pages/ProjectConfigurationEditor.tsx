@@ -3,7 +3,7 @@ import {
   discardDraft, publishDraft, readDraft, readUsage, saveDraft, type Configuration, type ConfigurationUsage, type Project,
 } from '../api/product.ts';
 import {
-  CUSTOM_PREFIX, FIELD_KINDS, customFieldsOf, keyFromName, mappingRows, optionsOf, workflowOf, workflowsOf, type CustomField, type CustomOption,
+  CUSTOM_PREFIX, FIELD_KINDS, customFieldsOf, keyFromName, requirementFieldsOf, mappingRows, optionsOf, workflowOf, workflowsOf, type CustomField, type CustomOption,
   type FieldKind, type Transition, type Workflow,
 } from '../app/configuration.ts';
 import { useLoad, useUnsavedGuard } from '../app/hooks.ts';
@@ -31,7 +31,7 @@ const etagNumber = (etag: string | null): number | null => {
 };
 
 /** The configuration with the optional members filled in, so the editor never has to ask whether they exist. */
-function whole(config: Configuration): Configuration & { workflows: Workflow[]; customFields: CustomField[] } {
+function whole(config: Configuration): Configuration & { workflows: Workflow[]; customFields: CustomField[]; requirementFields: CustomField[] } {
   return {
     ...config,
     transitions: config.transitions.map((transition) => ({ ...transition, requiredFields: transition.requiredFields ?? [] })),
@@ -39,6 +39,7 @@ function whole(config: Configuration): Configuration & { workflows: Workflow[]; 
       ...workflow, transitions: workflow.transitions.map((transition) => ({ ...transition, requiredFields: transition.requiredFields ?? [] })),
     })),
     customFields: customFieldsOf(config).map((field) => ({ ...field, options: [...optionsOf(field)] })),
+    requirementFields: requirementFieldsOf(config).map((field) => ({ ...field, options: [...optionsOf(field)] })),
   };
 }
 
@@ -190,7 +191,8 @@ function Editor({ project, etag, start, onPublished, onEdited, reload }: {
       <StatusesEditor config={config} update={update} />
       <WorkflowSection config={config} update={update} fieldNames={fieldNames} statusNames={statusNames} typeNames={typeNames} />
       <StandardFields config={config} update={update} />
-      <CustomFieldsEditor config={config} published={published} update={update} />
+      <CustomFieldsEditor config={config} published={published} update={update} list="customFields" />
+      <CustomFieldsEditor config={config} published={published} update={update} list="requirementFields" />
       {mapping !== null && (
         <MappingPanel project={project} reasons={mapping} config={config} typeNames={typeNames} statusNames={statusNames} busy={busy}
           onConfirm={(statusMapping, typeMapping) => void onPublish(statusMapping, typeMapping)} onCancel={() => setMapping(null)} />
@@ -378,21 +380,29 @@ function StandardFields({ config, update }: { readonly config: Whole; readonly u
   );
 }
 
-function CustomFieldsEditor({ config, published, update }: { readonly config: Whole; readonly published: Whole; readonly update: Edit }) {
+/** The custom fields of tickets or, since TASK-098, of requirements: the same kinds and the same rule that a published field stays. */
+type FieldList = 'customFields' | 'requirementFields';
+
+function CustomFieldsEditor({ config, published, update, list }: {
+  readonly config: Whole; readonly published: Whole; readonly update: Edit; readonly list: FieldList;
+}) {
   const { t } = useI18n();
   const [name, setName] = useState('');
   const [kind, setKind] = useState<FieldKind>('text');
-  const locked = (key: string) => published.customFields.some((field) => field.key === key);
+  const tickets = list === 'customFields';
+  const fields = config[list];
+  const locked = (key: string) => published[list].some((field) => field.key === key);
   const change = (key: string, next: (field: CustomField) => CustomField) =>
-    update((c) => ({ ...c, customFields: c.customFields.map((field) => (field.key === key ? next(field) : field)) }));
+    update((c) => ({ ...c, [list]: c[list].map((field) => (field.key === key ? next(field) : field)) }));
+  const remove = (key: string) => update((c) => (tickets ? removeCustomField(c, key) : { ...c, requirementFields: c.requirementFields.filter((field) => field.key !== key) }));
   return (
-    <fieldset data-testid="custom-fields">
-      <legend>{t('config.customFields')}</legend>
-      <p className="hint">{t('config.customFieldsHint')}</p>
-      {config.customFields.length === 0 ? <EmptyText text={t('config.noCustomFields')} /> : (
+    <fieldset data-testid={tickets ? 'custom-fields' : 'requirement-fields'}>
+      <legend>{t(tickets ? 'config.customFields' : 'config.requirementFields')}</legend>
+      <p className="hint">{t(tickets ? 'config.customFieldsHint' : 'config.requirementFieldsHint')}</p>
+      {fields.length === 0 ? <EmptyText text={t(tickets ? 'config.noCustomFields' : 'config.noRequirementFields')} /> : (
         <ul className="item-list">
-          {config.customFields.map((field) => (
-            <li key={field.key} className="panel" data-testid={`custom-field-${field.key}`}>
+          {fields.map((field) => (
+            <li key={field.key} className="panel" data-testid={`${tickets ? 'custom' : 'requirement'}-field-${field.key}`}>
               <TextField label={t('config.nameOf', { key: `${CUSTOM_PREFIX}${field.key}` })} value={field.name} maxLength={80}
                 onChange={(value) => change(field.key, (x) => ({ ...x, name: value }))} />
               {locked(field.key)
@@ -401,16 +411,16 @@ function CustomFieldsEditor({ config, published, update }: { readonly config: Wh
                     options={FIELD_KINDS.map((item) => ({ value: item, label: t(`config.kind.${item}` as MessageKey) }))} />}
               <label className="check">
                 <input type="checkbox" checked={field.required} onChange={(event) => change(field.key, (x) => ({ ...x, required: event.target.checked }))} />
-                <span>{t('config.requiredOnCreateField')}</span>
+                <span>{t(tickets ? 'config.requiredOnCreateField' : 'config.requiredForReview')}</span>
               </label>
               <label className="check">
                 <input type="checkbox" checked={field.active} onChange={(event) => change(field.key, (x) => ({ ...x, active: event.target.checked }))} />
                 <span>{t('config.active')}</span>
               </label>
-              {field.type === 'select' && <OptionsEditor field={field} publishedField={published.customFields.find((x) => x.key === field.key)}
+              {field.type === 'select' && <OptionsEditor field={field} publishedField={published[list].find((x) => x.key === field.key)}
                 onChange={(options) => change(field.key, (x) => ({ ...x, options }))} />}
               {!locked(field.key) && (
-                <button type="button" className="secondary" onClick={() => update((c) => removeCustomField(c, field.key))}>{t('config.remove', { name: field.name })}</button>
+                <button type="button" className="secondary" onClick={() => remove(field.key)}>{t('config.remove', { name: field.name })}</button>
               )}
             </li>
           ))}
@@ -421,8 +431,8 @@ function CustomFieldsEditor({ config, published, update }: { readonly config: Wh
         <SelectField label={t('config.kind')} value={kind} onChange={(value) => setKind(value as FieldKind)}
           options={FIELD_KINDS.map((item) => ({ value: item, label: t(`config.kind.${item}` as MessageKey) }))} />
         <button type="button" disabled={name.trim() === ''} onClick={() => {
-          const key = keyFromName(name, config.customFields.map((x) => x.key));
-          update((c) => ({ ...c, customFields: [...c.customFields, {
+          const key = keyFromName(name, fields.map((x) => x.key));
+          update((c) => ({ ...c, [list]: [...c[list], {
             key, name: name.trim(), type: kind, required: false, active: true,
             options: kind === 'select' ? [{ key: 'option_1', name: t('config.firstOption'), active: true }] : [],
           }] }));

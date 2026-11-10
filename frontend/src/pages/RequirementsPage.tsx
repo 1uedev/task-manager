@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   approveRequirement, createRequirement, discardRequirement, listRequirementOwners, listRequirementProjects, listRequirements, readRequirement,
   readRequirementHistory, readRequirementRevision, restoreRequirement, returnRequirement, submitRequirement, updateRequirement,
@@ -20,6 +20,8 @@ import type { MessageKey } from '../i18n/index.ts';
 import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
 import { DiffView } from './WikiDiffView.tsx';
 import { mergeCriteria, type Draft } from './requirementCriteria.ts';
+import { CUSTOM_PREFIX } from '../app/configuration.ts';
+import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { WikiContent } from './WikiContent.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
 
@@ -48,7 +50,8 @@ const VIOLATION: Record<string, MessageKey> = {
   'description.invalid': 'wiki.error.content', 'reason.required': 'requirements.error.reason', 'reason.too_long': 'requirements.error.reasonLong',
   'changes.required': 'requirements.error.nothing', 'text.too_long': 'requirements.error.textLong',
   'priority.not_readable': 'requirements.error.filterHidden', 'owner.not_readable': 'requirements.error.filterHidden',
-  'text.not_readable': 'requirements.error.filterHidden',
+  'text.not_readable': 'requirements.error.filterHidden', 'customFields.unknown': 'requirements.error.fieldUnknown',
+  'customFields.invalid': 'requirements.error.fieldUnknown',
 };
 
 const SPECIFIC: Record<string, MessageKey> = {
@@ -57,14 +60,40 @@ const SPECIFIC: Record<string, MessageKey> = {
   'requirement.content_not_readable': 'requirements.error.contentHidden', 'requirement.not_found': 'requirements.error.notFound',
   'requirement.revision_not_found': 'requirements.error.revision', 'project.not_found': 'requirements.error.projectNotFound',
   'auth.forbidden': 'requirements.error.forbidden', 'criteria.required': 'requirements.error.criteriaRequired',
+  'requirement.required_field_inaccessible': 'requirements.error.requiredHidden',
 };
+
+// Custom fields of requirements (TASK-098): the definitions the reader may read come with every answer, the values in the
+// content by key. The form holds every value as text and sends the JSON value of the field's kind.
+type RequirementField = Requirement['customFields'][number];
+type CustomValue = string | number | boolean;
+type CustomValues = Readonly<Record<string, CustomValue>>;
+const CUSTOM_VIOLATION = /^custom\.([a-z][a-z0-9_]*)\.([a-z_]+)$/;
+const valuesOf = (content: RequirementContent): CustomValues => (content.customFields ?? {}) as CustomValues;
+const customText = (value: CustomValue | undefined): string => (value === undefined ? '' : String(value));
+const textsOf = (content: RequirementContent): Record<string, string> =>
+  Object.fromEntries(Object.entries(valuesOf(content)).map(([key, value]) => [key, customText(value)]));
+function customJson(field: RequirementField, text: string): CustomValue | null {
+  if (text === '') return null;
+  if (field.type === 'integer') return /^-?\d+$/.test(text.trim()) ? Number(text.trim()) : text;
+  if (field.type === 'boolean') return text === 'true';
+  return text;
+}
 
 function useRequirementProblem() {
   const { t } = useI18n();
   const text = useProblemText();
-  return (problem: ProblemInfo) => {
+  return (problem: ProblemInfo, fields: readonly RequirementField[] = []) => {
     const known = (problem.violations ?? []).map((violation) => VIOLATION[violation]).filter((key): key is MessageKey => key !== undefined);
-    if (problem.status === 400 && known.length > 0) return [...new Set(known)].map((key) => t(key)).join(' ');
+    // A refused value of a custom field names the field: "Bereich: Das Feld wird für „Zur Prüfung“ benötigt."
+    const custom = (problem.violations ?? []).flatMap((violation) => {
+      const match = CUSTOM_VIOLATION.exec(violation);
+      if (match === null) return [];
+      const [, key = '', code = ''] = match;
+      const field = fields.find((item) => item.key === key)?.name ?? `${CUSTOM_PREFIX}${key}`;
+      return [`${field}: ${t(CUSTOM_ERROR[code] ?? 'custom.error.invalid')}`];
+    });
+    if (problem.status === 400 && known.length + custom.length > 0) return [...[...new Set(known)].map((key) => t(key)), ...custom].join(' ');
     if (problem.status === 400 && problem.code !== null && VIOLATION[problem.code] !== undefined) return t(VIOLATION[problem.code] as MessageKey);
     return text(problem, SPECIFIC);
   };
@@ -245,8 +274,13 @@ function ListView({ project }: { readonly project: RequirementProject }) {
 
 // ---------------------------------------------------------------- reading one requirement
 
-function ContentView({ content, access, testId }: { readonly content: RequirementContent; readonly access: RequirementAccess; readonly testId: string }) {
+function ContentView({ content, access, fields, testId }: {
+  readonly content: RequirementContent; readonly access: RequirementAccess; readonly fields: readonly RequirementField[]; readonly testId: string;
+}) {
   const { t } = useI18n();
+  const name = useAccountName();
+  const text = useCustomText();
+  const values = valuesOf(content);
   return (
     <div className="stack" data-testid={testId}>
       <section aria-labelledby={`${testId}-description`}>
@@ -273,6 +307,19 @@ function ContentView({ content, access, testId }: { readonly content: Requiremen
               </ol>
             )}
       </section>
+      {fields.length > 0 && (
+        <section aria-labelledby={`${testId}-custom`}>
+          <h3 id={`${testId}-custom`}>{t('requirements.field.custom')}</h3>
+          <dl className="facts" data-testid={`${testId}-custom`}>
+            {fields.map((field) => (
+              <Fragment key={field.key}>
+                <dt>{field.name}</dt>
+                <dd data-field={field.key}>{text(field, values[field.key], name)}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </section>
+      )}
     </div>
   );
 }
@@ -345,6 +392,8 @@ function EditorPanel({ requirement, onSaved, onClose }: {
   const [priority, setPriority] = useState<string>(requirement.content.priority ?? 'normal');
   const [owner, setOwner] = useState(requirement.ownerId ?? '');
   const [criteria, setCriteria] = useState<Draft[]>(() => draftsOf(requirement.content.criteria, next));
+  const editableFields = requirement.customFields.filter((field) => writable(access, `${CUSTOM_PREFIX}${field.key}`));
+  const [custom, setCustom] = useState<Record<string, string>>(() => textsOf(requirement.content));
   const [titleError, setTitleError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
@@ -353,7 +402,8 @@ function EditorPanel({ requirement, onSaved, onClose }: {
   const canDescription = writable(access, 'description') && requirement.content.description !== null;
   const editor = useWikiEditor((requirement.content.description ?? EMPTY_DOC) as WikiDocument, canDescription, () => undefined);
   const [baseline, setBaseline] = useState<string | null>(null);
-  const [owners] = useLoad(() => (writable(access, 'owner') ? listRequirementOwners(api, requirement.projectId)
+  const needsPeople = writable(access, 'owner') || editableFields.some((field) => field.type === 'user');
+  const [owners] = useLoad(() => (needsPeople ? listRequirementOwners(api, requirement.projectId)
     : Promise.resolve({ kind: 'ok' as const, data: { value: [] as string[], etag: null } })), [api, requirement.projectId]);
   useEffect(() => {
     if (editor !== null) setBaseline(JSON.stringify(editor.getJSON()));
@@ -375,13 +425,30 @@ function EditorPanel({ requirement, onSaved, onClose }: {
     if (writable(access, 'owner') && owner !== (base.ownerId ?? '')) body.ownerId = owner === '' ? null : owner;
     if (writable(access, 'criteria') && !sameCriteria(criteria, base.content.criteria)) body.criteria = criteria.map((item) => ({ id: item.id, text: item.text }));
     if (descriptionChanged && editor !== null) body.description = editor.getJSON() as WikiDocument;
+    const customBody: Record<string, CustomValue | null> = {};
+    for (const field of editableFields) {
+      const value = custom[field.key] ?? '';
+      if (value !== customText(valuesOf(base.content)[field.key])) customBody[field.key] = customJson(field, value);
+    }
+    if (Object.keys(customBody).length > 0) body.customFields = customBody;
     return body;
+  };
+  // The values of the own input for the comparison after a conflict: an emptied field has no value.
+  const ownValues = (): Record<string, CustomValue> => {
+    const values: Record<string, CustomValue> = { ...valuesOf(base.content) };
+    for (const field of editableFields) {
+      const value = customJson(field, custom[field.key] ?? '');
+      if (value === null) delete values[field.key];
+      else values[field.key] = value;
+    }
+    return values;
   };
   const dirty = Object.keys(changes()).length > 0;
   useUnsavedGuard(dirty);
   const contentChanged = (() => {
     const body = changes();
-    return body.title !== undefined || body.priority !== undefined || body.criteria !== undefined || body.description !== undefined;
+    return body.title !== undefined || body.priority !== undefined || body.criteria !== undefined || body.description !== undefined
+      || body.customFields !== undefined;
   })();
 
   async function save(event: FormEvent) {
@@ -403,6 +470,7 @@ function EditorPanel({ requirement, onSaved, onClose }: {
       setPriority(saved.content.priority ?? 'normal');
       setOwner(saved.ownerId ?? '');
       setCriteria(draftsOf(saved.content.criteria, next));
+      setCustom(textsOf(saved.content));
       if (editor !== null) {
         if (sent !== null && JSON.stringify(editor.getJSON()) === sent && saved.content.description !== null) {
           editor.commands.setContent(saved.content.description as WikiDocument, { emitUpdate: false });
@@ -425,7 +493,7 @@ function EditorPanel({ requirement, onSaved, onClose }: {
       return setNotice({ kind: 'info', text: problem(newer.problem) });
     }
     setBusy(false);
-    setNotice({ kind: 'info', text: problem(result.problem) });
+    setNotice({ kind: 'info', text: problem(result.problem, requirement.customFields) });
   }
 
   // Only what the person changed stays theirs; every untouched part takes the newer value, so nothing of the other change is
@@ -436,6 +504,8 @@ function EditorPanel({ requirement, onSaved, onClose }: {
     if (priority === (base.content.priority ?? 'normal')) setPriority(conflict.content.priority ?? 'normal');
     if (owner === (base.ownerId ?? '')) setOwner(conflict.ownerId ?? '');
     setCriteria(mergeCriteria(base.content.criteria, criteria, conflict.content.criteria, next));
+    const untouched = editableFields.filter((field) => (custom[field.key] ?? '') === customText(valuesOf(base.content)[field.key]));
+    setCustom((current) => ({ ...current, ...Object.fromEntries(untouched.map((field) => [field.key, customText(valuesOf(conflict.content)[field.key])])) }));
     if (editor !== null && !descriptionChanged && conflict.content.description !== null) {
       editor.commands.setContent(conflict.content.description as WikiDocument, { emitUpdate: false });
       setBaseline(JSON.stringify(editor.getJSON()));
@@ -452,6 +522,7 @@ function EditorPanel({ requirement, onSaved, onClose }: {
     setPriority(conflict.content.priority ?? 'normal');
     setOwner(conflict.ownerId ?? '');
     setCriteria(draftsOf(conflict.content.criteria, next));
+    setCustom(textsOf(conflict.content));
     if (editor !== null && conflict.content.description !== null) {
       editor.commands.setContent(conflict.content.description as WikiDocument, { emitUpdate: false });
       setBaseline(JSON.stringify(editor.getJSON()));
@@ -493,6 +564,16 @@ function EditorPanel({ requirement, onSaved, onClose }: {
         </div>
       )}
       {writable(access, 'criteria') && <CriteriaEditor items={criteria} setItems={setCriteria} disabled={busy} />}
+      {editableFields.length > 0 && (
+        <fieldset className="stack" data-testid="requirement-custom-editor">
+          <legend>{t('requirements.field.custom')}</legend>
+          {editableFields.map((field) => (
+            <CustomFieldInput key={field.key} field={field} value={custom[field.key] ?? ''} disabled={busy}
+              onChange={(value) => setCustom((current) => ({ ...current, [field.key]: value }))}
+              people={ownerOptions.map((id) => ({ id, name: name(id) }))} />
+          ))}
+        </fieldset>
+      )}
       <p className="hint" data-testid="requirement-save-state" data-dirty={dirty ? 'true' : 'false'}>
         {dirty ? t('requirements.state.unsaved')
           : t('requirements.state.saved', { version: base.version, time: formatDateTime(base.updatedAt, language), person: name(base.updatedBy) })}
@@ -509,10 +590,11 @@ function EditorPanel({ requirement, onSaved, onClose }: {
             descriptionHtml: null,
             // New criteria have no number yet; they count as added.
             criteria: writable(access, 'criteria') ? criteria.map((item, index) => ({ id: item.id ?? -(index + 1), text: item.text })) : base.content.criteria,
-          }, conflict.revision, conflict.content)} />
+            customFields: ownValues(),
+          }, conflict.revision, conflict.content, conflict.customFields)} />
           <details>
             <summary>{t('requirements.conflict.show')}</summary>
-            <ContentView content={conflict.content} access={conflict.access} testId="requirement-conflict-newer" />
+            <ContentView content={conflict.content} access={conflict.access} fields={conflict.customFields} testId="requirement-conflict-newer" />
           </details>
           <div className="actions">
             <button type="button" onClick={keepMine} data-testid="requirement-conflict-keep">{t('requirements.conflict.keep')}</button>
@@ -577,7 +659,7 @@ function ApproveDialog({ requirement, onDone, onStale, onCancel }: {
         <dd>{formatDateTime(requirement.updatedAt, language)}</dd>
       </dl>
       <p className="hint">{t('requirements.approve.hint')}</p>
-      <ContentView content={requirement.content} access={requirement.access} testId="requirement-approve-content" />
+      <ContentView content={requirement.content} access={requirement.access} fields={requirement.customFields} testId="requirement-approve-content" />
       <NoticeView notice={notice} />
       <div className="actions">
         <button type="button" ref={confirmRef} onClick={() => void approve()} disabled={busy} data-testid="requirement-approve-confirm">
@@ -641,6 +723,7 @@ interface Comparison {
   readonly priority: { readonly before: string; readonly after: string } | null;
   readonly description: readonly DiffEntry[] | null;
   readonly criteria: readonly CriterionChange[] | null;
+  readonly custom: readonly { readonly field: RequirementField; readonly before: CustomValue | undefined; readonly after: CustomValue | undefined }[];
 }
 
 type CriterionChange =
@@ -664,10 +747,11 @@ export function compareCriteria(before: readonly RequirementCriterion[], after: 
 }
 
 function compare(left: RequirementRevision, right: RequirementRevision): Comparison & { readonly moved: boolean } {
-  return compareContents(left.revision, left.content, right.revision, right.content);
+  return compareContents(left.revision, left.content, right.revision, right.content, right.customFields);
 }
 
-function compareContents(leftRevision: number, a: RequirementContent, rightRevision: number, b: RequirementContent): Comparison & { readonly moved: boolean } {
+function compareContents(leftRevision: number, a: RequirementContent, rightRevision: number, b: RequirementContent,
+  fields: readonly RequirementField[]): Comparison & { readonly moved: boolean } {
   const criteria = a.criteria !== null && b.criteria !== null ? compareCriteria(a.criteria, b.criteria) : null;
   return {
     left: leftRevision,
@@ -678,20 +762,29 @@ function compareContents(leftRevision: number, a: RequirementContent, rightRevis
       ? diffBlocks(blocksOf(a.description as WikiDocument), blocksOf(b.description as WikiDocument)) : null,
     criteria: criteria?.changes ?? null,
     moved: criteria?.moved ?? false,
+    // Only fields the reader may read come with their definition; a hidden field is never compared.
+    custom: fields.map((field) => ({ field, before: valuesOf(a)[field.key], after: valuesOf(b)[field.key] }))
+      .filter((entry) => customText(entry.before) !== customText(entry.after)),
   };
 }
 
-function EventText({ event, projectKey, pageTitles }: {
+function EventText({ event, projectKey, pageTitles, fields }: {
   readonly event: RequirementEvent;
   readonly projectKey: string;
   readonly pageTitles: Readonly<Record<string, string>>;
+  readonly fields: readonly RequirementField[];
 }) {
   const { t } = useI18n();
   const name = useAccountName();
+  const text = useCustomText();
+  // A custom field (TASK-098) is named by its definition; the server sends its events only to whom may read it.
+  const own = event.field?.startsWith(CUSTOM_PREFIX) ? fields.find((item) => `${CUSTOM_PREFIX}${item.key}` === event.field) : undefined;
   // Links name no field of the requirement (TASK-097).
-  const field = event.field === null || event.field === 'tickets' || event.field === 'pages' ? '' : t(`requirements.field.${event.field}` as MessageKey);
+  const field = event.field === null || event.field === 'tickets' || event.field === 'pages' ? ''
+    : event.field.startsWith(CUSTOM_PREFIX) ? own?.name ?? event.field : t(`requirements.field.${event.field}` as MessageKey);
   const value = (raw: string | null) => {
     if (raw === null) return t('requirements.event.empty');
+    if (own !== undefined) return text(own, raw, name);
     if (event.field === 'owner') return name(raw);
     if (event.field === 'priority') return t(priorityKey(raw as RequirementPriority));
     return raw;
@@ -799,7 +892,7 @@ function HistoryPanel({ requirement }: { readonly requirement: Requirement }) {
                 <section className="card stack" data-testid="requirement-revision-view">
                   <h3>{t('requirements.history.viewing', { revision: shown.revision, title: shown.content.title ?? '' })}</h3>
                   {shown.content.priority !== null && <p>{t('requirements.field.priority')}: {t(priorityKey(shown.content.priority))}</p>}
-                  <ContentView content={shown.content} access={requirement.access} testId="requirement-revision-content" />
+                  <ContentView content={shown.content} access={requirement.access} fields={shown.customFields} testId="requirement-revision-content" />
                   <div className="actions"><button type="button" className="secondary" onClick={() => setShown(null)}>{t('requirements.history.hide')}</button></div>
                 </section>
               )}
@@ -817,7 +910,7 @@ function HistoryPanel({ requirement }: { readonly requirement: Requirement }) {
                 {value.events.map((event, index) => (
                   <li key={index} data-kind={event.kind}>
                     <span className="badge">{t('requirements.revision', { revision: event.revision })}</span>{' '}
-                    <EventText event={event} projectKey={requirement.projectKey} pageTitles={value.pageTitles} />{' · '}{name(event.actorId)}{' · '}{formatDateTime(event.occurredAt, language)}
+                    <EventText event={event} projectKey={requirement.projectKey} pageTitles={value.pageTitles} fields={requirement.customFields} />{' · '}{name(event.actorId)}{' · '}{formatDateTime(event.occurredAt, language)}
                   </li>
                 ))}
               </ul>
@@ -831,9 +924,11 @@ function HistoryPanel({ requirement }: { readonly requirement: Requirement }) {
 
 function ComparisonView({ comparison, legend }: { readonly comparison: Comparison & { readonly moved: boolean }; readonly legend?: string }) {
   const { t } = useI18n();
+  const name = useAccountName();
+  const text = useCustomText();
   const label = (id: number) => (id > 0 ? `K${id}` : t('requirements.criteria.new'));
   const nothing = comparison.title === null && comparison.priority === null && (comparison.description ?? []).every((entry) => entry.op === 'same')
-    && (comparison.criteria ?? []).every((entry) => entry.op === 'same') && !comparison.moved;
+    && (comparison.criteria ?? []).every((entry) => entry.op === 'same') && !comparison.moved && comparison.custom.length === 0;
   return (
     <div className="stack" data-testid="requirement-compare-result">
       <p className="hint">{legend ?? t('requirements.history.comparing', { from: comparison.left, to: comparison.right })}</p>
@@ -862,6 +957,11 @@ function ComparisonView({ comparison, legend }: { readonly comparison: Compariso
         </ul>
       )}
       {comparison.moved && <p className="hint" data-testid="requirement-compare-moved">{t('requirements.history.moved')}</p>}
+      {comparison.custom.map((entry) => (
+        <p key={entry.field.key} data-testid="requirement-compare-custom" data-field={entry.field.key}>
+          {entry.field.name}: <del>{text(entry.field, entry.before, name)}</del> <ins>{text(entry.field, entry.after, name)}</ins>
+        </p>
+      ))}
     </div>
   );
 }
@@ -894,7 +994,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
     const result = await call();
     setBusy(false);
     if (result.kind !== 'ok') {
-      setNotice({ kind: 'info', text: problem(result.problem) });
+      setNotice({ kind: 'info', text: problem(result.problem, loaded.state === 'ok' ? loaded.value.customFields : []) });
       if (result.problem.status === 412) retry();
       return;
     }
@@ -988,7 +1088,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
                 onDone={(next) => changed(next, t(mode === 'return' ? 'requirements.returned' : 'requirements.discarded'))} />
             )}
             {mode === 'history' && <HistoryPanel key={requirement.id} requirement={requirement} />}
-            {(mode === 'read' || mode === 'return' || mode === 'discard') && <ContentView content={content} access={access} testId="requirement-content" />}
+            {(mode === 'read' || mode === 'return' || mode === 'discard') && <ContentView content={content} access={access} fields={requirement.customFields} testId="requirement-content" />}
             {mode === 'read' && <RequirementLinksPanel key={requirement.id} requirement={requirement} />}
           </article>
         );

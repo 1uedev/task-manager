@@ -554,6 +554,104 @@ describe('requirements', () => {
     });
   });
 
+  // TASK-098: custom fields of requirements from the project configuration, with their own field rules.
+  const OWN_FIELDS = [
+    { key: 'area', name: 'Bereich', type: 'select', required: true, active: true,
+      options: [{ key: 'portal', name: 'Portal', active: true }, { key: 'intern', name: 'Intern', active: true }] },
+    { key: 'effort', name: 'Aufwand', type: 'integer', required: false, active: true, options: [] },
+    { key: 'note', name: 'Vertraulich', type: 'text', required: false, active: true, options: [] }];
+  const OWN = ['custom.area', 'custom.effort', 'custom.note'];
+  const withOwnFields = (backend) => {
+    backend.state.configurations.get(backend.project.id).configuration.requirementFields = structuredClone(OWN_FIELDS);
+  };
+
+  test('custom fields are required for the review, count as content in approval, revision, comparison and history (TASK-098)', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        withOwnFields(backend);
+        grant(backend, [backend.anna], EVERYTHING, { read: [...ALL, ...OWN], write: [...ALL, ...OWN] });
+        item = backend.addRequirement(backend.anna, 'Kunden sehen den Stand ihrer Anfragen', { criteria: ['Die Portalliste zeigt den Status.'] });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      // An empty required field blocks the review with 400 and its name.
+      await page.getByTestId('requirement-submit').click();
+      await page.getByText('Bereich: wird für „Zur Prüfung“ benötigt.').waitFor();
+      assert.equal(item.status, 'draft');
+
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      const own = edit.getByTestId('requirement-custom-editor');
+      await own.getByLabel('Bereich').selectOption({ label: 'Portal' });
+      await own.getByLabel('Aufwand').fill('5');
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      assert.deepEqual(bodyOf(lastWrite(backend, /\/requirements\/[^/]+$/)).customFields, { area: 'portal', effort: 5 }, 'the values go with their kind');
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+      const shown = page.getByTestId('requirement-content-custom');
+      assert.equal(await shown.locator('[data-field="area"]').textContent(), 'Portal');
+      assert.equal(await shown.locator('[data-field="effort"]').textContent(), '5');
+      assert.equal(await shown.locator('[data-field="note"]').textContent(), 'Leer');
+
+      await page.getByTestId('requirement-submit').click();
+      await page.getByText('Revision 1 ist zur Prüfung gegeben.').waitFor();
+      await page.getByTestId('requirement-approve').click();
+      const dialog = page.getByTestId('requirement-approve-dialog');
+      assert.equal(await dialog.getByTestId('requirement-approve-content-custom').locator('[data-field="area"]').textContent(), 'Portal',
+        'the approval dialog shows the custom fields of the revision');
+      await dialog.getByTestId('requirement-approve-confirm').click();
+      await page.getByText('Revision 1 ist freigegeben.').waitFor();
+
+      // A change of a custom field after the approval opens the next revision.
+      await page.getByTestId('requirement-edit-open').click();
+      await edit.getByTestId('requirement-custom-editor').getByLabel('Aufwand').fill('8');
+      await edit.getByText('Beim Speichern entsteht eine neue Revision im Entwurf.').waitFor();
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Revision 2 ist eröffnet', { exact: false }).waitFor();
+      assert.equal(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id && entry.revision === 1).custom.effort, 5,
+        'the approved revision keeps its value');
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+
+      await page.getByTestId('requirement-history-open').click();
+      const history = page.getByTestId('requirement-history');
+      const compare = history.getByTestId('requirement-compare');
+      await compare.getByLabel('Von').selectOption('1');
+      await compare.getByLabel('Bis').selectOption('2');
+      await compare.getByRole('button', { name: 'Vergleichen' }).click();
+      const effort = compare.locator('[data-testid="requirement-compare-custom"][data-field="effort"]');
+      assert.equal(await effort.locator('del').textContent(), '5');
+      assert.equal(await effort.locator('ins').textContent(), '8');
+      const events = history.getByTestId('requirement-events');
+      await events.getByText('Bereich geändert von „leer“ zu „Portal“').waitFor();
+      await events.getByText('Aufwand geändert von „5“ zu „8“').waitFor();
+    });
+  });
+
+  test('a custom field without a read rule is missing everywhere, and a hidden required field stops the review with a conflict (TASK-098)', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        withOwnFields(backend);
+        grant(backend, [backend.anna], EVERYTHING, { read: [...ALL, 'custom.area'], write: ALL });
+        item = backend.addRequirement(backend.anna, 'Kunden sehen den Stand', { criteria: ['Die Portalliste zeigt den Status.'],
+          custom: { area: 'intern', effort: 3, note: 'nur intern' } });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      const shown = page.getByTestId('requirement-content-custom');
+      await shown.locator('[data-field="area"]').getByText('Intern').waitFor();
+      assert.equal(await shown.locator('dd').count(), 1, 'only the readable field with its definition');
+      assert.equal(await page.getByText('nur intern').count(), 0);
+      await page.getByTestId('requirement-edit-open').click();
+      assert.equal(await page.getByTestId('requirement-custom-editor').count(), 0, 'no control without a write rule');
+      await page.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+      await page.getByTestId('requirement-submit').click();
+      await page.getByText('Ein Pflichtfeld für „Zur Prüfung“ darfst du nicht lesen oder ändern.', { exact: false }).waitFor();
+      assert.equal(item.status, 'draft');
+    });
+  });
+
   test('the pages work in English as well', async () => {
     let item;
     await withApp({

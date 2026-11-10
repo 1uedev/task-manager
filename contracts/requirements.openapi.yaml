@@ -72,7 +72,7 @@ info:
     der Anforderung und brauchen kein `If-Match`; beide Historien halten sie fest.
 
     Eigene Felder (TASK-098, DEC-128): Die Projektkonfiguration legt in `requirementFields` eigene Felder für Anforderungen
-    an, mit denselben Typen wie für Tickets (`text`, `integer`, `boolean`, `select`, `user`); sie werden mit der
+    an, mit denselben Typen wie für Tickets (`text`, `longtext`, `integer`, `date`, `boolean`, `select`, `user`); sie werden mit der
     Konfiguration entworfen und veröffentlicht. Jedes Feld hat die Kennung `custom.<key>` mit eigener Lese und Schreibregel
     für den Ressourcentyp `requirement`. `customFields` einer Antwort nennt die Felder, die der Aufrufer lesen darf, und
     `content.customFields` deren Werte, soweit gesetzt (Text und Auswahl als Zeichenkette, Zahl als Ganzzahl, Wahrheitswert
@@ -591,8 +591,8 @@ components:
       type: string
       description: Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098)
       anyOf:
-        - {enum: [title, description, criteria, priority, owner]}
-        - {pattern: '^custom\.[a-z][a-z0-9_]{0,39}$'}
+        - {type: string, enum: [title, description, criteria, priority, owner]}
+        - {type: string, pattern: '^custom\.[a-z][a-z0-9_]{0,39}$'}
     CustomFieldValue:
       type: [string, integer, boolean]
     CustomFieldOption:
@@ -609,7 +609,7 @@ components:
       properties:
         key: {type: string}
         name: {type: string}
-        type: {type: string, enum: [text, integer, boolean, select, user]}
+        type: {type: string, enum: [text, longtext, integer, date, boolean, select, user]}
         required: {type: boolean, description: Pflicht beim Übergang nach Zur Prüfung}
         active: {type: boolean}
         options:

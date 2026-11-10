@@ -13,6 +13,8 @@ export const CUSTOM_PREFIX = 'custom.';
 export const FIELD_KINDS: readonly FieldKind[] = ['text', 'longtext', 'integer', 'date', 'boolean', 'select', 'user'];
 
 export const customFieldsOf = (config: Configuration): readonly CustomField[] => config.customFields ?? [];
+/** The custom fields of requirements (TASK-098), drafted and published with the same configuration. */
+export const requirementFieldsOf = (config: Configuration): readonly CustomField[] => config.requirementFields ?? [];
 export const workflowsOf = (config: Configuration): readonly Workflow[] => config.workflows ?? [];
 export const optionsOf = (field: CustomField): readonly CustomOption[] => field.options ?? [];
 
