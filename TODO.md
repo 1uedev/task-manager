@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,11 +28,16 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
 
 ### Blockiert – BLOCKIERT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-098](#task-098-eigene-felder-für-anforderungen-a13-teil-3) | Eigene Felder für Anforderungen (A13 Teil 3) | claude-20261110-requirements-01 | 2026-11-10 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -48,3 +53,81 @@ Neue Aufgaben verwenden die nächste freie TASK-ID. Pflichtangaben sind Status, 
 ## Vorgemerkte Entwicklung nach gesonderter Beauftragung
 
 Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-021 als isolierten Nachweis, DEC-055 die Backendgrundlage aus TASK-022, DEC-056 die React-Grundfläche aus TASK-023 und DEC-057 das Berechtigungsmodul aus TASK-025; die weiteren Implementierungsaufgaben bleiben Vorschläge, keine laufenden Aufträge. **BLOCKIERT** bedeutet: Implementierung noch nicht beauftragt und jeweils genannte Entscheidungen/Abhängigkeiten noch nicht erfüllt. TASK-024 ist inzwischen durch Claim-PR #73 für claude-20261018-identity-01 reserviert; TASK-026 bis TASK-031 haben weiterhin keinen Besitzer oder Arbeitsbranch. Nach ausdrücklicher Freigabe hebt die Koordination den passenden Blocker auf; dann gilt die normale Claim-PR-Regel. Umfang, Detailverträge und Folgeabhängigkeiten sind vor der Reservierung gegen die tatsächliche Entscheidung zu prüfen. Ein Merge allein ersetzt keine Abnahme.
+
+## TASK-096 Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-030; OPEN-021; ACC-006; docs/DOMAIN_MODEL.md (Anforderungsrevisionen und Freigabe, Prüffall F-13). **Abhängigkeiten:** TASK-026, TASK-027, TASK-043, TASK-068 und TASK-093, geliefert. **Arbeitsstand:** Holger hat am 10. November 2026 im Projektgespräch mit „ja mache mit A13 weiter“ den Beginn von Paket A13 beauftragt und am selben Tag die 24 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-097 und TASK-098). Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-126, Migrationen ab V0058.
+
+**Umfang:** Anforderungen je Projekt mit Kennung, festen Feldern, Abnahmekriterien, festem Ablauf, fachlichen Revisionen, Freigabe genau einer Revision nach DEC-030, Historie, Vergleich, Liste, Feldrechten und den Projektaktionen `requirement.read`, `requirement.edit` und `requirement.approve`, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Verknüpfungen (TASK-097), eigene Felder (TASK-098), Git Objekte (A15), Suche (A14), KI (A16), Portal, formale Stände und Änderungsanträge (REQ-REQ-004), Testfälle, Beziehungen zwischen Anforderungen, Import und Export, Kommentare, endgültiges Löschen, Verschieben in ein anderes Projekt, Bilder in der Beschreibung, Vier Augen Pflicht.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eine Anforderung gehört zu genau einem Projekt. Jedes Projekt zählt seine Anforderungen eigenständig, angezeigt als „ANF-17“ neben dem Projekt; die Kennung ändert sich nie.
+2. Feste Felder: Titel (1 bis 200 Zeichen), Beschreibung, Verantwortliche Person (optional, internes Mitglied des Projekts, kein Portalkonto), Priorität niedrig, normal, hoch oder kritisch (Vorgabe normal) und Status.
+3. Die Beschreibung nutzt Editor und vom Server geprüftes Format des Wikis ohne Bilder.
+4. Abnahmekriterien sind eine geordnete Liste von 0 bis 50 Klartexten mit 1 bis 2000 Zeichen und fester Kennung innerhalb der Anforderung (K1, K2, nie neu vergeben), Reihenfolge per Ziehen und per Tastatur änderbar. Zur Prüfung geben setzt mindestens ein Kriterium voraus.
+5. Fester Ablauf: Entwurf nach Zur Prüfung; Zur Prüfung nach Freigegeben oder mit Pflichtbegründung zurück nach Entwurf; jeder Stand nach Verworfen und von dort zurück nach Entwurf. Nicht je Projekt konfigurierbar.
+6. Speichern im Entwurf ändert die laufende Revision und schreibt einen Historieneintrag. Erst die erste inhaltliche Änderung nach einer Freigabe öffnet Revision n+1 als Entwurf; die freigegebene Revision bleibt unverändert lesbar, angezeigt als „Revision 1 freigegeben, Revision 2 in Bearbeitung“.
+7. Inhaltlich sind Titel, Beschreibung, Kriterien, Priorität und eigene Felder. Verantwortliche Person, Verknüpfungen und Verwerfen sind organisatorisch: keine neue Revision, aber ein Historieneintrag.
+8. Der Freigabedialog zeigt die Revision mit allen Inhalten und gibt genau diese frei (If-Match, sonst 412). Freigebende Person, Zeitpunkt und Revision bleiben unveränderlich erhalten. Wer ein Inhaltsfeld nicht lesen darf, kann nicht freigeben (403).
+9. Vier Augen werden nicht erzwungen; der Dialog nennt, wer die Revision bearbeitet hat.
+10. `requirement.read` liest Anforderungen und Historie; `requirement.edit` legt an, bearbeitet, gibt zur Prüfung, verwirft und stellt wieder her; `requirement.approve` gibt frei und gibt zurück. Feldrechte je Feld über die Rechteverwaltung für den Ressourcentyp `requirement`. Portalkonten erhalten keine Anforderungsrechte.
+11. Jede Änderung sendet die bekannte Version mit If-Match (428, 412); die eigene Eingabe bleibt erhalten, der neuere Stand erscheint mit markierten Unterschieden daneben.
+12. Die Historie nennt Anlegen, Feldänderungen, Kriterienänderungen, Statuswechsel mit Begründung, Freigaben und neue Revisionen mit Person und Zeit; Einträge zu nicht lesbaren Feldern bleiben verborgen.
+13. Zwei Revisionen lassen sich vergleichen: Felder einzeln, Kriterien nach Kennung, Beschreibung nach Blöcken; nur lesbare Felder.
+14. Die Projektliste zeigt Kennung, Titel, Status, Revision, Priorität, Verantwortliche Person und Freigabestand, filterbar nach Status, Priorität, Verantwortlicher Person und Titeltext, sortiert nach Kennung, seitenweise.
+15. Kein Löschen; verworfene Anforderungen bleiben mit Historie über einen Filter erreichbar.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Die Beispielanforderung „Kunden sehen den Stand ihrer freigegebenen Supportanfragen“ lässt sich mit prüfbaren Kriterien erfassen, zur Prüfung geben und freigeben (REQ-REQ-001, REQ-REQ-002).
+2. Ein neues Kriterium nach der Freigabe erzeugt eine ungeprüfte Revision; die alte Freigabe mit Person, Zeit und Fassung bleibt sichtbar und wird nicht übertragen (F-13, DEC-030).
+3. Eine Freigabe auf veralteter Version erhält 412; ohne Leserecht auf ein Inhaltsfeld keine Freigabe.
+4. Ohne `requirement.read` keine Anforderung, ohne Leserecht eines Felds weder Wert noch Historie noch Vergleich dieses Felds.
+5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-097 in derselben Sitzung, sobald das Ergebnis auf main ist.
+
+## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+
+**Bezug:** REQ-REQ-003, REQ-ACL-004; ACC-006; docs/DOMAIN_MODEL.md (Beispiel ANF-17 und DEV-42, Prüffall F-14). **Abhängigkeiten:** TASK-096 auf main. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-096 auf main ist. Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-127, eigene Migration nach denen von TASK-096.
+
+**Umfang:** Verknüpfungen einer Anforderung mit Tickets desselben Projekts mit Revisionsbezug, Hinweis und Umstellung auf neuere Revisionen, Umsetzungsstand aus den lesbaren Tickets, Verknüpfungen mit Wikiseiten desselben Projekts, das Feld „Anforderungen“ am Ticket, Einträge in beiden Historien, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: projektübergreifende Verknüpfungen, Git Objekte (A15), Abnahme der Umsetzung je Kriterium, Beziehungen zwischen Anforderungen.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eine Anforderung lässt sich mit Tickets desselben Projekts verknüpfen, jede Kombination einmal. Die Verknüpfung bezieht sich auf eine Revision, beim Anlegen auf die neueste. Bei einer neueren Revision zeigen Ticket und Anforderung „Neuere Revision n vorhanden“; erst eine ausdrückliche Umstellung bindet das Ticket an sie.
+2. Verknüpfen und Lösen mit `requirement.edit` an der Anforderung und `ticket.read` am Ticket. Sichtbar nur für Personen, die beide Seiten lesen dürfen; nicht lesbare Gegenstücke werden weder gezeigt noch gezählt. Verknüpfen ändert weder Status noch Version des Tickets und steht in beiden Historien.
+3. Die Anforderung zeigt ihre lesbaren Tickets mit deren Status, etwa „3 Tickets, davon 2 erledigt“. Ein erledigtes Ticket gibt nie frei und erklärt die Anforderung nie für erfüllt.
+4. Eine Anforderung lässt sich mit Wikiseiten desselben Projekts verknüpfen; gezeigt wird der veröffentlichte Titel in der Oberflächensprache für Personen mit `wiki.read`, sonst „Seite nicht verfügbar“ ohne Titel. Kein Revisionsbezug.
+5. Das Ticket erhält ein Feld „Anforderungen“ mit den lesbaren verknüpften Anforderungen, ihrer Revision und dem Hinweis auf neuere Revisionen; verknüpfen ist von beiden Seiten möglich.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. ANF-17 Revision 1 ist mit DEV-42 verknüpft; nach Revision 2 bleibt DEV-42 auf Revision 1 und zeigt den Hinweis, bis es ausdrücklich umgestellt wird.
+2. Ein erledigtes Ticket ändert weder Freigabe noch Status der Anforderung (F-14).
+3. Ohne Leserecht auf Ticket, Anforderung oder Wikiseite erscheint die Verknüpfung nicht und wird nicht gezählt.
+4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests an Anforderung und Ticket.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-096 auf main die Blockade aufheben und umsetzen.
+
+## TASK-098 Eigene Felder für Anforderungen (A13 Teil 3)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; TASK-044 (Projektkonfiguration). **Abhängigkeiten:** TASK-097 auf main. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-097 auf main ist. Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-128, eigene Migration nach denen von TASK-097.
+
+**Umfang:** Bereich „Anforderungen“ in der Projektkonfiguration mit eigenen Feldern derselben Typen wie bei Tickets, mit Entwurf und Veröffentlichung der Konfiguration, Feldrechten, Historie, Vergleich, Freigabedialog und Pflichtfeldern beim Übergang nach Zur Prüfung, sowie die Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: weitere Feldtypen, Formulare, Automationen.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eigene Felder für Anforderungen haben dieselben Typen wie bei Tickets und werden mit der Projektkonfiguration entworfen und veröffentlicht.
+2. Eigene Felder zählen als inhaltlich, erscheinen in Historie, Vergleich und Freigabedialog und folgen den Feldrechten. Pflichtfelder gelten beim Übergang nach Zur Prüfung.
+3. Das Vorführimage erhält im Demoprojekt die Beispielanforderung „Kunden sehen den Stand ihrer freigegebenen Supportanfragen“ mit drei Kriterien, Revision 1 freigegeben und Revision 2 im Entwurf, verknüpft mit einem Ticket auf Revision 1 und mit der Wikiseite „Serviceanfrage ergänzen“.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Ein veröffentlichtes eigenes Feld erscheint an Anforderungen und folgt den Feldrechten; seine Änderung nach Freigabe erzeugt eine neue Revision.
+2. Ein leeres Pflichtfeld verhindert den Übergang nach Zur Prüfung mit 400 und Nennung des Felds.
+3. Die Demo zeigt Freigabe, neue Revision und Revisionshinweis am Ticket.
+4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Konfiguration und Anforderung.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-097 auf main die Blockade aufheben und umsetzen.
