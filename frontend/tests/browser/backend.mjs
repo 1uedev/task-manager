@@ -1812,6 +1812,182 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     return item;
   }
+  // The check of WikiDocument.check and RichText.check (TASK-096, DEC-126; S1 and S2 of the review of TASK-099), written out
+  // node for node: the first violation of the grammar ends the check like the exception on the server, unknown attributes,
+  // marks of nodes that carry none, a second mark of the same kind and the content of a leaf are dropped, and only then are
+  // the images and links to wiki pages that remain refused. The codes come without the prefix description.
+  const RT_BLOCKS = new Set(['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'horizontalRule', 'table', 'image']);
+  const RT_MARKS = new Set(['bold', 'italic', 'code', 'link']);
+  const RT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const RT_IMAGE_PATH = '/api/v1/wiki/images/';
+  // Java Pattern without UNICODE_CHARACTER_CLASS: \s is only [ \t\n\x0B\f\r], (?i) folds ASCII only.
+  const RT_EXTERNAL = /^(?:[Hh][Tt][Tt][Pp][Ss]?:\/\/[^ \t\n\u000b\f\r<>"]+|[Mm][Aa][Ii][Ll][Tt][Oo]:[^ \t\n\u000b\f\r<>"]+)$/;
+  const RT_LANGUAGE = /^[a-z0-9+#-]{1,20}$/;
+  // Character.isWhitespace of Java, which String.strip and String.isBlank use: the space separators without the no break
+  // spaces U+00A0, U+2007 and U+202F, the line and paragraph separators and the controls \t to \r and U+001C to U+001F.
+  const rtWhitespace = (code) => (code >= 0x09 && code <= 0x0d) || (code >= 0x1c && code <= 0x20) || code === 0x1680
+    || (code >= 0x2000 && code <= 0x2006) || (code >= 0x2008 && code <= 0x200a) || code === 0x2028 || code === 0x2029
+    || code === 0x205f || code === 0x3000;
+  const javaStrip = (value) => {
+    const points = [...value];
+    let start = 0;
+    let end = points.length;
+    while (start < end && rtWhitespace(points[start].codePointAt(0))) start++;
+    while (end > start && rtWhitespace(points[end - 1].codePointAt(0))) end--;
+    return points.slice(start, end).join('');
+  };
+  class RichTextInvalid extends Error {}
+  function richTextCheck(content) {
+    const fail = (code) => { throw new RichTextInvalid(code); };
+    const isObject = (node) => node !== null && typeof node === 'object' && !Array.isArray(node);
+    const text = (node) => (typeof node === 'string' ? node : null);
+    const integer = (attrs, name, fallback) => {
+      const value = isObject(attrs) ? attrs[name] : undefined;
+      if (value === undefined || value === null) return fallback;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < -2147483648 || value > 2147483647) fail('invalid');
+      return value;
+    };
+    const images = [];
+    const pageLinks = [];
+    const href = (value) => {
+      // eslint-disable-next-line no-control-regex
+      if (value === null || javaStrip(value) === '' || value.length > 2000 || /[\u0000-\u001f\u007f-\u009f]/.test(value)) fail('link_invalid');
+      const stripped = javaStrip(value);
+      if (stripped.startsWith('wiki:')) {
+        if (!RT_UUID.test(stripped.slice(5))) fail('link_invalid');
+        pageLinks.push(stripped.slice(5));
+        return stripped;
+      }
+      if (!RT_EXTERNAL.test(stripped)) fail('link_invalid');
+      return stripped;
+    };
+    const inline = (list, out, marks) => {
+      if (list === undefined || list === null) return;
+      if (!Array.isArray(list)) fail('invalid');
+      const content = [];
+      for (const child of list) {
+        const type = isObject(child) ? text(child.type) : null;
+        if (type === null) fail('invalid');
+        if (!['text', 'hardBreak'].includes(type) || (type === 'hardBreak' && !marks)) fail('unsupported');
+        if (type === 'hardBreak') {
+          content.push({ type: 'hardBreak' });
+          continue;
+        }
+        const value = text(child.text);
+        if (value === null || value === '') fail('invalid');
+        const node = { type: 'text', text: value };
+        const given = child.marks;
+        if (given !== undefined && given !== null) {
+          if (!marks || !Array.isArray(given)) fail(marks ? 'invalid' : 'unsupported');
+          const kept = [];
+          const seen = new Set();
+          for (const mark of given) {
+            const name = isObject(mark) ? text(mark.type) : null;
+            if (name === null) fail('invalid');
+            if (!RT_MARKS.has(name)) fail('unsupported');
+            if (seen.has(name)) continue;
+            seen.add(name);
+            kept.push(name === 'link' ? { type: name, attrs: { href: href(isObject(mark.attrs) ? text(mark.attrs.href) : null) } } : { type: name });
+          }
+          if (kept.length > 0) node.marks = kept;
+        }
+        content.push(node);
+      }
+      if (content.length > 0) out.content = content;
+    };
+    const blocks = (list, out, depth, allowed) => {
+      if (list === undefined || list === null) return;
+      if (!Array.isArray(list)) fail('invalid');
+      if (depth > 30) fail('too_deep');
+      for (const child of list) {
+        const type = isObject(child) ? text(child.type) : null;
+        if (type === null) fail('invalid');
+        if (!allowed.has(type)) fail('unsupported');
+        out.push(block(type, child, depth));
+      }
+    };
+    const nonEmpty = (node, out, depth, allowed) => {
+      const content = [];
+      blocks(node.content, content, depth + 1, allowed);
+      if (content.length === 0) fail('invalid');
+      out.content = content;
+    };
+    const block = (type, node, depth) => {
+      const out = { type };
+      const attrs = node.attrs;
+      switch (type) {
+        case 'paragraph': inline(node.content, out, true); break;
+        case 'heading': {
+          const level = integer(attrs, 'level', 1);
+          if (level < 1 || level > 3) fail('invalid');
+          out.attrs = { level };
+          inline(node.content, out, true);
+          break;
+        }
+        case 'blockquote': nonEmpty(node, out, depth, RT_BLOCKS); break;
+        case 'bulletList': nonEmpty(node, out, depth, new Set(['listItem'])); break;
+        case 'orderedList': {
+          const start = integer(attrs, 'start', 1);
+          if (start < 1 || start > 1_000_000) fail('invalid');
+          out.attrs = { start };
+          nonEmpty(node, out, depth, new Set(['listItem']));
+          break;
+        }
+        case 'listItem': nonEmpty(node, out, depth, RT_BLOCKS); break;
+        case 'codeBlock': {
+          const language = isObject(attrs) ? text(attrs.language) : null;
+          out.attrs = { language: language !== null && RT_LANGUAGE.test(language) ? language : null };
+          inline(node.content, out, false);
+          break;
+        }
+        case 'horizontalRule': break;
+        case 'table': nonEmpty(node, out, depth, new Set(['tableRow'])); break;
+        case 'tableRow': nonEmpty(node, out, depth, new Set(['tableHeader', 'tableCell'])); break;
+        case 'tableHeader':
+        case 'tableCell': {
+          const colspan = integer(attrs, 'colspan', 1);
+          const rowspan = integer(attrs, 'rowspan', 1);
+          if (colspan < 1 || colspan > 50 || rowspan < 1 || rowspan > 500) fail('invalid');
+          out.attrs = { colspan, rowspan, colwidth: null };
+          const widths = isObject(attrs) ? attrs.colwidth : undefined;
+          if (Array.isArray(widths) && widths.length === colspan) {
+            for (const width of widths) if (!Number.isInteger(width) || width < 1 || width > 5000) fail('invalid');
+            out.attrs.colwidth = [...widths];
+          }
+          nonEmpty(node, out, depth, RT_BLOCKS);
+          break;
+        }
+        case 'image': {
+          const src = isObject(attrs) ? text(attrs.src) : null;
+          const id = src !== null && src.startsWith(RT_IMAGE_PATH) && RT_UUID.test(src.slice(RT_IMAGE_PATH.length)) ? src.slice(RT_IMAGE_PATH.length) : null;
+          if (id === null) fail('image_external');
+          const alt = attrs.alt === undefined || attrs.alt === null ? '' : text(attrs.alt);
+          if (alt === null || alt.length > 500) fail('invalid');
+          out.attrs = { src: RT_IMAGE_PATH + id, alt: javaStrip(alt) };
+          images.push(id);
+          break;
+        }
+        default: fail('unsupported');
+      }
+      return out;
+    };
+    try {
+      if (!isObject(content) || text(content.type) !== 'doc') fail('invalid');
+      const document = { type: 'doc', content: [] };
+      blocks(content.content, document.content, 1, RT_BLOCKS);
+      if (document.content.length === 0) document.content.push({ type: 'paragraph' });
+      if (Buffer.byteLength(JSON.stringify(document), 'utf8') > 1024 * 1024) fail('too_large');
+      if (images.length > 50) fail('too_many_images');
+      const violations = [];
+      if (images.length > 0) violations.push('image_not_allowed');
+      if (pageLinks.length > 0) violations.push('page_link_not_allowed');
+      const blank = document.content.every((node) => node.type === 'paragraph' && node.content === undefined);
+      return { violations, document, blank };
+    } catch (error) {
+      if (error instanceof RichTextInvalid) return { violations: [error.message], document: null, blank: false };
+      throw error;
+    }
+  }
   // Checks like the server (H2 of the TASK-096 review): fixed criterion numbers, owners from the active internal members, the
   // description codes with the prefix description. and only http, https and mailto as link targets; line breaks become LF.
   function requirementChanges(body, access, violations, context) {
@@ -1837,25 +2013,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       }
     }
     if (body.description !== undefined && body.description !== null) {
-      // The document is walked like the server does it (N1 of the follow up review of TASK-096): node types and the real link
-      // targets count, never a word in the text that happens to look like one.
-      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      // eslint-disable-next-line no-control-regex
-      const control = /[\u0000-\u001f\u007f-\u009f]/;
-      const walk = (node) => {
-        if (node === null || typeof node !== 'object') return;
-        if (node.type === 'image') violations.push('description.image_not_allowed');
-        for (const mark of Array.isArray(node.marks) ? node.marks : []) {
-          if (mark?.type !== 'link') continue;
-          const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '';
-          const value = href.trim();
-          if (value === '' || href.length > 2000 || control.test(href)) violations.push('description.link_invalid');
-          else if (value.startsWith('wiki:')) violations.push(uuid.test(value.slice(5)) ? 'description.page_link_not_allowed' : 'description.link_invalid');
-          else if (!/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(value)) violations.push('description.link_invalid');
-        }
-        for (const child of Array.isArray(node.content) ? node.content : []) walk(child);
-      };
-      walk(body.description);
+      // The document is checked and normalized like WikiDocument.check and RichText.check on the server (N1 of the follow up
+      // review of TASK-096, S1 and S2 of the review of TASK-099): first the grammar of the wiki editor with its normalization,
+      // then images and wiki links in what is left. What the server stores is stored here too.
+      const checked = richTextCheck(body.description);
+      if (checked.violations.length > 0) violations.push(...checked.violations.map((code) => `description.${code}`));
+      else body.description = checked.blank ? null : checked.document;
     }
     if (body.ownerId !== undefined && body.ownerId !== null) {
       const member = (state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === body.ownerId)
