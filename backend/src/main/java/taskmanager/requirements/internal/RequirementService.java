@@ -65,7 +65,7 @@ public class RequirementService {
     public static final int LIMIT_DEFAULT = 50;
     public static final int LIMIT_MAX = 200;
     private static final Set<String> EDITING = Set.of("created", "changed", "criterion_added", "criterion_changed", "criterion_removed",
-        "criteria_moved", "revision_opened");
+        "criteria_moved");
 
     private final RequirementRepository repository;
     private final ProjectAccess projects;
@@ -537,7 +537,9 @@ public class RequirementService {
         }
         Set<UUID> editors = new LinkedHashSet<>();
         for (RequirementRepository.Event event : repository.events(requirement.id())) {
-            if (event.revision() == current.revision() && EDITING.contains(event.kind()) && !"owner".equals(event.field())) {
+            // Only changes of fields the caller may read name their author (Holger's choice on H3 of the TASK-096 review).
+            if (event.revision() == current.revision() && EDITING.contains(event.kind()) && !"owner".equals(event.field())
+                && (event.field() == null || access.readable().contains(event.field()))) {
                 editors.add(event.actorId());
             }
         }
@@ -579,7 +581,9 @@ public class RequirementService {
             RichText text = RichText.check(content);
             return text.blank() ? null : text.json();
         } catch (RichText.Invalid invalid) {
-            invalid.violations().forEach(violation -> violations.add("description." + violation.substring(violation.indexOf('.') + 1)));
+            // content.x becomes description.x; the codes of a link or image keep their kind, for example description.link_invalid.
+            invalid.violations().forEach(violation -> violations.add("description." + (violation.startsWith("content.")
+                ? violation.substring("content.".length()) : violation.replace('.', '_'))));
             return null;
         }
     }
@@ -634,7 +638,8 @@ public class RequirementService {
                 violations.add("criteria.unknown");
                 continue;
             }
-            String text = criterion.text() == null ? "" : criterion.text().strip();
+            // Line breaks of every platform count as one line feed before the checks (H1 of the TASK-096 review).
+            String text = criterion.text() == null ? "" : lines(criterion.text()).strip();
             if (text.isEmpty()) {
                 violations.add("criteria.text_required");
             } else if (text.codePointCount(0, text.length()) > CRITERION_MAX) {
@@ -642,13 +647,17 @@ public class RequirementService {
             } else if (text.codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n')) {
                 violations.add("criteria.text_invalid");
             }
-            result.add(new CriterionInput(criterion.id(), text.replace("\r\n", "\n")));
+            result.add(new CriterionInput(criterion.id(), text));
         }
         return result;
     }
 
+    private static String lines(String text) {
+        return text.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
     private static String reason(String reason, boolean required, List<String> violations) {
-        String clean = reason == null ? "" : reason.strip();
+        String clean = reason == null ? "" : lines(reason).strip();
         if (clean.isEmpty()) {
             if (required) {
                 violations.add("reason.required");

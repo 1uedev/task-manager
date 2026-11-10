@@ -585,6 +585,31 @@ class RequirementApiTest {
         assertEquals(403, partial.get("/api/v1/requirements/projects/" + setup.project() + "/owners").status());
     }
 
+    /** Holger's choice on H3 of the TASK-096 review: only changes of readable fields name their person in editors. */
+    @Test
+    void editorsOnlyNameChangesOfReadableFields() {
+        Setup setup = project();
+        Browser anna = editor(setup);
+        Browser ben = editor(setup);
+        Browser partial = reader(setup, "description");
+        Browser full = approver(setup);
+        Response created = example(anna, setup);
+        UUID id = id(created);
+        Response changed = ben.send("PATCH", path(id), Map.of("description", paragraphDoc("Nur Ben ändert die Beschreibung.")), created.etag());
+        assertEquals(200, changed.status(), changed.body());
+
+        assertEquals(List.of(anna.id.toString(), ben.id.toString()), names(full.get(path(id)).json().get("editors")));
+        assertEquals(List.of(anna.id.toString()), names(partial.get(path(id)).json().get("editors")), "a hidden change names nobody");
+
+        Response submitted = anna.send("POST", path(id) + "/submit", Map.of(), changed.etag());
+        Response approved = full.send("POST", path(id) + "/approve", Map.of("revision", 1), submitted.etag());
+        assertEquals(200, approved.status(), approved.body());
+        Response opened = ben.send("PATCH", path(id), Map.of("description", paragraphDoc("Revision 2 nur in der Beschreibung.")), approved.etag());
+        assertEquals(2, opened.json().get("revision").asInt(), opened.body());
+        assertEquals(List.of(ben.id.toString()), names(full.get(path(id)).json().get("editors")));
+        assertTrue(partial.get(path(id)).json().get("editors").isEmpty(), "opening the revision does not name the person either");
+    }
+
     private static List<String> names(JsonNode array) {
         List<String> names = new ArrayList<>();
         array.forEach(n -> names.add(n.asString()));
@@ -648,6 +673,18 @@ class RequirementApiTest {
         Response multi = editor.send("PATCH", path(id), Map.of("criteria", List.of(criterion(5, "Zeile 1\nZeile 2"))), again.etag());
         assertEquals(200, multi.status(), multi.body());
         assertEquals("Zeile 1\nZeile 2", multi.json().get("content").get("criteria").get(0).get("text").asString());
+        // H1 of the TASK-096 review: CRLF and CR count as line feeds before the checks; other control characters stay refused.
+        Response windows = editor.send("PATCH", path(id), Map.of("criteria", List.of(criterion(5, "Zeile 1\r\nZeile 2\rZeile 3"))), multi.etag());
+        assertEquals(200, windows.status(), windows.body());
+        assertEquals("Zeile 1\nZeile 2\nZeile 3", windows.json().get("content").get("criteria").get(0).get("text").asString());
+        assertInvalid(editor.send("PATCH", path(id), Map.of("criteria", List.of(criterion(5, "Zeile\u0007"))), windows.etag()), "criteria.text_invalid");
+        Response submitted = editor.send("POST", path(id) + "/submit", Map.of(), windows.etag());
+        assertEquals(200, submitted.status(), submitted.body());
+        Browser approver = approver(setup);
+        Response returned = approver.send("POST", path(id) + "/return", Map.of("reason", "Bitte\r\nergänzen"), submitted.etag());
+        assertEquals(200, returned.status(), returned.body());
+        JsonNode history = editor.get(path(id) + "/history").json().get("events");
+        assertEquals("Bitte\nergänzen", history.get(history.size() - 1).get("reason").asString());
     }
 
     /** Fields are checked: title, priority, owner and the description without images and wiki links. */
@@ -669,6 +706,9 @@ class RequirementApiTest {
         assertInvalid(create(editor, setup, Map.of("title", "a", "description", wikiLink)), "description.page_link_not_allowed");
         Map<String, Object> script = Map.of("type", "doc", "content", List.of(Map.of("type", "script")));
         assertInvalid(create(editor, setup, Map.of("title", "a", "description", script)), "description.unsupported");
+        Map<String, Object> unsafe = Map.of("type", "doc", "content", List.of(Map.of("type", "paragraph", "content", List.of(Map.of("type", "text",
+            "text", "Klick", "marks", List.of(Map.of("type", "link", "attrs", Map.of("href", "javascript:alert(1)"))))))));
+        assertInvalid(create(editor, setup, Map.of("title", "a", "description", unsafe)), "description.link_invalid");
 
         Response created = example(editor, setup);
         UUID id = id(created);

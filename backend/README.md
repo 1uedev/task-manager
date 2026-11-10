@@ -547,7 +547,7 @@ Paket A13 Teil 1 (DEC-126). Modul `requirements`, Migration V0058 mit `requireme
 
 **Revisionen und Freigabe.** Jede Änderung verlangt die Version als If-Match (428 `requirement.precondition_required`, 412 `requirement.version_conflict`); die Zeile der Anforderung wird mit `FOR UPDATE` gesperrt. Die erste inhaltliche Änderung (Titel, Beschreibung, Kriterien, Priorität) nach einer Freigabe öffnet Revision n+1 im Entwurf; eine freigegebene Revision ändert das Repository nie mehr. Die verantwortliche Person ändert keine Revision. `POST .../approve` nennt die Revision im Körper und gibt genau diese frei; ohne Leserecht auf ein Inhaltsfeld 403 `requirement.content_not_readable`. Kriterien behalten ihre Nummer, neue erhalten die nächste aus `next_criterion`.
 
-**Beschreibung.** Das Format des Wikieditors über die öffentliche Fassade `wiki.RichText`; Bilder (`content.image_not_allowed`) und Wikiverweise (`content.page_link_not_allowed`) sind abgelehnt.
+**Beschreibung.** Das Format des Wikieditors über die öffentliche Fassade `wiki.RichText`; Bilder (`description.image_not_allowed`) und Wikiverweise (`description.page_link_not_allowed`) sind abgelehnt; die übrigen Codes der Wikiprüfung erscheinen ebenso mit dem Präfix `description.`, ein unsicheres Linkziel als `description.link_invalid`.
 
 **Grenzen.** Keine Verknüpfungen (TASK-097), keine eigenen Felder und Demodaten (TASK-098), keine Suche, kein Portal, kein Löschen.
 

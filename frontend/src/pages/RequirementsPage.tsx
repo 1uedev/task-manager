@@ -17,6 +17,8 @@ import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
+import { DiffView } from './WikiDiffView.tsx';
+import { mergeCriteria, type Draft } from './requirementCriteria.ts';
 import { WikiContent } from './WikiContent.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
 
@@ -37,9 +39,11 @@ const VIOLATION: Record<string, MessageKey> = {
   'criteria.text_required': 'requirements.error.criterionEmpty', 'criteria.text_too_long': 'requirements.error.criterionLong',
   'criteria.text_invalid': 'requirements.error.criterionEmpty', 'criteria.unknown': 'requirements.error.criterionUnknown',
   'criteria.invalid': 'requirements.error.criterionUnknown', 'priority.invalid': 'requirements.error.priority', 'owner.invalid': 'requirements.error.owner',
-  'owner.not_member': 'requirements.error.owner', 'content.image_not_allowed': 'requirements.error.image',
-  'content.page_link_not_allowed': 'requirements.error.pageLink', 'content.too_large': 'wiki.error.tooLarge', 'content.too_deep': 'wiki.error.tooDeepContent',
-  'content.invalid': 'wiki.error.content', 'content.unsupported': 'wiki.error.content', 'link.invalid': 'wiki.error.link',
+  'owner.not_member': 'requirements.error.owner', 'description.image_not_allowed': 'requirements.error.image',
+  'description.page_link_not_allowed': 'requirements.error.pageLink', 'description.too_large': 'wiki.error.tooLarge',
+  'description.too_deep': 'wiki.error.tooDeepContent', 'description.unsupported': 'wiki.error.content', 'description.link_invalid': 'wiki.error.link',
+  'description.link_unknown_page': 'requirements.error.pageLink', 'description.image_external': 'requirements.error.image',
+  'description.image_unknown': 'requirements.error.image', 'description.too_many_images': 'requirements.error.image',
   'description.invalid': 'wiki.error.content', 'reason.required': 'requirements.error.reason', 'reason.too_long': 'requirements.error.reasonLong',
   'changes.required': 'requirements.error.nothing', 'text.too_long': 'requirements.error.textLong',
   'priority.not_readable': 'requirements.error.filterHidden', 'owner.not_readable': 'requirements.error.filterHidden',
@@ -95,6 +99,8 @@ function CreateForm({ projectId, access }: { readonly projectId: string; readonl
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  // Typed input of a requirement not created yet is protected like that of the editor (F6 of the TASK-096 review).
+  useUnsavedGuard(title !== '' || priority !== 'normal');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -272,11 +278,6 @@ function ContentView({ content, access, testId }: { readonly content: Requiremen
 
 // ---------------------------------------------------------------- editing with criteria and conflict
 
-interface Draft {
-  readonly key: number;
-  readonly id: number | null;
-  readonly text: string;
-}
 
 const draftsOf = (criteria: readonly RequirementCriterion[] | null, next: () => number): Draft[] =>
   (criteria ?? []).map((criterion) => ({ key: next(), id: criterion.id, text: criterion.text }));
@@ -291,15 +292,8 @@ function CriteriaEditor({ items, setItems, disabled }: {
   const { t } = useI18n();
   const counter = useRef(1_000_000);
   const label = (item: Draft) => (item.id === null ? t('requirements.criteria.new') : `K${item.id}`);
-  const { itemProps, announcement } = useReorder(items, setItems, (item, position, count) =>
+  const { itemProps, announcement, moveItem } = useReorder(items, setItems, (item, position, count) =>
     t('requirements.criteria.moved', { criterion: label(item), position, count }));
-  const swap = (index: number, to: number) => {
-    const next = [...items];
-    const [moved] = next.splice(index, 1);
-    if (moved === undefined) return;
-    next.splice(to, 0, moved);
-    setItems(next);
-  };
   return (
     <fieldset className="stack criteria-editor" data-testid="requirement-criteria-editor">
       <legend>{t('requirements.field.criteria')}</legend>
@@ -312,9 +306,9 @@ function CriteriaEditor({ items, setItems, disabled }: {
               aria-label={t('requirements.criteria.text', { criterion: label(item) })}
               onChange={(event) => setItems(items.map((other) => (other.key === item.key ? { ...other, text: event.target.value } : other)))} />
             <div className="actions">
-              <button type="button" className="secondary" disabled={disabled || index === 0} onClick={() => swap(index, index - 1)}
+              <button type="button" className="secondary" disabled={disabled || index === 0} onClick={() => moveItem(index, index - 1)}
                 aria-label={t('requirements.criteria.up', { criterion: label(item) })}>↑</button>
-              <button type="button" className="secondary" disabled={disabled || index === items.length - 1} onClick={() => swap(index, index + 1)}
+              <button type="button" className="secondary" disabled={disabled || index === items.length - 1} onClick={() => moveItem(index, index + 1)}
                 aria-label={t('requirements.criteria.down', { criterion: label(item) })}>↓</button>
               <button type="button" className="secondary danger" disabled={disabled} onClick={() => setItems(items.filter((other) => other.key !== item.key))}
                 data-testid="requirement-criterion-remove" aria-label={t('requirements.criteria.remove', { criterion: label(item) })}>✕</button>
@@ -440,7 +434,7 @@ function EditorPanel({ requirement, onSaved, onClose }: {
     if (title === (base.content.title ?? '')) setTitle(conflict.content.title ?? '');
     if (priority === (base.content.priority ?? 'normal')) setPriority(conflict.content.priority ?? 'normal');
     if (owner === (base.ownerId ?? '')) setOwner(conflict.ownerId ?? '');
-    if (sameCriteria(criteria, base.content.criteria)) setCriteria(draftsOf(conflict.content.criteria, next));
+    setCriteria(mergeCriteria(base.content.criteria, criteria, conflict.content.criteria, next));
     if (editor !== null && !descriptionChanged && conflict.content.description !== null) {
       editor.commands.setContent(conflict.content.description as WikiDocument, { emitUpdate: false });
       setBaseline(JSON.stringify(editor.getJSON()));
@@ -570,6 +564,12 @@ function ApproveDialog({ requirement, onDone, onStale, onCancel }: {
       <dl className="facts">
         <dt>{t('requirements.approve.revision')}</dt>
         <dd data-testid="requirement-approve-revision">{t('requirements.revision', { revision: requirement.revision })}</dd>
+        <dt>{t('requirements.field.title')}</dt>
+        <dd data-testid="requirement-approve-title-value">{requirement.content.title ?? t('requirements.hidden')}</dd>
+        <dt>{t('requirements.field.priority')}</dt>
+        <dd data-testid="requirement-approve-priority">
+          {requirement.content.priority === null ? t('requirements.hidden') : t(priorityKey(requirement.content.priority))}
+        </dd>
         <dt>{t('requirements.approve.editors')}</dt>
         <dd data-testid="requirement-approve-editors">{requirement.editors.map((id) => name(id)).join(', ') || t('requirements.approve.noEditors')}</dd>
         <dt>{t('requirements.approve.saved')}</dt>
@@ -701,7 +701,7 @@ function EventText({ event }: { readonly event: RequirementEvent }) {
     case 'criterion_changed': return <>{t('requirements.event.criterionChanged', { criterion: event.criterion ?? '', from: event.from ?? '', to: event.to ?? '' })}</>;
     case 'criterion_removed': return <>{t('requirements.event.criterionRemoved', { criterion: event.criterion ?? '', text: event.from ?? '' })}</>;
     case 'criteria_moved': {
-      const list = (raw: string | null) => (raw ?? '').split(',').filter(Boolean).map((id) => `K${id}`).join(', ');
+      const list = (raw: string | null) => (raw ?? '').split(',').filter(Boolean).join(', ');
       return <>{t('requirements.event.criteriaMoved', { from: list(event.from), to: list(event.to) })}</>;
     }
     case 'revision_opened': return <>{t('requirements.event.revisionOpened', { revision: event.to ?? event.revision, approved: event.from ?? '' })}</>;
@@ -832,16 +832,7 @@ function ComparisonView({ comparison, legend }: { readonly comparison: Compariso
         </p>
       )}
       {comparison.description !== null && comparison.description.some((entry) => entry.op !== 'same') && (
-        <ol className="wiki-diff" data-testid="requirement-compare-description">
-          {comparison.description.filter((entry) => entry.op !== 'same').map((entry, index) => (
-            <li key={index} className={`diff-${entry.op}`}>
-              <span className="diff-label">{t(entry.op === 'added' ? 'wiki.diff.added' : entry.op === 'removed' ? 'wiki.diff.removed' : 'wiki.diff.changed')}</span>
-              {entry.op === 'changed' && <><del>{entry.before.text}</del><ins>{entry.after.text}</ins></>}
-              {entry.op === 'added' && <ins>{entry.block.text}</ins>}
-              {entry.op === 'removed' && <del>{entry.block.text}</del>}
-            </li>
-          ))}
-        </ol>
+        <DiffView entries={comparison.description} testId="requirement-compare-description" changesOnly />
       )}
       {comparison.criteria !== null && comparison.criteria.some((entry) => entry.op !== 'same') && (
         <ul className="wiki-diff" data-testid="requirement-compare-criteria">

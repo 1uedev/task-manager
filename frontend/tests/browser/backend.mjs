@@ -1782,8 +1782,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const current = requirementRevision(item, item.revision);
     const approved = item.approvedRevision === null ? null : requirementRevision(item, item.approvedRevision);
     const editors = [...new Set(req.events.filter((event) => event.requirementId === item.id && event.revision === item.revision
-      && ['created', 'changed', 'criterion_added', 'criterion_changed', 'criterion_removed', 'criteria_moved', 'revision_opened'].includes(event.kind)
-      && event.field !== 'owner').map((event) => event.actorId))];
+      && ['created', 'changed', 'criterion_added', 'criterion_changed', 'criterion_removed', 'criteria_moved'].includes(event.kind)
+      && event.field !== 'owner' && (event.field === null || access.readableFields.includes(event.field))).map((event) => event.actorId))];
     const key = state.projects.find((entry) => entry.id === item.projectId)?.key ?? '';
     return { id: item.id, projectId: item.projectId, projectKey: key, number: item.number, key: `ANF-${item.number}`, status: item.status, revision: item.revision,
       approvedRevision: item.approvedRevision, approval: approved ? { revision: approved.revision, approvedAt: approved.approvedAt, approvedBy: approved.approvedBy } : null,
@@ -1811,7 +1811,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     return item;
   }
-  function requirementChanges(body, access, violations) {
+  // Checks like the server (H2 of the TASK-096 review): fixed criterion numbers, owners from the active internal members, the
+  // description codes with the prefix description. and only http, https and mailto as link targets; line breaks become LF.
+  function requirementChanges(body, access, violations, context) {
     const known = ['title', 'description', 'priority', 'ownerId', 'criteria'];
     for (const name of Object.keys(body ?? {})) if (!known.includes(name)) violations.push(`${name}.unknown`);
     if (body.title !== undefined && (typeof body.title !== 'string' || body.title.trim() === '')) violations.push('title.required');
@@ -1821,16 +1823,30 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (!Array.isArray(body.criteria)) violations.push('criteria.invalid');
       else {
         if (body.criteria.length > 50) violations.push('criteria.too_many');
+        const seen = new Set();
         for (const criterion of body.criteria) {
-          if (typeof criterion?.text !== 'string' || criterion.text.trim() === '') violations.push('criteria.text_required');
-          else if (criterion.text.length > 2000) violations.push('criteria.text_too_long');
+          if (criterion?.id != null && (!context.known.has(criterion.id) || seen.has(criterion.id))) violations.push('criteria.unknown');
+          if (criterion?.id != null) seen.add(criterion.id);
+          if (typeof criterion?.text === 'string') criterion.text = criterion.text.replace(/\r\n?/g, '\n').trim();
+          if (typeof criterion?.text !== 'string' || criterion.text === '') violations.push('criteria.text_required');
+          else if ([...criterion.text].length > 2000) violations.push('criteria.text_too_long');
+          // eslint-disable-next-line no-control-regex
+          else if (/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(criterion.text)) violations.push('criteria.text_invalid');
         }
       }
     }
     if (body.description !== undefined && body.description !== null) {
       const text = JSON.stringify(body.description);
-      if (text.includes('"image"')) violations.push('content.image_not_allowed');
-      if (text.includes('"wiki:')) violations.push('content.page_link_not_allowed');
+      if (text.includes('"image"')) violations.push('description.image_not_allowed');
+      if (text.includes('"wiki:')) violations.push('description.page_link_not_allowed');
+      for (const [, href] of text.matchAll(/"href":"([^"]*)"/g)) {
+        if (!href.startsWith('wiki:') && !/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(href.trim())) violations.push('description.link_invalid');
+      }
+    }
+    if (body.ownerId !== undefined && body.ownerId !== null) {
+      const member = (state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === body.ownerId)
+        && state.accounts.some((entry) => entry.id === body.ownerId && entry.active && entry.kind !== 'portal');
+      if (!member) violations.push('owner.not_member');
     }
     const fields = known.filter((name) => body[name] !== undefined).map((name) => (name === 'ownerId' ? 'owner' : name));
     return fields.filter((name) => !access.writableFields.includes(name));
@@ -1880,7 +1896,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (method === 'POST') {
         if (!access.edit) return problem(403, 'auth.forbidden');
         const violations = [];
-        const denied = requirementChanges(body ?? {}, access, violations);
+        const denied = requirementChanges(body ?? {}, access, violations, { projectId, known: new Set() });
         if (body?.title === undefined) violations.push('title.required');
         if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
         if (denied.length > 0 || !access.writableFields.includes('title')) return problem(403, 'auth.forbidden');
@@ -1924,7 +1940,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (item.status === 'discarded') return problem(409, 'requirement.discarded');
       const violations = [];
       if (Object.keys(body ?? {}).length === 0) return problem(400, 'request.invalid', { violations: ['changes.required'] });
-      const denied = requirementChanges(body, access, violations);
+      const denied = requirementChanges(body, access, violations,
+        { projectId: item.projectId, known: new Set(requirementRevision(item, item.revision).criteria.map((criterion) => criterion.id)) });
       if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
       if (denied.length > 0) return problem(403, 'auth.forbidden');
       let current = requirementRevision(item, item.revision);
@@ -1960,7 +1977,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           if (!previous) requirementEvent(item, 'criterion_added', account, { field: 'criteria', criterion: criterion.id, to: criterion.text });
           else if (previous.text !== criterion.text) requirementEvent(item, 'criterion_changed', account, { field: 'criteria', criterion: criterion.id, from: previous.text, to: criterion.text });
         }
-        const order = (list) => list.filter((criterion) => old.has(criterion.id) && kept.has(criterion.id)).map((criterion) => criterion.id).join(',');
+        const order = (list) => list.filter((criterion) => old.has(criterion.id) && kept.has(criterion.id)).map((criterion) => `K${criterion.id}`).join(',');
         if (order(before.criteria) !== order(next.criteria)) requirementEvent(item, 'criteria_moved', account, { field: 'criteria', from: order(before.criteria), to: order(next.criteria) });
         Object.assign(current, next, { savedAt: now(), savedBy: account.id });
       }

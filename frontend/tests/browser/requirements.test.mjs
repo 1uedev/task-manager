@@ -172,6 +172,8 @@ describe('requirements', () => {
       await page.keyboard.press('Alt+ArrowDown');
       await edit.getByText('K1 steht jetzt an Stelle 2 von 3.').waitFor({ state: 'attached' });
       await edit.getByRole('button', { name: 'K3 nach oben' }).click();
+      // The arrow buttons announce the new position like the keyboard (F5 of the TASK-096 review).
+      await edit.getByText('K3 steht jetzt an Stelle 2 von 3.').waitFor({ state: 'attached' });
       await edit.getByRole('button', { name: 'K2 entfernen' }).click();
       assert.deepEqual(await edit.getByTestId('requirement-criterion').evaluateAll((rows) => rows.map((row) => row.dataset.criterion)), ['3', '1']);
       await edit.getByTestId('requirement-save').click();
@@ -244,13 +246,18 @@ describe('requirements', () => {
       await page.getByTestId('requirement-approve').click();
       const dialog = page.getByTestId('requirement-approve-dialog');
       await dialog.getByTestId('requirement-approve-revision').getByText('Revision 1').waitFor();
-      backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`, { criteria: [{ id: 1, text: 'Mindestens 16 Zeichen' }] },
+      // Every content field is in the dialog, title and priority included (F2 of the TASK-096 review).
+      assert.equal(await dialog.getByTestId('requirement-approve-title-value').textContent(), 'Passwortregeln');
+      assert.equal(await dialog.getByTestId('requirement-approve-priority').textContent(), 'Normal');
+      backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`, { title: 'Passwortregeln für alle', priority: 'critical', criteria: [{ id: 1, text: 'Mindestens 16 Zeichen' }] },
         { headers: { 'if-match': `"${item.version}"` } });
       await dialog.getByTestId('requirement-approve-confirm').click();
       await dialog.getByText('Die Anforderung wurde inzwischen geändert.', { exact: false }).waitFor();
       assert.equal(item.approvedRevision, null, 'nothing approved');
       // The dialog shows the newer content at once; a second confirmation would approve exactly that.
       await dialog.getByTestId('requirement-approve-content-criteria-list').getByText('Mindestens 16 Zeichen').waitFor();
+      assert.equal(await dialog.getByTestId('requirement-approve-title-value').textContent(), 'Passwortregeln für alle');
+      assert.equal(await dialog.getByTestId('requirement-approve-priority').textContent(), 'Kritisch');
       await dialog.getByRole('button', { name: 'Abbrechen' }).click();
       await page.getByTestId('requirement-content-criteria-list').getByText('Mindestens 16 Zeichen').waitFor();
       await page.getByTestId('requirement-return').click();
@@ -273,6 +280,76 @@ describe('requirements', () => {
       const events = page.getByTestId('requirement-events');
       await events.getByText('Zurück in den Entwurf: Bitte mit der Sicherheitsrichtlinie abstimmen').waitFor();
       await events.getByText('Wiederhergestellt als Entwurf').waitFor();
+    });
+  });
+
+  test('keeping the own input after a conflict keeps criteria someone else changed or added (F1 of the TASK-096 review)', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna, backend.ben], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Lieferschein', { criteria: ['K1 alt', 'K2 alt'] });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByLabel('Text von K1').fill('K1 MEINE EINGABE');
+      const answer = backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`,
+        { criteria: [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 VON BEN' }, { id: null, text: 'K3 VON BEN' }] }, { headers: { 'if-match': `"${item.version}"` } });
+      assert.equal(answer.status, 200);
+      await edit.getByTestId('requirement-save').click();
+      await page.getByTestId('requirement-conflict').getByTestId('requirement-conflict-keep').click();
+      assert.deepEqual(await edit.getByTestId('requirement-criterion').evaluateAll((rows) => rows.map((row) => [row.dataset.criterion, row.querySelector('textarea').value])),
+        [['1', 'K1 MEINE EINGABE'], ['2', 'K2 VON BEN'], ['3', 'K3 VON BEN']]);
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      assert.deepEqual(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).criteria.map((criterion) => criterion.text),
+        ['K1 MEINE EINGABE', 'K2 VON BEN', 'K3 VON BEN']);
+    });
+  });
+
+  test('a changed link target is named in the comparison of the history (F3 of the TASK-096 review)', async () => {
+    const linked = (href) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anleitung', marks: [{ type: 'link', attrs: { href } }] }] }] });
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna, backend.ben], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Verweis', { criteria: ['Ein Kriterium'], description: linked('https://old.example/'), status: 'approved', approvedBy: backend.ben });
+        const answer = backend.requirementCall(backend.anna, 'PATCH', `/requirements/${item.id}`, { description: linked('https://new.example/') },
+          { headers: { 'if-match': `"${item.version}"` } });
+        assert.equal(answer.status, 200);
+        assert.equal(item.revision, 2);
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page) => {
+      await page.getByTestId('requirement-history-open').click();
+      const form = page.getByTestId('requirement-compare');
+      await form.getByLabel('Von').selectOption('1');
+      await form.getByLabel('Bis').selectOption('2');
+      await form.getByRole('button', { name: 'Vergleichen' }).click();
+      const result = page.getByTestId('requirement-compare-description');
+      await result.getByText('Verweise und Bilder: https://old.example/').waitFor();
+      await result.getByText('Verweise und Bilder: https://new.example/').waitFor();
+    });
+  });
+
+  test('typed input of a requirement not created yet asks before leaving (F6 of the TASK-096 review)', async () => {
+    await withApp({ prepare: (backend) => grant(backend, [backend.anna], EVERYTHING), hash: listHash }, async (page) => {
+      const create = page.getByTestId('requirement-create');
+      await create.getByLabel('Titel').fill('Noch nicht angelegt');
+      let asked = 0;
+      page.once('dialog', (confirm) => {
+        asked++;
+        void confirm.dismiss();
+      });
+      await page.getByRole('link', { name: 'Start' }).click();
+      await page.waitForFunction(() => location.hash.startsWith('#/requirements/'));
+      assert.equal(asked, 1);
+      assert.equal(await create.getByLabel('Titel').inputValue(), 'Noch nicht angelegt', 'the input stays');
+      await create.getByRole('button', { name: 'Anlegen' }).click();
+      await page.waitForFunction(() => location.hash.split('/').length === 4);
+      assert.equal(asked, 1, 'creating leaves without a question');
     });
   });
 

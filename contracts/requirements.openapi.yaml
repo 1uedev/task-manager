@@ -47,7 +47,9 @@ info:
     Nummer jedes bleibenden Kriteriums, ein Kriterium ohne Nummer ist neu, ein fehlendes entfällt, die Reihenfolge der Liste
     ist die neue Reihenfolge (`criteria.unknown` für eine fremde oder doppelte Nummer). Die Beschreibung ist das Dokument des
     Wikieditors mit denselben Regeln wie eine Wikiseite, jedoch ohne Bilder (`description.image_not_allowed`) und ohne
-    Verweise auf Wikiseiten (`description.page_link_not_allowed`); ein leeres Dokument wird als leer gespeichert.
+    Verweise auf Wikiseiten (`description.page_link_not_allowed`); ein leeres Dokument wird als leer gespeichert. Die
+    Codes der Wikiprüfung erscheinen mit dem Präfix `description.`: `content.x` als `description.x`, `link.invalid` als
+    `description.link_invalid`. Zeilenumbrüche CRLF und CR in Kriterien und Begründungen werden vor der Prüfung zu LF.
     `descriptionHtml` ist die vom Server geschriebene Leseansicht. Begründungen haben höchstens 2000 Zeichen
     (`reason.required`, `reason.too_long`, `reason.invalid`).
 
@@ -489,7 +491,7 @@ components:
         access: {$ref: '#/components/schemas/Access'}
         editors:
           type: array
-          description: Personen, die den Inhalt der laufenden Revision geändert haben, für den Freigabedialog
+          description: Personen, die den Inhalt der laufenden Revision geändert haben, für den Freigabedialog; nur Änderungen an Feldern, die der Aufrufer lesen darf, nennen ihre Person
           items: {type: string, format: uuid}
         version: {type: integer, format: int64}
         createdAt: {type: string, format: date-time}

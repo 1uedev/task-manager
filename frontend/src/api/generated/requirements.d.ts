@@ -306,7 +306,7 @@ export interface components {
              */
             ownerId: string | null;
             access: components["schemas"]["Access"];
-            /** @description Personen, die den Inhalt der laufenden Revision geändert haben, für den Freigabedialog */
+            /** @description Personen, die den Inhalt der laufenden Revision geändert haben, für den Freigabedialog; nur Änderungen an Feldern, die der Aufrufer lesen darf, nennen ihre Person */
             editors: string[];
             /** Format: int64 */
             version: number;

@@ -72,6 +72,23 @@ describe('light and dark', () => {
     });
   });
 
+  // F4 of the TASK-096 review: with every navigation entry the sidebar scrolls inside itself in a low window, so language and
+  // display can be brought fully into view and used.
+  for (const height of [800, 600, 480]) {
+    test(`the display choice stays reachable in a window of 1100 by ${height} pixels`, async () => {
+      await withPage({ viewport: { width: 1100, height } }, async (page) => {
+        const light = page.getByRole('button', { name: 'Hell' });
+        await light.click();
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+        await light.scrollIntoViewIfNeeded();
+        const box = await light.boundingBox();
+        assert.ok(box !== null && box.y >= 0 && box.y + box.height <= height + 1, `the button lies inside the window: ${JSON.stringify(box)}`);
+        await page.getByLabel('Sprache').selectOption('en');
+        await page.getByRole('button', { name: 'Light' }).waitFor();
+      });
+    });
+  }
+
   for (const colorScheme of ['light', 'dark']) {
     for (const route of Object.keys(ROUTES(fake()))) {
       test(`every visible text on ${route} reaches its contrast in ${colorScheme}`, async () => {
