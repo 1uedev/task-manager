@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Nachtrag vom 10. November 2026: Holger hat das Wiki TASK-093 und TASK-094 mit der Korrektur TASK-095 abgenommen; diese Einträge stehen vor TASK-091. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,83 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-095 Befunde der Codex Nachprüfung von TASK-094 beheben (A12)
+
+**Bezug:** REQ-DOC-003, REQ-I18N-001; DEC-124, DEC-125. **Verantwortlich:** claude-20261110-wikifix-01. **Abgeschlossen:** 2026-11-10.
+
+**Abnahmekriterien:** R1 mit Browsertests in Deutsch und Englisch (Wechsel mit geöffneter Revision und Vergleich, verspätete Antwort), die ohne die Behebung fehlschlagen würden; N1 mit Paritätsfällen gegen Server und Testersatz, N2 mit gehaltener Sperre in `WikiApiTest`; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-125, ohne Migration und ohne Vertragsänderung. Die Historie ist an Seite und Fassung gebunden und beginnt nach einem Wechsel der Fassung, etwa mit der Oberflächensprache, neu; Ansehen und Vergleichen werten nur die Antwort der letzten Anfrage aus; der Revisionsinhalt trägt die Sprache seiner Revision, der Historienvergleich die Sprache der Fassung (R1). Der Testersatz prüft die Sprache einer neuen Fassung vor der Seite wie der Server (N1). `concurrentLanguageChangesStaySeparate` hält die Zeilensperre der Seite, bis PostgreSQL alle Anfragen wartend zeigt (N2).
+
+**Prüfungen:** Backend `verify` lokal mit PostgreSQL 16 (565 Tests), darunter der neue Fall `theLanguageOfANewVersionIsCheckedBeforeThePage`; `npm run verify` und Browsertests 233/233 mit zwei neuen R1 Fällen, die mit dem Stand vor der Behebung fehlschlagen. CI auf PR #283 grün.
+
+**Review:** Der Befund stammt aus der Codex Nachprüfung codex-20261109-wiki-review-03 ([Bericht](docs/REVIEW_TASK-094_NACHPRUEFUNG.md)); die Behebung hat Holger ohne weitere Nachprüfung abgenommen.
+
+**Abnahme:** Holger, 2026-11-10, im Thread zu Paket A12 mit „abgenommen“, zusammen mit TASK-093 und TASK-094; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung mit Nachprüfungsbericht #282 (553bdf8), Ergebnis #283 (65a2523); verknüpft mit TASK-094 und DEC-125.
+
+## TASK-094 Sprachfassungen im Wiki (A12 Teil 2)
+
+**Bezug:** REQ-DOC-003, REQ-I18N-001; OPEN-011; DEC-033, DEC-124. **Verantwortlich:** claude-20261109-wiki-01. **Abgeschlossen:** 2026-11-10.
+
+**Abnahmekriterien:** Eine deutsche Seite ohne Übersetzung ist vollständig nutzbar (W01); ist die gewünschte Sprache nur Entwurf, erhalten Leser ausschließlich eine veröffentlichte Rückfallfassung mit Sprachhinweis (W08); nach neuer Veröffentlichung der Ausgangsfassung bleibt die Übersetzung erhalten und zeigt den Hinweis (W07); Migration, Vertrag gegen Routen, Backend Tests, Browser Tests in Deutsch und Englisch.
+
+**Fachliche Regeln** (von Holger am 9. November 2026 bestätigt):
+1. Sprachen sind Deutsch und Englisch. Die erste Fassung ist die Ausgangssprache; eine weitere Fassung ist freiwillig und hat eigenen Titel, Entwurf, Revisionen und Veröffentlichung. Eine rein deutsche Seite ist vollständig nutzbar.
+2. Leser erhalten die veröffentlichte Fassung in ihrer Oberflächensprache, sonst die veröffentlichte Ausgangssprache, sonst die andere veröffentlichte Fassung, jeweils mit sichtbarem Sprachhinweis. Entwürfe sind nie Rückfallinhalt, ihr Bestehen wird Lesern nicht verraten.
+3. Eine Fassung merkt sich die übersetzte Revision der anderen Sprache. Wird die Ausgangsfassung danach neu veröffentlicht, sehen Personen mit `wiki.edit` „Ausgangsfassung wurde geändert“ mit Vergleich, Leser einen dezenten Hinweis.
+4. Das Vorführimage erhält im Demoprojekt einen kleinen Seitenbaum mit der Seite „Serviceanfrage ergänzen“, veröffentlicht auf Deutsch, mit englischem Entwurf.
+
+**Ergebnis:** DEC-124, Migration V0057 (`wiki_revision.source_revision`, Ereignis `translated`), Vertrag `contracts/wiki.openapi.yaml` Version 0.2.1 (Parameter `language`, `POST /wiki/pages/{pageId}/languages`, `fallback`, `languages`, `translation`, `sourceRevision`). Oberfläche mit Sprachleiste, Sprachhinweis, Hinweis für Leser, „Ausgangsfassung wurde geändert“ mit Vergleich und Abgleich beim Speichern; Demoseiten „Helpdesk Handbuch“ und „Serviceanfrage ergänzen“ im Projekt HELP mit englischem Entwurf. Nach der Codex Prüfung erfahren Leser von einer unveröffentlichten Ausgangsfassung weder Sprache noch Übersetzungsbeziehung, die Seite folgt der Oberflächensprache, ein offener Editor behält Fassung und Eingabe, und der Ausgangsvergleich nennt einen geänderten Titel und gilt nur für sein Revisionspaar. Abweichung zu Regel 3: Nach der erweiterten Regel 3 von TASK-093 sehen auch Personen mit nur `wiki.publish` den Hinweis mit Vergleich, ohne abgleichen zu können.
+
+**Prüfungen:** `WikiApiTest` (W01, W07, W08, Anlegen der Fassung mit 409, 400, 403, 404, Leserschutz für beide Ausgangssprachen, nur `wiki.publish`, alte Revisionen, gleichzeitiges Anlegen und Speichern je Sprache), `WikiContractTest` mit 16 Routen, Browsertests in Deutsch und Englisch, Unit Test der Demoseiten; das Demowerkzeug lief gegen ein frisch gestartetes Backend mit PostgreSQL 16. CI auf PR #281 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261109-wiki-review-02 ([Bericht](docs/REVIEW_TASK-094_PR-281.md)): „nachbessern“ mit F1 bis F4 und H1 bis H4, im selben PR #281 behoben. Nachprüfung codex-20261109-wiki-review-03 ([Bericht](docs/REVIEW_TASK-094_NACHPRUEFUNG.md)): R1, N1 und N2, behoben mit TASK-095.
+
+**Abnahme:** Holger, 2026-11-10, im Thread zu Paket A12 mit „abgenommen“, zusammen mit TASK-093 und TASK-095; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): weitere Sprachen, automatische oder KI Übersetzung, Wikisuche (A14) und Wiki im Kundenportal.
+
+**Referenz:** Reservierung #280 (6bf37ed), Ergebnis #281 (042b738); verknüpft mit TASK-093, TASK-095 und DEC-124.
+
+## TASK-093 Wikiseiten mit Entwurf, Veröffentlichung und Historie (A12 Teil 1)
+
+**Bezug:** REQ-DOC-001, REQ-DOC-002, REQ-DOC-004; OPEN-011; DEC-033, DEC-123. **Verantwortlich:** claude-20261109-wiki-01. **Abgeschlossen:** 2026-11-10.
+
+**Abnahmekriterien:** Ein gespeicherter Entwurf ändert die Leserfassung nicht, nur eine Veröffentlichung mit aktueller Version macht ihn lesbar (W03, W04, W06); zwei Bearbeitungen auf gleicher Grundlage ergeben 412 für die zweite ohne Überschreiben und mit erhaltener Eingabe (W05); die Beispielseite bleibt nach dreimaligem Bearbeiten strukturell erhalten, Skripte, freies HTML und externe Bilder werden abgewiesen oder entfernt (W02, W10); Leserechte für Seiten, Bilder, Verweistitel, Entwürfe und Historie (W09), Umbenennen und Verschieben erhalten Verweise (W11); Migration, Vertrag gegen Routen, Backend und Browser Tests.
+
+**Fachliche Regeln** (von Holger am 9. November 2026 bestätigt):
+1. Jedes Projekt hat ein Wiki; ein eigenes Unternehmenswiki gibt es nicht.
+2. Eine Seite hat höchstens eine Elternseite im selben Projekt, höchstens 6 Ebenen tief, Geschwister alphabetisch nach Titel. Seiten haben eine feste Kennung; Umbenennen und Verschieben im Baum ändern keinen Verweis.
+3. `wiki.read` liest veröffentlichte Seiten; `wiki.edit` liest Entwürfe und Historie, legt Seiten an, bearbeitet und verschiebt; `wiki.publish` liest ebenfalls Entwürfe und Historie, veröffentlicht, nimmt zurück, archiviert und stellt wieder her (ergänzt durch Holgers Wahl „Ja, Regel erweitern“ vom 9. November 2026 zu F5 der Codex Prüfung). Kein Vier Augen Verfahren. Portalkonten erhalten keine Wikirechte.
+4. Titel mit 1 bis 200 Zeichen, nicht eindeutig erzwungen.
+5. Je Seite und Sprache gibt es einen gemeinsamen Entwurf. „Entwurf speichern“ erzeugt eine neue Revision; Revisionen werden nie überschrieben. Kein automatisches Speichern; Speicherzustand sichtbar, Warnung beim Verlassen mit ungespeicherten Änderungen.
+6. Speichern und Veröffentlichen senden die bekannte Version mit If-Match; ist der Entwurf neuer, lehnt der Server mit 412 ab. Die eigene Eingabe bleibt erhalten, daneben erscheint der neuere Entwurf mit markierten Unterschieden. Keine Sperren, keine automatische Zusammenführung.
+7. Der Veröffentlichungsdialog zeigt Revision, Sprache und Leserkreis und veröffentlicht genau diese Revision. Leser sehen bis dahin die bisherige Veröffentlichung. „Veröffentlichung zurücknehmen“ entfernt die Leserfassung und behält die Historie.
+8. Die Historie listet alle Revisionen mit Person, Zeit und Kennzeichen „veröffentlicht“. Eine alte Revision lässt sich ansehen, mit einer anderen nach Blöcken vergleichen und als neuer Entwurf übernehmen, der erneut veröffentlicht werden muss.
+9. Eine archivierte Seite verschwindet für Leser und aus dem Baum, bleibt mit Historie für `wiki.publish` sichtbar und lässt sich wiederherstellen; Unterseiten wandern zur nächsthöheren Ebene.
+10. Anlegen, Speichern, Veröffentlichen, Zurücknehmen, Archivieren und Wiederherstellen stehen mit Person und Zeit in der Seitenhistorie.
+11. Editor Tiptap 3 nur mit freien Paketen unter MIT Lizenz, ohne kostenpflichtige Erweiterungen und Clouddienst. Gespeichert wird das strukturierte JSON mit Schemaversion; der Server prüft erlaubte Elemente, Größen und Verweise selbst und erzeugt daraus die Leseansicht.
+12. Elemente: Absätze, Überschriften in drei Stufen, fett, kursiv, Code im Text, geordnete und ungeordnete Listen, Tabellen mit Kopfzeile, Links, Bilder mit Alternativtext, Zitate, Codeblöcke, Trennlinien. Tastaturbedienung mit sichtbarem Fokus. Kein freies HTML, keine Skripte, keine Fremdinhalte.
+13. Links nur https, http und mailto sowie Verweise auf Wikiseiten desselben Projekts; ein Verweis auf eine archivierte oder nicht lesbare Seite zeigt „Seite nicht verfügbar“ ohne Titel.
+14. Bilder als PNG, JPEG oder WebP bis 5 MB, keine SVG Dateien, im vorhandenen Dateispeicher, ausgeliefert mit dem Leserecht der Seite; Entwurfsbilder nur mit `wiki.edit` oder `wiki.publish`. Externe Bilder werden nie nachgeladen.
+15. Beim Einfügen bleiben erlaubte Elemente erhalten, andere werden zu Text, mit Hinweis auf Entferntes. Eine Revision höchstens 1 MB und 50 Bilder; der Server nennt die Grenze mit 400.
+
+**Ergebnis:** DEC-123 mit Nachtrag zu F5, Migrationen V0055 (`file_image`) und V0056 (Wikitabellen), Vertrag `contracts/wiki.openapi.yaml`, Port `files.ImageStore`, Oberfläche „Wiki“ mit Tiptap 3.32.0 (nur MIT Pakete), Beschreibung in backend/README.md unter „Wiki (TASK-093)“. Nach der Codex Prüfung bleiben Eingaben während des Speicherns erhalten, der Blockvergleich erkennt Marken, Linkziele, Bilder und Attribute, ein unveränderter Entwurf gilt als gespeichert, Listen und Steuerzeichen in Links werden wie vom Server behandelt; F5 wurde mit Holgers Wahl „Ja, Regel erweitern“ zur Regel.
+
+**Prüfungen:** `WikiApiTest` (gleichzeitige Speicherungen mit genau einer neuen Revision, dreimaliges Bearbeiten, fremde Inhalte, Rechte für Seiten, Bilder und Verweise, Portalkonten, Baumregeln, Übernahme alter Revisionen), `WikiContractTest`, Unit Tests des Blockvergleichs und der Wiki Routen, Browsertests für Leser, Anlegen und Veröffentlichen, Konflikt, Einfügefilter, Historie, Archiv und Bilder. CI auf PR #278 und #279 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261109-wiki-review-01 ([Bericht](docs/REVIEW_TASK-093_PR-278.md)): „nachbessern“ mit F1 bis F5, H1 und H2; F1 bis F4, H1 und H2 im selben PR #278 behoben, F5 als Regel übernommen (#279).
+
+**Abnahme:** Holger, 2026-11-10, im Thread zu Paket A12 mit „abgenommen“, zusammen mit TASK-094 und TASK-095; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Hochgeladene, nie gespeicherte Bilder bleiben bis zu den Aufbewahrungsregeln im Dateispeicher; die Konfliktansicht vergleicht nach Blöcken, nicht nach Wörtern; Suche, Portal, KI, Import und Export, Kommentare und endgültiges Löschen bleiben außerhalb von A12.
+
+**Referenz:** Reservierung #277 (e223ce2), Ergebnis #278 (de16aa5), Regelnachtrag #279 (df4cfb2); verknüpft mit TASK-094, TASK-095 und DEC-123.
 
 ## TASK-091 Befunde der Nachprüfung von TASK-088 beheben
 
