@@ -600,6 +600,11 @@ class RequirementApiTest {
 
         assertEquals(List.of(anna.id.toString(), ben.id.toString()), names(full.get(path(id)).json().get("editors")));
         assertEquals(List.of(anna.id.toString()), names(partial.get(path(id)).json().get("editors")), "a hidden change names nobody");
+        // R2 of the follow up review: without a readable content field even the creation names nobody.
+        Browser noField = member(setup, "requirement.read");
+        Browser ownerOnly = member(setup, "requirement.read", "READ:owner");
+        assertTrue(noField.get(path(id)).json().get("editors").isEmpty(), "no field rule, no editors");
+        assertTrue(ownerOnly.get(path(id)).json().get("editors").isEmpty(), "the owner alone is no content field");
 
         Response submitted = anna.send("POST", path(id) + "/submit", Map.of(), changed.etag());
         Response approved = full.send("POST", path(id) + "/approve", Map.of("revision", 1), submitted.etag());
@@ -709,6 +714,12 @@ class RequirementApiTest {
         Map<String, Object> unsafe = Map.of("type", "doc", "content", List.of(Map.of("type", "paragraph", "content", List.of(Map.of("type", "text",
             "text", "Klick", "marks", List.of(Map.of("type", "link", "attrs", Map.of("href", "javascript:alert(1)"))))))));
         assertInvalid(create(editor, setup, Map.of("title", "a", "description", unsafe)), "description.link_invalid");
+        // N1 of the follow up review: words that look like node types or wiki links are plain text; a control character in a target is not.
+        assertEquals(201, create(editor, setup, Map.of("title", "a", "description", paragraphDoc("image"))).status());
+        assertEquals(201, create(editor, setup, Map.of("title", "a", "description", paragraphDoc("wiki:ordinary text"))).status());
+        Map<String, Object> nul = Map.of("type", "doc", "content", List.of(Map.of("type", "paragraph", "content", List.of(Map.of("type", "text",
+            "text", "Ziel", "marks", List.of(Map.of("type", "link", "attrs", Map.of("href", "https://example.test/a\u0000b"))))))));
+        assertInvalid(create(editor, setup, Map.of("title", "a", "description", nul)), "description.link_invalid");
 
         Response created = example(editor, setup);
         UUID id = id(created);

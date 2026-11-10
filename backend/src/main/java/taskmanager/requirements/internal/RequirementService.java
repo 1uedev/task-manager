@@ -536,10 +536,12 @@ public class RequirementService {
             approval = new Approval(approved.revision(), approved.approvedAt(), approved.approvedBy());
         }
         Set<UUID> editors = new LinkedHashSet<>();
+        // The creation wrote every content field; it names its author only to a caller who may read one of them (R2).
+        boolean contentReadable = CONTENT.stream().anyMatch(access.readable()::contains);
         for (RequirementRepository.Event event : repository.events(requirement.id())) {
             // Only changes of fields the caller may read name their author (Holger's choice on H3 of the TASK-096 review).
             if (event.revision() == current.revision() && EDITING.contains(event.kind()) && !"owner".equals(event.field())
-                && (event.field() == null || access.readable().contains(event.field()))) {
+                && (event.field() == null ? contentReadable : access.readable().contains(event.field()))) {
                 editors.add(event.actorId());
             }
         }

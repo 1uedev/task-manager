@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
-| [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +43,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -92,9 +92,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-099 Befunde der Codex Nachprüfung von TASK-096 beheben (A13)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
 
-**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-126; docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-096 geliefert (PR #286). **Arbeitsstand:** Holger hat am 10. November 2026 den Bericht der Codex Nachprüfung von TASK-096 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Ja, alles als TASK-099“ gewählt. Branch claude/project-thread-dyiimb; Ergebnis mit DEC-129, ohne Migration.
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-126; docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-096 geliefert (PR #286). **Arbeitsstand:** Holger hat am 10. November 2026 den Bericht der Codex Nachprüfung von TASK-096 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Ja, alles als TASK-099“ gewählt. Branch claude/project-thread-dyiimb; Ergebnis mit DEC-129, ohne Migration. Übergabe 10. November 2026: Ergebnis im Ergebnis PR von claude/project-thread-dyiimb; R1 in `frontend/src/pages/requirementCriteria.ts` mit drei neuen Unittests und einem Browsertest bis zum gespeicherten Ergebnis, R2 im `RequirementService` und im Testersatz mit Konten ohne Feldleseregel und nur mit `owner`, N1 im Testersatz mit den drei Paritätsfällen des Berichts in `RequirementApiTest` und `requirements.test.mjs`.
 
 **Umfang:** Befunde R1 und R2 und Hinweis N1 aus docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md:
 1. R1: „Meine Eingaben behalten“ erhält die selbst gewählte Position neuer Kriterien, auch wenn die alten Kriterien ihre Reihenfolge behalten.
@@ -109,7 +109,7 @@ Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
 3. N1 mit den drei Paritätsfällen des Berichts gegen Server und Testersatz.
 4. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung und Ergebnis PR.
+**Nächster Schritt:** Kurze Codex Nachprüfung nach Holgers Wahl, danach fachliche Abnahme durch Holger zusammen mit TASK-096.
 
 ## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
 

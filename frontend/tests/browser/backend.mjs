@@ -1783,7 +1783,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const approved = item.approvedRevision === null ? null : requirementRevision(item, item.approvedRevision);
     const editors = [...new Set(req.events.filter((event) => event.requirementId === item.id && event.revision === item.revision
       && ['created', 'changed', 'criterion_added', 'criterion_changed', 'criterion_removed', 'criteria_moved'].includes(event.kind)
-      && event.field !== 'owner' && (event.field === null || access.readableFields.includes(event.field))).map((event) => event.actorId))];
+      && event.field !== 'owner' && (event.field === null
+        ? REQ_CONTENT.some((name) => access.readableFields.includes(name)) : access.readableFields.includes(event.field))).map((event) => event.actorId))];
     const key = state.projects.find((entry) => entry.id === item.projectId)?.key ?? '';
     return { id: item.id, projectId: item.projectId, projectKey: key, number: item.number, key: `ANF-${item.number}`, status: item.status, revision: item.revision,
       approvedRevision: item.approvedRevision, approval: approved ? { revision: approved.revision, approvedAt: approved.approvedAt, approvedBy: approved.approvedBy } : null,
@@ -1836,12 +1837,25 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       }
     }
     if (body.description !== undefined && body.description !== null) {
-      const text = JSON.stringify(body.description);
-      if (text.includes('"image"')) violations.push('description.image_not_allowed');
-      if (text.includes('"wiki:')) violations.push('description.page_link_not_allowed');
-      for (const [, href] of text.matchAll(/"href":"([^"]*)"/g)) {
-        if (!href.startsWith('wiki:') && !/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(href.trim())) violations.push('description.link_invalid');
-      }
+      // The document is walked like the server does it (N1 of the follow up review of TASK-096): node types and the real link
+      // targets count, never a word in the text that happens to look like one.
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      // eslint-disable-next-line no-control-regex
+      const control = /[\u0000-\u001f\u007f-\u009f]/;
+      const walk = (node) => {
+        if (node === null || typeof node !== 'object') return;
+        if (node.type === 'image') violations.push('description.image_not_allowed');
+        for (const mark of Array.isArray(node.marks) ? node.marks : []) {
+          if (mark?.type !== 'link') continue;
+          const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '';
+          const value = href.trim();
+          if (value === '' || href.length > 2000 || control.test(href)) violations.push('description.link_invalid');
+          else if (value.startsWith('wiki:')) violations.push(uuid.test(value.slice(5)) ? 'description.page_link_not_allowed' : 'description.link_invalid');
+          else if (!/^(https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+)$/i.test(value)) violations.push('description.link_invalid');
+        }
+        for (const child of Array.isArray(node.content) ? node.content : []) walk(child);
+      };
+      walk(body.description);
     }
     if (body.ownerId !== undefined && body.ownerId !== null) {
       const member = (state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === body.ownerId)
