@@ -429,7 +429,9 @@ def seed_demo(args) -> None:
     nordwerk = seed_deadlines(admin, project_ids["HELP"])
     seed_portal(admin, project_ids["HELP"], nordwerk, password)
     seed_mail_template(admin)
-    seed_wiki(admin, project_ids["HELP"])
+    page = seed_wiki(admin, project_ids["HELP"])
+    leads = [admin_id] + [people[u] for u, _, group, _ in DEMO_PEOPLE if group == "Projektleitung"]
+    seed_requirements(admin, project_ids["HELP"], page, leads)
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
 
@@ -460,9 +462,9 @@ WIKI_REQUEST_EN = _wiki_doc(
 )
 
 
-def seed_wiki(admin: Client, project: str) -> None:
+def seed_wiki(admin: Client, project: str) -> str:
     """A small page tree in the helpdesk project (TASK-094): "Helpdesk Handbuch" with the page "Serviceanfrage ergänzen",
-    both published in German; the second page has an English draft that readers do not see."""
+    both published in German; the second page has an English draft that readers do not see. Returns the second page."""
     print("wiki")
     handbook = admin.call("POST", f"/wiki/projects/{project}/pages",
                           {"title": "Helpdesk Handbuch", "parentId": None, "content": WIKI_HANDBOOK, "language": "de"}).body["id"]
@@ -473,6 +475,55 @@ def seed_wiki(admin: Client, project: str) -> None:
     added = admin.call("POST", f"/wiki/pages/{request}/languages", {"language": "en"})
     admin.call("PUT", f"/wiki/pages/{request}/draft", {"title": "Complete a service request", "content": WIKI_REQUEST_EN},
                query={"language": "en"}, headers={"If-Match": added.headers.get("etag")})
+    return request
+
+
+REQUIREMENT_ACTIONS = ["requirement.read", "requirement.edit", "requirement.approve"]
+REQUIREMENT_FIELDS = ["title", "description", "criteria", "priority", "owner"]
+# The custom fields of requirements in the helpdesk project (TASK-098): a required choice and a whole number.
+REQUIREMENT_CUSTOM_FIELDS = [
+    {"key": "bereich", "name": "Bereich", "type": "select", "required": True, "active": True,
+     "options": [{"key": "portal", "name": "Kundenportal", "active": True}, {"key": "intern", "name": "Interne Bearbeitung", "active": True}]},
+    {"key": "aufwand", "name": "Aufwand in Tagen", "type": "integer", "required": False, "active": True, "options": []},
+]
+REQUIREMENT_EXAMPLE = {
+    "title": "Kunden sehen den Stand ihrer freigegebenen Supportanfragen",
+    "priority": "high",
+    "description": _wiki_doc(("p", "Im Kundenportal sehen berechtigte Kunden den Bearbeitungsstand ihrer Anfragen, ohne nachfragen zu müssen.")),
+    "criteria": [{"id": None, "text": "Die Portalliste zeigt den Status jeder freigegebenen Anfrage der eigenen Organisation."},
+                 {"id": None, "text": "Anfragen anderer Organisationen erscheinen weder in der Liste noch in der Suche."},
+                 {"id": None, "text": "Ein Statuswechsel im Ticket ist nach dem Neuladen der Portalseite sichtbar."}],
+    "customFields": {"bereich": "portal", "aufwand": 3},
+}
+
+
+def seed_requirements(admin: Client, project: str, page: str, members: list[str]) -> None:
+    """The example requirement in the helpdesk project (TASK-098): two custom fields, three criteria, revision 1 approved and
+    linked with ticket 1 and the wiki page "Serviceanfrage ergänzen", then a changed effort that opens revision 2 as draft, so
+    that the ticket shows the hint on the newer revision."""
+    print("requirements")
+    current = admin.call("GET", f"/projects/{project}")
+    configuration = current.body["configuration"]
+    configuration["requirementFields"] = REQUIREMENT_CUSTOM_FIELDS
+    admin.call("PUT", f"/projects/{project}/configuration", configuration, headers={"If-Match": current.headers.get("etag")})
+    group = admin.call("POST", "/permissions/groups", {"name": "Anforderungen"}).body["id"]
+    for action in REQUIREMENT_ACTIONS:
+        admin.call("PUT", f"/permissions/groups/{group}/actions", {"action": action, "projectId": None, "enabled": True})
+    rules = [(name, None) for name in REQUIREMENT_FIELDS] + [(f"custom.{field['key']}", project) for field in REQUIREMENT_CUSTOM_FIELDS]
+    for operation in ("read", "write"):
+        for name, scope in rules:
+            admin.call("PUT", f"/permissions/groups/{group}/fields",
+                       {"resourceType": "requirement", "field": name, "projectId": scope, "operation": operation, "effect": "allow"})
+    for account in members:
+        admin.call("PUT", f"/permissions/groups/{group}/members/{account}")
+    created = admin.call("POST", f"/requirements/projects/{project}/requirements", REQUIREMENT_EXAMPLE)
+    requirement = created.body["id"]
+    path = f"/requirements/{requirement}"
+    submitted = admin.call("POST", f"{path}/submit", headers={"If-Match": created.headers.get("etag")})
+    approved = admin.call("POST", f"{path}/approve", {"revision": 1}, headers={"If-Match": submitted.headers.get("etag")})
+    admin.call("POST", f"{path}/tickets", {"number": 1})
+    admin.call("POST", f"{path}/pages", {"pageId": page})
+    admin.call("PATCH", path, {"customFields": {"aufwand": 5}}, headers={"If-Match": approved.headers.get("etag")})
 
 
 def seed_mail_template(admin: Client) -> None:
