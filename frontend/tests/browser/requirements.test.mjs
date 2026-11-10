@@ -348,14 +348,79 @@ describe('requirements', () => {
     assert.deepEqual(nul.body.violations, ['description.link_invalid']);
     const page = create(paragraph('Seite', [{ type: 'link', attrs: { href: 'wiki:00000000-0000-4000-8000-000000000001' } }]));
     assert.deepEqual(page.body.violations, ['description.page_link_not_allowed']);
-    const image = create({ type: 'doc', content: [{ type: 'image', attrs: { src: '/x', alt: 'Bild' } }] });
+    // M1 of the review of TASK-099: an image of the wiki is refused as image, any other source already as external.
+    const image = create({ type: 'doc', content: [{ type: 'image', attrs: { src: '/api/v1/wiki/images/00000000-0000-4000-8000-000000000002', alt: 'Bild' } }] });
     assert.deepEqual(image.body.violations, ['description.image_not_allowed']);
+    const external = create({ type: 'doc', content: [{ type: 'image', attrs: { src: '/x', alt: 'Bild' } }] });
+    assert.deepEqual(external.body.violations, ['description.image_external']);
+    const upper = create(paragraph('Seite', [{ type: 'link', attrs: { href: 'wiki:ABCDEFAB-ABCD-4000-8000-ABCDEFABCDEF' } }]));
+    assert.deepEqual(upper.body.violations, ['description.link_invalid'], 'the server takes the identifier of a page in lower case only');
 
-    // R2: without a readable content field even the creation names nobody.
+    // R2: without a readable content field even the creation names nobody, also without any field rule.
     const made = create(paragraph('Inhalt'));
+    grant(backend, [backend.ben], ['requirement.read'], { read: [], write: [] });
+    const editors = (account) => backend.requirementCall(account, 'GET', `/requirements/${made.body.id}`).body.editors;
+    assert.deepEqual(editors(backend.ben), [], 'no field rule');
     grant(backend, [backend.ben], ['requirement.read'], { read: ['owner'], write: [] });
-    assert.deepEqual(backend.requirementCall(backend.anna, 'GET', `/requirements/${made.body.id}`).body.editors, [backend.anna.id]);
-    assert.deepEqual(backend.requirementCall(backend.ben, 'GET', `/requirements/${made.body.id}`).body.editors, []);
+    assert.deepEqual(editors(backend.anna), [backend.anna.id]);
+    assert.deepEqual(editors(backend.ben), [], 'only the owner is readable');
+    // A second person who changes only the description is named for full readers only.
+    grant(backend, [backend.nora], EVERYTHING);
+    const item = backend.state.requirements.items.find((entry) => entry.id === made.body.id);
+    const changed = backend.requirementCall(backend.nora, 'PATCH', `/requirements/${made.body.id}`, { description: paragraph('Neuer Inhalt') },
+      { headers: { 'if-match': `"${item.version}"` } });
+    assert.equal(changed.status, 200);
+    assert.deepEqual([...editors(backend.anna)].sort(), [backend.anna.id, backend.nora.id].sort());
+    assert.deepEqual(editors(backend.ben), []);
+  });
+
+  test('the stand in takes link targets with the space rules of the server (S1 of the review of TASK-099)', () => {
+    const backend = createBackend();
+    grant(backend, [backend.anna], EVERYTHING);
+    const create = (href) => backend.requirementCall(backend.anna, 'POST', `/requirements/projects/${backend.project.id}/requirements`,
+      { title: 'Probe', description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Link', marks: [{ type: 'link', attrs: { href } }] }] }] } });
+    // Java strip() keeps the no break spaces and the byte order mark, \s of the server pattern knows only ASCII spaces.
+    for (const href of [' https://example.test', '﻿https://example.test']) {
+      const answer = create(href);
+      assert.equal(answer.status, 400, JSON.stringify(href));
+      assert.deepEqual(answer.body.violations, ['description.link_invalid']);
+    }
+    for (const href of ['https://example.test/a b', 'https://example.test/a b', ' https://example.test ']) {
+      assert.equal(create(href).status, 201, JSON.stringify(href));
+    }
+    const stored = backend.state.requirements.revisions.at(-1).description;
+    assert.equal(stored.content[0].content[0].marks[0].attrs.href, 'https://example.test', 'stored stripped like the server');
+  });
+
+  test('the stand in normalizes the document before it refuses images and page links (S2 of the review of TASK-099)', () => {
+    const backend = createBackend();
+    grant(backend, [backend.anna], EVERYTHING);
+    const create = (description) => backend.requirementCall(backend.anna, 'POST', `/requirements/projects/${backend.project.id}/requirements`, { title: 'Probe', description });
+    const doc = (...content) => ({ type: 'doc', content });
+    const link = (href) => ({ type: 'link', attrs: { href } });
+    const text = (value, marks) => ({ type: 'text', text: value, ...(marks !== undefined ? { marks } : {}) });
+    const accepted = [
+      ['a second link mark is dropped', doc({ type: 'paragraph', content: [text('Link', [link('https://example.test'), link('javascript:alert(1)')])] })],
+      ['a second page link is dropped', doc({ type: 'paragraph', content: [text('Link', [link('https://example.test'), link('wiki:00000000-0000-4000-8000-000000000001')])] })],
+      ['marks of a line break are dropped', doc({ type: 'paragraph', content: [text('a'), { type: 'hardBreak', marks: [link('javascript:alert(1)')] }] })],
+      ['marks of a paragraph are dropped', doc({ type: 'paragraph', marks: [link('javascript:alert(1)')], content: [text('a')] })],
+      ['content of a rule is dropped', doc({ type: 'horizontalRule', content: [{ type: 'image', attrs: { src: '/api/v1/wiki/images/00000000-0000-4000-8000-000000000002' } }] })],
+    ];
+    for (const [name, description] of accepted) assert.equal(create(description).status, 201, name);
+    const first = backend.state.requirements.revisions.find((entry) => entry.description?.content?.[0]?.content?.[0]?.text === 'Link').description;
+    assert.deepEqual(first.content[0].content[0].marks, [link('https://example.test')], 'only the first link mark is stored');
+    const refused = [
+      ['an unknown block', doc({ type: 'iframe' }), 'description.unsupported'],
+      ['a list instead of a document', [], 'description.invalid'],
+      ['marks that are no list', doc({ type: 'paragraph', content: [text('a', 'invalid')] }), 'description.invalid'],
+      ['a link in a code block', doc({ type: 'codeBlock', content: [text('a', [link('https://example.test')])] }), 'description.unsupported'],
+      ['more than 1 MiB', doc({ type: 'paragraph', content: [text('x'.repeat(1_048_576))] }), 'description.too_large'],
+    ];
+    for (const [name, description, code] of refused) {
+      const answer = create(description);
+      assert.equal(answer.status, 400, name);
+      assert.deepEqual(answer.body.violations, [code], name);
+    }
   });
 
   test('a changed link target is named in the comparison of the history (F3 of the TASK-096 review)', async () => {
