@@ -73,4 +73,5 @@ export const CUSTOM_ERROR: Readonly<Record<string, MessageKey>> = {
   option_inactive: 'custom.error.optionInactive',
   not_member: 'custom.error.notMember',
   required_for_transition: 'custom.error.requiredForTransition',
+  required_for_review: 'custom.error.requiredForReview',
 };

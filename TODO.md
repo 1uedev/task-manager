@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -32,9 +32,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-098](#task-098-eigene-felder-für-anforderungen-a13-teil-3) | Eigene Felder für Anforderungen (A13 Teil 3) | claude-20261110-requirements-01 | 2026-11-10 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -42,6 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
 | [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-098](#task-098-eigene-felder-für-anforderungen-a13-teil-3) | Eigene Felder für Anforderungen (A13 Teil 3) | claude-20261110-requirements-01 | 2026-11-10 |
 | [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -135,9 +134,9 @@ Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
 
 ## TASK-098 Eigene Felder für Anforderungen (A13 Teil 3)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
 
-**Bezug:** REQ-REQ-001, REQ-ACL-004; TASK-044 (Projektkonfiguration). **Abhängigkeiten:** TASK-097 auf main. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-097 auf main ist. Geplanter Branch claude/project-thread-dyiimb, Entscheidung DEC-128, eigene Migration nach denen von TASK-097.
+**Bezug:** REQ-REQ-001, REQ-ACL-004; TASK-044 (Projektkonfiguration). **Abhängigkeiten:** TASK-097, auf main seit PR #290. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; nach dem Ergebnis von TASK-097 auf main (PR #290) begonnen. Branch claude/project-thread-dyiimb, Entscheidung DEC-128. Übergabe 10. November 2026: Ergebnis im PR von claude/project-thread-dyiimb mit `requirementFields` in der Projektkonfiguration (Vertrag `contracts/projects.openapi.yaml` 0.2.0), Migration V0060 (Werte je Revision in `requirement_revision.custom`), Vertrag `contracts/requirements.openapi.yaml` 0.3.0, Feldregeln `custom.<schlüssel>` des Ressourcentyps `requirement` (`contracts/permissions.openapi.yaml` 0.5.0), dem Bereich „Eigene Felder der Anforderungen“ im Konfigurationseditor, den Feldern in Bearbeitung, Ansicht, Freigabedialog, Revision, Vergleich und Historie sowie der Beispielanforderung ANF-1 im Demoprojekt HELP. Fünf Auslegungen stehen zur Bestätigung in DEC-128. Belege und Grenzen im PR. Der Prüfbericht von Codex zu TASK-097 liegt als docs/REVIEW_TASK-097_PR-290.md bei.
 
 **Umfang:** Bereich „Anforderungen“ in der Projektkonfiguration mit eigenen Feldern derselben Typen wie bei Tickets, mit Entwurf und Veröffentlichung der Konfiguration, Feldrechten, Historie, Vergleich, Freigabedialog und Pflichtfeldern beim Übergang nach Zur Prüfung, sowie die Demodaten, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: weitere Feldtypen, Formulare, Automationen.
 
@@ -152,4 +151,4 @@ Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
 3. Die Demo zeigt Freigabe, neue Revision und Revisionshinweis am Ticket.
 4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Konfiguration und Anforderung.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-097 auf main die Blockade aufheben und umsetzen.
+**Nächster Schritt:** Codex Prüfung des Ergebnisses, dann fachliche Abnahme durch Holger mit Bestätigung der Auslegungen (a) bis (e) in DEC-128; danach die gemeinsame Abnahme von Paket A13.

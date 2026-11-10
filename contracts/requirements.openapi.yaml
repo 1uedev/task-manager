@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Anforderungen (TASK-096, TASK-097)
-  version: 0.2.0
+  title: Task Manager API, Anforderungen (TASK-096 bis TASK-098)
+  version: 0.3.0
   description: |
     Anforderungen in Projekten mit Abnahmekriterien, fachlichen Revisionen und der Freigabe genau einer Revision
     (REQ-REQ-001, REQ-REQ-002, DEC-030, DEC-126). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -29,7 +29,7 @@ info:
     Revision nach `approved`. Ein anderer Übergang antwortet mit 409 `requirement.status_invalid`. Eine verworfene Anforderung
     lässt sich nicht ändern (409 `requirement.discarded`).
 
-    Revisionen nach DEC-030: Inhalt sind Titel, Beschreibung, Kriterien und Priorität. Solange die laufende Revision nicht
+    Revisionen nach DEC-030: Inhalt sind Titel, Beschreibung, Kriterien, Priorität und eigene Felder. Solange die laufende Revision nicht
     freigegeben ist, ändert Speichern sie und schreibt die Historie. Die erste inhaltliche Änderung nach einer Freigabe legt
     die nächste Revision als Entwurf an; die freigegebene Revision bleibt mit freigebender Person und Zeitpunkt unverändert
     (`approval`). Die verantwortliche Person ist organisatorisch: keine neue Revision, aber ein Historieneintrag. Eine Anfrage
@@ -70,6 +70,23 @@ info:
     Verknüpfung und keine Umstellung (409 `requirement.discarded`), Lösen bleibt möglich. Je Anforderung höchstens 200
     Tickets und 200 Seiten (409 `requirement.links_too_many`). Verknüpfungen ändern weder die Version des Tickets noch die
     der Anforderung und brauchen kein `If-Match`; beide Historien halten sie fest.
+
+    Eigene Felder (TASK-098, DEC-128): Die Projektkonfiguration legt in `requirementFields` eigene Felder für Anforderungen
+    an, mit denselben Typen wie für Tickets (`text`, `longtext`, `integer`, `date`, `boolean`, `select`, `user`); sie werden mit der
+    Konfiguration entworfen und veröffentlicht. Jedes Feld hat die Kennung `custom.<key>` mit eigener Lese und Schreibregel
+    für den Ressourcentyp `requirement`. `customFields` einer Antwort nennt die Felder, die der Aufrufer lesen darf, und
+    `content.customFields` deren Werte, soweit gesetzt (Text und Auswahl als Zeichenkette, Zahl als Ganzzahl, Wahrheitswert
+    als boolean, Person als Kennung). Eigene Felder sind Inhalt: Werte gehören zur Revision, die erste Änderung nach einer
+    Freigabe öffnet die nächste Revision, Änderungen erscheinen in der Historie als `changed` mit dem Feld `custom.<key>`
+    und im Vergleich. Ändern nennt in `customFields` die Werte je Schlüssel, `null` leert ein Feld (`customFields.unknown`
+    für ein Feld, das das Projekt nicht hat, `custom.<key>.invalid` für einen falschen Wert, `custom.<key>.inactive` und
+    `custom.<key>.option_inactive` für einen neuen Wert eines abgeschalteten Felds oder einer abgeschalteten Option,
+    `custom.<key>.not_member` für eine Person außerhalb des Projekts; ein schon gespeicherter Wert bleibt erlaubt). Ein
+    Pflichtfeld gilt beim Übergang nach Zur Prüfung: fehlt sein Wert, antwortet der Server mit 400
+    `custom.<key>.required_for_review`; darf die Person ein aktives Pflichtfeld nicht lesen und schreiben, mit 409
+    `requirement.required_field_inaccessible`. Freigeben verlangt zusätzlich die Leseregel jedes eigenen Felds des
+    Projekts. Ein eigenes Feld ohne Leseregel fehlt in Werten, Feldliste, Historie und Vergleich, und seine Änderungen
+    nennen ihre Person nicht in `editors`.
 
     Ist die Datenbank kurz belegt, antwortet der Server mit 503 `requirement.busy` und `Retry-After`; die ganze Anfrage darf
     wiederholt werden.
@@ -572,7 +589,35 @@ components:
       enum: [low, normal, high, critical]
     Field:
       type: string
-      enum: [title, description, criteria, priority, owner]
+      description: Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098)
+      anyOf:
+        - {type: string, enum: [title, description, criteria, priority, owner]}
+        - {type: string, pattern: '^custom\.[a-z][a-z0-9_]{0,39}$'}
+    CustomFieldValue:
+      type: [string, integer, boolean]
+    CustomFieldOption:
+      type: object
+      required: [key, name, active]
+      properties:
+        key: {type: string}
+        name: {type: string}
+        active: {type: boolean}
+    CustomField:
+      type: object
+      description: Ein eigenes Feld des Projekts, das der Aufrufer lesen darf (TASK-098)
+      required: [key, name, type, required, active, options]
+      properties:
+        key: {type: string}
+        name: {type: string}
+        type: {type: string, enum: [text, longtext, integer, date, boolean, select, user]}
+        required: {type: boolean, description: Pflicht beim Übergang nach Zur Prüfung}
+        active: {type: boolean}
+        options:
+          type: array
+          items: {$ref: '#/components/schemas/CustomFieldOption'}
+    CustomFields:
+      type: array
+      items: {$ref: '#/components/schemas/CustomField'}
     Access:
       type: object
       required: [read, edit, approve, readableFields, writableFields]
@@ -620,8 +665,12 @@ components:
     Content:
       type: object
       description: Inhalt einer Revision; ein Teil ohne Leseregel ist `null`
-      required: [title, description, descriptionHtml, criteria, priority]
+      required: [title, description, descriptionHtml, criteria, priority, customFields]
       properties:
+        customFields:
+          type: object
+          description: Werte der lesbaren eigenen Felder je Schlüssel, nur gesetzte
+          additionalProperties: {$ref: '#/components/schemas/CustomFieldValue'}
         title: {type: [string, 'null']}
         description:
           oneOf:
@@ -646,8 +695,9 @@ components:
     Requirement:
       type: object
       required: [id, projectId, projectKey, number, key, status, revision, approvedRevision, approval, content, ownerId, access, editors,
-        version, createdAt, createdBy, updatedAt, updatedBy]
+        version, createdAt, createdBy, updatedAt, updatedBy, customFields]
       properties:
+        customFields: {$ref: '#/components/schemas/CustomFields'}
         id: {type: string, format: uuid}
         projectId: {type: string, format: uuid}
         projectKey: {type: string}
@@ -689,6 +739,15 @@ components:
           type: array
           maxItems: 50
           items: {$ref: '#/components/schemas/CriterionInput'}
+        customFields:
+          type: object
+          maxProperties: 30
+          description: Werte eigener Felder je Schlüssel; `null` leert ein Feld (TASK-098)
+          propertyNames: {pattern: '^[a-z][a-z0-9_]{0,39}$'}
+          additionalProperties:
+            oneOf:
+              - {$ref: '#/components/schemas/CustomFieldValue'}
+              - {type: 'null'}
     RequirementItem:
       type: object
       required: [id, number, key, status, revision, approvedRevision, title, priority, ownerId, updatedAt]
@@ -708,8 +767,9 @@ components:
         updatedAt: {type: string, format: date-time}
     RequirementList:
       type: object
-      required: [projectId, projectKey, access, items, nextAfter]
+      required: [projectId, projectKey, access, items, nextAfter, customFields]
       properties:
+        customFields: {$ref: '#/components/schemas/CustomFields'}
         projectId: {type: string, format: uuid}
         projectKey: {type: string}
         access: {$ref: '#/components/schemas/Access'}
@@ -774,8 +834,9 @@ components:
           items: {$ref: '#/components/schemas/Event'}
     Revision:
       type: object
-      required: [revision, current, savedAt, savedBy, approvedAt, approvedBy, content]
+      required: [revision, current, savedAt, savedBy, approvedAt, approvedBy, content, customFields]
       properties:
+        customFields: {$ref: '#/components/schemas/CustomFields'}
         revision: {type: integer}
         current: {type: boolean}
         savedAt: {type: string, format: date-time}

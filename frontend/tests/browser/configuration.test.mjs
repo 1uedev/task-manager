@@ -80,6 +80,27 @@ describe('configuration editor', () => {
     });
   });
 
+  test('custom fields of requirements are drafted and published with the configuration and offered to the rights (TASK-098)', async () => {
+    await withApp(settings, async (page, backend) => {
+      const fields = page.getByTestId('requirement-fields');
+      await fields.getByText('Noch keine eigenen Felder für Anforderungen.').waitFor();
+      await fields.getByLabel('Neues Feld').fill('Bereich');
+      await fields.getByLabel('Typ').last().selectOption({ label: 'Einfachauswahl' });
+      await fields.getByRole('button', { name: 'Hinzufügen' }).last().click();
+      const area = fields.getByTestId('requirement-field-bereich');
+      await area.getByLabel('Pflicht für „Zur Prüfung“').check();
+      assert.equal(await page.getByTestId('custom-fields').getByTestId('custom-field-bereich').count(), 0, 'not a field of tickets');
+      await page.getByRole('button', { name: 'Veröffentlichen' }).click();
+      await page.getByText('Version 2 ist veröffentlicht und gilt jetzt für alle Tickets.').waitFor();
+      const published = backend.state.configurations.get(backend.project.id).configuration;
+      assert.deepEqual(published.requirementFields.map(({ key, type, required, active }) => ({ key, type, required, active })),
+        [{ key: 'bereich', type: 'select', required: true, active: true }]);
+      assert.deepEqual(published.customFields ?? [], [], 'the custom fields of tickets stay as they were');
+      await fields.getByText('Typ: Einfachauswahl (nicht mehr änderbar)').waitFor();
+      assert.equal(await fields.getByRole('button', { name: 'Bereich entfernen' }).count(), 0, 'a published field is only deactivated');
+    });
+  });
+
   test('a status that tickets use goes only with an assignment, which moves them', async () => {
     await withApp(settings, async (page, backend) => {
       const statuses = page.locator('fieldset', { has: page.locator('legend', { hasText: /^Status$/ }) });

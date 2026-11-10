@@ -246,6 +246,58 @@ class WikiSeedTests(unittest.TestCase):
         self.assertEqual(body["title"], "Complete a service request")
         self.assertFalse(any(path.endswith("/publish") and query for method, path, body, query, headers in calls), "the English version stays a draft")
 
+    def test_seed_wiki_returns_the_service_page(self):
+        def call(method, path, body=None, query=None, headers=None, **_):
+            if method == "POST" and path.endswith("/pages"):
+                return demo.Response(201, {"etag": '"1"'}, {"id": body["title"]}, 0.0)
+            return demo.Response(200, {"etag": '"1"'}, {}, 0.0)
+
+        admin = mock.Mock()
+        admin.call.side_effect = call
+        self.assertEqual(demo.seed_wiki(admin, "help"), "Serviceanfrage ergänzen")
+
     def test_demo_groups_carry_wiki_rights(self):
         self.assertEqual(demo.WIKI_ACTIONS_READ, ["wiki.read"])
         self.assertTrue(set(demo.WIKI_ACTIONS_READ) < set(demo.WIKI_ACTIONS_EDIT) < set(demo.WIKI_ACTIONS_FULL))
+
+
+class RequirementSeedTests(unittest.TestCase):
+    """TASK-098: the example requirement with custom fields, revision 1 approved and linked, revision 2 as draft."""
+
+    def test_example_requirement_with_approval_links_and_new_revision(self):
+        calls = []
+
+        def call(method, path, body=None, query=None, headers=None, **_):
+            calls.append((method, path, body, headers))
+            if path == "/projects/help" and method == "GET":
+                return demo.Response(200, {"etag": '"4"'}, {"configuration": {"statuses": [], "customFields": []}}, 0.0)
+            if path == "/permissions/groups":
+                return demo.Response(200, {}, {"id": "group"}, 0.0)
+            if path.endswith("/requirements") and method == "POST":
+                return demo.Response(201, {"etag": '"1"'}, {"id": "req"}, 0.0)
+            if path == "/requirements/req/submit":
+                return demo.Response(200, {"etag": '"2"'}, {}, 0.0)
+            if path == "/requirements/req/approve":
+                return demo.Response(200, {"etag": '"3"'}, {}, 0.0)
+            return demo.Response(200, {"etag": '"9"'}, {}, 0.0)
+
+        admin = mock.Mock()
+        admin.call.side_effect = call
+        demo.seed_requirements(admin, "help", "page", ["admin", "lead"])
+        configured = next(body for method, path, body, _ in calls if method == "PUT" and path == "/projects/help/configuration")
+        self.assertEqual([field["key"] for field in configured["requirementFields"]], ["bereich", "aufwand"])
+        self.assertTrue(configured["requirementFields"][0]["required"])
+        fields = [body for method, path, body, _ in calls if path == "/permissions/groups/group/fields"]
+        self.assertIn({"resourceType": "requirement", "field": "custom.bereich", "projectId": "help", "operation": "read", "effect": "allow"}, fields)
+        self.assertIn({"resourceType": "requirement", "field": "title", "projectId": None, "operation": "write", "effect": "allow"}, fields)
+        created = next(body for method, path, body, _ in calls if path == "/requirements/projects/help/requirements")
+        self.assertEqual(created["title"], "Kunden sehen den Stand ihrer freigegebenen Supportanfragen")
+        self.assertEqual(len(created["criteria"]), 3)
+        steps = [(method, path, body, headers) for method, path, body, headers in calls if path.startswith("/requirements/req")]
+        self.assertEqual(steps, [
+            ("POST", "/requirements/req/submit", None, {"If-Match": '"1"'}),
+            ("POST", "/requirements/req/approve", {"revision": 1}, {"If-Match": '"2"'}),
+            ("POST", "/requirements/req/tickets", {"number": 1}, None),
+            ("POST", "/requirements/req/pages", {"pageId": "page"}, None),
+            ("PATCH", "/requirements/req", {"customFields": {"aufwand": 5}}, {"If-Match": '"3"'}),
+        ], "the links are made on revision 1 before the change opens revision 2")

@@ -95,8 +95,8 @@ export interface paths {
          *     `initialStatus.unknown`, `transitions.status_unknown`, `transitions.same_status`, `transitions.duplicate`,
          *     `transitions.required_field_unknown`, `workflows.type_unknown`, `workflows.type_duplicate`,
          *     `workflows.initialStatus.unknown`, `customFields.key_invalid`, `customFields.key_duplicate`,
-         *     `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, `fields.invalid`
-         *     oder `fields.required_fixed`.
+         *     `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, dieselben Codes mit
+         *     dem Präfix `requirementFields.` für die eigenen Felder der Anforderungen, `fields.invalid` oder `fields.required_fixed`.
          */
         put: operations["changeProjectConfiguration"];
         post?: never;
@@ -159,7 +159,9 @@ export interface paths {
          *
          *     * 400 `request.invalid` mit den Gründen der Konfiguration, siehe `Configuration`.
          *     * 409 `project.configuration_incompatible`: ein eigenes Feld oder eine Auswahloption fehlt (`customFields.removed`,
-         *       `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`).
+         *       `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`); für die eigenen Felder
+         *       der Anforderungen entsprechend `requirementFields.removed`, `requirementFields.option_removed` und
+         *       `requirementFields.type_changed`.
          *     * 409 `project.configuration_in_use`: Tickets verwenden noch einen Tickettyp (`type.in_use:<schlüssel>`) oder einen
          *       Status (`status.in_use:<schlüssel>`), den die neue Version nicht mehr kennt oder für ihren Tickettyp nicht mehr
          *       vorsieht, und die Zuordnung fehlt; `status.mapping_invalid:<schlüssel>` heißt, dass der Zielstatus für den
@@ -392,6 +394,13 @@ export interface components {
              *     Versionen erhalten und behalten den Typ.
              */
             customFields?: components["schemas"]["CustomField"][];
+            /**
+             * @description Eigene Felder der Anforderungen (TASK-098) mit denselben Typen und Regeln wie `customFields`: ein veröffentlichtes
+             *     Feld und seine Auswahloptionen bleiben erhalten und behalten den Typ. `required` gilt beim Übergang einer
+             *     Anforderung nach Zur Prüfung. Die Rechteverwaltung kennt jedes Feld als `custom.<schlüssel>` des Ressourcentyps
+             *     `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen.
+             */
+            requirementFields?: components["schemas"]["CustomField"][];
             /** @description Genau die festen Felder in dieser Reihenfolge; title, type und status sind immer Pflicht. */
             fields: {
                 /** @enum {string} */

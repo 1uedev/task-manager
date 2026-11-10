@@ -563,6 +563,18 @@ Paket A13 Teil 2 (DEC-127, Regeln 1 bis 5 in TODO.md). Migration V0059 mit `requ
 
 **Grenzen.** Keine projektübergreifenden Verknüpfungen, keine Git Objekte, keine Abnahme je Kriterium, keine Beziehungen zwischen Anforderungen. Höchstens 200 Tickets und 200 Seiten je Anforderung. Eine verworfene Anforderung erhält keine neue Verknüpfung und keine Umstellung.
 
+## Eigene Felder für Anforderungen (TASK-098)
+
+Paket A13 Teil 3 (DEC-128, Regeln 1 bis 3 in TODO.md). Die Projektkonfiguration trägt neben `customFields` der Tickets die Liste `requirementFields` mit denselben Typen und Prüfungen (`ProjectConfiguration.customFieldChecks` mit dem Präfix `requirementFields`); ein veröffentlichtes Feld und seine Optionen bleiben erhalten und behalten den Typ (409 `project.configuration_incompatible` mit `requirementFields.removed`, `requirementFields.option_removed` oder `requirementFields.type_changed`). Die Rechteverwaltung kennt jedes Feld als `custom.<schlüssel>` des Ressourcentyps `requirement`, mit `projectId` und nur, solange die aktuelle Konfiguration es enthält.
+
+**Werte.** Migration V0060 ergänzt `requirement_revision` um `custom` (JSON Objekt der kanonischen Werte als Text, höchstens 1 MiB). Ändern nennt `customFields` mit den Werten je Schlüssel, `null` leert; die Werte werden wie bei Tickets geprüft (`ProjectConfiguration.canonical`), Personen sind aktive interne Mitglieder. Ein Wert, den die Revision schon hat, bleibt auch für ein deaktiviertes Feld erlaubt. Eigene Felder sind Inhalt: die erste Änderung nach einer Freigabe öffnet die nächste Revision, jede Änderung schreibt ein Ereignis `changed` mit dem Feld `custom.<schlüssel>` und altem und neuem Wert.
+
+**Rechte.** `RequirementService.access` fragt die festen Felder und danach, unter der Sperre des Projekts, die eigenen Felder der aktuellen Konfiguration beim Berechtigungsmodul ab. Antworten nennen in `customFields` die lesbaren Felder mit Definition und in `content.customFields` ihre gesetzten Werte (Zahl als Ganzzahl, Wahrheitswert als boolean, sonst Text). Zur Prüfung geben verlangt für jedes aktive Pflichtfeld einen Wert (400 `custom.<schlüssel>.required_for_review`) und die Lese und Schreibregel (sonst 409 `requirement.required_field_inaccessible`); Freigeben verlangt die Leseregel aller eigenen Felder.
+
+**Oberfläche und Demo.** Der Konfigurationseditor hat den Bereich „Eigene Felder der Anforderungen“ mit „Pflicht für „Zur Prüfung““. Die Seite „Anforderungen“ zeigt die Felder in Bearbeitung, Ansicht, Freigabedialog, Revision, Vergleich und Historie. Das Vorführimage legt in HELP die Felder „Bereich“ und „Aufwand in Tagen“ und ANF-1 mit freigegebener Revision 1, Verknüpfungen und Revision 2 im Entwurf an (`seed_requirements` in tools/demo/demo.py).
+
+**Grenzen.** Keine weiteren Feldtypen, keine Formulare oder Automationen, keine eigenen Felder in der Liste oder ihren Filtern, keine Suche über Anforderungen (A14).
+
 ## Neue Kundenantworten (TASK-067)
 
 Hinweis H7 der Prüfung von TASK-058 (DEC-097). Migration V0052 ergänzt `helpdesk_message` um `joined_at`, `seen_at` und `seen_by`.

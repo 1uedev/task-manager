@@ -23,9 +23,14 @@ import java.util.Set;
  * statuses it knows are the first one and those its transitions name. A transition can require fields (a standard field
  * or {@code custom.<key>}); a ticket must carry a value for them after the change that takes the transition. Documents
  * written before TASK-044 lack the new members and read as having no workflows, no custom fields and no required fields.
+ *
+ * <p>{@code requirementFields} are the custom fields of the requirements of the project (TASK-098, DEC-128): the same kinds
+ * and rules as the custom fields of tickets, with keys of their own; {@code required} means required when a requirement is
+ * given for review. Documents written before read as having none.
  */
 public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> statuses, String initialStatus,
-        List<Transition> transitions, List<Field> fields, List<Workflow> workflows, List<CustomField> customFields) {
+        List<Transition> transitions, List<Field> fields, List<Workflow> workflows, List<CustomField> customFields,
+        List<CustomField> requirementFields) {
     /** The fixed ticket fields of the first section, in their order. */
     public static final List<String> FIELD_KEYS = List.of("title", "description", "type", "status", "assignee");
     /** Fields a ticket always needs; a configuration cannot make them optional. */
@@ -151,12 +156,19 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
         fields = fields == null ? null : List.copyOf(fields);
         workflows = workflows == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(workflows));
         customFields = customFields == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(customFields));
+        requirementFields = requirementFields == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(requirementFields));
+    }
+
+    /** A configuration without custom fields of requirements, as before TASK-098. */
+    public ProjectConfiguration(List<TicketType> ticketTypes, List<Status> statuses, String initialStatus,
+            List<Transition> transitions, List<Field> fields, List<Workflow> workflows, List<CustomField> customFields) {
+        this(ticketTypes, statuses, initialStatus, transitions, fields, workflows, customFields, List.of());
     }
 
     /** The configuration of the first section, without workflows of single types and without custom fields. */
     public ProjectConfiguration(List<TicketType> ticketTypes, List<Status> statuses, String initialStatus,
             List<Transition> transitions, List<Field> fields) {
-        this(ticketTypes, statuses, initialStatus, transitions, fields, List.of(), List.of());
+        this(ticketTypes, statuses, initialStatus, transitions, fields, List.of(), List.of(), List.of());
     }
 
     /** The configuration of a new project. */
@@ -245,15 +257,28 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
         return customFields.stream().map(CustomField::id).toList();
     }
 
+    /** A custom field of the requirements (TASK-098). */
+    public Optional<CustomField> requirementField(String key) {
+        return requirementFields.stream().filter(field -> field.key().equals(key)).findFirst();
+    }
+
+    /** The identifiers {@code custom.<key>} of all custom fields of the requirements, active or not (TASK-098). */
+    public List<String> requirementFieldIds() {
+        return requirementFields.stream().map(CustomField::id).toList();
+    }
+
     /** The same configuration with surrounding blanks removed from the names, as it is stored. */
     public ProjectConfiguration normalized() {
         return new ProjectConfiguration(
             ticketTypes.stream().map(t -> new TicketType(t.key(), t.name().strip(), t.portal())).toList(),
             statuses.stream().map(s -> new Status(s.key(), s.name().strip(), s.category(), s.sla())).toList(),
-            initialStatus, transitions, fields, workflows,
-            customFields.stream().map(field -> new CustomField(field.key(), field.name().strip(), field.type(), field.required(),
-                field.active(), field.options().stream().map(option -> new Option(option.key(), option.name().strip(), option.active())).toList()))
-                .toList());
+            initialStatus, transitions, fields, workflows, stripped(customFields), stripped(requirementFields));
+    }
+
+    private static List<CustomField> stripped(List<CustomField> list) {
+        return list.stream().map(field -> new CustomField(field.key(), field.name().strip(), field.type(), field.required(),
+            field.active(), field.options().stream().map(option -> new Option(option.key(), option.name().strip(), option.active())).toList()))
+            .toList();
     }
 
     // ------------------------------------------------------------------------------------------------ rules
@@ -276,7 +301,8 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
         if (statuses != null && statuses.stream().anyMatch(s -> s != null && !SLA_KINDS.contains(s.sla()))) {
             violations.add("statuses.sla_invalid");
         }
-        Set<String> fieldIds = customFieldChecks(violations);
+        Set<String> fieldIds = customFieldChecks(customFields, "customFields", violations);
+        customFieldChecks(requirementFields, "requirementFields", violations);
         if (initialStatus == null || !statusKeys.contains(initialStatus)) {
             violations.add("initialStatus.unknown");
         }
@@ -315,77 +341,82 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
      */
     public List<String> incompatibilities(ProjectConfiguration previous) {
         List<String> violations = new ArrayList<>();
-        for (CustomField old : previous.customFields) {
-            Optional<CustomField> current = customField(old.key());
-            if (current.isEmpty()) {
-                add(violations, "customFields.removed");
-                continue;
-            }
-            if (!current.get().type().equals(old.type())) {
-                add(violations, "customFields.type_changed");
-            }
-            for (Option option : old.options) {
-                if (current.get().option(option.key()).isEmpty()) {
-                    add(violations, "customFields.option_removed");
-                }
-            }
-        }
+        kept(previous.customFields, customFields, "customFields", violations);
+        kept(previous.requirementFields, requirementFields, "requirementFields", violations);
         return List.copyOf(violations);
     }
 
-    private Set<String> customFieldChecks(List<String> violations) {
-        Set<String> ids = new HashSet<>();
-        if (customFields.size() > MAX_CUSTOM_FIELDS) {
-            violations.add("customFields.too_many");
+    private static void kept(List<CustomField> before, List<CustomField> after, String prefix, List<String> violations) {
+        for (CustomField old : before) {
+            Optional<CustomField> current = after.stream().filter(field -> field != null && old.key().equals(field.key())).findFirst();
+            if (current.isEmpty()) {
+                add(violations, prefix + ".removed");
+                continue;
+            }
+            if (!old.type().equals(current.get().type())) {
+                add(violations, prefix + ".type_changed");
+            }
+            for (Option option : old.options) {
+                if (current.get().option(option.key()).isEmpty()) {
+                    add(violations, prefix + ".option_removed");
+                }
+            }
         }
-        for (CustomField field : customFields) {
+    }
+
+    private static Set<String> customFieldChecks(List<CustomField> list, String prefix, List<String> violations) {
+        Set<String> ids = new HashSet<>();
+        if (list.size() > MAX_CUSTOM_FIELDS) {
+            violations.add(prefix + ".too_many");
+        }
+        for (CustomField field : list) {
             if (field == null || field.key() == null || !field.key().matches(KEY)) {
-                add(violations, "customFields.key_invalid");
+                add(violations, prefix + ".key_invalid");
                 continue;
             }
             if (!ids.add(field.id())) {
-                add(violations, "customFields.key_duplicate");
+                add(violations, prefix + ".key_duplicate");
             }
             if (field.name() == null || field.name().isBlank() || field.name().strip().codePointCount(0, field.name().strip().length()) > 80) {
-                add(violations, "customFields.name_invalid");
+                add(violations, prefix + ".name_invalid");
             }
             if (field.type() == null || !FIELD_TYPES.contains(field.type())) {
-                add(violations, "customFields.type_invalid");
+                add(violations, prefix + ".type_invalid");
                 continue;
             }
-            options(field, violations);
+            options(field, prefix, violations);
         }
         return ids;
     }
 
-    private static void options(CustomField field, List<String> violations) {
+    private static void options(CustomField field, String prefix, List<String> violations) {
         if (!SELECT.equals(field.type())) {
             if (!field.options().isEmpty()) {
-                add(violations, "customFields.options_unexpected");
+                add(violations, prefix + ".options_unexpected");
             }
             return;
         }
         if (field.options().isEmpty()) {
-            add(violations, "customFields.options_required");
+            add(violations, prefix + ".options_required");
         }
         if (field.options().size() > MAX_OPTIONS) {
-            add(violations, "customFields.options_too_many");
+            add(violations, prefix + ".options_too_many");
         }
         Set<String> keys = new HashSet<>();
         Set<String> names = new HashSet<>();
         for (Option option : field.options()) {
             if (option == null || option.key() == null || !option.key().matches(KEY)) {
-                add(violations, "customFields.option_key_invalid");
+                add(violations, prefix + ".option_key_invalid");
                 continue;
             }
             if (!keys.add(option.key())) {
-                add(violations, "customFields.option_key_duplicate");
+                add(violations, prefix + ".option_key_duplicate");
             }
             String name = option.name() == null ? "" : option.name().strip();
             if (name.isEmpty() || name.codePointCount(0, name.length()) > 80) {
-                add(violations, "customFields.option_name_invalid");
+                add(violations, prefix + ".option_name_invalid");
             } else if (!names.add(name.toLowerCase(java.util.Locale.ROOT))) {
-                add(violations, "customFields.option_name_duplicate");
+                add(violations, prefix + ".option_name_duplicate");
             }
         }
     }

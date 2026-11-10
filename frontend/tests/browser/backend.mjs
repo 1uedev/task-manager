@@ -380,6 +380,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
 
   const configurationOf = (projectId) => state.configurations.get(projectId).configuration;
   const customFieldsOf = (projectId) => configurationOf(projectId).customFields ?? [];
+  const requirementFieldsOf = (projectId) => state.configurations.get(projectId)?.configuration.requirementFields ?? [];
   // Custom fields follow the title rule here; the real rules per field are tested against the real backend.
   const customReadable = (account, projectId) => readable(account, projectId).includes('title');
   const customWritable = (account, projectId) => writable(account, projectId).includes('title');
@@ -1269,7 +1270,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       return ok({
         actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
         fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) },
-          { resourceType: 'requirement', fields: REQUIREMENT_FIELDS.filter((name) => company || requirementField(account, projectId, name, 'write')) }],
+          { resourceType: 'requirement', fields: [...REQUIREMENT_FIELDS, ...requirementFieldsOf(projectId).map((entry) => `custom.${entry.key}`)]
+            .filter((name) => company || requirementField(account, projectId, name, 'write')) }],
         groups: state.groups.map((group) => ({ id: group.id, name: group.name,
           actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
           fields: group.fields.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })) })),
@@ -1304,7 +1306,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (part === 'fields') {
       const resourceType = body.resourceType ?? 'ticket';
       if (!['ticket', 'requirement'].includes(resourceType)) return problem(400, 'request.invalid', { violations: ['resourceType.unknown'] });
-      if (resourceType === 'requirement' && !REQUIREMENT_FIELDS.includes(body.field)) return problem(400, 'request.invalid', { violations: ['field.unknown'] });
+      // Custom fields of requirements (TASK-098) need a project whose current configuration has them.
+      const ownField = resourceType === 'requirement' && typeof body.field === 'string' && body.field.startsWith('custom.') && body.projectId
+        && requirementFieldsOf(body.projectId).some((entry) => `custom.${entry.key}` === body.field);
+      if (resourceType === 'requirement' && !REQUIREMENT_FIELDS.includes(body.field) && !ownField) return problem(400, 'request.invalid', { violations: ['field.unknown'] });
       group.fields = group.fields.filter((rule) => !((rule.resourceType ?? 'ticket') === resourceType && rule.field === body.field && rule.operation === body.operation
         && rule.projectId === body.projectId));
       if (body.effect !== 'remove') group.fields.push({ resourceType, field: body.field, projectId: body.projectId, operation: body.operation, effect: body.effect });
@@ -1763,9 +1768,16 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // after an approval opens the next revision as draft. Every change needs the version as If-Match.
   const req = state.requirements;
   const REQ_CONTENT = ['title', 'description', 'criteria', 'priority'];
+  // Custom fields of requirements (TASK-098): drafted and published with the project configuration, each with its own read
+  // and write rule `custom.<key>` of the resource type requirement. Values belong to the revision.
+  const requirementFieldDefs = (projectId, access) => requirementFieldsOf(projectId)
+    .filter((entry) => access.readableFields.includes(`custom.${entry.key}`))
+    .map((entry) => ({ key: entry.key, name: entry.name, type: entry.type, required: entry.required === true, active: entry.active !== false,
+      options: (entry.options ?? []).map((option) => ({ key: option.key, name: option.name, active: option.active !== false })) }));
   const requirementAccess = (account, projectId) => {
     const read = may(account, 'requirement.read', projectId);
-    const readableFields = read ? REQUIREMENT_FIELDS.filter((name) => requirementField(account, projectId, name, 'read')) : [];
+    const readableFields = read ? [...REQUIREMENT_FIELDS, ...requirementFieldsOf(projectId).map((entry) => `custom.${entry.key}`)]
+      .filter((name) => requirementField(account, projectId, name, 'read')) : [];
     const edit = read && may(account, 'requirement.edit', projectId);
     return { read, edit, approve: read && may(account, 'requirement.approve', projectId), readableFields,
       writableFields: edit ? readableFields.filter((name) => requirementField(account, projectId, name, 'write')) : [] };
@@ -1777,7 +1789,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const shown = (name) => access.readableFields.includes(name);
     return { title: shown('title') ? revision.title : null, description: shown('description') ? (revision.description ?? { type: 'doc', content: [] }) : null,
       descriptionHtml: shown('description') ? (revision.description ? wikiHtml(revision.description, null, null) : '') : null,
-      criteria: shown('criteria') ? revision.criteria.map((criterion) => ({ ...criterion })) : null, priority: shown('priority') ? revision.priority : null };
+      criteria: shown('criteria') ? revision.criteria.map((criterion) => ({ ...criterion })) : null, priority: shown('priority') ? revision.priority : null,
+      customFields: Object.fromEntries(Object.entries(revision.custom ?? {}).filter(([key]) => shown(`custom.${key}`)).sort(([a], [b]) => a.localeCompare(b))) };
   };
   const requirementView = (account, item) => {
     const access = requirementAccess(account, item.projectId);
@@ -1791,15 +1804,16 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return { id: item.id, projectId: item.projectId, projectKey: key, number: item.number, key: `ANF-${item.number}`, status: item.status, revision: item.revision,
       approvedRevision: item.approvedRevision, approval: approved ? { revision: approved.revision, approvedAt: approved.approvedAt, approvedBy: approved.approvedBy } : null,
       content: requirementContent(current, access), ownerId: access.readableFields.includes('owner') ? item.ownerId : null, access, editors, version: item.version,
-      createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy };
+      createdAt: item.createdAt, createdBy: item.createdBy, updatedAt: item.updatedAt, updatedBy: item.updatedBy,
+      customFields: requirementFieldDefs(item.projectId, access) };
   };
   const requirementAnswer = (account, item, status = 200) => ({ status, body: requirementView(account, item), etag: `"${item.version}"` });
-  function addRequirement(by, title, { projectId = project.id, criteria = [], priority = 'normal', description = null, status = 'draft', ownerId = null, approvedBy = null } = {}) {
+  function addRequirement(by, title, { projectId = project.id, criteria = [], priority = 'normal', description = null, status = 'draft', ownerId = null, approvedBy = null, custom = {} } = {}) {
     req.counters.set(projectId, (req.counters.get(projectId) ?? 0) + 1);
     const item = { id: uuid(), projectId, number: req.counters.get(projectId), status: 'draft', ownerId, revision: 1, approvedRevision: null,
       nextCriterion: criteria.length + 1, version: 1, createdAt: now(), createdBy: by.id, updatedAt: now(), updatedBy: by.id };
     req.items.push(item);
-    req.revisions.push({ requirementId: item.id, revision: 1, title, description, priority, criteria: criteria.map((text, index) => ({ id: index + 1, text })),
+    req.revisions.push({ requirementId: item.id, revision: 1, title, description, priority, criteria: criteria.map((text, index) => ({ id: index + 1, text })), custom: { ...custom },
       openedAt: now(), openedBy: by.id, savedAt: now(), savedBy: by.id, approvedAt: null, approvedBy: null });
     requirementEvent(item, 'created', by);
     if (status === 'review' || status === 'approved') {
@@ -1993,7 +2007,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // Checks like the server (H2 of the TASK-096 review): fixed criterion numbers, owners from the active internal members, the
   // description codes with the prefix description. and only http, https and mailto as link targets; line breaks become LF.
   function requirementChanges(body, access, violations, context) {
-    const known = ['title', 'description', 'priority', 'ownerId', 'criteria'];
+    const known = ['title', 'description', 'priority', 'ownerId', 'criteria', 'customFields'];
     for (const name of Object.keys(body ?? {})) if (!known.includes(name)) violations.push(`${name}.unknown`);
     if (body.title !== undefined && (typeof body.title !== 'string' || body.title.trim() === '')) violations.push('title.required');
     else if (body.title !== undefined && body.title.length > 200) violations.push('title.too_long');
@@ -2027,8 +2041,33 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         && state.accounts.some((entry) => entry.id === body.ownerId && entry.active && entry.kind !== 'portal');
       if (!member) violations.push('owner.not_member');
     }
-    const fields = known.filter((name) => body[name] !== undefined).map((name) => (name === 'ownerId' ? 'owner' : name));
-    return fields.filter((name) => !access.writableFields.includes(name));
+    // Custom fields (TASK-098) with the rules of ticket fields: the kind of each value, a new value only for an active field and
+    // option, a person from the members; a value the revision already holds stays allowed.
+    const custom = body.customFields ?? {};
+    if (body.customFields !== undefined && (typeof custom !== 'object' || custom === null || Array.isArray(custom))) violations.push('customFields.invalid');
+    const defs = requirementFieldsOf(context.projectId);
+    for (const [key, value] of Object.entries(typeof custom === 'object' && custom !== null ? custom : {})) {
+      const def = defs.find((entry) => entry.key === key);
+      if (!def) {
+        violations.push('customFields.unknown');
+        continue;
+      }
+      if (value === null) continue;
+      const valid = { integer: Number.isInteger(value), boolean: typeof value === 'boolean', date: typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value),
+        select: typeof value === 'string' && (def.options ?? []).some((option) => option.key === value), user: typeof value === 'string',
+        text: typeof value === 'string' && value.trim() !== '' && value.length <= 200, longtext: typeof value === 'string' && value.trim() !== '' && value.length <= 20000 }[def.type];
+      if (!valid) {
+        violations.push(`custom.${key}.invalid`);
+        continue;
+      }
+      if (value === (context.current ?? {})[key]) continue;
+      if (def.active === false) violations.push(`custom.${key}.inactive`);
+      else if (def.type === 'select' && (def.options ?? []).find((option) => option.key === value)?.active === false) violations.push(`custom.${key}.option_inactive`);
+      else if (def.type === 'user' && !(state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === value)) violations.push(`custom.${key}.not_member`);
+    }
+    const fields = known.filter((name) => body[name] !== undefined && name !== 'customFields').map((name) => (name === 'ownerId' ? 'owner' : name));
+    return [...fields, ...Object.keys(typeof custom === 'object' && custom !== null ? custom : {}).map((key) => `custom.${key}`)]
+      .filter((name) => !access.writableFields.includes(name));
   }
   // Links (TASK-097) as the server: tickets with ticket.read and their title and status after the field rules, a newer revision
   // named until an explicit switch, done after the category of the status; pages with the published title for wiki readers.
@@ -2178,7 +2217,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
             const view = requirementView(account, item);
             return { id: item.id, number: item.number, key: view.key, status: item.status, revision: item.revision, approvedRevision: item.approvedRevision,
               title: view.content.title, priority: view.content.priority, ownerId: view.ownerId, updatedAt: item.updatedAt };
-          }), nextAfter: matches.length > limit ? page.at(-1).number : null });
+          }), nextAfter: matches.length > limit ? page.at(-1).number : null, customFields: requirementFieldDefs(projectId, access) });
         // A test can hold back the answer of one list request to check that a late answer of an older filter is dropped.
         return req.delayList ? req.delayList(answer, query) : answer;
       }
@@ -2190,7 +2229,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
         if (denied.length > 0 || !access.writableFields.includes('title')) return problem(403, 'auth.forbidden');
         const item = addRequirement(account, body.title, { projectId, priority: body.priority ?? 'normal', description: body.description ?? null,
-          criteria: (body.criteria ?? []).map((criterion) => criterion.text), ownerId: body.ownerId ?? null });
+          criteria: (body.criteria ?? []).map((criterion) => criterion.text), ownerId: body.ownerId ?? null,
+          custom: Object.fromEntries(Object.entries(body.customFields ?? {}).filter(([, value]) => value !== null)) });
         return requirementAnswer(account, item, 201);
       }
     }
@@ -2223,11 +2263,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const revision = requirementRevision(item, Number(match[4]));
       if (!revision) return problem(404, 'requirement.revision_not_found');
       return ok({ revision: revision.revision, current: revision.revision === item.revision, savedAt: revision.savedAt, savedBy: revision.savedBy,
-        approvedAt: revision.approvedAt, approvedBy: revision.approvedBy, content: requirementContent(revision, access) });
+        approvedAt: revision.approvedAt, approvedBy: revision.approvedBy, content: requirementContent(revision, access),
+        customFields: requirementFieldDefs(item.projectId, access) });
     }
     const needed = part === 'approve' || part === 'return' ? 'approve' : 'edit';
     if (!access[needed]) return problem(403, 'auth.forbidden');
-    if (part === 'approve' && !REQ_CONTENT.every((name) => access.readableFields.includes(name))) return problem(403, 'requirement.content_not_readable');
+    // TASK-098: every custom field of the project counts as content too.
+    if (part === 'approve' && ![...REQ_CONTENT, ...requirementFieldsOf(item.projectId).map((entry) => `custom.${entry.key}`)]
+      .every((name) => access.readableFields.includes(name))) return problem(403, 'requirement.content_not_readable');
     if (headers['if-match'] === undefined) return problem(428, 'requirement.precondition_required');
     if (headers['if-match'] !== `"${item.version}"`) return problem(412, 'requirement.version_conflict');
     const touch = () => Object.assign(item, { version: item.version + 1, updatedAt: now(), updatedBy: account.id });
@@ -2243,20 +2286,28 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const violations = [];
       if (Object.keys(body ?? {}).length === 0) return problem(400, 'request.invalid', { violations: ['changes.required'] });
       const denied = requirementChanges(body, access, violations,
-        { projectId: item.projectId, known: new Set(requirementRevision(item, item.revision).criteria.map((criterion) => criterion.id)) });
+        { projectId: item.projectId, known: new Set(requirementRevision(item, item.revision).criteria.map((criterion) => criterion.id)),
+          current: requirementRevision(item, item.revision).custom ?? {} });
       if (violations.length > 0) return problem(400, 'request.invalid', { violations: [...new Set(violations)] });
       if (denied.length > 0) return problem(403, 'auth.forbidden');
       let current = requirementRevision(item, item.revision);
-      const before = { ...current, criteria: current.criteria.map((criterion) => ({ ...criterion })) };
+      const before = { ...current, criteria: current.criteria.map((criterion) => ({ ...criterion })), custom: { ...(current.custom ?? {}) } };
+      const custom = { ...before.custom };
+      for (const [key, value] of Object.entries(body.customFields ?? {})) {
+        if (value === null) delete custom[key];
+        else custom[key] = value;
+      }
       const next = { title: body.title ?? current.title, priority: body.priority ?? current.priority,
-        description: body.description !== undefined ? body.description : current.description, criteria: current.criteria };
+        description: body.description !== undefined ? body.description : current.description, criteria: current.criteria, custom };
+      const sorted = (values) => JSON.stringify(Object.entries(values).sort(([a], [b]) => a.localeCompare(b)));
       if (body.criteria !== undefined) {
         const known = new Set(current.criteria.map((criterion) => criterion.id));
         if (body.criteria.some((criterion) => criterion.id != null && !known.has(criterion.id))) return problem(400, 'request.invalid', { violations: ['criteria.unknown'] });
         next.criteria = body.criteria.map((criterion) => (criterion.id == null ? { id: item.nextCriterion++, text: criterion.text } : { id: criterion.id, text: criterion.text }));
       }
       const contentChanged = next.title !== before.title || next.priority !== before.priority
-        || JSON.stringify(next.description) !== JSON.stringify(before.description) || JSON.stringify(next.criteria) !== JSON.stringify(before.criteria);
+        || JSON.stringify(next.description) !== JSON.stringify(before.description) || JSON.stringify(next.criteria) !== JSON.stringify(before.criteria)
+        || sorted(next.custom) !== sorted(before.custom);
       const ownerChanged = body.ownerId !== undefined && body.ownerId !== item.ownerId;
       if (!contentChanged && !ownerChanged) return requirementAnswer(account, item);
       if (contentChanged && current.approvedAt !== null) {
@@ -2281,6 +2332,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         }
         const order = (list) => list.filter((criterion) => old.has(criterion.id) && kept.has(criterion.id)).map((criterion) => `K${criterion.id}`).join(',');
         if (order(before.criteria) !== order(next.criteria)) requirementEvent(item, 'criteria_moved', account, { field: 'criteria', from: order(before.criteria), to: order(next.criteria) });
+        for (const key of [...new Set([...Object.keys(before.custom), ...Object.keys(next.custom)])].sort()) {
+          if (before.custom[key] !== next.custom[key]) {
+            requirementEvent(item, 'changed', account, { field: `custom.${key}`, from: before.custom[key] === undefined ? null : String(before.custom[key]),
+              to: next.custom[key] === undefined ? null : String(next.custom[key]) });
+          }
+        }
         Object.assign(current, next, { savedAt: now(), savedBy: account.id });
       }
       if (ownerChanged) {
@@ -2292,7 +2349,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (part === 'submit' && method === 'POST') {
       if (item.status !== 'draft') return problem(409, 'requirement.status_invalid');
-      if (requirementRevision(item, item.revision).criteria.length === 0) return problem(400, 'request.invalid', { violations: ['criteria.required'] });
+      // TASK-098: an active required field needs a value; who may not read and write it meets a conflict, not a hint at it.
+      const required = requirementFieldsOf(item.projectId).filter((entry) => entry.required === true && entry.active !== false);
+      if (required.some((entry) => !access.readableFields.includes(`custom.${entry.key}`) || !access.writableFields.includes(`custom.${entry.key}`))) {
+        return problem(409, 'requirement.required_field_inaccessible');
+      }
+      const values = requirementRevision(item, item.revision).custom ?? {};
+      const missing = [...(requirementRevision(item, item.revision).criteria.length === 0 ? ['criteria.required'] : []),
+        ...required.filter((entry) => values[entry.key] === undefined).map((entry) => `custom.${entry.key}.required_for_review`)];
+      if (missing.length > 0) return problem(400, 'request.invalid', { violations: missing });
       return move('submitted', 'review');
     }
     if (part === 'approve' && method === 'POST') {
