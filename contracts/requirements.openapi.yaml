@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Anforderungen (TASK-096)
-  version: 0.1.0
+  title: Task Manager API, Anforderungen (TASK-096, TASK-097)
+  version: 0.2.0
   description: |
     Anforderungen in Projekten mit Abnahmekriterien, fachlichen Revisionen und der Freigabe genau einer Revision
     (REQ-REQ-001, REQ-REQ-002, DEC-030, DEC-126). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -52,6 +52,24 @@ info:
     `description.link_invalid`. Zeilenumbrüche CRLF und CR in Kriterien und Begründungen werden vor der Prüfung zu LF.
     `descriptionHtml` ist die vom Server geschriebene Leseansicht. Begründungen haben höchstens 2000 Zeichen
     (`reason.required`, `reason.too_long`, `reason.invalid`).
+
+    Verknüpfungen (TASK-097, DEC-127): Eine Anforderung verknüpft Tickets desselben Projekts, jedes höchstens einmal (409
+    `requirement.already_linked`), mit Bezug auf eine Revision: beim Verknüpfen die laufende. Ist eine neuere Revision
+    vorhanden, nennt `newerRevision` sie, bis eine ausdrückliche Umstellung die Verknüpfung an die laufende Revision bindet;
+    die Umstellung nennt die gesehene Revision im Körper (sonst 412 `requirement.version_conflict`). Verknüpfen, Umstellen
+    und Lösen eines Tickets verlangen `requirement.edit` und `ticket.read` im Projekt (sonst 403 `auth.forbidden`). Eine
+    Verknüpfung sieht nur, wer beide Seiten lesen darf: ohne `ticket.read` fehlen Tickets, ihre Zahl und ihre Ereignisse in
+    der Historie der Anforderung; ohne `requirement.read` fehlen Anforderungen am Ticket und ihre Einträge in der
+    Tickethistorie (Feld `requirements`, Werte `ANF-n:Revision`). Titel und Status eines Tickets erscheinen nur mit ihren
+    Leseregeln; `summary.done` zählt Tickets, deren lesbarer Status die Kategorie `done` hat. Ein erledigtes Ticket gibt nie
+    frei und ändert weder Status noch Revision der Anforderung. Wikiseiten desselben Projekts werden ohne Revisionsbezug
+    verknüpft; verknüpfen lässt sich nur eine veröffentlichte, nicht archivierte Seite, die die Person mit `wiki.read` lesen
+    darf (sonst 400 `page.unknown`). Gezeigt wird ihr veröffentlichter Titel in der Sprache `language` mit der Rückfallregel
+    des Wikis; ohne `wiki.read` oder ohne veröffentlichte Fassung ist `title` leer und `available` falsch („Seite nicht
+    verfügbar“). Lösen einer Seite verlangt nur `requirement.edit`. Eine verworfene Anforderung erhält keine neue
+    Verknüpfung und keine Umstellung (409 `requirement.discarded`), Lösen bleibt möglich. Je Anforderung höchstens 200
+    Tickets und 200 Seiten (409 `requirement.links_too_many`). Verknüpfungen ändern weder die Version des Tickets noch die
+    der Anforderung und brauchen kein `If-Match`; beide Historien halten sie fest.
 
     Ist die Datenbank kurz belegt, antwortet der Server mit 503 `requirement.busy` und `Retry-After`; die ganze Anfrage darf
     wiederholt werden.
@@ -296,9 +314,10 @@ paths:
     get:
       operationId: readRequirementHistory
       summary: Revisionen und Historie
-      description: Einträge zu Feldern ohne Leseregel fehlen.
+      description: Einträge zu Feldern ohne Leseregel fehlen, Ereignisse von Tickets ohne `ticket.read`.
       parameters:
         - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/Language'
       responses:
         '200':
           description: Revisionen und Ereignisse in ihrer Reihenfolge
@@ -326,6 +345,147 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/links:
+    get:
+      operationId: readRequirementLinks
+      summary: Verknüpfte Tickets und Wikiseiten mit Umsetzungsstand
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/Language'
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/tickets:
+    post:
+      operationId: linkRequirementTicket
+      summary: Ticket desselben Projekts mit der laufenden Revision verknüpfen (requirement.edit und ticket.read)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/Language'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [number]
+              properties:
+                number: {type: integer, format: int64, minimum: 1, description: 'Nummer des Tickets im Projekt (`number.invalid`, `ticket.unknown`)'}
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/tickets/{number}:
+    delete:
+      operationId: unlinkRequirementTicket
+      summary: Verknüpfung mit einem Ticket lösen (requirement.edit und ticket.read)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/TicketNumber'
+        - $ref: '#/components/parameters/Language'
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/tickets/{number}/switch:
+    post:
+      operationId: switchRequirementTicket
+      summary: Verknüpfung auf die laufende Revision umstellen (requirement.edit und ticket.read)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/TicketNumber'
+        - $ref: '#/components/parameters/Language'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: {type: integer, minimum: 1, description: 'Die gesehene laufende Revision (`revision.required`)'}
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/pages:
+    post:
+      operationId: linkRequirementPage
+      summary: Veröffentlichte Wikiseite desselben Projekts verknüpfen (requirement.edit und wiki.read)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - $ref: '#/components/parameters/Language'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pageId]
+              properties:
+                pageId: {type: string, format: uuid, description: '`pageId.invalid`, `page.unknown`'}
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/pages/{pageId}:
+    delete:
+      operationId: unlinkRequirementPage
+      summary: Verknüpfung mit einer Wikiseite lösen (requirement.edit)
+      parameters:
+        - $ref: '#/components/parameters/RequirementId'
+        - name: pageId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/Language'
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/projects/{projectId}/tickets/{number}:
+    get:
+      operationId: readTicketRequirements
+      summary: Feld „Anforderungen“ eines Tickets
+      description: |
+        Verlangt `ticket.read` (sonst 404 `project.not_found`, unbekanntes Ticket 404 `ticket.not_found`). Ohne
+        `requirement.read` ist `read` falsch und die Liste leer.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/TicketNumber'
+      responses:
+        '200':
+          description: Lesbare verknüpfte Anforderungen nach Nummer
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TicketRequirements'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -348,6 +508,17 @@ components:
       in: path
       required: true
       schema: {type: integer, minimum: 1}
+    TicketNumber:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    Language:
+      name: language
+      in: query
+      required: false
+      description: Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite
+      schema: {type: string, enum: [de, en]}
     IfMatch:
       name: If-Match
       in: header
@@ -355,6 +526,11 @@ components:
       description: Version der Anforderung aus dem ETag
       schema: {type: string}
   responses:
+    Links:
+      description: Verknüpfungen nach der Änderung
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Links'}
     Requirement:
       description: Anforderung nach der Änderung; ETag ist ihre Version
       headers:
@@ -563,7 +739,9 @@ components:
         `kind`: created, changed (Feld mit `from` und `to`; die Beschreibung ohne Werte), criterion_added,
         criterion_changed, criterion_removed (mit `criterion`), criteria_moved (alte und neue Reihenfolge), revision_opened
         (`from` und `to` sind die Revisionen), submitted, approved, returned (mit `reason`), discarded (mit freiwilliger
-        `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status.
+        `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status. Verknüpfungen (TASK-097) mit dem Feld
+        `tickets`: ticket_linked, ticket_switched, ticket_unlinked mit `Ticketnummer:Revision` in `from` und `to`; mit dem
+        Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt.
       required: [kind, revision, field, criterion, from, to, reason, actorId, occurredAt]
       properties:
         kind: {type: string}
@@ -571,6 +749,7 @@ components:
         field:
           oneOf:
             - {$ref: '#/components/schemas/Field'}
+            - {type: string, enum: [tickets, pages]}
             - {type: 'null'}
         criterion: {type: [integer, 'null']}
         from: {type: [string, 'null']}
@@ -580,9 +759,13 @@ components:
         occurredAt: {type: string, format: date-time}
     History:
       type: object
-      required: [requirementId, revisions, events]
+      required: [requirementId, revisions, events, pageTitles]
       properties:
         requirementId: {type: string, format: uuid}
+        pageTitles:
+          type: object
+          description: Veröffentlichter Titel jeder Seite aus den Ereignissen, die die Person lesen darf; fehlt eine Seite, ist sie nicht verfügbar
+          additionalProperties: {type: string}
         revisions:
           type: array
           items: {$ref: '#/components/schemas/RevisionInfo'}
@@ -600,3 +783,70 @@ components:
         approvedAt: {type: [string, 'null'], format: date-time}
         approvedBy: {type: [string, 'null'], format: uuid}
         content: {$ref: '#/components/schemas/Content'}
+    TicketLink:
+      type: object
+      required: [ticketId, number, key, title, status, statusName, done, revision, newerRevision, linkedAt, linkedBy]
+      properties:
+        ticketId: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        key: {type: string, description: Projektkennung und Nummer, etwa DEV-42}
+        title: {type: [string, 'null'], description: Nur mit der Leseregel für den Tickettitel}
+        status: {type: [string, 'null'], description: Nur mit der Leseregel für den Ticketstatus}
+        statusName: {type: [string, 'null']}
+        done: {type: boolean, description: Der lesbare Status hat die Kategorie done}
+        revision: {type: integer, description: Revision, auf die sich die Verknüpfung bezieht}
+        newerRevision: {type: [integer, 'null'], description: Laufende Revision, wenn sie neuer ist („Neuere Revision n vorhanden“)}
+        linkedAt: {type: string, format: date-time}
+        linkedBy: {type: string, format: uuid}
+    PageLink:
+      type: object
+      required: [pageId, title, available, linkedAt, linkedBy]
+      properties:
+        pageId: {type: string, format: uuid}
+        title: {type: [string, 'null']}
+        available: {type: boolean}
+        linkedAt: {type: string, format: date-time}
+        linkedBy: {type: string, format: uuid}
+    Links:
+      type: object
+      required: [requirementId, revision, edit, ticketsReadable, tickets, summary, pages]
+      properties:
+        requirementId: {type: string, format: uuid}
+        revision: {type: integer, description: Laufende Revision}
+        edit: {type: boolean, description: Die Person darf Verknüpfungen ändern; bei einer verworfenen Anforderung falsch}
+        ticketsReadable: {type: boolean, description: Die Person hat ticket.read im Projekt}
+        tickets:
+          type: array
+          items: {$ref: '#/components/schemas/TicketLink'}
+        summary:
+          type: object
+          required: [tickets, done]
+          properties:
+            tickets: {type: integer}
+            done: {type: integer}
+        pages:
+          type: array
+          items: {$ref: '#/components/schemas/PageLink'}
+    TicketRequirement:
+      type: object
+      required: [requirementId, number, key, title, status, revision, newerRevision, linkedAt, linkedBy]
+      properties:
+        requirementId: {type: string, format: uuid}
+        number: {type: integer, format: int64}
+        key: {type: string}
+        title: {type: [string, 'null'], description: Nur mit der Leseregel für den Titel der Anforderung}
+        status: {$ref: '#/components/schemas/Status'}
+        revision: {type: integer}
+        newerRevision: {type: [integer, 'null']}
+        linkedAt: {type: string, format: date-time}
+        linkedBy: {type: string, format: uuid}
+    TicketRequirements:
+      type: object
+      required: [ticketId, read, edit, requirements]
+      properties:
+        ticketId: {type: string, format: uuid}
+        read: {type: boolean}
+        edit: {type: boolean}
+        requirements:
+          type: array
+          items: {$ref: '#/components/schemas/TicketRequirement'}

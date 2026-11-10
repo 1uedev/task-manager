@@ -236,6 +236,10 @@ export interface components {
             /** Format: uuid */
             actor: string;
             changes: {
+                /**
+                 * @description `requirements` (TASK-097): Verknüpfen, Umstellen oder Lösen einer Anforderung mit den Werten `ANF-n:Revision`,
+                 *     als eigener Eintrag, der die Version des Tickets nicht ändert; nur sichtbar mit `requirement.read` im Projekt.
+                 */
                 field: string;
                 from: string | null;
                 to: string | null;

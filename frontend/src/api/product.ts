@@ -960,9 +960,46 @@ export const discardRequirement = (api: ServerApi, id: string, version: number, 
 export const restoreRequirement = (api: ServerApi, id: string, version: number) =>
   run(() => api.requirements.POST('/requirements/{requirementId}/restore', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) } }),
     one<Requirement>(isRequirement));
-export const readRequirementHistory = (api: ServerApi, id: string) =>
-  run(() => api.requirements.GET('/requirements/{requirementId}/history', { params: { path: { requirementId: id } } }),
-    one<RequirementHistory>(isRequirementHistory));
+export const readRequirementHistory = (api: ServerApi, id: string, language?: 'de' | 'en') =>
+  run(() => api.requirements.GET('/requirements/{requirementId}/history', { params: { path: { requirementId: id },
+    query: language === undefined ? {} : { language } } }), one<RequirementHistory>(isRequirementHistory));
 export const readRequirementRevision = (api: ServerApi, id: string, revision: number) =>
   run(() => api.requirements.GET('/requirements/{requirementId}/revisions/{revision}', { params: { path: { requirementId: id, revision } } }),
-    one<RequirementRevision>(isRequirementRevision));
+    one<RequirementRevision>(isRequirementRevision))
+
+// ---------------------------------------------------------------- requirement links (TASK-097)
+
+export type RequirementLinks = RequirementTypes['schemas']['Links'];
+export type RequirementTicketLink = RequirementTypes['schemas']['TicketLink'];
+export type RequirementPageLink = RequirementTypes['schemas']['PageLink'];
+export type TicketRequirements = RequirementTypes['schemas']['TicketRequirements'];
+export type TicketRequirement = RequirementTypes['schemas']['TicketRequirement'];
+type LinkLanguage = 'de' | 'en';
+
+const isRequirementLinks = (v: unknown) => hasStrings(v, 'requirementId') && typeof (v as RequirementLinks).edit === 'boolean'
+  && Array.isArray((v as RequirementLinks).tickets) && Array.isArray((v as RequirementLinks).pages) && record((v as RequirementLinks).summary);
+const isTicketRequirements = (v: unknown) => hasStrings(v, 'ticketId') && typeof (v as TicketRequirements).read === 'boolean'
+  && Array.isArray((v as TicketRequirements).requirements);
+
+export const readRequirementLinks = (api: ServerApi, id: string, language: LinkLanguage) =>
+  run(() => api.requirements.GET('/requirements/{requirementId}/links', { params: { path: { requirementId: id }, query: { language } } }),
+    one<RequirementLinks>(isRequirementLinks));
+// A link names no version; it never changes the version of the requirement or of the ticket.
+export const linkRequirementTicket = (api: ServerApi, id: string, number: number, language: LinkLanguage) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/tickets', { params: { path: { requirementId: id }, query: { language } },
+    body: { number } }), one<RequirementLinks>(isRequirementLinks));
+export const switchRequirementTicket = (api: ServerApi, id: string, number: number, revision: number, language: LinkLanguage) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/tickets/{number}/switch', { params: { path: { requirementId: id, number },
+    query: { language } }, body: { revision } }), one<RequirementLinks>(isRequirementLinks));
+export const unlinkRequirementTicket = (api: ServerApi, id: string, number: number, language: LinkLanguage) =>
+  run(() => api.requirements.DELETE('/requirements/{requirementId}/tickets/{number}', { params: { path: { requirementId: id, number },
+    query: { language } } }), one<RequirementLinks>(isRequirementLinks));
+export const linkRequirementPage = (api: ServerApi, id: string, pageId: string, language: LinkLanguage) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/pages', { params: { path: { requirementId: id }, query: { language } },
+    body: { pageId } }), one<RequirementLinks>(isRequirementLinks));
+export const unlinkRequirementPage = (api: ServerApi, id: string, pageId: string, language: LinkLanguage) =>
+  run(() => api.requirements.DELETE('/requirements/{requirementId}/pages/{pageId}', { params: { path: { requirementId: id, pageId },
+    query: { language } } }), one<RequirementLinks>(isRequirementLinks));
+export const readTicketRequirements = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.requirements.GET('/requirements/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }),
+    one<TicketRequirements>(isTicketRequirements));;

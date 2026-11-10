@@ -4,10 +4,12 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.permissions.AccessContext;
 import taskmanager.platform.ApiProblemException;
+import taskmanager.requirements.internal.RequirementLinks;
 import taskmanager.requirements.internal.RequirementService;
 import tools.jackson.databind.JsonNode;
 
@@ -31,10 +34,12 @@ import tools.jackson.databind.JsonNode;
 @RequestMapping("/api/v1/requirements")
 class RequirementController {
     private final RequirementService service;
+    private final RequirementLinks links;
     private final RequirementRequests requests;
 
-    RequirementController(RequirementService service, RequirementRequests requests) {
+    RequirementController(RequirementService service, RequirementLinks links, RequirementRequests requests) {
         this.service = service;
+        this.links = links;
         this.requests = requests;
     }
 
@@ -86,7 +91,44 @@ class RequirementController {
             Instant occurredAt) {
     }
 
-    record HistoryBody(UUID requirementId, List<RevisionInfoBody> revisions, List<EventBody> events) {
+    record HistoryBody(UUID requirementId, List<RevisionInfoBody> revisions, List<EventBody> events, Map<UUID, String> pageTitles) {
+    }
+
+    record TicketLinkBody(UUID ticketId, long number, String key, String title, String status, String statusName, boolean done, int revision,
+            Integer newerRevision, Instant linkedAt, UUID linkedBy) {
+    }
+
+    record PageLinkBody(UUID pageId, String title, boolean available, Instant linkedAt, UUID linkedBy) {
+    }
+
+    record SummaryBody(int tickets, int done) {
+    }
+
+    record LinksBody(UUID requirementId, int revision, boolean edit, boolean ticketsReadable, List<TicketLinkBody> tickets, SummaryBody summary,
+            List<PageLinkBody> pages) {
+        static LinksBody of(RequirementLinks.Links l) {
+            return new LinksBody(l.requirementId(), l.revision(), l.edit(), l.ticketsReadable(), l.tickets().stream()
+                .map(t -> new TicketLinkBody(t.ticketId(), t.number(), t.key(), t.title(), t.status(), t.statusName(), t.done(), t.revision(),
+                    t.newerRevision(), t.linkedAt(), t.linkedBy()))
+                .toList(), new SummaryBody(l.summary().tickets(), l.summary().done()), l.pages().stream()
+                .map(p -> new PageLinkBody(p.pageId(), p.title(), p.title() != null, p.linkedAt(), p.linkedBy())).toList());
+        }
+    }
+
+    record TicketRequirementBody(UUID requirementId, long number, String key, String title, String status, int revision, Integer newerRevision,
+            Instant linkedAt, UUID linkedBy) {
+    }
+
+    record TicketRequirementsBody(UUID ticketId, boolean read, boolean edit, List<TicketRequirementBody> requirements) {
+    }
+
+    record TicketLinkRequest(Long number) {
+    }
+
+    record SwitchRequest(Integer revision) {
+    }
+
+    record PageLinkRequest(UUID pageId) {
     }
 
     record RevisionBody(int revision, boolean current, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, ContentBody content) {
@@ -198,14 +240,85 @@ class RequirementController {
     }
 
     @GetMapping("/{id}/history")
-    HistoryBody history(@PathVariable UUID id) {
+    HistoryBody history(@PathVariable UUID id, @RequestParam(required = false) String language) {
         AccessContext actor = requests.actor();
-        RequirementService.History h = RequirementRequests.retrying(() -> service.history(actor, id));
+        String lang = language(language);
+        RequirementService.History h = RequirementRequests.retrying(() -> service.history(actor, id, lang));
         return new HistoryBody(h.requirementId(),
             h.revisions().stream().map(r -> new RevisionInfoBody(r.revision(), r.openedAt(), r.openedBy(), r.savedAt(), r.savedBy(), r.approvedAt(),
                 r.approvedBy())).toList(),
             h.events().stream().map(e -> new EventBody(e.kind(), e.revision(), e.field(), e.criterion(), e.from(), e.to(), e.reason(), e.actorId(),
-                e.occurredAt())).toList());
+                e.occurredAt())).toList(), h.pageTitles());
+    }
+
+    // ------------------------------------------------------------------------------------------------ links (TASK-097)
+
+    @GetMapping("/{id}/links")
+    LinksBody links(@PathVariable UUID id, @RequestParam(required = false) String language) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        return LinksBody.of(RequirementRequests.retrying(() -> links.links(actor, id, lang)));
+    }
+
+    @PostMapping("/{id}/tickets")
+    LinksBody linkTicket(@PathVariable UUID id, @RequestParam(required = false) String language, @RequestBody(required = false) TicketLinkRequest body) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        Long number = body == null ? null : body.number();
+        return LinksBody.of(RequirementRequests.retrying(() -> links.linkTicket(actor, id, number, lang)));
+    }
+
+    @PostMapping("/{id}/tickets/{number}/switch")
+    LinksBody switchTicket(@PathVariable UUID id, @PathVariable long number, @RequestParam(required = false) String language,
+            @RequestBody(required = false) SwitchRequest body) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        Integer revision = body == null ? null : body.revision();
+        return LinksBody.of(RequirementRequests.retrying(() -> links.switchTicket(actor, id, number, revision, lang)));
+    }
+
+    @DeleteMapping("/{id}/tickets/{number}")
+    LinksBody unlinkTicket(@PathVariable UUID id, @PathVariable long number, @RequestParam(required = false) String language) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        return LinksBody.of(RequirementRequests.retrying(() -> links.unlinkTicket(actor, id, number, lang)));
+    }
+
+    @PostMapping("/{id}/pages")
+    LinksBody linkPage(@PathVariable UUID id, @RequestParam(required = false) String language, @RequestBody(required = false) PageLinkRequest body) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        UUID pageId = body == null ? null : body.pageId();
+        return LinksBody.of(RequirementRequests.retrying(() -> links.linkPage(actor, id, pageId, lang)));
+    }
+
+    @DeleteMapping("/{id}/pages/{pageId}")
+    LinksBody unlinkPage(@PathVariable UUID id, @PathVariable UUID pageId, @RequestParam(required = false) String language) {
+        AccessContext actor = requests.actor();
+        String lang = language(language);
+        return LinksBody.of(RequirementRequests.retrying(() -> links.unlinkPage(actor, id, pageId, lang)));
+    }
+
+    /** The field "Anforderungen" of a ticket (TASK-097). */
+    @GetMapping("/projects/{projectId}/tickets/{number}")
+    TicketRequirementsBody ofTicket(@PathVariable UUID projectId, @PathVariable long number) {
+        AccessContext actor = requests.actor();
+        RequirementLinks.TicketRequirements t = RequirementRequests.retrying(() -> links.ofTicket(actor, projectId, number));
+        return new TicketRequirementsBody(t.ticketId(), t.read(), t.edit(), t.requirements().stream()
+            .map(r -> new TicketRequirementBody(r.requirementId(), r.number(), r.key(), r.title(), r.status(), r.revision(), r.newerRevision(),
+                r.linkedAt(), r.linkedBy()))
+            .toList());
+    }
+
+    /** The language of titles: {@code de} or {@code en}; missing means the source language of each page. */
+    private static String language(String language) {
+        if (language == null) {
+            return null;
+        }
+        if (!List.of("de", "en").contains(language)) {
+            throw ApiProblemException.withViolations(400, "request.invalid", List.of("language.invalid"));
+        }
+        return language;
     }
 
     @GetMapping("/{id}/revisions/{revision}")

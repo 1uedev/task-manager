@@ -184,7 +184,7 @@ export interface paths {
         };
         /**
          * Revisionen und Historie
-         * @description Einträge zu Feldern ohne Leseregel fehlen.
+         * @description Einträge zu Feldern ohne Leseregel fehlen, Ereignisse von Tickets ohne `ticket.read`.
          */
         get: operations["readRequirementHistory"];
         put?: never;
@@ -204,6 +204,129 @@ export interface paths {
         };
         /** Inhalt einer Revision, für Ansicht und Vergleich */
         get: operations["readRequirementRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verknüpfte Tickets und Wikiseiten mit Umsetzungsstand */
+        get: operations["readRequirementLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ticket desselben Projekts mit der laufenden Revision verknüpfen (requirement.edit und ticket.read) */
+        post: operations["linkRequirementTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/tickets/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Verknüpfung mit einem Ticket lösen (requirement.edit und ticket.read) */
+        delete: operations["unlinkRequirementTicket"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/tickets/{number}/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verknüpfung auf die laufende Revision umstellen (requirement.edit und ticket.read) */
+        post: operations["switchRequirementTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Veröffentlichte Wikiseite desselben Projekts verknüpfen (requirement.edit und wiki.read) */
+        post: operations["linkRequirementPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/pages/{pageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Verknüpfung mit einer Wikiseite lösen (requirement.edit) */
+        delete: operations["unlinkRequirementPage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/projects/{projectId}/tickets/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Feld „Anforderungen“ eines Tickets
+         * @description Verlangt `ticket.read` (sonst 404 `project.not_found`, unbekanntes Ticket 404 `ticket.not_found`). Ohne
+         *     `requirement.read` ist `read` falsch und die Liste leer.
+         */
+        get: operations["readTicketRequirements"];
         put?: never;
         post?: never;
         delete?: never;
@@ -374,12 +497,14 @@ export interface components {
          * @description `kind`: created, changed (Feld mit `from` und `to`; die Beschreibung ohne Werte), criterion_added,
          *     criterion_changed, criterion_removed (mit `criterion`), criteria_moved (alte und neue Reihenfolge), revision_opened
          *     (`from` und `to` sind die Revisionen), submitted, approved, returned (mit `reason`), discarded (mit freiwilliger
-         *     `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status.
+         *     `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status. Verknüpfungen (TASK-097) mit dem Feld
+         *     `tickets`: ticket_linked, ticket_switched, ticket_unlinked mit `Ticketnummer:Revision` in `from` und `to`; mit dem
+         *     Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt.
          */
         Event: {
             kind: string;
             revision: number;
-            field: components["schemas"]["Field"] | null;
+            field: components["schemas"]["Field"] | ("tickets" | "pages") | null;
             criterion: number | null;
             from: string | null;
             to: string | null;
@@ -392,6 +517,10 @@ export interface components {
         History: {
             /** Format: uuid */
             requirementId: string;
+            /** @description Veröffentlichter Titel jeder Seite aus den Ereignissen, die die Person lesen darf; fehlt eine Seite, ist sie nicht verfügbar */
+            pageTitles: {
+                [key: string]: string;
+            };
             revisions: components["schemas"]["RevisionInfo"][];
             events: components["schemas"]["Event"][];
         };
@@ -408,8 +537,89 @@ export interface components {
             approvedBy: string | null;
             content: components["schemas"]["Content"];
         };
+        TicketLink: {
+            /** Format: uuid */
+            ticketId: string;
+            /** Format: int64 */
+            number: number;
+            /** @description Projektkennung und Nummer */
+            key: string;
+            /** @description Nur mit der Leseregel für den Tickettitel */
+            title: string | null;
+            /** @description Nur mit der Leseregel für den Ticketstatus */
+            status: string | null;
+            statusName: string | null;
+            /** @description Der lesbare Status hat die Kategorie done */
+            done: boolean;
+            /** @description Revision */
+            revision: number;
+            /** @description Laufende Revision */
+            newerRevision: number | null;
+            /** Format: date-time */
+            linkedAt: string;
+            /** Format: uuid */
+            linkedBy: string;
+        };
+        PageLink: {
+            /** Format: uuid */
+            pageId: string;
+            title: string | null;
+            available: boolean;
+            /** Format: date-time */
+            linkedAt: string;
+            /** Format: uuid */
+            linkedBy: string;
+        };
+        Links: {
+            /** Format: uuid */
+            requirementId: string;
+            /** @description Laufende Revision */
+            revision: number;
+            /** @description Die Person darf Verknüpfungen ändern; bei einer verworfenen Anforderung falsch */
+            edit: boolean;
+            /** @description Die Person hat ticket.read im Projekt */
+            ticketsReadable: boolean;
+            tickets: components["schemas"]["TicketLink"][];
+            summary: {
+                tickets: number;
+                done: number;
+            };
+            pages: components["schemas"]["PageLink"][];
+        };
+        TicketRequirement: {
+            /** Format: uuid */
+            requirementId: string;
+            /** Format: int64 */
+            number: number;
+            key: string;
+            /** @description Nur mit der Leseregel für den Titel der Anforderung */
+            title: string | null;
+            status: components["schemas"]["Status"];
+            revision: number;
+            newerRevision: number | null;
+            /** Format: date-time */
+            linkedAt: string;
+            /** Format: uuid */
+            linkedBy: string;
+        };
+        TicketRequirements: {
+            /** Format: uuid */
+            ticketId: string;
+            read: boolean;
+            edit: boolean;
+            requirements: components["schemas"]["TicketRequirement"][];
+        };
     };
     responses: {
+        /** @description Verknüpfungen nach der Änderung */
+        Links: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Links"];
+            };
+        };
         /** @description Anforderung nach der Änderung; ETag ist ihre Version */
         Requirement: {
             headers: {
@@ -440,6 +650,9 @@ export interface components {
         ProjectId: string;
         RequirementId: string;
         Revision: number;
+        TicketNumber: number;
+        /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+        Language: "de" | "en";
         /** @description Version der Anforderung aus dem ETag */
         IfMatch: string;
     };
@@ -760,7 +973,10 @@ export interface operations {
     };
     readRequirementHistory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
             header?: never;
             path: {
                 requirementId: components["parameters"]["RequirementId"];
@@ -803,6 +1019,199 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Revision"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    readRequirementLinks: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    linkRequirementTicket: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: int64
+                     * @description Nummer des Tickets im Projekt (`number.invalid`, `ticket.unknown`)
+                     */
+                    number: number;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    unlinkRequirementTicket: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+                number: components["parameters"]["TicketNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    switchRequirementTicket: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+                number: components["parameters"]["TicketNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Die gesehene laufende Revision (`revision.required`) */
+                    revision: number;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    linkRequirementPage: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description `pageId.invalid`, `page.unknown`
+                     */
+                    pageId: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    unlinkRequirementPage: {
+        parameters: {
+            query?: {
+                /** @description Sprache der Seitentitel, `de` oder `en` (`language.invalid`); ohne Angabe die Quellsprache jeder Seite */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Links"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    readTicketRequirements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["TicketNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lesbare verknüpfte Anforderungen nach Nummer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketRequirements"];
                 };
             };
             401: components["responses"]["Problem"];

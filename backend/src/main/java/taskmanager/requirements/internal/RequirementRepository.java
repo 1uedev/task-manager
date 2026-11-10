@@ -218,4 +218,75 @@ class RequirementRepository {
                 rs.getObject("actor_id", UUID.class), instant(rs.getTimestamp("occurred_at"))))
             .list();
     }
+
+    // ------------------------------------------------------------------------------------------------ links (TASK-097)
+
+    record TicketLink(UUID requirementId, UUID ticketId, int revision, Instant linkedAt, UUID linkedBy) {
+    }
+
+    record PageLink(UUID requirementId, UUID pageId, Instant linkedAt, UUID linkedBy) {
+    }
+
+    private static TicketLink ticketLink(ResultSet rs) throws SQLException {
+        return new TicketLink(rs.getObject("requirement_id", UUID.class), rs.getObject("ticket_id", UUID.class), rs.getInt("revision"),
+            instant(rs.getTimestamp("linked_at")), rs.getObject("linked_by", UUID.class));
+    }
+
+    List<TicketLink> ticketLinks(UUID requirementId) {
+        return jdbc.sql("select requirement_id, ticket_id, revision, linked_at, linked_by from requirement_ticket_link where requirement_id = ?")
+            .param(requirementId).query((rs, n) -> ticketLink(rs)).list();
+    }
+
+    /** The links of a ticket with requirements of the company. */
+    List<TicketLink> linksOfTicket(UUID companyId, UUID ticketId) {
+        return jdbc.sql("""
+                select requirement_id, ticket_id, revision, linked_at, linked_by from requirement_ticket_link
+                where company_id = ? and ticket_id = ?
+                """).params(companyId, ticketId).query((rs, n) -> ticketLink(rs)).list();
+    }
+
+    Optional<TicketLink> ticketLink(UUID requirementId, UUID ticketId) {
+        return jdbc.sql("""
+                select requirement_id, ticket_id, revision, linked_at, linked_by from requirement_ticket_link
+                where requirement_id = ? and ticket_id = ?
+                """).params(requirementId, ticketId).query((rs, n) -> ticketLink(rs)).optional();
+    }
+
+    void insert(UUID companyId, TicketLink link) {
+        jdbc.sql("""
+                insert into requirement_ticket_link (requirement_id, ticket_id, company_id, revision, linked_at, linked_by)
+                values (?, ?, ?, ?, ?, ?)
+                """).params(link.requirementId(), link.ticketId(), companyId, link.revision(), ts(link.linkedAt()), link.linkedBy()).update();
+    }
+
+    void switchRevision(UUID requirementId, UUID ticketId, int revision) {
+        jdbc.sql("update requirement_ticket_link set revision = ? where requirement_id = ? and ticket_id = ?").params(revision, requirementId, ticketId)
+            .update();
+    }
+
+    void deleteTicketLink(UUID requirementId, UUID ticketId) {
+        jdbc.sql("delete from requirement_ticket_link where requirement_id = ? and ticket_id = ?").params(requirementId, ticketId).update();
+    }
+
+    List<PageLink> pageLinks(UUID requirementId) {
+        return jdbc.sql("select requirement_id, page_id, linked_at, linked_by from requirement_page_link where requirement_id = ? order by linked_at, page_id")
+            .param(requirementId)
+            .query((rs, n) -> new PageLink(rs.getObject("requirement_id", UUID.class), rs.getObject("page_id", UUID.class),
+                instant(rs.getTimestamp("linked_at")), rs.getObject("linked_by", UUID.class)))
+            .list();
+    }
+
+    boolean pageLinked(UUID requirementId, UUID pageId) {
+        return jdbc.sql("select count(*) from requirement_page_link where requirement_id = ? and page_id = ?").params(requirementId, pageId)
+            .query(Long.class).single() > 0;
+    }
+
+    void insert(UUID companyId, PageLink link) {
+        jdbc.sql("insert into requirement_page_link (requirement_id, page_id, company_id, linked_at, linked_by) values (?, ?, ?, ?, ?)")
+            .params(link.requirementId(), link.pageId(), companyId, ts(link.linkedAt()), link.linkedBy()).update();
+    }
+
+    void deletePageLink(UUID requirementId, UUID pageId) {
+        jdbc.sql("delete from requirement_page_link where requirement_id = ? and page_id = ?").params(requirementId, pageId).update();
+    }
 }

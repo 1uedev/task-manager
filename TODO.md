@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -43,6 +41,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-096](#task-096-anforderungen-mit-kriterien-revisionen-und-freigabe-a13-teil-1) | Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
 | [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -113,9 +112,9 @@ Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
 
 ## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261110-requirements-01 · **Aktualisiert:** 2026-11-10
 
-**Bezug:** REQ-REQ-003, REQ-ACL-004; ACC-006; docs/DOMAIN_MODEL.md (Beispiel ANF-17 und DEV-42, Prüffall F-14). **Abhängigkeiten:** TASK-096 auf main. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; das Ergebnis von TASK-096 ist seit dem 10. November 2026 auf main (PR #286), die Blockade ist damit aufgehoben. Branch claude/project-thread-dyiimb, Entscheidung DEC-127, eigene Migration nach denen von TASK-096.
+**Bezug:** REQ-REQ-003, REQ-ACL-004; ACC-006; docs/DOMAIN_MODEL.md (Beispiel ANF-17 und DEV-42, Prüffall F-14). **Abhängigkeiten:** TASK-096 auf main. **Arbeitsstand:** Mit TASK-096 von Holger am 10. November 2026 beauftragt und mit den Vorschlägen bestätigt; das Ergebnis von TASK-096 ist seit dem 10. November 2026 auf main (PR #286), die Blockade ist damit aufgehoben. Branch claude/project-thread-dyiimb, Entscheidung DEC-127, eigene Migration nach denen von TASK-096. Übergabe 10. November 2026: Ergebnis in PR #290 von claude/project-thread-dyiimb mit Migration V0059, Dienst `RequirementLinks`, Vertrag `contracts/requirements.openapi.yaml` 0.2.0, Feld `requirements` in der Tickethistorie, Abschnitt „Verknüpfungen“ an der Anforderung (Tickets mit Revision, Hinweis und Umstellen, Zählung „n Tickets, davon m erledigt“, Wikiseiten) und Abschnitt „Anforderungen“ am Ticket mit Suche und Verknüpfen. Sechs Auslegungen stehen zur Bestätigung in DEC-127, darunter Regel 4 vor Abnahmekriterium 3 für Seiten ohne Leserecht. Belege und Grenzen im PR.
 
 **Umfang:** Verknüpfungen einer Anforderung mit Tickets desselben Projekts mit Revisionsbezug, Hinweis und Umstellung auf neuere Revisionen, Umsetzungsstand aus den lesbaren Tickets, Verknüpfungen mit Wikiseiten desselben Projekts, das Feld „Anforderungen“ am Ticket, Einträge in beiden Historien, mit Migration, Vertrag, Oberfläche und Tests. Nicht Teil: projektübergreifende Verknüpfungen, Git Objekte (A15), Abnahme der Umsetzung je Kriterium, Beziehungen zwischen Anforderungen.
 
@@ -132,7 +131,7 @@ Nicht Teil: neue Regeln, Verknüpfungen (TASK-097), eigene Felder (TASK-098).
 3. Ohne Leserecht auf Ticket, Anforderung oder Wikiseite erscheint die Verknüpfung nicht und wird nicht gezählt.
 4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests an Anforderung und Ticket.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen, Ergebnis als PR mit Belegen.
+**Nächster Schritt:** Codex Prüfung des Ergebnisses, dann fachliche Abnahme durch Holger mit Bestätigung der Auslegungen (a) bis (f) in DEC-127; danach TASK-098.
 
 ## TASK-098 Eigene Felder für Anforderungen (A13 Teil 3)
 

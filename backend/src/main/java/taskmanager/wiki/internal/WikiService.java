@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,6 +24,7 @@ import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.wiki.WikiPages;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -46,7 +48,7 @@ import tools.jackson.databind.JsonNode;
  * language it translates; when the source is published again later, the translation is marked as outdated.
  */
 @Service
-public class WikiService {
+public class WikiService implements WikiPages {
     public static final String READ = "wiki.read";
     public static final String EDIT = "wiki.edit";
     public static final String PUBLISH = "wiki.publish";
@@ -574,6 +576,27 @@ public class WikiService {
         if (page.archived()) {
             throw ApiProblemException.of(409, "wiki.page_archived");
         }
+    }
+
+    /** The published titles for the links of requirements (TASK-097); see {@link WikiPages#publishedTitles}. */
+    @Override
+    @Transactional
+    public Map<UUID, String> publishedTitles(AccessContext actor, UUID projectId, Collection<UUID> pageIds, String language) {
+        Map<UUID, String> titles = new HashMap<>();
+        if (pageIds.isEmpty() || !access(actor, projectId).read()) {
+            return titles;
+        }
+        String requested = language != null && LANGUAGES.contains(language) ? language : null;
+        for (UUID pageId : new HashSet<>(pageIds)) {
+            repository.find(actor.companyId(), pageId).filter(page -> page.projectId().equals(projectId) && !page.archived()).ifPresent(page -> {
+                Map<String, WikiRepository.Variant> variants = new HashMap<>();
+                repository.variants(page.id()).forEach(variant -> variants.put(variant.language(), variant));
+                shown(page.language(), variants, requested, false, WikiRepository.Variant::published)
+                    .flatMap(variant -> repository.revision(page.id(), variant.language(), variant.publishedRevision()))
+                    .ifPresent(revision -> titles.put(page.id(), revision.title()));
+            });
+        }
+        return titles;
     }
 
     // ------------------------------------------------------------------------------------------------ helpers

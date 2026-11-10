@@ -72,8 +72,11 @@ public class RequirementService {
     private final Permissions permissions;
     private final IdentityVerification identity;
     private final Clock clock;
+    private final RequirementLinks links;
 
-    RequirementService(RequirementRepository repository, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock) {
+    RequirementService(RequirementRepository repository, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
+            RequirementLinks links) {
+        this.links = links;
         this.repository = repository;
         this.projects = projects;
         this.permissions = permissions;
@@ -130,7 +133,11 @@ public class RequirementService {
             Instant occurredAt) {
     }
 
-    public record History(UUID requirementId, List<RevisionInfo> revisions, List<EventView> events) {
+    /**
+     * The history; {@code pageTitles} names the published title of each linked page of the events that the caller may read
+     * (TASK-097), a page without one is not available to the caller.
+     */
+    public record History(UUID requirementId, List<RevisionInfo> revisions, List<EventView> events, Map<UUID, String> pageTitles) {
     }
 
     /** A criterion of a request: {@code id} names an existing criterion, {@code null} a new one. */
@@ -248,17 +255,29 @@ public class RequirementService {
 
     @Transactional
     public History history(AccessContext actor, UUID id) {
+        return history(actor, id, null);
+    }
+
+    /**
+     * The history with the events of links (TASK-097): those of tickets only for a caller with {@code ticket.read}, those of
+     * pages for every reader, with the published title in {@code language} only for a caller who may read the page.
+     */
+    @Transactional
+    public History history(AccessContext actor, UUID id, String language) {
         RequirementRepository.Requirement requirement = visible(actor, id);
         Set<String> readable = access(actor, requirement.projectId()).readable();
         List<RevisionInfo> revisions = repository.revisions(requirement.id()).stream()
             .map(v -> new RevisionInfo(v.revision(), v.openedAt(), v.openedBy(), v.savedAt(), v.savedBy(), v.approvedAt(), v.approvedBy()))
             .toList();
-        List<EventView> events = repository.events(requirement.id()).stream()
-            .filter(e -> e.field() == null || readable.contains(e.field()))
+        List<RequirementRepository.Event> all = repository.events(requirement.id());
+        RequirementLinks.HistoryLinks shown = links.historyLinks(actor, requirement.projectId(), all, language);
+        List<EventView> events = all.stream()
+            .filter(e -> e.field() == null || readable.contains(e.field()) || "pages".equals(e.field())
+                || ("tickets".equals(e.field()) && shown.tickets()))
             .map(e -> new EventView(e.kind(), e.revision(), e.field(), e.criterion(), e.fromValue(), e.toValue(), e.reason(), e.actorId(),
                 e.occurredAt()))
             .toList();
-        return new History(requirement.id(), revisions, events);
+        return new History(requirement.id(), revisions, events, shown.pageTitles());
     }
 
     @Transactional

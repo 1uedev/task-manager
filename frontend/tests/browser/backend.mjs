@@ -159,7 +159,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // like a save of someone else that came first.
     wiki: { pages: [], revisions: [], events: [], images: [] },
     // The requirements (TASK-096) with their revisions and events, and the last number per project.
-    requirements: { items: [], revisions: [], events: [], counters: new Map() },
+    requirements: { items: [], revisions: [], events: [], counters: new Map(), ticketLinks: [], pageLinks: [] },
     wikiConflict: null,
   };
 
@@ -1089,7 +1089,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
     if (tail.startsWith('/sla')) return ticketSlaRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : [])];
+      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : []),
+        // TASK-097: links of requirements only for readers of the requirements of the project.
+        ...(may(account, 'requirement.read', item.id) ? ['requirements'] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
         .map(({ ticket: _ticket, ...entry }) => ({ ...entry, changes: entry.changes.filter((change) => shown.includes(change.field)) }))
         .filter((entry) => entry.changes.length > 0));
@@ -2028,10 +2030,120 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const fields = known.filter((name) => body[name] !== undefined).map((name) => (name === 'ownerId' ? 'owner' : name));
     return fields.filter((name) => !access.writableFields.includes(name));
   }
+  // Links (TASK-097) as the server: tickets with ticket.read and their title and status after the field rules, a newer revision
+  // named until an explicit switch, done after the category of the status; pages with the published title for wiki readers.
+  const ticketReadable = (account, projectId) => may(account, 'ticket.read', projectId);
+  const requirementLinks = (account, item, language) => {
+    const ticketsReadable = ticketReadable(account, item.projectId);
+    const shown = readable(account, item.projectId);
+    const statuses = configurationOf(item.projectId).statuses;
+    const tickets = !ticketsReadable ? [] : req.ticketLinks.filter((link) => link.requirementId === item.id).map((link) => {
+      const ticket = state.tickets.find((entry) => entry.id === link.ticketId);
+      const status = shown.includes('status') ? ticket.values.status : null;
+      const known = status === null ? null : statuses.find((entry) => entry.key === status) ?? null;
+      return { ticketId: ticket.id, number: ticket.number, key: ticket.key, title: shown.includes('title') ? ticket.values.title : null, status,
+        statusName: known?.name ?? null, done: known?.category === 'done', revision: link.revision, newerRevision: link.revision < item.revision ? item.revision : null,
+        linkedAt: link.linkedAt, linkedBy: link.linkedBy };
+    }).sort((a, b) => a.number - b.number);
+    const wikiReader = may(account, 'wiki.read', item.projectId);
+    const pageTitle = (pageId) => {
+      const page = wiki.pages.find((entry) => entry.id === pageId && entry.projectId === item.projectId);
+      return !wikiReader || !page || page.archived ? null : wikiTitleIn(page, language, false);
+    };
+    const pages = req.pageLinks.filter((link) => link.requirementId === item.id).map((link) => {
+      const title = pageTitle(link.pageId);
+      return { pageId: link.pageId, title, available: title !== null, linkedAt: link.linkedAt, linkedBy: link.linkedBy };
+    });
+    const edit = item.status !== 'discarded' && requirementAccess(account, item.projectId).edit;
+    return { requirementId: item.id, revision: item.revision, edit, ticketsReadable, tickets,
+      summary: { tickets: tickets.length, done: tickets.filter((entry) => entry.done).length }, pages, pageTitle };
+  };
+  const linksAnswer = (account, item, language) => {
+    const { pageTitle: _pageTitle, ...view } = requirementLinks(account, item, language);
+    return ok(view);
+  };
+  const ticketRequirementChange = (ticket, account, from, to) => state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id,
+    changes: [{ field: 'requirements', from, to }] });
+  function requirementLinkRoute(account, item, method, rest, query, body) {
+    const language = query.get('language');
+    if (language !== null && !WIKI_LANGUAGES.includes(language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+    if (rest === '/links' && method === 'GET') return linksAnswer(account, item, language);
+    const access = requirementAccess(account, item.projectId);
+    if (!access.edit) return problem(403, 'auth.forbidden');
+    const ticketPath = rest.match(/^\/tickets(?:\/(\d+)(\/switch)?)?$/);
+    const pagePath = rest.match(/^\/pages(?:\/([^/]+))?$/);
+    const linking = method === 'POST';
+    if (ticketPath && !ticketReadable(account, item.projectId)) return problem(403, 'auth.forbidden');
+    if (linking && item.status === 'discarded') return problem(409, 'requirement.discarded');
+    const label = (revision) => `ANF-${item.number}:${revision}`;
+    if (ticketPath && !ticketPath[1] && method === 'POST') {
+      if (!Number.isInteger(body?.number) || body.number < 1) return problem(400, 'request.invalid', { violations: ['number.invalid'] });
+      const ticket = state.tickets.find((entry) => entry.projectId === item.projectId && entry.number === body.number);
+      if (!ticket) return problem(400, 'request.invalid', { violations: ['ticket.unknown'] });
+      if (req.ticketLinks.some((link) => link.requirementId === item.id && link.ticketId === ticket.id)) return problem(409, 'requirement.already_linked');
+      if (req.ticketLinks.filter((link) => link.requirementId === item.id).length >= 200) return problem(409, 'requirement.links_too_many');
+      req.ticketLinks.push({ requirementId: item.id, ticketId: ticket.id, revision: item.revision, linkedAt: now(), linkedBy: account.id });
+      requirementEvent(item, 'ticket_linked', account, { field: 'tickets', to: `${ticket.number}:${item.revision}` });
+      ticketRequirementChange(ticket, account, null, label(item.revision));
+      return linksAnswer(account, item, language);
+    }
+    if (ticketPath && ticketPath[1]) {
+      const ticket = state.tickets.find((entry) => entry.projectId === item.projectId && entry.number === Number(ticketPath[1]));
+      const link = ticket && req.ticketLinks.find((entry) => entry.requirementId === item.id && entry.ticketId === ticket.id);
+      if (!link) return problem(404, 'requirement.link_not_found');
+      if (ticketPath[2] && method === 'POST') {
+        if (!Number.isInteger(body?.revision)) return problem(400, 'request.invalid', { violations: ['revision.required'] });
+        if (body.revision !== item.revision) return problem(412, 'requirement.version_conflict');
+        if (link.revision !== item.revision) {
+          requirementEvent(item, 'ticket_switched', account, { field: 'tickets', from: `${ticket.number}:${link.revision}`, to: `${ticket.number}:${item.revision}` });
+          ticketRequirementChange(ticket, account, label(link.revision), label(item.revision));
+          link.revision = item.revision;
+        }
+        return linksAnswer(account, item, language);
+      }
+      if (!ticketPath[2] && method === 'DELETE') {
+        req.ticketLinks.splice(req.ticketLinks.indexOf(link), 1);
+        requirementEvent(item, 'ticket_unlinked', account, { field: 'tickets', from: `${ticket.number}:${link.revision}` });
+        ticketRequirementChange(ticket, account, label(link.revision), null);
+        return linksAnswer(account, item, language);
+      }
+    }
+    if (pagePath && !pagePath[1] && method === 'POST') {
+      if (typeof body?.pageId !== 'string') return problem(400, 'request.invalid', { violations: ['pageId.invalid'] });
+      if (requirementLinks(account, item, language).pageTitle(body.pageId) === null) return problem(400, 'request.invalid', { violations: ['page.unknown'] });
+      if (req.pageLinks.some((link) => link.requirementId === item.id && link.pageId === body.pageId)) return problem(409, 'requirement.already_linked');
+      req.pageLinks.push({ requirementId: item.id, pageId: body.pageId, linkedAt: now(), linkedBy: account.id });
+      requirementEvent(item, 'page_linked', account, { field: 'pages', to: body.pageId });
+      return linksAnswer(account, item, language);
+    }
+    if (pagePath && pagePath[1] && method === 'DELETE') {
+      const link = req.pageLinks.find((entry) => entry.requirementId === item.id && entry.pageId === pagePath[1]);
+      if (!link) return problem(404, 'requirement.link_not_found');
+      req.pageLinks.splice(req.pageLinks.indexOf(link), 1);
+      requirementEvent(item, 'page_unlinked', account, { field: 'pages', from: link.pageId });
+      return linksAnswer(account, item, language);
+    }
+    return problem(404, 'requirement.not_found');
+  }
   function requirementRoute(account, method, p, query, headers, body) {
     if (p === '/requirements/projects' && method === 'GET') {
       return ok(state.projects.filter((item) => requirementAccess(account, item.id).read)
         .map((item) => ({ projectId: item.id, key: item.key, name: item.name, access: requirementAccess(account, item.id) })));
+    }
+    const onTicket = p.match(/^\/requirements\/projects\/([^/]+)\/tickets\/(\d+)$/);
+    if (onTicket && method === 'GET') {
+      const projectId = onTicket[1];
+      if (!ticketReadable(account, projectId)) return problem(404, 'project.not_found');
+      const ticket = state.tickets.find((entry) => entry.projectId === projectId && entry.number === Number(onTicket[2]));
+      if (!ticket) return problem(404, 'ticket.not_found');
+      const access = requirementAccess(account, projectId);
+      if (!access.read) return ok({ ticketId: ticket.id, read: false, edit: false, requirements: [] });
+      return ok({ ticketId: ticket.id, read: true, edit: access.edit, requirements: req.ticketLinks.filter((link) => link.ticketId === ticket.id).map((link) => {
+        const item = req.items.find((entry) => entry.id === link.requirementId);
+        return { requirementId: item.id, number: item.number, key: `ANF-${item.number}`,
+          title: access.readableFields.includes('title') ? requirementRevision(item, item.revision).title : null, status: item.status, revision: link.revision,
+          newerRevision: link.revision < item.revision ? item.revision : null, linkedAt: link.linkedAt, linkedBy: link.linkedBy };
+      }).sort((a, b) => a.number - b.number) });
     }
     const inProject = p.match(/^\/requirements\/projects\/([^/]+)\/(requirements|owners)$/);
     if (inProject) {
@@ -2082,6 +2194,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         return requirementAnswer(account, item, 201);
       }
     }
+    const linkPath = p.match(/^\/requirements\/([^/]+)(\/(?:links|tickets|pages).*)$/);
+    if (linkPath) {
+      const linked = req.items.find((entry) => entry.id === linkPath[1]);
+      if (!linked || !requirementAccess(account, linked.projectId).read) return problem(404, 'requirement.not_found');
+      return requirementLinkRoute(account, linked, method, linkPath[2], query, body);
+    }
     const match = p.match(/^\/requirements\/([^/]+)(\/(submit|approve|return|discard|restore|history|revisions\/(\d+)))?$/);
     const item = req.items.find((entry) => entry.id === match?.[1]);
     if (!item || !requirementAccess(account, item.projectId).read) return problem(404, 'requirement.not_found');
@@ -2089,10 +2207,17 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const part = match[3];
     if (!part && method === 'GET') return requirementAnswer(account, item);
     if (part === 'history' && method === 'GET') {
-      const fieldShown = (event) => event.field === null || access.readableFields.includes(event.field);
+      // TASK-097: ticket links only with ticket.read, page links for every reader with the titles the reader may see.
+      const tickets = ticketReadable(account, item.projectId);
+      const fieldShown = (event) => event.field === null || access.readableFields.includes(event.field) || event.field === 'pages'
+        || (event.field === 'tickets' && tickets);
+      const events = req.events.filter((event) => event.requirementId === item.id && fieldShown(event));
+      const { pageTitle } = requirementLinks(account, item, query.get('language'));
+      const pageTitles = Object.fromEntries(events.filter((event) => event.field === 'pages').map((event) => event.to ?? event.from)
+        .map((pageId) => [pageId, pageTitle(pageId)]).filter(([, title]) => title !== null));
       return ok({ requirementId: item.id, revisions: req.revisions.filter((entry) => entry.requirementId === item.id)
         .map(({ revision, openedAt, openedBy, savedAt, savedBy, approvedAt, approvedBy }) => ({ revision, openedAt, openedBy, savedAt, savedBy, approvedAt, approvedBy })),
-      events: req.events.filter((event) => event.requirementId === item.id && fieldShown(event)).map(({ requirementId, ...event }) => event) });
+      events: events.map(({ requirementId, ...event }) => event), pageTitles });
     }
     if (part?.startsWith('revisions/') && method === 'GET') {
       const revision = requirementRevision(item, Number(match[4]));
