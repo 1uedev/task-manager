@@ -76,6 +76,7 @@ class WikiApiTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired CompanyContext companies;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired javax.sql.DataSource dataSource;
 
     // ---------------------------------------------------------------- a minimal browser
 
@@ -990,7 +991,35 @@ class WikiApiTest {
         assertEquals(2, author.get(path).json().get("draft").get("revision").asInt(), "the German draft is untouched");
     }
 
-    /** H4 of the review: adding the same language twice at once gives one version; saves of both languages keep their own counters. */
+    /**
+     * N1 of the follow up review: the language of a new version is checked before the page, so a missing or unknown language
+     * answers 400 for an unpublished and for an unknown page alike, also for a reader. The browser stand in follows this.
+     */
+    @Test
+    void theLanguageOfANewVersionIsCheckedBeforeThePage() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        UUID unpublished = id(create(author, setup, "Entwurf", null, doc(paragraph("Nur Entwurf"))));
+        for (Browser who : List.of(author, reader)) {
+            for (UUID page : List.of(unpublished, UUID.randomUUID())) {
+                String path = "/api/v1/wiki/pages/" + page + "/languages";
+                Response missing = who.send("POST", path, Map.of(), null);
+                assertEquals(400, missing.status(), missing.body());
+                assertTrue(missing.body().contains("language.required"), missing.body());
+                Response unknown = who.send("POST", path, Map.of("language", "fr"), null);
+                assertEquals(400, unknown.status(), unknown.body());
+                assertTrue(unknown.body().contains("language.invalid"), unknown.body());
+            }
+        }
+    }
+
+    /**
+     * H4 of the review, N2 of the follow up review: while a separate connection holds the row lock of the page, two requests
+     * that add the same language and then two saves of both languages are started; the test waits until PostgreSQL shows both
+     * requests waiting for that lock and only then releases it. So the requests really meet at the lock: one language is added
+     * once, and the saves of both languages keep their own counters.
+     */
     @Test
     void concurrentLanguageChangesStaySeparate() {
         Setup setup = project();
@@ -999,44 +1028,65 @@ class WikiApiTest {
         UUID page = id(create(anna, setup, "Gleichzeitig", null, doc(paragraph("Basis"))));
         String path = "/api/v1/wiki/pages/" + page;
 
-        CountDownLatch start = new CountDownLatch(1);
-        List<CompletableFuture<Integer>> adds = new ArrayList<>();
-        for (Browser who : List.of(anna, ben, anna, ben)) {
-            adds.add(CompletableFuture.supplyAsync(() -> {
-                awaitStart(start);
-                return who.send("POST", path + "/languages", Map.of("language", "en"), null).status();
-            }));
-        }
-        start.countDown();
-        List<Integer> statuses = adds.stream().map(CompletableFuture::join).toList();
-        assertEquals(1, statuses.stream().filter(status -> status == 201).count(), statuses.toString());
-        assertTrue(statuses.stream().allMatch(status -> status == 201 || status == 409 || status == 503), statuses.toString());
+        List<Response> added = heldAtPage(page, List.of(
+            () -> anna.send("POST", path + "/languages", Map.of("language", "en"), null),
+            () -> ben.send("POST", path + "/languages", Map.of("language", "en"), null)));
+        List<Integer> statuses = added.stream().map(Response::status).sorted().toList();
+        assertEquals(List.of(201, 409), statuses, added.toString());
+        assertTrue(added.stream().anyMatch(response -> response.body().contains("wiki.language_exists")), added.toString());
         assertEquals(1, anna.get(path + "/history?language=en").json().get("revisions").size());
 
-        CountDownLatch again = new CountDownLatch(1);
-        List<CompletableFuture<Integer>> saves = new ArrayList<>();
-        for (int i = 0; i < 6; i++) {
-            int n = i;
-            String language = n % 2 == 0 ? "de" : "en";
-            Browser who = n % 3 == 0 ? anna : ben;
-            saves.add(CompletableFuture.supplyAsync(() -> {
-                awaitStart(again);
-                return saveIn(who, page, language, "\"1\"", "Gleichzeitig " + n, doc(paragraph("Lauf " + n)), null).status();
-            }));
-        }
-        again.countDown();
-        List<Integer> saved = saves.stream().map(CompletableFuture::join).toList();
-        assertTrue(saved.stream().allMatch(status -> status == 200 || status == 412 || status == 503), saved.toString());
-        assertEquals(2, anna.get(path + "/history?language=de").json().get("draftRevision").asInt(), saved.toString());
-        assertEquals(2, anna.get(path + "/history?language=en").json().get("draftRevision").asInt(), saved.toString());
-        assertEquals(2, saved.stream().filter(status -> status == 200).count(), "one save per language: " + saved);
+        List<Response> saved = heldAtPage(page, List.of(
+            () -> saveIn(anna, page, "de", "\"1\"", "Gleichzeitig de", doc(paragraph("Lauf de")), null),
+            () -> saveIn(ben, page, "en", "\"1\"", "Gleichzeitig en", doc(paragraph("Lauf en")), null)));
+        assertEquals(List.of(200, 200), saved.stream().map(Response::status).toList(), saved.toString());
+        assertEquals(2, anna.get(path + "/history?language=de").json().get("draftRevision").asInt());
+        assertEquals(2, anna.get(path + "/history?language=en").json().get("draftRevision").asInt());
+        assertTrue(saved.get(0).body().contains("Gleichzeitig de") && saved.get(1).body().contains("Gleichzeitig en"), saved.toString());
     }
 
-    private static void awaitStart(CountDownLatch start) {
-        try {
-            start.await(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    /**
+     * Holds the row lock of the page on a separate connection, starts the calls, waits until PostgreSQL shows every call
+     * waiting for a lock on {@code wiki_page}, then releases it and gives the answers in the order of the calls (pattern of
+     * {@code AppearanceApiTest.together}). The real window to reach the lock is the {@code lock_timeout} of 5 seconds.
+     */
+    private List<Response> heldAtPage(UUID page, List<java.util.function.Supplier<Response>> calls) {
+        CountDownLatch ready = new CountDownLatch(calls.size());
+        CountDownLatch start = new CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(calls.size()); var holder = dataSource.getConnection()) {
+            try {
+                holder.setAutoCommit(false);
+                try (var statement = holder.prepareStatement("select id from wiki_page where id = ? for update")) {
+                    statement.setObject(1, page);
+                    statement.execute();
+                }
+                List<java.util.concurrent.Future<Response>> futures = new ArrayList<>();
+                for (var call : calls) {
+                    futures.add(pool.submit(() -> { ready.countDown(); start.await(); return call.get(); }));
+                }
+                assertTrue(ready.await(10, TimeUnit.SECONDS), "all threads are ready");
+                start.countDown();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+                int waiting = 0;
+                while (waiting < calls.size() && System.nanoTime() < deadline) {
+                    waiting = jdbc.queryForObject("""
+                        select count(*) from pg_stat_activity
+                        where datname = current_database() and wait_event_type = 'Lock' and query ilike '%from wiki_page%'
+                        """, Integer.class);
+                    if (waiting < calls.size()) Thread.sleep(20);
+                }
+                assertEquals(calls.size(), waiting, "every request waits for the row lock of the page at the same time");
+                holder.rollback();
+                List<Response> answers = new ArrayList<>();
+                for (var future : futures) {
+                    answers.add(future.get(30, TimeUnit.SECONDS));
+                }
+                return answers;
+            } finally {
+                start.countDown();
+            }
+        } catch (SQLException | InterruptedException | java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            throw new IllegalStateException(e);
         }
     }
 }

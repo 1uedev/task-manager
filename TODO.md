@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-095](#task-095-befunde-der-codex-nachprüfung-von-task-094-beheben-a12) | Befunde der Codex Nachprüfung von TASK-094 beheben (A12) | claude-20261110-wikifix-01 | 2026-11-10 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -42,6 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-093](#task-093-wikiseiten-mit-entwurf-veröffentlichung-und-historie-a12-teil-1) | Wikiseiten mit Entwurf, Veröffentlichung und Historie (A12 Teil 1) | claude-20261109-wiki-01 | 2026-11-09 |
 | [TASK-094](#task-094-sprachfassungen-im-wiki-a12-teil-2) | Sprachfassungen im Wiki (A12 Teil 2) | claude-20261109-wiki-01 | 2026-11-09 |
+| [TASK-095](#task-095-befunde-der-codex-nachprüfung-von-task-094-beheben-a12) | Befunde der Codex Nachprüfung von TASK-094 beheben (A12) | claude-20261110-wikifix-01 | 2026-11-10 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -90,9 +89,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-095 Befunde der Codex Nachprüfung von TASK-094 beheben (A12)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261110-wikifix-01 · **Aktualisiert:** 2026-11-10
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261110-wikifix-01 · **Aktualisiert:** 2026-11-10
 
-**Bezug:** REQ-DOC-003, REQ-I18N-001; DEC-124; docs/REVIEW_TASK-094_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-094 geliefert (PR #281). **Arbeitsstand:** Holger hat am 10. November 2026 den Bericht der Codex Nachprüfung von TASK-094 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-095“ gewählt. Branch claude/project-thread-ipd3h4; Ergebnis mit DEC-125, ohne Migration.
+**Bezug:** REQ-DOC-003, REQ-I18N-001; DEC-124; docs/REVIEW_TASK-094_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-094 geliefert (PR #281). **Arbeitsstand:** Holger hat am 10. November 2026 den Bericht der Codex Nachprüfung von TASK-094 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-095“ gewählt. Branch claude/project-thread-ipd3h4; Ergebnis mit DEC-125, ohne Migration und ohne Vertragsänderung. Übergabe 10. November 2026: Die Historie in `WikiPage.tsx` ist mit einem Schlüssel aus Seite und Fassung gebunden und beginnt nach einem Wechsel der Fassung neu; Ansehen und Vergleichen werten nur die Antwort der letzten Anfrage aus; der Revisionsinhalt trägt die Sprache seiner Revision, der Historienvergleich die Sprache der Fassung. Der Testersatz prüft die Sprache einer neuen Fassung vor der Seite. Nachweise: 2 neue Browsertests zu R1 (geöffnete Revision und Vergleich beim Wechsel der Oberflächensprache, angehaltene Antworten nach späterer Wahl und nach dem Wechsel), die mit dem Stand vor der Behebung fehlschlagen, der erweiterte Paritätstest H1/N1 im Testersatz, im `WikiApiTest` der neue Fall `theLanguageOfANewVersionIsCheckedBeforeThePage` und `concurrentLanguageChangesStaySeparate` mit gehaltener Seitensperre, bis PostgreSQL alle Anfragen wartend zeigt. Lokal: Backend `verify` 565 Tests grün mit PostgreSQL 16, Browsertests 233/233.
 
 **Umfang:** Befund R1 und Hinweise N1 und N2 aus docs/REVIEW_TASK-094_NACHPRUEFUNG.md:
 1. R1: Die Historie gehört zu genau einer Seite und Fassung. Nach einem Wechsel der Fassung verschwinden eine geöffnete Revision und ein Vergleich, verspätete Antworten werden verworfen, und der Revisionsinhalt trägt die Sprache seiner Revision.
@@ -106,7 +105,7 @@ Nicht Teil: weitere Sprachen, Suche, Portal, neue Regeln.
 2. N1 mit Paritätsfällen gegen Server und Testersatz, N2 mit gehaltener Sperre in `WikiApiTest`.
 3. Bestehende Backend und Browser Tests bleiben grün.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung und Ergebnis PR.
+**Nächster Schritt:** Fachliche Abnahme durch Holger zusammen mit TASK-093 und TASK-094; eine kurze Nachprüfung ist möglich, aber nicht nötig.
 
 ## TASK-094 Sprachfassungen im Wiki (A12 Teil 2)
 
