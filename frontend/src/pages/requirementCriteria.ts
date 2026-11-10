@@ -11,7 +11,7 @@ export interface Draft {
 /**
  * "Meine Eingaben behalten" for the criteria (F1 of the TASK-096 review): the own changes are found per fixed number against the
  * state the input started from, everything else comes from the newer state. An own text or removal wins over the other one;
- * an own order wins, the criteria the other person added follow it; own new criteria stay. A criterion the person changed
+ * an own order wins, the criteria the other person added follow it; own new criteria stay at their place. A criterion the person changed
  * that the other person removed meanwhile stays as a new one, so the typed text is not lost.
  */
 export function mergeCriteria(base: readonly RequirementCriterion[] | null, mine: readonly Draft[],
@@ -45,10 +45,16 @@ export function mergeCriteria(base: readonly RequirementCriterion[] | null, mine
     result.push(...merged.values());
     return result;
   }
-  result.push(...merged.values());
+  // The other order stays; an own new criterion keeps its place behind the numbered criterion it followed in the own list,
+  // or stays in front when it came first (R1 of the follow up review of TASK-096).
+  const behind = new Map<number | null, Draft[]>();
+  let anchor: number | null = null;
   for (const draft of mine) {
-    if (draft.id === null) result.push(draft);
-    else if (orphan(draft)) result.push({ key: next(), id: null, text: draft.text });
+    if (draft.id !== null && merged.has(draft.id)) anchor = draft.id;
+    const added = draft.id === null ? draft : orphan(draft) ? { key: next(), id: null, text: draft.text } : null;
+    if (added !== null) behind.set(anchor, [...(behind.get(anchor) ?? []), added]);
   }
+  result.push(...(behind.get(null) ?? []));
+  for (const [id, draft] of merged) result.push(draft, ...(behind.get(id) ?? []));
   return result;
 }

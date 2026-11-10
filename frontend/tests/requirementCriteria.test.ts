@@ -25,7 +25,27 @@ test('an own text wins over the other text of the same criterion', () => {
 test('an own removal and own new criteria stay, the other changes come along', () => {
   const theirs = [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 VON BEN' }, { id: 3, text: 'K3 VON BEN' }];
   const merged = mergeCriteria(base, drafts([2, 'K2 alt'], [null, 'NEU']), theirs, counter());
-  assert.deepEqual(plain(merged), [[2, 'K2 VON BEN'], [3, 'K3 VON BEN'], [null, 'NEU']]);
+  assert.deepEqual(plain(merged), [[2, 'K2 VON BEN'], [null, 'NEU'], [3, 'K3 VON BEN']]);
+});
+
+// R1 of the follow up review of TASK-096: a new criterion keeps the place the person gave it.
+test('a new criterion between K1 and K2 stays there, the additions of the other person follow', () => {
+  const theirs = [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 VON BEN' }, { id: 3, text: 'K3 VON BEN' }];
+  const merged = mergeCriteria(base, drafts([1, 'K1 alt'], [null, 'EIGEN NEU'], [2, 'K2 alt']), theirs, counter());
+  assert.deepEqual(plain(merged), [[1, 'K1 alt'], [null, 'EIGEN NEU'], [2, 'K2 VON BEN'], [3, 'K3 VON BEN']]);
+});
+
+test('a new criterion in front stays in front', () => {
+  const theirs = [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 VON BEN' }, { id: 3, text: 'K3 VON BEN' }];
+  const merged = mergeCriteria(base, drafts([null, 'EIGEN NEU'], [1, 'K1 alt'], [2, 'K2 alt']), theirs, counter());
+  assert.deepEqual(plain(merged), [[null, 'EIGEN NEU'], [1, 'K1 alt'], [2, 'K2 VON BEN'], [3, 'K3 VON BEN']]);
+});
+
+test('a new criterion behind one the other person removed follows the nearest remaining one', () => {
+  const three = [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 alt' }, { id: 3, text: 'K3 alt' }];
+  const theirs = [{ id: 1, text: 'K1 alt' }, { id: 3, text: 'K3 alt' }];
+  const merged = mergeCriteria(three, drafts([1, 'K1 alt'], [2, 'K2 alt'], [null, 'A'], [null, 'B'], [3, 'K3 alt']), theirs, counter());
+  assert.deepEqual(plain(merged), [[1, 'K1 alt'], [null, 'A'], [null, 'B'], [3, 'K3 alt']]);
 });
 
 test('an own order wins and the criteria of the other person follow it', () => {
@@ -37,7 +57,7 @@ test('an own order wins and the criteria of the other person follow it', () => {
 test('a criterion changed here but removed meanwhile stays as a new one; an untouched removed one goes', () => {
   const theirs = [{ id: 3, text: 'K3 VON BEN' }];
   const merged = mergeCriteria(base, drafts([1, 'K1 MEINE'], [2, 'K2 alt']), theirs, counter());
-  assert.deepEqual(plain(merged), [[3, 'K3 VON BEN'], [null, 'K1 MEINE']]);
+  assert.deepEqual(plain(merged), [[null, 'K1 MEINE'], [3, 'K3 VON BEN']]);
 });
 
 test('without own changes the newer state is taken as it is', () => {

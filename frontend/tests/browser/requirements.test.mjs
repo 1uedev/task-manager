@@ -309,6 +309,55 @@ describe('requirements', () => {
     });
   });
 
+  test('a new criterion keeps the place it was given when the own input is kept (R1 of the follow up review of TASK-096)', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna, backend.ben], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Lieferadresse', { criteria: ['K1 alt', 'K2 alt'] });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByTestId('requirement-criterion-add').click();
+      await edit.getByLabel('Text von Neu').fill('EIGEN NEU');
+      await edit.getByRole('button', { name: 'Neu nach oben' }).click();
+      assert.deepEqual(await edit.getByTestId('requirement-criterion').evaluateAll((rows) => rows.map((row) => row.dataset.criterion)), ['1', 'new', '2']);
+      const answer = backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`,
+        { criteria: [{ id: 1, text: 'K1 alt' }, { id: 2, text: 'K2 VON BEN' }, { id: null, text: 'K3 VON BEN' }] }, { headers: { 'if-match': `"${item.version}"` } });
+      assert.equal(answer.status, 200);
+      await edit.getByTestId('requirement-save').click();
+      await page.getByTestId('requirement-conflict').getByTestId('requirement-conflict-keep').click();
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      assert.deepEqual(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).criteria.map((criterion) => [criterion.id, criterion.text]),
+        [[1, 'K1 alt'], [4, 'EIGEN NEU'], [2, 'K2 VON BEN'], [3, 'K3 VON BEN']]);
+    });
+  });
+
+  test('the stand in checks descriptions by their structure and names editors like the server (N1, R2 of the follow up review)', async () => {
+    const backend = createBackend();
+    grant(backend, [backend.anna], EVERYTHING);
+    const create = (description) => backend.requirementCall(backend.anna, 'POST', `/requirements/projects/${backend.project.id}/requirements`, { title: 'Probe', description });
+    const paragraph = (text, marks) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text, ...(marks ? { marks } : {}) }] }] });
+    assert.equal(create(paragraph('image')).status, 201, 'the word image is plain text');
+    assert.equal(create(paragraph('wiki:ordinary text')).status, 201, 'text that starts with wiki: is no link');
+    const nul = create(paragraph('Ziel', [{ type: 'link', attrs: { href: 'https://example.test/a\u0000b' } }]));
+    assert.equal(nul.status, 400);
+    assert.deepEqual(nul.body.violations, ['description.link_invalid']);
+    const page = create(paragraph('Seite', [{ type: 'link', attrs: { href: 'wiki:00000000-0000-4000-8000-000000000001' } }]));
+    assert.deepEqual(page.body.violations, ['description.page_link_not_allowed']);
+    const image = create({ type: 'doc', content: [{ type: 'image', attrs: { src: '/x', alt: 'Bild' } }] });
+    assert.deepEqual(image.body.violations, ['description.image_not_allowed']);
+
+    // R2: without a readable content field even the creation names nobody.
+    const made = create(paragraph('Inhalt'));
+    grant(backend, [backend.ben], ['requirement.read'], { read: ['owner'], write: [] });
+    assert.deepEqual(backend.requirementCall(backend.anna, 'GET', `/requirements/${made.body.id}`).body.editors, [backend.anna.id]);
+    assert.deepEqual(backend.requirementCall(backend.ben, 'GET', `/requirements/${made.body.id}`).body.editors, []);
+  });
+
   test('a changed link target is named in the comparison of the history (F3 of the TASK-096 review)', async () => {
     const linked = (href) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anleitung', marks: [{ type: 'link', attrs: { href } }] }] }] });
     let item;
