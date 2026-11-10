@@ -242,11 +242,13 @@ class RequirementApiTest {
                         companyId, group, project, rule);
                     continue;
                 }
+                // "READ:title" is a rule of requirements, "ticket:READ:title" one of tickets (TASK-097).
                 String[] parts = rule.split(":");
+                String type = parts.length == 3 ? parts[0] : "requirement";
                 jdbc.update("""
                         insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect)
-                        values (?, ?, ?, 'requirement', ?, ?, 'ALLOW')
-                        """, companyId, group, project, parts[1], parts[0]);
+                        values (?, ?, ?, ?, ?, ?, 'ALLOW')
+                        """, companyId, group, project, type, parts[parts.length - 1], parts[parts.length - 2]);
             }
             jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
             jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
@@ -847,5 +849,205 @@ class RequirementApiTest {
             Map.of("resourceType", "requirement", "field", "status", "operation", "read", "effect", "allow"), null), "field.unknown");
         assertInvalid(admin.send("PUT", "/api/v1/permissions/groups/" + groupId + "/fields",
             Map.of("resourceType", "ticket", "field", "criteria", "operation", "read", "effect", "allow"), null), "field.unknown");
+    }
+
+    // ---------------------------------------------------------------- links (TASK-097)
+
+    private static final String[] TICKET_READ = { "ticket.read", "ticket:READ:title", "ticket:READ:status", "ticket:READ:type",
+        "ticket:READ:description", "ticket:READ:assignee" };
+
+    private static String[] with(String[] first, String... more) {
+        List<String> all = new ArrayList<>(List.of(first));
+        all.addAll(List.of(more));
+        return all.toArray(String[]::new);
+    }
+
+    private long ticket(Browser who, Setup setup, String title) {
+        Response created = who.send("POST", "/api/v1/projects/" + setup.project() + "/tickets", Map.of("type", "task", "title", title), null);
+        assertEquals(201, created.status(), created.body());
+        return created.json().get("number").asLong();
+    }
+
+    private UUID page(Browser who, Setup setup, String title, boolean publish) {
+        Response created = who.send("POST", "/api/v1/wiki/projects/" + setup.project() + "/pages", Map.of("title", title, "content",
+            paragraphDoc("Inhalt")), null);
+        assertEquals(201, created.status(), created.body());
+        UUID page = UUID.fromString(created.json().get("id").asString());
+        if (publish) {
+            Response published = who.send("POST", "/api/v1/wiki/pages/" + page + "/publish", Map.of("revision", 1), created.etag());
+            assertEquals(200, published.status(), published.body());
+        }
+        return page;
+    }
+
+    private static List<String> ticketHistory(Browser who, Setup setup, long number) {
+        Response history = who.get("/api/v1/projects/" + setup.project() + "/tickets/" + number + "/history");
+        assertEquals(200, history.status(), history.body());
+        List<String> values = new ArrayList<>();
+        history.json().forEach(entry -> entry.get("changes").forEach(change -> {
+            if ("requirements".equals(change.get("field").asString())) {
+                values.add(change.get("from").asString(null) + ">" + change.get("to").asString(null));
+            }
+        }));
+        return values;
+    }
+
+    /**
+     * Acceptance 1 and 2 of TASK-097: ANF-1 revision 1 is linked with a ticket; after revision 2 the ticket stays on revision 1
+     * with the hint until it is switched explicitly. A done ticket changes neither status nor approval of the requirement (F-14),
+     * and linking changes neither status nor version of the ticket; both histories record it.
+     */
+    @Test
+    void aTicketStaysOnItsRevisionUntilItIsSwitchedAndNeverApproves() {
+        Setup setup = project();
+        Browser editor = member(setup, with(rules(List.of("requirement.read", "requirement.edit"), true), with(TICKET_READ, "ticket.create",
+            "ticket.edit", "ticket:WRITE:title", "ticket:WRITE:status", "ticket:WRITE:type")));
+        Browser approver = approver(setup);
+        long number = ticket(editor, setup, "Portalliste zeigt Status");
+        Response ticketBefore = editor.get("/api/v1/projects/" + setup.project() + "/tickets/" + number);
+        Response draft = example(editor, setup);
+        UUID id = id(draft);
+
+        Response linked = editor.send("POST", path(id) + "/tickets", Map.of("number", number), null);
+        assertEquals(200, linked.status(), linked.body());
+        JsonNode link = linked.json().get("tickets").get(0);
+        assertEquals(1, link.get("revision").asInt());
+        assertTrue(link.get("newerRevision").isNull());
+        assertTrue(link.get("key").asString().endsWith("-" + number));
+        assertEquals("Portalliste zeigt Status", link.get("title").asString());
+        assertEquals("new", link.get("status").asString());
+        assertEquals("Neu", link.get("statusName").asString());
+        assertEquals(409, editor.send("POST", path(id) + "/tickets", Map.of("number", number), null).status(), "each pair once");
+        assertInvalid(editor.send("POST", path(id) + "/tickets", Map.of("number", 9999), null), "ticket.unknown");
+
+        Response ticketAfter = editor.get("/api/v1/projects/" + setup.project() + "/tickets/" + number);
+        assertEquals(ticketBefore.etag(), ticketAfter.etag(), "linking keeps the version of the ticket");
+        assertEquals(ticketBefore.json().get("fields").get("status").asString(), ticketAfter.json().get("fields").get("status").asString());
+        Response requirementAfterLink = editor.get(path(id));
+        assertEquals(draft.etag(), requirementAfterLink.etag(), "linking keeps the version of the requirement");
+
+        // Approve revision 1, then change the content: revision 2 opens and the ticket stays on revision 1 with the hint.
+        Response submitted = editor.send("POST", path(id) + "/submit", null, requirementAfterLink.etag());
+        Response approved = approver.send("POST", path(id) + "/approve", Map.of("revision", 1), submitted.etag());
+        assertEquals(200, approved.status(), approved.body());
+        Response second = editor.send("PATCH", path(id), Map.of("title", "Kunden sehen den Stand und die Antworten"), approved.etag());
+        assertEquals(2, second.json().get("revision").asInt());
+        JsonNode stale = editor.get(path(id) + "/links").json().get("tickets").get(0);
+        assertEquals(1, stale.get("revision").asInt());
+        assertEquals(2, stale.get("newerRevision").asInt());
+        JsonNode onTicket = editor.get("/api/v1/requirements/projects/" + setup.project() + "/tickets/" + number).json();
+        assertTrue(onTicket.get("read").asBoolean());
+        assertEquals(1, onTicket.get("requirements").get(0).get("revision").asInt());
+        assertEquals(2, onTicket.get("requirements").get(0).get("newerRevision").asInt());
+        assertEquals("ANF-1", onTicket.get("requirements").get(0).get("key").asString());
+
+        assertEquals(412, editor.send("POST", path(id) + "/tickets/" + number + "/switch", Map.of("revision", 1), null).status(),
+            "only the current revision that the caller saw");
+        Response switched = editor.send("POST", path(id) + "/tickets/" + number + "/switch", Map.of("revision", 2), null);
+        assertEquals(200, switched.status(), switched.body());
+        assertEquals(2, switched.json().get("tickets").get(0).get("revision").asInt());
+        assertTrue(switched.json().get("tickets").get(0).get("newerRevision").isNull());
+
+        // F-14: the ticket moves to done; the requirement keeps its status and approval, the summary counts the done ticket.
+        Response current = editor.get("/api/v1/projects/" + setup.project() + "/tickets/" + number);
+        Response working = editor.send("PATCH", "/api/v1/projects/" + setup.project() + "/tickets/" + number, Map.of("status", "in_progress"),
+            current.etag());
+        assertEquals(200, working.status(), working.body());
+        Response done = editor.send("PATCH", "/api/v1/projects/" + setup.project() + "/tickets/" + number, Map.of("status", "done"), working.etag());
+        assertEquals(200, done.status(), done.body());
+        Response requirementNow = editor.get(path(id));
+        assertEquals("draft", requirementNow.json().get("status").asString());
+        assertEquals(1, requirementNow.json().get("approvedRevision").asInt());
+        assertEquals(second.etag(), requirementNow.etag(), "a done ticket does not change the requirement");
+        JsonNode summary = editor.get(path(id) + "/links").json().get("summary");
+        assertEquals(1, summary.get("tickets").asInt());
+        assertEquals(1, summary.get("done").asInt());
+
+        Response unlinked = editor.send("DELETE", path(id) + "/tickets/" + number, null, null);
+        assertEquals(200, unlinked.status(), unlinked.body());
+        assertEquals(0, unlinked.json().get("tickets").size());
+        assertEquals(404, editor.send("DELETE", path(id) + "/tickets/" + number, null, null).status());
+
+        assertEquals(List.of("null>ANF-1:1", "ANF-1:1>ANF-1:2", "ANF-1:2>null"), ticketHistory(editor, setup, number));
+        List<String> kinds = kinds(editor.get(path(id) + "/history"));
+        assertTrue(kinds.containsAll(List.of("ticket_linked", "ticket_switched", "ticket_unlinked")), kinds.toString());
+        assertTrue(editor.get(path(id)).json().get("editors").size() == 1, "links do not make editors");
+    }
+
+    /**
+     * Acceptance 3 of TASK-097: without read access to the ticket, the requirement or the page the link is not shown and not
+     * counted; a page without wiki.read appears without its title, an unpublished page cannot be linked.
+     */
+    @Test
+    void linksAppearOnlyToReadersOfBothSides() {
+        Setup setup = project();
+        Browser editor = member(setup, with(rules(List.of("requirement.read", "requirement.edit"), true), with(TICKET_READ, "ticket.create",
+            "ticket:WRITE:title", "ticket:WRITE:type", "wiki.read", "wiki.edit", "wiki.publish")));
+        long number = ticket(editor, setup, "Sichtbarkeit");
+        UUID id = id(example(editor, setup));
+        UUID published = page(editor, setup, "Portalhandbuch", true);
+        UUID unpublished = page(editor, setup, "Entwurf", false);
+        assertEquals(200, editor.send("POST", path(id) + "/tickets", Map.of("number", number), null).status());
+        assertInvalid(editor.send("POST", path(id) + "/pages", Map.of("pageId", unpublished.toString()), null), "page.unknown");
+        Response withPage = editor.send("POST", path(id) + "/pages", Map.of("pageId", published.toString()), null);
+        assertEquals(200, withPage.status(), withPage.body());
+        assertEquals("Portalhandbuch", withPage.json().get("pages").get(0).get("title").asString());
+
+        // A reader of requirements without ticket.read and wiki.read: no ticket, no count, the page without title.
+        Browser requirementsOnly = reader(setup);
+        JsonNode links = requirementsOnly.get(path(id) + "/links").json();
+        assertFalse(links.get("ticketsReadable").asBoolean());
+        assertEquals(0, links.get("tickets").size());
+        assertEquals(0, links.get("summary").get("tickets").asInt());
+        assertTrue(links.get("pages").get(0).get("title").isNull());
+        assertFalse(links.get("pages").get(0).get("available").asBoolean());
+        List<String> kinds = kinds(requirementsOnly.get(path(id) + "/history"));
+        assertFalse(kinds.contains("ticket_linked"), kinds.toString());
+        assertTrue(kinds.contains("page_linked"), kinds.toString());
+        assertEquals(404, requirementsOnly.get("/api/v1/requirements/projects/" + setup.project() + "/tickets/" + number).status());
+
+        // A reader of tickets without requirement.read: no requirements at the ticket, no entry in its history.
+        Browser ticketsOnly = member(setup, TICKET_READ);
+        JsonNode onTicket = ticketsOnly.get("/api/v1/requirements/projects/" + setup.project() + "/tickets/" + number).json();
+        assertFalse(onTicket.get("read").asBoolean());
+        assertEquals(0, onTicket.get("requirements").size());
+        assertEquals(List.of(), ticketHistory(ticketsOnly, setup, number));
+        assertEquals(404, ticketsOnly.get(path(id) + "/links").status());
+
+        // A reader of both sides without the status rule sees the ticket but does not count it as done.
+        Browser both = member(setup, with(rules(List.of("requirement.read"), false), "ticket.read", "ticket:READ:title"));
+        JsonNode bothLinks = both.get(path(id) + "/links").json();
+        assertEquals(1, bothLinks.get("tickets").size());
+        assertTrue(bothLinks.get("tickets").get(0).get("status").isNull());
+        assertEquals(List.of("null>ANF-1:1"), ticketHistory(both, setup, number));
+
+        // Linking a ticket needs ticket.read; removing a page link needs no wiki right.
+        Browser blind = member(setup, rules(List.of("requirement.read", "requirement.edit"), true));
+        assertEquals(403, blind.send("POST", path(id) + "/tickets", Map.of("number", number), null).status());
+        assertEquals(403, blind.send("DELETE", path(id) + "/tickets/" + number, null, null).status());
+        assertEquals(403, requirementsOnly.send("DELETE", path(id) + "/pages/" + published, null, null).status(), "edit is needed");
+        Response removed = blind.send("DELETE", path(id) + "/pages/" + published, null, null);
+        assertEquals(200, removed.status(), removed.body());
+        assertEquals(0, removed.json().get("pages").size());
+    }
+
+    /** A discarded requirement gets no new link; a link of another project's ticket number does not exist. */
+    @Test
+    void aDiscardedRequirementGetsNoNewLinks() {
+        Setup setup = project();
+        Browser editor = member(setup, with(rules(List.of("requirement.read", "requirement.edit"), true), with(TICKET_READ, "ticket.create",
+            "ticket:WRITE:title", "ticket:WRITE:type")));
+        long number = ticket(editor, setup, "Verworfen");
+        Response created = example(editor, setup);
+        UUID id = id(created);
+        assertEquals(200, editor.send("POST", path(id) + "/tickets", Map.of("number", number), null).status());
+        Response discarded = editor.send("POST", path(id) + "/discard", Map.of("reason", "doppelt"), created.etag());
+        assertEquals(200, discarded.status(), discarded.body());
+        long other = ticket(editor, setup, "Neu");
+        assertEquals(409, editor.send("POST", path(id) + "/tickets", Map.of("number", other), null).status());
+        assertFalse(editor.get(path(id) + "/links").json().get("edit").asBoolean());
+        assertEquals(200, editor.send("DELETE", path(id) + "/tickets/" + number, null, null).status(), "removing stays possible");
+        assertInvalid(editor.send("POST", path(id) + "/tickets", Map.of(), null), "number.invalid");
+        assertInvalid(editor.send("GET", path(id) + "/links?language=fr", null, null), "language.invalid");
     }
 }

@@ -15,6 +15,7 @@ import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, us
 import { useReorder } from '../app/useReorder.ts';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
+import { RequirementLinksPanel } from './RequirementLinksPanel.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
 import { DiffView } from './WikiDiffView.tsx';
@@ -680,10 +681,15 @@ function compareContents(leftRevision: number, a: RequirementContent, rightRevis
   };
 }
 
-function EventText({ event }: { readonly event: RequirementEvent }) {
+function EventText({ event, projectKey, pageTitles }: {
+  readonly event: RequirementEvent;
+  readonly projectKey: string;
+  readonly pageTitles: Readonly<Record<string, string>>;
+}) {
   const { t } = useI18n();
   const name = useAccountName();
-  const field = event.field === null ? '' : t(`requirements.field.${event.field}` as MessageKey);
+  // Links name no field of the requirement (TASK-097).
+  const field = event.field === null || event.field === 'tickets' || event.field === 'pages' ? '' : t(`requirements.field.${event.field}` as MessageKey);
   const value = (raw: string | null) => {
     if (raw === null) return t('requirements.event.empty');
     if (event.field === 'owner') return name(raw);
@@ -691,6 +697,10 @@ function EventText({ event }: { readonly event: RequirementEvent }) {
     return raw;
   };
   const status = (raw: string | null) => (raw === null ? '' : t(statusKey(raw as RequirementStatus)));
+  // Links (TASK-097): a ticket as "number:revision", a page by its identifier with the published title the reader may see.
+  const ticketPart = (raw: string | null, index: 0 | 1) => (raw ?? '').split(':')[index] ?? '';
+  const ticket = (raw: string | null) => `${projectKey}-${ticketPart(raw, 0)}`;
+  const page = (raw: string | null) => (raw !== null && pageTitles[raw] !== undefined ? pageTitles[raw] : t('requirements.links.pageUnavailable'));
   switch (event.kind) {
     case 'created': return <>{t('requirements.event.created')}</>;
     case 'changed':
@@ -710,6 +720,12 @@ function EventText({ event }: { readonly event: RequirementEvent }) {
     case 'returned': return <>{t('requirements.event.returned', { reason: event.reason ?? '' })}</>;
     case 'discarded': return <>{event.reason ? t('requirements.event.discardedReason', { reason: event.reason }) : t('requirements.event.discarded')}</>;
     case 'restored': return <>{t('requirements.event.restored', { status: status(event.to) })}</>;
+    case 'ticket_linked': return <>{t('requirements.event.ticketLinked', { ticket: ticket(event.to), revision: ticketPart(event.to, 1) })}</>;
+    case 'ticket_switched':
+      return <>{t('requirements.event.ticketSwitched', { ticket: ticket(event.to), from: ticketPart(event.from, 1), to: ticketPart(event.to, 1) })}</>;
+    case 'ticket_unlinked': return <>{t('requirements.event.ticketUnlinked', { ticket: ticket(event.from) })}</>;
+    case 'page_linked': return <>{t('requirements.event.pageLinked', { page: page(event.to) })}</>;
+    case 'page_unlinked': return <>{t('requirements.event.pageUnlinked', { page: page(event.from) })}</>;
     default: return <>{event.kind}</>;
   }
 }
@@ -719,7 +735,7 @@ function HistoryPanel({ requirement }: { readonly requirement: Requirement }) {
   const { api } = useBrand();
   const name = useAccountName();
   const problem = useRequirementProblem();
-  const [history, retry] = useLoad(() => readRequirementHistory(api, requirement.id), [api, requirement.id, requirement.version]);
+  const [history, retry] = useLoad(() => readRequirementHistory(api, requirement.id, language === 'en' ? 'en' : 'de'), [api, requirement.id, requirement.version, language]);
   const [shown, setShown] = useState<RequirementRevision | null>(null);
   const [left, setLeft] = useState('');
   const [right, setRight] = useState('');
@@ -801,7 +817,7 @@ function HistoryPanel({ requirement }: { readonly requirement: Requirement }) {
                 {value.events.map((event, index) => (
                   <li key={index} data-kind={event.kind}>
                     <span className="badge">{t('requirements.revision', { revision: event.revision })}</span>{' '}
-                    <EventText event={event} />{' · '}{name(event.actorId)}{' · '}{formatDateTime(event.occurredAt, language)}
+                    <EventText event={event} projectKey={requirement.projectKey} pageTitles={value.pageTitles} />{' · '}{name(event.actorId)}{' · '}{formatDateTime(event.occurredAt, language)}
                   </li>
                 ))}
               </ul>
@@ -973,6 +989,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
             )}
             {mode === 'history' && <HistoryPanel key={requirement.id} requirement={requirement} />}
             {(mode === 'read' || mode === 'return' || mode === 'discard') && <ContentView content={content} access={access} testId="requirement-content" />}
+            {mode === 'read' && <RequirementLinksPanel key={requirement.id} requirement={requirement} />}
           </article>
         );
       }}

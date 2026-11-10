@@ -549,7 +549,19 @@ Paket A13 Teil 1 (DEC-126). Modul `requirements`, Migration V0058 mit `requireme
 
 **Beschreibung.** Das Format des Wikieditors über die öffentliche Fassade `wiki.RichText`; Bilder (`description.image_not_allowed`) und Wikiverweise (`description.page_link_not_allowed`) sind abgelehnt; die übrigen Codes der Wikiprüfung erscheinen ebenso mit dem Präfix `description.`, ein unsicheres Linkziel als `description.link_invalid`.
 
-**Grenzen.** Keine Verknüpfungen (TASK-097), keine eigenen Felder und Demodaten (TASK-098), keine Suche, kein Portal, kein Löschen.
+**Grenzen.** Keine eigenen Felder und Demodaten (TASK-098), keine Suche, kein Portal, kein Löschen. Verknüpfungen beschreibt der folgende Abschnitt.
+
+## Verknüpfungen von Anforderungen (TASK-097)
+
+Paket A13 Teil 2 (DEC-127, Regeln 1 bis 5 in TODO.md). Migration V0059 mit `requirement_ticket_link` (Anforderung, Ticket, Revision) und `requirement_page_link` (Anforderung, Wikiseite) und den Ereignisarten `ticket_linked`, `ticket_switched`, `ticket_unlinked`, `page_linked` und `page_unlinked`. Dienst `RequirementLinks` im Modul `requirements`, das dafür von `tickets` abhängen darf; Tests in `RequirementApiTest`.
+
+**Tickets.** `POST /api/v1/requirements/{id}/tickets` mit `{number}` verknüpft ein Ticket desselben Projekts mit der laufenden Revision, `POST …/tickets/{number}/switch` mit `{revision}` stellt auf die laufende Revision um (412, wenn sie inzwischen eine andere ist), `DELETE …/tickets/{number}` löst. Alle drei verlangen `requirement.edit` und `ticket.read`, beide mit `Permissions.require` bis zum Commit gehalten; dann wird die Anforderung `FOR UPDATE` und das Ticket über `TicketAccess.lockForRequirementChange` `FOR SHARE` gesperrt, bevor die Zeit genommen wird. Weder die Version der Anforderung noch die des Tickets ändert sich, darum ohne If-Match. Die Historie des Tickets erhält über `TicketAccess.recordRequirementChange` einen eigenen Eintrag im Feld `requirements` mit `ANF-n:Revision`; das Ticketmodul zeigt ihn nur, wenn der Port `TicketRequirementReaders` (umgesetzt von `RequirementLinks`) `requirement.read` bestätigt.
+
+**Wikiseiten.** `POST …/pages` mit `{pageId}` und `DELETE …/pages/{pageId}`. Verknüpfen verlangt eine veröffentlichte, nicht archivierte Seite des Projekts, deren Titel die Person mit `wiki.read` lesen darf, über den öffentlichen Port `wiki.WikiPages`; Lösen nur `requirement.edit`. Ohne `wiki.read` oder ohne veröffentlichte Fassung erscheint die Verknüpfung ohne Titel.
+
+**Lesen.** `GET /api/v1/requirements/{id}/links?language=de|en` liefert die lesbaren Tickets mit Titel und Status nach ihren Leseregeln, `newerRevision` und die Zählung `summary` (Tickets, davon erledigt nach der Kategorie `done` des lesbaren Status) sowie die Seiten. `GET /api/v1/requirements/projects/{projectId}/tickets/{number}` ist das Feld „Anforderungen“ des Tickets: verlangt `ticket.read`, ohne `requirement.read` leer. Die Historie der Anforderung zeigt Ereignisse von Tickets nur mit `ticket.read` und nennt in `pageTitles` die lesbaren Seitentitel.
+
+**Grenzen.** Keine projektübergreifenden Verknüpfungen, keine Git Objekte, keine Abnahme je Kriterium, keine Beziehungen zwischen Anforderungen. Höchstens 200 Tickets und 200 Seiten je Anforderung. Eine verworfene Anforderung erhält keine neue Verknüpfung und keine Umstellung.
 
 ## Neue Kundenantworten (TASK-067)
 

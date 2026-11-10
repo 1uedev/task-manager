@@ -73,6 +73,17 @@ public interface TicketAccess {
     /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a priority change. */
     void lockForPriorityChange(UUID ticketId);
 
+    /**
+     * Records in the history that a requirement was linked ({@code removed} is {@code null}), unlinked ({@code added} is
+     * {@code null}) or switched to a newer revision (TASK-097). The values name the requirement and its revision as
+     * {@code ANF-n:r}. Like a tag change it leaves the version of the ticket as it is and holds the ticket row {@code FOR SHARE}
+     * until the commit; the entries are shown only to readers of the requirements ({@link TicketRequirementReaders}).
+     */
+    void recordRequirementChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added);
+
+    /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a requirement link change. */
+    void lockForRequirementChange(UUID ticketId);
+
     /** What the deadlines of a ticket depend on (TASK-068): project, type, status and when the ticket was created. */
     record State(UUID companyId, UUID projectId, long number, String type, String status, Instant createdAt) {
     }
@@ -112,6 +123,9 @@ public interface TicketAccess {
 
     /** The priority of the ticket for service deadlines (TASK-068): low, normal, high or critical. */
     String PRIORITY_FIELD = "priority";
+
+    /** The requirements linked to the ticket (TASK-097); kept by the requirements module, only its changes are in the history. */
+    String REQUIREMENTS_FIELD = "requirements";
 
     /** The actor of what the mail intake does by itself, such as a ticket from a confirmed contact; no account has it. */
     UUID MAIL_INTAKE = new UUID(0, 0x4d41494cL);

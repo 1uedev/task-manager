@@ -28,6 +28,7 @@ import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.TicketOrganizations;
+import taskmanager.tickets.TicketRequirementReaders;
 import taskmanager.tickets.TicketTagFilter;
 
 /**
@@ -74,10 +75,13 @@ public class TicketService {
     private final ApplicationEventPublisher events;
     private final TicketOrganizations organizations;
     private final ObjectProvider<TicketTagFilter> tagFilter;
+    private final ObjectProvider<TicketRequirementReaders> requirementReaders;
 
     TicketService(TicketRepository tickets, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
-            ApplicationEventPublisher events, TicketOrganizations organizations, ObjectProvider<TicketTagFilter> tagFilter) {
+            ApplicationEventPublisher events, TicketOrganizations organizations, ObjectProvider<TicketTagFilter> tagFilter,
+            ObjectProvider<TicketRequirementReaders> requirementReaders) {
         this.tagFilter = tagFilter;
+        this.requirementReaders = requirementReaders;
         this.tickets = tickets;
         this.projects = projects;
         this.permissions = permissions;
@@ -243,7 +247,9 @@ public class TicketService {
      * tag forms an entry of its own with the field {@code tags} and the version the ticket had then, so several entries can
      * share a version (TASK-042); they need the read rule for {@code tags}. The same holds for each addition or removal of an
      * attachment with the field {@code attachments} (TASK-051), and for each change of customer, contact or a mail of the
-     * helpdesk (TASK-057). A custom field is shown with its read rule.
+     * helpdesk (TASK-057). A custom field is shown with its read rule. Each link, unlink or switch of a requirement forms an
+     * entry of its own with the field {@code requirements}, shown only to a caller who may read the requirements of the project
+     * (TASK-097), because a link is visible only to readers of both sides.
      */
     @Transactional
     public List<HistoryEntry> history(AccessContext actor, UUID projectId, long number) {
@@ -254,14 +260,17 @@ public class TicketService {
         }
         Set<String> readable = read.readableFields();
         Ticket ticket = tickets.find(actor.companyId(), projectId, number).orElseThrow(TicketService::notFound);
+        TicketRequirementReaders readers = requirementReaders.getIfUnique();
+        boolean requirements = readers != null && readers.mayRead(actor, projectId);
         List<HistoryEntry> entries = new ArrayList<>();
         HistoryEntry fields = null;
         for (TicketRepository.Change change : tickets.changes(ticket.id())) {
-            if (!readable.contains(change.field())) {
+            boolean link = TicketAccess.REQUIREMENTS_FIELD.equals(change.field());
+            if (link ? !requirements : !readable.contains(change.field())) {
                 continue;
             }
             FieldChange fieldChange = new FieldChange(change.field(), change.oldValue(), change.newValue());
-            if (SEPARATE_FIELDS.contains(change.field())) {
+            if (link || SEPARATE_FIELDS.contains(change.field())) {
                 entries.add(new HistoryEntry(change.version(), change.occurredAt(), change.actor(), List.of(fieldChange)));
                 fields = null;
             } else if (fields != null && fields.version() == change.version()) {

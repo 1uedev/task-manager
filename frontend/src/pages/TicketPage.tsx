@@ -17,6 +17,7 @@ import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { TicketAttachments } from './TicketAttachments.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
+import { TicketRequirements } from './TicketRequirements.tsx';
 import { TicketSla } from './TicketSla.tsx';
 import { TicketTime } from './TimePage.tsx';
 import { TagLabel, TagPicker, useTagProblemText } from './TagParts.tsx';
@@ -289,6 +290,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
           <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketTime key={`time-${refusals}`} projectId={project.id} ticketNumber={ticket.number} round={round} />
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
+          <TicketRequirements key={`requirements-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <History key={`history-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />
         </div>
@@ -427,6 +429,19 @@ function History({ project, ticket, round }: { readonly project: Project; readon
     return t(added ? 'history.attachmentAdded' : 'history.attachmentRemoved', { name: described.name, size: formatBytes(described.size, language) });
   };
 
+  // A requirement link as the server keeps it in the history: "ANF-n:revision" (TASK-097).
+  const requirementText = (from: string | null | undefined, to: string | null | undefined) => {
+    const part = (raw: string | null | undefined) => {
+      const at = (raw ?? '').lastIndexOf(':');
+      return at < 0 ? { key: raw ?? '', revision: '' } : { key: (raw ?? '').slice(0, at), revision: (raw ?? '').slice(at + 1) };
+    };
+    const before = part(from);
+    const after = part(to);
+    if (!from) return t('history.requirementLinked', { key: after.key, revision: after.revision });
+    if (!to) return t('history.requirementUnlinked', { key: before.key });
+    return t('history.requirementSwitched', { key: after.key, from: before.revision, to: after.revision });
+  };
+
   // Customer and contact as the server keeps them in the history: a JSON text with the name they had then (TASK-057).
   const referenceText = (raw: string | null | undefined) => parseReference(raw)?.name ?? t('field.empty');
   const mailText = (raw: string | null | undefined) => {
@@ -450,6 +465,8 @@ function History({ project, ticket, round }: { readonly project: Project; readon
                     <li key={position}>
                       {change.field === 'tags'
                         ? t(change.to ? 'history.tagAdded' : 'history.tagRemoved', { tag: value('tags', change.to ?? change.from) })
+                        : change.field === 'requirements'
+                        ? requirementText(change.from, change.to)
                         : change.field === 'attachments'
                         ? attachmentText(change.to, change.from)
                         : change.field === 'mail'

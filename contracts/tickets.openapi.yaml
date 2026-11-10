@@ -388,6 +388,11 @@ components:
             type: object
             required: [field, from, to]
             properties:
-              field: {type: string, pattern: '^(title|description|type|status|assignee|tags|attachments|customer|contact|mail|priority|custom\.[a-z][a-z0-9_]{0,39})$'}
+              field:
+                type: string
+                pattern: '^(title|description|type|status|assignee|tags|attachments|customer|contact|mail|priority|requirements|custom\.[a-z][a-z0-9_]{0,39})$'
+                description: |
+                  `requirements` (TASK-097): Verknüpfen, Umstellen oder Lösen einer Anforderung mit den Werten `ANF-n:Revision`,
+                  als eigener Eintrag, der die Version des Tickets nicht ändert; nur sichtbar mit `requirement.read` im Projekt.
               from: {type: [string, 'null']}
               to: {type: [string, 'null']}
