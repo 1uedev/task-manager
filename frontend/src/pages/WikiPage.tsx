@@ -467,9 +467,14 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
   const [compared, setCompared] = useState<{ readonly left: number; readonly right: number; readonly entries: DiffEntry[] } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  // R1 of the follow up review: only the answer of the latest request to show or compare counts.
+  const shownRequest = useRef(0);
+  const comparedRequest = useRef(0);
 
   async function show(revision: number) {
+    const request = ++shownRequest.current;
     const result = await readWikiRevision(api, page.id, page.language, revision);
+    if (request !== shownRequest.current) return;
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: problem(result.problem) });
     setShown(result.data.value);
   }
@@ -477,8 +482,10 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
   async function compare(event: FormEvent) {
     event.preventDefault();
     if (left === '' || right === '') return;
+    const request = ++comparedRequest.current;
     const [a, b] = await Promise.all([readWikiRevision(api, page.id, page.language, Number(left)),
       readWikiRevision(api, page.id, page.language, Number(right))]);
+    if (request !== comparedRequest.current) return;
     if (a.kind !== 'ok') return setNotice({ kind: 'info', text: problem(a.problem) });
     if (b.kind !== 'ok') return setNotice({ kind: 'info', text: problem(b.problem) });
     setCompared({ left: Number(left), right: Number(right), entries: diffBlocks(blocksOf(a.data.value.content), blocksOf(b.data.value.content)) });
@@ -491,6 +498,7 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
     const result = await restoreWikiRevision(api, page.id, page.language, revision, page.draft.revision);
     setBusy(false);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: problem(result.problem) });
+    shownRequest.current++;
     setShown(null);
     setNotice({ kind: 'success', text: t('wiki.history.restored', { revision, draft: result.data.value.draft?.revision ?? revision }) });
     onRestored(result.data.value);
@@ -530,7 +538,7 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
               {shown !== null && (
                 <section className="card stack" data-testid="wiki-revision-view">
                   <h3>{t('wiki.history.viewing', { revision: shown.revision, title: shown.title })}</h3>
-                  <div lang={page.language}><Content html={shown.html} testId="wiki-revision-content" /></div>
+                  <div lang={shown.language}><Content html={shown.html} testId="wiki-revision-content" /></div>
                   <div className="actions"><button type="button" className="secondary" onClick={() => setShown(null)}>{t('wiki.history.hide')}</button></div>
                 </section>
               )}
@@ -543,7 +551,7 @@ function HistoryPanel({ page, onRestored }: { readonly page: Page; readonly onRe
                   {compared !== null && (
                     <>
                       <p className="hint">{t('wiki.history.comparing', { from: compared.left, to: compared.right })}</p>
-                      <DiffView entries={compared.entries} testId="wiki-compare-diff" />
+                      <DiffView entries={compared.entries} testId="wiki-compare-diff" lang={page.language} />
                     </>
                   )}
                 </form>
@@ -874,7 +882,11 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
             )}
             {mode === 'move' && <MoveForm page={page} tree={nodes} onCancel={() => setMode('read')} onDone={(moved) => changed(moved, t('wiki.moved'))} />}
             {mode === 'create' && <CreateForm projectId={projectId} tree={flat} parentId={page.id} onCancel={() => setMode('read')} />}
-            {mode === 'history' && <HistoryPanel page={page} onRestored={(restored) => changed(restored, null, 'history')} />}
+            {/* R1 of the follow up review: the history belongs to one page and language version. A change of the version gives a
+                new panel, so a shown revision, a comparison and late answers of the former version are dropped. */}
+            {mode === 'history' && (
+              <HistoryPanel key={`${page.id} ${page.language}`} page={page} onRestored={(restored) => changed(restored, null, 'history')} />
+            )}
             {(mode === 'read' || mode === 'publish' || mode === 'move' || mode === 'create') && (
               drafts && draft !== null && (page.published === null || draft.changed)
                 ? (

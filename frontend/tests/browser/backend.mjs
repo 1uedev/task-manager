@@ -1829,6 +1829,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     match = p.match(/^\/wiki\/pages\/([^/]+)(\/.*)?$/);
     if (!match) return problem(404, 'resource.not_found');
+    // N1 of the follow up review: as the server, the body of a new language version is checked before the page is looked up,
+    // so an unknown or unpublished page answers a missing or unknown language with 400 like any other page.
+    if (match[2] === '/languages' && method === 'POST') {
+      if (body?.language === undefined || body?.language === null) return problem(400, 'request.invalid', { violations: ['language.required'] });
+      if (!WIKI_LANGUAGES.includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+    }
     const page = wiki.pages.find((item) => item.id === match[1]);
     if (!page || !wikiVisible(account, page)) return problem(404, 'wiki.page_not_found');
     const access = wikiAccess(account, page.projectId);
@@ -1837,9 +1843,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const code = requested ?? page.language;
     const variant = wikiVariant(page, code);
     if (rest === '/languages' && method === 'POST') {
-      // As the server (H1 of the review): the language is checked before the right and the archive.
-      if (body?.language === undefined || body?.language === null) return problem(400, 'request.invalid', { violations: ['language.required'] });
-      if (!WIKI_LANGUAGES.includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      // The language of the body was checked above, before the page, the right and the archive (H1 of the review, N1 of the follow up).
       if (!access.edit) return problem(403, 'auth.forbidden');
       if (page.archived) return problem(409, 'wiki.page_archived');
       if (wikiVariant(page, body.language)) return problem(409, 'wiki.language_exists');

@@ -633,7 +633,98 @@ describe('wiki', () => {
     });
   });
 
-  test('H1: the stand in answers like the server for a missing language and a withdrawal of an archived page', () => {
+  test('R1: the history belongs to one version; a shown revision and a comparison go with a change of the interface language', async () => {
+    let wikiPage;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Abläufe', doc('Schritt eins'), { publish: true });
+        backend.state.wiki.revisions.push({ pageId: wikiPage.id, language: 'de', revision: 2, title: 'Abläufe', content: doc('Schritt zwei'),
+          savedAt: '2026-11-10T09:00:00Z', savedBy: backend.anna.id, basedOn: 1, restoredFrom: null, sourceRevision: null });
+        wikiPage.draftRevision = 2;
+        backend.addWikiLanguage(wikiPage, 'en', backend.anna, { title: 'Procedures', content: doc('Step one'), publish: true });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page) => {
+      await page.getByTestId('wiki-history-open').click();
+      const history = page.getByTestId('wiki-history');
+      await history.locator('[data-revision="1"]').getByRole('button', { name: 'Ansehen' }).click();
+      await history.getByTestId('wiki-revision-content').getByText('Schritt eins').waitFor();
+      assert.equal(await history.getByTestId('wiki-revision-content').evaluate((element) => element.parentElement?.closest('[lang]')?.getAttribute('lang')), 'de');
+      const compare = history.getByTestId('wiki-compare');
+      await compare.getByLabel('Von').selectOption('1');
+      await compare.getByLabel('Bis').selectOption('2');
+      await compare.getByRole('button', { name: 'Vergleichen' }).click();
+      await compare.getByTestId('wiki-compare-diff').getByText('Schritt zwei').waitFor();
+      assert.equal(await compare.getByTestId('wiki-compare-diff').locator('ins').first().getAttribute('lang'), 'de');
+
+      // The interface language changes while the history is open: the page follows with its English version.
+      await page.locator('#language').selectOption('en');
+      await history.locator('[data-revision="1"]').getByText('Procedures').waitFor();
+      assert.equal(await history.getByTestId('wiki-revision-view').count(), 0, 'the German revision is no longer shown');
+      assert.equal(await history.getByTestId('wiki-compare-diff').count(), 0, 'the German comparison is dropped');
+      await history.locator('[data-revision="1"]').getByRole('button', { name: 'View' }).click();
+      await history.getByTestId('wiki-revision-content').getByText('Step one').waitFor();
+      assert.equal(await history.getByTestId('wiki-revision-content').evaluate((element) => element.parentElement?.closest('[lang]')?.getAttribute('lang')), 'en');
+    });
+  });
+
+  test('R1: a late answer of the history is dropped, after a change of the interface language and after a later choice', async () => {
+    let wikiPage;
+    await withApp({
+      locale: 'en-US',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
+        wikiPage = backend.addWikiPage(backend.anna, 'Abläufe', doc('Schritt eins'), { publish: true });
+        backend.state.wiki.revisions.push({ pageId: wikiPage.id, language: 'de', revision: 2, title: 'Abläufe', content: doc('Schritt zwei'),
+          savedAt: '2026-11-10T09:00:00Z', savedBy: backend.anna.id, basedOn: 1, restoredFrom: null, sourceRevision: null });
+        wikiPage.draftRevision = 2;
+        backend.addWikiLanguage(wikiPage, 'en', backend.anna, { title: 'Procedures', content: doc('Step one'), publish: true });
+      },
+      hash: (backend) => wikiHash(backend, wikiPage),
+    }, async (page) => {
+      let held = 0;
+      const arrivals = [];
+      const releases = [];
+      await page.route((url) => /\/wiki\/pages\/[^/]+\/revisions\/1$/.test(url.pathname), async (route) => {
+        if (held < 2) {
+          held += 1;
+          await new Promise((resolve) => { releases.push(resolve); arrivals.shift()?.(); });
+        }
+        await route.fallback();
+      });
+      const arrived = () => new Promise((resolve) => { arrivals.push(resolve); });
+
+      await page.getByTestId('wiki-title').getByText('Procedures').waitFor();
+      await page.locator('#language').selectOption('de');
+      await page.getByTestId('wiki-title').getByText('Abläufe').waitFor();
+      await page.getByTestId('wiki-history-open').click();
+      const history = page.getByTestId('wiki-history');
+      await history.locator('[data-revision="2"]').waitFor();
+
+      // A later choice wins: revision 1 is held, revision 2 is shown, the late revision 1 changes nothing.
+      let first = arrived();
+      await history.locator('[data-revision="1"]').getByRole('button', { name: 'Ansehen' }).click();
+      await first;
+      await history.locator('[data-revision="2"]').getByRole('button', { name: 'Ansehen' }).click();
+      await history.getByTestId('wiki-revision-content').getByText('Schritt zwei').waitFor();
+      releases.shift()();
+      await page.waitForTimeout(300);
+      assert.equal(await history.getByTestId('wiki-revision-content').textContent(), 'Schritt zwei', 'the late revision 1 is dropped');
+
+      // A change of the interface language drops the held German answer.
+      first = arrived();
+      await history.locator('[data-revision="1"]').getByRole('button', { name: 'Ansehen' }).click();
+      await first;
+      await page.locator('#language').selectOption('en');
+      await history.locator('[data-revision="1"]').getByText('Procedures').waitFor();
+      releases.shift()();
+      await page.waitForTimeout(300);
+      assert.equal(await history.getByTestId('wiki-revision-view').count(), 0, 'the late German revision is not shown in the English history');
+    });
+  });
+
+  test('H1, N1: the stand in answers like the server for a missing language, also of an unknown page, and a withdrawal of an archived page', () => {
     const backend = createBackend();
     grant(backend, [backend.ben], ['wiki.read']);
     grant(backend, [backend.anna], ['wiki.edit', 'wiki.publish']);
@@ -643,6 +734,18 @@ describe('wiki', () => {
     assert.equal(missing.status, 400);
     assert.deepEqual(missing.body.violations, ['language.required']);
     assert.equal(backend.wikiCall(backend.ben, 'POST', `${path}/languages`, { language: 'en' }).status, 403);
+    // N1 of the follow up review: as the server, the language is checked before the page, also for an unpublished or unknown page.
+    const draftOnly = backend.addWikiPage(backend.anna, 'Entwurf', doc('Nur Entwurf'));
+    for (const who of [backend.anna, backend.ben]) {
+      for (const id of [draftOnly.id, '00000000-0000-4000-8000-000000000999']) {
+        const none = backend.wikiCall(who, 'POST', `/wiki/pages/${id}/languages`, {});
+        assert.equal(none.status, 400, id);
+        assert.deepEqual(none.body.violations, ['language.required'], id);
+        const unknown = backend.wikiCall(who, 'POST', `/wiki/pages/${id}/languages`, { language: 'fr' });
+        assert.equal(unknown.status, 400, id);
+        assert.deepEqual(unknown.body.violations, ['language.invalid'], id);
+      }
+    }
     backend.addWikiLanguage(wikiPage, 'en', backend.anna, { publish: true });
     wikiPage.archived = true;
     for (const query of ['language=de', 'language=en']) {
