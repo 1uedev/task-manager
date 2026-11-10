@@ -3,6 +3,7 @@ package taskmanager.requirements.internal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -11,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -23,6 +26,8 @@ import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.projects.ProjectConfiguration;
+import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.wiki.RichText;
 import tools.jackson.databind.JsonNode;
 
@@ -41,6 +46,10 @@ import tools.jackson.databind.JsonNode;
  * <p>Revisions after DEC-030: saving while the current revision is not approved changes it and writes the history. The first
  * content change (title, description, criteria, priority) after an approval opens the next revision as draft; the approved
  * revision stays as it is, with the person and time of its approval. The owner is organisational and opens no revision.
+ *
+ * <p>Custom fields (TASK-098, DEC-128): the project configuration names the custom fields of requirements; their values belong
+ * to the revision, count as content, follow the field rules {@code custom.<key>} of the resource type {@code requirement} and
+ * appear in history, comparison and approval. A required active field needs a value when the requirement is given for review.
  *
  * <p>Locks, in this order: rights (held until the commit by {@code Permissions.require}), the project row of the project
  * adapter, the counter of the project when a requirement is created, the requirement row. Every change carries the version
@@ -101,7 +110,8 @@ public class RequirementService {
     }
 
     /** The content of one revision; every part the caller may not read is {@code null}. */
-    public record Content(String title, JsonNode description, String descriptionHtml, List<CriterionView> criteria, String priority) {
+    public record Content(String title, JsonNode description, String descriptionHtml, List<CriterionView> criteria, String priority,
+            Map<String, Object> custom) {
     }
 
     public record Approval(int revision, Instant approvedAt, UUID approvedBy) {
@@ -113,20 +123,21 @@ public class RequirementService {
      */
     public record RequirementView(UUID id, UUID projectId, String projectKey, long number, String key, String status, int revision,
             Integer approvedRevision, Approval approval, Content content, UUID ownerId, Access access, List<UUID> editors, long version,
-            Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy) {
+            Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy, List<CustomField> customFields) {
     }
 
     public record Item(UUID id, long number, String key, String status, int revision, Integer approvedRevision, String title, String priority,
             UUID ownerId, Instant updatedAt) {
     }
 
-    public record ListPage(UUID projectId, String projectKey, Access access, List<Item> items, Long nextAfter) {
+    public record ListPage(UUID projectId, String projectKey, Access access, List<Item> items, Long nextAfter, List<CustomField> customFields) {
     }
 
     public record RevisionInfo(int revision, Instant openedAt, UUID openedBy, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy) {
     }
 
-    public record RevisionContent(int revision, boolean current, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, Content content) {
+    public record RevisionContent(int revision, boolean current, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, Content content,
+            List<CustomField> customFields) {
     }
 
     public record EventView(String kind, int revision, String field, Integer criterion, String from, String to, String reason, UUID actorId,
@@ -145,11 +156,20 @@ public class RequirementService {
     }
 
     /**
-     * The fields a request names. A field that is not named keeps its value; a named {@code null} empties the description or
-     * the owner.
+     * The fields a request names. A field that is not named keeps its value; a named {@code null} empties the description, the
+     * owner or a custom field. {@code custom} holds the named custom fields by key (TASK-098).
      */
     public record Changes(boolean hasTitle, String title, boolean hasDescription, JsonNode description, boolean hasPriority, String priority,
-            boolean hasOwner, String owner, boolean hasCriteria, List<CriterionInput> criteria) {
+            boolean hasOwner, String owner, boolean hasCriteria, List<CriterionInput> criteria, Map<String, Object> custom) {
+        public Changes {
+            custom = custom == null ? Map.of() : Collections.unmodifiableMap(new java.util.LinkedHashMap<>(custom));
+        }
+
+        public Changes(boolean hasTitle, String title, boolean hasDescription, JsonNode description, boolean hasPriority, String priority,
+                boolean hasOwner, String owner, boolean hasCriteria, List<CriterionInput> criteria) {
+            this(hasTitle, title, hasDescription, description, hasPriority, priority, hasOwner, owner, hasCriteria, criteria, Map.of());
+        }
+
         Set<String> fields() {
             Set<String> fields = new HashSet<>();
             if (hasTitle) {
@@ -167,6 +187,7 @@ public class RequirementService {
             if (hasCriteria) {
                 fields.add("criteria");
             }
+            custom.keySet().forEach(key -> fields.add(ProjectConfiguration.CUSTOM_PREFIX + key));
             return fields;
         }
     }
@@ -244,7 +265,7 @@ public class RequirementService {
         }).toList();
         Long next = rows.size() == size ? rows.getLast().requirement().number() : null;
         String key = projects.key(projectId).orElseThrow(RequirementService::projectNotFound);
-        return new ListPage(projectId, key, access, items, next);
+        return new ListPage(projectId, key, access, items, next, readableFields(configuration(projectId), access.readable()));
     }
 
     @Transactional
@@ -286,8 +307,9 @@ public class RequirementService {
         Set<String> readable = access(actor, requirement.projectId()).readable();
         RequirementRepository.Revision revision = repository.revision(requirement.id(), number)
             .orElseThrow(() -> ApiProblemException.of(404, "requirement.revision_not_found"));
+        ProjectConfiguration configuration = configuration(requirement.projectId());
         return new RevisionContent(revision.revision(), revision.revision() == requirement.currentRevision(), revision.savedAt(), revision.savedBy(),
-            revision.approvedAt(), revision.approvedBy(), content(revision, readable));
+            revision.approvedAt(), revision.approvedBy(), content(revision, readable, configuration), readableFields(configuration, readable));
     }
 
     /** The people who may become owner: active internal members of the project, for callers who may change the owner. */
@@ -308,6 +330,7 @@ public class RequirementService {
         if (!access.edit()) {
             throw forbidden();
         }
+        unknownFields(configuration(projectId), input.custom().keySet());
         Set<String> written = input.fields();
         written.add("title");
         require(actor, projectId, EDIT, Set.of(), written);
@@ -323,6 +346,7 @@ public class RequirementService {
                 criteria.add(new RequirementRepository.Criterion(next++, criterion.text()));
             }
         }
+        Map<String, String> custom = customValues(projectId, configuration(projectId), input.custom(), Map.of(), violations);
         if (!violations.isEmpty()) {
             throw invalid(violations);
         }
@@ -332,7 +356,7 @@ public class RequirementService {
         repository.insert(new RequirementRepository.Requirement(id, actor.companyId(), projectId, number, "draft", owner, 1, null, next, now,
             actor.userId(), now, actor.userId(), 1));
         repository.insert(new RequirementRepository.Revision(id, 1, title, description, priority, List.copyOf(criteria), now, actor.userId(), now,
-            actor.userId(), null, null));
+            actor.userId(), null, null, custom));
         repository.event(actor.companyId(), id, 1, "created", null, null, null, null, null, actor.userId(), now);
         return view(repository.find(actor.companyId(), id).orElseThrow(), access(actor, projectId));
     }
@@ -351,6 +375,8 @@ public class RequirementService {
         if (!access(actor, found.projectId()).edit()) {
             throw forbidden();
         }
+        ProjectConfiguration configuration = configuration(found.projectId());
+        unknownFields(configuration, changes.custom().keySet());
         require(actor, found.projectId(), EDIT, Set.of(), written);
         RequirementRepository.Requirement requirement = locked(actor, id, expectedVersion);
         if ("discarded".equals(requirement.status())) {
@@ -373,11 +399,12 @@ public class RequirementService {
             }
             criteria = List.copyOf(updated);
         }
+        Map<String, String> custom = customValues(requirement.projectId(), configuration, changes.custom(), current.custom(), violations);
         if (!violations.isEmpty()) {
             throw invalid(violations);
         }
         boolean content = !title.equals(current.title()) || !Objects.equals(description, current.description()) || !priority.equals(current.priority())
-            || !criteria.equals(current.criteria());
+            || !criteria.equals(current.criteria()) || !custom.equals(current.custom());
         boolean ownerChanged = !Objects.equals(owner, requirement.ownerId());
         if (!content && !ownerChanged) {
             return view(requirement, access(actor, requirement.projectId()));
@@ -390,15 +417,15 @@ public class RequirementService {
             if (current.approved()) {
                 revision = current.revision() + 1;
                 repository.insert(new RequirementRepository.Revision(requirement.id(), revision, title, description, priority, criteria, now, by, now, by,
-                    null, null));
+                    null, null, custom));
                 repository.event(actor.companyId(), requirement.id(), revision, "revision_opened", null, null, String.valueOf(current.revision()),
                     String.valueOf(revision), null, by, now);
                 status = "draft";
             } else {
                 repository.update(new RequirementRepository.Revision(requirement.id(), revision, title, description, priority, criteria,
-                    current.openedAt(), current.openedBy(), now, by, null, null));
+                    current.openedAt(), current.openedBy(), now, by, null, null, custom));
             }
-            recordContent(actor, requirement.id(), revision, current, title, description, priority, criteria, now);
+            recordContent(actor, requirement.id(), revision, current, title, description, priority, criteria, custom, now);
         }
         if (ownerChanged) {
             repository.event(actor.companyId(), requirement.id(), revision, "changed", "owner", null, text(requirement.ownerId()), text(owner), null, by,
@@ -416,8 +443,24 @@ public class RequirementService {
             throw ApiProblemException.of(409, "requirement.status_invalid");
         }
         RequirementRepository.Revision current = repository.revision(requirement.id(), requirement.currentRevision()).orElseThrow();
+        // A required custom field the caller may not read or write is a conflict of the configuration and the rights, whatever it
+        // holds, so the answer never tells whether a hidden field has a value (as for the transitions of tickets).
+        ProjectConfiguration configuration = configuration(requirement.projectId());
+        Access access = access(actor, requirement.projectId());
+        List<CustomField> required = configuration.requirementFields().stream().filter(field -> field.required() && field.active()).toList();
+        for (CustomField field : required) {
+            if (!access.readable().contains(field.id()) || !access.writable().contains(field.id())) {
+                throw ApiProblemException.of(409, "requirement.required_field_inaccessible");
+            }
+        }
+        List<String> missing = new ArrayList<>();
         if (current.criteria().isEmpty()) {
-            throw invalid(List.of("criteria.required"));
+            missing.add("criteria.required");
+        }
+        required.stream().filter(field -> !current.custom().containsKey(field.key()))
+            .forEach(field -> missing.add(field.id() + ".required_for_review"));
+        if (!missing.isEmpty()) {
+            throw invalid(missing);
         }
         return status(actor, requirement, "submitted", "review", requirement.approvedRevision(), null);
     }
@@ -430,10 +473,12 @@ public class RequirementService {
         if (!access.approve()) {
             throw forbidden();
         }
-        if (!access.readable().containsAll(CONTENT)) {
+        Set<String> content = new HashSet<>(CONTENT);
+        content.addAll(configuration(found.projectId()).requirementFieldIds());
+        if (!access.readable().containsAll(content)) {
             throw ApiProblemException.of(403, "requirement.content_not_readable");
         }
-        require(actor, found.projectId(), APPROVE, CONTENT, Set.of());
+        require(actor, found.projectId(), APPROVE, content, Set.of());
         RequirementRepository.Requirement requirement = locked(actor, id, expectedVersion);
         if (!"review".equals(requirement.status())) {
             throw ApiProblemException.of(409, "requirement.status_invalid");
@@ -443,8 +488,7 @@ public class RequirementService {
         }
         RequirementRepository.Revision current = repository.revision(requirement.id(), revision).orElseThrow();
         Instant now = clock.instant();
-        repository.update(new RequirementRepository.Revision(current.requirementId(), current.revision(), current.title(), current.description(),
-            current.priority(), current.criteria(), current.openedAt(), current.openedBy(), current.savedAt(), current.savedBy(), now, actor.userId()));
+        repository.update(current.approvedBy(now, actor.userId()));
         return status(actor, requirement, "approved", "approved", revision, null);
     }
 
@@ -506,9 +550,18 @@ public class RequirementService {
 
     /** Writes the history of a content change field by field and criterion by criterion. */
     private void recordContent(AccessContext actor, UUID id, int revision, RequirementRepository.Revision before, String title, String description,
-            String priority, List<RequirementRepository.Criterion> criteria, Instant now) {
+            String priority, List<RequirementRepository.Criterion> criteria, Map<String, String> custom, Instant now) {
         UUID by = actor.userId();
         UUID company = actor.companyId();
+        Set<String> keys = new TreeSet<>(before.custom().keySet());
+        keys.addAll(custom.keySet());
+        for (String key : keys) {
+            String old = before.custom().get(key);
+            String fresh = custom.get(key);
+            if (!Objects.equals(old, fresh)) {
+                repository.event(company, id, revision, "changed", ProjectConfiguration.CUSTOM_PREFIX + key, null, old, fresh, null, by, now);
+            }
+        }
         if (!title.equals(before.title())) {
             repository.event(company, id, revision, "changed", "title", null, before.title(), title, null, by, now);
         }
@@ -555,8 +608,11 @@ public class RequirementService {
             approval = new Approval(approved.revision(), approved.approvedAt(), approved.approvedBy());
         }
         Set<UUID> editors = new LinkedHashSet<>();
-        // The creation wrote every content field; it names its author only to a caller who may read one of them (R2).
-        boolean contentReadable = CONTENT.stream().anyMatch(access.readable()::contains);
+        ProjectConfiguration configuration = configuration(requirement.projectId());
+        // The creation wrote every content field; it names its author only to a caller who may read one of them (R2), custom
+        // fields included (TASK-098).
+        boolean contentReadable = CONTENT.stream().anyMatch(access.readable()::contains)
+            || configuration.requirementFieldIds().stream().anyMatch(access.readable()::contains);
         for (RequirementRepository.Event event : repository.events(requirement.id())) {
             // Only changes of fields the caller may read name their author (Holger's choice on H3 of the TASK-096 review).
             if (event.revision() == current.revision() && EDITING.contains(event.kind()) && !"owner".equals(event.field())
@@ -566,19 +622,93 @@ public class RequirementService {
         }
         String key = projects.key(requirement.projectId()).orElseThrow(RequirementService::projectNotFound);
         return new RequirementView(requirement.id(), requirement.projectId(), key, requirement.number(), KEY_PREFIX + requirement.number(),
-            requirement.status(), requirement.currentRevision(), requirement.approvedRevision(), approval, content(current, access.readable()),
-            access.readable().contains("owner") ? requirement.ownerId() : null, access, List.copyOf(editors), requirement.version(),
-            requirement.createdAt(), requirement.createdBy(), requirement.updatedAt(), requirement.updatedBy());
+            requirement.status(), requirement.currentRevision(), requirement.approvedRevision(), approval,
+            content(current, access.readable(), configuration), access.readable().contains("owner") ? requirement.ownerId() : null, access,
+            List.copyOf(editors), requirement.version(), requirement.createdAt(), requirement.createdBy(), requirement.updatedAt(),
+            requirement.updatedBy(), readableFields(configuration, access.readable()));
     }
 
-    private static Content content(RequirementRepository.Revision revision, Set<String> readable) {
+    /** The custom fields of requirements the caller may read, in the order of the configuration. */
+    private static List<CustomField> readableFields(ProjectConfiguration configuration, Set<String> readable) {
+        return configuration.requirementFields().stream().filter(field -> readable.contains(field.id())).toList();
+    }
+
+    private static Content content(RequirementRepository.Revision revision, Set<String> readable, ProjectConfiguration configuration) {
+        Map<String, Object> custom = new java.util.LinkedHashMap<>();
+        for (CustomField field : configuration.requirementFields()) {
+            String value = revision.custom().get(field.key());
+            if (value != null && readable.contains(field.id())) {
+                custom.put(field.key(), typed(field, value));
+            }
+        }
         RichText description = readable.contains("description") && revision.description() != null ? RichText.stored(revision.description()) : null;
         boolean descriptionReadable = readable.contains("description");
         return new Content(readable.contains("title") ? revision.title() : null,
             descriptionReadable ? (description == null ? RichText.check(null).tree() : description.tree()) : null,
             descriptionReadable ? (description == null ? "" : description.html()) : null,
             readable.contains("criteria") ? revision.criteria().stream().map(c -> new CriterionView(c.id(), c.text())).toList() : null,
-            readable.contains("priority") ? revision.priority() : null);
+            readable.contains("priority") ? revision.priority() : null, custom);
+    }
+
+    /** A stored value as its kind says: a whole number or a boolean as such, everything else as text. */
+    private static Object typed(CustomField field, String value) {
+        return switch (field.type()) {
+            case ProjectConfiguration.INTEGER -> Long.parseLong(value);
+            case ProjectConfiguration.BOOLEAN -> Boolean.parseBoolean(value);
+            default -> value;
+        };
+    }
+
+    /** A key the configuration does not know is a wrong request, not a missing right (as for tickets). */
+    private static void unknownFields(ProjectConfiguration configuration, Set<String> keys) {
+        if (keys.stream().anyMatch(key -> configuration.requirementField(key).isEmpty())) {
+            throw invalid(List.of("customFields.unknown"));
+        }
+    }
+
+    /**
+     * The custom values after the named changes. A value the revision already holds is accepted as it is even when its field or
+     * option became inactive or the account left the project; only a new value is checked against that (F-06 of DOMAIN_MODEL.md).
+     * Emptying is always possible; a required field is checked when the requirement is given for review.
+     */
+    private Map<String, String> customValues(UUID projectId, ProjectConfiguration configuration, Map<String, Object> changes,
+            Map<String, String> current, List<String> violations) {
+        Map<String, String> custom = new TreeMap<>(current);
+        for (var change : changes.entrySet()) {
+            CustomField field = configuration.requirementField(change.getKey()).orElseThrow();
+            if (change.getValue() == null) {
+                custom.remove(change.getKey());
+                continue;
+            }
+            String value = ProjectConfiguration.canonical(field, change.getValue());
+            if (value == null) {
+                violations.add(field.id() + ".invalid");
+                continue;
+            }
+            if (!value.equals(current.get(change.getKey()))) {
+                if (!field.active()) {
+                    violations.add(field.id() + ".inactive");
+                    continue;
+                }
+                if (ProjectConfiguration.SELECT.equals(field.type()) && !field.option(value).orElseThrow().active()) {
+                    violations.add(field.id() + ".option_inactive");
+                    continue;
+                }
+                if (ProjectConfiguration.USER.equals(field.type()) && (!projects.isMember(projectId, UUID.fromString(value))
+                        || !identity.accountIsActiveInternal(UUID.fromString(value)))) {
+                    violations.add(field.id() + ".not_member");
+                    continue;
+                }
+            }
+            custom.put(change.getKey(), value);
+        }
+        return custom;
+    }
+
+    /** The configuration in force; read after the rights check locked the project, it stays current until the commit. */
+    private ProjectConfiguration configuration(UUID projectId) {
+        return projects.currentConfigurationVersion(projectId).flatMap(version -> projects.configuration(projectId, version))
+            .orElseThrow(RequirementService::projectNotFound);
     }
 
     private static String title(String title, List<String> violations) {
@@ -742,9 +872,20 @@ public class RequirementService {
         if (!read.allowed()) {
             return Access.NONE;
         }
+        // The custom fields are known only from the configuration, which is read after the first check locked the project; their
+        // rules are asked separately, as for tickets (TASK-098).
+        List<String> custom = configuration(projectId).requirementFieldIds();
+        Set<String> readable = new HashSet<>(read.readableFields());
+        if (!custom.isEmpty()) {
+            readable.addAll(permissions.inspect(actor, resource, READ, Set.copyOf(custom)).readableFields());
+        }
         Decision edit = permissions.inspect(actor, resource, EDIT, FIELDS);
+        Set<String> writable = new HashSet<>(edit.allowed() ? edit.writableFields() : Set.of());
+        if (edit.allowed() && !custom.isEmpty()) {
+            writable.addAll(permissions.inspect(actor, resource, EDIT, Set.copyOf(custom)).writableFields());
+        }
         boolean approve = permissions.inspect(actor, resource, APPROVE, Set.of()).allowed();
-        return new Access(true, edit.allowed(), approve, read.readableFields(), edit.allowed() ? edit.writableFields() : Set.of());
+        return new Access(true, edit.allowed(), approve, readable, writable);
     }
 
     private void require(AccessContext actor, UUID projectId, String action, Set<String> read, Set<String> write) {

@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Projekte (TASK-026, TASK-044)
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Projekte des Unternehmens, ihre Mitglieder und Konfigurationsversionen (DEC-065). Alle Aufrufe verlangen eine vollständige
     Anmeldung; Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -166,8 +166,8 @@ paths:
         `initialStatus.unknown`, `transitions.status_unknown`, `transitions.same_status`, `transitions.duplicate`,
         `transitions.required_field_unknown`, `workflows.type_unknown`, `workflows.type_duplicate`,
         `workflows.initialStatus.unknown`, `customFields.key_invalid`, `customFields.key_duplicate`,
-        `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, `fields.invalid`
-        oder `fields.required_fixed`.
+        `customFields.type_invalid`, `customFields.options_required`, `customFields.option_name_duplicate`, dieselben Codes mit
+        dem Präfix `requirementFields.` für die eigenen Felder der Anforderungen, `fields.invalid` oder `fields.required_fixed`.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -271,7 +271,9 @@ paths:
 
         * 400 `request.invalid` mit den Gründen der Konfiguration, siehe `Configuration`.
         * 409 `project.configuration_incompatible`: ein eigenes Feld oder eine Auswahloption fehlt (`customFields.removed`,
-          `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`).
+          `customFields.option_removed`) oder ein Feld ändert seinen Typ (`customFields.type_changed`); für die eigenen Felder
+          der Anforderungen entsprechend `requirementFields.removed`, `requirementFields.option_removed` und
+          `requirementFields.type_changed`.
         * 409 `project.configuration_in_use`: Tickets verwenden noch einen Tickettyp (`type.in_use:<schlüssel>`) oder einen
           Status (`status.in_use:<schlüssel>`), den die neue Version nicht mehr kennt oder für ihren Tickettyp nicht mehr
           vorsieht, und die Zuordnung fehlt; `status.mapping_invalid:<schlüssel>` heißt, dass der Zielstatus für den
@@ -603,6 +605,15 @@ components:
           description: |
             Eigene Felder der Tickets. Ein veröffentlichtes Feld und jede seiner Auswahloptionen bleiben in allen späteren
             Versionen erhalten und behalten den Typ.
+          items: {$ref: '#/components/schemas/CustomField'}
+        requirementFields:
+          type: array
+          maxItems: 30
+          description: |
+            Eigene Felder der Anforderungen (TASK-098) mit denselben Typen und Regeln wie `customFields`: ein veröffentlichtes
+            Feld und seine Auswahloptionen bleiben erhalten und behalten den Typ. `required` gilt beim Übergang einer
+            Anforderung nach Zur Prüfung. Die Rechteverwaltung kennt jedes Feld als `custom.<schlüssel>` des Ressourcentyps
+            `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen.
           items: {$ref: '#/components/schemas/CustomField'}
         fields:
           type: array

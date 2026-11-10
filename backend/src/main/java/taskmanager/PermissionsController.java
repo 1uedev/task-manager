@@ -214,8 +214,9 @@ class PermissionsController {
     ResponseEntity<GroupDetailBody> setField(@PathVariable UUID id, @RequestBody(required = false) FieldRequest body) {
         List<String> violations = new ArrayList<>();
         String type = body == null ? null : body.resourceType();
-        // A custom field of a ticket exists per project (TASK-044): the rule needs a project and a field of its configuration.
-        boolean custom = TICKET.equals(type) && body.field() != null && body.field().matches(CUSTOM_FIELD) && body.projectId() != null;
+        // A custom field of a ticket (TASK-044) or of a requirement (TASK-098) exists per project: the rule needs a project and a
+        // field of its configuration.
+        boolean custom = (TICKET.equals(type) || REQUIREMENT.equals(type)) && body.field() != null && body.field().matches(CUSTOM_FIELD) && body.projectId() != null;
         if (type == null || !FIELDS.containsKey(type)) {
             violations.add("resourceType.unknown");
         } else if (body.field() == null || !(FIELDS.get(type).contains(body.field()) || custom)) {
@@ -233,7 +234,7 @@ class PermissionsController {
         return answer(change(actor -> {
             Supplier<ResourceContext> scope = scope(actor, body.projectId(), type);
             // After the scope: a project the caller cannot see answers 404 before its fields are looked at.
-            if (custom && !hasCustomField(body.projectId(), body.field())) {
+            if (custom && !customFieldIds(body.projectId(), type).contains(body.field())) {
                 throw ApiProblemException.withViolations(400, "request.invalid", List.of("field.unknown"));
             }
             administration.setField(actor, id, scope, body.field(), operation, effect);
@@ -272,11 +273,9 @@ class PermissionsController {
             boolean company = manages(actor);
             List<String> actions = PROJECT_ACTIONS.stream()
                 .filter(action -> company || permissions.inspect(actor, project, action, Set.of()).allowed()).toList();
-            List<String> customFields = customFieldIds(projectId);
             List<ResourceFields> fields = FIELDS.entrySet().stream().map(entry -> {
-                // The tickets of the project also have its custom fields (TASK-044).
-                List<String> offered = TICKET.equals(entry.getKey())
-                    ? java.util.stream.Stream.concat(entry.getValue().stream(), customFields.stream()).toList() : entry.getValue();
+                // Tickets (TASK-044) and requirements (TASK-098) of the project also have its custom fields.
+                List<String> offered = java.util.stream.Stream.concat(entry.getValue().stream(), customFieldIds(projectId, entry.getKey()).stream()).toList();
                 if (company) {
                     return new ResourceFields(entry.getKey(), offered);
                 }
@@ -337,14 +336,15 @@ class PermissionsController {
         return projects.resource(actor.companyId(), project, actor.userId(), resourceType, false);
     }
 
-    private boolean hasCustomField(UUID project, String field) {
-        return customFieldIds(project).contains(field);
-    }
-
-    /** The identifiers {@code custom.<key>} of the custom fields in the current configuration of the project. */
-    private List<String> customFieldIds(UUID project) {
+    /**
+     * The identifiers {@code custom.<key>} of the custom fields of tickets or of requirements (TASK-098) in the current
+     * configuration of the project.
+     */
+    private List<String> customFieldIds(UUID project, String resourceType) {
         return projects.currentConfigurationVersion(project).flatMap(version -> projects.configuration(project, version))
-            .map(taskmanager.projects.ProjectConfiguration::customFieldIds).orElse(List.of());
+            .map(configuration -> REQUIREMENT.equals(resourceType) ? configuration.requirementFieldIds()
+                : TICKET.equals(resourceType) ? configuration.customFieldIds() : List.<String>of())
+            .orElse(List.of());
     }
 
     /** The visibility rule of the projects module: a company administration or a holder of a right in the project. */

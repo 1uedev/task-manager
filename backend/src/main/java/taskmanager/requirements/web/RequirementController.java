@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.permissions.AccessContext;
 import taskmanager.platform.ApiProblemException;
+import taskmanager.projects.ProjectConfiguration;
 import taskmanager.requirements.internal.RequirementLinks;
 import taskmanager.requirements.internal.RequirementService;
 import tools.jackson.databind.JsonNode;
@@ -56,10 +57,22 @@ class RequirementController {
     record CriterionBody(int id, String text) {
     }
 
-    record ContentBody(String title, JsonNode description, String descriptionHtml, List<CriterionBody> criteria, String priority) {
+    record ContentBody(String title, JsonNode description, String descriptionHtml, List<CriterionBody> criteria, String priority,
+            Map<String, Object> customFields) {
         static ContentBody of(RequirementService.Content c) {
             return new ContentBody(c.title(), c.description(), c.descriptionHtml(),
-                c.criteria() == null ? null : c.criteria().stream().map(k -> new CriterionBody(k.id(), k.text())).toList(), c.priority());
+                c.criteria() == null ? null : c.criteria().stream().map(k -> new CriterionBody(k.id(), k.text())).toList(), c.priority(), c.custom());
+        }
+    }
+
+    record OptionBody(String key, String name, boolean active) {
+    }
+
+    /** A custom field of requirements the caller may read (TASK-098); whether it is writable says {@code access.writableFields}. */
+    record FieldBody(String key, String name, String type, boolean required, boolean active, List<OptionBody> options) {
+        static List<FieldBody> of(List<ProjectConfiguration.CustomField> fields) {
+            return fields.stream().map(f -> new FieldBody(f.key(), f.name(), f.type(), f.required(), f.active(),
+                f.options().stream().map(o -> new OptionBody(o.key(), o.name(), o.active())).toList())).toList();
         }
     }
 
@@ -68,12 +81,13 @@ class RequirementController {
 
     record RequirementBody(UUID id, UUID projectId, String projectKey, long number, String key, String status, int revision, Integer approvedRevision,
             ApprovalBody approval, ContentBody content, UUID ownerId, AccessBody access, List<UUID> editors, long version, Instant createdAt,
-            UUID createdBy, Instant updatedAt, UUID updatedBy) {
+            UUID createdBy, Instant updatedAt, UUID updatedBy, List<FieldBody> customFields) {
         static RequirementBody of(RequirementService.RequirementView v) {
             RequirementService.Approval a = v.approval();
             return new RequirementBody(v.id(), v.projectId(), v.projectKey(), v.number(), v.key(), v.status(), v.revision(), v.approvedRevision(),
                 a == null ? null : new ApprovalBody(a.revision(), a.approvedAt(), a.approvedBy()), ContentBody.of(v.content()), v.ownerId(),
-                AccessBody.of(v.access()), v.editors(), v.version(), v.createdAt(), v.createdBy(), v.updatedAt(), v.updatedBy());
+                AccessBody.of(v.access()), v.editors(), v.version(), v.createdAt(), v.createdBy(), v.updatedAt(), v.updatedBy(),
+                FieldBody.of(v.customFields()));
         }
     }
 
@@ -81,7 +95,7 @@ class RequirementController {
             UUID ownerId, Instant updatedAt) {
     }
 
-    record ListBody(UUID projectId, String projectKey, AccessBody access, List<ItemBody> items, Long nextAfter) {
+    record ListBody(UUID projectId, String projectKey, AccessBody access, List<ItemBody> items, Long nextAfter, List<FieldBody> customFields) {
     }
 
     record RevisionInfoBody(int revision, Instant openedAt, UUID openedBy, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy) {
@@ -131,7 +145,8 @@ class RequirementController {
     record PageLinkRequest(UUID pageId) {
     }
 
-    record RevisionBody(int revision, boolean current, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, ContentBody content) {
+    record RevisionBody(int revision, boolean current, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, ContentBody content,
+            List<FieldBody> customFields) {
     }
 
     record ApproveRequest(Integer revision) {
@@ -156,7 +171,7 @@ class RequirementController {
         return new ListBody(page.projectId(), page.projectKey(), AccessBody.of(page.access()), page.items().stream()
             .map(i -> new ItemBody(i.id(), i.number(), i.key(), i.status(), i.revision(), i.approvedRevision(), i.title(), i.priority(), i.ownerId(),
                 i.updatedAt()))
-            .toList(), page.nextAfter());
+            .toList(), page.nextAfter(), FieldBody.of(page.customFields()));
     }
 
     @GetMapping("/projects/{projectId}/owners")
@@ -325,7 +340,8 @@ class RequirementController {
     RevisionBody revision(@PathVariable UUID id, @PathVariable int revision) {
         AccessContext actor = requests.actor();
         RequirementService.RevisionContent r = RequirementRequests.retrying(() -> service.revision(actor, id, revision));
-        return new RevisionBody(r.revision(), r.current(), r.savedAt(), r.savedBy(), r.approvedAt(), r.approvedBy(), ContentBody.of(r.content()));
+        return new RevisionBody(r.revision(), r.current(), r.savedAt(), r.savedBy(), r.approvedAt(), r.approvedBy(), ContentBody.of(r.content()),
+            FieldBody.of(r.customFields()));
     }
 
     /**
@@ -334,14 +350,14 @@ class RequirementController {
      */
     static RequirementService.Changes changes(JsonNode body) {
         if (body == null || body.isNull()) {
-            return new RequirementService.Changes(false, null, false, null, false, null, false, null, false, null);
+            return new RequirementService.Changes(false, null, false, null, false, null, false, null, false, null, Map.of());
         }
         if (!body.isObject()) {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("body.invalid"));
         }
         List<String> violations = new ArrayList<>();
         for (String name : body.propertyNames()) {
-            if (!List.of("title", "description", "priority", "ownerId", "criteria").contains(name)) {
+            if (!List.of("title", "description", "priority", "ownerId", "criteria", "customFields").contains(name)) {
                 violations.add(name + ".unknown");
             }
         }
@@ -371,11 +387,45 @@ class RequirementController {
                 }
             }
         }
+        Map<String, Object> custom = customFields(body.get("customFields"), violations);
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations.stream().distinct().toList());
         }
         return new RequirementService.Changes(body.has("title"), title, body.has("description"), description, body.has("priority"), priority,
-            body.has("ownerId"), owner, body.has("criteria"), criteria);
+            body.has("ownerId"), owner, body.has("criteria"), criteria, custom);
+    }
+
+    /**
+     * The values of {@code customFields} by field key (TASK-098): text, a whole number or a boolean as such, {@code null} to empty
+     * a field. Whether the key exists and the value fits its field the service decides.
+     */
+    private static Map<String, Object> customFields(JsonNode node, List<String> violations) {
+        Map<String, Object> custom = new java.util.LinkedHashMap<>();
+        if (node == null) {
+            return custom;
+        }
+        if (!node.isObject() || node.size() > 30) {
+            violations.add("customFields.invalid");
+            return custom;
+        }
+        for (var entry : node.properties()) {
+            String key = entry.getKey();
+            JsonNode value = entry.getValue();
+            if (!key.matches("[a-z][a-z0-9_]{0,39}")) {
+                violations.add("customFields.unknown");
+            } else if (value.isNull()) {
+                custom.put(key, null);
+            } else if (value.isString()) {
+                custom.put(key, value.asString());
+            } else if (value.isBoolean()) {
+                custom.put(key, value.asBoolean());
+            } else if (value.isIntegralNumber() && value.canConvertToLong()) {
+                custom.put(key, value.asLong());
+            } else {
+                violations.add(ProjectConfiguration.CUSTOM_PREFIX + key + ".invalid");
+            }
+        }
+        return custom;
     }
 
     private static String text(JsonNode body, String name, List<String> violations) {

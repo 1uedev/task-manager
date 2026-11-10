@@ -851,6 +851,172 @@ class RequirementApiTest {
             Map.of("resourceType", "ticket", "field", "criteria", "operation", "read", "effect", "allow"), null), "field.unknown");
     }
 
+    // ---------------------------------------------------------------- custom fields (TASK-098)
+
+    private static Map<String, Object> field(String key, String name, String type, boolean required, List<Map<String, Object>> options) {
+        Map<String, Object> field = new LinkedHashMap<>();
+        field.put("key", key);
+        field.put("name", name);
+        field.put("type", type);
+        field.put("required", required);
+        if (options != null) {
+            field.put("options", options);
+        }
+        return field;
+    }
+
+    /** Publishes the configuration of the project with the given custom fields of requirements; returns the answer. */
+    private Response requirementFields(Setup setup, List<Map<String, Object>> fields) {
+        Response current = setup.admin().get("/api/v1/projects/" + setup.project());
+        assertEquals(200, current.status(), current.body());
+        Map<String, Object> configuration = JSON.convertValue(current.json().get("configuration"),
+            new tools.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        configuration.put("requirementFields", fields);
+        return setup.admin().send("PUT", "/api/v1/projects/" + setup.project() + "/configuration", configuration, current.etag());
+    }
+
+    private static final List<Map<String, Object>> AREA_OPTIONS = List.of(Map.of("key", "portal", "name", "Portal"),
+        Map.of("key", "intern", "name", "Intern"));
+
+    private static String[] customRules(String[] base, boolean write, String... keys) {
+        List<String> rules = new ArrayList<>(List.of(base));
+        for (String key : keys) {
+            rules.add("READ:custom." + key);
+            if (write) {
+                rules.add("WRITE:custom." + key);
+            }
+        }
+        return rules.toArray(String[]::new);
+    }
+
+    /**
+     * TASK-098 rules 1 and 2: a published custom field appears at requirements and follows its field rules, counts as content
+     * with history, comparison and approval, and a required field is needed when the requirement is given for review.
+     */
+    @Test
+    void customFieldsAreContentFollowTheRulesAndAreRequiredForReview() {
+        Setup setup = project();
+        Response configured = requirementFields(setup, List.of(field("area", "Bereich", "select", true, AREA_OPTIONS),
+            field("effort", "Aufwand", "integer", false, null), field("note", "Vertraulich", "text", false, null)));
+        assertEquals(200, configured.status(), configured.body());
+        Browser editor = member(setup, customRules(rules(List.of("requirement.read", "requirement.edit"), true), true, "area", "effort", "note"));
+        Browser noArea = member(setup, customRules(rules(List.of("requirement.read", "requirement.edit"), true), true, "effort", "note"));
+        Browser approver = member(setup, customRules(rules(List.of("requirement.read", "requirement.approve"), false), false, "area", "effort", "note"));
+        Browser partial = member(setup, customRules(rules(List.of("requirement.read", "requirement.approve"), false), false, "area"));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", "Kunden sehen den Stand ihrer Anfragen");
+        body.put("criteria", List.of(criterion(null, "Die Portalliste zeigt den Status.")));
+        body.put("customFields", Map.of("effort", 5));
+        Response created = create(editor, setup, body);
+        assertEquals(201, created.status(), created.body());
+        assertEquals(5, created.json().get("content").get("customFields").get("effort").asInt());
+        assertEquals(List.of("area", "effort", "note"), names(created.json().get("customFields"), "key"));
+        UUID id = id(created);
+
+        assertInvalid(editor.send("PATCH", path(id), Map.of("customFields", Map.of("unknown", "x")), created.etag()), "customFields.unknown");
+        assertInvalid(editor.send("PATCH", path(id), Map.of("customFields", Map.of("effort", "viel")), created.etag()), "custom.effort.invalid");
+        assertInvalid(editor.send("PATCH", path(id), Map.of("customFields", Map.of("area", "fremd")), created.etag()), "custom.area.invalid");
+        assertEquals(403, noArea.send("PATCH", path(id), Map.of("customFields", Map.of("area", "portal")), created.etag()).status(),
+            "the write rule of the field");
+
+        // Rule 2: a required field is needed for the review; who may not read or write it meets a conflict, not a hint at its value.
+        assertInvalid(editor.send("POST", path(id) + "/submit", null, created.etag()), "custom.area.required_for_review");
+        assertEquals("requirement.required_field_inaccessible", noArea.send("POST", path(id) + "/submit", null, created.etag()).code());
+        Response filled = editor.send("PATCH", path(id), Map.of("customFields", Map.of("area", "portal")), created.etag());
+        assertEquals(200, filled.status(), filled.body());
+        assertEquals("portal", filled.json().get("content").get("customFields").get("area").asString());
+        Response submitted = editor.send("POST", path(id) + "/submit", null, filled.etag());
+        assertEquals(200, submitted.status(), submitted.body());
+
+        // Nobody approves what they cannot read: a custom field counts as content.
+        assertEquals("requirement.content_not_readable", partial.send("POST", path(id) + "/approve", Map.of("revision", 1), submitted.etag()).code());
+        Response approved = approver.send("POST", path(id) + "/approve", Map.of("revision", 1), submitted.etag());
+        assertEquals(200, approved.status(), approved.body());
+
+        // A change after the approval opens revision 2; revision 1 keeps its values.
+        Map<String, Object> change = new LinkedHashMap<>();
+        change.put("effort", 8);
+        change.put("note", "nur intern");
+        Response changed = editor.send("PATCH", path(id), Map.of("customFields", change), approved.etag());
+        assertEquals(200, changed.status(), changed.body());
+        assertEquals(2, changed.json().get("revision").asInt());
+        assertEquals("draft", changed.json().get("status").asString());
+        assertEquals(5, editor.get(path(id) + "/revisions/1").json().get("content").get("customFields").get("effort").asInt());
+        assertEquals(8, editor.get(path(id) + "/revisions/2").json().get("content").get("customFields").get("effort").asInt());
+
+        // Read rules: the partial reader sees the area only, in the requirement, the revisions and the history.
+        Response seen = partial.get(path(id));
+        assertEquals(List.of("area"), names(seen.json().get("customFields"), "key"));
+        List<String> shown = new ArrayList<>();
+        seen.json().get("content").get("customFields").propertyNames().forEach(shown::add);
+        assertEquals(List.of("area"), shown);
+        assertTrue(seen.json().get("editors").isEmpty(), "the change of revision 2 touches hidden fields only");
+        List<String> fields = new ArrayList<>();
+        partial.get(path(id) + "/history").json().get("events").forEach(e -> fields.add(e.get("field").isNull() ? null : e.get("field").asString()));
+        assertTrue(fields.contains("custom.area") && !fields.contains("custom.effort") && !fields.contains("custom.note"), fields.toString());
+        List<String> all = new ArrayList<>();
+        editor.get(path(id) + "/history").json().get("events").forEach(e -> {
+            if ("custom.effort".equals(e.get("field").asString(null))) {
+                all.add(e.get("from").asString(null) + ">" + e.get("to").asString());
+            }
+        });
+        assertEquals(List.of("5>8"), all, "the history names the old and new value of a change after the creation");
+
+        // Emptying is always possible; the next review needs the required field again.
+        Map<String, Object> empty = new LinkedHashMap<>();
+        empty.put("area", null);
+        Response emptied = editor.send("PATCH", path(id), Map.of("customFields", empty), changed.etag());
+        assertEquals(200, emptied.status(), emptied.body());
+        assertInvalid(editor.send("POST", path(id) + "/submit", null, emptied.etag()), "custom.area.required_for_review");
+    }
+
+    /** TASK-098 rule 1: custom fields of requirements are never removed and keep their type; inactive ones take no new value. */
+    @Test
+    void customFieldsOfRequirementsStayAndCanBeDeactivated() {
+        Setup setup = project();
+        assertEquals(200, requirementFields(setup, List.of(field("effort", "Aufwand", "integer", false, null))).status());
+        Response removed = requirementFields(setup, List.of());
+        assertEquals(409, removed.status(), removed.body());
+        assertTrue(removed.body().contains("requirementFields.removed"), removed.body());
+        Response retyped = requirementFields(setup, List.of(field("effort", "Aufwand", "text", false, null)));
+        assertTrue(retyped.body().contains("requirementFields.type_changed"), retyped.body());
+        assertInvalid(requirementFields(setup, List.of(field("effort", "Aufwand", "integer", false, null), field("effort", "Doppelt", "text", false, null))),
+            "requirementFields.key_duplicate");
+
+        Browser editor = member(setup, customRules(rules(List.of("requirement.read", "requirement.edit"), true), true, "effort"));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", "Mit Aufwand");
+        body.put("customFields", Map.of("effort", 3));
+        Response created = create(editor, setup, body);
+        assertEquals(201, created.status(), created.body());
+        Map<String, Object> inactive = field("effort", "Aufwand", "integer", false, null);
+        inactive.put("active", false);
+        assertEquals(200, requirementFields(setup, List.of(inactive)).status());
+        UUID id = id(created);
+        Response kept = editor.send("PATCH", path(id), Map.of("title", "Mit Aufwand, umbenannt", "customFields", Map.of("effort", 3)), created.etag());
+        assertEquals(200, kept.status(), "a value it already holds stays");
+        assertInvalid(editor.send("PATCH", path(id), Map.of("customFields", Map.of("effort", 4)), kept.etag()), "custom.effort.inactive");
+        assertEquals(3, editor.get(path(id)).json().get("content").get("customFields").get("effort").asInt());
+
+        // The rights of the project offer the field for the resource type requirement.
+        Browser rights = person(AdministrationRight.PERMISSIONS_MANAGE);
+        Response group = rights.send("POST", "/api/v1/permissions/groups", Map.of("name", "Aufwand lesen"), null);
+        String groupId = group.json().get("id").asString();
+        Map<String, Object> rule = new LinkedHashMap<>(Map.of("resourceType", "requirement", "field", "custom.effort", "operation", "read", "effect", "allow"));
+        rule.put("projectId", setup.project().toString());
+        Response granted = rights.send("PUT", "/api/v1/permissions/groups/" + groupId + "/fields", rule, null);
+        assertEquals(200, granted.status(), granted.body());
+        rule.put("field", "custom.unknown");
+        assertInvalid(rights.send("PUT", "/api/v1/permissions/groups/" + groupId + "/fields", rule, null), "field.unknown");
+    }
+
+    private static List<String> names(JsonNode array, String property) {
+        List<String> names = new ArrayList<>();
+        array.forEach(item -> names.add(item.get(property).asString()));
+        return names;
+    }
+
     // ---------------------------------------------------------------- links (TASK-097)
 
     private static final String[] TICKET_READ = { "ticket.read", "ticket:READ:title", "ticket:READ:status", "ticket:READ:type",

@@ -126,6 +126,10 @@ export interface paths {
          *     `description`, `criteria`, `priority` und `owner` einer Anforderung; ein Feld eines anderen Typs antwortet mit 400 und
          *     `field.unknown`. Der Katalog nennt die Projektaktionen `requirement.read`, `requirement.edit` und
          *     `requirement.approve`.
+         *
+         *     Seit Version 0.5.0 (TASK-098, DEC-128) gilt dasselbe für die eigenen Felder der Anforderungen: `custom.<schlüssel>`
+         *     mit dem Ressourcentyp `requirement` braucht ein `projectId` und ein Feld aus `requirementFields` der aktuellen
+         *     Konfiguration, sonst 400 und `field.unknown`.
          */
         put: operations["setGroupField"];
         post?: never;

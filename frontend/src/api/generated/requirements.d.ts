@@ -355,8 +355,26 @@ export interface components {
         Status: "draft" | "review" | "approved" | "discarded";
         /** @enum {string} */
         Priority: "low" | "normal" | "high" | "critical";
-        /** @enum {string} */
-        Field: "title" | "description" | "criteria" | "priority" | "owner";
+        /** @description Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098) */
+        Field: string | ("title" | "description" | "criteria" | "priority" | "owner") | unknown;
+        CustomFieldValue: string | number | boolean;
+        CustomFieldOption: {
+            key: string;
+            name: string;
+            active: boolean;
+        };
+        /** @description Ein eigenes Feld des Projekts, das der Aufrufer lesen darf (TASK-098) */
+        CustomField: {
+            key: string;
+            name: string;
+            /** @enum {string} */
+            type: "text" | "integer" | "boolean" | "select" | "user";
+            /** @description Pflicht beim Übergang nach Zur Prüfung */
+            required: boolean;
+            active: boolean;
+            options: components["schemas"]["CustomFieldOption"][];
+        };
+        CustomFields: components["schemas"]["CustomField"][];
         Access: {
             read: boolean;
             edit: boolean;
@@ -392,6 +410,10 @@ export interface components {
         };
         /** @description Inhalt einer Revision; ein Teil ohne Leseregel ist `null` */
         Content: {
+            /** @description Werte der lesbaren eigenen Felder je Schlüssel, nur gesetzte */
+            customFields: {
+                [key: string]: components["schemas"]["CustomFieldValue"];
+            };
             title: string | null;
             description: components["schemas"]["Document"] | null;
             descriptionHtml: string | null;
@@ -407,6 +429,7 @@ export interface components {
             approvedBy: string;
         };
         Requirement: {
+            customFields: components["schemas"]["CustomFields"];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -449,6 +472,10 @@ export interface components {
             /** Format: uuid */
             ownerId?: string | null;
             criteria?: components["schemas"]["CriterionInput"][];
+            /** @description Werte eigener Felder je Schlüssel; `null` leert ein Feld (TASK-098) */
+            customFields?: {
+                [key: string]: components["schemas"]["CustomFieldValue"] | null;
+            };
         };
         RequirementItem: {
             /** Format: uuid */
@@ -467,6 +494,7 @@ export interface components {
             updatedAt: string;
         };
         RequirementList: {
+            customFields: components["schemas"]["CustomFields"];
             /** Format: uuid */
             projectId: string;
             projectKey: string;
@@ -525,6 +553,7 @@ export interface components {
             events: components["schemas"]["Event"][];
         };
         Revision: {
+            customFields: components["schemas"]["CustomFields"];
             revision: number;
             current: boolean;
             /** Format: date-time */

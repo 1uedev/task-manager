@@ -5,14 +5,18 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /** The tables of the requirements module. Nobody else reads them. */
 @Repository
@@ -21,7 +25,7 @@ class RequirementRepository {
     private static final String REQUIREMENT = "r.id, r.company_id, r.project_id, r.number, r.status, r.owner_id, r.current_revision, "
         + "r.approved_revision, r.next_criterion, r.created_at, r.created_by, r.updated_at, r.updated_by, r.version";
     private static final String REVISION = "v.requirement_id, v.revision, v.title, v.description, v.priority, v.criteria, v.opened_at, "
-        + "v.opened_by, v.saved_at, v.saved_by, v.approved_at, v.approved_by";
+        + "v.opened_by, v.saved_at, v.saved_by, v.approved_at, v.approved_by, v.custom";
 
     private final JdbcClient jdbc;
 
@@ -41,10 +45,23 @@ class RequirementRepository {
     record Criterion(int id, String text) {
     }
 
+    /**
+     * The content of one revision. {@code custom} holds the values of the custom fields of requirements (TASK-098) by their
+     * key in their canonical text; a field without a value has no entry.
+     */
     record Revision(UUID requirementId, int revision, String title, String description, String priority, List<Criterion> criteria,
-            Instant openedAt, UUID openedBy, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy) {
+            Instant openedAt, UUID openedBy, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy, Map<String, String> custom) {
+        Revision {
+            custom = Collections.unmodifiableMap(new TreeMap<>(custom == null ? Map.of() : custom));
+        }
+
         boolean approved() {
             return approvedAt != null;
+        }
+
+        /** The same revision approved by {@code by} at {@code at}. */
+        Revision approvedBy(Instant at, UUID by) {
+            return new Revision(requirementId, revision, title, description, priority, criteria, openedAt, openedBy, savedAt, savedBy, at, by, custom);
         }
     }
 
@@ -80,7 +97,19 @@ class RequirementRepository {
         return new Revision(rs.getObject("requirement_id", UUID.class), rs.getInt("revision"), rs.getString("title"), rs.getString("description"),
             rs.getString("priority"), criteria(rs.getString("criteria")), instant(rs.getTimestamp("opened_at")), rs.getObject("opened_by", UUID.class),
             instant(rs.getTimestamp("saved_at")), rs.getObject("saved_by", UUID.class), instant(rs.getTimestamp("approved_at")),
-            rs.getObject("approved_by", UUID.class));
+            rs.getObject("approved_by", UUID.class), custom(rs.getString("custom")));
+    }
+
+    static Map<String, String> custom(String json) {
+        Map<String, String> result = new TreeMap<>();
+        JSON.readTree(json).properties().forEach(entry -> result.put(entry.getKey(), entry.getValue().asString()));
+        return result;
+    }
+
+    static String custom(Map<String, String> values) {
+        ObjectNode object = JSON.createObjectNode();
+        new TreeMap<>(values).forEach(object::put);
+        return JSON.writeValueAsString(object);
     }
 
     static List<Criterion> criteria(String json) {
@@ -180,20 +209,20 @@ class RequirementRepository {
     void insert(Revision v) {
         jdbc.sql("""
                 insert into requirement_revision (requirement_id, revision, title, description, priority, criteria, opened_at, opened_by,
-                    saved_at, saved_by, approved_at, approved_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    saved_at, saved_by, approved_at, approved_by, custom)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(v.requirementId(), v.revision(), v.title(), v.description(), v.priority(), criteria(v.criteria()), ts(v.openedAt()),
-            v.openedBy(), ts(v.savedAt()), v.savedBy(), ts(v.approvedAt()), v.approvedBy()).update();
+            v.openedBy(), ts(v.savedAt()), v.savedBy(), ts(v.approvedAt()), v.approvedBy(), custom(v.custom())).update();
     }
 
     /** Changes a revision that is not approved; an approved revision is never changed again. */
     void update(Revision v) {
         int changed = jdbc.sql("""
                 update requirement_revision set title = ?, description = ?, priority = ?, criteria = ?, saved_at = ?, saved_by = ?,
-                    approved_at = ?, approved_by = ?
+                    approved_at = ?, approved_by = ?, custom = ?
                 where requirement_id = ? and revision = ? and approved_at is null
                 """).params(v.title(), v.description(), v.priority(), criteria(v.criteria()), ts(v.savedAt()), v.savedBy(), ts(v.approvedAt()),
-            v.approvedBy(), v.requirementId(), v.revision()).update();
+            v.approvedBy(), custom(v.custom()), v.requirementId(), v.revision()).update();
         if (changed != 1) {
             throw new IllegalStateException("An approved revision is never changed");
         }
