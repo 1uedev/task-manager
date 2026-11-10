@@ -539,6 +539,18 @@ Paket A6 (DEC-099). Migration V0053 legt `time_entry` und `time_entry_revision` 
 
 **Grenzen.** Keine Unternehmenszeitzone, daher UTC für „heute“ (von Holger bestätigt, DEC-122). Kein Timer, keine Freigaben, keine Abrechnung, keine Suche über Zeiten. Die Regel für archivierte Projekte folgt mit der Archivierung.
 
+## Anforderungen (TASK-096)
+
+Paket A13 Teil 1 (DEC-126). Modul `requirements`, Migration V0058 mit `requirement_counter`, `requirement`, `requirement_revision` und `requirement_event`. Vertrag: [contracts/requirements.openapi.yaml](../contracts/requirements.openapi.yaml), Routen unter `/api/v1/requirements`.
+
+**Rechte.** Die Projektaktionen `requirement.read` (lesen, Historie), `requirement.edit` (anlegen, ändern, zur Prüfung geben, verwerfen, wiederherstellen) und `requirement.approve` (freigeben, zurückgeben); `edit` und `approve` wirken nur zusammen mit `read`. Die Felder `title`, `description`, `criteria`, `priority` und `owner` haben Feldregeln des Ressourcentyps `requirement`; ein Feld ohne Leseregel kommt als `null`, seine Historie und sein Vergleich fehlen, ein Filter darüber antwortet 400. Ohne Leserecht antwortet ein Projekt mit 404 `project.not_found`, eine Anforderung mit 404 `requirement.not_found`. Jede Änderung prüft ihr Recht beim Commit.
+
+**Revisionen und Freigabe.** Jede Änderung verlangt die Version als If-Match (428 `requirement.precondition_required`, 412 `requirement.version_conflict`); die Zeile der Anforderung wird mit `FOR UPDATE` gesperrt. Die erste inhaltliche Änderung (Titel, Beschreibung, Kriterien, Priorität) nach einer Freigabe öffnet Revision n+1 im Entwurf; eine freigegebene Revision ändert das Repository nie mehr. Die verantwortliche Person ändert keine Revision. `POST .../approve` nennt die Revision im Körper und gibt genau diese frei; ohne Leserecht auf ein Inhaltsfeld 403 `requirement.content_not_readable`. Kriterien behalten ihre Nummer, neue erhalten die nächste aus `next_criterion`.
+
+**Beschreibung.** Das Format des Wikieditors über die öffentliche Fassade `wiki.RichText`; Bilder (`content.image_not_allowed`) und Wikiverweise (`content.page_link_not_allowed`) sind abgelehnt.
+
+**Grenzen.** Keine Verknüpfungen (TASK-097), keine eigenen Felder und Demodaten (TASK-098), keine Suche, kein Portal, kein Löschen.
+
 ## Neue Kundenantworten (TASK-067)
 
 Hinweis H7 der Prüfung von TASK-058 (DEC-097). Migration V0052 ergänzt `helpdesk_message` um `joined_at`, `seen_at` und `seen_by`.

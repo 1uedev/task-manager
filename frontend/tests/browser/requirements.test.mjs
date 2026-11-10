@@ -1,0 +1,381 @@
+import assert from 'node:assert/strict';
+import { after, before, describe, test } from 'node:test';
+import { ANNA, BEN, createBackend } from './backend.mjs';
+import { launch, open, startServer } from './support.mjs';
+
+// TASK-096: requirements of a project with list, filters, editing with criteria, review, approval of exactly the shown
+// revision, a new revision after an approval, return with reason, discard, restore, history with comparison and the field
+// rules of the resource type requirement, against the in-memory backend that follows the contract.
+
+let server;
+let browser;
+before(async () => {
+  server = await startServer();
+  browser = await launch();
+});
+after(async () => {
+  await browser?.close();
+  await server?.close();
+});
+
+const base = () => server.url.replace('127.0.0.1', 'localhost');
+const ALL = ['criteria', 'description', 'owner', 'priority', 'title'];
+
+/** A group with project actions for everyone in the project and the given read and write rules of requirements. */
+function grant(backend, accounts, actions, { read = ALL, write = ALL } = {}) {
+  backend.state.groups.push({ id: `00000000-0000-4000-8000-0000000096${String(backend.state.groups.length).padStart(2, '0')}`, name: `Anforderungen ${actions.join(' ')}`,
+    members: accounts.map((account) => account.id), actions: actions.map((action) => ({ action, projectId: null })),
+    fields: [...read.map((field) => ({ resourceType: 'requirement', field, projectId: null, operation: 'read', effect: 'allow' })),
+      ...write.map((field) => ({ resourceType: 'requirement', field, projectId: null, operation: 'write', effect: 'allow' }))] });
+}
+
+const EVERYTHING = ['requirement.read', 'requirement.edit', 'requirement.approve'];
+
+async function withApp({ prepare, as = ANNA, hash, locale = 'de-DE' }, body) {
+  const backend = createBackend();
+  prepare?.(backend);
+  const session = await open(browser, `${base()}${typeof hash === 'function' ? hash(backend) : hash ?? '#/requirements'}`,
+    { locale, setup: (context, page) => backend.install(context, page, { as }) });
+  try {
+    await session.page.waitForSelector('.shell main h1');
+    await body(session.page, backend);
+    assert.deepEqual(session.problems.filter((text) => !/Failed to load resource/.test(text)), [], 'no console warnings, errors or page errors');
+  } finally {
+    await session.context.close();
+  }
+}
+
+const listHash = (backend) => `#/requirements/${backend.project.id}`;
+const detailHash = (backend, item) => `#/requirements/${backend.project.id}/${item.id}`;
+const lastWrite = (backend, pattern) => backend.state.requests.findLast((item) => item.method !== 'GET' && pattern.test(item.path));
+const bodyOf = (request) => JSON.parse(request.body.toString('utf8'));
+
+describe('requirements', () => {
+  test('a requirement goes from creation over criteria and review to the approval of exactly the shown revision', async () => {
+    await withApp({ prepare: (backend) => grant(backend, [backend.anna, backend.ben], EVERYTHING) }, async (page, backend) => {
+      await page.getByTestId('requirement-project').getByRole('link').click();
+      await page.getByTestId('requirement-list').or(page.getByText('Keine Anforderungen gefunden.')).waitFor();
+      const create = page.getByTestId('requirement-create');
+      await create.getByLabel('Titel').fill('Anmeldung mit Firmenkonto');
+      await create.getByLabel('Priorität').selectOption('high');
+      await create.getByRole('button', { name: 'Anlegen' }).click();
+
+      const requirement = page.getByTestId('requirement');
+      await page.getByTestId('requirement-title').getByText('ANF-1').waitFor();
+      assert.equal(await requirement.getAttribute('data-status'), 'draft');
+      assert.deepEqual(bodyOf(lastWrite(backend, /\/requirements$/)), { title: 'Anmeldung mit Firmenkonto', priority: 'high' });
+
+      // A review needs a criterion: the server says so and the page shows it.
+      await page.getByTestId('requirement-submit').click();
+      await page.getByText('Zur Prüfung braucht es mindestens ein Abnahmekriterium.').waitFor();
+
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByTestId('requirement-criterion-add').click();
+      await edit.getByLabel('Text von Neu').fill('Anmeldung gelingt mit gültigem Konto');
+      await edit.getByTestId('requirement-criterion-add').click();
+      await edit.getByLabel('Text von Neu').nth(1).fill('Gesperrtes Konto wird abgewiesen');
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      const save = lastWrite(backend, /\/requirements\/[^/]+$/);
+      assert.equal(save.method, 'PATCH');
+      assert.equal(save.ifMatch, '"1"', 'the refused submit changed nothing');
+      assert.deepEqual(bodyOf(save).criteria, [{ id: null, text: 'Anmeldung gelingt mit gültigem Konto' }, { id: null, text: 'Gesperrtes Konto wird abgewiesen' }]);
+      await edit.locator('[data-criterion="1"]').waitFor();
+      await edit.locator('[data-criterion="2"]').waitFor();
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+
+      await page.getByTestId('requirement-submit').click();
+      await page.getByText('Revision 1 ist zur Prüfung gegeben.').waitFor();
+      assert.equal(await requirement.getAttribute('data-status'), 'review');
+
+      await page.getByTestId('requirement-approve').click();
+      const dialog = page.getByTestId('requirement-approve-dialog');
+      assert.equal(await dialog.getByTestId('requirement-approve-revision').textContent(), 'Revision 1');
+      assert.equal(await dialog.getByTestId('requirement-approve-editors').textContent(), 'Anna Admin');
+      await dialog.getByTestId('requirement-approve-content-criteria-list').getByText('Gesperrtes Konto wird abgewiesen').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), 'requirement-approve-confirm', 'the confirmation has the focus');
+      await dialog.getByTestId('requirement-approve-confirm').click();
+      await page.getByText('Revision 1 ist freigegeben.').waitFor();
+      const approve = lastWrite(backend, /\/approve$/);
+      assert.deepEqual(bodyOf(approve), { revision: 1 });
+      assert.equal(approve.ifMatch, '"3"');
+      await page.getByTestId('requirement-approval').getByText('Revision 1 freigegeben von Anna Admin', { exact: false }).waitFor();
+      assert.equal(await requirement.getAttribute('data-status'), 'approved');
+    });
+  });
+
+  test('a content change after the approval opens the next revision, the approved one stays valid and the history compares both', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Export als CSV', { criteria: ['Spalten wie in der Liste', 'Kodierung UTF-8'], status: 'approved' });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByTestId('requirement-new-revision-hint').getByText('eröffnet Revision 2', { exact: false }).waitFor();
+      // The owner is organisational: changing it alone opens no revision.
+      await edit.getByLabel('Verantwortlich').selectOption({ label: 'Ben Leser' });
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      assert.equal(item.revision, 1);
+      assert.equal(item.status, 'approved');
+
+      await edit.getByLabel('Titel').fill('Export als CSV und Excel');
+      await edit.getByLabel('Text von K2').fill('Kodierung UTF-8 mit BOM');
+      await edit.getByText('Beim Speichern entsteht eine neue Revision im Entwurf.').waitFor();
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Revision 2 ist eröffnet', { exact: false }).waitFor();
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+      const requirement = page.getByTestId('requirement');
+      assert.equal(await requirement.getAttribute('data-status'), 'draft');
+      await page.getByTestId('requirement-newer-revision').getByText('Revision 2 ist in Bearbeitung, gültig bleibt Revision 1').waitFor();
+      await page.getByTestId('requirement-approval').getByText('Revision 1 freigegeben', { exact: false }).waitFor();
+      assert.equal(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id && entry.revision === 1).title, 'Export als CSV',
+        'the approved revision is never changed');
+
+      await page.getByTestId('requirement-history-open').click();
+      const history = page.getByTestId('requirement-history');
+      await history.locator('[data-testid="requirement-revision"][data-revision="1"][data-approved="true"]').waitFor();
+      await history.locator('[data-testid="requirement-revision"][data-revision="2"][data-approved="false"]').waitFor();
+      const compare = history.getByTestId('requirement-compare');
+      await compare.getByLabel('Von').selectOption('1');
+      await compare.getByLabel('Bis').selectOption('2');
+      await compare.getByRole('button', { name: 'Vergleichen' }).click();
+      const title = compare.getByTestId('requirement-compare-title');
+      assert.equal(await title.locator('del').textContent(), 'Export als CSV');
+      assert.equal(await title.locator('ins').textContent(), 'Export als CSV und Excel');
+      const changed = compare.getByTestId('requirement-compare-criteria').locator('[data-op="changed"]');
+      assert.equal(await changed.locator('ins').textContent(), 'Kodierung UTF-8 mit BOM');
+      const events = history.getByTestId('requirement-events');
+      await events.getByText('Revision 2 eröffnet nach Freigabe von Revision 1').waitFor();
+      await events.getByText('Verantwortlich geändert von „leer“ zu „Ben Leser“').waitFor();
+      await events.getByText('K2 geändert von „Kodierung UTF-8“ zu „Kodierung UTF-8 mit BOM“').waitFor();
+    });
+  });
+
+  test('criteria keep their numbers when moved by keyboard or removed, and the history names the new order', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Suche über Projekte', { criteria: ['Treffer nach Relevanz', 'Höchstens eine Sekunde', 'Nur lesbare Felder'] });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByLabel('Text von K1').focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await edit.getByText('K1 steht jetzt an Stelle 2 von 3.').waitFor({ state: 'attached' });
+      await edit.getByRole('button', { name: 'K3 nach oben' }).click();
+      await edit.getByRole('button', { name: 'K2 entfernen' }).click();
+      assert.deepEqual(await edit.getByTestId('requirement-criterion').evaluateAll((rows) => rows.map((row) => row.dataset.criterion)), ['3', '1']);
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      assert.deepEqual(bodyOf(lastWrite(backend, /\/requirements\/[^/]+$/)).criteria.map((criterion) => criterion.id), [3, 1]);
+      assert.deepEqual(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).criteria.map((criterion) => criterion.id), [3, 1]);
+
+      // A new criterion gets the next number, never a number used before.
+      await edit.getByTestId('requirement-criterion-add').click();
+      await edit.getByLabel('Text von Neu').fill('Groß und Kleinschreibung egal');
+      await edit.getByTestId('requirement-save').click();
+      await edit.locator('[data-criterion="4"]').waitFor();
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+      await page.getByTestId('requirement-history-open').click();
+      const events = page.getByTestId('requirement-events');
+      await events.getByText('K2 entfernt: Höchstens eine Sekunde').waitFor();
+      await events.getByText('Reihenfolge der Kriterien geändert von K1, K3 zu K3, K1').waitFor();
+      await events.getByText('K4 hinzugefügt: Groß und Kleinschreibung egal').waitFor();
+    });
+  });
+
+  test('a save after someone else changed the requirement keeps the own input until a choice', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna, backend.ben], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Rechnungsadresse', { criteria: ['Adresse ist Pflicht'] });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      await edit.getByLabel('Titel').fill('Rechnungsadresse und Lieferadresse');
+      // Ben changes the criterion meanwhile.
+      const answer = backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`, { criteria: [{ id: 1, text: 'Adresse ist Pflicht, Land auch' }] },
+        { headers: { 'if-match': `"${item.version}"` } });
+      assert.equal(answer.status, 200);
+      await edit.getByTestId('requirement-save').click();
+      const conflict = page.getByTestId('requirement-conflict');
+      await conflict.getByText('Ben Leser hat die Anforderung', { exact: false }).waitFor();
+      // The differences are marked: struck out the own input, inserted the newer version.
+      const changed = conflict.getByTestId('requirement-compare-criteria').locator('[data-op="changed"]');
+      assert.equal(await changed.locator('del').textContent(), 'Adresse ist Pflicht');
+      assert.equal(await changed.locator('ins').textContent(), 'Adresse ist Pflicht, Land auch');
+      assert.equal(await conflict.getByTestId('requirement-compare-title').locator('del').textContent(), 'Rechnungsadresse und Lieferadresse');
+      assert.equal(await edit.getByLabel('Titel').inputValue(), 'Rechnungsadresse und Lieferadresse', 'the own input stays');
+      assert.equal(await edit.getByTestId('requirement-save').isDisabled(), true, 'no save before a choice');
+      await conflict.getByTestId('requirement-conflict-keep').click();
+      // The untouched criterion takes the newer text, the own title stays.
+      assert.equal(await edit.getByLabel('Text von K1').inputValue(), 'Adresse ist Pflicht, Land auch');
+      await edit.getByTestId('requirement-save').click();
+      await page.getByText('Gespeichert in Revision 1.').waitFor();
+      const save = lastWrite(backend, /\/requirements\/[^/]+$/);
+      assert.equal(save.ifMatch, '"2"', 'the save builds on the version of Ben');
+      // Only the own change goes out: the criterion of Ben stays.
+      assert.deepEqual(bodyOf(save), { title: 'Rechnungsadresse und Lieferadresse' });
+      assert.equal(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).criteria[0].text, 'Adresse ist Pflicht, Land auch');
+    });
+  });
+
+  test('an approval of a revision that changed meanwhile is refused, a return needs a reason, discard and restore work', async () => {
+    let item;
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna, backend.ben], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Passwortregeln', { criteria: ['Mindestens zwölf Zeichen'], status: 'review' });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-approve').click();
+      const dialog = page.getByTestId('requirement-approve-dialog');
+      await dialog.getByTestId('requirement-approve-revision').getByText('Revision 1').waitFor();
+      backend.requirementCall(backend.ben, 'PATCH', `/requirements/${item.id}`, { criteria: [{ id: 1, text: 'Mindestens 16 Zeichen' }] },
+        { headers: { 'if-match': `"${item.version}"` } });
+      await dialog.getByTestId('requirement-approve-confirm').click();
+      await dialog.getByText('Die Anforderung wurde inzwischen geändert.', { exact: false }).waitFor();
+      assert.equal(item.approvedRevision, null, 'nothing approved');
+      // The dialog shows the newer content at once; a second confirmation would approve exactly that.
+      await dialog.getByTestId('requirement-approve-content-criteria-list').getByText('Mindestens 16 Zeichen').waitFor();
+      await dialog.getByRole('button', { name: 'Abbrechen' }).click();
+      await page.getByTestId('requirement-content-criteria-list').getByText('Mindestens 16 Zeichen').waitFor();
+      await page.getByTestId('requirement-return').click();
+      const back = page.getByTestId('requirement-return-dialog');
+      await back.getByTestId('requirement-return-confirm').click();
+      await back.getByText('Bitte eine Begründung angeben.').waitFor();
+      await back.getByLabel('Begründung').fill('Bitte mit der Sicherheitsrichtlinie abstimmen');
+      await back.getByTestId('requirement-return-confirm').click();
+      await page.getByText('Die Anforderung ist zurück im Entwurf.').waitFor();
+      assert.deepEqual(bodyOf(lastWrite(backend, /\/return$/)), { reason: 'Bitte mit der Sicherheitsrichtlinie abstimmen' });
+
+      await page.getByTestId('requirement-discard').click();
+      await page.getByTestId('requirement-discard-confirm').click();
+      await page.getByText('Die Anforderung ist verworfen.').waitFor();
+      assert.equal(await page.getByTestId('requirement-edit-open').count(), 0, 'a discarded requirement is not edited');
+      page.once('dialog', (confirm) => void confirm.accept());
+      await page.getByTestId('requirement-restore').click();
+      await page.getByText('Wiederhergestellt, Status: Entwurf.').waitFor();
+      await page.getByTestId('requirement-history-open').click();
+      const events = page.getByTestId('requirement-events');
+      await events.getByText('Zurück in den Entwurf: Bitte mit der Sicherheitsrichtlinie abstimmen').waitFor();
+      await events.getByText('Wiederhergestellt als Entwurf').waitFor();
+    });
+  });
+
+  test('a person with read rules for some fields sees only those, with no actions and no filters over hidden fields', async () => {
+    let item;
+    await withApp({
+      as: BEN,
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        grant(backend, [backend.ben], ['requirement.read'], { read: ['title', 'criteria'], write: [] });
+        item = backend.addRequirement(backend.anna, 'Datenschutzhinweis', { criteria: ['Text vor dem Absenden sichtbar'], priority: 'critical',
+          description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Vertraulich' }] }] }, ownerId: backend.anna.id, status: 'review' });
+      },
+      hash: listHash,
+    }, async (page, backend) => {
+      const list = page.getByTestId('requirement-list');
+      await list.getByText('Datenschutzhinweis').waitFor();
+      assert.equal(await list.getByRole('columnheader', { name: 'Priorität' }).count(), 0);
+      assert.equal(await list.getByRole('columnheader', { name: 'Verantwortlich' }).count(), 0);
+      const filters = page.getByTestId('requirement-filters');
+      assert.equal(await filters.getByLabel('Priorität').count(), 0);
+      assert.equal(await filters.getByLabel('Verantwortlich').count(), 0);
+      assert.equal(await page.getByTestId('requirement-create').count(), 0);
+
+      await list.getByRole('link', { name: 'ANF-1' }).click();
+      await page.getByTestId('requirement-content-criteria-list').getByText('Text vor dem Absenden sichtbar').waitFor();
+      assert.equal(await page.getByTestId('requirement-priority').textContent(), 'Nicht sichtbar');
+      assert.equal(await page.getByTestId('requirement-owner').textContent(), 'Nicht sichtbar');
+      assert.equal(await page.getByText('Vertraulich').count(), 0);
+      for (const action of ['requirement-edit-open', 'requirement-submit', 'requirement-approve', 'requirement-return', 'requirement-discard']) {
+        assert.equal(await page.getByTestId(action).count(), 0, action);
+      }
+      assert.equal(backend.writes().length, 0);
+      assert.ok(item);
+    });
+  });
+
+  test('the list filters on the server, loads further pages and drops a late answer of an earlier filter', async () => {
+    await withApp({
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        for (let index = 1; index <= 55; index += 1) {
+          backend.addRequirement(backend.anna, `Anforderung ${index}`, { priority: index % 5 === 0 ? 'high' : 'normal', criteria: ['K'], status: index === 3 ? 'discarded' : 'draft' });
+        }
+        // Discarded by hand, as the stand in creates drafts only.
+        backend.state.requirements.items[2].status = 'discarded';
+      },
+      hash: listHash,
+    }, async (page, backend) => {
+      const rows = page.getByTestId('requirement-row');
+      await page.getByTestId('requirement-more').waitFor();
+      assert.equal(await rows.count(), 50);
+      assert.equal(await page.getByTestId('requirement-list').getByText('Anforderung 3', { exact: true }).count(), 0, 'discarded ones are left out');
+      await page.getByTestId('requirement-more').click();
+      await page.getByTestId('requirement-list').getByText('Anforderung 55', { exact: true }).waitFor();
+      assert.equal(await rows.count(), 54);
+      assert.equal(await page.getByTestId('requirement-more').count(), 0);
+
+      // The first filter answers late; the second one is shown and stays.
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      backend.state.requirements.delayList = (answer, query) => (query.get('priority') === 'high' ? held.then(() => answer) : answer);
+      const filters = page.getByTestId('requirement-filters');
+      await filters.getByLabel('Priorität').selectOption('high');
+      await filters.getByRole('button', { name: 'Filtern' }).click();
+      await page.getByTestId('requirement-list-loading').waitFor();
+      await filters.getByLabel('Priorität').selectOption('');
+      await filters.getByLabel('Status').selectOption('discarded');
+      await filters.getByRole('button', { name: 'Filtern' }).click();
+      await page.getByTestId('requirement-list').getByText('Anforderung 3', { exact: true }).waitFor();
+      release();
+      await page.waitForTimeout(300);
+      assert.equal(await rows.count(), 1, 'the late answer of the earlier filter is not taken');
+      const query = backend.state.requests.findLast((item) => item.method === 'GET' && item.path.endsWith('/requirements')).query;
+      assert.match(query, /status=discarded/);
+    });
+  });
+
+  test('the groups page sets field rules of requirements with their own resource type', async () => {
+    await withApp({ hash: '#/groups' }, async (page, backend) => {
+      await page.getByRole('link', { name: 'Lesen' }).click();
+      const table = page.getByTestId('group-fields-requirement');
+      await table.getByRole('rowheader', { name: 'Abnahmekriterien' }).waitFor();
+      await table.getByLabel('Lesen von Abnahmekriterien bei Anforderungen').selectOption('allow');
+      await page.getByText('Feldregel gespeichert.').waitFor();
+      assert.deepEqual(bodyOf(lastWrite(backend, /\/fields$/)), { resourceType: 'requirement', field: 'criteria', projectId: null, operation: 'read', effect: 'allow' });
+      assert.equal(await page.getByTestId('group-fields').getByRole('rowheader', { name: 'Abnahmekriterien' }).count(), 0, 'tickets have no criteria');
+    });
+  });
+
+  test('the pages work in English as well', async () => {
+    let item;
+    await withApp({
+      locale: 'en-US',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Single sign on', { criteria: ['Works with the company account'], status: 'approved' });
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page) => {
+      await page.getByTestId('requirement-status').getByText('Approved').waitFor();
+      await page.getByTestId('requirement-approval').getByText('Revision 1 approved by Anna Admin', { exact: false }).waitFor();
+      await page.getByRole('button', { name: 'History' }).waitFor();
+    });
+  });
+});

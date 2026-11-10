@@ -592,19 +592,19 @@ describe('drag and drop', () => {
       await page.keyboard.press('Alt+ArrowUp');
       await page.keyboard.press('Alt+ArrowUp');
       const order = () => page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route));
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki']);
-      assert.match(await live(page), /Board steht jetzt an Position 2 von 8/);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki', 'requirements']);
+      assert.match(await live(page), /Board steht jetzt an Position 2 von 9/);
       assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Board');
       await page.reload();
       await page.waitForSelector('.shell main h1');
-      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki']);
+      assert.deepEqual(await order(), ['start', 'board', 'projects', 'search', 'inbox', 'escalations', 'time', 'wiki', 'requirements']);
     });
   });
 
   test('navigation entries can be dragged with the mouse', async () => {
     await withPage({}, async (page) => {
       await page.dragAndDrop('.nav-main li[data-route="search"]', '.nav-main li[data-route="start"]');
-      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board', 'escalations', 'time', 'wiki']);
+      assert.deepEqual(await page.locator('.nav-main li').evaluateAll((items) => items.map((item) => item.dataset.route)), ['search', 'start', 'projects', 'inbox', 'board', 'escalations', 'time', 'wiki', 'requirements']);
     });
   });
 

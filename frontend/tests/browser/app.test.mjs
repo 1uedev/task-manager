@@ -442,7 +442,7 @@ describe('administration', () => {
       assert.equal(await page.getByRole('checkbox', { name: /^Konten verwalten/ }).count(), 0, 'company actions only without a project');
       await page.getByRole('checkbox', { name: /^Tickets bearbeiten/ }).click();
       await page.getByText('Tickets bearbeiten gewährt.').waitFor();
-      await page.getByLabel('Schreiben von Titel').selectOption('allow');
+      await page.getByLabel('Schreiben von Titel', { exact: true }).selectOption('allow');
       await page.getByText('Feldregel gespeichert.').waitFor();
       const group = backend.group('Entwicklung');
       assert.deepEqual(group.members, [backend.ben.id]);

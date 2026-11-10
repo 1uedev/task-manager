@@ -1,0 +1,221 @@
+package taskmanager.requirements.internal;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+
+/** The tables of the requirements module. Nobody else reads them. */
+@Repository
+class RequirementRepository {
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final String REQUIREMENT = "r.id, r.company_id, r.project_id, r.number, r.status, r.owner_id, r.current_revision, "
+        + "r.approved_revision, r.next_criterion, r.created_at, r.created_by, r.updated_at, r.updated_by, r.version";
+    private static final String REVISION = "v.requirement_id, v.revision, v.title, v.description, v.priority, v.criteria, v.opened_at, "
+        + "v.opened_by, v.saved_at, v.saved_by, v.approved_at, v.approved_by";
+
+    private final JdbcClient jdbc;
+
+    RequirementRepository(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    record Requirement(UUID id, UUID companyId, UUID projectId, long number, String status, UUID ownerId, int currentRevision,
+            Integer approvedRevision, int nextCriterion, Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy, long version) {
+        Requirement with(String newStatus, UUID newOwner, int revision, Integer approved, int next, Instant at, UUID by) {
+            return new Requirement(id, companyId, projectId, number, newStatus, newOwner, revision, approved, next, createdAt, createdBy, at, by,
+                version + 1);
+        }
+    }
+
+    /** One criterion with its fixed number inside the requirement. */
+    record Criterion(int id, String text) {
+    }
+
+    record Revision(UUID requirementId, int revision, String title, String description, String priority, List<Criterion> criteria,
+            Instant openedAt, UUID openedBy, Instant savedAt, UUID savedBy, Instant approvedAt, UUID approvedBy) {
+        boolean approved() {
+            return approvedAt != null;
+        }
+    }
+
+    /** A requirement of a list with the title and priority of its current revision. */
+    record Row(Requirement requirement, String title, String priority) {
+    }
+
+    record Event(long id, int revision, String kind, String field, Integer criterion, String fromValue, String toValue, String reason,
+            UUID actorId, Instant occurredAt) {
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    private static Timestamp ts(Instant value) {
+        return value == null ? null : Timestamp.from(value);
+    }
+
+    private static Integer integer(ResultSet rs, String column) throws SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static Requirement requirement(ResultSet rs) throws SQLException {
+        return new Requirement(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
+            rs.getLong("number"), rs.getString("status"), rs.getObject("owner_id", UUID.class), rs.getInt("current_revision"),
+            integer(rs, "approved_revision"), rs.getInt("next_criterion"), instant(rs.getTimestamp("created_at")), rs.getObject("created_by", UUID.class),
+            instant(rs.getTimestamp("updated_at")), rs.getObject("updated_by", UUID.class), rs.getLong("version"));
+    }
+
+    private static Revision revision(ResultSet rs) throws SQLException {
+        return new Revision(rs.getObject("requirement_id", UUID.class), rs.getInt("revision"), rs.getString("title"), rs.getString("description"),
+            rs.getString("priority"), criteria(rs.getString("criteria")), instant(rs.getTimestamp("opened_at")), rs.getObject("opened_by", UUID.class),
+            instant(rs.getTimestamp("saved_at")), rs.getObject("saved_by", UUID.class), instant(rs.getTimestamp("approved_at")),
+            rs.getObject("approved_by", UUID.class));
+    }
+
+    static List<Criterion> criteria(String json) {
+        List<Criterion> result = new ArrayList<>();
+        for (JsonNode node : JSON.readTree(json)) {
+            result.add(new Criterion(node.get("id").asInt(), node.get("text").asString()));
+        }
+        return List.copyOf(result);
+    }
+
+    static String criteria(List<Criterion> criteria) {
+        ArrayNode array = JSON.createArrayNode();
+        criteria.forEach(criterion -> array.addObject().put("id", criterion.id()).put("text", criterion.text()));
+        return JSON.writeValueAsString(array);
+    }
+
+    /** The next number of a requirement in the project; the counter row stays locked until the commit. */
+    long nextNumber(UUID projectId) {
+        return jdbc.sql("""
+                insert into requirement_counter (project_id, last_number) values (?, 1)
+                on conflict (project_id) do update set last_number = requirement_counter.last_number + 1
+                returning last_number
+                """).param(projectId).query(Long.class).single();
+    }
+
+    Optional<Requirement> find(UUID companyId, UUID id) {
+        return jdbc.sql("select " + REQUIREMENT + " from requirement r where r.company_id = ? and r.id = ?").params(companyId, id)
+            .query((rs, n) -> requirement(rs)).optional();
+    }
+
+    Optional<Requirement> lock(UUID companyId, UUID id) {
+        return jdbc.sql("select " + REQUIREMENT + " from requirement r where r.company_id = ? and r.id = ? for update").params(companyId, id)
+            .query((rs, n) -> requirement(rs)).optional();
+    }
+
+    Optional<Revision> revision(UUID requirementId, int revision) {
+        return jdbc.sql("select " + REVISION + " from requirement_revision v where v.requirement_id = ? and v.revision = ?")
+            .params(requirementId, revision).query((rs, n) -> revision(rs)).optional();
+    }
+
+    List<Revision> revisions(UUID requirementId) {
+        return jdbc.sql("select " + REVISION + " from requirement_revision v where v.requirement_id = ? order by v.revision")
+            .param(requirementId).query((rs, n) -> revision(rs)).list();
+    }
+
+    /**
+     * One page of the requirements of a project, ordered by number after {@code after}. A {@code null} filter does not
+     * filter; without a status filter discarded requirements are left out. {@code text} is looked for in the current title.
+     */
+    List<Row> list(UUID companyId, UUID projectId, String status, String priority, UUID owner, String text, long after, int limit) {
+        StringBuilder sql = new StringBuilder("select " + REQUIREMENT + ", v.title, v.priority from requirement r "
+            + "join requirement_revision v on v.requirement_id = r.id and v.revision = r.current_revision "
+            + "where r.company_id = ? and r.project_id = ? and r.number > ?");
+        List<Object> params = new ArrayList<>(List.of(companyId, projectId, after));
+        if (status == null) {
+            sql.append(" and r.status <> 'discarded'");
+        } else {
+            sql.append(" and r.status = ?");
+            params.add(status);
+        }
+        if (priority != null) {
+            sql.append(" and v.priority = ?");
+            params.add(priority);
+        }
+        if (owner != null) {
+            sql.append(" and r.owner_id = ?");
+            params.add(owner);
+        }
+        if (text != null) {
+            sql.append(" and strpos(lower(v.title), lower(?)) > 0");
+            params.add(text);
+        }
+        sql.append(" order by r.number limit ?");
+        params.add(limit);
+        return jdbc.sql(sql.toString()).params(params)
+            .query((rs, n) -> new Row(requirement(rs), rs.getString("title"), rs.getString("priority"))).list();
+    }
+
+    void insert(Requirement r) {
+        jdbc.sql("""
+                insert into requirement (id, company_id, project_id, number, status, owner_id, current_revision, approved_revision,
+                    next_criterion, created_at, created_by, updated_at, updated_by, version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(r.id(), r.companyId(), r.projectId(), r.number(), r.status(), r.ownerId(), r.currentRevision(), r.approvedRevision(),
+            r.nextCriterion(), ts(r.createdAt()), r.createdBy(), ts(r.updatedAt()), r.updatedBy(), r.version()).update();
+    }
+
+    void update(Requirement r) {
+        jdbc.sql("""
+                update requirement set status = ?, owner_id = ?, current_revision = ?, approved_revision = ?, next_criterion = ?,
+                    updated_at = ?, updated_by = ?, version = ?
+                where id = ?
+                """).params(r.status(), r.ownerId(), r.currentRevision(), r.approvedRevision(), r.nextCriterion(), ts(r.updatedAt()), r.updatedBy(),
+            r.version(), r.id()).update();
+    }
+
+    void insert(Revision v) {
+        jdbc.sql("""
+                insert into requirement_revision (requirement_id, revision, title, description, priority, criteria, opened_at, opened_by,
+                    saved_at, saved_by, approved_at, approved_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(v.requirementId(), v.revision(), v.title(), v.description(), v.priority(), criteria(v.criteria()), ts(v.openedAt()),
+            v.openedBy(), ts(v.savedAt()), v.savedBy(), ts(v.approvedAt()), v.approvedBy()).update();
+    }
+
+    /** Changes a revision that is not approved; an approved revision is never changed again. */
+    void update(Revision v) {
+        int changed = jdbc.sql("""
+                update requirement_revision set title = ?, description = ?, priority = ?, criteria = ?, saved_at = ?, saved_by = ?,
+                    approved_at = ?, approved_by = ?
+                where requirement_id = ? and revision = ? and approved_at is null
+                """).params(v.title(), v.description(), v.priority(), criteria(v.criteria()), ts(v.savedAt()), v.savedBy(), ts(v.approvedAt()),
+            v.approvedBy(), v.requirementId(), v.revision()).update();
+        if (changed != 1) {
+            throw new IllegalStateException("An approved revision is never changed");
+        }
+    }
+
+    void event(UUID companyId, UUID requirementId, int revision, String kind, String field, Integer criterion, String from, String to,
+            String reason, UUID actor, Instant at) {
+        jdbc.sql("""
+                insert into requirement_event (company_id, requirement_id, revision, kind, field, criterion, from_value, to_value, reason,
+                    actor_id, occurred_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(companyId, requirementId, revision, kind, field, criterion, from, to, reason, actor, ts(at)).update();
+    }
+
+    List<Event> events(UUID requirementId) {
+        return jdbc.sql("""
+                select id, revision, kind, field, criterion, from_value, to_value, reason, actor_id, occurred_at
+                from requirement_event where requirement_id = ? order by id
+                """).param(requirementId)
+            .query((rs, n) -> new Event(rs.getLong("id"), rs.getInt("revision"), rs.getString("kind"), rs.getString("field"),
+                integer(rs, "criterion"), rs.getString("from_value"), rs.getString("to_value"), rs.getString("reason"),
+                rs.getObject("actor_id", UUID.class), instant(rs.getTimestamp("occurred_at"))))
+            .list();
+    }
+}

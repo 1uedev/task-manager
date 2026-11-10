@@ -13,6 +13,7 @@ import type { components as TagTypes } from './generated/tags';
 import type { components as TicketTypes } from './generated/tickets';
 import type { components as TimeTypes } from './generated/time';
 import type { components as WikiTypes } from './generated/wiki';
+import type { components as RequirementTypes } from './generated/requirements';
 import { readProblem, type ProblemInfo } from './problem.ts';
 
 // The product API of TASK-030. Types come from the published contracts; every answer is checked again at runtime for
@@ -611,9 +612,11 @@ export const readProjectRights = (api: ServerApi, projectId: string) =>
     one<ProjectRights>((v) => record(v) && Array.isArray(v.actions) && Array.isArray(v.fields) && Array.isArray(v.groups)
       && v.groups.every((group) => isGroup(group) && Array.isArray((group as ProjectGroup).actions) && Array.isArray((group as ProjectGroup).fields))));
 
+// Field rules belong to a kind of object: tickets, or requirements since TASK-096.
+export type FieldResource = 'ticket' | 'requirement';
 export const setGroupField = (api: ServerApi, groupId: string, field: TicketField, projectId: string | null,
-  operation: 'read' | 'write', effect: 'allow' | 'deny' | 'remove') =>
-  run(() => api.permissions.PUT('/permissions/groups/{groupId}/fields', { params: { path: { groupId } }, body: { resourceType: 'ticket', field, projectId, operation, effect } }), detailOrNothing);
+  operation: 'read' | 'write', effect: 'allow' | 'deny' | 'remove', resourceType: FieldResource = 'ticket') =>
+  run(() => api.permissions.PUT('/permissions/groups/{groupId}/fields', { params: { path: { groupId } }, body: { resourceType, field, projectId, operation, effect } }), detailOrNothing);
 
 // ---------------------------------------------------------------- background jobs (TASK-054)
 
@@ -884,3 +887,82 @@ export const resetMailTemplate = (api: ServerApi, etag: string) =>
   run(() => api.appearance.DELETE('/appearance/mail-template', { params: ifMatch(etag) }), one<MailTemplate>(isMailTemplate));
 export const previewMailTemplate = (api: ServerApi, body: { language: 'de' | 'en'; applicationUrl: string | null; texts: MailTexts; name?: string; accentColor?: string }) =>
   run(() => api.appearance.POST('/appearance/mail-template/preview', { body }), one<MailPreview>(isMail));
+
+// ---------------------------------------------------------------- requirements (TASK-096)
+
+export type RequirementProject = RequirementTypes['schemas']['RequirementProject'];
+export type RequirementAccess = RequirementTypes['schemas']['Access'];
+export type Requirement = RequirementTypes['schemas']['Requirement'];
+export type RequirementItem = RequirementTypes['schemas']['RequirementItem'];
+export type RequirementList = RequirementTypes['schemas']['RequirementList'];
+export type RequirementStatus = RequirementTypes['schemas']['Status'];
+export type RequirementPriority = RequirementTypes['schemas']['Priority'];
+export type RequirementCriterion = RequirementTypes['schemas']['Criterion'];
+export type RequirementHistory = RequirementTypes['schemas']['History'];
+export type RequirementEvent = RequirementTypes['schemas']['Event'];
+export type RequirementRevision = RequirementTypes['schemas']['Revision'];
+export type RequirementContent = RequirementTypes['schemas']['Content'];
+export type RequirementInput = RequirementTypes['schemas']['RequirementInput'];
+export interface RequirementFilter {
+  readonly status: RequirementStatus | null;
+  readonly priority: RequirementPriority | null;
+  readonly owner: string | null;
+  readonly text: string | null;
+}
+
+const isRequirementAccess = (v: unknown) => record(v) && typeof v.read === 'boolean' && typeof v.edit === 'boolean' && typeof v.approve === 'boolean'
+  && Array.isArray(v.readableFields) && Array.isArray(v.writableFields);
+const isRequirementProject = (v: unknown) => hasStrings(v, 'projectId', 'key', 'name') && isRequirementAccess((v as RequirementProject).access);
+const isRequirementContent = (v: unknown) => record(v) && (v.criteria === null || Array.isArray(v.criteria));
+const isRequirement = (v: unknown) => hasStrings(v, 'id', 'projectId', 'key', 'status') && typeof (v as Requirement).version === 'number'
+  && typeof (v as Requirement).revision === 'number' && isRequirementAccess((v as Requirement).access)
+  && isRequirementContent((v as Requirement).content) && Array.isArray((v as Requirement).editors);
+const isRequirementItem = (v: unknown) => hasStrings(v, 'id', 'key', 'status') && typeof (v as RequirementItem).number === 'number';
+const isRequirementList = (v: unknown) => record(v) && isRequirementAccess(v.access) && Array.isArray(v.items) && v.items.every(isRequirementItem)
+  && (v.nextAfter === null || typeof v.nextAfter === 'number');
+const isRequirementHistory = (v: unknown) => record(v) && Array.isArray(v.revisions) && Array.isArray(v.events);
+const isRequirementRevision = (v: unknown) => record(v) && typeof v.revision === 'number' && isRequirementContent(v.content);
+const versionTag = (version: number) => `"${version}"`;
+
+export const REQUIREMENT_PAGE = 50;
+export const listRequirementProjects = (api: ServerApi) =>
+  run(() => api.requirements.GET('/requirements/projects'), listOf<RequirementProject>(isRequirementProject));
+export const listRequirements = (api: ServerApi, projectId: string, filter: RequirementFilter, after = 0) =>
+  run(() => api.requirements.GET('/requirements/projects/{projectId}/requirements', { params: { path: { projectId }, query: {
+    ...(filter.status === null ? {} : { status: filter.status }), ...(filter.priority === null ? {} : { priority: filter.priority }),
+    ...(filter.owner === null ? {} : { owner: filter.owner }), ...(filter.text === null ? {} : { text: filter.text }),
+    after, limit: REQUIREMENT_PAGE } } }), one<RequirementList>(isRequirementList));
+export const listRequirementOwners = (api: ServerApi, projectId: string) =>
+  run(() => api.requirements.GET('/requirements/projects/{projectId}/owners', { params: { path: { projectId } } }),
+    listOf<string>((item) => typeof item === 'string'));
+export const createRequirement = (api: ServerApi, projectId: string, body: RequirementInput) =>
+  run(() => api.requirements.POST('/requirements/projects/{projectId}/requirements', { params: { path: { projectId } }, body }),
+    one<Requirement>(isRequirement));
+export const readRequirement = (api: ServerApi, id: string) =>
+  run(() => api.requirements.GET('/requirements/{requirementId}', { params: { path: { requirementId: id } } }), one<Requirement>(isRequirement));
+// Every change names the version it builds on; a newer version answers 412.
+export const updateRequirement = (api: ServerApi, id: string, version: number, body: RequirementInput) =>
+  run(() => api.requirements.PATCH('/requirements/{requirementId}', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) }, body }),
+    one<Requirement>(isRequirement));
+export const submitRequirement = (api: ServerApi, id: string, version: number) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/submit', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) } }),
+    one<Requirement>(isRequirement));
+// The approval names exactly the revision the dialog showed.
+export const approveRequirement = (api: ServerApi, id: string, version: number, revision: number) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/approve', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) },
+    body: { revision } }), one<Requirement>(isRequirement));
+export const returnRequirement = (api: ServerApi, id: string, version: number, reason: string) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/return', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) },
+    body: { reason } }), one<Requirement>(isRequirement));
+export const discardRequirement = (api: ServerApi, id: string, version: number, reason: string | null) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/discard', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) },
+    body: { reason } }), one<Requirement>(isRequirement));
+export const restoreRequirement = (api: ServerApi, id: string, version: number) =>
+  run(() => api.requirements.POST('/requirements/{requirementId}/restore', { params: { path: { requirementId: id }, ...ifMatch(versionTag(version)) } }),
+    one<Requirement>(isRequirement));
+export const readRequirementHistory = (api: ServerApi, id: string) =>
+  run(() => api.requirements.GET('/requirements/{requirementId}/history', { params: { path: { requirementId: id } } }),
+    one<RequirementHistory>(isRequirementHistory));
+export const readRequirementRevision = (api: ServerApi, id: string, revision: number) =>
+  run(() => api.requirements.GET('/requirements/{requirementId}/revisions/{revision}', { params: { path: { requirementId: id, revision } } }),
+    one<RequirementRevision>(isRequirementRevision));

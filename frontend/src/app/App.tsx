@@ -21,9 +21,10 @@ import { StartPage } from '../pages/StartPage.tsx';
 import { TicketPage } from '../pages/TicketPage.tsx';
 import { TimePage } from '../pages/TimePage.tsx';
 import { WikiPage } from '../pages/WikiPage.tsx';
+import { RequirementsPage } from '../pages/RequirementsPage.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import {
-  AlertIcon, BoardIcon, BookIcon, BrushIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, HourglassIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TagIcon, TimerIcon, UsersIcon,
+  AlertIcon, BoardIcon, BookIcon, BrushIcon, ChecklistIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, HourglassIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TagIcon, TimerIcon, UsersIcon,
 } from './Icons.tsx';
 import { readStoredOrder, storeOrder } from './preferences.ts';
 import { hrefFor, section, useRoute, type Route, type RouteName } from './route.ts';
@@ -32,18 +33,18 @@ import { formatDateTime } from '../i18n/format.ts';
 import { useReorder } from './useReorder.ts';
 
 const NAV_LABEL: Record<RouteName, MessageKey> = {
-  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', escalations: 'nav.escalations', time: 'nav.time', wiki: 'nav.wiki', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', tags: 'nav.tags', appearance: 'nav.appearance',
+  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', escalations: 'nav.escalations', time: 'nav.time', wiki: 'nav.wiki', requirements: 'nav.requirements', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', tags: 'nav.tags', appearance: 'nav.appearance',
 };
 const NAV_ICON: Record<RouteName, () => ReactNode> = {
-  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, escalations: AlertIcon, time: HourglassIcon, wiki: BookIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, tags: TagIcon, appearance: BrushIcon,
+  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, escalations: AlertIcon, time: HourglassIcon, wiki: BookIcon, requirements: ChecklistIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, tags: TagIcon, appearance: BrushIcon,
 };
 const PAGE_TITLE: Record<RouteName, MessageKey> = {
-  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', escalations: 'escalations.title', time: 'time.title', wiki: 'wiki.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', tags: 'tagsPage.title', appearance: 'appearance.title',
+  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', escalations: 'escalations.title', time: 'time.title', wiki: 'wiki.title', requirements: 'requirements.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', tags: 'tagsPage.title', appearance: 'appearance.title',
 };
 const THEME_LABEL: Record<Theme, MessageKey> = { light: 'theme.light', dark: 'theme.dark', system: 'theme.system' };
 const THEME_ICON: Record<Theme, () => ReactNode> = { light: SunIcon, dark: MoonIcon, system: MonitorIcon };
 // The main entries can be put in a personal order; the administration section stays fixed below them.
-const MAIN_ROUTES: readonly RouteName[] = ['start', 'projects', 'search', 'inbox', 'board', 'escalations', 'time', 'wiki'];
+const MAIN_ROUTES: readonly RouteName[] = ['start', 'projects', 'search', 'inbox', 'board', 'escalations', 'time', 'wiki', 'requirements'];
 
 function Preferences() {
   const { t, language, languages, setLanguage } = useI18n();
@@ -190,6 +191,7 @@ function pageTitle(route: Route): MessageKey {
   if (route.name === 'project' || route.name === 'ticket') return 'projects.title';
   if (route.name === 'group') return 'groups.title';
   if (route.name === 'wikiPage') return 'wiki.title';
+  if (route.name === 'requirementPage') return 'requirements.title';
   return PAGE_TITLE[route.name];
 }
 
@@ -304,6 +306,10 @@ function Shell() {
           {route.name === 'time' && <TimePage />}
           {route.name === 'wiki' && <WikiPage key="wiki" projectId={null} pageId={null} />}
           {route.name === 'wikiPage' && <WikiPage key={route.projectId} projectId={route.projectId} pageId={route.pageId} />}
+          {route.name === 'requirements' && <RequirementsPage key="requirements" projectId={null} requirementId={null} />}
+          {route.name === 'requirementPage' && (
+            <RequirementsPage key={route.projectId} projectId={route.projectId} requirementId={route.requirementId} />
+          )}
           {route.name === 'helpdesk' && allowed('helpdesk') && <HelpdeskPage />}
           {route.name === 'sla' && allowed('sla') && <SlaPage />}
           {route.name === 'jobs' && allowed('jobs') && <JobsPage />}
