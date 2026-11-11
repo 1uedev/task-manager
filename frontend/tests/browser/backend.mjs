@@ -889,39 +889,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (p === '/tags/suggestions' && method === 'GET') return ok(suggestions(account, null, query));
     if (p.startsWith('/tags/')) return catalogTagRoute(account, null, method, p.slice('/tags'.length), query, headers, body);
-    if (p === '/search/tickets') {
-      const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-      const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
-        .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
-        .filter((ticket) => tagFilterMatches(account, ticket, query))
-        .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields,
-          tags: field(account, ticket.projectId, TAG_FIELD, 'read') ? state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => {
-            const tag = state.tags.find((candidate) => candidate.id === entry.tag);
-            return { id: tag.id, name: tag.name };
-          }) : null }));
-      const tagMatch = query.get('tagMatch') ?? 'all';
-      const tags = query.getAll('tag');
-      if (!['all', 'any', 'none', 'untagged'].includes(tagMatch) || (tagMatch === 'untagged') !== (tags.length === 0) && query.has('tagMatch')) {
-        return problem(400, 'request.invalid', { violations: ['tagMatch.invalid'] });
-      }
-      if (tags.length > 10) return problem(400, 'request.invalid', { violations: ['tag.invalid'] });
-      // Unknown and merged tags and tags of a hidden catalog answer alike, as the server checks them (TASK-086, Codex H2).
-      if (tags.some((id) => {
-        const tag = state.tags.find((candidate) => candidate.id === id);
-        return !tag || tag.mergedInto || (tag.projectId !== null && !catalogVisible(account, tag.projectId));
-      })) return problem(400, 'request.invalid', { violations: ['tag.unknown'] });
-      const offset = Number(query.get('offset') ?? 0);
-      const limit = Number(query.get('limit') ?? 20);
-      return ok({ total: items.length, items: items.slice(offset, offset + limit) });
-    }
+    if (p === '/search/tickets') return ticketSearch(account, query);
     if (p === '/search/wiki') return wikiSearch(account, query);
     if (p === '/search/requirements') return requirementSearch(account, query);
-    if (p === '/search/projects') {
-      const q = (query.get('q') ?? '').toLowerCase();
-      const items = state.projects.filter((item) => projectVisible(account, item) && (item.name.toLowerCase().includes(q) || item.key.toLowerCase().startsWith(q)))
-        .map((item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, tags: [] }));
-      return ok({ total: items.length, items });
-    }
+    if (p === '/search/projects') return projectSearch(account, query);
+    if (p === '/search/all') return overviewSearch(account, query);
     if (p.startsWith('/permissions')) return permissionsRoute(account, session, method, p, body, query);
     if (p.startsWith('/jobs')) return jobsRoute(account, method, p, query);
     if (p.startsWith('/helpdesk/inbox')) return inboxRoute(account, method, p, query, headers, body);
@@ -2635,6 +2607,85 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // As the server (TASK-103, DEC-133): the current revision or, with stage=approved, the newest approved one; words only in
   // readable fields, filters on unreadable fields match nothing, the key ANF-n with or without the project key, discarded
   // requirements only with a status filter, the excerpt from the first readable field that holds a word.
+  function ticketSearch(account, query) {
+    const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
+      .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
+      .filter((ticket) => tagFilterMatches(account, ticket, query))
+      // As the server: a text that is exactly a key puts that ticket first.
+      .sort((x, y) => Number(y.key === (query.get('q') ?? '').trim().toUpperCase()) - Number(x.key === (query.get('q') ?? '').trim().toUpperCase()))
+      .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields,
+        tags: field(account, ticket.projectId, TAG_FIELD, 'read') ? state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => {
+          const tag = state.tags.find((candidate) => candidate.id === entry.tag);
+          return { id: tag.id, name: tag.name };
+        }) : null }));
+    const tagMatch = query.get('tagMatch') ?? 'all';
+    const tags = query.getAll('tag');
+    if (!['all', 'any', 'none', 'untagged'].includes(tagMatch) || (tagMatch === 'untagged') !== (tags.length === 0) && query.has('tagMatch')) {
+      return problem(400, 'request.invalid', { violations: ['tagMatch.invalid'] });
+    }
+    if (tags.length > 10) return problem(400, 'request.invalid', { violations: ['tag.invalid'] });
+    // Unknown and merged tags and tags of a hidden catalog answer alike, as the server checks them (TASK-086, Codex H2).
+    if (tags.some((id) => {
+      const tag = state.tags.find((candidate) => candidate.id === id);
+      return !tag || tag.mergedInto || (tag.projectId !== null && !catalogVisible(account, tag.projectId));
+    })) return problem(400, 'request.invalid', { violations: ['tag.unknown'] });
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    return ok({ total: items.length, items: items.slice(offset, offset + limit) });
+  }
+  // As the server (TASK-029, TASK-104): projects by key, name and description, company tags, an exact key first.
+  function projectSearch(account, query) {
+    const q = (query.get('q') ?? '').toLowerCase().trim();
+    if (searchTextInvalid(q)) return problem(400, 'request.invalid', { violations: ['q.invalid'] });
+    const tags = query.getAll('tag');
+    const tagMatch = query.get('tagMatch') ?? 'all';
+    const projectTags = (item) => state.projectTags.filter((entry) => entry.project === item.id).map((entry) => entry.tag);
+    const words = searchWords(q);
+    const found = (item) => { const terms = searchWords(`${item.key} ${item.name} ${item.description ?? ''}`); return words.every((word) => terms.some((term) => term.startsWith(word))); };
+    const items = state.projects.filter((item) => projectVisible(account, item) && found(item))
+      .filter((item) => tags.length === 0 && tagMatch !== 'untagged' ? true
+        : tagMatch === 'untagged' ? projectTags(item).length === 0
+          : tagMatch === 'any' ? tags.some((tag) => projectTags(item).includes(tag))
+            : tagMatch === 'none' ? !tags.some((tag) => projectTags(item).includes(tag)) : tags.every((tag) => projectTags(item).includes(tag)))
+      .sort((x, y) => Number(y.key.toLowerCase() === q) - Number(x.key.toLowerCase() === q) || x.key.localeCompare(y.key))
+      .map((item) => ({ id: item.id, key: item.key, name: item.name, description: item.description,
+        tags: projectTags(item).map((id) => state.tags.find((tag) => tag.id === id)).filter(Boolean).map((tag) => ({ id: tag.id, name: tag.name })) }));
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    return ok({ total: items.length, items: items.slice(offset, offset + limit) });
+  }
+  // As the server (TASK-104, DEC-134): five hits and the total per area, null without a right in any project, and the object
+  // a key names exactly when the person may read it.
+  function overviewSearch(account, query) {
+    const q = query.get('q') ?? '';
+    const preferred = query.get('preferred') ?? 'de';
+    const violations = [];
+    if (searchTextInvalid(q)) violations.push('q.invalid');
+    if (!WIKI_LANGUAGES.includes(preferred)) violations.push('preferred.invalid');
+    if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+    const five = (extra = {}) => new URLSearchParams({ ...(q === '' ? {} : { q }), limit: '5', ...extra });
+    const area = (allowed, answer) => (allowed ? answer().body : null);
+    const tickets = area(state.projects.some((item) => may(account, 'ticket.read', item.id)), () => ticketSearch(account, five()));
+    const projects = area(may(account, 'projects.manage') || state.projects.some((item) => projectVisible(account, item)), () => projectSearch(account, five()));
+    const wiki = area(state.projects.some((item) => wikiAny(wikiAccess(account, item.id))), () => wikiSearch(account, five({ preferred })));
+    const requirements = area(state.projects.some((item) => requirementAccess(account, item.id).read), () => requirementSearch(account, five()));
+    const text = q.normalize('NFKC').trim().toUpperCase();
+    let direct = null;
+    const ticketKey = text.match(/^([A-Z][A-Z0-9]{1,9})-([0-9]{1,18})$/);
+    const requirementKey = text.match(/^([A-Z][A-Z0-9]{1,9})\s+ANF-([0-9]{1,18})$/);
+    if (ticketKey && tickets) {
+      const hit = tickets.items.find((item) => item.key === `${ticketKey[1]}-${Number(ticketKey[2])}`);
+      if (hit) direct = { kind: 'ticket', id: hit.id, projectId: hit.projectId, key: hit.key, number: hit.number };
+    } else if (requirementKey && requirements) {
+      const hit = requirements.items.find((item) => item.projectKey === requirementKey[1] && item.number === Number(requirementKey[2]));
+      if (hit) direct = { kind: 'requirement', id: hit.id, projectId: hit.projectId, key: `${hit.projectKey} ${hit.key}`, number: hit.number };
+    } else if (/^[A-Z][A-Z0-9]{1,9}$/.test(text) && projects) {
+      const hit = projects.items.find((item) => item.key === text);
+      if (hit) direct = { kind: 'project', id: hit.id, projectId: hit.id, key: hit.key, number: null };
+    }
+    return ok({ tickets, projects, wiki, requirements, direct });
+  }
   function requirementSearch(account, query) {
     const violations = [];
     const stage = query.get('stage') ?? 'current';

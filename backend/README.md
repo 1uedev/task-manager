@@ -653,6 +653,18 @@ Paket A14 Teil 2 (DEC-133, Regeln 1 bis 5 in TODO.md). Migration V0063 legt `sea
 
 **Oberfläche.** Die Suchseite hat den dritten Bereich „Anforderungen“, der seine Projekte erst beim ersten Wählen lädt. Er bietet Projekt, Stand (aktuelle Revision oder zuletzt freigegeben), Status (Vorgabe alle außer verworfen), Priorität und verantwortliche Person, wenn das gewählte Projekt ihre Leseregel gibt, und „Schon einmal freigegeben“. Ein Treffer öffnet die Anforderung; ein Ausschnitt aus einem Kriterium beginnt mit „Kriterium n:“.
 
+### Übersicht „Alle“ und Schnellsuche (TASK-104)
+
+Paket A14 Teil 3 (DEC-134, Regeln 1 bis 8 in TODO.md), ohne Migration. Tests in `SearchOverviewApiTest`, `search-overview.test.mjs` im Browser und dem Routentest.
+
+**Endpunkt.** `GET /api/v1/search/all` mit `q` und `preferred` (`de`, `en`) liefert in einer Anfrage je Bereich `tickets`, `projects`, `wiki` und `requirements` die ersten fünf Treffer und `total`, berechnet von denselben Suchen wie die Bereichsendpunkte mit denselben Rechten und Grenzen: Wiki im veröffentlichten Stand, Anforderungen in der aktuellen Revision ohne verworfene. Ein Bereich ist `null`, wenn die Person dort kein Recht hat: Tickets ohne Projekt mit `ticket.read` und lesbarem Feld, Projekte ohne `projects.manage` und ohne Projekt mit `project.read` oder `project.manage`, Wiki ohne Wikiaktion, Anforderungen ohne `requirement.read` mit lesbarem Feld. Das hängt nur an den Rechten, nie an den Treffern. Es gibt keine gemeinsame Rangliste. `direct` nennt das Objekt, wenn der ganze Text nach NFKC, Leerraum außen und Großschreibung genau eine Kennung ist und die Person das Objekt lesen kann: `PLAT-12` ein Ticket, `PLAT ANF-17` eine Anforderung (nur mit Projektschlüssel), `PLAT` ein Projekt. Sonst ist `direct` `null`, gleich ob es das Objekt gibt; eine nicht lesbare Kennung antwortet also wie eine unbekannte. Fehlercodes wie die Bereiche, dazu `preferred.invalid`.
+
+**Projektschlüssel.** Die Projektsuche stellt ein Projekt, dessen Schlüssel genau der Suchtext ist, vor alle anderen Treffer, wie es die Ticketsuche mit einer Ticketkennung tut.
+
+**Oberfläche.** Die Suchseite hat die Reiter „Alle“, „Tickets“, „Projekte“, „Wiki“ und „Anforderungen“; `#/search` öffnet „Alle“, `#/search/{bereich}?q=` einen Reiter mit Suchtext. „Alle“ zeigt je erlaubtem Bereich Überschrift mit Anzahl, bis zu fünf Treffer und bei mehr Treffern „Alle anzeigen“, das den Reiter des Bereichs mit demselben Text öffnet; dort gelten Filter und Seiten des Bereichs. Über jeder Seite steht die Schnellsuche „Schnellsuche“; die Taste „/“ setzt außerhalb von Eingabefeldern den Fokus hinein. Enter fragt `/search/all`: mit `direct` öffnet sie Ticket, Anforderung oder Projekt, sonst „Alle“ mit dem Text.
+
+**Messung.** Referenzbestand mit Wikiseiten und Anforderungen (`demo seed --profile reference`, für einen bestehenden Bestand `--profile reference-content`), Messklassen und Ziele in `tools/demo/demo.py`, Browsermessung mit `npm run measure:search` im Frontend; Verfahren und Ergebnis in [docs/DEMO.md](../docs/DEMO.md).
+
 ## Gruppen und Rechte (TASK-030, Teil 1)
 
 Verwaltung der Gruppen des Berechtigungsmoduls über HTTP (DEC-070). Vertrag: [permissions.openapi.yaml](../contracts/permissions.openapi.yaml), `PermissionsContractTest` vergleicht ihn mit den Routen; `PermissionsApiTest` prüft den Weg bis in die Fachmodule. `PermissionsController` liegt am Anwendungseinstieg (Paket `taskmanager`), weil Regeln für ein Projekt den Projektadapter `ProjectAccess.resource` brauchen und das Berechtigungsmodul nicht vom Projektmodul abhängen darf.

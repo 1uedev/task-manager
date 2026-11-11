@@ -42,7 +42,13 @@ export function Marked({ text, marks }: { readonly text: string; readonly marks:
 // The wiki area of the search (TASK-102). Readers search the published pages; who may read drafts can search the drafts
 // instead, who publishes can add archived pages. The server decides what is found; the page shows what comes back. The filters
 // follow the project chosen (H4 of the review): a filter the chosen projects do not allow is not offered and is cleared.
-export function WikiSearch() {
+/** A search asked for from outside the area (TASK-104): the overview's "Alle anzeigen" or the address with a text. */
+export interface SearchStart {
+  readonly q: string;
+  readonly n: number;
+}
+
+export function WikiSearch({ start }: { readonly start?: SearchStart | undefined } = {}) {
   const { t, language: uiLanguage } = useI18n();
   const { api } = useBrand();
   const [projects, retryProjects] = useLoad(() => listWikiProjects(api), [api]);
@@ -57,6 +63,15 @@ export function WikiSearch() {
   const latest = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const focusAfter = useRef(false);
+
+  // A text given from outside replaces the own text and searches with the other filters as they are.
+  useEffect(() => {
+    if (start === undefined) return;
+    setError(null);
+    const next = { ...query, q: start.q };
+    setQuery(next);
+    void run(0, next);
+  }, [start?.n]);
 
   const known = projects.state === 'ok' ? projects.value : [];
   const chosen = query.project === '' ? known : known.filter((item) => item.projectId === query.project);
@@ -103,7 +118,6 @@ export function WikiSearch() {
     return { ...next, drafts: next.drafts && scope.some((item) => item.access.edit || item.access.publish),
       archived: next.archived && scope.some((item) => item.access.publish) };
   });
-  const pathText = (hit: WikiHit) => hit.path.map((entry) => (entry.available ? entry.title ?? '' : t('search.wiki.unavailable'))).join(' › ');
   return (
     <>
       {projects.state === 'problem' && (
@@ -132,27 +146,7 @@ export function WikiSearch() {
             <h2 id="wiki-hits" ref={heading} tabIndex={-1}>{t('search.wiki.pages', { count: found.total })}</h2>
             {found.items.length === 0 ? <EmptyText text={t('search.none')} /> : (
               <ul className="item-list search-hits" data-testid="wiki-hits">
-                {found.items.map((hit) => (
-                  <li key={hit.id}>
-                    <a href={hrefFor({ name: 'wikiPage', projectId: hit.projectId, pageId: hit.id, language: hit.language === 'en' ? 'en' : 'de',
-                      published: hit.stage === 'published' })}>
-                      <span className="item-key">{hit.projectKey}</span>
-                      <span className="item-title" lang={hit.language}><Marked text={hit.title} marks={hit.titleMarks} /></span>
-                    </a>
-                    <p className="hint">
-                      {hit.path.length > 0 && <span className="search-path">{pathText(hit)} · </span>}
-                      <span>{hit.language === 'en' ? t('search.wiki.english') : t('search.wiki.german')}</span>
-                      {hit.stage === 'draft' && <> · <span className="preview-badge">{t('search.wiki.draft', { revision: hit.revision })}</span></>}
-                      {hit.archived && <> · <span className="preview-badge">{t('search.wiki.archivedBadge')}</span></>}
-                      {hit.publishedAt !== null && <> · {t('search.wiki.publishedAt', { at: formatDateTime(hit.publishedAt, uiLanguage) })}</>}
-                    </p>
-                    {hit.snippet !== null && (
-                      <p className="search-snippet" lang={hit.language}>
-                        {hit.snippet.cutStart && '… '}<Marked text={hit.snippet.text} marks={hit.snippet.marks} />{hit.snippet.cutEnd && ' …'}
-                      </p>
-                    )}
-                  </li>
-                ))}
+                {found.items.map((hit) => <WikiHitItem key={hit.id} hit={hit} />)}
               </ul>
             )}
             <p className="actions">
@@ -165,5 +159,32 @@ export function WikiSearch() {
         )}
       </div>
     </>
+  );
+}
+
+/** One wiki hit with its path, language, stage and marked excerpt; also used in the overview (TASK-104). */
+export function WikiHitItem({ hit }: { readonly hit: WikiHit }) {
+  const { t, language: uiLanguage } = useI18n();
+  const pathText = hit.path.map((entry) => (entry.available ? entry.title ?? '' : t('search.wiki.unavailable'))).join(' › ');
+  return (
+    <li>
+      <a href={hrefFor({ name: 'wikiPage', projectId: hit.projectId, pageId: hit.id, language: hit.language === 'en' ? 'en' : 'de',
+        published: hit.stage === 'published' })}>
+        <span className="item-key">{hit.projectKey}</span>
+        <span className="item-title" lang={hit.language}><Marked text={hit.title} marks={hit.titleMarks} /></span>
+      </a>
+      <p className="hint">
+        {hit.path.length > 0 && <span className="search-path">{pathText} · </span>}
+        <span>{hit.language === 'en' ? t('search.wiki.english') : t('search.wiki.german')}</span>
+        {hit.stage === 'draft' && <> · <span className="preview-badge">{t('search.wiki.draft', { revision: hit.revision })}</span></>}
+        {hit.archived && <> · <span className="preview-badge">{t('search.wiki.archivedBadge')}</span></>}
+        {hit.publishedAt !== null && <> · {t('search.wiki.publishedAt', { at: formatDateTime(hit.publishedAt, uiLanguage) })}</>}
+      </p>
+      {hit.snippet !== null && (
+        <p className="search-snippet" lang={hit.language}>
+          {hit.snippet.cutStart && '… '}<Marked text={hit.snippet.text} marks={hit.snippet.marks} />{hit.snippet.cutEnd && ' …'}
+        </p>
+      )}
+    </li>
   );
 }

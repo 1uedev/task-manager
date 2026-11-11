@@ -1,15 +1,15 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { listProjects, searchProjects, searchTickets, type ProjectHit, type TicketHit } from '../api/product.ts';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { listProjects, searchAll, searchProjects, searchTickets, type ProjectHit, type SearchOverview, type TicketHit } from '../api/product.ts';
 import type { ProblemInfo } from '../api/problem.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useLoad } from '../app/hooks.ts';
-import { hrefFor } from '../app/route.ts';
+import { hrefFor, type SearchArea } from '../app/route.ts';
 import { EmptyText, PageHead, SelectField, TextField } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
-import { RequirementSearch } from './RequirementSearch.tsx';
-import { WikiSearch } from './WikiSearch.tsx';
-import { NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagFilter, tagFilterActive, useTicketSelection, type TagFilterValue } from './TagParts.tsx';
+import { RequirementHitItem, RequirementSearch } from './RequirementSearch.tsx';
+import { WikiHitItem, WikiSearch, type SearchStart } from './WikiSearch.tsx';
+import { NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagFilter, useTicketSelection, type TagFilterValue } from './TagParts.tsx';
 
 interface Query {
   readonly q: string;
@@ -17,50 +17,248 @@ interface Query {
   readonly tagFilter: TagFilterValue;
 }
 
-type Found =
+type Found<T> =
   | { readonly state: 'idle' }
   | { readonly state: 'loading' }
   | { readonly state: 'problem'; readonly problem: ProblemInfo }
-  | { readonly state: 'ok'; readonly tickets: { total: number; items: TicketHit[] }; readonly projects: { total: number; items: ProjectHit[] } | null };
+  | { readonly state: 'ok'; readonly value: T };
 
-type Area = 'tickets' | 'wiki' | 'requirements';
-const AREA_LABELS = { tickets: 'search.area.tickets', wiki: 'search.area.wiki', requirements: 'search.area.requirements' } as const;
+type Area = SearchArea;
+const AREAS = ['all', 'tickets', 'projects', 'wiki', 'requirements'] as const;
+const AREA_LABELS = {
+  all: 'search.area.all', tickets: 'search.area.tickets', projects: 'search.area.projects', wiki: 'search.area.wiki',
+  requirements: 'search.area.requirements',
+} as const;
 
-// The search with its areas (TASK-102, TASK-103): tickets and projects, the wiki and requirements. Each area keeps its own
-// input while another one is shown. The wiki and requirements areas are built the first time they are chosen, so the page asks
-// for their projects only when needed.
-export function SearchPage() {
+// The search with its areas (TASK-102 to TASK-104): the overview "Alle" and one tab per area, each with the filters and pages
+// of its own search. Each area keeps its own input while another one is shown; an area is built the first time it is chosen,
+// so the page asks for its projects only when needed. A text from the address (quick search) is searched in the area named.
+export function SearchPage({ area: initial = 'all', q = '' }: { readonly area?: Area; readonly q?: string }) {
   const { t } = useI18n();
-  const [area, setArea] = useState<Area>('tickets');
-  const [opened, setOpened] = useState<ReadonlySet<Area>>(new Set(['tickets']));
+  const [area, setArea] = useState<Area>(initial);
+  const [opened, setOpened] = useState<ReadonlySet<Area>>(new Set([initial]));
+  // A text handed to an area: from the address at the start, or from "Alle anzeigen" of the overview.
+  const [starts, setStarts] = useState<Partial<Record<Area, SearchStart>>>(q === '' ? {} : { [initial]: { q, n: 1 } });
+  const choose = (value: Area) => {
+    setArea(value);
+    setOpened((current) => new Set([...current, value]));
+  };
+  const showAll = (value: Area, text: string) => {
+    setStarts((current) => ({ ...current, [value]: { q: text, n: (current[value]?.n ?? 0) + 1 } }));
+    choose(value);
+  };
   return (
     <>
       <PageHead title={t('search.title')} intro={t('search.intro')} />
       <fieldset className="search-areas">
         <legend>{t('search.area')}</legend>
-        {(['tickets', 'wiki', 'requirements'] as const).map((value) => (
+        {AREAS.map((value) => (
           <label key={value} className="check">
-            <input type="radio" name="search-area" value={value} checked={area === value} onChange={() => { setArea(value); setOpened((current) => new Set([...current, value])); }} />
+            <input type="radio" name="search-area" value={value} checked={area === value} onChange={() => choose(value)} />
             {' '}{t(AREA_LABELS[value])}
           </label>
         ))}
       </fieldset>
-      <div hidden={area !== 'tickets'}><TicketSearch /></div>
-      {opened.has('wiki') && <div hidden={area !== 'wiki'}><WikiSearch /></div>}
-      {opened.has('requirements') && <div hidden={area !== 'requirements'}><RequirementSearch /></div>}
+      {opened.has('all') && <div hidden={area !== 'all'}><OverviewSearch start={starts.all} onShowAll={showAll} /></div>}
+      {opened.has('tickets') && <div hidden={area !== 'tickets'}><TicketSearch start={starts.tickets} /></div>}
+      {opened.has('projects') && <div hidden={area !== 'projects'}><ProjectSearch start={starts.projects} /></div>}
+      {opened.has('wiki') && <div hidden={area !== 'wiki'}><WikiSearch start={starts.wiki} /></div>}
+      {opened.has('requirements') && <div hidden={area !== 'requirements'}><RequirementSearch start={starts.requirements} /></div>}
     </>
   );
 }
 
-// Search over tickets and projects. The server searches only what the person may read; hidden fields neither match
-// nor show, so the page displays what comes back and nothing more.
-function TicketSearch() {
+// The overview "Alle" (TASK-104, rule 1): per area the first five hits with the total and "Alle anzeigen"; no common ranking,
+// an area without a right does not appear.
+function OverviewSearch({ start, onShowAll }: { readonly start: SearchStart | undefined; readonly onShowAll: (area: Area, q: string) => void }) {
+  const { t, language } = useI18n();
+  const { api } = useBrand();
+  const [q, setQ] = useState(start?.q ?? '');
+  const [found, setFound] = useState<Found<SearchOverview>>({ state: 'idle' });
+  const [error, setError] = useState<string | null>(null);
+  const sent = useRef('');
+  const latest = useRef(0);
+
+  async function run(text: string) {
+    const ticket = ++latest.current;
+    sent.current = text;
+    setFound({ state: 'loading' });
+    const result = await searchAll(api, text.trim(), language);
+    if (ticket !== latest.current) return;
+    if (result.kind !== 'ok') {
+      if (result.problem.status === 400) {
+        setFound({ state: 'idle' });
+        return setError(t('search.error.invalid'));
+      }
+      return setFound({ state: 'problem', problem: result.problem });
+    }
+    setFound({ state: 'ok', value: result.data.value });
+  }
+
+  useEffect(() => {
+    if (start === undefined) return;
+    setQ(start.q);
+    setError(null);
+    void run(start.q);
+  }, [start?.n]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (q.trim().length > 200) return setError(t('search.error.long'));
+    setError(null);
+    void run(q);
+  }
+
+  const value = found.state === 'ok' ? found.value : null;
+  const section = (area: Exclude<Area, 'all'>, heading: string, items: readonly unknown[], total: number, list: ReactNode) => (
+    <section aria-labelledby={`overview-${area}`} data-testid={`overview-${area}`}>
+      <h2 id={`overview-${area}`}>{heading}</h2>
+      {items.length === 0 ? <EmptyText text={t('search.none')} /> : list}
+      {total > items.length && (
+        <p className="actions">
+          <button type="button" className="secondary" onClick={() => onShowAll(area, sent.current)}
+            aria-label={t('search.showAllOf', { area: t(AREA_LABELS[area]) })}>{t('search.showAll')}</button>
+        </p>
+      )}
+    </section>
+  );
+  return (
+    <>
+      <form className="search-form" role="search" aria-label={t('search.all.label')} onSubmit={submit} noValidate>
+        <TextField label={t('search.text')} hint={t('search.all.hint')} value={q} onChange={setQ} maxLength={200} error={error} />
+        <button type="submit">{t('search.submit')}</button>
+      </form>
+      <div aria-live="polite" data-testid="overview-status">
+        {found.state === 'loading' && <LoadingView />}
+        {found.state === 'problem' && <ProblemView problem={found.problem} onAction={() => void run(sent.current)} actionLabel="states.retry" />}
+        {value !== null && (
+          <div className="stack" data-testid="overview">
+            {value.tickets === null && value.projects === null && value.wiki === null && value.requirements === null
+              && <EmptyText text={t('search.all.nothing')} />}
+            {value.tickets !== null && section('tickets', t('search.tickets', { count: value.tickets.total }), value.tickets.items, value.tickets.total, (
+              <ul className="item-list search-hits">
+                {value.tickets.items.map((hit) => (
+                  <li key={hit.id}>
+                    <a href={hrefFor({ name: 'ticket', projectId: hit.projectId, number: hit.number })}>
+                      <span className="item-key">{hit.key}</span>
+                      <span className="item-title">{hit.fields.title ?? t('field.hidden')}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ))}
+            {value.projects !== null && section('projects', t('search.projects', { count: value.projects.total }), value.projects.items, value.projects.total, (
+              <ProjectList items={value.projects.items} />
+            ))}
+            {value.wiki !== null && section('wiki', t('search.wiki.pages', { count: value.wiki.total }), value.wiki.items, value.wiki.total, (
+              <ul className="item-list search-hits">{value.wiki.items.map((hit) => <WikiHitItem key={hit.id} hit={hit} />)}</ul>
+            ))}
+            {value.requirements !== null && section('requirements', t('search.requirements.found', { count: value.requirements.total }),
+              value.requirements.items, value.requirements.total, (
+                <ul className="item-list search-hits">{value.requirements.items.map((hit) => <RequirementHitItem key={hit.id} hit={hit} />)}</ul>
+              ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function ProjectList({ items }: { readonly items: readonly ProjectHit[] }) {
+  return (
+    <ul className="item-list">
+      {items.map((hit) => (
+        <li key={hit.id}>
+          <a href={hrefFor({ name: 'project', id: hit.id, tab: 'tickets' })}>
+            <span className="item-key">{hit.key}</span>
+            <span className="item-title">{hit.name}</span>
+          </a>
+          {hit.tags.length > 0 && <p className="hint">{hit.tags.map((tag) => tag.name).join(', ')}</p>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// The projects area (TASK-104): projects by key, name and description with the tags of the company catalog, page by page.
+function ProjectSearch({ start }: { readonly start: SearchStart | undefined }) {
+  const { t } = useI18n();
+  const { api } = useBrand();
+  const [q, setQ] = useState(start?.q ?? '');
+  const [tagFilter, setTagFilter] = useState<TagFilterValue>(NO_TAG_FILTER);
+  const [found, setFound] = useState<Found<{ total: number; items: ProjectHit[] }>>({ state: 'idle' });
+  const [offset, setOffset] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const sent = useRef<{ q: string; tagFilter: TagFilterValue }>({ q: '', tagFilter: NO_TAG_FILTER });
+  const latest = useRef(0);
+
+  async function run(nextOffset: number, query = sent.current) {
+    const ticket = ++latest.current;
+    sent.current = query;
+    setFound({ state: 'loading' });
+    const result = await searchProjects(api, { q: query.q.trim(), tag: query.tagFilter.tags.map((tag) => tag.id), tagMatch: query.tagFilter.match, offset: nextOffset });
+    if (ticket !== latest.current) return;
+    if (result.kind !== 'ok') {
+      if (result.problem.status === 400) {
+        setFound({ state: 'idle' });
+        return setError(t('search.error.invalid'));
+      }
+      return setFound({ state: 'problem', problem: result.problem });
+    }
+    setOffset(nextOffset);
+    setFound({ state: 'ok', value: result.data.value });
+  }
+
+  useEffect(() => {
+    if (start === undefined) return;
+    setQ(start.q);
+    setError(null);
+    void run(0, { q: start.q, tagFilter });
+  }, [start?.n]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (q.trim().length > 200) return setError(t('search.error.long'));
+    setError(null);
+    void run(0, { q, tagFilter });
+  }
+
+  return (
+    <>
+      <form className="search-form" role="search" aria-label={t('search.projects.label')} onSubmit={submit} noValidate>
+        <TextField label={t('search.text')} hint={t('search.projects.hint')} value={q} onChange={setQ} maxLength={200} error={error} />
+        <TagFilter projectId={null} value={tagFilter} onChange={setTagFilter} />
+        <button type="submit">{t('search.submit')}</button>
+      </form>
+      <div aria-live="polite">
+        {found.state === 'loading' && <LoadingView />}
+        {found.state === 'problem' && <ProblemView problem={found.problem} onAction={() => void run(offset)} actionLabel="states.retry" />}
+        {found.state === 'ok' && (
+          <section aria-labelledby="project-hits">
+            <h2 id="project-hits">{t('search.projects', { count: found.value.total })}</h2>
+            {found.value.items.length === 0 ? <EmptyText text={t('search.none')} /> : <ProjectList items={found.value.items} />}
+            <p className="actions">
+              {offset > 0 && <button type="button" className="secondary" onClick={() => void run(Math.max(0, offset - 20))}>{t('search.previous')}</button>}
+              {offset + found.value.items.length < found.value.total && offset + 20 <= 1000 && (
+                <button type="button" className="secondary" onClick={() => void run(offset + 20)}>{t('search.next')}</button>
+              )}
+            </p>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The tickets area. The server searches only what the person may read; hidden fields neither match nor show, so the page
+// displays what comes back and nothing more. Projects have their own area since TASK-104.
+function TicketSearch({ start }: { readonly start: SearchStart | undefined }) {
   const { t } = useI18n();
   const { api } = useBrand();
   const [projects] = useLoad(() => listProjects(api), [api]);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(start?.q ?? '');
   const [project, setProject] = useState('');
-  const [found, setFound] = useState<Found>({ state: 'idle' });
+  const [found, setFound] = useState<Found<{ total: number; items: TicketHit[] }>>({ state: 'idle' });
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<TagFilterValue>(NO_TAG_FILTER);
@@ -86,12 +284,16 @@ function TicketSearch() {
       }
       return setFound({ state: 'problem', problem: tickets.problem });
     }
-    // Projects carry tags of the company catalog only, so a tag filter applies to tickets here.
-    const projectHits = text !== '' && query.project === '' && nextOffset === 0 && !tagFilterActive(query.tagFilter) ? await searchProjects(api, text) : null;
-    if (ticket !== latest.current) return;
     setOffset(nextOffset);
-    setFound({ state: 'ok', tickets: tickets.data.value, projects: projectHits?.kind === 'ok' ? projectHits.data.value : null });
+    setFound({ state: 'ok', value: tickets.data.value });
   }
+
+  useEffect(() => {
+    if (start === undefined) return;
+    setQ(start.q);
+    setError(null);
+    void run(0, { q: start.q, project, tagFilter });
+  }, [start?.n]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -103,7 +305,7 @@ function TicketSearch() {
   const names = new Map((projects.state === 'ok' ? projects.value : []).map((item) => [item.id, item]));
   return (
     <>
-      <form className="search-form" role="search" aria-label={t('search.area.tickets')} onSubmit={submit} noValidate>
+      <form className="search-form" role="search" aria-label={t('search.tickets.label')} onSubmit={submit} noValidate>
         <TextField label={t('search.text')} hint={t('search.hint')} value={q} onChange={setQ} maxLength={200} error={error} />
         <SelectField label={t('search.project')} value={project} onChange={setProject}
           options={[{ value: '', label: t('search.allProjects') }, ...(projects.state === 'ok' ? projects.value : []).map((item) => ({ value: item.id, label: `${item.key} · ${item.name}` }))]} />
@@ -116,12 +318,12 @@ function TicketSearch() {
       {found.state === 'ok' && (
         <div aria-live="polite">
           <section aria-labelledby="ticket-hits">
-            <h2 id="ticket-hits">{t('search.tickets', { count: found.tickets.total })}</h2>
-            {found.tickets.items.length === 0 ? <EmptyText text={t('search.none')} /> : (
+            <h2 id="ticket-hits">{t('search.tickets', { count: found.value.total })}</h2>
+            {found.value.items.length === 0 ? <EmptyText text={t('search.none')} /> : (
               <>
-              <p className="select-page"><label><SelectPage selection={selection} items={found.tickets.items} /> {t('tickets.selectPage')}</label></p>
+              <p className="select-page"><label><SelectPage selection={selection} items={found.value.items} /> {t('tickets.selectPage')}</label></p>
               <ul className="item-list selectable" data-testid="ticket-hits">
-                {found.tickets.items.map((hit) => (
+                {found.value.items.map((hit) => (
                   <li key={hit.id}>
                     <SelectTicket selection={selection} id={hit.id} ticketKey={hit.key} />
                     <a href={hrefFor({ name: 'ticket', projectId: hit.projectId, number: hit.number })}>
@@ -139,28 +341,11 @@ function TicketSearch() {
             )}
             <p className="actions">
               {offset > 0 && <button type="button" className="secondary" onClick={() => void run(Math.max(0, offset - 20))}>{t('search.previous')}</button>}
-              {offset + found.tickets.items.length < found.tickets.total && offset + 20 <= 1000 && (
+              {offset + found.value.items.length < found.value.total && offset + 20 <= 1000 && (
                 <button type="button" className="secondary" onClick={() => void run(offset + 20)}>{t('search.next')}</button>
               )}
             </p>
           </section>
-          {found.projects !== null && (
-            <section aria-labelledby="project-hits">
-              <h2 id="project-hits">{t('search.projects', { count: found.projects.total })}</h2>
-              {found.projects.items.length === 0 ? <EmptyText text={t('search.none')} /> : (
-                <ul className="item-list">
-                  {found.projects.items.map((hit) => (
-                    <li key={hit.id}>
-                      <a href={hrefFor({ name: 'project', id: hit.id, tab: 'tickets' })}>
-                        <span className="item-key">{hit.key}</span>
-                        <span className="item-title">{hit.name}</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
         </div>
       )}
     </>

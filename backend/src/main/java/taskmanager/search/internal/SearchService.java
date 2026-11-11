@@ -367,6 +367,12 @@ public class SearchService {
                 return new Page<>(0, List.of());
             }
             rank = "ts_rank(s.document, to_tsquery('simple', ?))";
+            String key = projectKey(query.text());
+            if (key != null) {
+                // A text that is exactly a project key puts that project first (TASK-104, quick search).
+                rank = "case when s.key = ? then 1000 else 0 end + " + rank;
+                params.add(key);
+            }
             params.add(text.tsquery());
         }
         params.add(actor.companyId());
@@ -380,7 +386,8 @@ public class SearchService {
         }
         tagFilter(where, params, "search_project_tag", "project_id", "s.project_id", query.tags(), query.tagMatch());
         String select = "select s.project_id, s.key, s.name, s.description, " + rank + " as rank from search_project s where " + where;
-        List<Object> countParams = text.present() ? params.subList(1, params.size()) : params;
+        int rankParams = text.present() ? (projectKey(query.text()) != null ? 2 : 1) : 0;
+        List<Object> countParams = params.subList(rankParams, params.size());
         long total = jdbc.sql("select count(*) from search_project s where " + where).params(countParams).query(Long.class).single();
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(query.limit());
@@ -458,17 +465,7 @@ public class SearchService {
     public Page<WikiHit> wiki(AccessContext actor, WikiQuery query) {
         internal(actor);
         SearchText text = text(query.text());
-        Map<UUID, WikiAccess> access = new LinkedHashMap<>();
-        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
-            Supplier<ResourceContext> resource = resource(actor, project, WIKI_RESOURCE);
-            boolean read = permissions.inspect(actor, resource, WIKI_READ, Set.of()).allowed();
-            boolean edit = permissions.inspect(actor, resource, WIKI_EDIT, Set.of()).allowed();
-            boolean publish = permissions.inspect(actor, resource, WIKI_PUBLISH, Set.of()).allowed();
-            WikiAccess rights = new WikiAccess(read, edit || publish, publish);
-            if (rights.any()) {
-                access.put(project, rights);
-            }
-        }
+        Map<UUID, WikiAccess> access = wikiAccess(actor);
         if (!query.projects().isEmpty() && !access.keySet().containsAll(query.projects())) {
             throw invalid("project.unknown");
         }
@@ -551,6 +548,22 @@ public class SearchService {
         return new Page<>(total[0], rows.stream().map(row -> new WikiHit(row.id(), row.projectId(), row.projectKey(), row.title(),
             SearchSnippet.marks(row.title(), words), row.language(), stage, row.revision(), row.publishedAt(), row.archived(),
             paths.getOrDefault(row.id(), List.of()), SearchSnippet.of(row.body(), words))).toList());
+    }
+
+    /** Per member project with a wiki action: what the caller may search there. */
+    private Map<UUID, WikiAccess> wikiAccess(AccessContext actor) {
+        Map<UUID, WikiAccess> access = new LinkedHashMap<>();
+        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
+            Supplier<ResourceContext> resource = resource(actor, project, WIKI_RESOURCE);
+            boolean read = permissions.inspect(actor, resource, WIKI_READ, Set.of()).allowed();
+            boolean edit = permissions.inspect(actor, resource, WIKI_EDIT, Set.of()).allowed();
+            boolean publish = permissions.inspect(actor, resource, WIKI_PUBLISH, Set.of()).allowed();
+            WikiAccess rights = new WikiAccess(read, edit || publish, publish);
+            if (rights.any()) {
+                access.put(project, rights);
+            }
+        }
+        return access;
     }
 
     // ------------------------------------------------------------------------------------------------ requirements
@@ -882,6 +895,91 @@ public class SearchService {
     private Supplier<ResourceContext> resource(AccessContext actor, UUID project, String resourceType) {
         return projects.resource(actor.companyId(), project, actor.userId(), resourceType, false);
     }
+
+    // ------------------------------------------------------------------------------------------------ overview
+
+    /** The hits of every area in the overview "Alle" (TASK-104, DEC-134). */
+    static final int OVERVIEW_LIMIT = 5;
+    private static final java.util.regex.Pattern PROJECT_KEY = java.util.regex.Pattern.compile("[A-Z][A-Z0-9]{1,9}");
+
+    /**
+     * The object a text names exactly (TASK-104): {@code ticket} for {@code KEY-12}, {@code requirement} for {@code KEY ANF-17},
+     * {@code project} for a project key; {@code id} is that of the ticket, requirement or project.
+     */
+    public record Direct(String kind, UUID id, UUID projectId, String key, Long number) {
+    }
+
+    /**
+     * The overview: per area the first {@value #OVERVIEW_LIMIT} hits and the total, {@code null} for an area the caller has no
+     * right in, and the object a text names exactly when the caller may read it.
+     */
+    public record Overview(Page<TicketHit> tickets, Page<ProjectHit> projects, Page<WikiHit> wiki, Page<RequirementHit> requirements,
+            Direct direct) {
+    }
+
+    /**
+     * Every area with the rules of its own search, in one transaction: tickets and projects as TASK-029, wiki pages in their
+     * published revision as TASK-102, requirements in their current revision as TASK-103. An area appears only when the caller
+     * has its read action in a member project ({@code project.read} or the company right for projects); there is no common
+     * ranking over the areas. Only an object the caller may read can be named directly; otherwise the text is an ordinary search.
+     */
+    @Transactional
+    public Overview overview(AccessContext actor, String raw, String preferred) {
+        internal(actor);
+        SearchText text = text(raw);
+        boolean ticketArea = !readableTicketFields(actor).isEmpty();
+        boolean projectArea = permissions.inspect(actor, () -> ResourceContext.company(actor.companyId()),
+            AdministrationRight.PROJECTS_MANAGE.key(), Set.of()).allowed() || !readableProjects(actor).isEmpty();
+        boolean wikiArea = wikiAccess(actor).values().stream().anyMatch(WikiAccess::any);
+        boolean requirementArea = !readableRequirementFields(actor).isEmpty();
+        Page<TicketHit> tickets = ticketArea
+            ? tickets(actor, new TicketQuery(raw, List.of(), List.of(), List.of(), List.of(), List.of(), OVERVIEW_LIMIT, 0)) : null;
+        Page<ProjectHit> projectHits = projectArea ? projects(actor, new ProjectQuery(raw, List.of(), OVERVIEW_LIMIT, 0)) : null;
+        Page<WikiHit> wikiHits = wikiArea
+            ? wiki(actor, new WikiQuery(raw, List.of(), null, preferred, false, false, OVERVIEW_LIMIT, 0)) : null;
+        Page<RequirementHit> requirementHits = requirementArea
+            ? requirements(actor, new RequirementQuery(raw, List.of(), false, List.of(), List.of(), List.of(), null, List.of(), OVERVIEW_LIMIT, 0))
+            : null;
+        return new Overview(tickets, projectHits, wikiHits, requirementHits, direct(raw, text, tickets, projectHits, requirementHits));
+    }
+
+    private static Direct direct(String raw, SearchText text, Page<TicketHit> tickets, Page<ProjectHit> projectHits,
+            Page<RequirementHit> requirementHits) {
+        if (text.key() != null && tickets != null) {
+            for (TicketHit hit : tickets.items()) {
+                if (hit.projectKey().equals(text.key()) && hit.number() == text.number()) {
+                    return new Direct("ticket", hit.id(), hit.projectId(), hit.projectKey() + "-" + hit.number(), hit.number());
+                }
+            }
+        }
+        String[] requirement = requirementKey(raw);
+        if (requirement != null && requirement[0] != null && requirementHits != null) {
+            for (RequirementHit hit : requirementHits.items()) {
+                if (hit.projectKey().equals(requirement[0]) && hit.number() == Long.parseLong(requirement[1])) {
+                    return new Direct("requirement", hit.id(), hit.projectId(), hit.projectKey() + " " + hit.key(), hit.number());
+                }
+            }
+        }
+        String key = projectKey(raw);
+        if (key != null && projectHits != null) {
+            for (ProjectHit hit : projectHits.items()) {
+                if (hit.key().equals(key)) {
+                    return new Direct("project", hit.id(), hit.id(), hit.key(), null);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The text as a project key in upper case, when it has the form of one; {@code null} otherwise. */
+    private static String projectKey(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC).strip().toUpperCase(java.util.Locale.ROOT);
+        return PROJECT_KEY.matcher(text).matches() ? text : null;
+    }
+
 
     private static SearchText text(String raw) {
         SearchText text = SearchText.parse(raw);

@@ -233,6 +233,7 @@ class GroupSpec:
     actions: list[str]
     read: list[str]
     write: list[str]
+    resource: str = "ticket"
 
 
 class Builder:
@@ -259,7 +260,7 @@ class Builder:
         for operation, fields in (("read", spec.read), ("write", spec.write)):
             for name in fields:
                 self.admin.call("PUT", f"/permissions/groups/{group}/fields",
-                                {"resourceType": "ticket", "field": name, "projectId": None, "operation": operation, "effect": "allow"})
+                                {"resourceType": spec.resource, "field": name, "projectId": None, "operation": operation, "effect": "allow"})
         for account in members:
             self.admin.call("PUT", f"/permissions/groups/{group}/members/{account}")
         return group
@@ -715,6 +716,165 @@ def seed_reference(args) -> None:
     minutes = (time.monotonic() - started) / 60
     print(f"done in {minutes:.1f} minutes: {accounts_n} accounts, {projects_n} projects, {tickets_n} tickets, "
           f"{args.company_tags + projects_n * args.project_tags} tags, {total_tags} ticket tag assignments.")
+    seed_reference_content(args, admin, builder)
+
+
+# ---------------------------------------------------------------------- wiki pages and requirements of the reference set
+
+WIKI_TITLE_WORDS = ["Leitfaden", "Anleitung", "Hinweise", "Checkliste", "Ablauf", "Uebersicht", "Regeln", "Notizen"]
+
+
+def reference_doc(rng: random.Random, serial: int, marker: str, sentences: int) -> dict:
+    """A wiki document of one to three short sections from the synthetic vocabulary and a rare marker word."""
+    blocks = []
+    for section in range(rng.randint(1, 3)):
+        blocks.append(("h", f"{zipf_word(rng).capitalize()} {rng.choice(QUALIFIERS)}"))
+        text = " ".join(f"Die {zipf_word(rng)} {rng.choice(VERBS)} {rng.choice(QUALIFIERS)}, betroffen ist {rng.choice(COMMON_WORDS)} {zipf_word(rng)}."
+                        for _ in range(rng.randint(1, sentences)))
+        if section == 0:
+            text += f" Merkmal {marker}{serial:06d}."
+        blocks.append(("p", text))
+    return _wiki_doc(*blocks)
+
+
+def wiki_title(rng: random.Random) -> str:
+    return f"{rng.choice(WIKI_TITLE_WORDS)} {zipf_word(rng)} {rng.choice(QUALIFIERS)}"[:200]
+
+
+class ContentBuilder:
+    """Creates the wiki pages and requirements of the reference set through the public API, each project in one thread."""
+
+    def __init__(self, builder: Builder):
+        self.builder = builder
+        self.counts = {"pages": 0, "english": 0, "drafts": 0, "unpublished": 0, "archived": 0,
+                       "requirements": 0, "criteria": 0, "review": 0, "approved": 0, "revised": 0}
+        self.lock = threading.Lock()
+
+    def count(self, name: str, n: int = 1) -> None:
+        with self.lock:
+            self.counts[name] += n
+
+    def wiki(self, key: str, project: str, pages: int, seed: int) -> None:
+        """A page tree of at most four levels: ten roots, the other pages below an earlier one. About a third of the pages
+        has a published English version, about one in eight an open draft after the publication, one in twenty was never
+        published and one in twenty of the pages without children is archived at the end."""
+        client = self.builder.worker()
+        rng = random.Random(seed)
+        depth: dict[str, int] = {}
+        children: dict[str, int] = {}
+        published: list[str] = []
+        for index in range(pages):
+            parents = [page for page in published if depth[page] < 4]
+            parent = None if index < 10 or not parents else rng.choice(parents)
+            serial = seed * 1000 + index
+            created = client.call("POST", f"/wiki/projects/{project}/pages",
+                                  {"title": wiki_title(rng), "parentId": parent, "content": reference_doc(rng, serial, "w", 4), "language": "de"})
+            page = created.body["id"]
+            depth[page] = 1 if parent is None else depth[parent] + 1
+            children[page] = 0
+            if parent is not None:
+                children[parent] += 1
+            self.count("pages")
+            if index >= 10 and rng.random() < 0.05:
+                self.count("unpublished")
+                continue
+            client.call("POST", f"/wiki/pages/{page}/publish", {"revision": 1}, headers={"If-Match": '"1"'})
+            published.append(page)
+            if rng.random() < 0.125:
+                client.call("PUT", f"/wiki/pages/{page}/draft", {"title": wiki_title(rng), "content": reference_doc(rng, serial, "w", 4)},
+                            query={"language": "de"}, headers={"If-Match": '"1"'})
+                self.count("drafts")
+            if rng.random() < 0.33:
+                added = client.call("POST", f"/wiki/pages/{page}/languages", {"language": "en"})
+                saved = client.call("PUT", f"/wiki/pages/{page}/draft",
+                                    {"title": f"Guide {zipf_word(rng)} {rng.choice(['notes', 'steps', 'rules', 'checklist'])}",
+                                     "content": reference_doc(rng, serial, "e", 3)},
+                                    query={"language": "en"}, headers={"If-Match": added.headers.get("etag")})
+                revision = saved.headers.get("etag")
+                client.call("POST", f"/wiki/pages/{page}/publish", {"revision": int(revision.strip('W/"'))},
+                            query={"language": "en"}, headers={"If-Match": revision})
+                self.count("english")
+        leaves = [page for page in published if children[page] == 0]
+        for page in rng.sample(leaves, k=len(leaves) // 20):
+            version = client.call("GET", f"/wiki/pages/{page}", query={"language": "de"}).body["version"]
+            client.call("POST", f"/wiki/pages/{page}/archive", {"version": version}, query={"language": "de"})
+            self.count("archived")
+
+    def requirement(self, project: str, serial: int, seed: int) -> None:
+        """One requirement with one to eight criteria. Three in ten are approved, a third of them changed again into a
+        new revision; one in ten waits in review."""
+        client = self.builder.worker()
+        rng = random.Random(seed)
+        title, _ = reference_text(rng, serial)
+        criteria = [{"id": None, "text": f"Die {zipf_word(rng)} {rng.choice(VERBS)} {rng.choice(QUALIFIERS)} ({rng.choice(COMMON_WORDS)})."}
+                    for _ in range(rng.randint(1, 8))]
+        body = {"title": title, "priority": rng.choices(["low", "normal", "high", "critical"], [2, 5, 2, 1])[0],
+                "description": reference_doc(rng, serial, "a", 2), "criteria": criteria}
+        created = client.call("POST", f"/requirements/projects/{project}/requirements", body)
+        path = f"/requirements/{created.body['id']}"
+        self.count("requirements")
+        self.count("criteria", len(criteria))
+        roll = rng.random()
+        if roll < 0.4:
+            submitted = client.call("POST", f"{path}/submit", headers={"If-Match": created.headers.get("etag")})
+            if roll < 0.1:
+                self.count("review")
+                return
+            approved = client.call("POST", f"{path}/approve", {"revision": 1}, headers={"If-Match": submitted.headers.get("etag")})
+            self.count("approved")
+            if rng.random() < 1 / 3:
+                again, _ = reference_text(rng, serial)
+                client.call("PATCH", path, {"title": again}, headers={"If-Match": approved.headers.get("etag")})
+                self.count("revised")
+
+
+def seed_reference_content(args, admin: Client, builder: Builder) -> None:
+    """Part of TASK-104 (DEC-134, rule 4): wiki pages and requirements in the reference projects, with the rights of the
+    three reference groups. Runs after the tickets or alone on an existing reference set (profile reference-content)."""
+    started = time.monotonic()
+    names = [f"ref{i:03d}" for i in range(1, args.accounts + 1)]
+    directory = {entry["username"]: entry["id"] for entry in admin.call("GET", "/directory/accounts").body}
+    groups = {item["name"] for item in admin.call("GET", "/permissions/groups").body}
+    if "Referenz Wiki Verwaltung" in groups:
+        raise SystemExit("the wiki pages and requirements of the reference set exist already")
+    ids = [directory[name] for name in names]
+    third = max(1, len(ids) // 3)
+    full, edit, read = ids[:third], ids[third:2 * third], ids[2 * third:]
+    admin_id = directory[args.admin]
+    print("wiki and requirement rights")
+    everything = ["title", "description", "criteria", "priority", "owner"]
+    builder.group(GroupSpec("Referenz Wiki Verwaltung", WIKI_ACTIONS_FULL, [], []), [admin_id] + full)
+    builder.group(GroupSpec("Referenz Wiki Bearbeitung", WIKI_ACTIONS_EDIT, [], []), edit)
+    builder.group(GroupSpec("Referenz Wiki Lesen", WIKI_ACTIONS_READ, [], []), read)
+    builder.group(GroupSpec("Referenz Anforderungen Verwaltung", REQUIREMENT_ACTIONS, everything, everything, "requirement"), [admin_id] + full)
+    builder.group(GroupSpec("Referenz Anforderungen Bearbeitung", ["requirement.read", "requirement.edit"], everything,
+                            ["title", "description", "criteria", "priority"], "requirement"), edit)
+    builder.group(GroupSpec("Referenz Anforderungen Lesen ohne Beschreibung", ["requirement.read"], ["title", "criteria", "priority", "owner"], [],
+                            "requirement"), read)
+    projects = sorted((item for item in admin.call("GET", "/projects").body if item["key"].startswith("R")), key=lambda item: item["key"])
+    if not projects:
+        raise SystemExit("no reference projects; create the reference set first")
+    content = ContentBuilder(builder)
+    pages_each = max(1, args.wiki_pages // len(projects))
+    print(f"{pages_each * len(projects)} wiki pages")
+    with concurrent.futures.ThreadPoolExecutor(builder.workers) as pool:
+        for future in [pool.submit(content.wiki, item["key"], item["id"], pages_each, 104000 + index) for index, item in enumerate(projects)]:
+            future.result()
+    print(f"  {content.counts}")
+    print(f"{args.requirements} requirements")
+    with concurrent.futures.ThreadPoolExecutor(builder.workers) as pool:
+        futures = [pool.submit(content.requirement, projects[serial % len(projects)]["id"], serial, 204000 + serial)
+                   for serial in range(args.requirements)]
+        for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+            future.result()
+            if done % 2000 == 0:
+                print(f"  {done}/{len(futures)} requirements", flush=True)
+    minutes = (time.monotonic() - started) / 60
+    print(f"wiki pages and requirements done in {minutes:.1f} minutes: {content.counts}")
+    results = os.environ.get("TASK_MANAGER_RESULTS", "results")
+    os.makedirs(results, exist_ok=True)
+    with open(os.path.join(results, "reference-content.json"), "w") as out:
+        json.dump({"minutes": round(minutes, 1), **content.counts}, out, indent=2)
 
 
 # ---------------------------------------------------------------------- checks of the presentation data set
@@ -846,10 +1006,12 @@ def verify(args) -> None:
 
 # ---------------------------------------------------------------------- measurement
 
-# Shares of OPERATIONS.md. Time booking (10) and wiki editing (5) do not exist yet; the remaining 85 are scaled up.
+# Shares of OPERATIONS.md. Time booking (10) and wiki editing do not take part; the remaining shares are scaled up.
 # The complex search is split: most cases are built from a ticket the person can see, so that text, projects, status,
 # type and tags fit together and at least that ticket matches; the rest combines random filters and mostly finds
 # nothing, which is the cheap selective case and is reported on its own.
+# TASK-104 (DEC-134, rule 5) adds the wiki share of OPERATIONS.md (5) as reading of pages and the searches over wiki pages
+# and requirements, the overview "Alle" and the quick search with a key; the classes of TASK-031 keep their shares.
 MIX = {
     "Ticketliste": 20.0,
     "Ticketdetail": 25.0,
@@ -864,15 +1026,26 @@ MIX = {
     "Komplexe Suche mit Treffern": 1.5,
     "Komplexe Suche selektiv": 0.5,
     "Tagvorschlag": 2.0,
+    "Wikiseite lesen": 5.0,
+    "Wiki ein Wort": 1.5,
+    "Wiki Entwürfe": 0.5,
+    "Anforderung ein Wort": 1.0,
+    "Anforderung Kennung": 0.5,
+    "Anforderung mit Filtern": 0.5,
+    "Übersicht Alle": 2.0,
+    "Schnellsuche mit Kennung": 1.0,
 }
 # One ticket change yields two values: the save alone (the PATCH, compared with the 1 s for a regular save in
 # OPERATIONS.md) and the whole action of reading the current version and saving, which has no target of its own.
-# These are proposed comparison values of the reference profile, not promised product limits.
+# The search targets are those of TASK-104 rule 6 (part of OPEN-014): a key and suggestions at most 200 ms, a regular
+# search with its first page at most 500 ms, a complex search and the overview at most 1 s, each as p95 on the server.
 TARGETS_MS = {
     "Ticketliste": 500, "Ticketdetail": 500, "Ticketänderung Speichern": 1000, "Ticketänderung gesamt": None,
-    "Suche Kennung": 500, "Suche ein Wort": 500, "Suche zwei Wörter": 500, "Suche häufiger Begriff": 500,
+    "Suche Kennung": 200, "Suche ein Wort": 500, "Suche zwei Wörter": 500, "Suche häufiger Begriff": 500,
     "Suche kurzer Präfix": 500, "Suche ohne Treffer": 500, "Suche mit Filtern": 500,
     "Komplexe Suche mit Treffern": 1000, "Komplexe Suche selektiv": 1000, "Tagvorschlag": 200,
+    "Wikiseite lesen": 500, "Wiki ein Wort": 500, "Wiki Entwürfe": 500, "Anforderung ein Wort": 500, "Anforderung Kennung": 200,
+    "Anforderung mit Filtern": 500, "Übersicht Alle": 1000, "Schnellsuche mit Kennung": 200,
 }
 
 
@@ -892,6 +1065,10 @@ class UserState:
     tags: list[str] = field(default_factory=list)
     cases: list[dict] = field(default_factory=list)
     can_edit: bool = False
+    wiki: bool = False
+    wiki_drafts: bool = False
+    pages: list[str] = field(default_factory=list)
+    requirements: dict[str, int] = field(default_factory=dict)
 
 
 def prepare_user(base: str, username: str, password: str) -> UserState:
@@ -916,6 +1093,20 @@ def prepare_user(base: str, username: str, password: str) -> UserState:
     first = state.projects[0]["id"]
     sample = client.call("GET", f"/projects/{first}/tickets/{state.tickets[first][0]}").body
     state.can_edit = "title" in sample.get("writableFields", [])
+    # The areas of the person come from the overview itself: an area without a right is null.
+    overview = client.call("GET", "/search/all", query={"q": "xqprobe"}).body
+    state.wiki = overview["wiki"] is not None
+    if state.wiki:
+        state.wiki_drafts = client.call("GET", "/search/wiki", query={"drafts": "true", "limit": 1}, expect=None).status == 200
+        for word in TOPIC_WORDS[:5]:
+            found = client.call("GET", "/search/wiki", query={"q": word, "limit": 50}).body
+            state.pages.extend(hit["id"] for hit in found["items"])
+    if overview["requirements"] is not None:
+        # The highest number per project, from the list without text that starts with the newest.
+        for project in state.projects:
+            found = client.call("GET", "/search/requirements", query={"project": [project["id"]], "limit": 1}).body
+            if found["items"]:
+                state.requirements[project["id"]] = found["items"][0]["number"]
     return state
 
 
@@ -976,6 +1167,37 @@ def run_action(state: UserState, kind: str, rng: random.Random) -> list[Sample]:
         return [Sample("Ticketänderung Speichern", saved.seconds * 1000, outcome), Sample("Ticketänderung gesamt", whole, outcome)]
     elif kind == "Tagvorschlag":
         response = client.call("GET", "/tags", query={"q": rng.choice(["ber", "bere", "bereich 0", "the"]), "limit": 10}, expect=None)
+    elif kind == "Wikiseite lesen":
+        response = client.call("GET", f"/wiki/pages/{rng.choice(state.pages)}", query={"language": rng.choice(["de", "en"])}, expect=None)
+    elif kind in ("Wiki ein Wort", "Wiki Entwürfe"):
+        search = {"q": zipf_word(rng), "limit": 20, "preferred": "de"}
+        if kind == "Wiki Entwürfe":
+            search["drafts"] = "true"
+        response = client.call("GET", "/search/wiki", query=search, expect=None)
+    elif kind.startswith("Anforderung"):
+        search = {"limit": 20}
+        if kind == "Anforderung Kennung":
+            rpid = rng.choice(list(state.requirements))
+            key = next(p["key"] for p in state.projects if p["id"] == rpid)
+            search["q"] = f"{key} ANF-{rng.randint(1, state.requirements[rpid])}"
+        else:
+            search["q"] = zipf_word(rng)
+        if kind == "Anforderung mit Filtern":
+            search["project"] = [rng.choice(list(state.requirements))]
+            search["status"] = [rng.choice(["draft", "review", "approved"])]
+            search["priority"] = rng.sample(["low", "normal", "high", "critical"], k=2)
+        response = client.call("GET", "/search/requirements", query=search, expect=None)
+    elif kind == "Übersicht Alle":
+        search = {"q": rng.choice([zipf_word(rng), f"{zipf_word(rng)} {rng.choice(VERBS)}", rng.choice(COMMON_WORDS)]), "preferred": "de"}
+        response = client.call("GET", "/search/all", query=search, expect=None)
+    elif kind == "Schnellsuche mit Kennung":
+        # A ticket key or, where the person reads requirements, a requirement key; the answer names the object in "direct".
+        search = {"q": f"{project['key']}-{number}", "preferred": "de"}
+        if state.requirements and rng.random() < 0.3:
+            rpid = rng.choice(list(state.requirements))
+            key = next(p["key"] for p in state.projects if p["id"] == rpid)
+            search["q"] = f"{key} ANF-{rng.randint(1, state.requirements[rpid])}"
+        response = client.call("GET", "/search/all", query=search, expect=None)
     else:
         search = {"limit": 20}
         if kind == "Suche Kennung":
@@ -1001,7 +1223,12 @@ def run_action(state: UserState, kind: str, rng: random.Random) -> list[Sample]:
         response = client.call("GET", "/search/tickets", query=search, expect=None)
     hits = None
     if search is not None and response.status == 200 and isinstance(response.body, dict):
-        hits = response.body.get("total")
+        if kind == "Übersicht Alle":
+            hits = sum(area["total"] for area in response.body.values() if isinstance(area, dict) and "total" in area)
+        elif kind == "Schnellsuche mit Kennung":
+            hits = 0 if response.body.get("direct") is None else 1
+        else:
+            hits = response.body.get("total")
     return [Sample(kind, response.seconds * 1000, outcome_of(kind, response.status), hits)]
 
 
@@ -1043,7 +1270,11 @@ def measure(args) -> None:
     stock = admin.call("GET", "/search/tickets", query={"limit": 1}).body["total"]
     projects = len(admin.call("GET", "/projects").body)
     accounts = len(admin.call("GET", "/accounts").body)
-    print(f"stock visible to {args.admin}: {projects} projects, {stock} tickets, {accounts} accounts")
+    pages = admin.call("GET", "/search/wiki", query={"limit": 1}).body["total"]
+    drafts = admin.call("GET", "/search/wiki", query={"limit": 1, "drafts": "true"}).body["total"]
+    requirements = admin.call("GET", "/search/requirements", query={"limit": 1}).body["total"]
+    print(f"stock visible to {args.admin}: {projects} projects, {stock} tickets, {accounts} accounts, {pages} published and "
+          f"{drafts} draft wiki versions, {requirements} requirements")
 
     kinds = list(MIX)
     weights = [MIX[k] for k in kinds]
@@ -1058,8 +1289,12 @@ def measure(args) -> None:
         rng = random.Random(1000 + index)
         # A person without write rights does not try to change tickets, and one who sees no ticket with tags has no
         # complex search with hits; their shares go to the other actions.
-        own = [0 if (k == "Ticketänderung" and not state.can_edit) or (k == "Komplexe Suche mit Treffern" and not state.cases)
-               else w for k, w in zip(kinds, weights)]
+        # The same holds for the wiki and requirement classes of a person without these rights.
+        missing = {"Ticketänderung": not state.can_edit, "Komplexe Suche mit Treffern": not state.cases,
+                   "Wikiseite lesen": not state.pages, "Wiki ein Wort": not state.wiki, "Wiki Entwürfe": not state.wiki_drafts,
+                   "Anforderung ein Wort": not state.requirements, "Anforderung Kennung": not state.requirements,
+                   "Anforderung mit Filtern": not state.requirements}
+        own = [0 if missing.get(k, False) else w for k, w in zip(kinds, weights)]
         while True:
             pause = rng.expovariate(1 / args.think) if args.think > 0 else 0
             if time.monotonic() + pause >= stop_at:
@@ -1092,7 +1327,8 @@ def measure(args) -> None:
     result = {
         "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - args.duration - args.warmup)),
         "users": args.users, "think_seconds": args.think, "warmup_seconds": args.warmup, "duration_seconds": args.duration,
-        "stock": {"projects": projects, "tickets": stock, "accounts": accounts},
+        "stock": {"projects": projects, "tickets": stock, "accounts": accounts, "wiki_published": pages, "wiki_drafts": drafts,
+                  "requirements": requirements},
         "client_machine": machine(), "server": args.url, "samples": total,
         "error_rate": round(errors / total, 5) if total else None,
         "actions": actions[0], "throughput_per_second": round(actions[0] / args.duration, 2), "classes": rows,
@@ -1103,7 +1339,8 @@ def measure(args) -> None:
         json.dump(result, out, indent=2, ensure_ascii=False)
     lines = [
         f"Messung {result['started']}: {args.users} Benutzer, Denkzeit {args.think} s, {args.warmup} s Aufwärmen, {args.duration} s Messung",
-        f"Bestand: {projects} Projekte, {stock} Tickets, {accounts} Konten; {actions[0]} Aktionen, Fehlerquote {result['error_rate']}",
+        f"Bestand: {projects} Projekte, {stock} Tickets, {accounts} Konten, {pages} veröffentlichte und {drafts} Entwurfsfassungen im Wiki, "
+        f"{requirements} Anforderungen; {actions[0]} Aktionen, Fehlerquote {result['error_rate']}",
         "",
     ]
     report = "\n".join(lines + report_table(rows)) + "\n"
@@ -1162,7 +1399,8 @@ def main(argv: list[str]) -> None:
     commands = parser.add_subparsers(dest="command", required=True)
 
     seed = commands.add_parser("seed", help="create a synthetic data set")
-    seed.add_argument("--profile", choices=["demo", "reference"], default="demo")
+    seed.add_argument("--profile", choices=["demo", "reference", "reference-content"], default="demo",
+                      help="reference-content adds only the wiki pages and requirements to an existing reference set")
     seed.add_argument("--one-time-password", help="one time password printed by bootstrap-admin, for the first login")
     seed.add_argument("--workers", type=int, default=8, help="parallel sessions for creating tickets")
     seed.add_argument("--projects", type=int, default=20)
@@ -1171,6 +1409,8 @@ def main(argv: list[str]) -> None:
     seed.add_argument("--company-tags", type=int, default=1000)
     seed.add_argument("--project-tags", type=int, default=200)
     seed.add_argument("--tags-per-ticket", type=float, default=5.0, help="mean number of tags per ticket")
+    seed.add_argument("--wiki-pages", type=int, default=2000)
+    seed.add_argument("--requirements", type=int, default=10000)
 
     run = commands.add_parser("measure", help="measure with concurrent users on the reference data set")
     run.add_argument("--users", type=int, default=15)
@@ -1186,7 +1426,15 @@ def main(argv: list[str]) -> None:
 
     args = parser.parse_args(argv)
     if args.command == "seed":
-        (seed_demo if args.profile == "demo" else seed_reference)(args)
+        if args.profile == "demo":
+            seed_demo(args)
+        elif args.profile == "reference":
+            seed_reference(args)
+        else:
+            admin = admin_client(args)
+            builder = Builder(admin, workers=args.workers)
+            builder.credentials = (args.admin, demo_password())
+            seed_reference_content(args, admin, builder)
     elif args.command == "verify":
         verify(args)
     else:

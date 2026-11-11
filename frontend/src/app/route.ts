@@ -5,6 +5,9 @@ export const routes = ['start', 'projects', 'search', 'inbox', 'board', 'escalat
 export type RouteName = (typeof routes)[number];
 export const projectTabs = ['tickets', 'members', 'tags', 'settings', 'rights'] as const;
 export type ProjectTab = (typeof projectTabs)[number];
+// The areas of the search (TASK-104): the overview "Alle" and one tab per area.
+export const searchAreas = ['all', 'tickets', 'projects', 'wiki', 'requirements'] as const;
+export type SearchArea = (typeof searchAreas)[number];
 
 export type Route =
   | { readonly name: RouteName }
@@ -15,13 +18,22 @@ export type Route =
   // language version found and, with published, that the published revision was found, not the draft.
   | { readonly name: 'wikiPage'; readonly projectId: string; readonly pageId: string | null; readonly language?: 'de' | 'en'; readonly published?: boolean }
   // The requirements of a project, with one of them when requirementId is set (TASK-096).
-  | { readonly name: 'requirementPage'; readonly projectId: string; readonly requirementId: string | null };
+  | { readonly name: 'requirementPage'; readonly projectId: string; readonly requirementId: string | null }
+  // One area of the search with the text to search for (TASK-104), for the quick search and "Alle anzeigen".
+  | { readonly name: 'searchArea'; readonly area: SearchArea; readonly q: string };
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Only identifiers of the expected form leave the address bar; anything else shows the start page.
 export function routeFromHash(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/');
+  const raw = hash.replace(/^#\/?/, '');
+  const mark = raw.indexOf('?');
+  const parts = (mark < 0 ? raw : raw.slice(0, mark)).split('/');
+  const query = new URLSearchParams(mark < 0 ? '' : raw.slice(mark + 1));
+  if (parts[0] === 'search' && (parts.length === 2 || (parts.length === 1 && mark >= 0))) {
+    const area = searchAreas.find((candidate) => candidate === (parts[1] ?? 'all'));
+    if (area !== undefined) return { name: 'searchArea', area, q: (query.get('q') ?? '').slice(0, 200) };
+  }
   const [first, id, third, fourth, fifth] = parts;
   if (first === 'projects' && id !== undefined && ID.test(id)) {
     if (third === 'tickets' && fourth !== undefined && /^[1-9][0-9]{0,8}$/.test(fourth) && parts.length === 4) {
@@ -64,6 +76,8 @@ export function hrefFor(route: RouteName | Route): string {
       return `#/wiki/${target.projectId}/${target.pageId}${target.language === undefined ? '' : `/${target.language}${target.published === true ? '/published' : ''}`}`;
     case 'requirementPage':
       return target.requirementId === null ? `#/requirements/${target.projectId}` : `#/requirements/${target.projectId}/${target.requirementId}`;
+    case 'searchArea':
+      return `#/search/${target.area}${target.q === '' ? '' : `?q=${encodeURIComponent(target.q)}`}`;
     default:
       return `#/${target.name}`;
   }
@@ -75,6 +89,7 @@ export function section(route: Route): RouteName {
   if (route.name === 'group') return 'groups';
   if (route.name === 'wikiPage') return 'wiki';
   if (route.name === 'requirementPage') return 'requirements';
+  if (route.name === 'searchArea') return 'search';
   return route.name;
 }
 

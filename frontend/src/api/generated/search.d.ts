@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Übersicht „Alle“ und Schnellsuche (TASK-104) */
+        get: operations["searchAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -87,6 +104,22 @@ export interface components {
             violations?: string[];
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * @description Das Objekt, das der Text genau nennt und das die Person lesen darf (TASK-104): `ticket` für `KEY-12` mit der
+         *     Kennung des Tickets, `requirement` für `KEY ANF-17` mit der Kennung der Anforderung, `project` für einen
+         *     Projektschlüssel mit der Kennung des Projekts. `key` ist die Kennung, wie sie angezeigt wird, `number` die Nummer
+         *     des Tickets oder der Anforderung, bei einem Projekt `null`.
+         */
+        Direct: {
+            /** @enum {string} */
+            kind: "ticket" | "requirement" | "project";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            key: string;
+            number: number | null;
         };
         TagRef: {
             /** Format: uuid */
@@ -244,7 +277,7 @@ export interface components {
          *     auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
          *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
          *     `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid, für `/search/requirements`
-         *     stage.invalid, priority.invalid, owner.invalid, approved.invalid.
+         *     stage.invalid, priority.invalid, owner.invalid, approved.invalid, für `/search/all` q.invalid und preferred.invalid.
          */
         Problem: {
             headers: {
@@ -452,6 +485,53 @@ export interface operations {
                     "application/json": {
                         total: number;
                         items: components["schemas"]["RequirementHit"][];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    searchAll: {
+        parameters: {
+            query?: {
+                /** @description Suchtext; ohne ihn gelten nur die Filter. */
+                q?: components["parameters"]["Text"];
+                /** @description Sprache der Oberfläche für Wikitreffer wie bei `/search/wiki`. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`. */
+                preferred?: "de" | "en";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Je Bereich höchstens fünf Treffer und die Anzahl; `null` für einen Bereich ohne Recht. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tickets: {
+                            total: number;
+                            items: components["schemas"]["TicketHit"][];
+                        } | null;
+                        projects: {
+                            total: number;
+                            items: components["schemas"]["ProjectHit"][];
+                        } | null;
+                        wiki: {
+                            total: number;
+                            items: components["schemas"]["WikiHit"][];
+                        } | null;
+                        requirements: {
+                            total: number;
+                            items: components["schemas"]["RequirementHit"][];
+                        } | null;
+                        direct: components["schemas"]["Direct"] | null;
                     };
                 };
             };

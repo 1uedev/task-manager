@@ -32,7 +32,7 @@ import taskmanager.search.internal.SearchService.WikiHit;
 import taskmanager.search.internal.SearchService.WikiQuery;
 
 /**
- * Search for tickets and projects (TASK-029), wiki pages (TASK-102) and requirements (TASK-103). Every endpoint needs a complete login; the service decides what the caller
+ * Search for tickets and projects (TASK-029), wiki pages (TASK-102), requirements (TASK-103) and all of them at once (TASK-104). Every endpoint needs a complete login; the service decides what the caller
  * may find. Repeated parameters combine with "or" inside one filter and with "and" between filters; the given tags follow
  * {@code tagMatch} ({@code all} by default). A lock that could not be taken in time ends the search with 503 {@code search.busy} and {@code Retry-After}.
  */
@@ -155,6 +155,31 @@ class SearchController {
         }
         Page<RequirementHit> page = retrying(() -> search.requirements(actor, query));
         return new PageBody<>(page.total(), page.items());
+    }
+
+    record OverviewBody(PageBody<TicketHitBody> tickets, PageBody<ProjectHit> projects, PageBody<WikiHit> wiki,
+            PageBody<RequirementHit> requirements, SearchService.Direct direct) {
+    }
+
+    /**
+     * The overview "Alle" and the quick search (TASK-104, DEC-134): per area the first five hits and the total, {@code null}
+     * for an area without a right, and {@code direct} when the text names exactly one object the caller may read.
+     */
+    @GetMapping("/api/v1/search/all")
+    OverviewBody all(@RequestParam(required = false) String q, @RequestParam(required = false) String preferred) {
+        AccessContext actor = actor();
+        List<String> violations = new ArrayList<>();
+        String language = language(preferred, "preferred", violations);
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+        }
+        SearchService.Overview overview = retrying(() -> search.overview(actor, q, language));
+        return new OverviewBody(
+            overview.tickets() == null ? null : new PageBody<>(overview.tickets().total(), overview.tickets().items().stream().map(TicketHitBody::of).toList()),
+            overview.projects() == null ? null : new PageBody<>(overview.projects().total(), overview.projects().items()),
+            overview.wiki() == null ? null : new PageBody<>(overview.wiki().total(), overview.wiki().items()),
+            overview.requirements() == null ? null : new PageBody<>(overview.requirements().total(), overview.requirements().items()),
+            overview.direct());
     }
 
     // ------------------------------------------------------------------------------------------------ helpers

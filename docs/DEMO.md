@@ -168,9 +168,67 @@ Erster Lauf vor der Prüfung, gleicher Bestand und gleiche Last: 5.365 Messwerte
 
 Beide Stufen liefen mit dem Werkzeugstand vor der Prüfung; für ihre komplexe Suche und Ticketänderung gilt dasselbe wie für den ersten Lauf. Die aggregierten Ergebnisse aller Läufe stehen unter [measurements/task-031](measurements/task-031/) (je eine Markdown Tabelle und eine JSON Datei mit Maschine, Parametern und p50/p95/p99 je Klasse).
 
+### Messung mit Wiki, Anforderungen und Übersicht (TASK-104)
+
+Messung zu Paket A14 (DEC-134, Regeln 4 bis 8 von TASK-104) am 11. November 2026. Ziele nach Regel 6, serverseitig als p95 unter der Referenzlast: Kennung und Vorschläge höchstens 200 ms, reguläre Suche erste Seite höchstens 500 ms, komplexe Suche und Übersicht „Alle“ höchstens 1 s. Damit gilt für „Suche Kennung“ jetzt 200 ms statt 500 ms. Im Browser vom Auslösen bis zur sichtbaren ersten Seite höchstens 1 s (Regel 7).
+
+```sh
+docker compose --profile tools run --rm demo seed --profile reference --one-time-password EINMALPASSWORT   # mit Wiki und Anforderungen
+docker compose --profile tools run --rm demo seed --profile reference-content                             # nur Wiki und Anforderungen, auf einem Bestand aus TASK-031
+docker compose --profile tools run --rm demo measure
+cd frontend && TASK_MANAGER_URL=http://localhost:8080 TASK_MANAGER_DEMO_PASSWORD=... npm run measure:search -- --repetitions 200
+```
+
+- **Bestand**: der Referenzbestand aus TASK-031 (17,4 Minuten) und zusätzlich über die öffentliche API in 2,2 Minuten: 2.000 Wikiseiten in den 20 Projekten als Seitenbaum mit höchstens vier Ebenen, davon 630 mit veröffentlichter englischer Fassung, 242 mit offenem Entwurf nach der Veröffentlichung, 87 nie veröffentlicht und 40 archiviert; 10.000 Anforderungen mit je ein bis acht Kriterien (45.000 Kriterien), davon 962 in Prüfung und 2.923 freigegeben, 975 davon mit neuer Revision im Entwurf. Texte aus demselben synthetischen Wortschatz wie die Tickets. Rechte in drei Gruppen wie bei den Tickets: Verwaltung mit allen Wiki und Anforderungsaktionen, Bearbeitung mit `wiki.edit` und `requirement.edit`, Lesen mit `wiki.read` und `requirement.read` ohne die Beschreibung. Datenbank 749 MB, davon Suchprojektion 277 MB, danach `VACUUM ANALYZE`. Zählung in [reference-content.json](measurements/task-104/reference-content.json).
+- **Last**: wie in TASK-031, 15 Sitzungen, 5 Sekunden mittlere Denkzeit, 10 Minuten Aufwärmen, 30 Minuten Messung, dazu der Wikianteil von OPERATIONS.md (5) als Lesen von Wikiseiten und die neuen Suchklassen. Personen ohne Recht in einem Bereich führen dessen Klassen nicht aus; wer nur liest, sucht keine Entwürfe.
+- **Neue Messklassen**: Wikiseite lesen, Wiki ein Wort (veröffentlichte Fassungen), Wiki Entwürfe, Anforderung ein Wort, Anforderung Kennung (`R05 ANF-123`), Anforderung mit Filtern (Projekt, Status, zwei Prioritäten), Übersicht „Alle“ (ein Wort, zwei Wörter oder ein häufiger Begriff) und Schnellsuche mit Kennung (`/search/all` mit einer Ticketkennung oder zu 30 Prozent einer Anforderungskennung, erfolgreich nur mit Direkttreffer). Bei „Alle“ zählt „Treffer“ die Summe der Anzahlen aller Bereiche.
+- **Browsermessung**: Chromium 153 mit dem Konto `ref001` (Verwaltung), je Klasse 10 Durchläufe zum Aufwärmen und 200 gemessene. Jeder Durchlauf öffnet seinen Reiter neu, trägt ein häufiges Wort ein, und gemessen wird vom Klick auf „Suchen“ bis zum ersten sichtbaren Treffer oder „Keine Treffer“; bei der Schnellsuche von Enter bis zur Überschrift der geöffneten Ticketseite. Die Zeit nimmt der Messprozess um die Steuerung des Browsers herum, sie ist eine obere Schranke. Die Browsermessung lief nach der Servermessung ohne gleichzeitige Last.
+- **Maschine und Abweichung**: dieselbe Art virtueller Maschine wie in TASK-031, 4 vCPU (Intel Xeon, 2,3 GHz) und 16 GB. Weil Docker Hub die Abrufe der Basisimages drosselte (HTTP 429), lief die Anwendung nicht im Vorführimage, sondern als dasselbe Jar mit Java 21 und PostgreSQL 16 direkt auf der Maschine, Hintergrundaufträge im selben Prozess. Messwerkzeug, Browser, Anwendung und Datenbank teilten sich die Maschine. Der Vergleich mit dem Image (Java 25, PostgreSQL 18.6) steht aus.
+
+**Ergebnis der Servermessung** ([measurement-20261111-230003.md](measurements/task-104/measurement-20261111-230003.md)): 5.415 Aktionen, keine Fehler, keine Abweisungen. Alle Klassen erfüllen ihr Ziel.
+
+| Messklasse | Messwerte | p50 ms | p95 ms | p99 ms | Ziel p95 | erfüllt | mit Treffern | Treffer Median | Treffer max |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| Ticketliste (50 Tickets) | 1188 | 6,5 | 9,3 | 11,7 | 500 ms | ja | | | |
+| Ticketdetail | 1499 | 6,1 | 8,5 | 10,7 | 500 ms | ja | | | |
+| Ticketänderung Speichern (PATCH) | 531 | 9,2 | 13,2 | 17,7 | 1 s | ja | | | |
+| Ticketänderung gesamt | 531 | 15,7 | 21,9 | 26,8 | kein eigenes Ziel | | | | |
+| Suche Kennung | 176 | 12,0 | 17,7 | 21,5 | 200 ms | ja | 176 von 176 | 1 | 1 |
+| Suche ein Wort | 225 | 95,7 | 181,0 | 205,4 | 500 ms | ja | 225 von 225 | 12.060 | 21.803 |
+| Suche zwei Wörter | 188 | 59,1 | 166,9 | 193,9 | 500 ms | ja | 188 von 188 | 1.274 | 6.800 |
+| Suche häufiger Begriff | 205 | 87,4 | 120,4 | 135,3 | 500 ms | ja | 205 von 205 | 10.825 | 13.600 |
+| Suche kurzer Präfix | 118 | 18,8 | 126,1 | 155,3 | 500 ms | ja | 118 von 118 | 214 | 22.500 |
+| Suche ohne Treffer | 134 | 10,0 | 16,0 | 22,5 | 500 ms | ja | 0 von 134 | 0 | 0 |
+| Suche mit Filtern | 243 | 34,9 | 63,3 | 73,2 | 500 ms | ja | 243 von 243 | 751 | 2.230 |
+| Komplexe Suche mit Treffern | 87 | 17,8 | 28,0 | 29,9 | 1 s | ja | 86 von 87 | 1 | 39 |
+| Komplexe Suche selektiv | 29 | 16,5 | 42,4 | 48,0 | 1 s | ja | 0 von 29 | 0 | 0 |
+| Tagvorschlag | 126 | 5,0 | 8,0 | 9,7 | 200 ms | ja | | | |
+| Wikiseite lesen | 285 | 11,0 | 15,1 | 17,2 | 500 ms | ja | | | |
+| Wiki ein Wort | 73 | 46,6 | 69,3 | 78,3 | 500 ms | ja | 73 von 73 | 416 | 470 |
+| Wiki Entwürfe | 21 | 48,8 | 65,3 | 68,7 | 500 ms | ja | 21 von 21 | 487 | 489 |
+| Anforderung ein Wort | 61 | 29,2 | 45,1 | 52,2 | 500 ms | ja | 61 von 61 | 2.358 | 2.499 |
+| Anforderung Kennung | 26 | 24,3 | 33,8 | 39,6 | 200 ms | ja | 26 von 26 | 1 | 1 |
+| Anforderung mit Filtern | 37 | 13,1 | 34,4 | 37,3 | 500 ms | ja | 37 von 37 | 39 | 250 |
+| Übersicht „Alle“ | 101 | 180,3 | 268,8 | 288,4 | 1 s | ja | 101 von 101 | 13.026 | 24.766 |
+| Schnellsuche mit Kennung | 62 | 72,6 | 97,9 | 109,7 | 200 ms | ja | 62 von 62 | 1 | 1 |
+
+„Alle“ führt die vier Bereichssuchen nacheinander in einer Transaktion aus; ihre Zeit liegt deshalb etwa bei der Summe aus Ticket, Projekt, Wiki und Anforderungssuche und wird von der Ticketsuche mit vielen Treffern bestimmt. Die Schnellsuche fragt ebenfalls alle vier Bereiche und braucht daher mehr als die reine Ticketkennung, bleibt aber unter 200 ms. Die seltenen Klassen haben wenige Messwerte (21 bis 101); ihr p95 ist entsprechend unsicher.
+
+**Ergebnis der Browsermessung** ([browser-20261111-230324.md](measurements/task-104/browser-20261111-230324.md)): je 200 Messwerte, keine Fehler, keine Fehler der Seite, alle unter dem Ziel von 1 s.
+
+| Messklasse | Messwerte | p50 ms | p95 ms | p99 ms | Ziel p95 | erfüllt |
+|---|---:|---:|---:|---:|---:|---|
+| Tickets ein Wort | 200 | 88,2 | 225,8 | 232,1 | 1 s | ja |
+| Wiki ein Wort | 200 | 129,7 | 148,7 | 162,2 | 1 s | ja |
+| Anforderung ein Wort | 200 | 97,9 | 148,6 | 158,7 | 1 s | ja |
+| Übersicht „Alle“ | 200 | 218,1 | 320,2 | 342,3 | 1 s | ja |
+| Schnellsuche mit Kennung bis zur Ticketseite | 200 | 113,6 | 130,4 | 151,8 | 1 s | ja |
+
+Kein Ziel wurde verfehlt, eine Nachbesserung nach Regel 8 war nicht nötig. Ein Probelauf der Browsermessung auf einem kleinen Bestand während des Erzeugens der Daten (rund 90 Anfragen je Sekunde) lag bei „Alle“ bei 838 ms p95 aus nur fünf Werten; unter Volllast der Maschine wird es also deutlich knapper. Dieser Probelauf ist kein Ergebnis.
+
 ### Grenzen der Messung
 
 - Ein Lauf von 30 Minuten statt zusätzlich des zweistündigen Dauerlaufs; keine Hintergrundlast durch Mailabruf, SLA oder Sicherung, weil es diese Teile noch nicht gibt.
-- Kommentare, Wiki, Anforderungen und Portalkonten fehlen im Bestand und in der Suche; die Messung belegt nicht den vollständigen V1 Suchumfang (DEC-050).
-- Wahrgenommene Suche im Browser (Ziel 1 s einschließlich Debounce, Netz und Darstellung) wurde nicht gemessen. Kalt- und Warmzustand, abgebrochene Browserabfragen und Abfragepläne sind nicht getrennt erfasst.
+- Kommentare und Portalkonten fehlen im Bestand; Wiki und Anforderungen sind seit TASK-104 enthalten (DEC-050).
+- Wahrgenommene Suche im Browser misst seit TASK-104 die Browsermessung ohne gleichzeitige Last und ohne Netz zwischen Browser und Server. Kalt- und Warmzustand, abgebrochene Browserabfragen und Abfragepläne sind nicht getrennt erfasst.
 - Eine einzelne virtuelle Maschine, Messwerkzeug auf derselben Maschine. Die Werte sind ein Anhaltspunkt für diese Maschine, keine Zusage für die Referenzhardware und kein Vergleich mit Easy8, Redmine oder Jira.

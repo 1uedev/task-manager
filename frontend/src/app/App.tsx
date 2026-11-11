@@ -14,6 +14,7 @@ import { PortalPage } from '../pages/PortalPage.tsx';
 import { ProjectPage } from '../pages/ProjectPage.tsx';
 import { ProjectsPage } from '../pages/ProjectsPage.tsx';
 import { SearchPage } from '../pages/SearchPage.tsx';
+import { QuickSearch } from './QuickSearch.tsx';
 import { SLA_RIGHT, SlaPage } from '../pages/SlaPage.tsx';
 import { TAGS_RIGHT, TagsPage } from '../pages/TagsPage.tsx';
 import { EscalationsPage } from '../pages/EscalationsPage.tsx';
@@ -192,6 +193,7 @@ function pageTitle(route: Route): MessageKey {
   if (route.name === 'group') return 'groups.title';
   if (route.name === 'wikiPage') return 'wiki.title';
   if (route.name === 'requirementPage') return 'requirements.title';
+  if (route.name === 'searchArea') return 'search.title';
   return PAGE_TITLE[route.name];
 }
 
@@ -290,13 +292,15 @@ function Shell() {
         <p className="visually-hidden" aria-live="polite">{announcement}</p>
       </header>
       <div className="workspace">
+        <div className="topbar"><QuickSearch /></div>
         <main id="main" ref={main} tabIndex={-1} className={`page-${current}`}>
           {!allowed(current) && <><h1 tabIndex={-1}>{t(PAGE_TITLE[current])}</h1><ProblemView problem={{ kind: 'forbidden', status: 403, code: null, correlationId: null }} /></>}
           {route.name === 'start' && <StartPage />}
           {route.name === 'projects' && <ProjectsPage />}
           {route.name === 'project' && <ProjectPage key={route.id} id={route.id} tab={route.tab} />}
           {route.name === 'ticket' && <TicketPage key={`${route.projectId}/${route.number}`} projectId={route.projectId} number={route.number} />}
-          {route.name === 'search' && <SearchPage />}
+          {route.name === 'search' && <SearchPage key="search" />}
+          {route.name === 'searchArea' && <SearchPage key={routeKey} area={route.area} q={route.q} />}
           {route.name === 'board' && <BoardPage />}
           {route.name === 'accounts' && allowed('accounts') && <AccountsPage />}
           {route.name === 'groups' && allowed('groups') && <GroupsPage />}
