@@ -624,19 +624,23 @@ public class SearchService {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(query.limit());
         pageParams.add(query.offset());
-        long[] total = {-1};
-        List<RequirementRow> rows = jdbc.sql("select *, count(*) over () as total from (" + union + ") h "
-                + "order by rank desc, project_key, number desc limit ? offset ?")
+        // One statement, also past the last page: the count row is always there and the page rows join it, so total and page
+        // come from one snapshot even while a requirement changes (R4 of the follow up review of TASK-102).
+        long[] total = {0};
+        List<RequirementRow> rows = new ArrayList<>();
+        jdbc.sql("with h as (" + union + ") select c.total, p.id, p.project_id, p.project_key, p.number "
+                + "from (select count(*) as total from h) c left join lateral (select * from h "
+                + "order by rank desc, project_key, number desc limit ? offset ?) p on true order by p.rank desc, p.project_key, p.number desc")
             .params(pageParams)
-            .query((rs, n) -> {
+            .query((ResultSet rs) -> {
                 total[0] = rs.getLong("total");
-                return new RequirementRow(rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class),
-                    rs.getString("project_key"), rs.getLong("number"));
-            })
-            .list();
+                UUID id = rs.getObject("id", UUID.class);
+                if (id != null) {
+                    rows.add(new RequirementRow(id, rs.getObject("project_id", UUID.class), rs.getString("project_key"), rs.getLong("number")));
+                }
+            });
         if (rows.isEmpty()) {
-            long count = query.offset() == 0 ? 0 : jdbc.sql("select count(*) from (" + union + ") h").params(params).query(Long.class).single();
-            return new Page<>(count, List.of());
+            return new Page<>(total[0], List.of());
         }
         return new Page<>(total[0], requirementHits(rows, stage, readable, text.plainWords()));
     }
