@@ -26,9 +26,11 @@ import taskmanager.search.internal.SearchService.TagMatch;
 import taskmanager.search.internal.SearchService.TagRef;
 import taskmanager.search.internal.SearchService.TicketHit;
 import taskmanager.search.internal.SearchService.TicketQuery;
+import taskmanager.search.internal.SearchService.WikiHit;
+import taskmanager.search.internal.SearchService.WikiQuery;
 
 /**
- * Search for tickets and projects (TASK-029). Every endpoint needs a complete login; the service decides what the caller
+ * Search for tickets and projects (TASK-029) and wiki pages (TASK-102). Every endpoint needs a complete login; the service decides what the caller
  * may find. Repeated parameters combine with "or" inside one filter and with "and" between filters; the given tags follow
  * {@code tagMatch} ({@code all} by default). A lock that could not be taken in time ends the search with 503 {@code search.busy} and {@code Retry-After}.
  */
@@ -100,7 +102,54 @@ class SearchController {
         return new PageBody<>(page.total(), page.items());
     }
 
+    /**
+     * Wiki pages (TASK-102): {@code language} limits the versions searched to {@code de} or {@code en}, {@code preferred} names
+     * the language of the interface, {@code drafts} searches the drafts, {@code archived} adds archived pages.
+     */
+    @GetMapping("/api/v1/search/wiki")
+    PageBody<WikiHit> wiki(@RequestParam(required = false) String q, @RequestParam(required = false) List<String> project,
+            @RequestParam(required = false) String language, @RequestParam(required = false) String preferred,
+            @RequestParam(required = false) String drafts, @RequestParam(required = false) String archived,
+            @RequestParam(required = false) Integer limit, @RequestParam(required = false) Integer offset) {
+        AccessContext actor = actor();
+        List<String> violations = new ArrayList<>();
+        WikiQuery query = new WikiQuery(q, ids(project, "project", violations), language(language, "language", violations),
+            language(preferred, "preferred", violations), flag(drafts, "drafts", violations), flag(archived, "archived", violations),
+            limit(limit, violations), offset(offset, violations));
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+        }
+        Page<WikiHit> page = retrying(() -> search.wiki(actor, query));
+        return new PageBody<>(page.total(), page.items());
+    }
+
     // ------------------------------------------------------------------------------------------------ helpers
+
+    /** {@code de} or {@code en}; absent is {@code null}. */
+    private static String language(String raw, String name, List<String> violations) {
+        if (raw == null) {
+            return null;
+        }
+        String code = raw.strip();
+        if (!code.equals("de") && !code.equals("en")) {
+            violations.add(name + ".invalid");
+            return null;
+        }
+        return code;
+    }
+
+    /** {@code true} or {@code false}; absent is false. */
+    private static boolean flag(String raw, String name, List<String> violations) {
+        if (raw == null) {
+            return false;
+        }
+        String value = raw.strip();
+        if (!value.equals("true") && !value.equals("false")) {
+            violations.add(name + ".invalid");
+            return false;
+        }
+        return value.equals("true");
+    }
 
     /** At most {@value #MAX_TAGS} tags in one tag filter (DEC-103). */
     private static List<UUID> tags(List<String> raw, List<String> violations) {

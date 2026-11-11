@@ -24,6 +24,7 @@ import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.tickets.TicketAccess;
+import taskmanager.wiki.WikiPages;
 
 /**
  * Searches tickets and projects (TASK-029, DEC-069) in the projection of this module.
@@ -49,12 +50,14 @@ public class SearchService {
     private final SearchRepository search;
     private final ProjectAccess projects;
     private final Permissions permissions;
+    private final WikiPages wiki;
 
-    SearchService(JdbcClient jdbc, SearchRepository search, ProjectAccess projects, Permissions permissions) {
+    SearchService(JdbcClient jdbc, SearchRepository search, ProjectAccess projects, Permissions permissions, WikiPages wiki) {
         this.jdbc = jdbc;
         this.search = search;
         this.projects = projects;
         this.permissions = permissions;
+        this.wiki = wiki;
     }
 
     /** A required custom value: the ticket holds exactly this canonical text in the custom field with this key (TASK-044). */
@@ -408,6 +411,141 @@ public class SearchService {
             }
         }
         return readable;
+    }
+
+    // ------------------------------------------------------------------------------------------------ wiki
+
+    static final String WIKI_RESOURCE = "wiki_page";
+    static final String WIKI_READ = "wiki.read";
+    static final String WIKI_EDIT = "wiki.edit";
+    static final String WIKI_PUBLISH = "wiki.publish";
+
+    /**
+     * A search of wiki pages (TASK-102, DEC-132). {@code language} limits the language versions searched ({@code null} for
+     * both), {@code preferred} is the language of the interface, whose version a page shows when both match. {@code drafts}
+     * searches the current drafts instead of the published revisions, {@code archived} adds archived pages.
+     */
+    public record WikiQuery(String text, List<UUID> projects, String language, String preferred, boolean drafts, boolean archived,
+            int limit, int offset) {
+    }
+
+    /**
+     * One page in the version found: {@code stage} is {@code published} or {@code draft}; {@code publishedAt} is set for a
+     * published revision. {@code path} holds the pages above as the page view shows them to the caller.
+     */
+    public record WikiHit(UUID id, UUID projectId, String projectKey, String title, List<SearchSnippet.Mark> titleMarks, String language,
+            String stage, int revision, java.time.Instant publishedAt, boolean archived, List<WikiPages.PathEntry> path, SearchSnippet snippet) {
+    }
+
+    private record WikiAccess(boolean read, boolean drafts, boolean publish) {
+        boolean any() {
+            return read || drafts;
+        }
+    }
+
+    private record WikiRow(UUID id, UUID projectId, String projectKey, String language, String title, int revision,
+            java.time.Instant publishedAt, boolean archived) {
+    }
+
+    /**
+     * Rights first, as for tickets: the projects with a wiki action of the caller are searched, drafts only in projects with
+     * {@code wiki.edit} or {@code wiki.publish}, archived pages only in projects with {@code wiki.publish}, as the wiki shows them
+     * (DEC-123). Asking for drafts or archived pages without such a project is refused with 403. Every language version matches
+     * on its own: all words in its title or its text; a page is one hit, shown in the preferred language, else its source
+     * language, else the other matching version. Rank, total and page come from these rows alone.
+     */
+    @Transactional
+    public Page<WikiHit> wiki(AccessContext actor, WikiQuery query) {
+        internal(actor);
+        SearchText text = text(query.text());
+        Map<UUID, WikiAccess> access = new LinkedHashMap<>();
+        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
+            Supplier<ResourceContext> resource = resource(actor, project, WIKI_RESOURCE);
+            boolean read = permissions.inspect(actor, resource, WIKI_READ, Set.of()).allowed();
+            boolean edit = permissions.inspect(actor, resource, WIKI_EDIT, Set.of()).allowed();
+            boolean publish = permissions.inspect(actor, resource, WIKI_PUBLISH, Set.of()).allowed();
+            WikiAccess rights = new WikiAccess(read, edit || publish, publish);
+            if (rights.any()) {
+                access.put(project, rights);
+            }
+        }
+        if (!query.projects().isEmpty() && !access.keySet().containsAll(query.projects())) {
+            throw invalid("project.unknown");
+        }
+        List<UUID> scope = access.keySet().stream().filter(project -> query.projects().isEmpty() || query.projects().contains(project))
+            .filter(project -> !query.drafts() || access.get(project).drafts()).toList();
+        if ((query.drafts() && access.values().stream().noneMatch(WikiAccess::drafts))
+                || (query.archived() && access.values().stream().noneMatch(WikiAccess::publish))) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        List<UUID> archivedScope = query.archived() ? scope.stream().filter(project -> access.get(project).publish()).toList() : List.of();
+        if (scope.isEmpty() || (text.present() && text.tsquery() == null)) {
+            return new Page<>(0, List.of());
+        }
+
+        List<Object> params = new ArrayList<>();
+        StringBuilder where = new StringBuilder("p.company_id = ? and p.project_id in (" + placeholders(scope.size()) + ") and t.stage = ?");
+        params.add(actor.companyId());
+        params.addAll(scope);
+        params.add(query.drafts() ? "draft" : "published");
+        if (archivedScope.isEmpty()) {
+            where.append(" and not p.archived");
+        } else {
+            where.append(" and (not p.archived or p.project_id in (").append(placeholders(archivedScope.size())).append("))");
+            params.addAll(archivedScope);
+        }
+        if (query.language() != null) {
+            where.append(" and t.language = ?");
+            params.add(query.language());
+        }
+        String rank = "0";
+        List<Object> rankParams = new ArrayList<>();
+        if (text.present()) {
+            for (String word : text.words()) {
+                where.append(" and (t.title_tsv @@ to_tsquery('simple', ?) or t.body_tsv @@ to_tsquery('simple', ?))");
+                params.add(word);
+                params.add(word);
+            }
+            // Words in the title count twice as much as words in the text.
+            rank = "2 * ts_rank(t.title_tsv, to_tsquery('simple', ?)) + ts_rank(t.body_tsv, to_tsquery('simple', ?))";
+            rankParams.add(text.tsquery());
+            rankParams.add(text.tsquery());
+        }
+        String preferred = query.preferred() == null ? "de" : query.preferred();
+        String from = " from search_wiki_text t join search_wiki_page p on p.page_id = t.page_id "
+            + "join search_project sp on sp.project_id = p.project_id where " + where;
+        long total = jdbc.sql("select count(distinct t.page_id)" + from).params(params).query(Long.class).single();
+        if (total == 0) {
+            return new Page<>(0, List.of());
+        }
+        List<Object> pageParams = new ArrayList<>(rankParams);
+        pageParams.add(preferred);
+        pageParams.addAll(params);
+        pageParams.add(query.limit());
+        pageParams.add(query.offset());
+        List<WikiRow> rows = jdbc.sql("select * from (select distinct on (t.page_id) t.page_id, p.project_id, sp.key as project_key, t.language, "
+                + "t.title, t.revision, t.published_at, p.archived, " + rank + " as rank, "
+                + "case when t.language = ? then 0 when t.language = p.source_language then 1 else 2 end as preference"
+                + from + " order by t.page_id, preference) h order by rank desc, lower(title), title, page_id limit ? offset ?")
+            .params(pageParams)
+            .query((rs, n) -> new WikiRow(rs.getObject("page_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getString("project_key"),
+                rs.getString("language"), rs.getString("title"), rs.getInt("revision"),
+                rs.getTimestamp("published_at") == null ? null : rs.getTimestamp("published_at").toInstant(), rs.getBoolean("archived")))
+            .list();
+        if (rows.isEmpty()) {
+            return new Page<>(total, List.of());
+        }
+        String stage = query.drafts() ? "draft" : "published";
+        Map<String, String> bodies = new HashMap<>();
+        for (WikiRow row : rows) {
+            jdbc.sql("select body from search_wiki_text where page_id = ? and language = ? and stage = ?").params(row.id(), row.language(), stage)
+                .query(String.class).optional().ifPresent(body -> bodies.put(row.id() + "/" + row.language(), body));
+        }
+        Map<UUID, List<WikiPages.PathEntry>> paths = wiki.paths(actor, rows.stream().map(WikiRow::id).toList(), preferred);
+        List<String> words = text.plainWords();
+        return new Page<>(total, rows.stream().map(row -> new WikiHit(row.id(), row.projectId(), row.projectKey(), row.title(),
+            SearchSnippet.marks(row.title(), words), row.language(), stage, row.revision(), row.publishedAt(), row.archived(),
+            paths.getOrDefault(row.id(), List.of()), SearchSnippet.of(bodies.get(row.id() + "/" + row.language()), words))).toList());
     }
 
     // ------------------------------------------------------------------------------------------------ shared

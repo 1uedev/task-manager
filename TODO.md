@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-102](#task-102-wiki-in-der-gemeinsamen-suche-a14-teil-1) | Wiki in der gemeinsamen Suche (A14 Teil 1) | claude-20261111-search-01 | 2026-11-11 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -41,7 +39,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-102](#task-102-wiki-in-der-gemeinsamen-suche-a14-teil-1) | Wiki in der gemeinsamen Suche (A14 Teil 1) | claude-20261111-search-01 | 2026-11-11 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -56,7 +56,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-102 Wiki in der gemeinsamen Suche (A14 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004; DEC-047, DEC-050; docs/TAGS_SEARCH.md (Suchumfang, Prüffälle T09, T11, T13, T16). **Abhängigkeiten:** TASK-029, TASK-093 und TASK-094, geliefert. **Arbeitsstand:** Holger hat am 11. November 2026 im Projektgespräch mit „ja“ den Beginn von Paket A14 beauftragt und am selben Tag die 23 Vorschläge mit „passt“ übernommen (Regeln unten und bei TASK-103 und TASK-104). Geplanter Branch claude/project-thread-hulabb, Entscheidung DEC-132, Migrationen ab V0062.
 
@@ -66,7 +66,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 1. Gefunden werden Titel und Text jeder Sprachfassung. Der Server gewinnt den Text aus dem geprüften Dokument: Absätze, Überschriften, Listen, Tabellen, Zitate, Codeblöcke und sichtbare Linktexte; keine Bilder, Linkadressen oder internen Kennungen.
 2. Standardmäßig wird nur die veröffentlichte Revision jeder Sprachfassung durchsucht, auch für Personen mit `wiki.edit`. Mit `wiki.edit` lässt sich „Entwürfe durchsuchen“ wählen; dann wird stattdessen der aktuelle Entwurf durchsucht und der Treffer als Entwurf gekennzeichnet. Nie gemischt.
 3. Beide Sprachfassungen werden durchsucht, ein Treffer je Seite: Treffen beide, zeigt der Treffer die Fassung in der Oberflächensprache, sonst die getroffene, jeweils mit Sprachkennzeichen. Filter „Sprache“ mit Deutsch, Englisch oder beide.
-4. Archivierte Seiten werden nicht gefunden; mit „Archivierte einbeziehen“ (nur mit `wiki.edit`) erscheinen sie gekennzeichnet.
+4. Archivierte Seiten werden nicht gefunden; mit „Archivierte einbeziehen“ (nur mit `wiki.edit`) erscheinen sie gekennzeichnet. Umgesetzt mit `wiki.publish`, weil das Wiki archivierte Seiten nur damit zeigt (DEC-132 Auslegung 1).
 5. Suchen verlangt Mitgliedschaft und `wiki.read`, Entwürfe und Archiv `wiki.edit`. Ohne Recht weder Treffer noch Zähler noch Vorschau. Portalkonten erhalten keine Wikisuche (403).
 6. Ein Treffer zeigt Titel, Projekt, Pfad der Elternseiten (nicht lesbare als „Seite nicht verfügbar“), Sprache, Stand, Zeitpunkt der Veröffentlichung und einen Ausschnitt als Klartext mit den Positionen der gefundenen Wörter, nie als HTML.
 7. Textregeln wie TASK-029: keine Wortstämme, jedes Wort als Präfix, alle Wörter verlangt, keine Suchsyntax, dieselben Grenzen und 503 `search.busy`.
@@ -79,7 +79,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Nach Veröffentlichen ist der neue Stand in der folgenden Suche sichtbar (T13); `rebuild-search` liefert dieselben Treffer.
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Wiki.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-103 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Übergabe:** Ergebnis auf dem Branch claude/project-thread-hulabb (Ergebnis-PR). Umgesetzt wie oben mit Migration V0062, Vertrag `contracts/search.openapi.yaml` 0.3.0, Beschreibung in backend/README.md (Abschnitt „Wiki in der Suche“) und DEC-132 mit sechs Auslegungen zur Prüfung, darunter das Archiv nur mit `wiki.publish`. Nachweise: `WikiSearchApiTest` (Entwürfe nur auf Wunsch, Sprachfassungen als ein Treffer, Rechte für Treffer, Zähler und Archiv, sichtbarer Text, Pfad und Neuaufbau, Liste ohne Suchtext), `SearchSnippetTest`, `WikiPlainTextTest`, `SearchContractTest`, vollständiger Backendlauf, Browsertest des Bereichs Wiki in `wiki.test.mjs`, vollständige Browsertests.
+
+**Nächster Schritt:** Prüfung durch Codex oder eine getrennte Claude Sitzung, danach Abnahme durch Holger; TASK-103 beginnt, sobald das Ergebnis auf main ist.
 
 ## TASK-103 Anforderungen in der gemeinsamen Suche (A14 Teil 2)
 

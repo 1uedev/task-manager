@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import taskmanager.projects.ProjectChanged;
 import taskmanager.tags.TagChanged;
 import taskmanager.tickets.TicketChanged;
+import taskmanager.wiki.WikiPageChanged;
 
 /**
  * The projection tables of the search module. Nobody else reads them. Rows that a write changes are locked before the
@@ -65,6 +66,35 @@ class SearchRepository {
             jdbc.sql("insert into search_ticket_custom (ticket_id, field_key, value, terms) values (?, ?, ?, ?)")
                 .params(ticket.ticketId(), value.key(), value.value(), text ? SearchText.terms(value.value()) : "").update();
         }
+    }
+
+    /**
+     * Writes a wiki page with the published revision and the draft of each language version as rows of their own (TASK-102).
+     * The page row is locked first, so two changes of one page write one after the other.
+     */
+    void upsertWikiPage(WikiPageChanged page) {
+        jdbc.sql("""
+                insert into search_wiki_page (page_id, company_id, project_id, source_language, archived) values (?, ?, ?, ?, ?)
+                on conflict (page_id) do update set project_id = excluded.project_id, source_language = excluded.source_language,
+                    archived = excluded.archived
+                """).params(page.pageId(), page.companyId(), page.projectId(), page.sourceLanguage(), page.archived()).update();
+        jdbc.sql("delete from search_wiki_text where page_id = ?").param(page.pageId()).update();
+        for (WikiPageChanged.Version version : page.versions()) {
+            if (version.publishedRevision() != null) {
+                insertWikiText(page.pageId(), version.language(), "published", version.publishedRevision(), version.publishedTitle(),
+                    version.publishedText(), version.publishedAt());
+            }
+            insertWikiText(page.pageId(), version.language(), "draft", version.draftRevision(), version.draftTitle(), version.draftText(), null);
+        }
+    }
+
+    private void insertWikiText(UUID pageId, String language, String stage, int revision, String title, String body, java.time.Instant publishedAt) {
+        String text = body == null ? "" : body;
+        jdbc.sql("""
+                insert into search_wiki_text (page_id, language, stage, revision, title, body, published_at, title_terms, body_terms)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(pageId, language, stage, revision, title, text, publishedAt == null ? null : java.sql.Timestamp.from(publishedAt),
+                SearchText.terms(title), SearchText.indexTerms(text)).update();
     }
 
     /** Stores the tag and writes the tag names of every ticket and project that carries it again. */
@@ -149,7 +179,7 @@ class SearchRepository {
      */
     void lockForRebuild() {
         jdbc.sql("lock table search_state, search_project, search_ticket, search_ticket_custom, search_tag, search_ticket_tag, "
-            + "search_project_tag in exclusive mode").update();
+            + "search_project_tag, search_wiki_page, search_wiki_text in exclusive mode").update();
     }
 
     boolean built(UUID companyId) {
@@ -167,6 +197,8 @@ class SearchRepository {
         jdbc.sql("delete from search_project_tag a using search_project s where s.project_id = a.project_id and s.company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_ticket_custom a using search_ticket s where s.ticket_id = a.ticket_id and s.company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_ticket where company_id = ?").param(companyId).update();
+        jdbc.sql("delete from search_wiki_text a using search_wiki_page s where s.page_id = a.page_id and s.company_id = ?").param(companyId).update();
+        jdbc.sql("delete from search_wiki_page where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_project where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_tag where company_id = ?").param(companyId).update();
     }

@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.files.ImageStore;
@@ -24,6 +26,7 @@ import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.wiki.WikiPageChanged;
 import taskmanager.wiki.WikiPages;
 import tools.jackson.databind.JsonNode;
 
@@ -63,13 +66,16 @@ public class WikiService implements WikiPages {
     private final Permissions permissions;
     private final ImageStore images;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    WikiService(WikiRepository repository, ProjectAccess projects, Permissions permissions, ImageStore images, Clock clock) {
+    WikiService(WikiRepository repository, ProjectAccess projects, Permissions permissions, ImageStore images, Clock clock,
+            ApplicationEventPublisher events) {
         this.repository = repository;
         this.projects = projects;
         this.permissions = permissions;
         this.images = images;
         this.clock = clock;
+        this.events = events;
     }
 
     /** The wiki actions of the caller in one project. */
@@ -358,6 +364,7 @@ public class WikiService implements WikiPages {
             null, null), document.images());
         repository.insert(new WikiRepository.Variant(id, lang, 1, null, null, null));
         repository.event(actor.companyId(), id, "created", lang, 1, actor.userId(), now);
+        changed(actor.companyId(), id);
         return page(actor, id, lang);
     }
 
@@ -384,6 +391,7 @@ public class WikiService implements WikiPages {
             null, null, base), document.images());
         repository.insert(new WikiRepository.Variant(page.id(), code, 1, null, null, null));
         repository.event(actor.companyId(), page.id(), "translated", code, 1, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), code);
     }
 
@@ -423,6 +431,7 @@ public class WikiService implements WikiPages {
             actor.userId(), variant.draftRevision(), null, source), document.images());
         repository.update(new WikiRepository.Variant(page.id(), code, next, variant.publishedRevision(), variant.publishedAt(), variant.publishedBy()));
         repository.event(actor.companyId(), page.id(), "saved", code, next, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), code);
     }
 
@@ -442,6 +451,7 @@ public class WikiService implements WikiPages {
         Instant now = clock.instant();
         repository.update(new WikiRepository.Variant(page.id(), code, variant.draftRevision(), revision, now, actor.userId()));
         repository.event(actor.companyId(), page.id(), "published", code, revision, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), code);
     }
 
@@ -457,6 +467,7 @@ public class WikiService implements WikiPages {
         Instant now = clock.instant();
         repository.update(new WikiRepository.Variant(page.id(), code, variant.draftRevision(), null, null, null));
         repository.event(actor.companyId(), page.id(), "withdrawn", code, variant.publishedRevision(), actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), code);
     }
 
@@ -476,6 +487,7 @@ public class WikiService implements WikiPages {
             actor.userId(), variant.draftRevision(), number, old.sourceRevision()), document.images());
         repository.update(new WikiRepository.Variant(page.id(), code, next, variant.publishedRevision(), variant.publishedAt(), variant.publishedBy()));
         repository.event(actor.companyId(), page.id(), "reverted", code, next, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), code);
     }
 
@@ -530,6 +542,7 @@ public class WikiService implements WikiPages {
         repository.update(new WikiRepository.Page(page.id(), page.companyId(), page.projectId(), page.parentId(), page.language(), page.createdAt(),
             page.createdBy(), now, actor.userId(), page.version() + 1));
         repository.event(actor.companyId(), page.id(), "archived", null, null, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), language);
     }
 
@@ -554,6 +567,7 @@ public class WikiService implements WikiPages {
         repository.update(new WikiRepository.Page(page.id(), page.companyId(), page.projectId(), parent, page.language(), page.createdAt(),
             page.createdBy(), null, null, page.version() + 1));
         repository.event(actor.companyId(), page.id(), "unarchived", null, null, actor.userId(), now);
+        changed(actor.companyId(), page.id());
         return page(actor, page.id(), language);
     }
 
@@ -597,6 +611,62 @@ public class WikiService implements WikiPages {
             });
         }
         return titles;
+    }
+
+    /** The paths above the pages as the page view shows them to the caller (TASK-102); see {@link WikiPages#paths}. */
+    @Override
+    @Transactional
+    public Map<UUID, List<PathEntry>> paths(AccessContext actor, Collection<UUID> pageIds, String language) {
+        Map<UUID, List<PathEntry>> paths = new HashMap<>();
+        String requested = language != null && LANGUAGES.contains(language) ? language : null;
+        Map<UUID, List<WikiRepository.Page>> byProject = new HashMap<>();
+        for (UUID pageId : new HashSet<>(pageIds)) {
+            repository.find(actor.companyId(), pageId).ifPresent(page -> byProject.computeIfAbsent(page.projectId(), id -> new ArrayList<>()).add(page));
+        }
+        byProject.forEach((projectId, pages) -> {
+            Access access = access(actor, projectId);
+            if (!access.any()) {
+                return;
+            }
+            Map<UUID, PageRows> rows = byPage(repository.tree(actor.companyId(), projectId, false));
+            for (WikiRepository.Page page : pages) {
+                boolean visible = page.archived() ? access.publish() : access.drafts() || published(page.id());
+                if (visible) {
+                    paths.put(page.id(), path(rows, page, access, requested).stream().map(crumb -> new PathEntry(crumb.id(), crumb.title())).toList());
+                }
+            }
+        });
+        return paths;
+    }
+
+    /** Every page of the company for the search projection (TASK-102); see {@link WikiPages#searchSources}. */
+    @Override
+    @Transactional
+    public void searchSources(UUID companyId, Consumer<WikiPageChanged> sink) {
+        for (UUID pageId : repository.pageIds(companyId)) {
+            source(companyId, pageId).ifPresent(sink);
+        }
+    }
+
+    /** Tells the search module the new state of a page inside the transaction of the change (TASK-102, DEC-132). */
+    private void changed(UUID companyId, UUID pageId) {
+        source(companyId, pageId).ifPresent(events::publishEvent);
+    }
+
+    private Optional<WikiPageChanged> source(UUID companyId, UUID pageId) {
+        return repository.find(companyId, pageId).map(page -> {
+            List<WikiPageChanged.Version> versions = new ArrayList<>();
+            for (WikiRepository.Variant variant : repository.variants(page.id())) {
+                WikiRepository.Revision draft = repository.revision(page.id(), variant.language(), variant.draftRevision()).orElseThrow();
+                WikiRepository.Revision published = variant.published()
+                    ? repository.revision(page.id(), variant.language(), variant.publishedRevision()).orElseThrow() : null;
+                versions.add(new WikiPageChanged.Version(variant.language(), draft.revision(), draft.title(),
+                    WikiDocument.stored(draft.content()).plainText(), published == null ? null : published.revision(),
+                    published == null ? null : published.title(),
+                    published == null ? null : WikiDocument.stored(published.content()).plainText(), variant.publishedAt()));
+            }
+            return new WikiPageChanged(page.id(), page.companyId(), page.projectId(), page.language(), page.archived(), versions);
+        });
     }
 
     // ------------------------------------------------------------------------------------------------ helpers
@@ -645,6 +715,18 @@ public class WikiService implements WikiPages {
             translation = access.drafts() ? new TranslationView(translated, sourcePublished, outdated) : new TranslationView(null, null, outdated);
         }
         Map<UUID, PageRows> rows = byPage(repository.tree(actor.companyId(), page.projectId(), false));
+        List<Crumb> path = path(rows, page, access, requested);
+        UUID shownParent = path.isEmpty() ? null : path.getLast().id();
+        if (page.archived()) {
+            shownParent = page.parentId();
+        }
+        boolean fallback = requested == null ? sourceVisible && !code.equals(page.language()) : !code.equals(requested);
+        return new PageView(page.id(), page.projectId(), shownParent, code, sourceVisible ? page.language() : null, fallback, languages, translation, page.archived(),
+            page.version(), access, path, published, draft, page.createdAt(), page.createdBy());
+    }
+
+    /** The pages above a page from the top as the caller sees them: with drafts the real parents, for readers the visible ones. */
+    private static List<Crumb> path(Map<UUID, PageRows> rows, WikiRepository.Page page, Access access, String requested) {
         List<Crumb> path = new ArrayList<>();
         UUID parent = access.drafts() ? page.parentId() : visibleParent(rows, page.parentId());
         Set<UUID> seen = new HashSet<>();
@@ -657,13 +739,7 @@ public class WikiService implements WikiPages {
             path.addFirst(new Crumb(parent, access.drafts() ? row.get().draftTitle() : row.get().publishedTitle()));
             parent = access.drafts() ? above.page().parentId() : visibleParent(rows, above.page().parentId());
         }
-        UUID shownParent = path.isEmpty() ? null : path.getLast().id();
-        if (page.archived()) {
-            shownParent = page.parentId();
-        }
-        boolean fallback = requested == null ? sourceVisible && !code.equals(page.language()) : !code.equals(requested);
-        return new PageView(page.id(), page.projectId(), shownParent, code, sourceVisible ? page.language() : null, fallback, languages, translation, page.archived(),
-            page.version(), access, path, published, draft, page.createdAt(), page.createdBy());
+        return path;
     }
 
     /** A language code of the request, or {@code null} for the source language of the page. */

@@ -14,6 +14,8 @@ import taskmanager.tags.TagMerged;
 import taskmanager.tags.TicketTagChanged;
 import taskmanager.tickets.TicketAccess;
 import taskmanager.tickets.TicketChanged;
+import taskmanager.wiki.WikiPageChanged;
+import taskmanager.wiki.WikiPages;
 
 /**
  * Keeps the projection of the search module (TASK-029, DEC-069). The listeners run synchronously inside the transaction that
@@ -26,12 +28,21 @@ public class SearchProjection {
     private final ProjectAccess projects;
     private final TicketAccess tickets;
     private final TagAccess tags;
+    private final WikiPages wiki;
 
-    SearchProjection(SearchRepository search, ProjectAccess projects, TicketAccess tickets, TagAccess tags) {
+    SearchProjection(SearchRepository search, ProjectAccess projects, TicketAccess tickets, TagAccess tags, WikiPages wiki) {
         this.search = search;
         this.projects = projects;
         this.tickets = tickets;
         this.tags = tags;
+        this.wiki = wiki;
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void on(WikiPageChanged page) {
+        search.enterWrite();
+        search.upsertWikiPage(page);
     }
 
     @EventListener
@@ -107,6 +118,7 @@ public class SearchProjection {
         tickets.searchSources(companyId).forEach(search::upsertTicket);
         tags.ticketAssignments(companyId).forEach(assignment -> search.insertTicketTag(assignment.ticketId(), assignment.tagId()));
         tags.projectAssignments(companyId).forEach(assignment -> search.insertProjectTag(assignment.projectId(), assignment.tagId()));
+        wiki.searchSources(companyId, search::upsertWikiPage);
         search.refreshCompany(companyId);
         search.markBuilt(companyId);
     }

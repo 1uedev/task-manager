@@ -754,4 +754,34 @@ describe('wiki', () => {
       assert.equal(answer.body.code, 'wiki.page_archived', query);
     }
   });
+
+  test('the search finds published pages with path and marked snippet, and drafts only on request (TASK-102)', async () => {
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit']);
+        const parent = backend.addWikiPage(backend.anna, 'Betrieb', doc('Allgemeines'), { publish: true });
+        backend.addWikiPage(backend.anna, 'Sicherung', doc('Die Datensicherung läuft nachts um zwei Uhr.'), { parentId: parent.id, publish: true });
+        backend.addWikiPage(backend.anna, 'Plan Datensicherung', doc('Noch offen'));
+      },
+    }, async (page) => {
+      await page.getByRole('radio', { name: 'Wiki' }).check();
+      const form = page.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('datensich');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hits = page.getByTestId('wiki-hits');
+      await hits.waitFor();
+      assert.equal(await hits.locator('li').count(), 1, 'the draft only page is not found without the drafts filter');
+      const hit = hits.locator('li').first();
+      assert.match(await hit.innerText(), /Sicherung/);
+      assert.match(await hit.innerText(), /^Betrieb · Deutsch/m, "the path of the parent page");
+      assert.equal(await hit.locator('.search-snippet mark').first().innerText(), 'Datensicherung');
+
+      await form.getByLabel('Entwürfe durchsuchen').check();
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=wiki-hits] li').length === 2);
+      assert.match(await hits.innerText(), /Entwurf, Revision 1/);
+    });
+  });
 });

@@ -125,6 +125,11 @@ class WikiRepository {
         jdbc.sql("update wiki_page set parent_id = ?, version = version + 1 where parent_id = ? and archived_at is null").params(to, from).update();
     }
 
+    /** The identifiers of every page of the company, archived ones included, for a rebuild of the search projection (TASK-102). */
+    List<UUID> pageIds(UUID companyId) {
+        return jdbc.sql("select id from wiki_page where company_id = ? order by id").param(companyId).query(UUID.class).list();
+    }
+
     /** Every language version of the pages of the project, archived pages only when asked for. */
     List<TreeRow> tree(UUID companyId, UUID projectId, boolean archived) {
         return jdbc.sql("select " + PAGE + ", " + VARIANT + """

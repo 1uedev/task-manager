@@ -1,8 +1,10 @@
 package taskmanager.wiki;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import taskmanager.permissions.AccessContext;
 
 /**
@@ -17,4 +19,18 @@ public interface WikiPages {
      * an unknown, archived or unpublished page and every page of a caller without {@code wiki.read} are missing from the answer.
      */
     Map<UUID, String> publishedTitles(AccessContext actor, UUID projectId, Collection<UUID> pageIds, String language);
+
+    /** One page above a page as the caller sees it on the page itself (TASK-102). */
+    record PathEntry(UUID id, String title) {
+    }
+
+    /**
+     * The path of each page above it as the page view shows it to the caller, from the top (TASK-102): with drafts the real
+     * parents with their draft titles, for readers only published pages that are not archived, each with its published title in
+     * {@code language} or its fallback. Pages the caller may not see are missing from the answer.
+     */
+    Map<UUID, List<PathEntry>> paths(AccessContext actor, Collection<UUID> pageIds, String language);
+
+    /** Every page of the company as the search module keeps it (TASK-102), one after the other, for a rebuild of its projection. */
+    void searchSources(UUID companyId, Consumer<WikiPageChanged> sink);
 }

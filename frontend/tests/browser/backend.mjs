@@ -914,6 +914,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const limit = Number(query.get('limit') ?? 20);
       return ok({ total: items.length, items: items.slice(offset, offset + limit) });
     }
+    if (p === '/search/wiki') return wikiSearch(account, query);
     if (p === '/search/projects') {
       const q = (query.get('q') ?? '').toLowerCase();
       const items = state.projects.filter((item) => projectVisible(account, item) && (item.name.toLowerCase().includes(q) || item.key.toLowerCase().startsWith(q)))
@@ -2465,6 +2466,64 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       wikiEvent(page, 'published', 1, by, language);
     }
     return variant;
+  }
+  // As the search (TASK-102): published revisions, drafts only with drafts=true and a draft right, archived pages only with
+  // archived=true and wiki.publish, every language version on its own, one hit per page in the preferred language.
+  const wikiPlain = (node) => node.type === 'text' ? ((node.marks ?? []).some((mark) => mark.type === 'link' && /^wiki:/.test(mark.attrs?.href ?? '')) ? '' : node.text)
+    : node.type === 'hardBreak' ? '\n' : node.type === 'image' ? '' : (node.content ?? []).map(wikiPlain).join('') + (node.type === 'doc' ? '' : '\n');
+  const searchWords = (text) => text.normalize('NFKC').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const searchMarks = (text, words) => [...text.matchAll(/[\p{L}\p{N}]+/gu)]
+    .filter((match) => words.some((word) => match[0].normalize('NFKC').toLowerCase().startsWith(word)))
+    .map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  function wikiSearch(account, query) {
+    const violations = [];
+    const language = query.get('language');
+    const preferred = query.get('preferred') ?? 'de';
+    if (language !== null && !WIKI_LANGUAGES.includes(language)) violations.push('language.invalid');
+    if (!WIKI_LANGUAGES.includes(preferred)) violations.push('preferred.invalid');
+    for (const flag of ['drafts', 'archived']) if (query.has(flag) && !['true', 'false'].includes(query.get(flag))) violations.push(`${flag}.invalid`);
+    const q = query.get('q') ?? '';
+    if (q.length > 200) violations.push('q.invalid');
+    if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+    const drafts = query.get('drafts') === 'true';
+    const archived = query.get('archived') === 'true';
+    const projects = state.projects.filter((item) => wikiAny(wikiAccess(account, item.id))).map((item) => item.id);
+    const filter = query.getAll('project');
+    if (filter.some((id) => !projects.includes(id))) return problem(400, 'request.invalid', { violations: ['project.unknown'] });
+    if ((drafts && !projects.some((id) => wikiDrafts(wikiAccess(account, id)))) || (archived && !projects.some((id) => wikiAccess(account, id).publish))) {
+      return problem(403, 'auth.forbidden');
+    }
+    const words = searchWords(q);
+    const hits = [];
+    for (const page of wiki.pages) {
+      const access = wikiAccess(account, page.projectId);
+      if (!projects.includes(page.projectId) || (filter.length > 0 && !filter.includes(page.projectId)) || (drafts && !wikiDrafts(access))) continue;
+      if (page.archived && !(archived && access.publish)) continue;
+      const candidates = [];
+      for (const [code, variant] of Object.entries(wikiVariants(page))) {
+        if (language !== null && code !== language) continue;
+        const number = drafts ? variant.draftRevision : variant.publishedRevision;
+        if (number === null) continue;
+        const revision = wikiRevision(page, number, code);
+        const body = wikiPlain(revision.content).trim();
+        const terms = [...searchWords(revision.title), ...searchWords(body)];
+        if (!words.every((word) => terms.some((term) => term.startsWith(word)))) continue;
+        candidates.push({ code, revision, body, publishedAt: drafts ? null : variant.publishedAt ?? now() });
+      }
+      if (candidates.length === 0) continue;
+      const rank = (item) => (item.code === preferred ? 0 : item.code === page.language ? 1 : 2);
+      const shown = candidates.sort((a, b) => rank(a) - rank(b))[0];
+      const view = wikiPageView(account, page, preferred);
+      const text = shown.body.replace(/[\r\n\t]/g, ' ').slice(0, 240);
+      hits.push({ id: page.id, projectId: page.projectId, projectKey: state.projects.find((item) => item.id === page.projectId).key, title: shown.revision.title,
+        titleMarks: searchMarks(shown.revision.title, words), language: shown.code, stage: drafts ? 'draft' : 'published', revision: shown.revision.revision,
+        publishedAt: shown.publishedAt, archived: page.archived, path: view.path,
+        snippet: text === '' ? null : { text, marks: searchMarks(text, words), cutStart: false, cutEnd: shown.body.length > 240 } });
+    }
+    hits.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    return ok({ total: hits.length, items: hits.slice(offset, offset + limit) });
   }
   function wikiRoute(account, method, p, query, headers, body) {
     if (p === '/wiki/projects' && method === 'GET') {
