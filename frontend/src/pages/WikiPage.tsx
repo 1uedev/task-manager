@@ -711,7 +711,8 @@ type PageCall = { (): ReturnType<typeof withdrawWikiPage> };
 
 type Mode = 'read' | 'edit' | 'history' | 'publish' | 'move' | 'create';
 
-function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
+function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }: {
+  readonly entry: Entry;
   readonly pageId: string;
   readonly projectId: string;
   readonly projectName: string;
@@ -724,7 +725,11 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
   const problem = useWikiProblem();
   // The language asked for (F2 of the review): the version the person chose on this page, else the current language of the
   // interface. While the editor is open the version stays fixed, so that a change of the interface language keeps the input.
-  const [chosen, setChosen] = useState<{ readonly pageId: string; readonly language: WikiLanguage } | null>(null);
+  // A search hit opens the language version it found (F5 of the review of TASK-102).
+  const [chosen, setChosen] = useState<{ readonly pageId: string; readonly language: WikiLanguage } | null>(
+    entry.language === undefined ? null : { pageId, language: entry.language });
+  // and, when it found the published revision, shows that one first even to who sees the newer draft.
+  const [publishedFirst, setPublishedFirst] = useState(entry.published);
   const [pinned, setPinned] = useState<WikiLanguage | null>(null);
   const wanted = pinned ?? (chosen !== null && chosen.pageId === pageId ? chosen.language : wikiLanguage(language));
   const [loaded, retry, replace] = useLoad(() => readWikiPage(api, pageId, wanted), [api, pageId, wanted]);
@@ -739,6 +744,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
   const depth = flat.find((row) => row.item.id === pageId)?.depth ?? 1;
 
   function changed(page: Page, text: string | null, next: Mode = 'read') {
+    setPublishedFirst(false);
     if (page.language !== wanted) setChosen({ pageId: page.id, language: page.language });
     replace({ value: page, etag: page.draft === null ? null : `"${page.draft.revision}"` });
     setMode(next);
@@ -842,7 +848,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
               <HistoryPanel key={`${page.id} ${page.language}`} page={page} onRestored={(restored) => changed(restored, null, 'history')} />
             )}
             {(mode === 'read' || mode === 'publish' || mode === 'move' || mode === 'create') && (
-              drafts && draft !== null && (page.published === null || draft.changed)
+              drafts && draft !== null && (page.published === null || draft.changed) && !(publishedFirst && page.published !== null)
                 ? (
                   <section className="stack" data-testid="wiki-draft-view">
                     <p className="mode-notice">{t('wiki.draftShown', { revision: draft.revision })}</p>
@@ -850,7 +856,17 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
                   </section>
                 )
                 : page.published !== null
-                  ? <div lang={page.language}><Content html={page.published.html} testId="wiki-content" /></div>
+                  ? (
+                    <>
+                      {publishedFirst && drafts && draft !== null && draft.changed && (
+                        <p className="mode-notice" data-testid="wiki-published-shown">
+                          {t('wiki.publishedShown', { revision: page.published.revision })}{' '}
+                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
+                        </p>
+                      )}
+                      <div lang={page.language}><Content html={page.published.html} testId="wiki-content" /></div>
+                    </>
+                  )
                   : <EmptyText text={t('wiki.empty')} />
             )}
           </article>
@@ -862,7 +878,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged }: {
 
 // ---------------------------------------------------------------- the wiki of a project and the choice of projects
 
-function ProjectWiki({ projectId, pageId }: { readonly projectId: string; readonly pageId: string | null }) {
+function ProjectWiki({ projectId, pageId, entry }: { readonly projectId: string; readonly pageId: string | null; readonly entry: Entry }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
   const [archived, setArchived] = useState(false);
@@ -916,7 +932,8 @@ function ProjectWiki({ projectId, pageId }: { readonly projectId: string; readon
                       {value.access.edit && <CreateForm projectId={projectId} tree={flatten(nodes)} parentId={null} />}
                     </div>
                   )
-                  : <PageView key={pageId} pageId={pageId} projectId={projectId} projectName={projectName} tree={value} onTreeChanged={refresh} />}
+                  : <PageView key={`${pageId} ${entry.language ?? ''} ${entry.published}`} pageId={pageId} projectId={projectId} projectName={projectName} tree={value}
+                    onTreeChanged={refresh} entry={entry} />}
               </div>
             </div>
           );
@@ -968,6 +985,13 @@ function ProjectChoice() {
   );
 }
 
-export function WikiPage({ projectId, pageId }: { readonly projectId: string | null; readonly pageId: string | null }) {
-  return projectId === null ? <ProjectChoice /> : <ProjectWiki projectId={projectId} pageId={pageId} />;
+/** How a page is entered from a search hit (TASK-102): its language version and whether the published revision was found. */
+type Entry = { readonly language?: WikiLanguage | undefined; readonly published: boolean };
+
+export function WikiPage({ projectId, pageId, entry = { published: false } }: {
+  readonly projectId: string | null;
+  readonly pageId: string | null;
+  readonly entry?: Entry;
+}) {
+  return projectId === null ? <ProjectChoice /> : <ProjectWiki projectId={projectId} pageId={pageId} entry={entry} />;
 }

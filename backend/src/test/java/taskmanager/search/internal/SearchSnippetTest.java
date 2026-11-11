@@ -58,4 +58,33 @@ class SearchSnippetTest {
         assertTrue(cut.getBytes(StandardCharsets.UTF_8).length <= SearchText.MAX_INDEX_BYTES);
         assertTrue(cut.endsWith("äöü"));
     }
+
+    /** F3 of the review: the same words as the index, also for decomposed accents, compatibility forms and astral letters. */
+    @Test
+    void marksFollowTheIndexForDecomposedAccentsCompatibilityFormsAndAstralLetters() {
+        String decomposed = "Cafe\u0301 offen";
+        assertEquals(List.of(new SearchSnippet.Mark(0, 5)), SearchSnippet.marks(decomposed, List.of("café")));
+        assertEquals(SearchText.terms(decomposed), "café offen");
+        // The ligature fi is one letter that the index reads as two.
+        assertEquals(List.of(new SearchSnippet.Mark(0, 5)), SearchSnippet.marks("\uFB01nden", List.of("find")));
+        // A letter outside the BMP counts two units; the word after it is marked at its real place.
+        String astral = "\uD835\uDC00bc wort";
+        assertEquals(List.of(new SearchSnippet.Mark(5, 9)), SearchSnippet.marks(astral, List.of("wort")));
+        // A found word far back leads the excerpt, and its mark is moved into it.
+        String body = "x ".repeat(300) + "Cafe\u0301 am Ende";
+        SearchSnippet snippet = SearchSnippet.of(body, List.of("café"));
+        assertTrue(snippet.cutStart());
+        SearchSnippet.Mark mark = snippet.marks().getFirst();
+        assertEquals("Cafe\u0301", snippet.text().substring(mark.start(), mark.end()));
+    }
+
+    /** A mark cut by the edge of the excerpt is cut with it and never points outside. */
+    @Test
+    void aMarkAtTheEdgeOfTheExcerptStaysInside() {
+        String body = "druck".repeat(100);
+        SearchSnippet snippet = SearchSnippet.of(body, List.of("druck"));
+        assertEquals(1, snippet.marks().size());
+        assertEquals(0, snippet.marks().getFirst().start());
+        assertEquals(snippet.text().length(), snippet.marks().getFirst().end());
+    }
 }

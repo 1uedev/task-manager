@@ -11,8 +11,9 @@ export type Route =
   | { readonly name: 'project'; readonly id: string; readonly tab: ProjectTab }
   | { readonly name: 'ticket'; readonly projectId: string; readonly number: number }
   | { readonly name: 'group'; readonly id: string }
-  // The wiki of a project, with one of its pages when pageId is set (TASK-093).
-  | { readonly name: 'wikiPage'; readonly projectId: string; readonly pageId: string | null }
+  // The wiki of a project, with one of its pages when pageId is set (TASK-093). A hit of the search (TASK-102) also names the
+  // language version found and, with published, that the published revision was found, not the draft.
+  | { readonly name: 'wikiPage'; readonly projectId: string; readonly pageId: string | null; readonly language?: 'de' | 'en'; readonly published?: boolean }
   // The requirements of a project, with one of them when requirementId is set (TASK-096).
   | { readonly name: 'requirementPage'; readonly projectId: string; readonly requirementId: string | null };
 
@@ -21,7 +22,7 @@ const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // Only identifiers of the expected form leave the address bar; anything else shows the start page.
 export function routeFromHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/');
-  const [first, id, third, fourth] = parts;
+  const [first, id, third, fourth, fifth] = parts;
   if (first === 'projects' && id !== undefined && ID.test(id)) {
     if (third === 'tickets' && fourth !== undefined && /^[1-9][0-9]{0,8}$/.test(fourth) && parts.length === 4) {
       return { name: 'ticket', projectId: id, number: Number(fourth) };
@@ -33,6 +34,10 @@ export function routeFromHash(hash: string): Route {
   if (first === 'wiki' && id !== undefined && ID.test(id)) {
     if (parts.length === 2) return { name: 'wikiPage', projectId: id, pageId: null };
     if (parts.length === 3 && third !== undefined && ID.test(third)) return { name: 'wikiPage', projectId: id, pageId: third };
+    if ((parts.length === 4 || (parts.length === 5 && fifth === 'published')) && third !== undefined && ID.test(third)
+        && (fourth === 'de' || fourth === 'en')) {
+      return { name: 'wikiPage', projectId: id, pageId: third, language: fourth, published: parts.length === 5 };
+    }
   }
   if (first === 'requirements' && id !== undefined && ID.test(id)) {
     if (parts.length === 2) return { name: 'requirementPage', projectId: id, requirementId: null };
@@ -55,7 +60,8 @@ export function hrefFor(route: RouteName | Route): string {
     case 'group':
       return `#/groups/${target.id}`;
     case 'wikiPage':
-      return target.pageId === null ? `#/wiki/${target.projectId}` : `#/wiki/${target.projectId}/${target.pageId}`;
+      if (target.pageId === null) return `#/wiki/${target.projectId}`;
+      return `#/wiki/${target.projectId}/${target.pageId}${target.language === undefined ? '' : `/${target.language}${target.published === true ? '/published' : ''}`}`;
     case 'requirementPage':
       return target.requirementId === null ? `#/requirements/${target.projectId}` : `#/requirements/${target.projectId}/${target.requirementId}`;
     default:

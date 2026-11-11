@@ -505,4 +505,201 @@ class WikiSearchApiTest {
         assertEquals(List.of("Bravo"), titles(search(reader, "", "project=" + setup.project(), "limit=1", "offset=1")));
         assertEquals(4, total(search(author, "", "project=" + setup.project(), "drafts=true")));
     }
+
+    // ---------------------------------------------------------------- after the review (docs/REVIEW_TASK-102_PR-299.md)
+
+    /**
+     * F2: every level above a hit stays; in the published stage a parent shows its published title and an unpublished parent
+     * is "not available" without identifier or title, in the draft stage the draft titles show.
+     */
+    @Test
+    void thePathKeepsEveryLevelInTheStageSearched() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String found = word("pfadwort");
+        UUID top = id(create(author, setup, "Spitze", null, "de", doc(paragraph("Oben"))));
+        publish(author, top, "de", 1);
+        save(author, top, "de", 1, "Spitze neu", doc(paragraph("Oben")));
+        UUID hidden = id(create(author, setup, "Geheime Mitte", top, "de", doc(paragraph("Mitte"))));
+        UUID child = id(create(author, setup, "Blatt", hidden, "de", doc(paragraph(found))));
+        publish(author, child, "de", 1);
+
+        for (Browser who : List.of(reader, author)) {
+            JsonNode path = search(who, found).json().get("items").get(0).get("path");
+            assertEquals(2, path.size(), path.toString());
+            assertEquals("Spitze", path.get(0).get("title").asString(), "the published title, not the newer draft title");
+            assertEquals(top.toString(), path.get(0).get("id").asString());
+            assertTrue(path.get(0).get("available").asBoolean());
+            assertFalse(path.get(1).get("available").asBoolean());
+            assertTrue(path.get(1).get("id").isNull());
+            assertTrue(path.get(1).get("title").isNull());
+            assertFalse(path.toString().contains("Geheime"), path.toString());
+            assertFalse(path.toString().contains(hidden.toString()), path.toString());
+        }
+        JsonNode drafts = search(author, found, "drafts=true").json().get("items").get(0).get("path");
+        assertEquals("Spitze neu", drafts.get(0).get("title").asString());
+        assertEquals("Geheime Mitte", drafts.get(1).get("title").asString());
+        assertTrue(drafts.get(1).get("available").asBoolean());
+    }
+
+    /** H6: withdrawing, taking an old revision over, archiving and restoring reach the search in the same transaction. */
+    @Test
+    void everyChangeOfAPageReachesTheSearch() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String first = word("ersterstand");
+        String second = word("zweiterstand");
+        UUID page = id(create(author, setup, "Wechsel", null, "de", doc(paragraph(first))));
+        publish(author, page, "de", 1);
+        save(author, page, "de", 1, "Wechsel", doc(paragraph(second)));
+        publish(author, page, "de", 2);
+        assertEquals(0, total(search(reader, first)));
+        assertEquals(1, total(search(reader, second)));
+
+        Response withdrawn = author.send("POST", "/api/v1/wiki/pages/" + page + "/withdraw?language=de", null, null);
+        assertEquals(200, withdrawn.status(), withdrawn.body());
+        assertEquals(0, total(search(reader, second)), "a withdrawn page is not found by readers");
+        assertEquals(1, total(search(author, second, "drafts=true")));
+
+        Response restored = author.send("POST", "/api/v1/wiki/pages/" + page + "/revisions/1/restore?language=de", null, "\"2\"");
+        assertEquals(200, restored.status(), restored.body());
+        assertEquals(1, total(search(author, first, "drafts=true")), "the old revision taken over is the new draft");
+        assertEquals(0, total(search(author, second, "drafts=true")));
+        publish(author, page, "de", 3);
+        assertEquals(1, total(search(reader, first)));
+
+        long version = author.get("/api/v1/wiki/pages/" + page + "?language=de").json().get("version").asLong();
+        Response archived = author.send("POST", "/api/v1/wiki/pages/" + page + "/archive?language=de", Map.of("version", version), null);
+        assertEquals(200, archived.status(), archived.body());
+        assertEquals(0, total(search(reader, first)));
+        assertEquals(1, total(search(author, first, "archived=true")));
+        Response unarchived = author.send("POST", "/api/v1/wiki/pages/" + page + "/unarchive?language=de",
+            Map.of("version", archived.json().get("version").asLong()), null);
+        assertEquals(200, unarchived.status(), unarchived.body());
+        assertEquals(1, total(search(reader, first)));
+        JsonNode hit = search(reader, first).json().get("items").get(0);
+        assertFalse(hit.get("archived").asBoolean());
+        assertEquals(3, hit.get("revision").asInt());
+    }
+
+    /**
+     * F4: row, revision, title and excerpt of a hit come from one snapshot. While a page is published again and again, every
+     * hit shows the excerpt of exactly the revision it names.
+     */
+    @Test
+    void aHitNeverMixesRevisionsWhileThePageIsPublished() throws Exception {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String common = word("gleichzeitig");
+        UUID page = id(create(author, setup, "Stand 1", null, "de", doc(paragraph(common + " inhalt1"))));
+        publish(author, page, "de", 1);
+        java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread writer = new Thread(() -> {
+            try {
+                for (int revision = 2; revision <= 25; revision++) {
+                    save(author, page, "de", revision - 1, "Stand " + revision, doc(paragraph(common + " inhalt" + revision)));
+                    publish(author, page, "de", revision);
+                }
+            } catch (Throwable e) {
+                failed.set(e);
+            } finally {
+                done.set(true);
+            }
+        });
+        writer.start();
+        int checked = 0;
+        while (!done.get() || checked == 0) {
+            Response found = search(reader, common);
+            assertEquals(200, found.status(), found.body());
+            JsonNode hit = found.json().get("items").get(0);
+            int revision = hit.get("revision").asInt();
+            assertEquals(1, found.json().get("total").asInt());
+            assertEquals("Stand " + revision, hit.get("title").asString());
+            assertEquals(common + " inhalt" + revision, hit.get("snippet").get("text").asString());
+            checked++;
+        }
+        writer.join();
+        if (failed.get() != null) {
+            throw new AssertionError(failed.get());
+        }
+        assertTrue(checked > 0);
+    }
+
+    /** H2: words spread over title and text rank by where each one is found, a word in the title above the same in the text. */
+    @Test
+    void wordsSpreadOverTitleAndTextRankAboveTheTextAlone() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String a = word("verteilta");
+        String b = word("verteiltb");
+        UUID textOnly = id(create(author, setup, "Nur Text", null, "de", doc(paragraph(a + " " + b))));
+        UUID spread = id(create(author, setup, "Titel " + a, null, "de", doc(paragraph(b))));
+        publish(author, textOnly, "de", 1);
+        publish(author, spread, "de", 1);
+        assertEquals(List.of("Titel " + a, "Nur Text"), titles(search(reader, a + " " + b)));
+    }
+
+    /** Past the last page the answer still names the total, without hits. */
+    @Test
+    void pastTheLastPageTheTotalStays() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String common = word("seitenende");
+        for (int n = 1; n <= 3; n++) {
+            UUID page = id(create(author, setup, "Ende " + n, null, "de", doc(paragraph(common))));
+            publish(author, page, "de", 1);
+        }
+        Response past = search(reader, common, "offset=20");
+        assertEquals(3, total(past));
+        assertEquals(0, past.json().get("items").size());
+        Response second = search(reader, common, "limit=2", "offset=2");
+        assertEquals(3, total(second));
+        assertEquals(List.of("Ende 3"), titles(second));
+    }
+
+    /** F3: a decomposed accent stays inside its word; the search for the composed form marks it in title and excerpt. */
+    @Test
+    void decomposedAccentsAreMarkedLikeTheIndexFindsThem() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String stem = word("cafe");
+        String decomposed = stem + "e\u0301x";
+        String filler = "Wort ".repeat(80);
+        UUID page = id(create(author, setup, "Titel " + decomposed, null, "de", doc(paragraph(filler + decomposed + " Ende"))));
+        publish(author, page, "de", 1);
+        Response found = search(reader, stem + "\u00e9x");
+        assertEquals(1, total(found));
+        JsonNode hit = found.json().get("items").get(0);
+        assertEquals(1, hit.get("titleMarks").size());
+        assertEquals(6, hit.get("titleMarks").get(0).get("start").asInt());
+        assertEquals(6 + decomposed.length(), hit.get("titleMarks").get(0).get("end").asInt());
+        JsonNode snippet = hit.get("snippet");
+        assertTrue(snippet.get("cutStart").asBoolean(), "the excerpt starts near the word, not at the text start");
+        String text = snippet.get("text").asString();
+        int start = snippet.get("marks").get(0).get("start").asInt();
+        assertEquals(decomposed, text.substring(start, snippet.get("marks").get(0).get("end").asInt()));
+    }
+
+    /** H1: the text of a link to a wiki page is left out, but the words before and after it stay apart. */
+    @Test
+    void theWordBoundaryOfALeftOutLinkTextIsKept() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String before = word("vorher");
+        String after = word("nachher");
+        UUID target = id(create(author, setup, "Ziel", null, "de", doc(paragraph("Ziel"))));
+        UUID page = id(create(author, setup, "Verweis", null, "de",
+            doc(node("paragraph", text(before), text("Ziel", link("wiki:" + target)), text(after)))));
+        publish(author, page, "de", 1);
+        assertEquals(1, total(search(reader, after)), "the word after a left out link text stays a word of its own");
+        assertEquals(1, total(search(reader, before)));
+    }
 }

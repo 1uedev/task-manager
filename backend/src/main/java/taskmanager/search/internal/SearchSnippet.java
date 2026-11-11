@@ -10,13 +10,15 @@ import java.util.regex.Pattern;
 /**
  * A short excerpt of a found text with the places of the search words (TASK-102, DEC-132). The excerpt is plain text; the
  * marks are offsets in UTF-16 code units, as JavaScript counts them, so the interface highlights them without reading HTML.
- * A word of the text counts as found when its normalized form (NFKC, lower case) starts with a search word, the rule of the
- * index.
+ * A word of the text counts as found when one of the words its normalized form (NFKC, lower case) splits into starts with a
+ * search word, the rule of the index (F3 of the review). A word of the original text includes its combining marks, so a
+ * decomposed accent stays inside the word it belongs to; the marks are found in the whole text and then moved into the excerpt.
  */
 public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boolean cutEnd) {
     static final int BEFORE = 60;
     static final int LENGTH = 240;
-    private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+");
+    private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}\\p{M}]+");
+    private static final Pattern SEPARATORS = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Pattern BREAKS = Pattern.compile("[\\r\\n\\t]");
 
     /** The place of one found word in {@link #text}: start inclusive, end exclusive. */
@@ -36,14 +38,8 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
             return null;
         }
         String text = BREAKS.matcher(body).replaceAll(" ");
-        int first = -1;
-        Matcher matcher = WORD.matcher(text);
-        while (matcher.find()) {
-            if (found(matcher.group(), words)) {
-                first = matcher.start();
-                break;
-            }
-        }
+        List<Mark> all = marks(text, words);
+        int first = all.isEmpty() ? -1 : all.getFirst().start();
         int start = first < 0 ? 0 : Math.max(0, first - BEFORE);
         if (start > 0) {
             int space = text.indexOf(' ', start);
@@ -56,8 +52,13 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
         }
         start = safe(text, start);
         end = safe(text, end);
-        String excerpt = text.substring(start, end);
-        return new SearchSnippet(excerpt, marks(excerpt, words), start > 0, end < text.length());
+        List<Mark> marks = new ArrayList<>();
+        for (Mark mark : all) {
+            if (mark.end() > start && mark.start() < end) {
+                marks.add(new Mark(Math.max(mark.start(), start) - start, Math.min(mark.end(), end) - start));
+            }
+        }
+        return new SearchSnippet(text.substring(start, end), marks, start > 0, end < text.length());
     }
 
     /** The places of the found words in a whole text such as a title. */
@@ -77,9 +78,11 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
 
     private static boolean found(String word, List<String> words) {
         String normalized = Normalizer.normalize(word, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
-        for (String wanted : words) {
-            if (normalized.startsWith(wanted)) {
-                return true;
+        for (String part : SEPARATORS.split(normalized)) {
+            for (String wanted : words) {
+                if (!part.isEmpty() && part.startsWith(wanted)) {
+                    return true;
+                }
             }
         }
         return false;

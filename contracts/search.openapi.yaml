@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102)
-  version: 0.3.0
+  version: 0.3.1
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -149,19 +149,25 @@ paths:
           explode: true
         - name: language
           in: query
-          description: Nur diese Sprachfassungen durchsuchen; ohne Angabe beide.
+          description: Nur diese Sprachfassungen durchsuchen; ohne Angabe beide. Ein anderer Wert antwortet mit `language.invalid`.
           schema: {type: string, enum: [de, en]}
         - name: preferred
           in: query
-          description: Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen. Vorgabe `de`.
+          description: Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen, sonst die Quellsprache. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`.
           schema: {type: string, enum: [de, en]}
         - name: drafts
           in: query
-          description: Im aktuellen Entwurf statt in der veröffentlichten Revision suchen.
+          description: |
+            Im aktuellen Entwurf statt in der veröffentlichten Revision suchen, nie gemischt. Vorgabe `false`. Durchsucht nur
+            Projekte mit `wiki.edit` oder `wiki.publish`; fehlt beides in jedem Mitgliedsprojekt, antwortet der Server mit 403
+            `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `drafts.invalid`.
           schema: {type: string, enum: ['true', 'false']}
         - name: archived
           in: query
-          description: Archivierte Seiten einbeziehen.
+          description: |
+            Archivierte Seiten einbeziehen, gekennzeichnet mit `archived`. Vorgabe `false`. Nur in Projekten mit `wiki.publish`,
+            wie das Wiki selbst archivierte Seiten zeigt (DEC-132); fehlt es in jedem Mitgliedsprojekt, antwortet der Server mit
+            403 `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `archived.invalid`.
           schema: {type: string, enum: ['true', 'false']}
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -219,7 +225,8 @@ components:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
         auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
+        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
+        `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -302,10 +309,15 @@ components:
         cutEnd: {type: boolean}
     PathEntry:
       type: object
-      required: [id, title]
+      description: |
+        Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
+        veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
+        verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
+      required: [id, title, available]
       properties:
-        id: {type: string, format: uuid}
-        title: {type: string}
+        id: {type: [string, 'null'], format: uuid}
+        title: {type: [string, 'null']}
+        available: {type: boolean}
     WikiHit:
       type: object
       required: [id, projectId, projectKey, title, titleMarks, language, stage, revision, publishedAt, archived, path, snippet]

@@ -305,7 +305,7 @@ function Shell() {
           {route.name === 'escalations' && <EscalationsPage />}
           {route.name === 'time' && <TimePage />}
           {route.name === 'wiki' && <WikiPage key="wiki" projectId={null} pageId={null} />}
-          {route.name === 'wikiPage' && <WikiPage key={route.projectId} projectId={route.projectId} pageId={route.pageId} />}
+          {route.name === 'wikiPage' && <WikiPage key={route.projectId} projectId={route.projectId} pageId={route.pageId} entry={{ language: route.language, published: route.published === true }} />}
           {route.name === 'requirements' && <RequirementsPage key="requirements" projectId={null} requirementId={null} />}
           {route.name === 'requirementPage' && (
             <RequirementsPage key={route.projectId} projectId={route.projectId} requirementId={route.requirementId} />

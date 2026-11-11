@@ -443,7 +443,7 @@ public class SearchService {
         }
     }
 
-    private record WikiRow(UUID id, UUID projectId, String projectKey, String language, String title, int revision,
+    private record WikiRow(UUID id, UUID projectId, String projectKey, String language, String title, String body, int revision,
             java.time.Instant publishedAt, boolean archived) {
     }
 
@@ -506,46 +506,47 @@ public class SearchService {
                 params.add(word);
                 params.add(word);
             }
-            // Words in the title count twice as much as words in the text.
+            // Each word counts where it is found, in the title twice as much as in the text; ranking the title and the text
+            // each against all words would push a hit with its words spread over both far behind (H2 of the review).
+            String anyWord = String.join(" | ", text.words());
             rank = "2 * ts_rank(t.title_tsv, to_tsquery('simple', ?)) + ts_rank(t.body_tsv, to_tsquery('simple', ?))";
-            rankParams.add(text.tsquery());
-            rankParams.add(text.tsquery());
+            rankParams.add(anyWord);
+            rankParams.add(anyWord);
         }
         String preferred = query.preferred() == null ? "de" : query.preferred();
         String from = " from search_wiki_text t join search_wiki_page p on p.page_id = t.page_id "
             + "join search_project sp on sp.project_id = p.project_id where " + where;
-        long total = jdbc.sql("select count(distinct t.page_id)" + from).params(params).query(Long.class).single();
-        if (total == 0) {
-            return new Page<>(0, List.of());
-        }
+        // One statement, so total, row, revision and text come from one snapshot even while a page is published or withdrawn
+        // (F4 of the review): the window counts the pages before the limit.
         List<Object> pageParams = new ArrayList<>(rankParams);
         pageParams.add(preferred);
         pageParams.addAll(params);
         pageParams.add(query.limit());
         pageParams.add(query.offset());
-        List<WikiRow> rows = jdbc.sql("select * from (select distinct on (t.page_id) t.page_id, p.project_id, sp.key as project_key, t.language, "
-                + "t.title, t.revision, t.published_at, p.archived, " + rank + " as rank, "
+        long[] total = {-1};
+        List<WikiRow> rows = jdbc.sql("select *, count(*) over () as total from (select distinct on (t.page_id) t.page_id, p.project_id, "
+                + "sp.key as project_key, t.language, t.title, t.body, t.revision, t.published_at, p.archived, " + rank + " as rank, "
                 + "case when t.language = ? then 0 when t.language = p.source_language then 1 else 2 end as preference"
                 + from + " order by t.page_id, preference) h order by rank desc, lower(title), title, page_id limit ? offset ?")
             .params(pageParams)
-            .query((rs, n) -> new WikiRow(rs.getObject("page_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getString("project_key"),
-                rs.getString("language"), rs.getString("title"), rs.getInt("revision"),
-                rs.getTimestamp("published_at") == null ? null : rs.getTimestamp("published_at").toInstant(), rs.getBoolean("archived")))
+            .query((rs, n) -> {
+                total[0] = rs.getLong("total");
+                return new WikiRow(rs.getObject("page_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getString("project_key"),
+                    rs.getString("language"), rs.getString("title"), rs.getString("body"), rs.getInt("revision"),
+                    rs.getTimestamp("published_at") == null ? null : rs.getTimestamp("published_at").toInstant(), rs.getBoolean("archived"));
+            })
             .list();
         if (rows.isEmpty()) {
-            return new Page<>(total, List.of());
+            // Past the last page (or nothing found): the count alone.
+            long count = query.offset() == 0 ? 0 : jdbc.sql("select count(distinct t.page_id)" + from).params(params).query(Long.class).single();
+            return new Page<>(count, List.of());
         }
         String stage = query.drafts() ? "draft" : "published";
-        Map<String, String> bodies = new HashMap<>();
-        for (WikiRow row : rows) {
-            jdbc.sql("select body from search_wiki_text where page_id = ? and language = ? and stage = ?").params(row.id(), row.language(), stage)
-                .query(String.class).optional().ifPresent(body -> bodies.put(row.id() + "/" + row.language(), body));
-        }
-        Map<UUID, List<WikiPages.PathEntry>> paths = wiki.paths(actor, rows.stream().map(WikiRow::id).toList(), preferred);
+        Map<UUID, List<WikiPages.PathEntry>> paths = wiki.paths(actor, rows.stream().map(WikiRow::id).toList(), preferred, query.drafts());
         List<String> words = text.plainWords();
-        return new Page<>(total, rows.stream().map(row -> new WikiHit(row.id(), row.projectId(), row.projectKey(), row.title(),
+        return new Page<>(total[0], rows.stream().map(row -> new WikiHit(row.id(), row.projectId(), row.projectKey(), row.title(),
             SearchSnippet.marks(row.title(), words), row.language(), stage, row.revision(), row.publishedAt(), row.archived(),
-            paths.getOrDefault(row.id(), List.of()), SearchSnippet.of(bodies.get(row.id() + "/" + row.language()), words))).toList());
+            paths.getOrDefault(row.id(), List.of()), SearchSnippet.of(row.body(), words))).toList());
     }
 
     // ------------------------------------------------------------------------------------------------ shared

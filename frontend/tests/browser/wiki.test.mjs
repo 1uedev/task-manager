@@ -784,4 +784,71 @@ describe('wiki', () => {
       assert.match(await hits.innerText(), /Entwurf, Revision 1/);
     });
   });
+
+  test('a hit opens the language version and the published revision it found, and a hidden parent shows as not available (TASK-102 F2, F5)', async () => {
+    let page;
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit']);
+        const hidden = backend.addWikiPage(backend.anna, 'Verborgene Mitte', doc('Mitte'));
+        page = backend.addWikiPage(backend.anna, 'Leitfaden', doc('Deutscher Text'), { parentId: hidden.id, publish: true });
+        backend.addWikiLanguage(page, 'en', backend.anna, { title: 'Guide', content: doc('English handbook text'), publish: true });
+        // A newer English draft that does not contain the word found.
+        backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'Guide', content: doc('Rewritten') },
+          { headers: { 'if-match': '"1"' }, query: 'language=en' });
+      },
+    }, async (app) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('handbook');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = app.getByTestId('wiki-hits').locator('li').first();
+      await hit.waitFor();
+      assert.match(await hit.innerText(), /^Seite nicht verfügbar · Englisch/m, 'the hidden parent keeps its level without its title');
+      assert.equal(await hit.locator('.item-title').getAttribute('lang'), 'en');
+      await hit.getByRole('link').click();
+      await app.getByTestId('wiki-content').waitFor();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'Guide');
+      assert.match(await app.getByTestId('wiki-content').innerText(), /English handbook text/, 'the published revision the search found');
+      assert.match(await app.getByTestId('wiki-published-shown').innerText(), /veröffentlichte Revision 1/);
+      await app.getByRole('button', { name: 'Entwurf zeigen' }).click();
+      assert.match(await app.getByTestId('wiki-content').innerText(), /Rewritten/);
+    });
+  });
+
+  test('the draft and archive filters follow the project chosen and a failed next page is retried with its own offset (TASK-102 H4)', async () => {
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit']);
+        for (let n = 1; n <= 25; n += 1) backend.addWikiPage(backend.anna, `Seite ${String(n).padStart(2, '0')}`, doc('Gemeinsam'), { publish: true });
+      },
+    }, async (app) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Entwürfe durchsuchen').check();
+      assert.equal(await form.getByLabel('Archivierte einbeziehen').count(), 0, 'no archive filter without wiki.publish');
+      await form.getByLabel('Entwürfe durchsuchen').uncheck();
+      await form.getByLabel('Suchtext').fill('gemeinsam');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await app.getByTestId('wiki-hits').waitFor();
+      assert.equal(await app.getByTestId('wiki-hits').locator('li').count(), 20);
+      let failing = true;
+      await app.route('**/api/v1/search/wiki?*', async (route) => {
+        if (failing) {
+          failing = false;
+          return route.fulfill({ status: 500, contentType: 'application/problem+json', body: JSON.stringify({ title: 'Fehler', status: 500, code: 'server.error' }) });
+        }
+        return route.fallback();
+      });
+      await app.getByRole('button', { name: 'Weitere Treffer' }).click();
+      await app.getByRole('button', { name: 'Erneut versuchen' }).click();
+      await app.waitForFunction(() => document.querySelectorAll('[data-testid=wiki-hits] li').length === 5);
+      assert.match(await app.getByTestId('wiki-hits').innerText(), /Seite 21/);
+      assert.equal(await app.evaluate(() => document.activeElement?.id), 'wiki-hits', 'after paging the focus is on the heading of the result');
+    });
+  });
 });

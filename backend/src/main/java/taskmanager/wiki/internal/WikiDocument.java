@@ -150,6 +150,9 @@ public final class WikiDocument {
             case "text" -> {
                 if (!internalLink(node)) {
                     out.append(node.get("text").asString());
+                } else if (!out.isEmpty() && !Character.isWhitespace(out.charAt(out.length() - 1))) {
+                    // The left out text still separates the words around it.
+                    out.append(' ');
                 }
             }
             case "hardBreak" -> out.append('\n');

@@ -121,10 +121,16 @@ export interface components {
             cutStart: boolean;
             cutEnd: boolean;
         };
+        /**
+         * @description Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
+         *     veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
+         *     verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
+         */
         PathEntry: {
             /** Format: uuid */
-            id: string;
-            title: string;
+            id: string | null;
+            title: string | null;
+            available: boolean;
         };
         WikiHit: {
             /** Format: uuid */
@@ -158,7 +164,8 @@ export interface components {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
          *     auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
+         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
+         *     `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
          */
         Problem: {
             headers: {
@@ -283,13 +290,21 @@ export interface operations {
                 q?: components["parameters"]["Text"];
                 /** @description Projektkennung, wiederholbar (höchstens 20); ein Projekt ohne Wikiaktion antwortet mit `project.unknown`. */
                 project?: string[];
-                /** @description Nur diese Sprachfassungen durchsuchen; ohne Angabe beide. */
+                /** @description Nur diese Sprachfassungen durchsuchen; ohne Angabe beide. Ein anderer Wert antwortet mit `language.invalid`. */
                 language?: "de" | "en";
-                /** @description Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen. Vorgabe `de`. */
+                /** @description Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen, sonst die Quellsprache. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`. */
                 preferred?: "de" | "en";
-                /** @description Im aktuellen Entwurf statt in der veröffentlichten Revision suchen. */
+                /**
+                 * @description Im aktuellen Entwurf statt in der veröffentlichten Revision suchen, nie gemischt. Vorgabe `false`. Durchsucht nur
+                 *     Projekte mit `wiki.edit` oder `wiki.publish`; fehlt beides in jedem Mitgliedsprojekt, antwortet der Server mit 403
+                 *     `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `drafts.invalid`.
+                 */
                 drafts?: "true" | "false";
-                /** @description Archivierte Seiten einbeziehen. */
+                /**
+                 * @description Archivierte Seiten einbeziehen, gekennzeichnet mit `archived`. Vorgabe `false`. Nur in Projekten mit `wiki.publish`,
+                 *     wie das Wiki selbst archivierte Seiten zeigt (DEC-132); fehlt es in jedem Mitgliedsprojekt, antwortet der Server mit
+                 *     403 `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `archived.invalid`.
+                 */
                 archived?: "true" | "false";
                 limit?: components["parameters"]["Limit"];
                 offset?: components["parameters"]["Offset"];

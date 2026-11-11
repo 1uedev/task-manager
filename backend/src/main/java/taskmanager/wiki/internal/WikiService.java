@@ -616,7 +616,7 @@ public class WikiService implements WikiPages {
     /** The paths above the pages as the page view shows them to the caller (TASK-102); see {@link WikiPages#paths}. */
     @Override
     @Transactional
-    public Map<UUID, List<PathEntry>> paths(AccessContext actor, Collection<UUID> pageIds, String language) {
+    public Map<UUID, List<PathEntry>> paths(AccessContext actor, Collection<UUID> pageIds, String language, boolean drafts) {
         Map<UUID, List<PathEntry>> paths = new HashMap<>();
         String requested = language != null && LANGUAGES.contains(language) ? language : null;
         Map<UUID, List<WikiRepository.Page>> byProject = new HashMap<>();
@@ -632,11 +632,31 @@ public class WikiService implements WikiPages {
             for (WikiRepository.Page page : pages) {
                 boolean visible = page.archived() ? access.publish() : access.drafts() || published(page.id());
                 if (visible) {
-                    paths.put(page.id(), path(rows, page, access, requested).stream().map(crumb -> new PathEntry(crumb.id(), crumb.title())).toList());
+                    paths.put(page.id(), searchPath(rows, page, drafts && access.drafts(), requested));
                 }
             }
         });
         return paths;
+    }
+
+    /** Every level above a found page, in the stage of the search (DEC-132); see {@link WikiPages#paths}. */
+    private static List<PathEntry> searchPath(Map<UUID, PageRows> rows, WikiRepository.Page page, boolean drafts, String requested) {
+        List<PathEntry> path = new ArrayList<>();
+        UUID parent = page.parentId();
+        Set<UUID> seen = new HashSet<>();
+        while (parent != null && seen.add(parent)) {
+            PageRows above = rows.get(parent);
+            if (above == null) {
+                // An archived parent is no longer in the tree; its own parent is not known from here.
+                path.addFirst(PathEntry.unavailable());
+                break;
+            }
+            Optional<WikiRepository.TreeRow> row = shownRow(above, requested, drafts);
+            path.addFirst(row.map(r -> new PathEntry(above.page().id(), drafts ? r.draftTitle() : r.publishedTitle(), true))
+                .orElseGet(PathEntry::unavailable));
+            parent = above.page().parentId();
+        }
+        return path;
     }
 
     /** Every page of the company for the search projection (TASK-102); see {@link WikiPages#searchSources}. */
