@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-100](#task-100-befunde-der-codex-prüfung-von-task-098-beheben-a13) | Befunde der Codex Prüfung von TASK-098 beheben (A13) | claude-20261111-requirements-02 | 2026-11-11 |
 
 ### Blockiert – BLOCKIERT
 
@@ -87,6 +89,28 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
 
 **Nächster Schritt:** Nach Holgers Wahl eine Codex Nachprüfung der Nachbesserung, dann fachliche Abnahme durch Holger, dabei die Auslegungen (a) bis (e) in DEC-126 bestätigen; nach dem Merge des Ergebnisses TASK-097 in derselben Sitzung.
+
+## TASK-100 Befunde der Codex Prüfung von TASK-098 beheben (A13)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-requirements-02 · **Aktualisiert:** 2026-11-11
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; DEC-128; docs/REVIEW_TASK-098_PR-291.md. **Abhängigkeiten:** TASK-098 geliefert (PR #291). **Arbeitsstand:** Holger hat am 11. November 2026 den Bericht der Codex Prüfung von TASK-098 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-100“ gewählt. Branch claude/project-thread-dyiimb, Entscheidung DEC-130, Migration V0061.
+
+**Umfang:** Befunde F1 bis F4 aus docs/REVIEW_TASK-098_PR-291.md:
+1. F1: Die Projektansicht nennt die eigenen Felder der Anforderungen nur Personen, die die Konfiguration verwalten dürfen; Leser erhalten sie wie bisher gefiltert über die Anforderungen.
+2. F2: Die Personenauswahl der Anforderungen steht auch Personen offen, die ein eigenes Personenfeld schreiben dürfen, ohne das Recht auf „Verantwortlich“ zu erweitern; ein Ladefehler wird angezeigt.
+3. F3: Die Speichergrenze der Werte je Revision fasst alle erlaubten Werte (Migration V0061), eine darüber hinausgehende Größe antwortet mit 400 statt 500.
+4. F4: Der Testersatz prüft und kanonisiert die Werte eigener Felder wie der Server.
+
+Hinweis H1 (Pflichtfelder nur beim Übergang nach Zur Prüfung) bleibt nach DEC-128 (a) und wird in DEC-130 festgehalten. Nicht Teil: neue Regeln, eigene Felder der Tickets in der Projektansicht.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 mit Backendtest: dasselbe eingeschränkte Mitglied sieht weder über die Anforderung noch über das Projektdetail die verborgene Definition.
+2. F2 mit Backend und Browsertest: beschreibbares Personenfeld ohne Schreibrecht auf `owner`.
+3. F3 mit Backendtest über viele lange Werte mit Mehrbytezeichen und einem kleinen PATCH an großem Bestand.
+4. F4 mit einer gemeinsamen Fallmatrix gegen Server und Testersatz; bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
 
 ## TASK-099 Befunde der Codex Nachprüfung von TASK-096 beheben (A13)
 
