@@ -16,6 +16,8 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.identity.IdentityVerification;
@@ -28,6 +30,8 @@ import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
+import taskmanager.requirements.RequirementChanged;
+import taskmanager.requirements.RequirementSources;
 import taskmanager.wiki.RichText;
 import tools.jackson.databind.JsonNode;
 
@@ -56,7 +60,7 @@ import tools.jackson.databind.JsonNode;
  * of the requirement and is refused with 412 when the requirement is newer.
  */
 @Service
-public class RequirementService {
+public class RequirementService implements RequirementSources {
     public static final String READ = "requirement.read";
     public static final String EDIT = "requirement.edit";
     public static final String APPROVE = "requirement.approve";
@@ -82,10 +86,12 @@ public class RequirementService {
     private final IdentityVerification identity;
     private final Clock clock;
     private final RequirementLinks links;
+    private final ApplicationEventPublisher events;
 
     RequirementService(RequirementRepository repository, ProjectAccess projects, Permissions permissions, IdentityVerification identity, Clock clock,
-            RequirementLinks links) {
+            RequirementLinks links, ApplicationEventPublisher events) {
         this.links = links;
+        this.events = events;
         this.repository = repository;
         this.projects = projects;
         this.permissions = permissions;
@@ -367,6 +373,7 @@ public class RequirementService {
         repository.insert(new RequirementRepository.Revision(id, 1, title, description, priority, List.copyOf(criteria), now, actor.userId(), now,
             actor.userId(), null, null, custom));
         repository.event(actor.companyId(), id, 1, "created", null, null, null, null, null, actor.userId(), now);
+        changed(actor.companyId(), id);
         return view(repository.find(actor.companyId(), id).orElseThrow(), access(actor, projectId));
     }
 
@@ -441,6 +448,7 @@ public class RequirementService {
                 now);
         }
         repository.update(requirement.with(status, owner, revision, requirement.approvedRevision(), next, now, by));
+        changed(actor.companyId(), id);
         return view(repository.find(actor.companyId(), id).orElseThrow(), access(actor, requirement.projectId()));
     }
 
@@ -554,6 +562,7 @@ public class RequirementService {
             actor.userId(), now);
         repository.update(requirement.with(status, requirement.ownerId(), requirement.currentRevision(), approved, requirement.nextCriterion(), now,
             actor.userId()));
+        changed(actor.companyId(), requirement.id());
         return view(repository.find(actor.companyId(), requirement.id()).orElseThrow(), access(actor, requirement.projectId()));
     }
 
@@ -719,6 +728,52 @@ public class RequirementService {
     }
 
     /** The configuration in force; read after the rights check locked the project, it stays current until the commit. */
+    // ------------------------------------------------------------------------------------------------ search (TASK-103)
+
+    /** Every requirement of the company for the search projection; see {@link RequirementSources#searchSources}. */
+    @Override
+    @Transactional
+    public void searchSources(UUID companyId, Consumer<RequirementChanged> sink) {
+        for (UUID id : repository.ids(companyId)) {
+            source(companyId, id).ifPresent(sink);
+        }
+    }
+
+    /** Tells the search module the new state of a requirement inside the transaction of the change (TASK-103, DEC-133). */
+    private void changed(UUID companyId, UUID id) {
+        source(companyId, id).ifPresent(events::publishEvent);
+    }
+
+    private java.util.Optional<RequirementChanged> source(UUID companyId, UUID id) {
+        return repository.find(companyId, id).map(requirement -> {
+            ProjectConfiguration configuration = projects.currentConfigurationVersion(requirement.projectId())
+                .flatMap(version -> projects.configuration(requirement.projectId(), version)).orElse(null);
+            List<RequirementChanged.Stage> stages = new ArrayList<>();
+            RequirementRepository.Revision current = repository.revision(id, requirement.currentRevision()).orElseThrow();
+            stages.add(stage("current", current, configuration));
+            if (requirement.approvedRevision() != null) {
+                RequirementRepository.Revision approved = requirement.approvedRevision() == requirement.currentRevision() ? current
+                    : repository.revision(id, requirement.approvedRevision()).orElseThrow();
+                stages.add(stage("approved", approved, configuration));
+            }
+            return new RequirementChanged(requirement.id(), requirement.companyId(), requirement.projectId(), requirement.number(),
+                requirement.status(), requirement.ownerId(), requirement.currentRevision(), requirement.approvedRevision(), stages);
+        });
+    }
+
+    private static RequirementChanged.Stage stage(String stage, RequirementRepository.Revision revision, ProjectConfiguration configuration) {
+        String description = revision.description() == null ? null : RichText.stored(revision.description()).plainText();
+        List<RequirementChanged.CustomValue> custom = new ArrayList<>();
+        revision.custom().forEach((key, value) -> {
+            String type = configuration == null ? null : configuration.requirementField(key).map(CustomField::type).orElse(null);
+            if (type != null) {
+                custom.add(new RequirementChanged.CustomValue(key, type, value));
+            }
+        });
+        return new RequirementChanged.Stage(stage, revision.revision(), revision.title(), description, revision.priority(),
+            revision.criteria().stream().map(c -> new RequirementChanged.Criterion(c.id(), c.text())).toList(), custom);
+    }
+
     private ProjectConfiguration configuration(UUID projectId) {
         return projects.currentConfigurationVersion(projectId).flatMap(version -> projects.configuration(projectId, version))
             .orElseThrow(RequirementService::projectNotFound);

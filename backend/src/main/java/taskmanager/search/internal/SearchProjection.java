@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectChanged;
+import taskmanager.requirements.RequirementChanged;
+import taskmanager.requirements.RequirementSources;
 import taskmanager.tags.ProjectTagChanged;
 import taskmanager.tags.TagAccess;
 import taskmanager.tags.TagChanged;
@@ -29,8 +31,11 @@ public class SearchProjection {
     private final TicketAccess tickets;
     private final TagAccess tags;
     private final WikiPages wiki;
+    private final RequirementSources requirements;
 
-    SearchProjection(SearchRepository search, ProjectAccess projects, TicketAccess tickets, TagAccess tags, WikiPages wiki) {
+    SearchProjection(SearchRepository search, ProjectAccess projects, TicketAccess tickets, TagAccess tags, WikiPages wiki,
+            RequirementSources requirements) {
+        this.requirements = requirements;
         this.search = search;
         this.projects = projects;
         this.tickets = tickets;
@@ -43,6 +48,13 @@ public class SearchProjection {
     public void on(WikiPageChanged page) {
         search.enterWrite();
         search.upsertWikiPage(page);
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void on(RequirementChanged requirement) {
+        search.enterWrite();
+        search.upsertRequirement(requirement);
     }
 
     @EventListener
@@ -119,6 +131,7 @@ public class SearchProjection {
         tags.ticketAssignments(companyId).forEach(assignment -> search.insertTicketTag(assignment.ticketId(), assignment.tagId()));
         tags.projectAssignments(companyId).forEach(assignment -> search.insertProjectTag(assignment.projectId(), assignment.tagId()));
         wiki.searchSources(companyId, search::upsertWikiPage);
+        requirements.searchSources(companyId, search::upsertRequirement);
         search.refreshCompany(companyId);
         search.markBuilt(companyId);
     }

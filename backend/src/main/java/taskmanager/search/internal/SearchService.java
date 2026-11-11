@@ -549,6 +549,301 @@ public class SearchService {
             paths.getOrDefault(row.id(), List.of()), SearchSnippet.of(row.body(), words))).toList());
     }
 
+    // ------------------------------------------------------------------------------------------------ requirements
+
+    static final String REQUIREMENT_RESOURCE = "requirement";
+    static final String REQUIREMENT_READ = "requirement.read";
+    /** The standard fields of requirements with field rules (DEC-126); key, status and revision are no fields. */
+    static final List<String> REQUIREMENT_FIELDS = List.of("title", "description", "criteria", "priority", "owner");
+    public static final List<String> REQUIREMENT_STATUSES = List.of("draft", "review", "approved", "discarded");
+    public static final List<String> REQUIREMENT_PRIORITIES = List.of("low", "normal", "high", "critical");
+    private static final java.util.regex.Pattern REQUIREMENT_KEY =
+        java.util.regex.Pattern.compile("(?:([A-Z][A-Z0-9]{1,9})\\s+)?ANF-([0-9]{1,18})");
+    private static final Map<String, String> REQUIREMENT_VECTORS = Map.of(
+        "title", "t.title_tsv", "description", "t.description_tsv", "criteria", "t.criteria_tsv");
+
+    /**
+     * A search of requirements (TASK-103, DEC-133). {@code approvedStage} searches the newest approved revision instead of the
+     * current one, never both. {@code everApproved} keeps requirements that were ({@code true}) or never were ({@code false})
+     * approved; {@code null} keeps all. Discarded requirements are left out unless a status is given.
+     */
+    public record RequirementQuery(String text, List<UUID> projects, boolean approvedStage, List<String> statuses, List<String> priorities,
+            List<UUID> owners, Boolean everApproved, List<CustomFilter> custom, int limit, int offset) {
+    }
+
+    /**
+     * One requirement in the revision searched. Fields the caller may not read are {@code null} (title, priority, owner) or
+     * missing (custom fields). {@code approved} tells whether this revision is the newest approved one.
+     */
+    public record RequirementHit(UUID id, UUID projectId, String projectKey, String key, long number, String title,
+            List<SearchSnippet.Mark> titleMarks, String status, String stage, int revision, int currentRevision, Integer approvedRevision,
+            boolean approved, String priority, UUID owner, Map<String, String> customFields, RequirementSnippet snippet) {
+    }
+
+    /**
+     * The excerpt of a hit and where it comes from: {@code description}, {@code criteria} with the number of the criterion, or
+     * the identifier of a custom field of the kind text or long text.
+     */
+    public record RequirementSnippet(String field, Integer criterion, SearchSnippet excerpt) {
+    }
+
+    private record RequirementRow(UUID id, UUID projectId, String projectKey, long number) {
+    }
+
+    /**
+     * Rights first, as for tickets: projects with {@code requirement.read} of the caller are searched, words match only in the
+     * fields the caller may read there, and a filter on a field they may not read matches nothing in that project. Rank, total,
+     * page and excerpt come from readable fields alone; the key {@code ANF-n}, with or without the key of the project in front,
+     * finds the requirement for every reader. One statement gives total and page from one snapshot.
+     */
+    @Transactional
+    public Page<RequirementHit> requirements(AccessContext actor, RequirementQuery query) {
+        internal(actor);
+        SearchText text = text(query.text());
+        Map<UUID, Set<String>> readable = readableRequirementFields(actor);
+        Set<UUID> scope = new LinkedHashSet<>(readable.keySet());
+        if (!query.projects().isEmpty()) {
+            if (!readable.keySet().containsAll(query.projects())) {
+                throw invalid("project.unknown");
+            }
+            scope.retainAll(query.projects());
+        }
+        String[] key = requirementKey(query.text());
+        Map<Set<String>, List<UUID>> groups = new LinkedHashMap<>();
+        for (UUID project : scope) {
+            groups.computeIfAbsent(readable.get(project), fields -> new ArrayList<>()).add(project);
+        }
+        List<String> selects = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        String stage = query.approvedStage() ? "approved" : "current";
+        groups.forEach((fields, ids) -> requirementSelect(actor, query, text, key, stage, fields, ids, selects, params));
+        if (selects.isEmpty()) {
+            return new Page<>(0, List.of());
+        }
+        String union = String.join(" union all ", selects);
+        List<Object> pageParams = new ArrayList<>(params);
+        pageParams.add(query.limit());
+        pageParams.add(query.offset());
+        long[] total = {-1};
+        List<RequirementRow> rows = jdbc.sql("select *, count(*) over () as total from (" + union + ") h "
+                + "order by rank desc, project_key, number desc limit ? offset ?")
+            .params(pageParams)
+            .query((rs, n) -> {
+                total[0] = rs.getLong("total");
+                return new RequirementRow(rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class),
+                    rs.getString("project_key"), rs.getLong("number"));
+            })
+            .list();
+        if (rows.isEmpty()) {
+            long count = query.offset() == 0 ? 0 : jdbc.sql("select count(*) from (" + union + ") h").params(params).query(Long.class).single();
+            return new Page<>(count, List.of());
+        }
+        return new Page<>(total[0], requirementHits(rows, stage, readable, text.plainWords()));
+    }
+
+    /** {@code [project key or null, number]} when the text names a requirement by its key; {@code null} otherwise. */
+    private static String[] requirementKey(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String text = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC).strip().toUpperCase(java.util.Locale.ROOT);
+        java.util.regex.Matcher matcher = REQUIREMENT_KEY.matcher(text);
+        return matcher.matches() ? new String[] {matcher.group(1), matcher.group(2)} : null;
+    }
+
+    /** One select of the union for the projects that share the same readable fields; none when they cannot match. */
+    private void requirementSelect(AccessContext actor, RequirementQuery query, SearchText text, String[] key, String stage, Set<String> fields,
+            List<UUID> ids, List<String> selects, List<Object> params) {
+        if ((!query.priorities().isEmpty() && !fields.contains("priority")) || (!query.owners().isEmpty() && !fields.contains("owner"))
+                || query.custom().stream().anyMatch(filter -> !fields.contains(ProjectConfiguration.CUSTOM_PREFIX + filter.key()))) {
+            return;
+        }
+        List<String> vectors = REQUIREMENT_FIELDS.stream().filter(REQUIREMENT_VECTORS::containsKey).filter(fields::contains)
+            .map(REQUIREMENT_VECTORS::get).toList();
+        List<String> customKeys = fields.stream().filter(field -> field.startsWith(ProjectConfiguration.CUSTOM_PREFIX))
+            .map(field -> field.substring(ProjectConfiguration.CUSTOM_PREFIX.length())).sorted().toList();
+        String custom = "search_requirement_custom c where c.requirement_id = r.requirement_id and c.stage = t.stage and c.field_key in ("
+            + placeholders(customKeys.size()) + ")";
+        List<Object> rankParams = new ArrayList<>();
+        List<Object> whereParams = new ArrayList<>();
+        StringBuilder where = new StringBuilder();
+        String rank = "0";
+        if (text.present()) {
+            List<String> matches = new ArrayList<>();
+            if (text.tsquery() != null && (!vectors.isEmpty() || !customKeys.isEmpty())) {
+                List<String> words = new ArrayList<>();
+                for (String word : text.words()) {
+                    List<String> alternatives = new ArrayList<>();
+                    for (String vector : vectors) {
+                        alternatives.add(vector + " @@ to_tsquery('simple', ?)");
+                        whereParams.add(word);
+                    }
+                    if (!customKeys.isEmpty()) {
+                        alternatives.add("exists (select 1 from " + custom + " and c.tsv @@ to_tsquery('simple', ?))");
+                        whereParams.addAll(customKeys);
+                        whereParams.add(word);
+                    }
+                    words.add("(" + String.join(" or ", alternatives) + ")");
+                }
+                matches.add("(" + String.join(" and ", words) + ")");
+                // Each word counts where it is found, the title twice as much as the other fields (as for wiki pages).
+                String anyWord = String.join(" | ", text.words());
+                List<String> parts = new ArrayList<>();
+                for (String vector : vectors) {
+                    parts.add((vector.equals("t.title_tsv") ? "2 * " : "") + "ts_rank(" + vector + ", to_tsquery('simple', ?))");
+                    rankParams.add(anyWord);
+                }
+                if (!customKeys.isEmpty()) {
+                    parts.add("coalesce((select max(ts_rank(c.tsv, to_tsquery('simple', ?))) from " + custom + "), 0)");
+                    rankParams.add(anyWord);
+                    rankParams.addAll(customKeys);
+                }
+                rank = String.join(" + ", parts);
+            }
+            if (key != null) {
+                // The key is not a field: who may read the requirement may find it by its key.
+                String keyMatch = key[0] == null ? "r.number = ?" : "(p.key = ? and r.number = ?)";
+                rank = "case when " + keyMatch + " then 1000 else 0 end + " + rank;
+                List<Object> keyParams = new ArrayList<>();
+                if (key[0] != null) {
+                    keyParams.add(key[0]);
+                }
+                keyParams.add(Long.parseLong(key[1]));
+                rankParams.addAll(0, keyParams);
+                matches.add(keyMatch);
+                whereParams.addAll(keyParams);
+            }
+            if (matches.isEmpty()) {
+                return;
+            }
+            where.append(" and (").append(String.join(" or ", matches)).append(")");
+        }
+        if (query.statuses().isEmpty()) {
+            where.append(" and r.status <> 'discarded'");
+        } else {
+            filter(where, whereParams, "r.status", query.statuses());
+        }
+        filter(where, whereParams, "t.priority", query.priorities());
+        filter(where, whereParams, "r.owner_id", query.owners());
+        if (query.everApproved() != null) {
+            where.append(query.everApproved() ? " and r.approved_revision is not null" : " and r.approved_revision is null");
+        }
+        for (CustomFilter filter : query.custom()) {
+            where.append(" and exists (select 1 from search_requirement_custom c where c.requirement_id = r.requirement_id "
+                + "and c.stage = t.stage and c.field_key = ? and c.value = ?)");
+            whereParams.add(filter.key());
+            whereParams.add(filter.value());
+        }
+        selects.add("select r.requirement_id as id, r.project_id, p.key as project_key, r.number, " + rank + " as rank "
+            + "from search_requirement r join search_requirement_text t on t.requirement_id = r.requirement_id and t.stage = ? "
+            + "join search_project p on p.project_id = r.project_id "
+            + "where r.company_id = ? and r.project_id in (" + placeholders(ids.size()) + ")" + where);
+        params.addAll(rankParams);
+        params.add(stage);
+        params.add(actor.companyId());
+        params.addAll(ids);
+        params.addAll(whereParams);
+    }
+
+    /** The page with the fields of each requirement the caller may read in its project and the excerpt of a readable field. */
+    private List<RequirementHit> requirementHits(List<RequirementRow> rows, String stage, Map<UUID, Set<String>> readable, List<String> words) {
+        List<UUID> ids = rows.stream().map(RequirementRow::id).toList();
+        record Text(String status, UUID owner, int current, Integer approved, int revision, String title, String description, String priority) {
+        }
+        Map<UUID, Text> texts = new HashMap<>();
+        jdbc.sql("select r.requirement_id, r.status, r.owner_id, r.current_revision, r.approved_revision, t.revision, t.title, "
+                + "t.description, t.priority from search_requirement r join search_requirement_text t on t.requirement_id = r.requirement_id "
+                + "and t.stage = :stage where r.requirement_id in (:ids)")
+            .param("stage", stage).param("ids", ids)
+            .query((ResultSet rs) -> {
+                texts.put(rs.getObject("requirement_id", UUID.class), new Text(rs.getString("status"), rs.getObject("owner_id", UUID.class),
+                    rs.getInt("current_revision"), (Integer) rs.getObject("approved_revision"), rs.getInt("revision"), rs.getString("title"),
+                    rs.getString("description"), rs.getString("priority")));
+            });
+        record Criterion(int id, String text) {
+        }
+        Map<UUID, List<Criterion>> criteria = new HashMap<>();
+        jdbc.sql("select requirement_id, criterion_id, text from search_requirement_criterion where stage = :stage and requirement_id in (:ids) "
+                + "order by position").param("stage", stage).param("ids", ids)
+            .query((ResultSet rs) -> {
+                criteria.computeIfAbsent(rs.getObject("requirement_id", UUID.class), id -> new ArrayList<>())
+                    .add(new Criterion(rs.getInt("criterion_id"), rs.getString("text")));
+            });
+        record Custom(String value, boolean text) {
+        }
+        Map<UUID, Map<String, Custom>> custom = new HashMap<>();
+        jdbc.sql("select requirement_id, field_key, value, terms <> '' as text from search_requirement_custom where stage = :stage "
+                + "and requirement_id in (:ids) order by field_key").param("stage", stage).param("ids", ids)
+            .query((ResultSet rs) -> {
+                custom.computeIfAbsent(rs.getObject("requirement_id", UUID.class), id -> new LinkedHashMap<>())
+                    .put(rs.getString("field_key"), new Custom(rs.getString("value"), rs.getBoolean("text")));
+            });
+        List<RequirementHit> hits = new ArrayList<>();
+        for (RequirementRow row : rows) {
+            Set<String> fields = readable.get(row.projectId());
+            Text text = texts.get(row.id());
+            Map<String, String> shownCustom = new LinkedHashMap<>();
+            Map<String, Custom> values = custom.getOrDefault(row.id(), Map.of());
+            values.forEach((field, value) -> {
+                if (fields.contains(ProjectConfiguration.CUSTOM_PREFIX + field)) {
+                    shownCustom.put(field, value.value());
+                }
+            });
+            // The excerpt comes from the first readable field that holds a search word: description, criteria, custom texts.
+            RequirementSnippet snippet = null;
+            if (!words.isEmpty()) {
+                if (fields.contains("description") && !SearchSnippet.marks(text.description(), words).isEmpty()) {
+                    snippet = new RequirementSnippet("description", null, SearchSnippet.of(text.description(), words));
+                }
+                if (snippet == null && fields.contains("criteria")) {
+                    for (Criterion criterion : criteria.getOrDefault(row.id(), List.of())) {
+                        if (!SearchSnippet.marks(criterion.text(), words).isEmpty()) {
+                            snippet = new RequirementSnippet("criteria", criterion.id(), SearchSnippet.of(criterion.text(), words));
+                            break;
+                        }
+                    }
+                }
+                if (snippet == null) {
+                    for (Map.Entry<String, Custom> value : values.entrySet()) {
+                        String id = ProjectConfiguration.CUSTOM_PREFIX + value.getKey();
+                        if (value.getValue().text() && fields.contains(id) && !SearchSnippet.marks(value.getValue().value(), words).isEmpty()) {
+                            snippet = new RequirementSnippet(id, null, SearchSnippet.of(value.getValue().value(), words));
+                            break;
+                        }
+                    }
+                }
+            }
+            if (snippet == null && fields.contains("description") && !text.description().isBlank()) {
+                snippet = new RequirementSnippet("description", null, SearchSnippet.of(text.description(), words));
+            }
+            boolean titleShown = fields.contains("title");
+            hits.add(new RequirementHit(row.id(), row.projectId(), row.projectKey(), "ANF-" + row.number(), row.number(),
+                titleShown ? text.title() : null, titleShown ? SearchSnippet.marks(text.title(), words) : List.of(), text.status(), stage,
+                text.revision(), text.current(), text.approved(), text.approved() != null && text.approved() == text.revision(),
+                fields.contains("priority") ? text.priority() : null, fields.contains("owner") ? text.owner() : null, shownCustom, snippet));
+        }
+        return hits;
+    }
+
+    /** Per project with {@code requirement.read}: the requirement fields the caller may read there, custom fields included. */
+    private Map<UUID, Set<String>> readableRequirementFields(AccessContext actor) {
+        Map<UUID, Set<String>> readable = new LinkedHashMap<>();
+        for (UUID project : projects.memberships(actor.companyId(), actor.userId())) {
+            Supplier<ResourceContext> resource = resource(actor, project, REQUIREMENT_RESOURCE);
+            Decision read = permissions.inspect(actor, resource, REQUIREMENT_READ, Set.copyOf(REQUIREMENT_FIELDS));
+            if (read.allowed()) {
+                Set<String> shown = new HashSet<>(read.readableFields());
+                List<String> custom = projects.currentConfigurationVersion(project)
+                    .flatMap(version -> projects.configuration(project, version)).map(ProjectConfiguration::requirementFieldIds).orElse(List.of());
+                if (!custom.isEmpty()) {
+                    shown.addAll(permissions.inspect(actor, resource, REQUIREMENT_READ, Set.copyOf(custom)).readableFields());
+                }
+                readable.put(project, Set.copyOf(shown));
+            }
+        }
+        return readable;
+    }
+
     // ------------------------------------------------------------------------------------------------ shared
 
     /**

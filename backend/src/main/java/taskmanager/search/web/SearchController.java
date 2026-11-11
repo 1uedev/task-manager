@@ -22,6 +22,8 @@ import taskmanager.search.internal.SearchService.CustomFilter;
 import taskmanager.search.internal.SearchService.Page;
 import taskmanager.search.internal.SearchService.ProjectHit;
 import taskmanager.search.internal.SearchService.ProjectQuery;
+import taskmanager.search.internal.SearchService.RequirementHit;
+import taskmanager.search.internal.SearchService.RequirementQuery;
 import taskmanager.search.internal.SearchService.TagMatch;
 import taskmanager.search.internal.SearchService.TagRef;
 import taskmanager.search.internal.SearchService.TicketHit;
@@ -30,7 +32,7 @@ import taskmanager.search.internal.SearchService.WikiHit;
 import taskmanager.search.internal.SearchService.WikiQuery;
 
 /**
- * Search for tickets and projects (TASK-029) and wiki pages (TASK-102). Every endpoint needs a complete login; the service decides what the caller
+ * Search for tickets and projects (TASK-029), wiki pages (TASK-102) and requirements (TASK-103). Every endpoint needs a complete login; the service decides what the caller
  * may find. Repeated parameters combine with "or" inside one filter and with "and" between filters; the given tags follow
  * {@code tagMatch} ({@code all} by default). A lock that could not be taken in time ends the search with 503 {@code search.busy} and {@code Retry-After}.
  */
@@ -123,7 +125,47 @@ class SearchController {
         return new PageBody<>(page.total(), page.items());
     }
 
+    /**
+     * Requirements (TASK-103): {@code stage=approved} searches the newest approved revision instead of the current one,
+     * {@code approved} keeps requirements that were or never were approved, {@code custom=<key>=<value>} filters on a custom field.
+     */
+    @GetMapping("/api/v1/search/requirements")
+    PageBody<RequirementHit> requirements(@RequestParam(required = false) String q, @RequestParam(required = false) List<String> project,
+            @RequestParam(required = false) String stage, @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) List<String> priority, @RequestParam(required = false) List<String> owner,
+            @RequestParam(required = false) String approved, @RequestParam(required = false) List<String> custom,
+            @RequestParam(required = false) Integer limit, @RequestParam(required = false) Integer offset) {
+        AccessContext actor = actor();
+        List<String> violations = new ArrayList<>();
+        boolean approvedStage = false;
+        if (stage != null) {
+            String value = stage.strip();
+            if (!value.equals("current") && !value.equals("approved")) {
+                violations.add("stage.invalid");
+            }
+            approvedStage = value.equals("approved");
+        }
+        RequirementQuery query = new RequirementQuery(q, ids(project, "project", violations), approvedStage,
+            known(texts(status, "status", violations), SearchService.REQUIREMENT_STATUSES, "status", violations),
+            known(texts(priority, "priority", violations), SearchService.REQUIREMENT_PRIORITIES, "priority", violations),
+            ids(owner, "owner", violations), approved == null ? null : flag(approved, "approved", violations),
+            customFilters(custom, violations), limit(limit, violations), offset(offset, violations));
+        if (!violations.isEmpty()) {
+            throw ApiProblemException.withViolations(400, "request.invalid", violations);
+        }
+        Page<RequirementHit> page = retrying(() -> search.requirements(actor, query));
+        return new PageBody<>(page.total(), page.items());
+    }
+
     // ------------------------------------------------------------------------------------------------ helpers
+
+    /** Only values of a fixed list; {@code <name>.invalid} otherwise. */
+    private static List<String> known(List<String> values, List<String> allowed, String name, List<String> violations) {
+        if (!allowed.containsAll(values) && !violations.contains(name + ".invalid")) {
+            violations.add(name + ".invalid");
+        }
+        return values;
+    }
 
     /** {@code de} or {@code en}; absent is {@code null}. */
     private static String language(String raw, String name, List<String> violations) {
