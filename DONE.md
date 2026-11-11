@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Nachtrag vom 10. November 2026: Holger hat das Wiki TASK-093 und TASK-094 mit der Korrektur TASK-095 abgenommen; diese Einträge stehen vor TASK-091. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Nachtrag vom 10. November 2026: Holger hat das Wiki TASK-093 und TASK-094 mit der Korrektur TASK-095 abgenommen; diese Einträge stehen vor TASK-091. Nachtrag vom 11. November 2026: Holger hat die Anforderungen TASK-096 bis TASK-098 mit den Korrekturen TASK-099 bis TASK-101 abgenommen (Paket A13); diese Einträge stehen vor TASK-095. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,143 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-101 Gespeicherte Person eines Personenfelds im Editor zeigen (A13)
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; DEC-128, DEC-131. **Verantwortlich:** claude-20261111-requirements-03. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** Browsertest für Anforderungen: deaktiviertes Personenfeld und ehemaliges Mitglied zeigen die gespeicherte Person ausgewählt und gekennzeichnet, „Niemand“ leert das Feld; Browsertest für ein Ticket mit demselben Fall; bestehende Tests bleiben grün.
+
+**Ergebnis:** DEC-131, ohne Migration und ohne Änderung an Server oder Verträgen. `CustomFieldInput` bietet bei einem Personenfeld die gespeicherte Person zusätzlich an, wenn sie nicht in der Auswahl steht, mit dem Zusatz „(nicht mehr wählbar)“; „Niemand“ leert das Feld. Gilt für Anforderungen und Tickets.
+
+**Prüfungen:** Zwei Browsertests in `requirements.test.mjs` (deaktiviertes Feld, Person nicht mehr Mitglied) und einer in `configuration.test.mjs` (Ticket); ohne die Korrektur scheitern alle drei. `npm run verify` und Browsertests 264/264 grün, CI auf PR #296 grün.
+
+**Review:** Der Hinweis stammt aus der Claude Nachprüfung von TASK-100 (N1, [Bericht](docs/REVIEW_TASK-100_PR-293.md)); die Behebung hat Holger ohne weitere Nachprüfung abgenommen.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte „Nimmst du das Paket A13 mit den Auslegungen DEC-126 bis DEC-128 ab?“ mit „Ja, abnehmen“, zusammen mit TASK-096 bis TASK-100; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #295 (70862eb), Ergebnis #296 (eceda80); verknüpft mit TASK-100 und DEC-131.
+
+## TASK-100 Befunde der Codex Prüfung von TASK-098 beheben (A13)
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; DEC-128, DEC-130. **Verantwortlich:** claude-20261111-requirements-02. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** F1 mit Backendtest: dasselbe eingeschränkte Mitglied sieht weder über die Anforderung noch über das Projektdetail die verborgene Definition; F2 mit Backend und Browsertest: beschreibbares Personenfeld ohne Schreibrecht auf `owner`; F3 mit Backendtest über viele lange Werte mit Mehrbytezeichen und einem kleinen PATCH an großem Bestand; F4 mit einer gemeinsamen Fallmatrix gegen Server und Testersatz; bestehende Tests bleiben grün.
+
+**Ergebnis:** DEC-130, Migration V0061, Verträge `contracts/projects.openapi.yaml` 0.2.1 und `contracts/requirements.openapi.yaml` 0.3.1, Beschreibung in backend/README.md unter „Nachbesserung (TASK-100, DEC-130)“. F1: Projektdetail und gespeicherte Konfigurationsversionen nennen `requirementFields` nur bei `manageable`. F2: Die Personenauswahl öffnet sich auch über ein beschreibbares aktives eigenes Personenfeld, ohne `owner` zu öffnen; die Oberfläche zeigt einen Ladefehler mit „Erneut versuchen“. F3: Grenze von 4 MiB für die Werte je Revision, `customFields.too_large` (400) vor dem Schreiben. F4: Der Testersatz prüft und kanonisiert die Werte wie der Server; die Fallmatrix contracts/cases/requirement-custom-values.json (34 Fälle) läuft gegen beide Wege. Hinweis H1 der Prüfung von TASK-098 bleibt nach DEC-128 (a).
+
+**Prüfungen:** Backend lokal mit PostgreSQL 16 (589 Tests), darunter `theProjectViewNamesCustomFieldsOfRequirementsOnlyToItsAdministration`, `aWritablePersonFieldOpensTheChoiceOfPersonsButNotTheOwner`, `theLargestPermittedValuesFitAndASmallChangeOnTopWorks` und `RequirementCustomSizeTest`; `npm run verify` und Browsertests 261/261. CI auf PR #293 grün.
+
+**Review:** Getrennte Claude Prüfung statt Codex auf Holgers Wunsch, Sitzung claude-20261111-requirements-review-01 ([Bericht](docs/REVIEW_TASK-100_PR-293.md)): „abnehmen“, F1 bis F4 wirksam behoben, Hinweise N1 bis N3; N1 behoben mit TASK-101.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte zur Abnahme von Paket A13 mit „Ja, abnehmen“, zusammen mit TASK-096 bis TASK-099 und TASK-101; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): N2, die Fallmatrix prüft nur neue Werte an einer frischen Anforderung (nicht deaktivierte Felder und Optionen, kanonisch unveränderte Werte, deaktivierte Konten und Portalkonten als Person, `customFields.too_large`); N3, die Antwort 400 `customFields.too_large` ist nur als Unittest von `customFits` belegt, weil gültige Konfigurationen die Grenze nicht erreichen.
+
+**Referenz:** Reservierung #292 (8bb860e), Ergebnis #293 (cb1d463), Prüfbericht #294 (3f2007f); verknüpft mit TASK-098, TASK-101 und DEC-130.
+
+## TASK-099 Befunde der Codex Nachprüfung von TASK-096 beheben (A13)
+
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-126, DEC-129. **Verantwortlich:** claude-20261110-requirements-01. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** R1 mit Unittests für `[K1, Neu, K2]` und `[Neu, K1, K2]` und einem Browsertest bis zum gespeicherten Ergebnis; R2 mit Backendtest und Testersatz für Konten ohne Feldleseregel und nur mit `owner`; N1 mit den drei Paritätsfällen des Berichts gegen Server und Testersatz; bestehende Backend und Browser Tests bleiben grün.
+
+**Ergebnis:** DEC-129, ohne Migration und ohne Vertragsänderung. R1: „Meine Eingaben behalten“ erhält die selbst gewählte Stelle eines neuen Kriteriums (`frontend/src/pages/requirementCriteria.ts`). R2: Das Anlegen nennt seine Person in `editors` nur, wenn der Aufrufer mindestens ein Inhaltsfeld lesen darf. N1: Der Testersatz prüft die Beschreibung über die Dokumentstruktur. Nach der Nachprüfung im selben PR S1, S2, M1 und M2: Der Testersatz bildet `WikiDocument.check` und `RichText.check` mit Normalisierung, Fehlerreihenfolge und den Leerzeichenregeln von Java nach.
+
+**Prüfungen:** Drei neue Unittests der Kriterienübernahme, Browsertests bis zum gespeicherten Ergebnis und mit den Gegenbeispielen der Nachprüfung, Paritätsfälle in `RequirementApiTest` und `requirements.test.mjs`. CI auf PR #288 und #289 grün.
+
+**Review:** Die Befunde stammen aus der Codex Nachprüfung codex-20261110-requirements-rereview-01 ([Bericht](docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md)). Nachprüfung codex-20261110-requirements-rereview-02 ([Bericht](docs/REVIEW_TASK-099_PR-288.md)): R1 und R2 behoben, S1, S2, M1 und M2 zum Testersatz, im selben PR behoben (#289); danach ohne weitere Nachprüfung abgenommen.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte zur Abnahme von Paket A13 mit „Ja, abnehmen“, zusammen mit TASK-096 bis TASK-098, TASK-100 und TASK-101; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #287 (4d3c978), Ergebnis #288 (0b7e233), Nachbesserung #289 (4eaf75f); verknüpft mit TASK-096 und DEC-129.
+
+## TASK-098 Eigene Felder für Anforderungen (A13 Teil 3)
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; TASK-044; DEC-128. **Verantwortlich:** claude-20261110-requirements-01. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** Ein veröffentlichtes eigenes Feld erscheint an Anforderungen und folgt den Feldrechten, seine Änderung nach Freigabe erzeugt eine neue Revision; ein leeres Pflichtfeld verhindert den Übergang nach Zur Prüfung mit 400 und Nennung des Felds; die Demo zeigt Freigabe, neue Revision und Revisionshinweis am Ticket; Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Konfiguration und Anforderung.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eigene Felder für Anforderungen haben dieselben Typen wie bei Tickets und werden mit der Projektkonfiguration entworfen und veröffentlicht.
+2. Eigene Felder zählen als inhaltlich, erscheinen in Historie, Vergleich und Freigabedialog und folgen den Feldrechten. Pflichtfelder gelten beim Übergang nach Zur Prüfung.
+3. Das Vorführimage erhält im Demoprojekt die Beispielanforderung „Kunden sehen den Stand ihrer freigegebenen Supportanfragen“ mit drei Kriterien, Revision 1 freigegeben und Revision 2 im Entwurf, verknüpft mit einem Ticket auf Revision 1 und mit der Wikiseite „Serviceanfrage ergänzen“.
+
+**Ergebnis:** DEC-128 mit den von Holger bestätigten Auslegungen (a) bis (e), Migration V0060 (Werte je Revision in `requirement_revision.custom`), Verträge `contracts/requirements.openapi.yaml` 0.3.0, `contracts/projects.openapi.yaml` 0.2.0 und `contracts/permissions.openapi.yaml` 0.5.0, Feldregeln `custom.<schlüssel>` des Ressourcentyps `requirement`, Bereich „Eigene Felder der Anforderungen“ im Konfigurationseditor, Felder in Bearbeitung, Ansicht, Freigabedialog, Revision, Vergleich und Historie sowie die Beispielanforderung ANF-1 im Demoprojekt HELP. Die Befunde der Codex Prüfung sind mit TASK-100 und TASK-101 behoben.
+
+**Prüfungen:** Backend Tests der eigenen Felder, Pflichtfelder und Feldrechte, Vertrag gegen Routen, Browsertests für Konfiguration und Anforderung, Unittest der Demodaten. CI auf PR #291 grün. Die Codex Prüfung bestätigte zusätzlich mit einer lokalen Demo gegen den echten Server ANF-1 mit Revision 1 freigegeben, Revision 2 im Entwurf und den Hinweis „Neuere Revision 2 vorhanden“ an HELP-1.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261110-requirements-fields-01 ([Bericht](docs/REVIEW_TASK-098_PR-291.md)): „nachbessern“ mit F1 bis F4, H1 und H2; F1 bis F4 behoben mit TASK-100, H1 bleibt nach DEC-128 (a) und DEC-130.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte „Nimmst du das Paket A13 mit den Auslegungen DEC-126 bis DEC-128 ab?“ mit „Ja, abnehmen“; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H2 der Codex Prüfung, das gepinnte PostgreSQL 18.6, das Lifecycle Skript und das Vorführimage liefen in jener Prüfung nicht lokal, sondern nur in CI; weitere Feldtypen, Formulare, Automationen, eigene Felder in Liste und Filtern, Suche über Anforderungen (A14).
+
+**Referenz:** Reservierung #285 (3f186a7), Ergebnis #291 (3e729f5); verknüpft mit TASK-096, TASK-097, TASK-100 und DEC-128.
+
+## TASK-097 Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2)
+
+**Bezug:** REQ-REQ-003, REQ-ACL-004; ACC-006; DEC-127. **Verantwortlich:** claude-20261110-requirements-01. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** ANF-17 Revision 1 ist mit DEV-42 verknüpft, nach Revision 2 bleibt DEV-42 auf Revision 1 und zeigt den Hinweis, bis es ausdrücklich umgestellt wird; ein erledigtes Ticket ändert weder Freigabe noch Status der Anforderung (F-14); ohne Leserecht auf Ticket oder Anforderung erscheint die Verknüpfung nicht und wird nicht gezählt, eine verknüpfte Wikiseite ohne Leserecht erscheint nur als „Seite nicht verfügbar“ ohne Titel (angepasst nach Holgers Wahl vom 11. November 2026, siehe unten); Migration, Vertrag gegen Routen, Backend Tests, Browser Tests an Anforderung und Ticket.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eine Anforderung lässt sich mit Tickets desselben Projekts verknüpfen, jede Kombination einmal. Die Verknüpfung bezieht sich auf eine Revision, beim Anlegen auf die neueste. Bei einer neueren Revision zeigen Ticket und Anforderung „Neuere Revision n vorhanden“; erst eine ausdrückliche Umstellung bindet das Ticket an sie.
+2. Verknüpfen und Lösen mit `requirement.edit` an der Anforderung und `ticket.read` am Ticket. Sichtbar nur für Personen, die beide Seiten lesen dürfen; nicht lesbare Gegenstücke werden weder gezeigt noch gezählt. Verknüpfen ändert weder Status noch Version des Tickets und steht in beiden Historien.
+3. Die Anforderung zeigt ihre lesbaren Tickets mit deren Status, etwa „3 Tickets, davon 2 erledigt“. Ein erledigtes Ticket gibt nie frei und erklärt die Anforderung nie für erfüllt.
+4. Eine Anforderung lässt sich mit Wikiseiten desselben Projekts verknüpfen; gezeigt wird der veröffentlichte Titel in der Oberflächensprache für Personen mit `wiki.read`, sonst „Seite nicht verfügbar“ ohne Titel. Kein Revisionsbezug.
+5. Das Ticket erhält ein Feld „Anforderungen“ mit den lesbaren verknüpften Anforderungen, ihrer Revision und dem Hinweis auf neuere Revisionen; verknüpfen ist von beiden Seiten möglich.
+
+**Ergebnis:** DEC-127 mit den von Holger bestätigten Auslegungen (a) bis (f), Migration V0059, Dienst `RequirementLinks`, Vertrag `contracts/requirements.openapi.yaml` 0.2.0, Feld `requirements` in der Tickethistorie, Abschnitt „Verknüpfungen“ an der Anforderung mit Revision, Hinweis, Umstellen und Zählung „n Tickets, davon m erledigt“, Abschnitt „Anforderungen“ am Ticket mit Suche und Verknüpfen. Zum Widerspruch zwischen Regel 4 und dem ursprünglichen Abnahmekriterium 3 (Befund F1 der Codex Prüfung) hat Holger am 11. November 2026 „Platzhalter ohne Titel (Regel 4)“ gewählt; das Kriterium ist oben entsprechend gefasst, die Umsetzung bleibt unverändert.
+
+**Prüfungen:** Backend Tests zu Verknüpfen, Lösen, Umstellen mit 412, Zählung, Rechten beider Seiten, Historien und unveränderten Versionen, Vertrag gegen Routen, Browsertests an Anforderung und Ticket. CI auf PR #290 grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261110-requirements-links-01 ([Bericht](docs/REVIEW_TASK-097_PR-290.md)): „Abnahme zurückstellen“ wegen F1, der fachlichen Abweichung, die Holger mit der Wahl oben entschieden hat. Die Hinweise H1 bis H3 halten fest, dass Codex Implementierung, Konkurrenz, Rechte, Migration und Oberfläche nicht im Einzelnen geprüft hat; eine vollständige unabhängige Implementierungsprüfung von TASK-097 liegt damit nicht vor. Holger hat ohne sie abgenommen.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte „Nimmst du das Paket A13 mit den Auslegungen DEC-126 bis DEC-128 ab?“ mit „Ja, abnehmen“ und zu F1 mit „Platzhalter ohne Titel (Regel 4)“ (nach einem korrigierten Fehlklick im Thread); bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): H1 bis H3 der Codex Prüfung als nachholbare unabhängige Implementierungsprüfung; projektübergreifende Verknüpfungen, Git Objekte (A15), Abnahme je Kriterium und Beziehungen zwischen Anforderungen.
+
+**Referenz:** Reservierung #285 (3f186a7), Ergebnis #290 (c11cf7b); verknüpft mit TASK-096, TASK-098 und DEC-127.
+
+## TASK-096 Anforderungen mit Kriterien, Revisionen und Freigabe (A13 Teil 1)
+
+**Bezug:** REQ-REQ-001, REQ-REQ-002, REQ-ACL-004; DEC-030, DEC-126; OPEN-021; ACC-006. **Verantwortlich:** claude-20261110-requirements-01. **Abgeschlossen:** 2026-11-11.
+
+**Abnahmekriterien:** Die Beispielanforderung „Kunden sehen den Stand ihrer freigegebenen Supportanfragen“ lässt sich mit prüfbaren Kriterien erfassen, zur Prüfung geben und freigeben (REQ-REQ-001, REQ-REQ-002); ein neues Kriterium nach der Freigabe erzeugt eine ungeprüfte Revision, die alte Freigabe mit Person, Zeit und Fassung bleibt sichtbar und wird nicht übertragen (F-13, DEC-030); eine Freigabe auf veralteter Version erhält 412, ohne Leserecht auf ein Inhaltsfeld keine Freigabe; ohne `requirement.read` keine Anforderung, ohne Leserecht eines Felds weder Wert noch Historie noch Vergleich dieses Felds; Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
+
+**Fachliche Regeln** (von Holger am 10. November 2026 bestätigt):
+1. Eine Anforderung gehört zu genau einem Projekt. Jedes Projekt zählt seine Anforderungen eigenständig, angezeigt als „ANF-17“ neben dem Projekt; die Kennung ändert sich nie.
+2. Feste Felder: Titel (1 bis 200 Zeichen), Beschreibung, Verantwortliche Person (optional, internes Mitglied des Projekts, kein Portalkonto), Priorität niedrig, normal, hoch oder kritisch (Vorgabe normal) und Status.
+3. Die Beschreibung nutzt Editor und vom Server geprüftes Format des Wikis ohne Bilder.
+4. Abnahmekriterien sind eine geordnete Liste von 0 bis 50 Klartexten mit 1 bis 2000 Zeichen und fester Kennung innerhalb der Anforderung (K1, K2, nie neu vergeben), Reihenfolge per Ziehen und per Tastatur änderbar. Zur Prüfung geben setzt mindestens ein Kriterium voraus.
+5. Fester Ablauf: Entwurf nach Zur Prüfung; Zur Prüfung nach Freigegeben oder mit Pflichtbegründung zurück nach Entwurf; jeder Stand nach Verworfen und von dort zurück nach Entwurf. Nicht je Projekt konfigurierbar.
+6. Speichern im Entwurf ändert die laufende Revision und schreibt einen Historieneintrag. Erst die erste inhaltliche Änderung nach einer Freigabe öffnet Revision n+1 als Entwurf; die freigegebene Revision bleibt unverändert lesbar, angezeigt als „Revision 1 freigegeben, Revision 2 in Bearbeitung“.
+7. Inhaltlich sind Titel, Beschreibung, Kriterien, Priorität und eigene Felder. Verantwortliche Person, Verknüpfungen und Verwerfen sind organisatorisch: keine neue Revision, aber ein Historieneintrag.
+8. Der Freigabedialog zeigt die Revision mit allen Inhalten und gibt genau diese frei (If-Match, sonst 412). Freigebende Person, Zeitpunkt und Revision bleiben unveränderlich erhalten. Wer ein Inhaltsfeld nicht lesen darf, kann nicht freigeben (403).
+9. Vier Augen werden nicht erzwungen; der Dialog nennt, wer die Revision bearbeitet hat.
+10. `requirement.read` liest Anforderungen und Historie; `requirement.edit` legt an, bearbeitet, gibt zur Prüfung, verwirft und stellt wieder her; `requirement.approve` gibt frei und gibt zurück. Feldrechte je Feld über die Rechteverwaltung für den Ressourcentyp `requirement`. Portalkonten erhalten keine Anforderungsrechte.
+11. Jede Änderung sendet die bekannte Version mit If-Match (428, 412); die eigene Eingabe bleibt erhalten, der neuere Stand erscheint mit markierten Unterschieden daneben.
+12. Die Historie nennt Anlegen, Feldänderungen, Kriterienänderungen, Statuswechsel mit Begründung, Freigaben und neue Revisionen mit Person und Zeit; Einträge zu nicht lesbaren Feldern bleiben verborgen.
+13. Zwei Revisionen lassen sich vergleichen: Felder einzeln, Kriterien nach Kennung, Beschreibung nach Blöcken; nur lesbare Felder.
+14. Die Projektliste zeigt Kennung, Titel, Status, Revision, Priorität, Verantwortliche Person und Freigabestand, filterbar nach Status, Priorität, Verantwortlicher Person und Titeltext, sortiert nach Kennung, seitenweise.
+15. Kein Löschen; verworfene Anforderungen bleiben mit Historie über einen Filter erreichbar.
+
+**Ergebnis:** DEC-126 mit den von Holger bestätigten Auslegungen (a) bis (e) und seiner Wahl zu H3 („Ja, nach lesbaren Feldern“), Modul `requirements`, Migration V0058, Verträge `contracts/requirements.openapi.yaml` 0.1.0 und `contracts/permissions.openapi.yaml` 0.4.0 mit dem Ressourcentyp `requirement`, Seite „Anforderungen“ mit Liste, Filtern, Bearbeitung, Kriterien per Ziehen und Tastatur, Konflikt mit markierten Unterschieden, Freigabedialog, Zurückgeben, Verwerfen, Wiederherstellen, Historie und Vergleich sowie Feldregeln für Anforderungen in Gruppen und Projektrechten. Beschreibung in backend/README.md unter „Anforderungen (TASK-096)“. Nach der Codex Prüfung im selben PR F1 bis F7 und H1 bis H3 behoben; die Befunde der Nachprüfung mit TASK-099.
+
+**Prüfungen:** `RequirementApiTest` (Ablauf, Revisionen, Freigabe mit 412 und 403, Feldrechte in Wert, Historie und Vergleich, Konflikte), Vertrag gegen Routen, Unittests der Kriterienübernahme, Browsertests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich. CI auf PR #286 grün. Die Codex Prüfung bestätigte den vollständigen Backendlauf ohne Umgehung der Rechte oder Überschreiben einer freigegebenen Revision.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261110-requirements-review-01 ([Bericht](docs/REVIEW_TASK-096_PR-286.md)): „nachbessern“ mit F1 bis F7 und H1 bis H3, im selben PR #286 behoben. Nachprüfung codex-20261110-requirements-rereview-01 ([Bericht](docs/REVIEW_TASK-096_PR-286_NACHPRUEFUNG.md)): R1, R2 und N1, behoben mit TASK-099.
+
+**Abnahme:** Holger, 2026-11-11, auf der Entscheidungskarte „Nimmst du das Paket A13 mit den Auslegungen DEC-126 bis DEC-128 ab?“ mit „Ja, abnehmen“, zusammen mit TASK-097 bis TASK-101; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Suche über Anforderungen (A14), Git Objekte (A15), KI (A16), Portal, formale Stände und Änderungsanträge (REQ-REQ-004), Testfälle, Beziehungen zwischen Anforderungen, Import und Export, Kommentare, endgültiges Löschen, Verschieben in ein anderes Projekt, Bilder in der Beschreibung und eine Vier Augen Pflicht.
+
+**Referenz:** Reservierung #285 (3f186a7), Ergebnis #286 (4a27aad); verknüpft mit TASK-097 bis TASK-099 und DEC-126.
 
 ## TASK-095 Befunde der Codex Nachprüfung von TASK-094 beheben (A12)
 
