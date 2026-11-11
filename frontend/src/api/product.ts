@@ -48,6 +48,7 @@ export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
 export type WikiHit = SearchTypes['schemas']['WikiHit'];
 export type SearchMark = SearchTypes['schemas']['Mark'];
+export type RequirementHit = SearchTypes['schemas']['RequirementHit'];
 export type Group = PermissionTypes['schemas']['Group'];
 export type GroupDetail = PermissionTypes['schemas']['GroupDetail'];
 export type Catalog = PermissionTypes['schemas']['Catalog'];
@@ -600,6 +601,27 @@ export const searchWiki = (api: ServerApi, query: WikiSearchQuery) =>
       limit: 20, offset: query.offset ?? 0 } },
     querySerializer: { array: { style: 'form', explode: true } },
   }), one<{ total: number; items: WikiHit[] }>(isPage((v) => hasStrings(v, 'id', 'projectId', 'title', 'stage', 'language'))));
+
+// The requirements of the search (TASK-103): the current revision, or with `approved` the newest approved one, never both.
+export interface RequirementSearchQuery {
+  readonly q: string;
+  readonly project?: string;
+  readonly approved: boolean;
+  readonly status?: 'draft' | 'review' | 'approved' | 'discarded';
+  readonly priority?: 'low' | 'normal' | 'high' | 'critical';
+  readonly owner?: string;
+  readonly everApproved?: boolean;
+  readonly offset?: number;
+}
+export const searchRequirements = (api: ServerApi, query: RequirementSearchQuery) =>
+  run(() => api.search.GET('/search/requirements', {
+    params: { query: { ...(query.q ? { q: query.q } : {}), ...(query.project ? { project: [query.project] } : {}),
+      ...(query.approved ? { stage: 'approved' as const } : {}), ...(query.status ? { status: [query.status] } : {}),
+      ...(query.priority ? { priority: [query.priority] } : {}), ...(query.owner ? { owner: [query.owner] } : {}),
+      ...(query.everApproved === undefined ? {} : { approved: query.everApproved ? 'true' as const : 'false' as const }),
+      limit: 20, offset: query.offset ?? 0 } },
+    querySerializer: { array: { style: 'form', explode: true } },
+  }), one<{ total: number; items: RequirementHit[] }>(isPage((v) => hasStrings(v, 'id', 'projectId', 'key', 'status', 'stage'))));
 
 // ---------------------------------------------------------------- groups and rights
 

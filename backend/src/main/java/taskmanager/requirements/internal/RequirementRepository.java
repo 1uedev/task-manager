@@ -146,6 +146,11 @@ class RequirementRepository {
                 """).param(projectId).query(Long.class).single();
     }
 
+    /** The identifiers of every requirement of the company (TASK-103). */
+    List<UUID> ids(UUID companyId) {
+        return jdbc.sql("select id from requirement where company_id = ? order by id").param(companyId).query(UUID.class).list();
+    }
+
     Optional<Requirement> find(UUID companyId, UUID id) {
         return jdbc.sql("select " + REQUIREMENT + " from requirement r where r.company_id = ? and r.id = ?").params(companyId, id)
             .query((rs, n) -> requirement(rs)).optional();

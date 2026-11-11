@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102)
-  version: 0.3.1
+  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102, TASK-103)
+  version: 0.4.0
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -43,6 +43,16 @@ info:
     Text dieser Fassung. Eine Seite ist ein Treffer; treffen beide Fassungen, zeigt er die in `preferred`, sonst die
     Ausgangssprache der Seite. Ordnung nach Rang (Titelwörter zählen doppelt), dann Titel. Vom Text werden höchstens die
     ersten 200.000 Byte der Suchwörter durchsucht.
+
+    Anforderungen (TASK-103, DEC-133): Durchsucht werden Titel, Beschreibung (sichtbarer Text des Dokuments), die Texte der
+    Abnahmekriterien und eigene Felder der Arten Kurztext und Langtext; eigene Felder anderer Arten filtern mit `custom`
+    wie bei Tickets. Gesucht wird in den Projekten, in denen die Person Mitglied ist und `requirement.read` hat. Suchwörter
+    treffen nur Felder, deren Leseregel die Person hat; ein Filter auf ein nicht lesbares Feld (`priority`, `owner`,
+    `custom`) trifft im betreffenden Projekt nichts, und Rang, `total`, Seite und Ausschnitt entstehen nur aus lesbaren
+    Feldern. Ohne `stage` gilt die aktuelle Revision, mit `stage=approved` nur die zuletzt freigegebene Revision; beide
+    Stände mischen sich nie. Der Schlüssel `ANF-n`, mit dem Projektschlüssel davor (`HELP ANF-17`) oder allein, findet die
+    Anforderung für jede Person, die sie lesen darf, und steht dann vorn. Verworfene Anforderungen erscheinen nur mit einem
+    Filter `status`. Ordnung nach Rang (Titelwörter zählen doppelt), dann Projektschlüssel und Nummer absteigend.
 
     Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel). Der Index folgt
     jeder Änderung in derselben Transaktion. Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server
@@ -188,6 +198,66 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /search/requirements:
+    get:
+      operationId: searchRequirements
+      summary: Anforderungen suchen und filtern (TASK-103)
+      parameters:
+        - $ref: '#/components/parameters/Text'
+        - name: project
+          in: query
+          description: Projektkennung, wiederholbar (höchstens 20); ein Projekt ohne `requirement.read` antwortet mit `project.unknown`.
+          schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+          explode: true
+        - name: stage
+          in: query
+          description: |
+            `current` (Vorgabe) durchsucht die aktuelle Revision, `approved` nur die zuletzt freigegebene Revision; Anforderungen
+            ohne Freigabe fehlen dann. Ein anderer Wert antwortet mit `stage.invalid`.
+          schema: {type: string, enum: [current, approved]}
+        - name: status
+          in: query
+          description: Status, wiederholbar; nur mit diesem Filter erscheinen verworfene Anforderungen. Ein anderer Wert antwortet mit `status.invalid`.
+          schema: {type: array, items: {type: string, enum: [draft, review, approved, discarded]}, maxItems: 20}
+          explode: true
+        - name: priority
+          in: query
+          description: Priorität im gesuchten Stand, wiederholbar; trifft nur mit Leseregel für `priority`. Ein anderer Wert antwortet mit `priority.invalid`.
+          schema: {type: array, items: {type: string, enum: [low, normal, high, critical]}, maxItems: 20}
+          explode: true
+        - name: owner
+          in: query
+          description: Kennung der verantwortlichen Person, wiederholbar; trifft nur mit Leseregel für `owner`.
+          schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+          explode: true
+        - name: approved
+          in: query
+          description: '`true` nur Anforderungen, die je freigegeben wurden, `false` nur solche ohne Freigabe. Ein anderer Wert antwortet mit `approved.invalid`.'
+          schema: {type: string, enum: ['true', 'false']}
+        - name: custom
+          in: query
+          description: '`<schlüssel>=<wert>` eines lesbaren eigenen Feldes der Anforderungen im gesuchten Stand, wiederholbar, wie bei Tickets.'
+          schema: {type: array, items: {type: string, maxLength: 241}, maxItems: 20}
+          explode: true
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Treffer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: {type: integer, minimum: 0}
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/RequirementHit'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -226,7 +296,8 @@ components:
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
         auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
         status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
-        `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
+        `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid, für `/search/requirements`
+        stage.invalid, priority.invalid, owner.invalid, approved.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -341,4 +412,44 @@ components:
         snippet:
           oneOf:
             - {$ref: '#/components/schemas/Snippet'}
+            - {type: 'null'}
+    RequirementSnippet:
+      type: object
+      description: |
+        Ausschnitt aus dem ersten lesbaren Feld, das ein Suchwort enthält, in der Folge Beschreibung, Abnahmekriterien,
+        eigene Textfelder; ohne Treffer dort der Anfang der lesbaren Beschreibung.
+      required: [field, criterion, excerpt]
+      properties:
+        field: {type: string, description: '`description`, `criteria` oder `custom.<schlüssel>`.'}
+        criterion: {type: [integer, 'null'], minimum: 1, description: Feste Nummer des Kriteriums, nur bei `criteria`.}
+        excerpt: {$ref: '#/components/schemas/Snippet'}
+    RequirementHit:
+      type: object
+      required: [id, projectId, projectKey, key, number, title, titleMarks, status, stage, revision, currentRevision, approvedRevision,
+        approved, priority, owner, customFields, snippet]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        key: {type: string, description: 'Zum Beispiel "ANF-17".'}
+        number: {type: integer, minimum: 1}
+        title: {type: [string, 'null'], description: Titel im gesuchten Stand; null ohne Leseregel für `title`.}
+        titleMarks:
+          type: array
+          items: {$ref: '#/components/schemas/Mark'}
+        status: {type: string, enum: [draft, review, approved, discarded]}
+        stage: {type: string, enum: [current, approved]}
+        revision: {type: integer, minimum: 1, description: Die durchsuchte Revision.}
+        currentRevision: {type: integer, minimum: 1}
+        approvedRevision: {type: [integer, 'null'], minimum: 1, description: Zuletzt freigegebene Revision; null ohne Freigabe.}
+        approved: {type: boolean, description: Die durchsuchte Revision ist die zuletzt freigegebene.}
+        priority: {type: [string, 'null'], enum: [low, normal, high, critical, null], description: null ohne Leseregel.}
+        owner: {type: [string, 'null'], format: uuid, description: null ohne Leseregel oder ohne verantwortliche Person.}
+        customFields:
+          description: Die lesbaren eigenen Felder mit Wert im gesuchten Stand, in der Textform des Filters `custom`.
+          type: object
+          additionalProperties: {type: string}
+        snippet:
+          oneOf:
+            - {$ref: '#/components/schemas/RequirementSnippet'}
             - {type: 'null'}

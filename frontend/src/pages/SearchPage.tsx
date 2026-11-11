@@ -7,6 +7,7 @@ import { hrefFor } from '../app/route.ts';
 import { EmptyText, PageHead, SelectField, TextField } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
+import { RequirementSearch } from './RequirementSearch.tsx';
 import { WikiSearch } from './WikiSearch.tsx';
 import { NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagFilter, tagFilterActive, useTicketSelection, type TagFilterValue } from './TagParts.tsx';
 
@@ -22,28 +23,31 @@ type Found =
   | { readonly state: 'problem'; readonly problem: ProblemInfo }
   | { readonly state: 'ok'; readonly tickets: { total: number; items: TicketHit[] }; readonly projects: { total: number; items: ProjectHit[] } | null };
 
-type Area = 'tickets' | 'wiki';
+type Area = 'tickets' | 'wiki' | 'requirements';
+const AREA_LABELS = { tickets: 'search.area.tickets', wiki: 'search.area.wiki', requirements: 'search.area.requirements' } as const;
 
-// The search with its areas (TASK-102): tickets and projects, and the wiki. Each area keeps its own input while the other
-// one is shown. The wiki area is built the first time it is chosen, so the page asks for wiki projects only when needed.
+// The search with its areas (TASK-102, TASK-103): tickets and projects, the wiki and requirements. Each area keeps its own
+// input while another one is shown. The wiki and requirements areas are built the first time they are chosen, so the page asks
+// for their projects only when needed.
 export function SearchPage() {
   const { t } = useI18n();
   const [area, setArea] = useState<Area>('tickets');
-  const [wikiOpened, setWikiOpened] = useState(false);
+  const [opened, setOpened] = useState<ReadonlySet<Area>>(new Set(['tickets']));
   return (
     <>
       <PageHead title={t('search.title')} intro={t('search.intro')} />
       <fieldset className="search-areas">
         <legend>{t('search.area')}</legend>
-        {(['tickets', 'wiki'] as const).map((value) => (
+        {(['tickets', 'wiki', 'requirements'] as const).map((value) => (
           <label key={value} className="check">
-            <input type="radio" name="search-area" value={value} checked={area === value} onChange={() => { setArea(value); if (value === 'wiki') setWikiOpened(true); }} />
-            {' '}{t(value === 'tickets' ? 'search.area.tickets' : 'search.area.wiki')}
+            <input type="radio" name="search-area" value={value} checked={area === value} onChange={() => { setArea(value); setOpened((current) => new Set([...current, value])); }} />
+            {' '}{t(AREA_LABELS[value])}
           </label>
         ))}
       </fieldset>
       <div hidden={area !== 'tickets'}><TicketSearch /></div>
-      {wikiOpened && <div hidden={area !== 'wiki'}><WikiSearch /></div>}
+      {opened.has('wiki') && <div hidden={area !== 'wiki'}><WikiSearch /></div>}
+      {opened.has('requirements') && <div hidden={area !== 'requirements'}><RequirementSearch /></div>}
     </>
   );
 }

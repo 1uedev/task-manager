@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anforderungen suchen und filtern (TASK-103) */
+        get: operations["searchRequirements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -159,13 +176,64 @@ export interface components {
             path: components["schemas"]["PathEntry"][];
             snippet: components["schemas"]["Snippet"] | null;
         };
+        /**
+         * @description Ausschnitt aus dem ersten lesbaren Feld, das ein Suchwort enthält, in der Folge Beschreibung, Abnahmekriterien,
+         *     eigene Textfelder; ohne Treffer dort der Anfang der lesbaren Beschreibung.
+         */
+        RequirementSnippet: {
+            /** @description `description`, `criteria` oder `custom.<schlüssel>`. */
+            field: string;
+            /** @description Feste Nummer des Kriteriums */
+            criterion: number | null;
+            excerpt: components["schemas"]["Snippet"];
+        };
+        RequirementHit: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            projectKey: string;
+            /** @description Zum Beispiel "ANF-17". */
+            key: string;
+            number: number;
+            /** @description Titel im gesuchten Stand; null ohne Leseregel für `title`. */
+            title: string | null;
+            titleMarks: components["schemas"]["Mark"][];
+            /** @enum {string} */
+            status: "draft" | "review" | "approved" | "discarded";
+            /** @enum {string} */
+            stage: "current" | "approved";
+            /** @description Die durchsuchte Revision. */
+            revision: number;
+            currentRevision: number;
+            /** @description Zuletzt freigegebene Revision; null ohne Freigabe. */
+            approvedRevision: number | null;
+            /** @description Die durchsuchte Revision ist die zuletzt freigegebene. */
+            approved: boolean;
+            /**
+             * @description null ohne Leseregel.
+             * @enum {string|null}
+             */
+            priority: "low" | "normal" | "high" | "critical" | null;
+            /**
+             * Format: uuid
+             * @description null ohne Leseregel oder ohne verantwortliche Person.
+             */
+            owner: string | null;
+            /** @description Die lesbaren eigenen Felder mit Wert im gesuchten Stand, in der Textform des Filters `custom`. */
+            customFields: {
+                [key: string]: string;
+            };
+            snippet: components["schemas"]["RequirementSnippet"] | null;
+        };
     };
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
          *     auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
          *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
-         *     `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
+         *     `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid, für `/search/requirements`
+         *     stage.invalid, priority.invalid, owner.invalid, approved.invalid.
          */
         Problem: {
             headers: {
@@ -324,6 +392,55 @@ export interface operations {
                     "application/json": {
                         total: number;
                         items: components["schemas"]["WikiHit"][];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    searchRequirements: {
+        parameters: {
+            query?: {
+                /** @description Suchtext; ohne ihn gelten nur die Filter. */
+                q?: components["parameters"]["Text"];
+                /** @description Projektkennung, wiederholbar (höchstens 20); ein Projekt ohne `requirement.read` antwortet mit `project.unknown`. */
+                project?: string[];
+                /**
+                 * @description `current` (Vorgabe) durchsucht die aktuelle Revision, `approved` nur die zuletzt freigegebene Revision; Anforderungen
+                 *     ohne Freigabe fehlen dann. Ein anderer Wert antwortet mit `stage.invalid`.
+                 */
+                stage?: "current" | "approved";
+                /** @description Status, wiederholbar; nur mit diesem Filter erscheinen verworfene Anforderungen. Ein anderer Wert antwortet mit `status.invalid`. */
+                status?: ("draft" | "review" | "approved" | "discarded")[];
+                /** @description Priorität im gesuchten Stand, wiederholbar; trifft nur mit Leseregel für `priority`. Ein anderer Wert antwortet mit `priority.invalid`. */
+                priority?: ("low" | "normal" | "high" | "critical")[];
+                /** @description Kennung der verantwortlichen Person, wiederholbar; trifft nur mit Leseregel für `owner`. */
+                owner?: string[];
+                /** @description `true` nur Anforderungen, die je freigegeben wurden, `false` nur solche ohne Freigabe. Ein anderer Wert antwortet mit `approved.invalid`. */
+                approved?: "true" | "false";
+                /** @description `<schlüssel>=<wert>` eines lesbaren eigenen Feldes der Anforderungen im gesuchten Stand, wiederholbar, wie bei Tickets. */
+                custom?: string[];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Treffer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        items: components["schemas"]["RequirementHit"][];
                     };
                 };
             };

@@ -915,6 +915,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       return ok({ total: items.length, items: items.slice(offset, offset + limit) });
     }
     if (p === '/search/wiki') return wikiSearch(account, query);
+    if (p === '/search/requirements') return requirementSearch(account, query);
     if (p === '/search/projects') {
       const q = (query.get('q') ?? '').toLowerCase();
       const items = state.projects.filter((item) => projectVisible(account, item) && (item.name.toLowerCase().includes(q) || item.key.toLowerCase().startsWith(q)))
@@ -2570,6 +2571,70 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     hits.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
     return ok({ total: hits.length, items: hits.slice(offset, offset + limit) });
+  }
+
+  // As the server (TASK-103, DEC-133): the current revision or, with stage=approved, the newest approved one; words only in
+  // readable fields, filters on unreadable fields match nothing, the key ANF-n with or without the project key, discarded
+  // requirements only with a status filter, the excerpt from the first readable field that holds a word.
+  function requirementSearch(account, query) {
+    const violations = [];
+    const stage = query.get('stage') ?? 'current';
+    if (!['current', 'approved'].includes(stage)) violations.push('stage.invalid');
+    const statuses = query.getAll('status');
+    const priorities = query.getAll('priority');
+    const owners = query.getAll('owner');
+    if (statuses.some((value) => !['draft', 'review', 'approved', 'discarded'].includes(value))) violations.push('status.invalid');
+    if (priorities.some((value) => !['low', 'normal', 'high', 'critical'].includes(value))) violations.push('priority.invalid');
+    if (owners.some((value) => !/^[0-9a-f-]{36}$/.test(value))) violations.push('owner.invalid');
+    const everApproved = query.get('approved');
+    if (everApproved !== null && !['true', 'false'].includes(everApproved)) violations.push('approved.invalid');
+    const custom = query.getAll('custom').map((entry) => [entry.slice(0, entry.indexOf('=')), entry.slice(entry.indexOf('=') + 1)]);
+    const q = query.get('q') ?? '';
+    if (q.length > 200 || searchWords(q).length > 10 || searchWords(q).some((word) => word.length > 50)) violations.push('q.invalid');
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    if (!Number.isInteger(offset) || offset < 0 || offset > 1000 || !Number.isInteger(limit) || limit < 1 || limit > 50) violations.push('paging.invalid');
+    if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+    const projects = state.projects.filter((item) => requirementAccess(account, item.id).read).map((item) => item.id);
+    const filter = query.getAll('project');
+    if (filter.some((id) => !projects.includes(id))) return problem(400, 'request.invalid', { violations: ['project.unknown'] });
+    const words = searchWords(q);
+    const key = q.normalize('NFKC').trim().toUpperCase().match(/^(?:([A-Z][A-Z0-9]{1,9})\s+)?ANF-([0-9]{1,18})$/);
+    const found = (text) => { const terms = searchWords(text ?? ''); return (word) => terms.some((term) => term.startsWith(word)); };
+    const hits = [];
+    for (const item of req.items) {
+      if (!projects.includes(item.projectId) || (filter.length > 0 && !filter.includes(item.projectId))) continue;
+      const number = stage === 'approved' ? item.approvedRevision : item.revision;
+      if (number === null) continue;
+      const access = requirementAccess(account, item.projectId);
+      const shown = (name) => access.readableFields.includes(name);
+      const revision = requirementRevision(item, number);
+      const projectKey = state.projects.find((entry) => entry.id === item.projectId).key;
+      if (statuses.length === 0 ? item.status === 'discarded' : !statuses.includes(item.status)) continue;
+      if (priorities.length > 0 && !(shown('priority') && priorities.includes(revision.priority))) continue;
+      if (owners.length > 0 && !(shown('owner') && owners.includes(item.ownerId))) continue;
+      if (everApproved !== null && (item.approvedRevision !== null) !== (everApproved === 'true')) continue;
+      if (custom.some(([field, value]) => !shown(`custom.${field}`) || String((revision.custom ?? {})[field] ?? '') !== value)) continue;
+      const description = revision.description ? wikiPlain(revision.description).trim() : '';
+      const texts = [...(shown('description') ? [['description', null, description]] : []),
+        ...(shown('criteria') ? revision.criteria.map((criterion) => ['criteria', criterion.id, criterion.text]) : []),
+        ...requirementFieldsOf(item.projectId).filter((entry) => ['text', 'longtext'].includes(entry.type) && shown(`custom.${entry.key}`))
+          .map((entry) => [`custom.${entry.key}`, null, String((revision.custom ?? {})[entry.key] ?? '')])];
+      const byKey = key !== null && Number(key[2]) === item.number && (key[1] === undefined || key[1] === projectKey);
+      const byWords = words.length > 0 && words.every((word) => (shown('title') && found(revision.title)(word)) || texts.some(([, , text]) => found(text)(word)));
+      if (q.trim() !== '' && !byKey && !byWords) continue;
+      const source = texts.find(([, , text]) => words.some(found(text)));
+      const snippet = source ? { field: source[0], criterion: source[1], excerpt: searchSnippet(source[2], words) }
+        : shown('description') && description !== '' ? { field: 'description', criterion: null, excerpt: searchSnippet(description, words) } : null;
+      hits.push({ rank: byKey ? 1000 : 0, hit: { id: item.id, projectId: item.projectId, projectKey, key: `ANF-${item.number}`, number: item.number,
+        title: shown('title') ? revision.title : null, titleMarks: shown('title') ? searchMarks(revision.title, words) : [], status: item.status, stage,
+        revision: number, currentRevision: item.revision, approvedRevision: item.approvedRevision, approved: item.approvedRevision === number,
+        priority: shown('priority') ? revision.priority : null, owner: shown('owner') ? item.ownerId : null,
+        customFields: Object.fromEntries(Object.entries(revision.custom ?? {}).filter(([field]) => shown(`custom.${field}`)).map(([field, value]) => [field, String(value)])),
+        snippet } });
+    }
+    hits.sort((a, b) => b.rank - a.rank || a.hit.projectKey.localeCompare(b.hit.projectKey) || b.hit.number - a.hit.number);
+    return ok({ total: hits.length, items: hits.slice(offset, offset + limit).map((entry) => entry.hit) });
   }
   function wikiRoute(account, method, p, query, headers, body) {
     if (p === '/wiki/projects' && method === 'GET') {

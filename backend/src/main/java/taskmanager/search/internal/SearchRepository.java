@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import taskmanager.projects.ProjectChanged;
 import taskmanager.tags.TagChanged;
 import taskmanager.tickets.TicketChanged;
+import taskmanager.requirements.RequirementChanged;
 import taskmanager.wiki.WikiPageChanged;
 
 /**
@@ -97,6 +98,46 @@ class SearchRepository {
                 SearchText.terms(title), SearchText.indexTerms(text)).update();
     }
 
+    /**
+     * Writes a requirement with its current revision and its newest approved revision as stages of their own (TASK-103). The
+     * requirement row is locked first, so two changes of one requirement write one after the other.
+     */
+    void upsertRequirement(RequirementChanged requirement) {
+        jdbc.sql("""
+                insert into search_requirement (requirement_id, company_id, project_id, number, status, owner_id, current_revision,
+                    approved_revision)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (requirement_id) do update set project_id = excluded.project_id, status = excluded.status,
+                    owner_id = excluded.owner_id, current_revision = excluded.current_revision, approved_revision = excluded.approved_revision
+                """).params(requirement.requirementId(), requirement.companyId(), requirement.projectId(), requirement.number(),
+                requirement.status(), requirement.ownerId(), requirement.currentRevision(), requirement.approvedRevision()).update();
+        UUID id = requirement.requirementId();
+        jdbc.sql("delete from search_requirement_custom where requirement_id = ?").param(id).update();
+        jdbc.sql("delete from search_requirement_criterion where requirement_id = ?").param(id).update();
+        jdbc.sql("delete from search_requirement_text where requirement_id = ?").param(id).update();
+        for (RequirementChanged.Stage stage : requirement.stages()) {
+            String description = stage.description() == null ? "" : stage.description();
+            StringBuilder criteria = new StringBuilder();
+            stage.criteria().forEach(criterion -> criteria.append(criteria.isEmpty() ? "" : "\n").append(criterion.text()));
+            jdbc.sql("""
+                    insert into search_requirement_text (requirement_id, stage, revision, title, description, priority, title_terms,
+                        description_terms, criteria_terms)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """).params(id, stage.stage(), stage.revision(), stage.title(), description, stage.priority(),
+                    SearchText.terms(stage.title()), SearchText.indexTerms(description), SearchText.indexTerms(criteria.toString())).update();
+            int position = 0;
+            for (RequirementChanged.Criterion criterion : stage.criteria()) {
+                jdbc.sql("insert into search_requirement_criterion (requirement_id, stage, criterion_id, position, text) values (?, ?, ?, ?, ?)")
+                    .params(id, stage.stage(), criterion.id(), position++, criterion.text()).update();
+            }
+            for (RequirementChanged.CustomValue value : stage.custom()) {
+                boolean text = "text".equals(value.type()) || "longtext".equals(value.type());
+                jdbc.sql("insert into search_requirement_custom (requirement_id, stage, field_key, value, terms) values (?, ?, ?, ?, ?)")
+                    .params(id, stage.stage(), value.key(), value.value(), text ? SearchText.indexTerms(value.value()) : "").update();
+            }
+        }
+    }
+
     /** Stores the tag and writes the tag names of every ticket and project that carries it again. */
     void upsertTag(TagChanged tag) {
         jdbc.sql("""
@@ -179,7 +220,8 @@ class SearchRepository {
      */
     void lockForRebuild() {
         jdbc.sql("lock table search_state, search_project, search_ticket, search_ticket_custom, search_tag, search_ticket_tag, "
-            + "search_project_tag, search_wiki_page, search_wiki_text in exclusive mode").update();
+            + "search_project_tag, search_wiki_page, search_wiki_text, search_requirement, search_requirement_text, search_requirement_criterion, "
+            + "search_requirement_custom in exclusive mode").update();
     }
 
     boolean built(UUID companyId) {
@@ -199,6 +241,11 @@ class SearchRepository {
         jdbc.sql("delete from search_ticket where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_wiki_text a using search_wiki_page s where s.page_id = a.page_id and s.company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_wiki_page where company_id = ?").param(companyId).update();
+        for (String table : List.of("search_requirement_custom", "search_requirement_criterion", "search_requirement_text")) {
+            jdbc.sql("delete from " + table + " a using search_requirement s where s.requirement_id = a.requirement_id and s.company_id = ?")
+                .param(companyId).update();
+        }
+        jdbc.sql("delete from search_requirement where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_project where company_id = ?").param(companyId).update();
         jdbc.sql("delete from search_tag where company_id = ?").param(companyId).update();
     }

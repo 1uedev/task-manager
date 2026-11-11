@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -34,7 +34,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-103](#task-103-anforderungen-in-der-gemeinsamen-suche-a14-teil-2) | Anforderungen in der gemeinsamen Suche (A14 Teil 2) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-104](#task-104-gemeinsame-suchübersicht-schnellsuche-und-messung-a14-teil-3) | Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3) | claude-20261111-search-01 | 2026-11-11 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
@@ -42,6 +41,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-102](#task-102-wiki-in-der-gemeinsamen-suche-a14-teil-1) | Wiki in der gemeinsamen Suche (A14 Teil 1) | claude-20261111-search-01 | 2026-11-11 |
+| [TASK-103](#task-103-anforderungen-in-der-gemeinsamen-suche-a14-teil-2) | Anforderungen in der gemeinsamen Suche (A14 Teil 2) | claude-20261111-search-01 | 2026-11-11 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -85,9 +85,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-103 Anforderungen in der gemeinsamen Suche (A14 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
 
-**Bezug:** REQ-SRCH-001, REQ-REQ-001, REQ-ACL-004; DEC-050; docs/TAGS_SEARCH.md (Suchumfang, Prüffälle T09, T13, T20). **Abhängigkeiten:** TASK-102 auf main; TASK-096 bis TASK-098, geliefert. **Arbeitsstand:** Mit TASK-102 von Holger am 11. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-102 auf main ist. Geplanter Branch claude/project-thread-hulabb, Entscheidung DEC-133, eigene Migration nach denen von TASK-102.
+**Bezug:** REQ-SRCH-001, REQ-REQ-001, REQ-ACL-004; DEC-050; docs/TAGS_SEARCH.md (Suchumfang, Prüffälle T09, T13, T20). **Abhängigkeiten:** TASK-102 auf main; TASK-096 bis TASK-098, geliefert. **Arbeitsstand:** Mit TASK-102 von Holger am 11. November 2026 beauftragt und mit den Vorschlägen bestätigt; begonnen, nachdem das Ergebnis von TASK-102 mit PR #299 auf main war. Branch claude/project-thread-hulabb, Entscheidung DEC-133, Migration V0063. Ergebnis im Ergebnis PR: Projektion `search_requirement` mit aktuellem und zuletzt freigegebenem Stand, Endpunkt `GET /api/v1/search/requirements`, Bereich „Anforderungen“ der Suchseite, Auslegungen der Sitzung in DEC-133.
 
 **Umfang:** Anforderungen in der Suchprojektion mit Feldrechten, der Endpunkt `/search/requirements` mit Filtern, Ausschnitt und Seiten, der Neuaufbau, der Bereich „Anforderungen“ auf der Suchseite, mit Migration, Vertrag und Tests. Nicht Teil: ältere freigegebene Revisionen, Tags an Anforderungen, Verknüpfungen als Filter.
 
@@ -104,7 +104,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. `HELP ANF-1` findet die Anforderung für Leser direkt, für andere nichts.
 4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Anforderungen.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-102 auf main die Blockade aufheben und umsetzen.
+**Nächster Schritt:** Prüfung durch Codex oder eine getrennte Claude Sitzung, danach Abnahme durch Holger; TASK-104 beginnt, sobald das Ergebnis auf main ist.
 
 ## TASK-104 Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3)
 
