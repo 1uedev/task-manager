@@ -1,4 +1,5 @@
 import { optionsOf, type CustomField } from '../app/configuration.ts';
+import { useAccountName } from '../app/session.tsx';
 import { SelectField, TextField } from '../app/ui.tsx';
 import { formatDate } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
@@ -21,6 +22,7 @@ export function CustomFieldInput({ field, value, onChange, people, error = null,
   readonly disabled?: boolean;
 }) {
   const { t } = useI18n();
+  const accountName = useAccountName();
   const label = field.name;
   switch (field.type) {
     case 'longtext':
@@ -38,9 +40,15 @@ export function CustomFieldInput({ field, value, onChange, people, error = null,
       return <SelectField label={label} value={value} onChange={onChange} disabled={disabled}
         options={[{ value: '', label: t('field.empty') }, ...options.map((option) => ({ value: option.key, label: option.active ? option.name : t('custom.inactiveOption', { name: option.name }) }))]} />;
     }
-    case 'user':
+    case 'user': {
+      // The stored person stays shown and selected even when it can no longer be chosen (field inactive, no longer a member or
+      // not active): marked like an inactive option, so the editor never pretends the field is empty (TASK-101, N1 of the
+      // review of TASK-100). "Nobody" still empties it.
+      const stored = value !== '' && !people.some((person) => person.id === value)
+        ? [{ value, label: t('custom.inactiveOption', { name: accountName(value) }) }] : [];
       return <SelectField label={label} value={value} onChange={onChange} disabled={disabled}
-        options={[{ value: '', label: t('field.nobody') }, ...people.map((person) => ({ value: person.id, label: person.name }))]} />;
+        options={[{ value: '', label: t('field.nobody') }, ...stored, ...people.map((person) => ({ value: person.id, label: person.name }))]} />;
+    }
     default:
       return <TextField label={label} value={value} onChange={onChange} maxLength={200} error={error} disabled={disabled} />;
   }

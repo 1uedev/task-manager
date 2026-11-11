@@ -685,6 +685,38 @@ describe('requirements', () => {
     });
   });
 
+  // TASK-101 (N1 of the review of TASK-100): a stored person who can no longer be chosen stays shown and selected, marked, and
+  // "Niemand" empties the field.
+  for (const [name, setup] of [
+    ['the field is inactive', (backend) => { backend.state.configurations.get(backend.project.id).configuration.requirementFields[0].active = false; }],
+    ['the person left the project', (backend) => {
+      backend.state.members.set(backend.project.id, backend.state.members.get(backend.project.id).filter((member) => member.accountId !== backend.ben.id));
+    }]]) {
+    test(`a stored person stays shown in a custom person field when ${name} (TASK-101)`, async () => {
+      let item;
+      await withApp({
+        prepare: (backend) => {
+          backend.state.configurations.get(backend.project.id).configuration.requirementFields = [
+            { key: 'reviewer', name: 'Prüfer', type: 'user', required: false, active: true, options: [] }];
+          grant(backend, [backend.anna], EVERYTHING, { read: [...ALL, 'custom.reviewer'], write: ['title', 'custom.reviewer'] });
+          item = backend.addRequirement(backend.anna, 'Mit Prüfer', { criteria: ['Jemand prüft.'], custom: { reviewer: backend.ben.id } });
+          setup(backend);
+        },
+        hash: (backend) => detailHash(backend, item),
+      }, async (page, backend) => {
+        await page.getByTestId('requirement-edit-open').click();
+        const edit = page.getByTestId('requirement-edit');
+        const reviewer = edit.getByLabel('Prüfer');
+        await reviewer.locator('option', { hasText: `${BEN.displayName} (nicht mehr wählbar)` }).waitFor({ state: 'attached' });
+        assert.equal(await reviewer.inputValue(), backend.ben.id, 'the stored person is selected, not "Niemand"');
+        await reviewer.selectOption({ label: 'Niemand' });
+        await edit.getByRole('button', { name: 'Speichern' }).click();
+        await edit.getByText('Stand 2', { exact: false }).waitFor();
+        assert.equal(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).custom.reviewer ?? null, null);
+      });
+    });
+  }
+
   test('the pages work in English as well', async () => {
     let item;
     await withApp({

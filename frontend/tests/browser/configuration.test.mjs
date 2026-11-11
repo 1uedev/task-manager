@@ -101,6 +101,27 @@ describe('configuration editor', () => {
     });
   });
 
+  test('a stored person who left the project stays shown in a custom person field of a ticket and can be removed (TASK-101)', async () => {
+    let ticket;
+    const prepare = (backend) => {
+      backend.state.configurations.get(backend.project.id).configuration.customFields = [
+        { key: 'tester', name: 'Tester', type: 'user', required: false, active: true, options: [] }];
+      ticket = backend.state.tickets.find((entry) => entry.projectId === backend.project.id && entry.number === 1);
+      ticket.custom = { tester: backend.nora.id };
+      backend.state.members.set(backend.project.id, backend.state.members.get(backend.project.id).filter((member) => member.accountId !== backend.nora.id));
+      return `#/projects/${backend.project.id}/tickets/1`;
+    };
+    await withApp(prepare, async (page, backend) => {
+      const tester = page.getByLabel('Tester', { exact: true });
+      await tester.locator('option', { hasText: 'Nora Neu (nicht mehr wählbar)' }).waitFor({ state: 'attached' });
+      assert.equal(await tester.inputValue(), backend.nora.id, 'the stored person is selected, not "Niemand"');
+      await tester.selectOption({ label: 'Niemand' });
+      await page.getByRole('button', { name: 'Änderungen speichern' }).click();
+      await page.getByText('Gespeichert.').waitFor();
+      assert.equal(ticket.custom.tester ?? null, null);
+    });
+  });
+
   test('a status that tickets use goes only with an assignment, which moves them', async () => {
     await withApp(settings, async (page, backend) => {
       const statuses = page.locator('fieldset', { has: page.locator('legend', { hasText: /^Status$/ }) });
