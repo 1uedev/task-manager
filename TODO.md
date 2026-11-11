@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
 
 ### Blockiert – BLOCKIERT
 
@@ -105,6 +107,32 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Anforderungen.
 
 **Nächster Schritt:** Prüfung durch Codex oder eine getrennte Claude Sitzung, danach Abnahme durch Holger; TASK-104 beginnt, sobald das Ergebnis auf main ist.
+
+## TASK-105 Befunde der Codex Nachprüfung von TASK-102 beheben (A14)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-search-02 · **Aktualisiert:** 2026-11-11
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-133; docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-102 (PR #299) und TASK-103 (PR #300) geliefert. **Arbeitsstand:** Holger hat am 11. November 2026 den Bericht der Codex Nachprüfung von TASK-102 (Empfehlung nachbessern) in den Thread gegeben und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-105“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-135, keine Migration geplant.
+
+**Umfang:** Befunde R1 bis R4 und Hinweise N1 bis N4 aus docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md:
+1. R1: Ein Treffer im veröffentlichten Stand zeigt Titel und Inhalt der veröffentlichten Revision; ist sie inzwischen zurückgezogen, wird das kenntlich gemacht und der Entwurf erst über eine ausdrückliche Aktion gezeigt.
+2. R2: Der Pfad eines Treffers geht über archivierte Elternseiten bis zur Wurzel weiter; archivierte Ebenen erscheinen als „Seite nicht verfügbar“.
+3. R3: Markierungen in Titel und Ausschnitt folgen derselben Normalisierung und Wortzerlegung wie der Index, auch für Kompatibilitätszeichen am Wortanfang; gilt für Wiki und Anforderungen.
+4. R4: Zähler und Seite der Wikisuche kommen auch hinter der letzten Seite aus einer Anweisung (für Anforderungen schon mit PR #300 behoben).
+5. N1: Der Testersatz folgt Rangfolge, Längengrenzen und Indexgrenze des Servers.
+6. N2: Browsertest für den Wechsel in ein Projekt mit geringeren Rechten.
+7. N3: Vertrag und Kommentare beschreiben den Pfad im Suchstand mit festen Kombinationen von `available`, `id` und `title`; Tests der vier 400 Gründe und einer Antwort mit Platzhalter.
+8. N4: TODO nennt für veröffentlichte Inhalte eine der drei Wikiaktionen, für Entwürfe `wiki.edit` oder `wiki.publish`, das Archivrecht getrennt.
+
+Nicht Teil: neue Regeln, TASK-104.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. R1 mit Browsertest: unterschiedliche Titel von Entwurf und Veröffentlichung, dazu eine zwischen Suche und Klick zurückgezogene Veröffentlichung.
+2. R2 mit API Test: Kind archiviert, dann Elternseite archiviert, Pfad bis zur Wurzel in beiden Ständen.
+3. R3 mit Test für `Ⓐlpha` im Titel und einem Treffer außerhalb des Anfangsausschnitts.
+4. R4 mit Test eines Publikationswechsels am Seitenende; N1 bis N3 mit Tests, bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach der Reservierung auf main umsetzen; danach TASK-104.
 
 ## TASK-104 Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3)
 
