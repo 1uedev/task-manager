@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-101](#task-101-gespeicherte-person-eines-personenfelds-im-editor-zeigen-a13) | Gespeicherte Person eines Personenfelds im Editor zeigen (A13) | claude-20261111-requirements-03 | 2026-11-11 |
 
 ### Blockiert – BLOCKIERT
 
@@ -88,6 +90,21 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Liste, Bearbeitung, Konflikt, Freigabe, Historie und Vergleich.
 
 **Nächster Schritt:** Nach Holgers Wahl eine Codex Nachprüfung der Nachbesserung, dann fachliche Abnahme durch Holger, dabei die Auslegungen (a) bis (e) in DEC-126 bestätigen; nach dem Merge des Ergebnisses TASK-097 in derselben Sitzung.
+
+## TASK-101 Gespeicherte Person eines Personenfelds im Editor zeigen (A13)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-requirements-03 · **Aktualisiert:** 2026-11-11
+
+**Bezug:** REQ-REQ-001, REQ-ACL-004; DEC-128, DEC-131; docs/REVIEW_TASK-100_PR-293.md. **Abhängigkeiten:** TASK-100 geliefert (PR #293). **Arbeitsstand:** Holger hat am 11. November 2026 auf der Entscheidungskarte „N1 als TASK-101, dann Abnahme“ gewählt. Branch claude/project-thread-dyiimb, Entscheidung DEC-131, keine Migration.
+
+**Umfang:** Hinweis N1 aus docs/REVIEW_TASK-100_PR-293.md: Ein eigenes Personenfeld zeigt im Editor die gespeicherte Person auch dann, wenn sie nicht in der Personenauswahl steht (Feld deaktiviert, Person nicht mehr Mitglied oder nicht mehr aktiv), gekennzeichnet als nicht mehr wählbar. Gilt für Anforderungen und Tickets, die dieselbe Komponente nutzen. Nicht Teil: N2 und N3, neue Regeln, Änderungen an Server oder Verträgen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Browsertest für Anforderungen: deaktiviertes Personenfeld und ehemaliges Mitglied zeigen die gespeicherte Person ausgewählt, gekennzeichnet, und „Niemand“ leert das Feld.
+2. Browsertest für ein Ticket mit demselben Fall.
+3. Bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
 
 ## TASK-100 Befunde der Codex Prüfung von TASK-098 beheben (A13)
 
