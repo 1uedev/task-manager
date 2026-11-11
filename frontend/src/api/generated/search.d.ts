@@ -139,15 +139,23 @@ export interface components {
             cutEnd: boolean;
         };
         /**
-         * @description Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
-         *     veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
-         *     verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
+         * @description Eine Ebene über der gefundenen Seite, von oben bis zur Wurzel; keine Ebene wird ausgelassen. Im Stand `published`
+         *     trägt eine nicht archivierte Elternseite mit veröffentlichter Fassung ihren veröffentlichten Titel; im Stand `draft`
+         *     trägt jede nicht archivierte Elternseite ihren Entwurfstitel. Jede andere Ebene, auch eine archivierte Elternseite, ist
+         *     nicht verfügbar und erscheint als „Seite nicht verfügbar“. Eine verfügbare Ebene hat immer Kennung und Titel, eine nicht
+         *     verfügbare nie.
          */
         PathEntry: {
             /** Format: uuid */
-            id: string | null;
-            title: string | null;
-            available: boolean;
+            id: string;
+            title: string;
+            /** @constant */
+            available: true;
+        } | {
+            id: null;
+            title: null;
+            /** @constant */
+            available: false;
         };
         WikiHit: {
             /** Format: uuid */
@@ -172,7 +180,10 @@ export interface components {
              */
             publishedAt: string | null;
             archived: boolean;
-            /** @description Seiten darüber, von oben, wie die Seitenansicht sie der Person zeigt. */
+            /**
+             * @description Pfad im gesuchten Stand: jede Ebene über der Seite von oben bis zur Wurzel, nach den Regeln von `PathEntry`. Er
+             *     folgt nicht den Brotkrumen der Seitenansicht, die nur sichtbare Seiten zeigen.
+             */
             path: components["schemas"]["PathEntry"][];
             snippet: components["schemas"]["Snippet"] | null;
         };

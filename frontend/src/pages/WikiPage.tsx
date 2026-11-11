@@ -765,8 +765,17 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
     <LoadedView loaded={loaded} retry={retry}>
       {(page) => {
         const drafts = page.access.edit || page.access.publish;
-        const shownTitle = (drafts ? page.draft?.title : null) ?? page.published?.title ?? '';
         const draft = page.draft;
+        // Title and text always come from the same stage (R1 of the follow up review of TASK-102). A search hit in the published
+        // revision shows that one; when it was withdrawn since, the page says so and shows the draft only on request.
+        const stage: 'draft' | 'published' | 'gone' | 'empty' = publishedFirst
+          ? (page.published !== null ? 'published' : 'gone')
+          : drafts && draft !== null && (page.published === null || draft.changed)
+            ? 'draft'
+            : page.published !== null ? 'published' : 'empty';
+        const shownTitle = stage === 'draft' ? draft?.title ?? ''
+          : stage === 'published' ? page.published?.title ?? ''
+            : stage === 'gone' ? t('wiki.publishedGoneTitle') : draft?.title ?? '';
         return (
           <article className="stack wiki-page" data-testid="wiki-page" data-page={page.id} data-archived={page.archived ? 'true' : 'false'}>
             {page.path.length > 0 && (
@@ -779,7 +788,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                 ))}
               </nav>
             )}
-            <h2 className="wiki-title" data-testid="wiki-title" lang={page.language}>{shownTitle}</h2>
+            <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={stage === 'gone' ? language : page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
               <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setChosen({ pageId: page.id, language: code }); }}
                 onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
@@ -848,14 +857,14 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
               <HistoryPanel key={`${page.id} ${page.language}`} page={page} onRestored={(restored) => changed(restored, null, 'history')} />
             )}
             {(mode === 'read' || mode === 'publish' || mode === 'move' || mode === 'create') && (
-              drafts && draft !== null && (page.published === null || draft.changed) && !(publishedFirst && page.published !== null)
+              stage === 'draft' && draft !== null
                 ? (
                   <section className="stack" data-testid="wiki-draft-view">
                     <p className="mode-notice">{t('wiki.draftShown', { revision: draft.revision })}</p>
                     <div lang={page.language}><Content html={draft.html} testId="wiki-content" /></div>
                   </section>
                 )
-                : page.published !== null
+                : stage === 'published' && page.published !== null
                   ? (
                     <>
                       {publishedFirst && drafts && draft !== null && draft.changed && (
@@ -867,7 +876,16 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                       <div lang={page.language}><Content html={page.published.html} testId="wiki-content" /></div>
                     </>
                   )
-                  : <EmptyText text={t('wiki.empty')} />
+                  : stage === 'gone'
+                    ? (
+                      <p className="mode-notice" data-testid="wiki-published-gone">
+                        {t('wiki.publishedGone')}{' '}
+                        {drafts && draft !== null && (
+                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
+                        )}
+                      </p>
+                    )
+                    : <EmptyText text={t('wiki.empty')} />
             )}
           </article>
         );

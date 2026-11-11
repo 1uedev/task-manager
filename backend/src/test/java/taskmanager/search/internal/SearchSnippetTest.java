@@ -87,4 +87,35 @@ class SearchSnippetTest {
         assertEquals(0, snippet.marks().getFirst().start());
         assertEquals(snippet.text().length(), snippet.marks().getFirst().end());
     }
+
+    /** R3 of the follow up review: a compatibility symbol that becomes letters is found and marked like the index finds it. */
+    @Test
+    void compatibilitySymbolsThatBecomeLettersAreMarked() {
+        assertEquals("alpha", SearchText.terms("\u24B6lpha"));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 5)), SearchSnippet.marks("\u24B6lpha", List.of("alpha")));
+        assertEquals("telecall", SearchText.terms("\u2121ecall"));
+        assertEquals(List.of(new SearchSnippet.Mark(3, 9)), SearchSnippet.marks("Zu \u2121ecall", List.of("telec")));
+        // A symbol that splits into two words is marked once.
+        assertEquals(List.of(new SearchSnippet.Mark(0, 1)), SearchSnippet.marks("\u00BD", List.of("1", "2")));
+        // The İ grows in lower case; the places after it stay right.
+        String dotted = "\u0130stanbul Wort";
+        assertEquals(List.of(new SearchSnippet.Mark(9, 13)), SearchSnippet.marks(dotted, List.of("wort")));
+        // Far back in a text, the excerpt starts near the symbol and marks it.
+        String body = "Vorwort ".repeat(40) + "\u24B6lpha Ende";
+        SearchSnippet snippet = SearchSnippet.of(body, List.of("alpha"));
+        assertTrue(snippet.cutStart());
+        SearchSnippet.Mark mark = snippet.marks().getFirst();
+        assertEquals("\u24B6lpha", snippet.text().substring(mark.start(), mark.end()));
+    }
+
+    /** Every word the index keeps for a text is found with its marks, for texts with every kind of special character. */
+    @Test
+    void everyIndexedWordIsMarked() {
+        for (String text : List.of("\u24B6lpha \u2121ecall", "Cafe\u0301 \uFB01nden \u00BD", "\uD835\uDC00bc \uFF27\uFF32\uFF2F\uFF33\uFF33",
+                "\u0130stanbul \u1100\u1161\u11A8 x\u0303y", "\u2460 Stra\u00DFe")) {
+            for (String term : SearchText.terms(text).split(" ")) {
+                assertFalse(SearchSnippet.marks(text, List.of(term)).isEmpty(), term + " in " + text);
+            }
+        }
+    }
 }

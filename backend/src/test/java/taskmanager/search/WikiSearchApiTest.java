@@ -543,6 +543,43 @@ class WikiSearchApiTest {
         assertTrue(drafts.get(1).get("available").asBoolean());
     }
 
+    /**
+     * R2 of the follow up review: an archived parent is a placeholder and the path goes on to the root. The child is archived
+     * first and keeps its parent, the parent is archived after it; the archive hit of the child shows the readable root.
+     */
+    @Test
+    void anArchivedParentKeepsThePathUpToTheRoot() {
+        Setup setup = project();
+        Browser publisher = member(setup, "wiki.edit", "wiki.publish");
+        String found = word("archivpfad");
+        UUID root = id(create(publisher, setup, "Wurzel", null, "de", doc(paragraph("Oben"))));
+        publish(publisher, root, "de", 1);
+        UUID parent = id(create(publisher, setup, "Eltern", root, "de", doc(paragraph("Mitte"))));
+        publish(publisher, parent, "de", 1);
+        UUID child = id(create(publisher, setup, "Kind", parent, "de", doc(paragraph(found))));
+        publish(publisher, child, "de", 1);
+        archive(publisher, child);
+        archive(publisher, parent);
+
+        for (String[] stage : List.of(new String[] {"archived=true"}, new String[] {"archived=true", "drafts=true"})) {
+            Response result = search(publisher, found, stage);
+            assertEquals(1, total(result), result.body());
+            JsonNode path = result.json().get("items").get(0).get("path");
+            assertEquals(2, path.size(), path.toString());
+            assertEquals("Wurzel", path.get(0).get("title").asString());
+            assertEquals(root.toString(), path.get(0).get("id").asString());
+            assertFalse(path.get(1).get("available").asBoolean());
+            assertTrue(path.get(1).get("id").isNull());
+            assertTrue(path.get(1).get("title").isNull());
+        }
+    }
+
+    private void archive(Browser who, UUID page) {
+        long version = who.get("/api/v1/wiki/pages/" + page + "?language=de").json().get("version").asLong();
+        Response archived = who.send("POST", "/api/v1/wiki/pages/" + page + "/archive?language=de", Map.of("version", version), null);
+        assertEquals(200, archived.status(), archived.body());
+    }
+
     /** H6: withdrawing, taking an old revision over, archiving and restoring reach the search in the same transaction. */
     @Test
     void everyChangeOfAPageReachesTheSearch() {
@@ -663,6 +700,49 @@ class WikiSearchApiTest {
         assertEquals(List.of("Ende 3"), titles(second));
     }
 
+    /**
+     * R4 of the follow up review: total and page come from one snapshot also past the last page. While a second page is
+     * published and withdrawn again and again, the second page of one hit each holds a hit exactly when the total says two.
+     */
+    @Test
+    void pastTheLastPageTheTotalComesFromTheSameSnapshot() throws Exception {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String common = word("wechselende");
+        UUID first = id(create(author, setup, "Erste", null, "de", doc(paragraph(common))));
+        publish(author, first, "de", 1);
+        UUID second = id(create(author, setup, "Zweite", null, "de", doc(paragraph(common))));
+        java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread writer = new Thread(() -> {
+            try {
+                for (int round = 0; round < 15; round++) {
+                    publish(author, second, "de", 1);
+                    Response withdrawn = author.send("POST", "/api/v1/wiki/pages/" + second + "/withdraw?language=de", null, null);
+                    assertEquals(200, withdrawn.status(), withdrawn.body());
+                }
+            } catch (Throwable e) {
+                failed.set(e);
+            } finally {
+                done.set(true);
+            }
+        });
+        writer.start();
+        int checked = 0;
+        while (!done.get() || checked == 0) {
+            Response found = search(reader, common, "limit=1", "offset=1");
+            long total = total(found);
+            assertTrue(total == 1 || total == 2, found.body());
+            assertEquals(total == 2 ? 1 : 0, found.json().get("items").size(), found.body());
+            checked++;
+        }
+        writer.join();
+        if (failed.get() != null) {
+            throw new AssertionError(failed.get());
+        }
+    }
+
     /** F3: a decomposed accent stays inside its word; the search for the composed form marks it in title and excerpt. */
     @Test
     void decomposedAccentsAreMarkedLikeTheIndexFindsThem() {
@@ -685,6 +765,91 @@ class WikiSearchApiTest {
         String text = snippet.get("text").asString();
         int start = snippet.get("marks").get(0).get("start").asInt();
         assertEquals(decomposed, text.substring(start, snippet.get("marks").get(0).get("end").asInt()));
+    }
+
+    /** R3 of the follow up review: a compatibility symbol at the start of a word is marked in the title and leads the excerpt. */
+    @Test
+    void compatibilitySymbolsAreMarkedLikeTheIndexFindsThem() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String stem = word("lpha");
+        String symbol = "\u24B6" + stem;
+        UUID page = id(create(author, setup, "Titel " + symbol, null, "de", doc(paragraph("Vorwort ".repeat(40) + symbol + " Ende"))));
+        publish(author, page, "de", 1);
+        Response found = search(reader, "a" + stem);
+        assertEquals(1, total(found));
+        JsonNode hit = found.json().get("items").get(0);
+        assertEquals(1, hit.get("titleMarks").size(), hit.toString());
+        assertEquals(6, hit.get("titleMarks").get(0).get("start").asInt());
+        assertEquals(6 + symbol.length(), hit.get("titleMarks").get(0).get("end").asInt());
+        JsonNode snippet = hit.get("snippet");
+        assertTrue(snippet.get("cutStart").asBoolean(), "the excerpt starts near the word, not at the text start");
+        String text = snippet.get("text").asString();
+        JsonNode mark = snippet.get("marks").get(0);
+        assertEquals(symbol, text.substring(mark.get("start").asInt(), mark.get("end").asInt()));
+    }
+
+    /**
+     * N1 of the follow up review, the same cases as the browser stand in: the limits of the search text count code points after
+     * NFKC, and a word after the limit of the indexed terms is not found.
+     */
+    @Test
+    void theLimitsCountCodePointsAfterNormalizationAndTheIndexStops() {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        // 26 ligatures are 52 letters after NFKC, more than 50 for one word.
+        assertInvalid(search(reader, "\uFB01".repeat(26)), "q.invalid");
+        // 150 emoji are 300 UTF-16 units but 150 code points: valid, and without words they find nothing.
+        Response emoji = search(reader, "\uD83D\uDE00".repeat(150));
+        assertEquals(0, total(emoji));
+        String early = word("anfang");
+        String late = word("spaet");
+        UUID page = id(create(author, setup, "Lang", null, "de", doc(paragraph(early + " " + "fueller ".repeat(30_000) + late))));
+        publish(author, page, "de", 1);
+        assertEquals(1, total(search(reader, early)));
+        assertEquals(0, total(search(reader, late)), "a word after the limit of the indexed terms is not found");
+    }
+
+    /**
+     * N3 of the follow up review: the four reasons of the wiki search the contract names are answered with 400, and every level
+     * of a real path is one of the two forms of the contract.
+     */
+    @Test
+    void theDocumentedReasonsAreAnsweredAndThePathHasTheFormsOfTheContract() throws Exception {
+        Setup setup = project();
+        Browser author = member(setup, "wiki.edit", "wiki.publish");
+        Browser reader = member(setup, "wiki.read");
+        String contract = java.nio.file.Files.readString(java.nio.file.Path.of("..", "contracts", "search.openapi.yaml"));
+        Map<String, String> reasons = new LinkedHashMap<>();
+        reasons.put("language=fr", "language.invalid");
+        reasons.put("preferred=fr", "preferred.invalid");
+        reasons.put("drafts=ja", "drafts.invalid");
+        reasons.put("archived=ja", "archived.invalid");
+        reasons.forEach((parameter, reason) -> {
+            assertTrue(contract.contains("`" + reason + "`"), reason + " is named in the contract");
+            assertInvalid(search(reader, "wort", parameter), reason);
+        });
+
+        String found = word("formwort");
+        UUID top = id(create(author, setup, "Oben", null, "de", doc(paragraph("Oben"))));
+        publish(author, top, "de", 1);
+        UUID hidden = id(create(author, setup, "Mitte", top, "de", doc(paragraph("Mitte"))));
+        UUID leaf = id(create(author, setup, "Blatt", hidden, "de", doc(paragraph(found))));
+        publish(author, leaf, "de", 1);
+        Response result = search(reader, found);
+        assertEquals(200, result.status(), result.body());
+        JsonNode path = result.json().get("items").get(0).get("path");
+        assertEquals(2, path.size(), path.toString());
+        for (JsonNode level : path) {
+            if (level.get("available").asBoolean()) {
+                assertTrue(level.get("id").isString() && level.get("title").isString(), level.toString());
+            } else {
+                assertTrue(level.get("id").isNull() && level.get("title").isNull(), level.toString());
+            }
+        }
+        assertFalse(path.get(1).get("available").asBoolean(), "the unpublished parent is the placeholder");
     }
 
     /** H1: the text of a link to a wiki page is left out, but the words before and after it stay apart. */

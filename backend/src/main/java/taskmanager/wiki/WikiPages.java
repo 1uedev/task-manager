@@ -34,8 +34,9 @@ public interface WikiPages {
      * The path of each page above it from the top for a search hit (TASK-102, DEC-132), every level kept. With {@code drafts}
      * (the search of drafts, only for a caller with a draft right) every parent that is not archived shows its draft title;
      * otherwise a parent with a published version that is not archived shows its published title in {@code language} or its
-     * fallback, and every other parent is unavailable, without identifier or title. Pages the caller may not see are missing
-     * from the answer.
+     * fallback, and every other parent is unavailable, without identifier or title. An archived parent is unavailable too and
+     * the path goes on with its own parent, so no level up to the root is ever left out. A found page the caller may not see
+     * has no entry in the answer.
      */
     Map<UUID, List<PathEntry>> paths(AccessContext actor, Collection<UUID> pageIds, String language, boolean drafts);
 

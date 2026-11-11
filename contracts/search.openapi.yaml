@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102, TASK-103)
-  version: 0.4.0
+  version: 0.4.1
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -381,14 +381,24 @@ components:
     PathEntry:
       type: object
       description: |
-        Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
-        veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
-        verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
-      required: [id, title, available]
-      properties:
-        id: {type: [string, 'null'], format: uuid}
-        title: {type: [string, 'null']}
-        available: {type: boolean}
+        Eine Ebene über der gefundenen Seite, von oben bis zur Wurzel; keine Ebene wird ausgelassen. Im Stand `published`
+        trägt eine nicht archivierte Elternseite mit veröffentlichter Fassung ihren veröffentlichten Titel; im Stand `draft`
+        trägt jede nicht archivierte Elternseite ihren Entwurfstitel. Jede andere Ebene, auch eine archivierte Elternseite, ist
+        nicht verfügbar und erscheint als „Seite nicht verfügbar“. Eine verfügbare Ebene hat immer Kennung und Titel, eine nicht
+        verfügbare nie.
+      oneOf:
+        - type: object
+          required: [id, title, available]
+          properties:
+            id: {type: string, format: uuid}
+            title: {type: string}
+            available: {const: true}
+        - type: object
+          required: [id, title, available]
+          properties:
+            id: {type: 'null'}
+            title: {type: 'null'}
+            available: {const: false}
     WikiHit:
       type: object
       required: [id, projectId, projectKey, title, titleMarks, language, stage, revision, publishedAt, archived, path, snippet]
@@ -407,7 +417,9 @@ components:
         archived: {type: boolean}
         path:
           type: array
-          description: Seiten darüber, von oben, wie die Seitenansicht sie der Person zeigt.
+          description: |
+            Pfad im gesuchten Stand: jede Ebene über der Seite von oben bis zur Wurzel, nach den Regeln von `PathEntry`. Er
+            folgt nicht den Brotkrumen der Seitenansicht, die nur sichtbare Seiten zeigen.
           items: {$ref: '#/components/schemas/PathEntry'}
         snippet:
           oneOf:
