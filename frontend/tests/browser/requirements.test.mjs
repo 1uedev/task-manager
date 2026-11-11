@@ -768,3 +768,80 @@ test('the stand in answers the shared case matrix of custom values like the serv
     }
   }
 });
+
+describe('requirements in the search (TASK-103)', () => {
+  /** A second revision in the draft after the approval of revision 1, as a content change on the server would open it. */
+  function reviseApproved(backend, item, title) {
+    const first = backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id && entry.revision === 1);
+    backend.state.requirements.revisions.push({ ...first, revision: 2, title, approvedAt: null, approvedBy: null });
+    Object.assign(item, { revision: 2, status: 'draft', version: item.version + 1 });
+  }
+
+  test('the current revision and the last approved one are searched apart, a criterion hit names its number and opens the requirement', async () => {
+    let item;
+    await withApp({
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        item = backend.addRequirement(backend.anna, 'Export als CSV', { criteria: ['Spalten wie in der Liste', 'Kodierung UTF-8'], status: 'approved' });
+        reviseApproved(backend, item, 'Export als Tabellenblatt');
+      },
+    }, async (page) => {
+      await page.getByRole('radio', { name: 'Anforderungen' }).check();
+      const form = page.getByRole('search', { name: 'Anforderungen durchsuchen' });
+      await form.getByLabel('Suchtext').fill('tabellen');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hits = page.getByTestId('requirement-hits');
+      await hits.waitFor();
+      const hit = hits.locator('li').first();
+      assert.equal(await hit.locator('.item-title mark').innerText(), 'Tabellenblatt');
+      assert.match(await hit.innerText(), /Entwurf · Revision 2, nicht freigegeben, freigegeben ist Revision 1/);
+
+      await form.getByLabel('Stand').selectOption({ label: 'Zuletzt freigegeben' });
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await page.getByRole('heading', { name: '0 Anforderungen' }).waitFor();
+
+      await form.getByLabel('Suchtext').fill('kodierung');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await page.getByRole('heading', { name: '1 Anforderung' }).waitFor();
+      assert.match(await hit.innerText(), /Export als CSV/);
+      assert.match(await hit.innerText(), /Revision 1, freigegeben/);
+      assert.match(await hit.locator('.search-snippet').innerText(), /^Kriterium 2: Kodierung UTF-8$/);
+      assert.equal(await hit.locator('.search-snippet mark').innerText(), 'Kodierung');
+      await hit.getByRole('link').click();
+      await page.getByTestId('requirement-title').waitFor();
+      assert.match(page.url(), new RegExp(`#/requirements/[^/]+/${item.id}$`));
+    });
+  });
+
+  test('a reader of some fields finds no word of a hidden field, gets no filter over it and finds the requirement by its key', async () => {
+    await withApp({
+      as: BEN,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], EVERYTHING);
+        grant(backend, [backend.ben], ['requirement.read'], { read: ['title', 'criteria'], write: [] });
+        backend.addRequirement(backend.anna, 'Datenschutzhinweis', { criteria: ['Text vor dem Absenden sichtbar'], priority: 'critical',
+          description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Vertraulich' }] }] }, ownerId: backend.anna.id });
+      },
+    }, async (page) => {
+      await page.getByRole('radio', { name: 'Anforderungen' }).check();
+      const form = page.getByRole('search', { name: 'Anforderungen durchsuchen' });
+      await form.getByLabel('Stand').waitFor();
+      assert.equal(await form.getByLabel('Priorität').count(), 0);
+      assert.equal(await form.getByLabel('Verantwortlich').count(), 0);
+      await form.getByLabel('Suchtext').fill('vertraulich');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await page.getByRole('heading', { name: '0 Anforderungen' }).waitFor();
+
+      await form.getByLabel('Suchtext').fill('plat anf-1');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = page.getByTestId('requirement-hits').locator('li').first();
+      await hit.waitFor();
+      assert.match(await hit.innerText(), /PLAT ANF-1/);
+      assert.match(await hit.innerText(), /Datenschutzhinweis/);
+      assert.doesNotMatch(await hit.innerText(), /Vertraulich|Kritisch/);
+      assert.equal(await hit.locator('.search-snippet').count(), 0, 'no excerpt from a hidden description');
+    });
+  });
+});
