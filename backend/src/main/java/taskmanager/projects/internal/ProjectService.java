@@ -329,8 +329,10 @@ public class ProjectService {
 
     @Transactional
     public ProjectConfiguration configuration(AccessContext actor, UUID id, long version) {
-        access(actor, id, false);
-        return projects.configuration(id, version).orElseThrow(() -> ApiProblemException.of(404, "project.configuration_not_found"));
+        Granted granted = access(actor, id, false);
+        ProjectConfiguration configuration = projects.configuration(id, version)
+            .orElseThrow(() -> ApiProblemException.of(404, "project.configuration_not_found"));
+        return granted.manageable() ? configuration : configuration.withoutRequirementFields();
     }
 
     /** The members and the version of the project they belong to. */
@@ -466,7 +468,7 @@ public class ProjectService {
 
     private ProjectView view(Project project, boolean manageable) {
         ProjectConfiguration configuration = projects.configuration(project.id(), project.configurationVersion()).orElseThrow();
-        return new ProjectView(project, configuration, manageable);
+        return new ProjectView(project, manageable ? configuration : configuration.withoutRequirementFields(), manageable);
     }
 
     private static void validate(String name, String description, List<String> violations) {

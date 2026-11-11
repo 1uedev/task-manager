@@ -312,14 +312,23 @@ public class RequirementService {
             revision.approvedAt(), revision.approvedBy(), content(revision, readable, configuration), readableFields(configuration, readable));
     }
 
-    /** The people who may become owner: active internal members of the project, for callers who may change the owner. */
+    /**
+     * The people who may be chosen for the owner or a custom person field: the active internal members of the project, for
+     * callers who may write the owner or at least one active custom field of the type {@code user} (TASK-100, DEC-130). The
+     * right to one of these fields widens no other: who writes a person field only does not become able to change the owner.
+     */
     @Transactional
     public List<UUID> owners(AccessContext actor, UUID projectId) {
         Access access = projectAccess(actor, projectId);
-        if (!access.edit() || !access.writable().contains("owner")) {
+        if (!access.edit() || !choosesPeople(access, configuration(projectId))) {
             throw forbidden();
         }
         return projects.members(projectId).stream().filter(identity::accountIsActiveInternal).toList();
+    }
+
+    private static boolean choosesPeople(Access access, ProjectConfiguration configuration) {
+        return access.writable().contains("owner") || configuration.requirementFields().stream()
+            .anyMatch(field -> field.active() && ProjectConfiguration.USER.equals(field.type()) && access.writable().contains(field.id()));
     }
 
     // ------------------------------------------------------------------------------------------------ changes
@@ -701,6 +710,10 @@ public class RequirementService {
                 }
             }
             custom.put(change.getKey(), value);
+        }
+        // The stored form has a limit of its own; reaching it is a wrong request, not a failure of the server (TASK-100, F3).
+        if (violations.isEmpty() && !RequirementRepository.customFits(custom)) {
+            violations.add("customFields.too_large");
         }
         return custom;
     }

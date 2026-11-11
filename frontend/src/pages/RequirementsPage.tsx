@@ -21,6 +21,7 @@ import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
 import { DiffView } from './WikiDiffView.tsx';
 import { mergeCriteria, type Draft } from './requirementCriteria.ts';
 import { CUSTOM_PREFIX } from '../app/configuration.ts';
+import { ProblemView } from '../states/StateViews.tsx';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { WikiContent } from './WikiContent.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
@@ -52,6 +53,8 @@ const VIOLATION: Record<string, MessageKey> = {
   'priority.not_readable': 'requirements.error.filterHidden', 'owner.not_readable': 'requirements.error.filterHidden',
   'text.not_readable': 'requirements.error.filterHidden', 'customFields.unknown': 'requirements.error.fieldUnknown',
   'customFields.invalid': 'requirements.error.fieldUnknown',
+  // TASK-100 (F3): the stored values of a revision would exceed their limit.
+  'customFields.too_large': 'requirements.error.fieldsTooLarge',
 };
 
 const SPECIFIC: Record<string, MessageKey> = {
@@ -402,8 +405,9 @@ function EditorPanel({ requirement, onSaved, onClose }: {
   const canDescription = writable(access, 'description') && requirement.content.description !== null;
   const editor = useWikiEditor((requirement.content.description ?? EMPTY_DOC) as WikiDocument, canDescription, () => undefined);
   const [baseline, setBaseline] = useState<string | null>(null);
-  const needsPeople = writable(access, 'owner') || editableFields.some((field) => field.type === 'user');
-  const [owners] = useLoad(() => (needsPeople ? listRequirementOwners(api, requirement.projectId)
+  // The choice of persons serves the owner and the active custom person fields one may write (TASK-100, DEC-130).
+  const needsPeople = writable(access, 'owner') || editableFields.some((field) => field.type === 'user' && field.active !== false);
+  const [owners, reloadOwners] = useLoad(() => (needsPeople ? listRequirementOwners(api, requirement.projectId)
     : Promise.resolve({ kind: 'ok' as const, data: { value: [] as string[], etag: null } })), [api, requirement.projectId]);
   useEffect(() => {
     if (editor !== null) setBaseline(JSON.stringify(editor.getJSON()));
@@ -550,6 +554,12 @@ function EditorPanel({ requirement, onSaved, onClose }: {
       {writable(access, 'priority') && (
         <SelectField label={t('requirements.field.priority')} value={priority} onChange={setPriority} disabled={busy}
           options={PRIORITIES.map((value) => ({ value, label: t(priorityKey(value)) }))} />
+      )}
+      {owners.state === 'problem' && (
+        <div data-testid="requirement-people-error">
+          <p className="hint">{t('requirements.people.loadFailed')}</p>
+          <ProblemView problem={owners.problem} onAction={reloadOwners} actionLabel="states.retry" />
+        </div>
       )}
       {writable(access, 'owner') && (
         <SelectField label={t('requirements.field.owner')} value={owner} onChange={setOwner} disabled={busy} hint={t('requirements.owner.hint')}

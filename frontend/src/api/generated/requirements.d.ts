@@ -56,8 +56,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Mögliche verantwortliche Personen
-         * @description Aktive interne Mitglieder des Projekts; nur für Personen mit `requirement.edit` und der Schreibregel für `owner`.
+         * Wählbare Personen für Verantwortlich und eigene Personenfelder
+         * @description Aktive interne Mitglieder des Projekts; für Personen mit `requirement.edit` und der Schreibregel für `owner` oder für
+         *     mindestens ein aktives eigenes Feld vom Typ `user` (TASK-100, DEC-130). Die Liste erweitert kein Recht: wer nur ein
+         *     Personenfeld schreiben darf, ändert `owner` weiterhin nicht. Sonst 403 `auth.forbidden`.
          */
         get: operations["listRequirementOwners"];
         put?: never;

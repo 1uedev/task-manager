@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-100](#task-100-befunde-der-codex-prüfung-von-task-098-beheben-a13) | Befunde der Codex Prüfung von TASK-098 beheben (A13) | claude-20261111-requirements-02 | 2026-11-11 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +42,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-097](#task-097-verknüpfungen-von-anforderungen-mit-tickets-und-wikiseiten-a13-teil-2) | Verknüpfungen von Anforderungen mit Tickets und Wikiseiten (A13 Teil 2) | claude-20261110-requirements-01 | 2026-11-10 |
 | [TASK-098](#task-098-eigene-felder-für-anforderungen-a13-teil-3) | Eigene Felder für Anforderungen (A13 Teil 3) | claude-20261110-requirements-01 | 2026-11-10 |
 | [TASK-099](#task-099-befunde-der-codex-nachprüfung-von-task-096-beheben-a13) | Befunde der Codex Nachprüfung von TASK-096 beheben (A13) | claude-20261110-requirements-01 | 2026-11-10 |
+| [TASK-100](#task-100-befunde-der-codex-prüfung-von-task-098-beheben-a13) | Befunde der Codex Prüfung von TASK-098 beheben (A13) | claude-20261111-requirements-02 | 2026-11-11 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -92,7 +91,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-100 Befunde der Codex Prüfung von TASK-098 beheben (A13)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-requirements-02 · **Aktualisiert:** 2026-11-11
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261111-requirements-02 · **Aktualisiert:** 2026-11-11
 
 **Bezug:** REQ-REQ-001, REQ-ACL-004; DEC-128; docs/REVIEW_TASK-098_PR-291.md. **Abhängigkeiten:** TASK-098 geliefert (PR #291). **Arbeitsstand:** Holger hat am 11. November 2026 den Bericht der Codex Prüfung von TASK-098 (Empfehlung nachbessern) in den Thread gestellt und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-100“ gewählt. Branch claude/project-thread-dyiimb, Entscheidung DEC-130, Migration V0061.
 
@@ -110,7 +109,15 @@ Hinweis H1 (Pflichtfelder nur beim Übergang nach Zur Prüfung) bleibt nach DEC-
 3. F3 mit Backendtest über viele lange Werte mit Mehrbytezeichen und einem kleinen PATCH an großem Bestand.
 4. F4 mit einer gemeinsamen Fallmatrix gegen Server und Testersatz; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
+**Ergebnis:** Umgesetzt im Ergebnis PR (Branch claude/project-thread-dyiimb), Einzelheiten in backend/README.md unter „Nachbesserung (TASK-100, DEC-130)“:
+1. F1: `ProjectService` gibt `requirementFields` in Projektdetail und gespeicherten Konfigurationsversionen nur bei `manageable` aus, sonst eine leere Liste; der Testersatz ebenso. Test `theProjectViewNamesCustomFieldsOfRequirementsOnlyToItsAdministration` prüft dasselbe eingeschränkte Mitglied über Anforderung, Projektdetail und Konfigurationsversion sowie Unternehmens und Projektverwaltung.
+2. F2: Die Personenauswahl `/requirements/projects/{projectId}/owners` öffnet sich auch über ein beschreibbares aktives eigenes Personenfeld, ohne `owner` zu öffnen; die Oberfläche zeigt einen Ladefehler mit „Erneut versuchen“. Backendtest `aWritablePersonFieldOpensTheChoiceOfPersonsButNotTheOwner`, Browsertest „a writable custom person field offers the members without the owner …“.
+3. F3: Migration V0061 hebt die Grenze auf 4 MiB, die jede erlaubte Kombination fasst; `customFields.too_large` (400) vor dem Schreiben. Tests `theLargestPermittedValuesFitAndASmallChangeOnTopWorks` (30 Langtexte mit Euro und Steuerzeichen, gespeichert über 1 MiB, danach kleines PATCH) und `RequirementCustomSizeTest`.
+4. F4: Der Testersatz prüft Feldkarte, Schlüssel, Text nach Java strip und Codepunkten, Datum, Ganzzahlgrenze, Personen und Kanonisierung wie der Server. Die Fallmatrix contracts/cases/requirement-custom-values.json (34 Fälle) läuft gegen beide Wege.
+
+**Übergabe:** Bereit zur Codex Nachprüfung und zur fachlichen Abnahme durch Holger zusammen mit TASK-096 bis TASK-099.
+
+**Nächster Schritt:** Codex Nachprüfung des Ergebnis PR, danach Abnahme des Pakets A13.
 
 ## TASK-099 Befunde der Codex Nachprüfung von TASK-096 beheben (A13)
 

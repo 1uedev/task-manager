@@ -395,8 +395,13 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         ...[TAG_FIELD, ATTACHMENT_FIELD].filter((name) => may(account, 'ticket.edit', ticket.projectId) && field(account, ticket.projectId, name, 'read') && field(account, ticket.projectId, name, 'write'))],
       createdAt: ticket.createdAt, createdBy: ticket.createdBy, updatedAt: ticket.updatedAt, updatedBy: ticket.updatedBy };
   };
-  const projectView = (account, item) => ({ ...item, configurationVersion: state.configurations.get(item.id).version, configuration: configurationOf(item.id),
-    manageable: may(account, 'projects.manage') || may(account, 'project.manage', item.id) });
+  // Like the server since TASK-100 (F1 of the review of TASK-098): the custom fields of requirements only for who manages the project.
+  const projectView = (account, item) => {
+    const manageable = may(account, 'projects.manage') || may(account, 'project.manage', item.id);
+    const configuration = configurationOf(item.id);
+    return { ...item, configurationVersion: state.configurations.get(item.id).version,
+      configuration: manageable ? configuration : { ...configuration, requirementFields: [] }, manageable };
+  };
   const summary = (account, item) => ({ id: item.id, key: item.key, name: item.name, description: item.description, version: item.version, manageable: projectView(account, item).manageable });
   // An account as the administration sees it (TASK-045): the state of the one time password and a running waiting time.
   const accountView = ({ password: _password, delayedUntil, ...rest }) => ({ authKind: 'local', kind: 'internal', organizationId: null, contactId: null, ...rest,
@@ -2004,6 +2009,42 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       throw error;
     }
   }
+  // The canonical value of a custom field of requirements as ProjectConfiguration.canonical makes it, or undefined when the
+  // value does not fit the field (TASK-100, F4): text stripped like Java, at most 200 or 20000 code points and without NUL, a
+  // whole number of at most 2^53 - 1 in either direction, an existing day in the form yyyy-mm-dd, a UUID in lower case.
+  function requirementCanonical(def, value) {
+    switch (def.type) {
+      case 'text':
+      case 'longtext': {
+        if (typeof value !== 'string') return undefined;
+        const stripped = javaStrip(value);
+        const max = def.type === 'text' ? 200 : 20000;
+        return stripped === '' || [...stripped].length > max || stripped.includes('\u0000') ? undefined : stripped;
+      }
+      case 'integer':
+        return Number.isInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER ? value : undefined;
+      case 'date': {
+        if (typeof value !== 'string') return undefined;
+        const day = javaStrip(value);
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+        if (!match) return undefined;
+        const date = new Date(0);
+        date.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]) ? day : undefined;
+      }
+      case 'boolean':
+        return typeof value === 'boolean' ? value : undefined;
+      case 'select':
+        return typeof value === 'string' && (def.options ?? []).some((option) => option.key === value) ? value : undefined;
+      case 'user': {
+        if (typeof value !== 'string') return undefined;
+        const id = javaStrip(value).toLowerCase();
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ? id : undefined;
+      }
+      default:
+        return undefined;
+    }
+  }
   // Checks like the server (H2 of the TASK-096 review): fixed criterion numbers, owners from the active internal members, the
   // description codes with the prefix description. and only http, https and mailto as link targets; line breaks become LF.
   function requirementChanges(body, access, violations, context) {
@@ -2042,29 +2083,37 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       if (!member) violations.push('owner.not_member');
     }
     // Custom fields (TASK-098) with the rules of ticket fields: the kind of each value, a new value only for an active field and
-    // option, a person from the members; a value the revision already holds stays allowed.
-    const custom = body.customFields ?? {};
-    if (body.customFields !== undefined && (typeof custom !== 'object' || custom === null || Array.isArray(custom))) violations.push('customFields.invalid');
+    // option, a person from the active internal members; a value the revision already holds stays allowed. Since TASK-100 (F4 of
+    // the review of TASK-098) the values are checked and made canonical like RequirementController.customFields and
+    // ProjectConfiguration.canonical, which contracts/cases/requirement-custom-values.json holds both to.
+    const custom = body.customFields === undefined ? {} : body.customFields;
+    const customObject = typeof custom === 'object' && custom !== null && !Array.isArray(custom);
+    if (body.customFields !== undefined && (!customObject || Object.keys(custom).length > 30)) violations.push('customFields.invalid');
     const defs = requirementFieldsOf(context.projectId);
-    for (const [key, value] of Object.entries(typeof custom === 'object' && custom !== null ? custom : {})) {
-      const def = defs.find((entry) => entry.key === key);
+    const canonical = {};
+    for (const [key, value] of Object.entries(customObject && Object.keys(custom).length <= 30 ? custom : {})) {
+      const def = /^[a-z][a-z0-9_]{0,39}$/.test(key) ? defs.find((entry) => entry.key === key) : undefined;
       if (!def) {
         violations.push('customFields.unknown');
         continue;
       }
-      if (value === null) continue;
-      const valid = { integer: Number.isInteger(value), boolean: typeof value === 'boolean', date: typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value),
-        select: typeof value === 'string' && (def.options ?? []).some((option) => option.key === value), user: typeof value === 'string',
-        text: typeof value === 'string' && value.trim() !== '' && value.length <= 200, longtext: typeof value === 'string' && value.trim() !== '' && value.length <= 20000 }[def.type];
-      if (!valid) {
+      if (value === null) {
+        canonical[key] = null;
+        continue;
+      }
+      const shaped = requirementCanonical(def, value);
+      if (shaped === undefined) {
         violations.push(`custom.${key}.invalid`);
         continue;
       }
-      if (value === (context.current ?? {})[key]) continue;
+      canonical[key] = shaped;
+      if (shaped === (context.current ?? {})[key]) continue;
       if (def.active === false) violations.push(`custom.${key}.inactive`);
-      else if (def.type === 'select' && (def.options ?? []).find((option) => option.key === value)?.active === false) violations.push(`custom.${key}.option_inactive`);
-      else if (def.type === 'user' && !(state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === value)) violations.push(`custom.${key}.not_member`);
+      else if (def.type === 'select' && (def.options ?? []).find((option) => option.key === shaped)?.active === false) violations.push(`custom.${key}.option_inactive`);
+      else if (def.type === 'user' && !((state.members.get(context.projectId) ?? []).some((entry) => entry.accountId === shaped)
+        && state.accounts.some((entry) => entry.id === shaped && entry.active && entry.kind !== 'portal'))) violations.push(`custom.${key}.not_member`);
     }
+    if (customObject) body.customFields = canonical;
     const fields = known.filter((name) => body[name] !== undefined && name !== 'customFields').map((name) => (name === 'ownerId' ? 'owner' : name));
     return [...fields, ...Object.keys(typeof custom === 'object' && custom !== null ? custom : {}).map((key) => `custom.${key}`)]
       .filter((name) => !access.writableFields.includes(name));
@@ -2190,7 +2239,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const access = requirementAccess(account, projectId);
       if (!access.read) return problem(404, 'project.not_found');
       if (inProject[2] === 'owners') {
-        if (!access.writableFields.includes('owner')) return problem(403, 'auth.forbidden');
+        // The owner or an active custom person field one may write opens the choice (TASK-100, DEC-130).
+        const people = access.writableFields.includes('owner') || requirementFieldsOf(projectId)
+          .some((field) => field.active !== false && field.type === 'user' && access.writableFields.includes(`custom.${field.key}`));
+        if (!access.edit || !people) return problem(403, 'auth.forbidden');
+        // A test can let a load of the choice fail once to check the shown error and the retry.
+        if (req.failOwners?.()) return problem(503, 'server.unavailable');
         return ok((state.members.get(projectId) ?? []).map((member) => member.accountId)
           .filter((id) => state.accounts.some((entry) => entry.id === id && entry.active && entry.kind !== 'portal')));
       }

@@ -100,6 +100,17 @@ class RequirementRepository {
             rs.getObject("approved_by", UUID.class), custom(rs.getString("custom")));
     }
 
+    /**
+     * The largest stored form of the custom values of one revision in bytes, as V0061 checks it (TASK-100, DEC-130). It holds
+     * every combination the configuration allows: 30 fields of 20000 code points with up to 6 bytes each as JSON.
+     */
+    static final int CUSTOM_MAX_BYTES = 4 * 1024 * 1024;
+
+    /** Whether the stored form of the values stays within {@link #CUSTOM_MAX_BYTES}. */
+    static boolean customFits(Map<String, String> values) {
+        return custom(values).getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= CUSTOM_MAX_BYTES;
+    }
+
     static Map<String, String> custom(String json) {
         Map<String, String> result = new TreeMap<>();
         JSON.readTree(json).properties().forEach(entry -> result.put(entry.getKey(), entry.getValue().asString()));
