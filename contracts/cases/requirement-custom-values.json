@@ -1,0 +1,422 @@
+{
+ "description": "TASK-100 (F4 der Prüfung von TASK-098): gemeinsame Fallmatrix für die Werte eigener Felder der Anforderungen. RequirementApiTest führt sie gegen den Server aus, requirements.test.mjs gegen den Testersatz. Jeder Fall legt eine neue Anforderung an und ändert sie mit PATCH und genau dieser Feldkarte. $member steht für ein aktives internes Mitglied, $MEMBER für dessen Kennung in Großbuchstaben, $stranger für ein Konto ohne Mitgliedschaft. stored nennt die danach gelesenen Werte, null bedeutet ohne Wert. Ein Objekt {\"$repeat\": z, \"times\": n} steht für den Text aus n Wiederholungen von z.",
+ "fields": [
+  {
+   "key": "note",
+   "name": "Notiz",
+   "type": "text",
+   "required": false,
+   "active": true,
+   "options": []
+  },
+  {
+   "key": "long",
+   "name": "Langtext",
+   "type": "longtext",
+   "required": false,
+   "active": true,
+   "options": []
+  },
+  {
+   "key": "count",
+   "name": "Anzahl",
+   "type": "integer",
+   "required": false,
+   "active": true,
+   "options": []
+  },
+  {
+   "key": "day",
+   "name": "Tag",
+   "type": "date",
+   "required": false,
+   "active": true,
+   "options": []
+  },
+  {
+   "key": "flag",
+   "name": "Schalter",
+   "type": "boolean",
+   "required": false,
+   "active": true,
+   "options": []
+  },
+  {
+   "key": "area",
+   "name": "Bereich",
+   "type": "select",
+   "required": false,
+   "active": true,
+   "options": [
+    {
+     "key": "portal",
+     "name": "Portal",
+     "active": true
+    },
+    {
+     "key": "alt",
+     "name": "Alt",
+     "active": false
+    }
+   ]
+  },
+  {
+   "key": "person",
+   "name": "Prüfer",
+   "type": "user",
+   "required": false,
+   "active": true,
+   "options": []
+  }
+ ],
+ "cases": [
+  {
+   "name": "Feldkarte null",
+   "customFields": null,
+   "status": 400,
+   "violation": "customFields.invalid"
+  },
+  {
+   "name": "Feldkarte als Liste",
+   "customFields": [],
+   "status": 400,
+   "violation": "customFields.invalid"
+  },
+  {
+   "name": "mehr als 30 Einträge",
+   "customFields": {
+    "k0": "x",
+    "k1": "x",
+    "k2": "x",
+    "k3": "x",
+    "k4": "x",
+    "k5": "x",
+    "k6": "x",
+    "k7": "x",
+    "k8": "x",
+    "k9": "x",
+    "k10": "x",
+    "k11": "x",
+    "k12": "x",
+    "k13": "x",
+    "k14": "x",
+    "k15": "x",
+    "k16": "x",
+    "k17": "x",
+    "k18": "x",
+    "k19": "x",
+    "k20": "x",
+    "k21": "x",
+    "k22": "x",
+    "k23": "x",
+    "k24": "x",
+    "k25": "x",
+    "k26": "x",
+    "k27": "x",
+    "k28": "x",
+    "k29": "x",
+    "k30": "x"
+   },
+   "status": 400,
+   "violation": "customFields.invalid"
+  },
+  {
+   "name": "unbekannter Schlüssel",
+   "customFields": {
+    "unknown": "x"
+   },
+   "status": 400,
+   "violation": "customFields.unknown"
+  },
+  {
+   "name": "Schlüssel außerhalb des Musters",
+   "customFields": {
+    "Bad": "x"
+   },
+   "status": 400,
+   "violation": "customFields.unknown"
+  },
+  {
+   "name": "Text ohne umgebende Leerzeichen",
+   "customFields": {
+    "note": "  hello  "
+   },
+   "status": 200,
+   "stored": {
+    "note": "hello"
+   }
+  },
+  {
+   "name": "geschütztes Leerzeichen bleibt wie bei Java strip",
+   "customFields": {
+    "note": " x "
+   },
+   "status": 200,
+   "stored": {
+    "note": " x "
+   }
+  },
+  {
+   "name": "Text nur aus Leerzeichen",
+   "customFields": {
+    "note": "   "
+   },
+   "status": 400,
+   "violation": "custom.note.invalid"
+  },
+  {
+   "name": "Text mit 200 Codepunkten außerhalb der Basisebene",
+   "customFields": {
+    "note": {
+     "$repeat": "😀",
+     "times": 200
+    }
+   },
+   "status": 200,
+   "stored": {
+    "note": {
+     "$repeat": "😀",
+     "times": 200
+    }
+   }
+  },
+  {
+   "name": "Text mit 201 Zeichen",
+   "customFields": {
+    "note": {
+     "$repeat": "x",
+     "times": 201
+    }
+   },
+   "status": 400,
+   "violation": "custom.note.invalid"
+  },
+  {
+   "name": "Text mit NUL",
+   "customFields": {
+    "note": "a\u0000b"
+   },
+   "status": 400,
+   "violation": "custom.note.invalid"
+  },
+  {
+   "name": "Text als Zahl",
+   "customFields": {
+    "note": 5
+   },
+   "status": 400,
+   "violation": "custom.note.invalid"
+  },
+  {
+   "name": "Langtext mit 20000 Mehrbytezeichen",
+   "customFields": {
+    "long": {
+     "$repeat": "€",
+     "times": 20000
+    }
+   },
+   "status": 200,
+   "stored": {
+    "long": {
+     "$repeat": "€",
+     "times": 20000
+    }
+   }
+  },
+  {
+   "name": "Langtext mit 20001 Zeichen",
+   "customFields": {
+    "long": {
+     "$repeat": "€",
+     "times": 20001
+    }
+   },
+   "status": 400,
+   "violation": "custom.long.invalid"
+  },
+  {
+   "name": "größte Ganzzahl",
+   "customFields": {
+    "count": 9007199254740991
+   },
+   "status": 200,
+   "stored": {
+    "count": 9007199254740991
+   }
+  },
+  {
+   "name": "kleinste Ganzzahl",
+   "customFields": {
+    "count": -9007199254740991
+   },
+   "status": 200,
+   "stored": {
+    "count": -9007199254740991
+   }
+  },
+  {
+   "name": "Ganzzahl über 2^53 - 1",
+   "customFields": {
+    "count": 9007199254740992
+   },
+   "status": 400,
+   "violation": "custom.count.invalid"
+  },
+  {
+   "name": "Ganzzahl als Text",
+   "customFields": {
+    "count": "5"
+   },
+   "status": 400,
+   "violation": "custom.count.invalid"
+  },
+  {
+   "name": "Bruchzahl",
+   "customFields": {
+    "count": 1.5
+   },
+   "status": 400,
+   "violation": "custom.count.invalid"
+  },
+  {
+   "name": "Schalttag",
+   "customFields": {
+    "day": "2024-02-29"
+   },
+   "status": 200,
+   "stored": {
+    "day": "2024-02-29"
+   }
+  },
+  {
+   "name": "Datum mit umgebenden Leerzeichen",
+   "customFields": {
+    "day": " 2026-03-01 "
+   },
+   "status": 200,
+   "stored": {
+    "day": "2026-03-01"
+   }
+  },
+  {
+   "name": "nicht vorhandener Tag",
+   "customFields": {
+    "day": "2026-02-30"
+   },
+   "status": 400,
+   "violation": "custom.day.invalid"
+  },
+  {
+   "name": "Datum ohne führende Nullen",
+   "customFields": {
+    "day": "2026-3-1"
+   },
+   "status": 400,
+   "violation": "custom.day.invalid"
+  },
+  {
+   "name": "Wahrheitswert falsch",
+   "customFields": {
+    "flag": false
+   },
+   "status": 200,
+   "stored": {
+    "flag": false
+   }
+  },
+  {
+   "name": "Wahrheitswert als Text",
+   "customFields": {
+    "flag": "true"
+   },
+   "status": 400,
+   "violation": "custom.flag.invalid"
+  },
+  {
+   "name": "aktive Option",
+   "customFields": {
+    "area": "portal"
+   },
+   "status": 200,
+   "stored": {
+    "area": "portal"
+   }
+  },
+  {
+   "name": "unbekannte Option",
+   "customFields": {
+    "area": "fremd"
+   },
+   "status": 400,
+   "violation": "custom.area.invalid"
+  },
+  {
+   "name": "deaktivierte Option als neuer Wert",
+   "customFields": {
+    "area": "alt"
+   },
+   "status": 400,
+   "violation": "custom.area.option_inactive"
+  },
+  {
+   "name": "Mitglied als Person",
+   "customFields": {
+    "person": "$member"
+   },
+   "status": 200,
+   "stored": {
+    "person": "$member"
+   }
+  },
+  {
+   "name": "Mitglied in Großbuchstaben",
+   "customFields": {
+    "person": "$MEMBER"
+   },
+   "status": 200,
+   "stored": {
+    "person": "$member"
+   }
+  },
+  {
+   "name": "Person ohne Mitgliedschaft",
+   "customFields": {
+    "person": "$stranger"
+   },
+   "status": 400,
+   "violation": "custom.person.not_member"
+  },
+  {
+   "name": "Person ohne UUID",
+   "customFields": {
+    "person": "kein-konto"
+   },
+   "status": 400,
+   "violation": "custom.person.invalid"
+  },
+  {
+   "name": "Leeren eines Felds",
+   "customFields": {
+    "note": null
+   },
+   "status": 200,
+   "stored": {
+    "note": null
+   }
+  },
+  {
+   "name": "mehrere Felder zugleich",
+   "customFields": {
+    "note": "a",
+    "count": 0,
+    "flag": true
+   },
+   "status": 200,
+   "stored": {
+    "note": "a",
+    "count": 0,
+    "flag": true
+   }
+  }
+ ]
+}

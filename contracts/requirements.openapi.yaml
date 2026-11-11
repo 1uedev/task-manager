@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Anforderungen (TASK-096 bis TASK-098)
-  version: 0.3.0
+  version: 0.3.1
   description: |
     Anforderungen in Projekten mit Abnahmekriterien, fachlichen Revisionen und der Freigabe genau einer Revision
     (REQ-REQ-001, REQ-REQ-002, DEC-030, DEC-126). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -81,7 +81,9 @@ info:
     und im Vergleich. Ändern nennt in `customFields` die Werte je Schlüssel, `null` leert ein Feld (`customFields.unknown`
     für ein Feld, das das Projekt nicht hat, `custom.<key>.invalid` für einen falschen Wert, `custom.<key>.inactive` und
     `custom.<key>.option_inactive` für einen neuen Wert eines abgeschalteten Felds oder einer abgeschalteten Option,
-    `custom.<key>.not_member` für eine Person außerhalb des Projekts; ein schon gespeicherter Wert bleibt erlaubt). Ein
+    `custom.<key>.not_member` für eine Person außerhalb des Projekts; ein schon gespeicherter Wert bleibt erlaubt). Die
+    gespeicherten Werte einer Revision fassen jede erlaubte Kombination; wäre ihre gespeicherte Form größer als 4 MiB, antwortet
+    der Server mit 400 `customFields.too_large` (TASK-100). Ein
     Pflichtfeld gilt beim Übergang nach Zur Prüfung: fehlt sein Wert, antwortet der Server mit 400
     `custom.<key>.required_for_review`; darf die Person ein aktives Pflichtfeld nicht lesen und schreiben, mit 409
     `requirement.required_field_inaccessible`. Freigeben verlangt zusätzlich die Leseregel jedes eigenen Felds des
@@ -165,8 +167,11 @@ paths:
   /requirements/projects/{projectId}/owners:
     get:
       operationId: listRequirementOwners
-      summary: Mögliche verantwortliche Personen
-      description: Aktive interne Mitglieder des Projekts; nur für Personen mit `requirement.edit` und der Schreibregel für `owner`.
+      summary: Wählbare Personen für Verantwortlich und eigene Personenfelder
+      description: |
+        Aktive interne Mitglieder des Projekts; für Personen mit `requirement.edit` und der Schreibregel für `owner` oder für
+        mindestens ein aktives eigenes Feld vom Typ `user` (TASK-100, DEC-130). Die Liste erweitert kein Recht: wer nur ein
+        Personenfeld schreiben darf, ändert `owner` weiterhin nicht. Sonst 403 `auth.forbidden`.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:

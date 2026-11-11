@@ -39,6 +39,7 @@ import taskmanager.TestDatabase;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
+import taskmanager.projects.ProjectConfiguration;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -1009,6 +1010,166 @@ class RequirementApiTest {
         assertEquals(200, granted.status(), granted.body());
         rule.put("field", "custom.unknown");
         assertInvalid(rights.send("PUT", "/api/v1/permissions/groups/" + groupId + "/fields", rule, null), "field.unknown");
+    }
+
+    /**
+     * TASK-100 (F1 of the review of TASK-098): the definitions of custom fields of requirements reach a member only through the
+     * requirements after the field rules; the project detail and its configuration versions name them only to who manages it.
+     */
+    @Test
+    void theProjectViewNamesCustomFieldsOfRequirementsOnlyToItsAdministration() {
+        Setup setup = project();
+        Response configured = requirementFields(setup, List.of(field("secret", "Vertrauliche Bewertung", "select", false,
+            List.of(Map.of("key", "internal", "name", "Interne Eskalation")))));
+        assertEquals(200, configured.status(), configured.body());
+        long version = configured.json().get("configurationVersion").asLong();
+        Browser restricted = member(setup, "project.read", "requirement.read", "READ:title");
+        Browser manager = member(setup, "project.read", "project.manage");
+        Response created = create(editor(setup), setup, Map.of("title", "Mit verborgenem Feld"));
+        assertEquals(201, created.status(), created.body());
+
+        Response requirement = restricted.get(path(id(created)));
+        assertEquals(200, requirement.status(), requirement.body());
+        assertTrue(requirement.json().get("customFields").isEmpty(), requirement.body());
+        Response detail = restricted.get("/api/v1/projects/" + setup.project());
+        assertEquals(200, detail.status(), detail.body());
+        assertFalse(detail.json().get("manageable").asBoolean());
+        assertTrue(detail.json().get("configuration").get("requirementFields").isEmpty(), detail.body());
+        assertFalse(detail.body().contains("Vertrauliche Bewertung") || detail.body().contains("Interne Eskalation"), detail.body());
+        Response stored = restricted.get("/api/v1/projects/" + setup.project() + "/configurations/" + version);
+        assertEquals(200, stored.status(), stored.body());
+        assertTrue(stored.json().get("requirementFields").isEmpty(), stored.body());
+
+        // Who manages the project, as company or project administration, keeps the whole configuration for its editor.
+        for (Browser administration : List.of(setup.admin(), manager)) {
+            Response full = administration.get("/api/v1/projects/" + setup.project());
+            assertTrue(full.json().get("manageable").asBoolean());
+            assertEquals(List.of("secret"), names(full.json().get("configuration").get("requirementFields"), "key"));
+            assertEquals(List.of("secret"), names(administration.get("/api/v1/projects/" + setup.project() + "/configurations/" + version)
+                .json().get("requirementFields"), "key"));
+        }
+    }
+
+    /**
+     * TASK-100 (F2 of the review of TASK-098): who may write an active custom person field gets the choice of persons without the
+     * right to change the owner; the owner stays closed to them.
+     */
+    @Test
+    void aWritablePersonFieldOpensTheChoiceOfPersonsButNotTheOwner() {
+        Setup setup = project();
+        Map<String, Object> old = field("former", "Früherer Prüfer", "user", false, null);
+        old.put("active", false);
+        assertEquals(200, requirementFields(setup, List.of(field("reviewer", "Prüfer", "user", false, null), old)).status());
+        String[] base = rules(List.of("requirement.read", "requirement.edit"), false);
+        Browser reviewerWriter = member(setup, customRules(base, true, "reviewer"));
+        Browser formerWriter = member(setup, customRules(base, true, "former"));
+        Browser plain = member(setup, base);
+        Browser colleague = member(setup);
+        String owners = "/api/v1/requirements/projects/" + setup.project() + "/owners";
+
+        Response choice = reviewerWriter.get(owners);
+        assertEquals(200, choice.status(), choice.body());
+        List<String> people = new ArrayList<>();
+        choice.json().forEach(entry -> people.add(entry.asString()));
+        assertTrue(people.contains(colleague.id.toString()) && people.contains(reviewerWriter.id.toString()), choice.body());
+        assertEquals(403, formerWriter.get(owners).status(), "an inactive field takes no new person");
+        assertEquals(403, plain.get(owners).status(), "neither owner nor person field");
+
+        Response created = create(editor(setup), setup, Map.of("title", "Mit Prüfer"));
+        Response chosen = reviewerWriter.send("PATCH", path(id(created)), Map.of("customFields", Map.of("reviewer", colleague.id.toString())), created.etag());
+        assertEquals(200, chosen.status(), chosen.body());
+        assertEquals(colleague.id.toString(), chosen.json().get("content").get("customFields").get("reviewer").asString());
+        assertEquals(403, reviewerWriter.send("PATCH", path(id(created)), Map.of("ownerId", colleague.id.toString()), chosen.etag()).status(),
+            "the owner stays closed");
+    }
+
+    /**
+     * TASK-100 (F3 of the review of TASK-098): every combination of values the configuration allows can be stored; 30 long
+     * values of multibyte and escaped characters need more than the former limit of 1 MiB, and a small change on top works.
+     */
+    @Test
+    void theLargestPermittedValuesFitAndASmallChangeOnTopWorks() {
+        Setup setup = project();
+        List<Map<String, Object>> fields = new ArrayList<>();
+        List<String> keys = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            keys.add("long" + i);
+            fields.add(field("long" + i, "Langtext " + i, "longtext", false, null));
+        }
+        assertEquals(200, requirementFields(setup, fields).status());
+        Browser editor = member(setup, customRules(rules(List.of("requirement.read", "requirement.edit"), true), true, keys.toArray(String[]::new)));
+        Response current = create(editor, setup, Map.of("title", "Sehr lange Werte"));
+        assertEquals(201, current.status(), current.body());
+        UUID id = id(current);
+        for (int i = 0; i < 30; i++) {
+            // The euro sign takes 3 bytes, the control character U+0001 6 bytes as escaped in the stored JSON.
+            String value = (i % 2 == 0 ? "€" : "\u0001").repeat(ProjectConfiguration.LONGTEXT_MAX);
+            current = editor.send("PATCH", path(id), Map.of("customFields", Map.of("long" + i, value)), current.etag());
+            assertEquals(200, current.status(), "long" + i + ": " + current.body().substring(0, Math.min(300, current.body().length())));
+        }
+        Integer size = jdbc.queryForObject("select octet_length(custom) from requirement_revision where requirement_id = ?", Integer.class, id);
+        assertTrue(size > 1048576, "beyond the former limit: " + size);
+        Response small = editor.send("PATCH", path(id), Map.of("customFields", Map.of("long7", "kurz")), current.etag());
+        assertEquals(200, small.status(), small.body().substring(0, Math.min(300, small.body().length())));
+        assertEquals("kurz", small.json().get("content").get("customFields").get("long7").asString());
+    }
+
+    /**
+     * TASK-100 (F4 of the review of TASK-098): the shared case matrix of contracts/cases, which requirements.test.mjs runs against
+     * the stand in of the browser tests, answers the same against the server.
+     */
+    @Test
+    void theSharedCaseMatrixOfCustomValuesHolds() throws IOException {
+        JsonNode matrix = JSON.readTree(java.nio.file.Files.readString(java.nio.file.Path.of("..", "contracts", "cases", "requirement-custom-values.json")));
+        Setup setup = project();
+        List<Map<String, Object>> fields = JSON.convertValue(matrix.get("fields"), new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() { });
+        Response configured = requirementFields(setup, fields);
+        assertEquals(200, configured.status(), configured.body());
+        List<String> keys = new ArrayList<>();
+        fields.forEach(entry -> keys.add((String) entry.get("key")));
+        Browser editor = member(setup, customRules(rules(List.of("requirement.read", "requirement.edit"), true), true, keys.toArray(String[]::new)));
+        Browser colleague = member(setup);
+        Browser stranger = person();
+        Map<String, String> replacements = Map.of("$member", colleague.id.toString(), "$MEMBER", colleague.id.toString().toUpperCase(Locale.ROOT),
+            "$stranger", stranger.id.toString());
+        for (JsonNode entry : matrix.get("cases")) {
+            String name = entry.get("name").asString();
+            Response created = create(editor, setup, Map.of("title", name));
+            assertEquals(201, created.status(), name + ": " + created.body());
+            Map<String, Object> body = new HashMap<>();
+            body.put("customFields", expand(JSON.convertValue(entry.get("customFields"), Object.class), replacements));
+            Response answer = editor.send("PATCH", path(id(created)), body, created.etag());
+            assertEquals(entry.get("status").asInt(), answer.status(), name + ": " + answer.body());
+            if (answer.status() == 400) {
+                List<String> violations = new ArrayList<>();
+                answer.json().get("violations").forEach(v -> violations.add(v.asString()));
+                assertTrue(violations.contains(entry.get("violation").asString()), name + ": " + violations);
+                continue;
+            }
+            JsonNode values = editor.get(path(id(created))).json().get("content").get("customFields");
+            Object stored = expand(JSON.convertValue(entry.get("stored"), Object.class), replacements);
+            ((Map<?, ?>) stored).forEach((key, expected) -> {
+                JsonNode actual = values.get((String) key);
+                Object shown = actual == null || actual.isNull() ? null : JSON.convertValue(actual, Object.class);
+                assertEquals(expected == null ? null : JSON.convertValue(JSON.valueToTree(expected), Object.class), shown, name + ": " + key);
+            });
+        }
+    }
+
+    /** The placeholders and repetitions of the case matrix, as its description names them. */
+    private static Object expand(Object value, Map<String, String> replacements) {
+        if (value instanceof String text) {
+            return replacements.getOrDefault(text, text);
+        }
+        if (value instanceof Map<?, ?> map) {
+            if (map.get("$repeat") instanceof String repeated && map.get("times") instanceof Number times) {
+                return repeated.repeat(times.intValue());
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, entry) -> result.put((String) key, expand(entry, replacements)));
+            return result;
+        }
+        return value;
     }
 
     private static List<String> names(JsonNode array, String property) {

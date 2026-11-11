@@ -267,6 +267,15 @@ public record ProjectConfiguration(List<TicketType> ticketTypes, List<Status> st
         return requirementFields.stream().map(CustomField::id).toList();
     }
 
+    /**
+     * The same configuration without the custom fields of the requirements, for callers who may not manage the project
+     * (TASK-100, DEC-130): those see only the definitions their field rules let them read, through the requirements module.
+     */
+    public ProjectConfiguration withoutRequirementFields() {
+        return requirementFields.isEmpty() ? this
+            : new ProjectConfiguration(ticketTypes, statuses, initialStatus, transitions, fields, workflows, customFields, List.of());
+    }
+
     /** The same configuration with surrounding blanks removed from the names, as it is stored. */
     public ProjectConfiguration normalized() {
         return new ProjectConfiguration(

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { after, before, describe, test } from 'node:test';
 import { ANNA, BEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
@@ -652,6 +653,38 @@ describe('requirements', () => {
     });
   });
 
+  test('a writable custom person field offers the members without the owner, and a failed load is shown with a retry (TASK-100)', async () => {
+    let item;
+    let failures = 1;
+    await withApp({
+      prepare: (backend) => {
+        backend.state.configurations.get(backend.project.id).configuration.requirementFields = [
+          { key: 'reviewer', name: 'Prüfer', type: 'user', required: false, active: true, options: [] }];
+        grant(backend, [backend.anna], EVERYTHING, { read: [...ALL, 'custom.reviewer'], write: ['title', 'custom.reviewer'] });
+        item = backend.addRequirement(backend.anna, 'Mit Prüfer', { criteria: ['Jemand prüft.'] });
+        backend.state.requirements.failOwners = () => failures-- > 0;
+      },
+      hash: (backend) => detailHash(backend, item),
+    }, async (page, backend) => {
+      await page.getByTestId('requirement-edit-open').click();
+      const edit = page.getByTestId('requirement-edit');
+      const error = edit.getByTestId('requirement-people-error');
+      await error.getByText('Die Personenauswahl konnte nicht geladen werden.', { exact: false }).waitFor();
+      await error.getByRole('button', { name: 'Erneut versuchen' }).click();
+      await error.waitFor({ state: 'detached' });
+      assert.equal(await edit.getByLabel('Verantwortlich').count(), 0, 'no owner control without its write rule');
+      const reviewer = edit.getByLabel('Prüfer');
+      await reviewer.locator('option', { hasText: BEN.displayName }).waitFor({ state: 'attached' });
+      await reviewer.selectOption({ label: BEN.displayName });
+      await edit.getByRole('button', { name: 'Speichern' }).click();
+      await edit.getByText('Stand 2', { exact: false }).waitFor();
+      await edit.getByRole('button', { name: 'Bearbeitung schließen' }).click();
+      await page.getByTestId('requirement-content-custom').locator('[data-field="reviewer"]').getByText(BEN.displayName).waitFor();
+      assert.equal(backend.state.requirements.revisions.find((entry) => entry.requirementId === item.id).custom.reviewer, backend.ben.id);
+      assert.equal(item.ownerId ?? null, null);
+    });
+  });
+
   test('the pages work in English as well', async () => {
     let item;
     await withApp({
@@ -667,4 +700,39 @@ describe('requirements', () => {
       await page.getByRole('button', { name: 'History' }).waitFor();
     });
   });
+});
+
+// TASK-100 (F4 of the review of TASK-098): the stand in checks and keeps the values of custom fields like the server. The same
+// case matrix runs against the server in RequirementApiTest.
+test('the stand in answers the shared case matrix of custom values like the server (TASK-100)', async () => {
+  const matrix = JSON.parse(await readFile(new URL('../../../contracts/cases/requirement-custom-values.json', import.meta.url), 'utf8'));
+  const backend = createBackend();
+  backend.state.configurations.get(backend.project.id).configuration.requirementFields = structuredClone(matrix.fields);
+  const own = matrix.fields.map((field) => `custom.${field.key}`);
+  grant(backend, [backend.anna], EVERYTHING, { read: [...ALL, ...own], write: [...ALL, ...own] });
+  const member = backend.ben.id;
+  const stranger = '00000000-0000-4000-8000-00000000f100';
+  const expand = (value) => {
+    if (value === '$member') return member;
+    if (value === '$MEMBER') return member.toUpperCase();
+    if (value === '$stranger') return stranger;
+    if (value !== null && typeof value === 'object' && typeof value.$repeat === 'string') return value.$repeat.repeat(value.times);
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, expand(entry)]));
+    return value;
+  };
+  for (const entry of matrix.cases) {
+    const created = backend.requirementCall(backend.anna, 'POST', `/requirements/projects/${backend.project.id}/requirements`, { title: entry.name });
+    assert.equal(created.status, 201, entry.name);
+    const answer = backend.requirementCall(backend.anna, 'PATCH', `/requirements/${created.body.id}`, { customFields: expand(entry.customFields) },
+      { headers: { 'if-match': created.etag } });
+    assert.equal(answer.status, entry.status, `${entry.name}: ${JSON.stringify(answer.body)}`);
+    if (entry.status === 400) {
+      assert.ok(answer.body.violations.includes(entry.violation), `${entry.name}: ${JSON.stringify(answer.body.violations)}`);
+      continue;
+    }
+    const read = backend.requirementCall(backend.anna, 'GET', `/requirements/${created.body.id}`);
+    for (const [key, value] of Object.entries(expand(entry.stored))) {
+      assert.deepEqual(read.body.content.customFields[key] ?? null, value, `${entry.name}: ${key}`);
+    }
+  }
 });

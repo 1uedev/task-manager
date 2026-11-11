@@ -398,7 +398,10 @@ export interface components {
              * @description Eigene Felder der Anforderungen (TASK-098) mit denselben Typen und Regeln wie `customFields`: ein veröffentlichtes
              *     Feld und seine Auswahloptionen bleiben erhalten und behalten den Typ. `required` gilt beim Übergang einer
              *     Anforderung nach Zur Prüfung. Die Rechteverwaltung kennt jedes Feld als `custom.<schlüssel>` des Ressourcentyps
-             *     `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen.
+             *     `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen. Projektdetail und
+             *     gespeicherte Konfigurationsversionen nennen diese Felder nur Personen, die das Projekt verwalten dürfen
+             *     (`manageable`); allen anderen antworten sie mit einer leeren Liste, und die lesbaren Definitionen kommen über die
+             *     Anforderungen nach den Feldregeln (TASK-100, DEC-130).
              */
             requirementFields?: components["schemas"]["CustomField"][];
             /** @description Genau die festen Felder in dieser Reihenfolge; title, type und status sind immer Pflicht. */

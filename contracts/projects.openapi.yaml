@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Projekte (TASK-026, TASK-044)
-  version: 0.2.0
+  version: 0.2.1
   description: |
     Projekte des Unternehmens, ihre Mitglieder und Konfigurationsversionen (DEC-065). Alle Aufrufe verlangen eine vollständige
     Anmeldung; Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
@@ -613,7 +613,10 @@ components:
             Eigene Felder der Anforderungen (TASK-098) mit denselben Typen und Regeln wie `customFields`: ein veröffentlichtes
             Feld und seine Auswahloptionen bleiben erhalten und behalten den Typ. `required` gilt beim Übergang einer
             Anforderung nach Zur Prüfung. Die Rechteverwaltung kennt jedes Feld als `custom.<schlüssel>` des Ressourcentyps
-            `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen.
+            `requirement`. Fehlt die Angabe, hat das Projekt keine eigenen Felder für Anforderungen. Projektdetail und
+            gespeicherte Konfigurationsversionen nennen diese Felder nur Personen, die das Projekt verwalten dürfen
+            (`manageable`); allen anderen antworten sie mit einer leeren Liste, und die lesbaren Definitionen kommen über die
+            Anforderungen nach den Feldregeln (TASK-100, DEC-130).
           items: {$ref: '#/components/schemas/CustomField'}
         fields:
           type: array
