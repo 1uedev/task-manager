@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073)
-  version: 0.2.0
+  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102)
+  version: 0.3.1
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -32,6 +32,17 @@ info:
     der Arten Kurztext und Langtext, der Filter `custom` verlangt einen genauen Wert eines lesbaren eigenen Feldes, und
     `customFields` im Treffer zeigt nur lesbare Werte. Auch hier ändert ein verborgenes Feld weder das Ergebnis noch die
     Reihenfolge.
+
+    Wikiseiten (TASK-102, DEC-132): Durchsucht werden Titel und sichtbarer Text jeder Sprachfassung. Der Text stammt aus
+    dem vom Server geprüften Dokument: Absätze, Überschriften, Listen, Tabellen, Zitate, Codeblöcke und die Texte externer
+    Links, ohne Bilder, Linkadressen und Texte von Links auf Wikiseiten. Gesucht wird in den Projekten, in denen die Person
+    Mitglied ist und eine Wikiaktion hat. Ohne `drafts` nur in der veröffentlichten Revision jeder Sprachfassung, mit
+    `drafts=true` stattdessen im aktuellen Entwurf und nur in Projekten mit `wiki.edit` oder `wiki.publish`. Archivierte
+    Seiten nur mit `archived=true` und nur in Projekten mit `wiki.publish`, wie das Wiki sie zeigt. Wer `drafts` oder
+    `archived` ohne ein solches Projekt verlangt, erhält 403. Jede Sprachfassung trifft für sich: jedes Wort im Titel oder im
+    Text dieser Fassung. Eine Seite ist ein Treffer; treffen beide Fassungen, zeigt er die in `preferred`, sonst die
+    Ausgangssprache der Seite. Ordnung nach Rang (Titelwörter zählen doppelt), dann Titel. Vom Text werden höchstens die
+    ersten 200.000 Byte der Suchwörter durchsucht.
 
     Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel). Der Index folgt
     jeder Änderung in derselben Transaktion. Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server
@@ -125,6 +136,58 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /search/wiki:
+    get:
+      operationId: searchWiki
+      summary: Wikiseiten suchen (TASK-102)
+      parameters:
+        - $ref: '#/components/parameters/Text'
+        - name: project
+          in: query
+          description: Projektkennung, wiederholbar (höchstens 20); ein Projekt ohne Wikiaktion antwortet mit `project.unknown`.
+          schema: {type: array, items: {type: string, format: uuid}, maxItems: 20}
+          explode: true
+        - name: language
+          in: query
+          description: Nur diese Sprachfassungen durchsuchen; ohne Angabe beide. Ein anderer Wert antwortet mit `language.invalid`.
+          schema: {type: string, enum: [de, en]}
+        - name: preferred
+          in: query
+          description: Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen, sonst die Quellsprache. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`.
+          schema: {type: string, enum: [de, en]}
+        - name: drafts
+          in: query
+          description: |
+            Im aktuellen Entwurf statt in der veröffentlichten Revision suchen, nie gemischt. Vorgabe `false`. Durchsucht nur
+            Projekte mit `wiki.edit` oder `wiki.publish`; fehlt beides in jedem Mitgliedsprojekt, antwortet der Server mit 403
+            `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `drafts.invalid`.
+          schema: {type: string, enum: ['true', 'false']}
+        - name: archived
+          in: query
+          description: |
+            Archivierte Seiten einbeziehen, gekennzeichnet mit `archived`. Vorgabe `false`. Nur in Projekten mit `wiki.publish`,
+            wie das Wiki selbst archivierte Seiten zeigt (DEC-132); fehlt es in jedem Mitgliedsprojekt, antwortet der Server mit
+            403 `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `archived.invalid`.
+          schema: {type: string, enum: ['true', 'false']}
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Treffer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: {type: integer, minimum: 0}
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/WikiHit'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -162,7 +225,8 @@ components:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
         auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
+        status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
+        `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -223,3 +287,58 @@ components:
         tags:
           type: array
           items: {$ref: '#/components/schemas/TagRef'}
+    Mark:
+      type: object
+      description: Stelle eines gefundenen Worts, Versatz in UTF-16 Codeeinheiten, Ende ausschließlich.
+      required: [start, end]
+      properties:
+        start: {type: integer, minimum: 0}
+        end: {type: integer, minimum: 1}
+    Snippet:
+      type: object
+      description: |
+        Ausschnitt des Texts als Klartext, nie HTML, um das erste gefundene Wort (sonst der Anfang), mit den Stellen der
+        gefundenen Wörter. `cutStart` und `cutEnd` sagen, ob davor oder danach Text fehlt.
+      required: [text, marks, cutStart, cutEnd]
+      properties:
+        text: {type: string}
+        marks:
+          type: array
+          items: {$ref: '#/components/schemas/Mark'}
+        cutStart: {type: boolean}
+        cutEnd: {type: boolean}
+    PathEntry:
+      type: object
+      description: |
+        Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
+        veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
+        verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
+      required: [id, title, available]
+      properties:
+        id: {type: [string, 'null'], format: uuid}
+        title: {type: [string, 'null']}
+        available: {type: boolean}
+    WikiHit:
+      type: object
+      required: [id, projectId, projectKey, title, titleMarks, language, stage, revision, publishedAt, archived, path, snippet]
+      properties:
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        projectKey: {type: string}
+        title: {type: string, description: Titel der gezeigten Fassung im gesuchten Stand.}
+        titleMarks:
+          type: array
+          items: {$ref: '#/components/schemas/Mark'}
+        language: {type: string, enum: [de, en], description: Sprache der gezeigten Fassung.}
+        stage: {type: string, enum: [published, draft]}
+        revision: {type: integer, minimum: 1}
+        publishedAt: {type: [string, 'null'], format: date-time, description: Zeitpunkt der Veröffentlichung, nur bei `published`.}
+        archived: {type: boolean}
+        path:
+          type: array
+          description: Seiten darüber, von oben, wie die Seitenansicht sie der Person zeigt.
+          items: {$ref: '#/components/schemas/PathEntry'}
+        snippet:
+          oneOf:
+            - {$ref: '#/components/schemas/Snippet'}
+            - {type: 'null'}

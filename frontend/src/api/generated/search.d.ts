@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search/wiki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wikiseiten suchen (TASK-102) */
+        get: operations["searchWiki"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -89,12 +106,66 @@ export interface components {
             description: string | null;
             tags: components["schemas"]["TagRef"][];
         };
+        /** @description Stelle eines gefundenen Worts, Versatz in UTF-16 Codeeinheiten, Ende ausschließlich. */
+        Mark: {
+            start: number;
+            end: number;
+        };
+        /**
+         * @description Ausschnitt des Texts als Klartext, nie HTML, um das erste gefundene Wort (sonst der Anfang), mit den Stellen der
+         *     gefundenen Wörter. `cutStart` und `cutEnd` sagen, ob davor oder danach Text fehlt.
+         */
+        Snippet: {
+            text: string;
+            marks: components["schemas"]["Mark"][];
+            cutStart: boolean;
+            cutEnd: boolean;
+        };
+        /**
+         * @description Eine Ebene über der gefundenen Seite, von oben. Im Stand `published` trägt eine veröffentlichte Elternseite ihren
+         *     veröffentlichten Titel; jede andere Ebene ist nicht verfügbar, ohne Kennung und Titel, und erscheint als „Seite nicht
+         *     verfügbar“. Im Stand `draft` tragen die Elternseiten ihren Entwurfstitel.
+         */
+        PathEntry: {
+            /** Format: uuid */
+            id: string | null;
+            title: string | null;
+            available: boolean;
+        };
+        WikiHit: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            projectKey: string;
+            /** @description Titel der gezeigten Fassung im gesuchten Stand. */
+            title: string;
+            titleMarks: components["schemas"]["Mark"][];
+            /**
+             * @description Sprache der gezeigten Fassung.
+             * @enum {string}
+             */
+            language: "de" | "en";
+            /** @enum {string} */
+            stage: "published" | "draft";
+            revision: number;
+            /**
+             * Format: date-time
+             * @description Zeitpunkt der Veröffentlichung
+             */
+            publishedAt: string | null;
+            archived: boolean;
+            /** @description Seiten darüber, von oben, wie die Seitenansicht sie der Person zeigt. */
+            path: components["schemas"]["PathEntry"][];
+            snippet: components["schemas"]["Snippet"] | null;
+        };
     };
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, search.busy, auth.required, auth.forbidden,
          *     auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
-         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid.
+         *     status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
+         *     `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid.
          */
         Problem: {
             headers: {
@@ -203,6 +274,56 @@ export interface operations {
                     "application/json": {
                         total: number;
                         items: components["schemas"]["ProjectHit"][];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    searchWiki: {
+        parameters: {
+            query?: {
+                /** @description Suchtext; ohne ihn gelten nur die Filter. */
+                q?: components["parameters"]["Text"];
+                /** @description Projektkennung, wiederholbar (höchstens 20); ein Projekt ohne Wikiaktion antwortet mit `project.unknown`. */
+                project?: string[];
+                /** @description Nur diese Sprachfassungen durchsuchen; ohne Angabe beide. Ein anderer Wert antwortet mit `language.invalid`. */
+                language?: "de" | "en";
+                /** @description Sprache der Oberfläche; ihre Fassung zeigt ein Treffer, wenn beide Fassungen treffen, sonst die Quellsprache. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`. */
+                preferred?: "de" | "en";
+                /**
+                 * @description Im aktuellen Entwurf statt in der veröffentlichten Revision suchen, nie gemischt. Vorgabe `false`. Durchsucht nur
+                 *     Projekte mit `wiki.edit` oder `wiki.publish`; fehlt beides in jedem Mitgliedsprojekt, antwortet der Server mit 403
+                 *     `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `drafts.invalid`.
+                 */
+                drafts?: "true" | "false";
+                /**
+                 * @description Archivierte Seiten einbeziehen, gekennzeichnet mit `archived`. Vorgabe `false`. Nur in Projekten mit `wiki.publish`,
+                 *     wie das Wiki selbst archivierte Seiten zeigt (DEC-132); fehlt es in jedem Mitgliedsprojekt, antwortet der Server mit
+                 *     403 `auth.forbidden`. Ein anderer Wert als `true` oder `false` antwortet mit `archived.invalid`.
+                 */
+                archived?: "true" | "false";
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Treffer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        items: components["schemas"]["WikiHit"][];
                     };
                 };
             };

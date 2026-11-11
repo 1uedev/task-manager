@@ -73,6 +73,11 @@ public final class RichText {
         return document.html(target -> null);
     }
 
+    /** The visible text for the search (TASK-103), one block per line; see {@link WikiDocument#plainText()}. */
+    public String plainText() {
+        return document.plainText();
+    }
+
     /** Whether the document holds nothing but empty paragraphs. */
     public boolean blank() {
         return document.html(target -> null).replaceAll("<p></p>", "").isEmpty();

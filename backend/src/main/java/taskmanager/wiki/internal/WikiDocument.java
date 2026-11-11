@@ -132,6 +132,63 @@ public final class WikiDocument {
         return out.toString();
     }
 
+    /**
+     * The visible text of the document for the search (TASK-102, DEC-132): the text of paragraphs, headings, lists, tables,
+     * quotes and code blocks, each block on a line of its own, and the text of external links. Images and their alternative
+     * text, addresses of links and the text of links to wiki pages are left out; such a link shows its text only to who may
+     * read the target, so it must not make a page findable for others.
+     */
+    public String plainText() {
+        StringBuilder out = new StringBuilder();
+        plain(root, out);
+        return out.toString().strip();
+    }
+
+    private static void plain(JsonNode node, StringBuilder out) {
+        String type = node.get("type").asString();
+        switch (type) {
+            case "text" -> {
+                if (!internalLink(node)) {
+                    out.append(node.get("text").asString());
+                } else if (!out.isEmpty() && !Character.isWhitespace(out.charAt(out.length() - 1))) {
+                    // The left out text still separates the words around it.
+                    out.append(' ');
+                }
+            }
+            case "hardBreak" -> out.append('\n');
+            case "image", "horizontalRule" -> {
+                // no text
+            }
+            default -> {
+                JsonNode content = node.get("content");
+                if (content != null) {
+                    for (JsonNode child : content) {
+                        plain(child, out);
+                    }
+                }
+                if (!"doc".equals(type) && (BLOCKS.contains(type) || "listItem".equals(type) || "tableRow".equals(type)
+                        || "tableHeader".equals(type) || "tableCell".equals(type))) {
+                    if (!out.isEmpty() && out.charAt(out.length() - 1) != '\n') {
+                        out.append('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean internalLink(JsonNode text) {
+        JsonNode marks = text.get("marks");
+        if (marks == null) {
+            return false;
+        }
+        for (JsonNode mark : marks) {
+            if ("link".equals(mark.get("type").asString()) && mark.get("attrs").get("href").asString().startsWith("wiki:")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------------------------------------------ checking
 
     private static final class Checker {

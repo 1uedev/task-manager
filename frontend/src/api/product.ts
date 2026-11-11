@@ -46,6 +46,8 @@ export type PortalTagSuggestions = TagTypes['schemas']['PortalSuggestions'];
 export type Attachment = FileTypes['schemas']['Attachment'];
 export type TicketHit = SearchTypes['schemas']['TicketHit'];
 export type ProjectHit = SearchTypes['schemas']['ProjectHit'];
+export type WikiHit = SearchTypes['schemas']['WikiHit'];
+export type SearchMark = SearchTypes['schemas']['Mark'];
 export type Group = PermissionTypes['schemas']['Group'];
 export type GroupDetail = PermissionTypes['schemas']['GroupDetail'];
 export type Catalog = PermissionTypes['schemas']['Catalog'];
@@ -578,6 +580,26 @@ export const searchTickets = (api: ServerApi, query: TicketQuery) =>
 export const searchProjects = (api: ServerApi, q: string) =>
   run(() => api.search.GET('/search/projects', { params: { query: { q, limit: 20 } } }),
     one<{ total: number; items: ProjectHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'name'))));
+
+// Wiki pages (TASK-102): published revisions, or the drafts on request; archived pages on request; both languages unless one
+// is chosen. `preferred` is the language of the interface, in which a page is shown when both of its versions match.
+export interface WikiSearchQuery {
+  readonly q: string;
+  readonly project?: string;
+  readonly language?: 'de' | 'en';
+  readonly preferred: string;
+  readonly drafts: boolean;
+  readonly archived: boolean;
+  readonly offset?: number;
+}
+export const searchWiki = (api: ServerApi, query: WikiSearchQuery) =>
+  run(() => api.search.GET('/search/wiki', {
+    params: { query: { ...(query.q ? { q: query.q } : {}), ...(query.project ? { project: [query.project] } : {}),
+      ...(query.language ? { language: query.language } : {}), preferred: query.preferred === 'en' ? 'en' : 'de',
+      ...(query.drafts ? { drafts: 'true' as const } : {}), ...(query.archived ? { archived: 'true' as const } : {}),
+      limit: 20, offset: query.offset ?? 0 } },
+    querySerializer: { array: { style: 'form', explode: true } },
+  }), one<{ total: number; items: WikiHit[] }>(isPage((v) => hasStrings(v, 'id', 'projectId', 'title', 'stage', 'language'))));
 
 // ---------------------------------------------------------------- groups and rights
 

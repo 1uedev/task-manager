@@ -34,10 +34,22 @@ test('the wiki of a project and its pages carry checked identifiers only (TASK-0
   for (const route of [{ name: 'wikiPage', projectId: ID, pageId: null }, { name: 'wikiPage', projectId: ID, pageId: PAGE }] as const) {
     assert.deepEqual(routeFromHash(hrefFor(route)), route);
   }
-  for (const bad of ['#/wiki/x', `#/wiki/${ID}/x`, `#/wiki/${ID}/${PAGE}/more`, `#/wiki/${ID.toUpperCase()}`]) {
+  for (const bad of ['#/wiki/x', `#/wiki/${ID}/x`, `#/wiki/${ID}/${PAGE}/more`, `#/wiki/${ID}/${PAGE}/de/more`, `#/wiki/${ID.toUpperCase()}`]) {
     assert.deepEqual(routeFromHash(bad), { name: 'start' }, bad);
   }
   assert.equal(section({ name: 'wikiPage', projectId: ID, pageId: PAGE }), 'wiki');
+});
+
+test('a search hit opens the wiki page in the language version and stage it found (TASK-102, F5)', () => {
+  const PAGE = '1a2b3c4d-5555-4666-8777-888899990000';
+  for (const route of [{ name: 'wikiPage', projectId: ID, pageId: PAGE, language: 'en', published: true },
+    { name: 'wikiPage', projectId: ID, pageId: PAGE, language: 'de', published: false }] as const) {
+    assert.deepEqual(routeFromHash(hrefFor(route)), route);
+  }
+  assert.equal(hrefFor({ name: 'wikiPage', projectId: ID, pageId: PAGE, language: 'en', published: true }), `#/wiki/${ID}/${PAGE}/en/published`);
+  for (const bad of [`#/wiki/${ID}/${PAGE}/fr`, `#/wiki/${ID}/${PAGE}/en/draft`, `#/wiki/${ID}/${PAGE}/en/published/more`]) {
+    assert.deepEqual(routeFromHash(bad), { name: 'start' }, bad);
+  }
 });
 
 test('the requirements of a project and one requirement carry checked identifiers only (TASK-096)', () => {

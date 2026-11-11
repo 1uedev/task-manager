@@ -7,6 +7,7 @@ import { hrefFor } from '../app/route.ts';
 import { EmptyText, PageHead, SelectField, TextField } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
+import { WikiSearch } from './WikiSearch.tsx';
 import { NO_TAG_FILTER, SelectionBar, SelectPage, SelectTicket, TagFilter, tagFilterActive, useTicketSelection, type TagFilterValue } from './TagParts.tsx';
 
 interface Query {
@@ -21,9 +22,35 @@ type Found =
   | { readonly state: 'problem'; readonly problem: ProblemInfo }
   | { readonly state: 'ok'; readonly tickets: { total: number; items: TicketHit[] }; readonly projects: { total: number; items: ProjectHit[] } | null };
 
+type Area = 'tickets' | 'wiki';
+
+// The search with its areas (TASK-102): tickets and projects, and the wiki. Each area keeps its own input while the other
+// one is shown. The wiki area is built the first time it is chosen, so the page asks for wiki projects only when needed.
+export function SearchPage() {
+  const { t } = useI18n();
+  const [area, setArea] = useState<Area>('tickets');
+  const [wikiOpened, setWikiOpened] = useState(false);
+  return (
+    <>
+      <PageHead title={t('search.title')} intro={t('search.intro')} />
+      <fieldset className="search-areas">
+        <legend>{t('search.area')}</legend>
+        {(['tickets', 'wiki'] as const).map((value) => (
+          <label key={value} className="check">
+            <input type="radio" name="search-area" value={value} checked={area === value} onChange={() => { setArea(value); if (value === 'wiki') setWikiOpened(true); }} />
+            {' '}{t(value === 'tickets' ? 'search.area.tickets' : 'search.area.wiki')}
+          </label>
+        ))}
+      </fieldset>
+      <div hidden={area !== 'tickets'}><TicketSearch /></div>
+      {wikiOpened && <div hidden={area !== 'wiki'}><WikiSearch /></div>}
+    </>
+  );
+}
+
 // Search over tickets and projects. The server searches only what the person may read; hidden fields neither match
 // nor show, so the page displays what comes back and nothing more.
-export function SearchPage() {
+function TicketSearch() {
   const { t } = useI18n();
   const { api } = useBrand();
   const [projects] = useLoad(() => listProjects(api), [api]);
@@ -72,8 +99,7 @@ export function SearchPage() {
   const names = new Map((projects.state === 'ok' ? projects.value : []).map((item) => [item.id, item]));
   return (
     <>
-      <PageHead title={t('search.title')} intro={t('search.intro')} />
-      <form className="search-form" role="search" onSubmit={submit} noValidate>
+      <form className="search-form" role="search" aria-label={t('search.area.tickets')} onSubmit={submit} noValidate>
         <TextField label={t('search.text')} hint={t('search.hint')} value={q} onChange={setQ} maxLength={200} error={error} />
         <SelectField label={t('search.project')} value={project} onChange={setProject}
           options={[{ value: '', label: t('search.allProjects') }, ...(projects.state === 'ok' ? projects.value : []).map((item) => ({ value: item.id, label: `${item.key} · ${item.name}` }))]} />
