@@ -516,30 +516,34 @@ public class SearchService {
         String preferred = query.preferred() == null ? "de" : query.preferred();
         String from = " from search_wiki_text t join search_wiki_page p on p.page_id = t.page_id "
             + "join search_project sp on sp.project_id = p.project_id where " + where;
-        // One statement, so total, row, revision and text come from one snapshot even while a page is published or withdrawn
-        // (F4 of the review): the window counts the pages before the limit.
+        // One statement, also past the last page: the count row is always there and the page rows join it, so total, row,
+        // revision and text come from one snapshot even while a page is published or withdrawn (F4 of the review, R4 of the
+        // follow up review).
         List<Object> pageParams = new ArrayList<>(rankParams);
         pageParams.add(preferred);
         pageParams.addAll(params);
         pageParams.add(query.limit());
         pageParams.add(query.offset());
-        long[] total = {-1};
-        List<WikiRow> rows = jdbc.sql("select *, count(*) over () as total from (select distinct on (t.page_id) t.page_id, p.project_id, "
+        long[] total = {0};
+        List<WikiRow> rows = new ArrayList<>();
+        jdbc.sql("with h as (select distinct on (t.page_id) t.page_id, p.project_id, "
                 + "sp.key as project_key, t.language, t.title, t.body, t.revision, t.published_at, p.archived, " + rank + " as rank, "
                 + "case when t.language = ? then 0 when t.language = p.source_language then 1 else 2 end as preference"
-                + from + " order by t.page_id, preference) h order by rank desc, lower(title), title, page_id limit ? offset ?")
+                + from + " order by t.page_id, preference) select c.total, w.* from (select count(*) as total from h) c "
+                + "left join lateral (select * from h order by rank desc, lower(title), title, page_id limit ? offset ?) w on true "
+                + "order by w.rank desc, lower(w.title), w.title, w.page_id")
             .params(pageParams)
-            .query((rs, n) -> {
+            .query((ResultSet rs) -> {
                 total[0] = rs.getLong("total");
-                return new WikiRow(rs.getObject("page_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getString("project_key"),
-                    rs.getString("language"), rs.getString("title"), rs.getString("body"), rs.getInt("revision"),
-                    rs.getTimestamp("published_at") == null ? null : rs.getTimestamp("published_at").toInstant(), rs.getBoolean("archived"));
-            })
-            .list();
+                UUID id = rs.getObject("page_id", UUID.class);
+                if (id != null) {
+                    rows.add(new WikiRow(id, rs.getObject("project_id", UUID.class), rs.getString("project_key"),
+                        rs.getString("language"), rs.getString("title"), rs.getString("body"), rs.getInt("revision"),
+                        rs.getTimestamp("published_at") == null ? null : rs.getTimestamp("published_at").toInstant(), rs.getBoolean("archived")));
+                }
+            });
         if (rows.isEmpty()) {
-            // Past the last page (or nothing found): the count alone.
-            long count = query.offset() == 0 ? 0 : jdbc.sql("select count(distinct t.page_id)" + from).params(params).query(Long.class).single();
-            return new Page<>(count, List.of());
+            return new Page<>(total[0], List.of());
         }
         String stage = query.drafts() ? "draft" : "published";
         Map<UUID, List<WikiPages.PathEntry>> paths = wiki.paths(actor, rows.stream().map(WikiRow::id).toList(), preferred, query.drafts());

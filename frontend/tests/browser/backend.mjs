@@ -2474,11 +2474,60 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   const wikiPlain = (node) => node.type === 'text' ? ((node.marks ?? []).some((mark) => mark.type === 'link' && /^wiki:/.test(mark.attrs?.href ?? '')) ? ' ' : node.text)
     : node.type === 'hardBreak' ? '\n' : node.type === 'image' ? '' : (node.content ?? []).map(wikiPlain).join('') + (node.type === 'doc' ? '' : '\n');
   const searchWords = (text) => text.normalize('NFKC').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  // As SearchSnippet: a word of the original text with its combining marks counts when a word of its normal form starts with a
-  // search word.
-  const searchMarks = (text, words) => [...text.matchAll(/[\p{L}\p{N}\p{M}]+/gu)]
-    .filter((match) => searchWords(match[0]).some((part) => words.some((word) => part.startsWith(word))))
-    .map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  // As SearchText.indexTerms: the indexed words of a long text stop after 200,000 bytes in UTF-8, after a whole word.
+  const indexWords = (text) => {
+    const kept = [];
+    let bytes = -1;
+    for (const word of searchWords(text)) {
+      bytes += 1 + Buffer.byteLength(word, 'utf8');
+      if (bytes > 200_000) break;
+      kept.push(word);
+    }
+    return kept;
+  };
+  // As SearchText.parse: the limits count code points after NFKC.
+  const searchTextInvalid = (q) => {
+    const text = q.normalize('NFKC').trim();
+    const words = searchWords(text);
+    return [...text].length > 200 || words.length > 10 || words.some((word) => [...word].length > 50);
+  };
+  // As SearchSnippet.marks (TASK-105 R3): the text is normalized like the index one character with its combining marks at a
+  // time, each unit of the normal form keeps its place in the original text, and a word of the normal form that starts with a
+  // search word marks the characters it came from.
+  const continuesCharacter = (ch) => /\p{M}/u.test(ch) || (ch.codePointAt(0) >= 0x1160 && ch.codePointAt(0) <= 0x11ff);
+  const searchMarks = (text, words) => {
+    if (words.length === 0) return [];
+    let units = [];
+    for (let i = 0; i < text.length;) {
+      const start = i;
+      i += String.fromCodePoint(text.codePointAt(i)).length;
+      while (i < text.length && continuesCharacter(String.fromCodePoint(text.codePointAt(i)))) i += String.fromCodePoint(text.codePointAt(i)).length;
+      for (const unit of text.slice(start, i).normalize('NFKC').split('')) units.push({ unit, from: start, to: i });
+    }
+    const plain = units.map((item) => item.unit).join('');
+    let folded = plain.toLowerCase();
+    if (folded.length !== plain.length) {
+      const moved = [];
+      for (let k = 0; k < plain.length;) {
+        const size = String.fromCodePoint(plain.codePointAt(k)).length;
+        for (const unit of plain.slice(k, k + size).toLowerCase().split('')) moved.push({ unit, from: units[k].from, to: units[k].to });
+        k += size;
+      }
+      units = moved;
+      folded = moved.map((item) => item.unit).join('');
+    }
+    const marks = [];
+    for (const match of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
+      if (!words.some((word) => match[0].startsWith(word))) continue;
+      let mark = { start: units[match.index].from, end: units[match.index + match[0].length - 1].to };
+      if (marks.length > 0 && mark.start < marks.at(-1).end) {
+        const last = marks.pop();
+        mark = { start: last.start, end: Math.max(last.end, mark.end) };
+      }
+      marks.push(mark);
+    }
+    return marks;
+  };
   // As SearchSnippet.of: 240 units from 60 before the first found word, cut at spaces, never inside a surrogate pair.
   const searchSnippet = (body, words) => {
     if (body.trim() === '') return null;
@@ -2510,10 +2559,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     let parent = page.parentId;
     while (parent !== null && !seen.has(parent)) {
       seen.add(parent);
-      const above = wiki.pages.find((item) => item.id === parent && !item.archived);
-      if (above === undefined) {
+      const above = wiki.pages.find((item) => item.id === parent);
+      if (above === undefined || above.archived) {
+        // An archived parent is a placeholder and the path goes on with its own parent (TASK-105 R2).
         path.unshift({ id: null, title: null, available: false });
-        break;
+        parent = above?.parentId ?? null;
+        continue;
       }
       const title = wikiTitleIn(above, preferred, drafts);
       path.unshift(title === null ? { id: null, title: null, available: false } : { id: above.id, title, available: true });
@@ -2529,7 +2580,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (!WIKI_LANGUAGES.includes(preferred)) violations.push('preferred.invalid');
     for (const flag of ['drafts', 'archived']) if (query.has(flag) && !['true', 'false'].includes(query.get(flag))) violations.push(`${flag}.invalid`);
     const q = query.get('q') ?? '';
-    if (q.length > 200 || searchWords(q).length > 10 || searchWords(q).some((word) => word.length > 50)) violations.push('q.invalid');
+    if (searchTextInvalid(q)) violations.push('q.invalid');
     const offset = Number(query.get('offset') ?? 0);
     const limit = Number(query.get('limit') ?? 20);
     if (!Number.isInteger(offset) || offset < 0 || offset > 1000 || !Number.isInteger(limit) || limit < 1 || limit > 50) violations.push('paging.invalid');
@@ -2557,9 +2608,13 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         if (number === null) continue;
         const revision = wikiRevision(page, number, code);
         const body = wikiPlain(revision.content).trim();
-        const terms = [...searchWords(revision.title), ...searchWords(body)];
-        if (!words.every((word) => terms.some((term) => term.startsWith(word)))) continue;
-        candidates.push({ code, revision, body, publishedAt: drafts ? null : variant.publishedAt ?? now() });
+        const titleTerms = searchWords(revision.title);
+        const bodyTerms = indexWords(body);
+        const has = (terms, word) => terms.some((term) => term.startsWith(word));
+        if (!words.every((word) => has(titleTerms, word) || has(bodyTerms, word))) continue;
+        // As the rank of the server: every word counts where it is found, in the title twice (an approximation of ts_rank).
+        const rank = words.reduce((sum, word) => sum + (has(titleTerms, word) ? 2 : 0) + (has(bodyTerms, word) ? 1 : 0), 0);
+        candidates.push({ code, revision, body, rank, publishedAt: drafts ? null : variant.publishedAt ?? now() });
       }
       if (candidates.length === 0) continue;
       const rank = (item) => (item.code === preferred ? 0 : item.code === page.language ? 1 : 2);
@@ -2567,9 +2622,13 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       hits.push({ id: page.id, projectId: page.projectId, projectKey: state.projects.find((item) => item.id === page.projectId).key, title: shown.revision.title,
         titleMarks: searchMarks(shown.revision.title, words), language: shown.code, stage: drafts ? 'draft' : 'published', revision: shown.revision.revision,
         publishedAt: shown.publishedAt, archived: page.archived, path: wikiSearchPath(page, preferred, drafts),
-        snippet: searchSnippet(shown.body, words) });
+        snippet: searchSnippet(shown.body, words), rank: shown.rank });
     }
-    hits.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+    // As the server: rank first, then the title in lower case (compared like the collation of the database), the title and the
+    // identifier.
+    const plainOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    hits.sort((a, b) => b.rank - a.rank || a.title.toLowerCase().localeCompare(b.title.toLowerCase()) || plainOrder(a.title, b.title) || plainOrder(a.id, b.id));
+    for (const hit of hits) delete hit.rank;
     return ok({ total: hits.length, items: hits.slice(offset, offset + limit) });
   }
 
@@ -2590,7 +2649,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (everApproved !== null && !['true', 'false'].includes(everApproved)) violations.push('approved.invalid');
     const custom = query.getAll('custom').map((entry) => [entry.slice(0, entry.indexOf('=')), entry.slice(entry.indexOf('=') + 1)]);
     const q = query.get('q') ?? '';
-    if (q.length > 200 || searchWords(q).length > 10 || searchWords(q).some((word) => word.length > 50)) violations.push('q.invalid');
+    if (searchTextInvalid(q)) violations.push('q.invalid');
     const offset = Number(query.get('offset') ?? 0);
     const limit = Number(query.get('limit') ?? 20);
     if (!Number.isInteger(offset) || offset < 0 || offset > 1000 || !Number.isInteger(limit) || limit < 1 || limit > 50) violations.push('paging.invalid');
@@ -3295,6 +3354,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addWikiLanguage,
     // The wiki routes without a browser, for checks of the same answers as the server (H1 of the TASK-094 review).
     wikiCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => wikiRoute(account, method, path, new URLSearchParams(query), headers, body),
+    wikiSearchCall: (account, query) => wikiSearch(account, new URLSearchParams(query)),
     // A prepared cycle of a ticket, as the server would report it (TASK-068).
     addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {

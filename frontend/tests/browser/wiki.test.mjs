@@ -796,7 +796,7 @@ describe('wiki', () => {
         page = backend.addWikiPage(backend.anna, 'Leitfaden', doc('Deutscher Text'), { parentId: hidden.id, publish: true });
         backend.addWikiLanguage(page, 'en', backend.anna, { title: 'Guide', content: doc('English handbook text'), publish: true });
         // A newer English draft that does not contain the word found.
-        backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'Guide', content: doc('Rewritten') },
+        backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'Guide rewritten', content: doc('Rewritten') },
           { headers: { 'if-match': '"1"' }, query: 'language=en' });
       },
     }, async (app) => {
@@ -815,6 +815,62 @@ describe('wiki', () => {
       assert.match(await app.getByTestId('wiki-published-shown').innerText(), /veröffentlichte Revision 1/);
       await app.getByRole('button', { name: 'Entwurf zeigen' }).click();
       assert.match(await app.getByTestId('wiki-content').innerText(), /Rewritten/);
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'Guide rewritten', 'title and text of the draft together (R1)');
+    });
+  });
+
+  test('a published hit withdrawn before the click says so and shows the draft only on request (TASK-105 R1)', async () => {
+    let page;
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit', 'wiki.publish']);
+        page = backend.addWikiPage(backend.anna, 'Alte Ueberschrift', doc('Alte Fassung'), { publish: true });
+        backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'Neuer Entwurfstitel', content: doc('Neuer Text') },
+          { headers: { 'if-match': '"1"' }, query: 'language=de' });
+      },
+    }, async (app, backend) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('ueberschrift');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = app.getByTestId('wiki-hits').locator('li').first();
+      await hit.waitFor();
+      const withdrawn = backend.wikiCall(backend.anna, 'POST', `/wiki/pages/${page.id}/withdraw`, {}, { query: 'language=de' });
+      assert.equal(withdrawn.status, 200);
+      await hit.getByRole('link').click();
+      await app.getByTestId('wiki-published-gone').waitFor();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'Nicht mehr veröffentlicht');
+      assert.equal(await app.getByTestId('wiki-content').count(), 0, 'no draft without the explicit action');
+      assert.doesNotMatch(await app.getByTestId('wiki-page').innerText(), /Neuer Entwurfstitel|Neuer Text/);
+      await app.getByTestId('wiki-published-gone').getByRole('button', { name: 'Entwurf zeigen' }).click();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'Neuer Entwurfstitel');
+      assert.match(await app.getByTestId('wiki-content').innerText(), /Neuer Text/);
+    });
+  });
+
+  test('a published hit shows the published title above the published text, also when the draft has another title (TASK-105 R1)', async () => {
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit']);
+        const page = backend.addWikiPage(backend.anna, 'Alte Ueberschrift', doc('Alte Fassung'), { publish: true });
+        backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'Neuer Entwurfstitel', content: doc('Neuer Text') },
+          { headers: { 'if-match': '"1"' }, query: 'language=de' });
+      },
+    }, async (app) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('ueberschrift');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = app.getByTestId('wiki-hits').locator('li').first();
+      await hit.waitFor();
+      await hit.getByRole('link').click();
+      await app.getByTestId('wiki-content').waitFor();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'Alte Ueberschrift', 'the title the search found');
+      assert.match(await app.getByTestId('wiki-content').innerText(), /Alte Fassung/);
     });
   });
 
@@ -850,5 +906,105 @@ describe('wiki', () => {
       assert.match(await app.getByTestId('wiki-hits').innerText(), /Seite 21/);
       assert.equal(await app.evaluate(() => document.activeElement?.id), 'wiki-hits', 'after paging the focus is on the heading of the result');
     });
+  });
+
+  test('filters switched on in a project with wiki.publish are hidden and not sent after the change to a project to read only (TASK-105 N2)', async () => {
+    let reading;
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        reading = { id: '00000000-0000-4000-8000-000000105002', key: 'LESE', name: 'Nur lesen', description: null, version: 1, configurationVersion: 1,
+          createdAt: backend.project.createdAt, updatedAt: backend.project.updatedAt };
+        backend.state.projects.push(reading);
+        backend.state.members.set(reading.id, [{ accountId: backend.anna.id, addedAt: reading.createdAt }]);
+        backend.state.configurations.set(reading.id, structuredClone(backend.state.configurations.get(backend.project.id)));
+        backend.state.groups.push({ id: '00000000-0000-4000-8000-000000105001', name: 'Wiki je Projekt', members: [backend.anna.id], fields: [],
+          actions: [...['wiki.read', 'wiki.edit', 'wiki.publish'].map((action) => ({ action, projectId: backend.project.id })),
+            { action: 'wiki.read', projectId: reading.id }] });
+        backend.addWikiPage(backend.anna, 'Gelesen', doc('Gemeinsam'), { publish: true, projectId: reading.id });
+      },
+    }, async (app, backend) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Projekt').selectOption(backend.project.id);
+      await form.getByLabel('Entwürfe durchsuchen').check();
+      await form.getByLabel('Archivierte einbeziehen').check();
+      await form.getByLabel('Projekt').selectOption(reading.id);
+      assert.equal(await form.getByLabel('Entwürfe durchsuchen').count(), 0, 'no draft filter in a project to read only');
+      assert.equal(await form.getByLabel('Archivierte einbeziehen').count(), 0, 'no archive filter in a project to read only');
+      const sent = [];
+      app.on('request', (request) => { if (request.url().includes('/api/v1/search/wiki?')) sent.push(new URL(request.url()).searchParams); });
+      await form.getByLabel('Suchtext').fill('gemeinsam');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await app.getByTestId('wiki-hits').waitFor();
+      assert.match(await app.getByTestId('wiki-hits').innerText(), /Gelesen/);
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].get('project'), reading.id);
+      assert.notEqual(sent[0].get('drafts'), 'true', 'the hidden draft filter is not sent');
+      assert.notEqual(sent[0].get('archived'), 'true', 'the hidden archive filter is not sent');
+      // Back in the first project the filters are offered again, cleared.
+      await form.getByLabel('Projekt').selectOption(backend.project.id);
+      assert.equal(await form.getByLabel('Entwürfe durchsuchen').isChecked(), false);
+      assert.equal(await form.getByLabel('Archivierte einbeziehen').isChecked(), false);
+    });
+  });
+});
+
+// TASK-105 N1: the stand in answers the cases of WikiSearchApiTest like the server, so that the browser tests see the same
+// hits, order, marks and refusals.
+describe('the wiki search of the stand in answers like the server (TASK-105 N1)', () => {
+  const setup = (actions = ['wiki.read', 'wiki.edit', 'wiki.publish']) => {
+    const backend = createBackend();
+    grant(backend, [backend.anna], actions);
+    return backend;
+  };
+  const search = (backend, query) => backend.wikiSearchCall(backend.anna, query);
+  const archive = (backend, page) => {
+    const answer = backend.wikiCall(backend.anna, 'POST', `/wiki/pages/${page.id}/archive`, { version: page.version }, { query: 'language=de' });
+    assert.equal(answer.status, 200);
+  };
+
+  test('words spread over title and text rank above the text alone', () => {
+    const backend = setup();
+    backend.addWikiPage(backend.anna, 'Nur Text', doc('verteilta verteiltb'), { publish: true });
+    backend.addWikiPage(backend.anna, 'Titel verteilta', doc('verteiltb'), { publish: true });
+    const found = search(backend, `q=${encodeURIComponent('verteilta verteiltb')}`);
+    assert.deepEqual(found.body.items.map((hit) => hit.title), ['Titel verteilta', 'Nur Text']);
+  });
+
+  test('an archived parent is a placeholder and the path goes on to the root', () => {
+    const backend = setup();
+    const root = backend.addWikiPage(backend.anna, 'Wurzel', doc('Oben'), { publish: true });
+    const parent = backend.addWikiPage(backend.anna, 'Eltern', doc('Mitte'), { parentId: root.id, publish: true });
+    const child = backend.addWikiPage(backend.anna, 'Kind', doc('archivpfad'), { parentId: parent.id, publish: true });
+    archive(backend, child);
+    archive(backend, parent);
+    for (const query of ['q=archivpfad&archived=true', 'q=archivpfad&archived=true&drafts=true']) {
+      const found = search(backend, query);
+      assert.equal(found.body.total, 1);
+      assert.deepEqual(found.body.items[0].path, [{ id: root.id, title: 'Wurzel', available: true }, { id: null, title: null, available: false }]);
+    }
+  });
+
+  test('a compatibility symbol at the start of a word is marked in title and excerpt', () => {
+    const backend = setup();
+    backend.addWikiPage(backend.anna, 'Titel Ⓐlpha', doc(`${'Vorwort '.repeat(40)}Ⓐlpha Ende`), { publish: true });
+    const hit = search(backend, 'q=alpha').body.items[0];
+    assert.deepEqual(hit.titleMarks, [{ start: 6, end: 11 }]);
+    assert.equal(hit.snippet.cutStart, true);
+    const [mark] = hit.snippet.marks;
+    assert.equal(hit.snippet.text.slice(mark.start, mark.end), 'Ⓐlpha');
+  });
+
+  test('the limits count code points after NFKC and a word after the limit of the index is not found', () => {
+    const backend = setup();
+    assert.equal(search(backend, `q=${encodeURIComponent('ﬁ'.repeat(26))}`).status, 400);
+    const emoji = search(backend, `q=${encodeURIComponent('\u{1F600}'.repeat(150))}`);
+    assert.equal(emoji.status, 200);
+    assert.equal(emoji.body.total, 0);
+    backend.addWikiPage(backend.anna, 'Lang', doc(`anfang ${'fueller '.repeat(30_000)}spaet`), { publish: true });
+    assert.equal(search(backend, 'q=anfang').body.total, 1);
+    assert.equal(search(backend, 'q=spaet').body.total, 0);
   });
 });

@@ -632,7 +632,8 @@ public class WikiService implements WikiPages {
             for (WikiRepository.Page page : pages) {
                 boolean visible = page.archived() ? access.publish() : access.drafts() || published(page.id());
                 if (visible) {
-                    paths.put(page.id(), searchPath(rows, page, drafts && access.drafts(), requested));
+                    paths.put(page.id(), searchPath(rows, page, drafts && access.drafts(), requested,
+                        id -> repository.find(actor.companyId(), id).filter(above -> above.projectId().equals(projectId))));
                 }
             }
         });
@@ -640,16 +641,19 @@ public class WikiService implements WikiPages {
     }
 
     /** Every level above a found page, in the stage of the search (DEC-132); see {@link WikiPages#paths}. */
-    private static List<PathEntry> searchPath(Map<UUID, PageRows> rows, WikiRepository.Page page, boolean drafts, String requested) {
+    private static List<PathEntry> searchPath(Map<UUID, PageRows> rows, WikiRepository.Page page, boolean drafts, String requested,
+            java.util.function.Function<UUID, Optional<WikiRepository.Page>> archived) {
         List<PathEntry> path = new ArrayList<>();
         UUID parent = page.parentId();
         Set<UUID> seen = new HashSet<>();
         while (parent != null && seen.add(parent)) {
             PageRows above = rows.get(parent);
             if (above == null) {
-                // An archived parent is no longer in the tree; its own parent is not known from here.
+                // An archived parent is no longer in the tree: a placeholder, and the path goes on with its own parent up to
+                // the root (R2 of the follow up review of TASK-102).
                 path.addFirst(PathEntry.unavailable());
-                break;
+                parent = archived.apply(parent).map(WikiRepository.Page::parentId).orElse(null);
+                continue;
             }
             Optional<WikiRepository.TreeRow> row = shownRow(above, requested, drafts);
             path.addFirst(row.map(r -> new PathEntry(above.page().id(), drafts ? r.draftTitle() : r.publishedTitle(), true))

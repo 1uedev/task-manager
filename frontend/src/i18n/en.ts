@@ -1390,6 +1390,8 @@ export const en: Record<MessageKey, Message> = {
   'wiki.unavailable': 'Page not available',
   'wiki.publishedShown': 'You see the published revision {revision}, where the search found its words. The draft is newer.',
   'wiki.showDraft': 'Show draft',
+  'wiki.publishedGone': 'The search found a published version that has been withdrawn since.',
+  'wiki.publishedGoneTitle': 'No longer published',
   'wiki.draftShown': 'You see the draft (revision {revision}). Readers see it only after publication.',
   'wiki.status.published': 'Published: revision {revision} by {person} on {time}.',
   'wiki.status.unpublished': 'Not published.',

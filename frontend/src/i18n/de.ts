@@ -1390,6 +1390,8 @@ export const de = {
   'wiki.unavailable': 'Seite nicht verfügbar',
   'wiki.publishedShown': 'Du siehst die veröffentlichte Revision {revision}, in der die Suche gefunden hat. Der Entwurf ist neuer.',
   'wiki.showDraft': 'Entwurf zeigen',
+  'wiki.publishedGone': 'Die Suche hat eine veröffentlichte Fassung gefunden, die inzwischen zurückgezogen wurde.',
+  'wiki.publishedGoneTitle': 'Nicht mehr veröffentlicht',
   'wiki.draftShown': 'Du siehst den Entwurf (Revision {revision}). Leser sehen ihn erst nach der Veröffentlichung.',
   'wiki.status.published': 'Veröffentlicht: Revision {revision} von {person} am {time}.',
   'wiki.status.unpublished': 'Nicht veröffentlicht.',

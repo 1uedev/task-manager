@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +42,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-102](#task-102-wiki-in-der-gemeinsamen-suche-a14-teil-1) | Wiki in der gemeinsamen Suche (A14 Teil 1) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-103](#task-103-anforderungen-in-der-gemeinsamen-suche-a14-teil-2) | Anforderungen in der gemeinsamen Suche (A14 Teil 2) | claude-20261111-search-01 | 2026-11-11 |
+| [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -66,18 +65,18 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Fachliche Regeln** (von Holger am 11. November 2026 bestätigt):
 1. Gefunden werden Titel und Text jeder Sprachfassung. Der Server gewinnt den Text aus dem geprüften Dokument: Absätze, Überschriften, Listen, Tabellen, Zitate, Codeblöcke und sichtbare Linktexte; keine Bilder, Linkadressen oder internen Kennungen.
-2. Standardmäßig wird nur die veröffentlichte Revision jeder Sprachfassung durchsucht, auch für Personen mit `wiki.edit`. Mit `wiki.edit` lässt sich „Entwürfe durchsuchen“ wählen; dann wird stattdessen der aktuelle Entwurf durchsucht und der Treffer als Entwurf gekennzeichnet. Nie gemischt.
+2. Standardmäßig wird nur die veröffentlichte Revision jeder Sprachfassung durchsucht, auch für Personen mit `wiki.edit`. Mit `wiki.edit` oder `wiki.publish` lässt sich „Entwürfe durchsuchen“ wählen; dann wird stattdessen der aktuelle Entwurf durchsucht und der Treffer als Entwurf gekennzeichnet. Nie gemischt.
 3. Beide Sprachfassungen werden durchsucht, ein Treffer je Seite: Treffen beide, zeigt der Treffer die Fassung in der Oberflächensprache, sonst die getroffene, jeweils mit Sprachkennzeichen. Filter „Sprache“ mit Deutsch, Englisch oder beide.
 4. Archivierte Seiten werden nicht gefunden; mit „Archivierte einbeziehen“ (nur mit `wiki.publish`, wie das Wiki selbst archivierte Seiten zeigt; von Holger am 11. November 2026 so entschieden, statt zuvor `wiki.edit`) erscheinen sie gekennzeichnet.
-5. Suchen verlangt Mitgliedschaft und `wiki.read`, Entwürfe `wiki.edit`, das Archiv `wiki.publish`. Ohne Recht weder Treffer noch Zähler noch Vorschau. Portalkonten erhalten keine Wikisuche (403).
+5. Suchen verlangt Mitgliedschaft und eine der drei Wikiaktionen `wiki.read`, `wiki.edit` oder `wiki.publish` (wie das Wiki selbst veröffentlichte Inhalte zeigt), Entwürfe `wiki.edit` oder `wiki.publish`. Das Archiv verlangt gesondert `wiki.publish` im jeweiligen Projekt. Ohne Recht weder Treffer noch Zähler noch Vorschau. Portalkonten erhalten keine Wikisuche (403).
 6. Ein Treffer zeigt Titel, Projekt, Pfad der Elternseiten (nicht lesbare als „Seite nicht verfügbar“), Sprache, Stand, Zeitpunkt der Veröffentlichung und einen Ausschnitt als Klartext mit den Positionen der gefundenen Wörter, nie als HTML.
 7. Textregeln wie TASK-029: keine Wortstämme, jedes Wort als Präfix, alle Wörter verlangt, keine Suchsyntax, dieselben Grenzen und 503 `search.busy`.
 8. Die Projektion wird in derselben Transaktion geschrieben; Rechte gelten bei jeder Suche neu. `rebuild-search` baut auch das Wiki neu auf, die Migration löscht den Aufbauvermerk.
 
 **Abnahmekriterien:** Vorschlag, zur Prüfung:
-1. Ein Wort, das nur im Entwurf einer veröffentlichten Seite steht, findet ein Leser nicht; mit „Entwürfe durchsuchen“ und `wiki.edit` erscheint die Seite als Entwurf (T11).
+1. Ein Wort, das nur im Entwurf einer veröffentlichten Seite steht, findet ein Leser nicht; mit „Entwürfe durchsuchen“ und `wiki.edit` oder `wiki.publish` erscheint die Seite als Entwurf (T11).
 2. Ein Wort der englischen Fassung findet die Seite mit Sprachkennzeichen; der Sprachfilter grenzt ein.
-3. Ohne Mitgliedschaft oder `wiki.read` keine Treffer und keine Zähler; archivierte Seiten nur mit dem Filter und `wiki.publish`.
+3. Ohne Mitgliedschaft oder ohne jede der drei Wikiaktionen keine Treffer und keine Zähler; Entwürfe nur mit `wiki.edit` oder `wiki.publish`; archivierte Seiten gesondert nur mit dem Filter und `wiki.publish`.
 4. Nach Veröffentlichen ist der neue Stand in der folgenden Suche sichtbar (T13); `rebuild-search` liefert dieselben Treffer.
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Wiki.
 
@@ -110,7 +109,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-105 Befunde der Codex Nachprüfung von TASK-102 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261111-search-02 · **Aktualisiert:** 2026-11-11
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261111-search-02 · **Aktualisiert:** 2026-11-11
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-133; docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md. **Abhängigkeiten:** TASK-102 (PR #299) und TASK-103 (PR #300) geliefert. **Arbeitsstand:** Holger hat am 11. November 2026 den Bericht der Codex Nachprüfung von TASK-102 (Empfehlung nachbessern) in den Thread gegeben und am selben Tag auf der Entscheidungskarte „Alles beheben als TASK-105“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-135, keine Migration geplant.
 
@@ -132,7 +131,9 @@ Nicht Teil: neue Regeln, TASK-104.
 3. R3 mit Test für `Ⓐlpha` im Titel und einem Treffer außerhalb des Anfangsausschnitts.
 4. R4 mit Test eines Publikationswechsels am Seitenende; N1 bis N3 mit Tests, bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach der Reservierung auf main umsetzen; danach TASK-104.
+**Übergabe:** Ergebnis in PR #302 (Branch claude/project-thread-hulabb), ohne Migration, Vertrag `contracts/search.openapi.yaml` 0.4.1. R1: Titel und Text einer Wikiseite kommen aus demselben Stand; eine seit der Suche zurückgezogene Veröffentlichung zeigt „Nicht mehr veröffentlicht“ und den Entwurf erst nach „Entwurf zeigen“ (zwei neue Browsertests, der bestehende mit unterschiedlichen Titeln). R2: `WikiService.searchPath` liest die Elternbeziehung archivierter Seiten und geht bis zur Wurzel (`anArchivedParentKeepsThePathUpToTheRoot`, Testersatz gleich). R3: `SearchSnippet.marks` normalisiert Zeichen für Zeichen samt kombinierenden Zeichen und bildet die Wörter der Normalform auf die Stellen im Originaltext ab (Unit Tests mit Ⓐ, ℡, ½, İ und einer Prüfung, dass jedes Indexwort markiert wird; API Tests für Wiki und Anforderungen). R4: Zählzeile und optionale Trefferzeilen in einer Anweisung (`pastTheLastPageTheTotalComesFromTheSameSnapshot` mit wiederholtem Veröffentlichen und Zurückziehen). N1: Testersatz mit Rang vor Titel, Längen in Codepoints nach NFKC und Indexgrenze, dieselben vier Fälle direkt am Testersatz und am Server. N2: Browsertest mit Wechsel in ein reines Leseprojekt. N3: `PathEntry` mit zwei festen Formen, Pfadbeschreibung, Kommentar von `WikiPages.paths`, Test der vier 400 Gründe und der Formen einer echten Antwort. N4: Regeln 2 und 5 und Kriterien 1 und 3 von TASK-102 nennen die Alternativen, das Archivrecht gesondert. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme; TASK-104 folgt.
 
 ## TASK-104 Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3)
 

@@ -16,7 +16,7 @@ Vor der jeweiligen Fachimplementierung erhält die produktive API einen eigenen 
 
 [tags.openapi.yaml](tags.openapi.yaml) beschreibt den Unternehmenskatalog, die Projektkataloge und die Tag Zuordnungen zu Tickets und Projekten (TASK-028, DEC-068). `TagsContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht. Der Identitätsvertrag nennt seither `tags.manage` in der Rechteliste der Sitzung.
 
-[search.openapi.yaml](search.openapi.yaml) beschreibt die Suche und die Filter für Tickets und Projekte (TASK-029, DEC-069). `SearchContractTest` gleicht ihn mit den Routen ab; die Oberfläche nutzt ihn noch nicht.
+[search.openapi.yaml](search.openapi.yaml) beschreibt die Suche und die Filter für Tickets und Projekte (TASK-029, DEC-069), seit Version 0.3.0 auch für Wikiseiten (TASK-102, DEC-132) und seit 0.4.0 für Anforderungen (TASK-103, DEC-133). Version 0.4.1 (TASK-105, DEC-135) legt den Pfad eines Wikitreffers als Pfad im gesuchten Stand bis zur Wurzel fest, mit Kennung und Titel genau bei verfügbaren Ebenen. `SearchContractTest` gleicht ihn mit den Routen ab.
 
 [permissions.openapi.yaml](permissions.openapi.yaml) beschreibt die Verwaltung der Gruppen, Mitglieder, Aktionen und Feldregeln (TASK-030, DEC-070). `PermissionsContractTest` gleicht ihn mit den Routen ab. Der Identitätsvertrag nennt seither `permissions.manage` in der Rechteliste der Sitzung und das Kontenverzeichnis `GET /directory/accounts`.
 

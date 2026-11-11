@@ -389,6 +389,24 @@ class RequirementSearchApiTest {
         assertEquals(List.of(found), keys(editor.get(search(setup, q("Portalliste") + "&stage=approved"))));
     }
 
+    /** R3 of the follow up review of TASK-102 (TASK-105): a compatibility symbol is marked in title and criterion like the index finds it. */
+    @Test
+    void compatibilitySymbolsAreMarkedInTitleAndExcerpt() {
+        Setup setup = project();
+        Browser editor = editor(setup);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", "Titel \u24B6lpharegel");
+        body.put("criteria", List.of(criterion(null, "Vorwort ".repeat(20) + "\u24B6lpharegel gilt")));
+        assertEquals(201, create(editor, setup, body).status());
+        JsonNode hit = editor.get(search(setup, q("alpharegel"))).json().get("items").get(0);
+        assertEquals(1, hit.get("titleMarks").size(), hit.toString());
+        assertEquals(6, hit.get("titleMarks").get(0).get("start").asInt());
+        assertEquals(16, hit.get("titleMarks").get(0).get("end").asInt());
+        JsonNode excerpt = hit.get("snippet").get("excerpt");
+        JsonNode mark = excerpt.get("marks").get(0);
+        assertEquals("\u24B6lpharegel", excerpt.get("text").asString().substring(mark.get("start").asInt(), mark.get("end").asInt()));
+    }
+
     /** Rule 5: a word in a criterion gives the excerpt of that criterion with its fixed number; a description word its own. */
     @Test
     void theExcerptNamesTheCriterionItCameFrom() {
