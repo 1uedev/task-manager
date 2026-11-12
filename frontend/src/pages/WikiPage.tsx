@@ -730,6 +730,10 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
     entry.language === undefined ? null : { pageId, language: entry.language });
   // and, when it found the published revision, shows that one first even to who sees the newer draft.
   const [publishedFirst, setPublishedFirst] = useState(entry.published);
+  // The language whose published version the search found; once the person chooses a language in the bar or the offered other
+  // version, the found one no longer counts and the published version of the chosen language is shown first (F1 of the Codex
+  // review of TASK-106). The draft then still needs its own action.
+  const [found, setFound] = useState<WikiLanguage | undefined>(entry.language);
   const [pinned, setPinned] = useState<WikiLanguage | null>(null);
   const wanted = pinned ?? (chosen !== null && chosen.pageId === pageId ? chosen.language : wikiLanguage(language));
   const [loaded, retry, replace] = useLoad(() => readWikiPage(api, pageId, wanted), [api, pageId, wanted]);
@@ -764,7 +768,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
   // A published hit whose version nobody may read any more (F1 of the Codex review of TASK-105): a reader gets 404 once the
   // only published version was withdrawn. The page says that the found version is no longer available, as it does for who
   // may see drafts, and tells nothing more than the 404 itself.
-  if (publishedFirst && loaded.state === 'problem' && loaded.problem.status === 404) {
+  if (publishedFirst && found !== undefined && loaded.state === 'problem' && loaded.problem.status === 404) {
     return (
       <article className="stack wiki-page" data-testid="wiki-page" data-page={pageId}>
         <h2 className="wiki-title" data-testid="wiki-title" data-stage="gone">{t('wiki.publishedGoneTitle')}</h2>
@@ -782,12 +786,13 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
         // revision shows that one; when it was withdrawn since, the page says so and shows the draft only on request.
         // The found version counts only in its own language: a fallback to another published version means the found one is
         // gone (F1 of the Codex review of TASK-105).
-        const foundShown = page.published !== null && (entry.language === undefined || page.language === entry.language);
-        const stage: 'draft' | 'published' | 'gone' | 'empty' = publishedFirst
-          ? (foundShown ? 'published' : 'gone')
-          : drafts && draft !== null && (page.published === null || draft.changed)
-            ? 'draft'
-            : page.published !== null ? 'published' : 'empty';
+        const foundShown = page.published !== null && (found === undefined || page.language === found);
+        const usual = drafts && draft !== null && (page.published === null || draft.changed)
+          ? 'draft'
+          : page.published !== null ? 'published' : 'empty';
+        const stage: 'draft' | 'published' | 'gone' | 'empty' = !publishedFirst
+          ? usual
+          : found !== undefined ? (foundShown ? 'published' : 'gone') : page.published !== null ? 'published' : usual;
         const shownTitle = stage === 'draft' ? draft?.title ?? ''
           : stage === 'published' ? page.published?.title ?? ''
             : stage === 'gone' ? t('wiki.publishedGoneTitle') : draft?.title ?? '';
@@ -805,7 +810,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
             )}
             <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={stage === 'gone' ? language : page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
-              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); if (code !== entry.language) setPublishedFirst(false); setChosen({ pageId: page.id, language: code }); }}
+              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setFound(undefined); setChosen({ pageId: page.id, language: code }); }}
                 onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
             )}
             {page.fallback && stage !== 'gone' && (
@@ -817,14 +822,19 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
               <p className="hint" data-testid="wiki-outdated">{t('wiki.translation.outdatedReader', { language: t(languageName(page.sourceLanguage)) })}</p>
             )}
             {page.translation?.outdated === true && drafts && mode !== 'edit' && <SourceChange page={page} />}
-            <p className="hint" data-testid="wiki-status">
-              {page.archived && <span className="badge" data-testid="wiki-archived">{t('wiki.badge.archived')} </span>}
-              {page.published !== null
-                ? t('wiki.status.published', { revision: page.published.revision, person: name(page.published.publishedBy),
-                  time: formatDateTime(page.published.publishedAt, language) })
-                : t('wiki.status.unpublished')}
-              {drafts && draft !== null && draft.changed && page.published !== null && ` ${t('wiki.status.draftNewer', { revision: draft.revision })}`}
-            </p>
+            {/* H1 of the Codex review of TASK-106: while the found version is gone, no status of another version stands beside the
+                notice; a fallback version names its language in the status. */}
+            {stage !== 'gone' && (
+              <p className="hint" data-testid="wiki-status">
+                {page.archived && <span className="badge" data-testid="wiki-archived">{t('wiki.badge.archived')} </span>}
+                {page.published !== null
+                  ? t(page.fallback ? 'wiki.status.publishedLanguage' : 'wiki.status.published', { revision: page.published.revision,
+                    person: name(page.published.publishedBy), time: formatDateTime(page.published.publishedAt, language),
+                    language: t(languageName(page.language)) })
+                  : t('wiki.status.unpublished')}
+                {drafts && draft !== null && draft.changed && page.published !== null && ` ${t('wiki.status.draftNewer', { revision: draft.revision })}`}
+              </p>
+            )}
             <NoticeView notice={notice} />
             {mode !== 'edit' && (
               <div className="actions" data-testid="wiki-actions">
@@ -895,11 +905,11 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                     ? (
                       <p className="mode-notice" data-testid="wiki-published-gone">
                         {t('wiki.publishedGone')}{' '}
-                        {drafts && draft !== null && page.language === entry.language && (
+                        {drafts && draft !== null && page.language === found && (
                           <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
                         )}
-                        {page.published !== null && page.language !== entry.language && (
-                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>
+                        {page.published !== null && page.language !== found && (
+                          <button type="button" className="secondary" onClick={() => setFound(undefined)}>
                             {t('wiki.showAvailable', { language: t(languageName(page.language)) })}
                           </button>
                         )}

@@ -1,6 +1,5 @@
 package taskmanager.search.internal;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -26,7 +25,7 @@ record SearchText(String tsquery, String key, Long number, boolean given) {
         if (raw == null || raw.isBlank()) {
             return new SearchText(null, null, null, false);
         }
-        String text = Normalizer.normalize(raw, Normalizer.Form.NFKC).strip();
+        String text = Nfkc.of(raw).strip();
         if (text.codePointCount(0, text.length()) > MAX_LENGTH) {
             return null;
         }
@@ -59,7 +58,7 @@ record SearchText(String tsquery, String key, Long number, boolean given) {
         if (text == null || text.isBlank()) {
             return "";
         }
-        String normalized = Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        String normalized = Nfkc.of(text).toLowerCase(Locale.ROOT);
         StringBuilder terms = new StringBuilder();
         for (String word : SEPARATORS.split(normalized)) {
             if (!word.isEmpty()) {

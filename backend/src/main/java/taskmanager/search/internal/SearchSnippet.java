@@ -95,6 +95,11 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
         return marks;
     }
 
+    /** The normal form the marks search in, for tests: the same words as {@link SearchText#terms}. */
+    static String normalForm(String text) {
+        return Normal.of(text).text();
+    }
+
     /** A letter or a number, as {@code [\\p{L}\\p{N}]} of the index. */
     private static boolean wordPart(int codePoint) {
         int type = Character.getType(codePoint);
@@ -103,49 +108,53 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
     }
 
     /**
-     * A text in normal form (NFKC, lower case) with the original place of every one of its characters. The text is the normal
-     * form of the whole text, exactly as {@link SearchText#terms} builds it; only the places come from pieces of the original
-     * (F2 of the Codex review of TASK-105). A piece is one character with its combining marks, joined with the next piece as
-     * long as NFKC of both together differs from their parts, as with compatibility jamo that compose into one syllable. Lower
-     * case is taken over the whole text, so a final sigma stays ς as in the index; per piece it only gives the places.
+     * A text in normal form (NFKC, lower case) with the original place of every one of its characters (F2 and F3 of the Codex
+     * review of TASK-106). The original is cut into segments at the boundaries of the normalization: a segment starts at a
+     * character whose decomposition starts with a starter that never joins the one before it, so it is no combining mark and
+     * no conjoining vowel or final Hangul jamo; everything else belongs to the segment before it. NFKC of the whole text is then
+     * NFKC of the segments one after the other, which {@link #of} checks, and each segment is normalized once, so the time grows
+     * with the length of the text. The letters and numbers of a segment come from its shortest beginning that gives them all,
+     * found by halving, so a mark of a word covers only the original characters its word is made of and not a combining mark
+     * after it that stays apart. Lower case is taken over the whole text, so a final sigma stays ς as in the index; per segment
+     * it only gives the places.
      */
     private record Normal(String text, int[] from, int[] to) {
         static Normal of(String original) {
-            List<int[]> pieces = new ArrayList<>();
-            List<String> normals = new ArrayList<>();
+            List<int[]> segments = new ArrayList<>();
             int i = 0;
             while (i < original.length()) {
                 int start = i;
                 i += Character.charCount(original.codePointAt(i));
-                while (i < original.length() && continues(original.codePointAt(i))) {
+                while (i < original.length() && !starts(original.codePointAt(i))) {
                     i += Character.charCount(original.codePointAt(i));
                 }
-                String part = Normalizer.normalize(original.substring(start, i), Normalizer.Form.NFKC);
-                if (!pieces.isEmpty()) {
-                    int[] last = pieces.getLast();
-                    String joined = Normalizer.normalize(original.substring(last[0], i), Normalizer.Form.NFKC);
-                    if (!joined.equals(normals.getLast() + part)) {
-                        last[1] = i;
-                        normals.set(normals.size() - 1, joined);
-                        continue;
-                    }
-                }
-                pieces.add(new int[] {start, i});
-                normals.add(part);
+                segments.add(new int[] {start, i});
             }
+            StringBuilder joined = new StringBuilder();
             StringBuilder lowered = new StringBuilder();
             List<int[]> places = new ArrayList<>();
-            for (int k = 0; k < pieces.size(); k++) {
-                String piece = normals.get(k).toLowerCase(Locale.ROOT);
-                for (int c = 0; c < piece.length(); c++) {
-                    places.add(pieces.get(k));
-                }
+            for (int[] segment : segments) {
+                String normal = Nfkc.of(original.substring(segment[0], segment[1]));
+                int[] word = {segment[0], wordEnd(original, segment, normal)};
+                String piece = normal.toLowerCase(Locale.ROOT);
+                piece.codePoints().forEach(codePoint -> {
+                    for (int unit = 0; unit < Character.charCount(codePoint); unit++) {
+                        places.add(wordPart(codePoint) ? word : segment);
+                    }
+                });
+                joined.append(normal);
                 lowered.append(piece);
             }
-            String whole = String.join("", normals).toLowerCase(Locale.ROOT);
+            String whole = Nfkc.of(original);
+            if (!whole.contentEquals(joined)) {
+                // Not expected for any text (SearchSnippetTest compares many): the marks then follow the normal form of the
+                // segments, which can differ from the index only around the place where the two differ.
+                whole = joined.toString();
+            }
+            String wholeLowered = whole.toLowerCase(Locale.ROOT);
             // In the root locale only the final sigma depends on its neighbours, and it keeps the length; should another rule
-            // ever change it, the pieces stay in place of the whole text.
-            String text = whole.length() == lowered.length() ? whole : lowered.toString();
+            // ever change it, the segments stay in place of the whole text.
+            String text = wholeLowered.length() == lowered.length() ? wholeLowered : lowered.toString();
             int[] from = new int[places.size()];
             int[] to = new int[places.size()];
             for (int k = 0; k < from.length; k++) {
@@ -155,11 +164,59 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
             return new Normal(text, from, to);
         }
 
-        /** A combining mark or a following Hangul jamo belongs to the character before it. */
-        private static boolean continues(int codePoint) {
-            int type = Character.getType(codePoint);
-            return type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK || type == Character.COMBINING_SPACING_MARK
-                || (codePoint >= 0x1160 && codePoint <= 0x11FF);
+        /**
+         * The end of the shortest beginning of a segment whose normal form has the same letters and numbers as the whole
+         * segment; for a single character the segment end. Found by halving over the characters after the first, so a long run
+         * of combining marks costs a few normalizations only.
+         */
+        private static int wordEnd(String original, int[] segment, String normal) {
+            int first = segment[0] + Character.charCount(original.codePointAt(segment[0]));
+            if (first >= segment[1]) {
+                return segment[1];
+            }
+            String letters = letters(normal);
+            if (letters.isEmpty()) {
+                return segment[1];
+            }
+            int[] ends = original.substring(first, segment[1]).codePoints().map(Character::charCount).toArray();
+            int[] positions = new int[ends.length + 1];
+            positions[0] = first;
+            for (int k = 0; k < ends.length; k++) {
+                positions[k + 1] = positions[k] + ends[k];
+            }
+            int low = 0;
+            int high = ends.length;
+            while (low < high) {
+                int middle = (low + high) >>> 1;
+                String prefix = Nfkc.of(original.substring(segment[0], positions[middle]));
+                if (letters(prefix).equals(letters)) {
+                    high = middle;
+                } else {
+                    low = middle + 1;
+                }
+            }
+            return positions[low];
+        }
+
+        private static String letters(String normal) {
+            StringBuilder letters = new StringBuilder();
+            normal.codePoints().filter(SearchSnippet::wordPart).forEach(letters::appendCodePoint);
+            return letters.toString();
+        }
+
+        /**
+         * A character that starts a new segment: its decomposition starts with a character that is no combining mark and no
+         * conjoining vowel or final Hangul jamo, the only starters that compose with the character before them.
+         */
+        static boolean starts(int codePoint) {
+            if (codePoint < 0x300) {
+                return true;
+            }
+            int first = Normalizer.normalize(new String(Character.toChars(codePoint)), Normalizer.Form.NFKD).codePointAt(0);
+            int type = Character.getType(first);
+            boolean mark = type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK || type == Character.COMBINING_SPACING_MARK;
+            boolean jamo = (first >= 0x1160 && first <= 0x11FF) || (first >= 0xD7B0 && first <= 0xD7FF);
+            return !mark && !jamo;
         }
     }
 
