@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +42,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-103](#task-103-anforderungen-in-der-gemeinsamen-suche-a14-teil-2) | Anforderungen in der gemeinsamen Suche (A14 Teil 2) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-104](#task-104-gemeinsame-suchübersicht-schnellsuche-und-messung-a14-teil-3) | Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
+| [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -166,7 +165,7 @@ Nicht Teil: neue Regeln, TASK-104.
 
 ## TASK-106 Befunde der Codex Prüfung von TASK-105 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-03 · **Aktualisiert:** 2026-11-12
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261112-search-03 · **Aktualisiert:** 2026-11-12
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-135; docs/REVIEW_TASK-105_PR-302.md. **Abhängigkeiten:** TASK-105 (PR #302) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-105 in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-106“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-136, keine Migration geplant.
 
@@ -183,4 +182,6 @@ Nicht Teil: neue Regeln, H1 des Berichts.
 2. F2 mit Unit Tests (jedes Indexwort wird markiert, auch für ㄱㅏ und İ ΟΣ) und einem API Test bei Anforderungen.
 3. F3 mit Test am Testersatz; H2 im bestehenden API Test; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
+**Übergabe:** Ergebnis in PR #305 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung. F1: `WikiPage` zeigt bei einem veröffentlichten Treffer, dessen gefundene Fassung nicht mehr veröffentlicht oder nicht mehr lesbar ist, „Nicht mehr veröffentlicht“ mit dem Hinweis, dass die gefundene Fassung nicht mehr zur Verfügung steht, auch bei 404 und auch statt einer stillen Ersatzfassung; „Entwurf zeigen“ nur in derselben Sprache, eine andere veröffentlichte Sprachfassung über „Fassung … zeigen“ (zwei Browsertests mit reinem Lesekonto). F2: `SearchSnippet` verbindet Zeichen, die NFKC zusammensetzt, zu einem Stück und bildet die Kleinschreibung über die ganze Normalform wie `SearchText.terms` (Unit Tests mit `ㄱㅏ` und `İ ΟΣ` in der Prüfung, dass jedes Indexwort markiert wird, API Test `composedJamoChooseTheirCriterionAndAFinalSigmaIsMarked`); der Testersatz markiert gleich. F3: Der Testersatz entfernt Leerraum wie Javas `strip()`, U+FEFF bleibt Inhalt (Test direkt am Testersatz). H2: `anArchivedParentKeepsThePathUpToTheRoot` mit Wurzeltitel „Wurzel“ veröffentlicht und „Wurzel Entwurf“ im Entwurf. Läufe: Backend `mvn verify` 631 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 285 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-106.

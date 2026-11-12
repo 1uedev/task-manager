@@ -2459,35 +2459,38 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   };
   // As SearchText.parse: the limits count code points after NFKC.
   const searchTextInvalid = (q) => {
-    const text = q.normalize('NFKC').trim();
+    const text = javaStrip(q.normalize('NFKC'));
     const words = searchWords(text);
     return [...text].length > 200 || words.length > 10 || words.some((word) => [...word].length > 50);
   };
-  // As SearchSnippet.marks (TASK-105 R3): the text is normalized like the index one character with its combining marks at a
-  // time, each unit of the normal form keeps its place in the original text, and a word of the normal form that starts with a
-  // search word marks the characters it came from.
+  // javaStrip above trims like Java: U+FEFF or a non-breaking space stay, unlike trim() in JavaScript (F3 of the Codex review
+  // of TASK-105), so such a text is a given search without words that finds nothing, as on the server.
+  // As SearchSnippet.marks (TASK-105 R3, F2 of the Codex review of TASK-105): the text is the normal form of the whole text as
+  // the index builds it; the places come from pieces of the original, one character with its combining marks, joined with the
+  // next piece while NFKC of both together differs from their parts (compatibility jamo). Lower case over the whole text keeps
+  // a final sigma as the index does; per piece it only gives the places.
   const continuesCharacter = (ch) => /\p{M}/u.test(ch) || (ch.codePointAt(0) >= 0x1160 && ch.codePointAt(0) <= 0x11ff);
   const searchMarks = (text, words) => {
     if (words.length === 0) return [];
-    let units = [];
+    const pieces = [];
     for (let i = 0; i < text.length;) {
       const start = i;
       i += String.fromCodePoint(text.codePointAt(i)).length;
       while (i < text.length && continuesCharacter(String.fromCodePoint(text.codePointAt(i)))) i += String.fromCodePoint(text.codePointAt(i)).length;
-      for (const unit of text.slice(start, i).normalize('NFKC').split('')) units.push({ unit, from: start, to: i });
-    }
-    const plain = units.map((item) => item.unit).join('');
-    let folded = plain.toLowerCase();
-    if (folded.length !== plain.length) {
-      const moved = [];
-      for (let k = 0; k < plain.length;) {
-        const size = String.fromCodePoint(plain.codePointAt(k)).length;
-        for (const unit of plain.slice(k, k + size).toLowerCase().split('')) moved.push({ unit, from: units[k].from, to: units[k].to });
-        k += size;
+      const part = text.slice(start, i).normalize('NFKC');
+      const last = pieces.at(-1);
+      if (last) {
+        const joined = text.slice(last.from, i).normalize('NFKC');
+        if (joined !== last.normal + part) {
+          Object.assign(last, { to: i, normal: joined });
+          continue;
+        }
       }
-      units = moved;
-      folded = moved.map((item) => item.unit).join('');
+      pieces.push({ from: start, to: i, normal: part });
     }
+    const units = pieces.flatMap((piece) => piece.normal.toLowerCase().split('').map(() => ({ from: piece.from, to: piece.to })));
+    const whole = pieces.map((piece) => piece.normal).join('').toLowerCase();
+    const folded = whole.length === units.length ? whole : pieces.map((piece) => piece.normal.toLowerCase()).join('');
     const marks = [];
     for (const match of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
       if (!words.some((word) => match[0].startsWith(word))) continue;
@@ -2567,7 +2570,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     const words = searchWords(q);
     // A text of punctuation only finds nothing, as on the server; no text at all lists every readable page.
-    if (q.trim() !== '' && words.length === 0) return ok({ total: 0, items: [] });
+    if (javaStrip(q) !== '' && words.length === 0) return ok({ total: 0, items: [] });
     const hits = [];
     for (const page of wiki.pages) {
       const access = wikiAccess(account, page.projectId);
@@ -2732,7 +2735,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
           .map((entry) => [`custom.${entry.key}`, null, String((revision.custom ?? {})[entry.key] ?? '')])];
       const byKey = key !== null && Number(key[2]) === item.number && (key[1] === undefined || key[1] === projectKey);
       const byWords = words.length > 0 && words.every((word) => (shown('title') && found(revision.title)(word)) || texts.some(([, , text]) => found(text)(word)));
-      if (q.trim() !== '' && !byKey && !byWords) continue;
+      if (javaStrip(q) !== '' && !byKey && !byWords) continue;
       const source = texts.find(([, , text]) => words.some(found(text)));
       const snippet = source ? { field: source[0], criterion: source[1], excerpt: searchSnippet(source[2], words) }
         : shown('description') && description !== '' ? { field: 'description', criterion: null, excerpt: searchSnippet(description, words) } : null;

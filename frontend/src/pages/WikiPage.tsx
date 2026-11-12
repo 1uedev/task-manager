@@ -761,6 +761,18 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
     changed(result.data.value, t(success));
   }
 
+  // A published hit whose version nobody may read any more (F1 of the Codex review of TASK-105): a reader gets 404 once the
+  // only published version was withdrawn. The page says that the found version is no longer available, as it does for who
+  // may see drafts, and tells nothing more than the 404 itself.
+  if (publishedFirst && loaded.state === 'problem' && loaded.problem.status === 404) {
+    return (
+      <article className="stack wiki-page" data-testid="wiki-page" data-page={pageId}>
+        <h2 className="wiki-title" data-testid="wiki-title" data-stage="gone">{t('wiki.publishedGoneTitle')}</h2>
+        <p className="mode-notice" data-testid="wiki-published-gone">{t('wiki.publishedGoneUnavailable')}</p>
+      </article>
+    );
+  }
+
   return (
     <LoadedView loaded={loaded} retry={retry}>
       {(page) => {
@@ -768,8 +780,11 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
         const draft = page.draft;
         // Title and text always come from the same stage (R1 of the follow up review of TASK-102). A search hit in the published
         // revision shows that one; when it was withdrawn since, the page says so and shows the draft only on request.
+        // The found version counts only in its own language: a fallback to another published version means the found one is
+        // gone (F1 of the Codex review of TASK-105).
+        const foundShown = page.published !== null && (entry.language === undefined || page.language === entry.language);
         const stage: 'draft' | 'published' | 'gone' | 'empty' = publishedFirst
-          ? (page.published !== null ? 'published' : 'gone')
+          ? (foundShown ? 'published' : 'gone')
           : drafts && draft !== null && (page.published === null || draft.changed)
             ? 'draft'
             : page.published !== null ? 'published' : 'empty';
@@ -790,10 +805,10 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
             )}
             <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={stage === 'gone' ? language : page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
-              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setChosen({ pageId: page.id, language: code }); }}
+              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); if (code !== entry.language) setPublishedFirst(false); setChosen({ pageId: page.id, language: code }); }}
                 onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
             )}
-            {page.fallback && (
+            {page.fallback && stage !== 'gone' && (
               <p className="mode-notice" data-testid="wiki-fallback" lang={language}>
                 {t('wiki.language.fallback', { wanted: t(languageName(wanted)), shown: t(languageName(page.language)) })}
               </p>
@@ -880,8 +895,13 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                     ? (
                       <p className="mode-notice" data-testid="wiki-published-gone">
                         {t('wiki.publishedGone')}{' '}
-                        {drafts && draft !== null && (
+                        {drafts && draft !== null && page.language === entry.language && (
                           <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
+                        )}
+                        {page.published !== null && page.language !== entry.language && (
+                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>
+                            {t('wiki.showAvailable', { language: t(languageName(page.language)) })}
+                          </button>
                         )}
                       </p>
                     )

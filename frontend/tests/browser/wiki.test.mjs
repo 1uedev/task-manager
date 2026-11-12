@@ -850,6 +850,45 @@ describe('wiki', () => {
     });
   });
 
+  for (const [label, english] of [['only version', false], ['German version while the English one stays published', true]]) {
+    test(`a reader whose found ${label} was withdrawn before the click is told so (F1 of the Codex review of TASK-105)`, async () => {
+      let page;
+      await withApp({
+        as: BEN,
+        hash: '#/search',
+        prepare: (backend) => {
+          grant(backend, [backend.anna], ['wiki.read', 'wiki.edit', 'wiki.publish']);
+          grant(backend, [backend.ben], ['wiki.read']);
+          page = backend.addWikiPage(backend.anna, 'Rueckzugsseite', doc('Deutscher Text'), { publish: true });
+          if (english) backend.addWikiLanguage(page, 'en', backend.anna, { title: 'Withdrawal page', content: doc('English text'), publish: true });
+        },
+      }, async (app, backend) => {
+        await app.getByRole('radio', { name: 'Wiki' }).check();
+        const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+        await form.getByLabel('Suchtext').fill('rueckzug');
+        await form.getByLabel('Sprache').selectOption('de');
+        await form.getByRole('button', { name: 'Suchen' }).click();
+        const hit = app.getByTestId('wiki-hits').locator('li').first();
+        await hit.waitFor();
+        const withdrawn = backend.wikiCall(backend.anna, 'POST', `/wiki/pages/${page.id}/withdraw`, {}, { query: 'language=de' });
+        assert.equal(withdrawn.status, 200);
+        await hit.getByRole('link').click();
+        await app.getByTestId('wiki-published-gone').waitFor();
+        assert.equal(await app.getByTestId('wiki-title').innerText(), 'Nicht mehr veröffentlicht');
+        assert.equal(await app.getByTestId('wiki-content').count(), 0);
+        assert.equal(await app.getByTestId('wiki-fallback').count(), 0, 'no fallback notice while the found version is gone');
+        if (!english) {
+          assert.match(await app.getByTestId('wiki-published-gone').innerText(), /nicht mehr zur Verfügung/);
+          return;
+        }
+        await app.getByTestId('wiki-published-gone').getByRole('button', { name: 'Fassung Englisch zeigen' }).click();
+        assert.equal(await app.getByTestId('wiki-title').innerText(), 'Withdrawal page');
+        assert.match(await app.getByTestId('wiki-content').innerText(), /English text/);
+        await app.getByTestId('wiki-fallback').waitFor();
+      });
+    });
+  }
+
   test('a published hit shows the published title above the published text, also when the draft has another title (TASK-105 R1)', async () => {
     await withApp({
       as: ANNA,
@@ -995,6 +1034,19 @@ describe('the wiki search of the stand in answers like the server (TASK-105 N1)'
     assert.equal(hit.snippet.cutStart, true);
     const [mark] = hit.snippet.marks;
     assert.equal(hit.snippet.text.slice(mark.start, mark.end), 'Ⓐlpha');
+  });
+
+  test('composed jamo and a final sigma are marked like the index, and U+FEFF alone finds nothing (F2, F3 of the Codex review of TASK-105)', () => {
+    const backend = setup();
+    backend.addWikiPage(backend.anna, 'İ ΟΣ', doc('Vorwort \u3131\u314F Ende'), { publish: true });
+    const jamo = search(backend, `q=${encodeURIComponent('\uAC00')}`).body;
+    assert.equal(jamo.total, 1);
+    const [mark] = jamo.items[0].snippet.marks;
+    assert.equal(jamo.items[0].snippet.text.slice(mark.start, mark.end), '\u3131\u314F');
+    const sigma = search(backend, `q=${encodeURIComponent('ος')}`).body;
+    assert.equal(sigma.total, 1);
+    assert.deepEqual(sigma.items[0].titleMarks, [{ start: 2, end: 4 }]);
+    assert.deepEqual(search(backend, `q=${encodeURIComponent('\uFEFF')}`).body, { total: 0, items: [] });
   });
 
   test('the limits count code points after NFKC and a word after the limit of the index is not found', () => {

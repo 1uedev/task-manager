@@ -102,11 +102,17 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
             || type == Character.OTHER_NUMBER;
     }
 
-    /** A text in normal form (NFKC, lower case) with the original place of every one of its characters. */
+    /**
+     * A text in normal form (NFKC, lower case) with the original place of every one of its characters. The text is the normal
+     * form of the whole text, exactly as {@link SearchText#terms} builds it; only the places come from pieces of the original
+     * (F2 of the Codex review of TASK-105). A piece is one character with its combining marks, joined with the next piece as
+     * long as NFKC of both together differs from their parts, as with compatibility jamo that compose into one syllable. Lower
+     * case is taken over the whole text, so a final sigma stays ς as in the index; per piece it only gives the places.
+     */
     private record Normal(String text, int[] from, int[] to) {
         static Normal of(String original) {
-            StringBuilder normalized = new StringBuilder();
-            List<int[]> places = new ArrayList<>();
+            List<int[]> pieces = new ArrayList<>();
+            List<String> normals = new ArrayList<>();
             int i = 0;
             while (i < original.length()) {
                 int start = i;
@@ -115,36 +121,38 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
                     i += Character.charCount(original.codePointAt(i));
                 }
                 String part = Normalizer.normalize(original.substring(start, i), Normalizer.Form.NFKC);
-                for (int k = 0; k < part.length(); k++) {
-                    normalized.append(part.charAt(k));
-                    places.add(new int[] {start, i});
-                }
-            }
-            String plain = normalized.toString();
-            String lower = plain.toLowerCase(Locale.ROOT);
-            if (lower.length() != plain.length()) {
-                // Rare letters such as İ grow in lower case: one code point at a time keeps the places.
-                StringBuilder each = new StringBuilder();
-                List<int[]> moved = new ArrayList<>();
-                for (int k = 0; k < plain.length(); ) {
-                    int size = Character.charCount(plain.codePointAt(k));
-                    String piece = plain.substring(k, k + size).toLowerCase(Locale.ROOT);
-                    for (int c = 0; c < piece.length(); c++) {
-                        moved.add(places.get(k));
+                if (!pieces.isEmpty()) {
+                    int[] last = pieces.getLast();
+                    String joined = Normalizer.normalize(original.substring(last[0], i), Normalizer.Form.NFKC);
+                    if (!joined.equals(normals.getLast() + part)) {
+                        last[1] = i;
+                        normals.set(normals.size() - 1, joined);
+                        continue;
                     }
-                    each.append(piece);
-                    k += size;
                 }
-                lower = each.toString();
-                places = moved;
+                pieces.add(new int[] {start, i});
+                normals.add(part);
             }
+            StringBuilder lowered = new StringBuilder();
+            List<int[]> places = new ArrayList<>();
+            for (int k = 0; k < pieces.size(); k++) {
+                String piece = normals.get(k).toLowerCase(Locale.ROOT);
+                for (int c = 0; c < piece.length(); c++) {
+                    places.add(pieces.get(k));
+                }
+                lowered.append(piece);
+            }
+            String whole = String.join("", normals).toLowerCase(Locale.ROOT);
+            // In the root locale only the final sigma depends on its neighbours, and it keeps the length; should another rule
+            // ever change it, the pieces stay in place of the whole text.
+            String text = whole.length() == lowered.length() ? whole : lowered.toString();
             int[] from = new int[places.size()];
             int[] to = new int[places.size()];
             for (int k = 0; k < from.length; k++) {
                 from[k] = places.get(k)[0];
                 to[k] = places.get(k)[1];
             }
-            return new Normal(lower, from, to);
+            return new Normal(text, from, to);
         }
 
         /** A combining mark or a following Hangul jamo belongs to the character before it. */

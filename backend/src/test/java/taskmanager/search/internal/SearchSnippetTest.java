@@ -112,10 +112,25 @@ class SearchSnippetTest {
     @Test
     void everyIndexedWordIsMarked() {
         for (String text : List.of("\u24B6lpha \u2121ecall", "Cafe\u0301 \uFB01nden \u00BD", "\uD835\uDC00bc \uFF27\uFF32\uFF2F\uFF33\uFF33",
-                "\u0130stanbul \u1100\u1161\u11A8 x\u0303y", "\u2460 Stra\u00DFe")) {
+                "\u0130stanbul \u1100\u1161\u11A8 x\u0303y", "\u2460 Stra\u00DFe", "\u3131\u314F \u3131\u314F\u3131",
+                "\u0130 \u039F\u03A3", "\u0130 \u039F\u03A3 \u03A3\u039F\u03A3")) {
             for (String term : SearchText.terms(text).split(" ")) {
                 assertFalse(SearchSnippet.marks(text, List.of(term)).isEmpty(), term + " in " + text);
             }
         }
+    }
+
+    /**
+     * F2 of the Codex review of TASK-105: compatibility jamo that NFKC composes only together, and a final sigma whose lower case
+     * depends on its neighbours, are marked exactly where the index finds them.
+     */
+    @Test
+    void composedJamoAndFinalSigmaAreMarkedLikeTheIndex() {
+        assertEquals("\uAC00", SearchText.terms("\u3131\u314F"));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 2)), SearchSnippet.marks("\u3131\u314F", List.of("\uAC00")));
+        assertEquals("i \u03BF\u03C2", SearchText.terms("\u0130 \u039F\u03A3"));
+        assertEquals(List.of(new SearchSnippet.Mark(2, 4)), SearchSnippet.marks("\u0130 \u039F\u03A3", List.of("\u03BF\u03C2")));
+        SearchSnippet snippet = SearchSnippet.of("Vorwort \u3131\u314F Ende", List.of("\uAC00"));
+        assertEquals(List.of(new SearchSnippet.Mark(8, 10)), snippet.marks());
     }
 }

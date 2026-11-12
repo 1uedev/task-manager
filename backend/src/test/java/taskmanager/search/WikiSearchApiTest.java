@@ -554,6 +554,8 @@ class WikiSearchApiTest {
         String found = word("archivpfad");
         UUID root = id(create(publisher, setup, "Wurzel", null, "de", doc(paragraph("Oben"))));
         publish(publisher, root, "de", 1);
+        // H2 of the review of TASK-105: the draft of the root has another title, so that a mixed up stage shows.
+        save(publisher, root, "de", 1, "Wurzel Entwurf", doc(paragraph("Oben")));
         UUID parent = id(create(publisher, setup, "Eltern", root, "de", doc(paragraph("Mitte"))));
         publish(publisher, parent, "de", 1);
         UUID child = id(create(publisher, setup, "Kind", parent, "de", doc(paragraph(found))));
@@ -561,12 +563,13 @@ class WikiSearchApiTest {
         archive(publisher, child);
         archive(publisher, parent);
 
-        for (String[] stage : List.of(new String[] {"archived=true"}, new String[] {"archived=true", "drafts=true"})) {
-            Response result = search(publisher, found, stage);
+        Map<String, String[]> stages = Map.of("Wurzel", new String[] {"archived=true"}, "Wurzel Entwurf", new String[] {"archived=true", "drafts=true"});
+        for (Map.Entry<String, String[]> stage : stages.entrySet()) {
+            Response result = search(publisher, found, stage.getValue());
             assertEquals(1, total(result), result.body());
             JsonNode path = result.json().get("items").get(0).get("path");
             assertEquals(2, path.size(), path.toString());
-            assertEquals("Wurzel", path.get(0).get("title").asString());
+            assertEquals(stage.getKey(), path.get(0).get("title").asString(), String.join("&", stage.getValue()));
             assertEquals(root.toString(), path.get(0).get("id").asString());
             assertFalse(path.get(1).get("available").asBoolean());
             assertTrue(path.get(1).get("id").isNull());
