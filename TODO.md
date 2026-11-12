@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-108](#task-108-befunde-der-codex-prüfung-von-task-107-beheben-a14) | Befunde der Codex Prüfung von TASK-107 beheben (A14) | claude-20261112-search-05 | 2026-11-12 |
 
 ### Blockiert – BLOCKIERT
 
@@ -211,3 +213,26 @@ Nicht Teil: neue Regeln.
 **Übergabe:** Ergebnis in PR #307 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache des gefundenen Treffers getrennt vom Vorrang der Veröffentlichung; die Wahl einer Sprache in der Sprachleiste oder „Fassung … zeigen“ zeigt deren veröffentlichte Fassung, den Entwurf nur „Entwurf zeigen“ (Browsertest mit Entwurfsrecht und unterschiedlichen englischen Titeln). F2: neue Klasse `Nfkc` mit demselben Ergebnis wie `java.text.Normalizer`, die lange Folgen kombinierender Zeichen selbst stabil nach Kombinationsklasse vorordnet; genutzt von `SearchText` (Index und Suchtext), `SearchService` (Kennungen) und `SearchSnippet`; 100.000 solcher Zeichen in rund 0,14 s (`aLongRunOfReorderedMarksIsMarkedQuickly`, `theLinearNormalFormIsNfkc` mit 3.000 Zufallstexten gegen den Normalizer). F3: `SearchSnippet` zerlegt an den Grenzen der Normalisierung und sucht den kürzesten Anfang eines Abschnitts mit allen seinen Buchstaben per Halbierung (`aMarkCoversOnlyTheCharactersOfItsWord`, `theWordsOfTheMarksAreThoseOfTheIndexForRandomTexts` mit 3.000 Zufallstexten gegen `SearchText.terms`); Testersatz gleich, ein Abgleich von 800 Zufallstexten mit Java ergab nur Abweichungen beim Sigma zwischen Buchstaben anderer Schriften. F4: Testersatz mit der Kleinschreibung des Sigma nach Javas Wortgrenzen für gängige Fälle (`AΣ1A`, `AΣ-A`, `AΣ_A`, `AΣ A`, `A1Σ`), Grenze im Test und in backend/README.md benannt. H1: keine Statuszeile neben „Nicht mehr veröffentlicht“, eine Ersatzfassung nennt ihre Sprache. Läufe: Backend `mvn verify` 636 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 287 grün.
 
 **Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-107.
+
+## TASK-108 Befunde der Codex Prüfung von TASK-107 beheben (A14)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-05 · **Aktualisiert:** 2026-11-12
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-137; docs/REVIEW_TASK-107_PR-307.md. **Abhängigkeiten:** TASK-107 (PR #307) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-107 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-108“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-138, keine Migration geplant.
+
+**Umfang:** Befunde F1 bis F4 und Hinweis H2 aus docs/REVIEW_TASK-107_PR-307.md:
+1. F1: Nach einem veröffentlichten Suchtreffer ist jede Wahl einer Sprache, auch die erneute Wahl der gefundenen Sprache und eine Sprache nur mit Entwurf, eine neue Entscheidung für deren veröffentlichte Fassung. Fehlt sie, erscheint ein Hinweis mit eigener Aktion für den Entwurf. Eine gewählte Entwurfsansicht gilt nur für ihre Sprache.
+2. F2: Die Markierung braucht auch bei später Zusammensetzung (etwa A, viele U+0334, dann U+0301) linearen Aufwand.
+3. F3: Ergibt ein Normalisierungsabschnitt mehrere Indexwörter (etwa `½ᅡ`, `กำ`), umfasst jede Markierung nur die Originalzeichen ihres Worts, mit richtigen UTF-16 Positionen auch nach ergänzenden Zeichen; Testersatz gleich.
+4. F4: Der Testersatz schreibt das Sigma an Doppelpunkt und Mittelpunkt (`AΣ:A`, `AΣ·A`) wie Java klein.
+5. H2: Weicht die verkettete Abschnittsnormalform von NFKC des ganzen Texts ab, entstehen keine Markierungen aus einer anderen Form als der des Index.
+
+Nicht Teil: neue Regeln.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 mit Browsertests für beide im Bericht genannten Wege.
+2. F2 mit einem Laufzeittest für späte Zusammensetzung.
+3. F3 mit Unit Tests für die vier Fälle des Berichts und einem Zufallstest, der den genauen Originalbereich jedes Worts prüft; Testersatz mit `½ᅡ`.
+4. F4 mit Fällen am Testersatz; H2 mit Test oder begründeter Beschreibung; bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und Ergebnis PR mit Nachweisen öffnen.
