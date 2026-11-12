@@ -881,13 +881,51 @@ describe('wiki', () => {
           assert.match(await app.getByTestId('wiki-published-gone').innerText(), /nicht mehr zur Verfügung/);
           return;
         }
+        assert.equal(await app.getByTestId('wiki-status').count(), 0, 'no status of the English version beside the notice (H1 of the review of TASK-106)');
         await app.getByTestId('wiki-published-gone').getByRole('button', { name: 'Fassung Englisch zeigen' }).click();
         assert.equal(await app.getByTestId('wiki-title').innerText(), 'Withdrawal page');
         assert.match(await app.getByTestId('wiki-content').innerText(), /English text/);
         await app.getByTestId('wiki-fallback').waitFor();
+        assert.match(await app.getByTestId('wiki-status').innerText(), /^Fassung Englisch veröffentlicht: Revision 1/);
       });
     });
   }
+
+  test('after a withdrawn published hit, choosing another language shows its published version, its draft only on request (F1 of the Codex review of TASK-106)', async () => {
+    let page;
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit', 'wiki.publish']);
+        page = backend.addWikiPage(backend.anna, 'Rueckzugsseite', doc('Deutscher Text'), { publish: true });
+        backend.addWikiLanguage(page, 'en', backend.anna, { title: 'English published', content: doc('Published English text'), publish: true });
+        const saved = backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title: 'English draft', content: doc('Draft English text') },
+          { headers: { 'if-match': '"1"' }, query: 'language=en' });
+        assert.equal(saved.status, 200);
+      },
+    }, async (app, backend) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('rueckzug');
+      await form.getByLabel('Sprache').selectOption('de');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = app.getByTestId('wiki-hits').locator('li').first();
+      await hit.waitFor();
+      assert.equal(backend.wikiCall(backend.anna, 'POST', `/wiki/pages/${page.id}/withdraw`, {}, { query: 'language=de' }).status, 200);
+      await hit.getByRole('link').click();
+      await app.getByTestId('wiki-published-gone').waitFor();
+      assert.equal(await app.getByTestId('wiki-status').count(), 0);
+      await app.getByTestId('wiki-languages').getByRole('button', { name: /^Englisch/ }).click();
+      await app.waitForFunction(() => document.querySelector('[data-testid=wiki-title]')?.textContent === 'English published');
+      assert.equal(await app.getByTestId('wiki-title').getAttribute('data-stage'), 'published');
+      assert.match(await app.getByTestId('wiki-content').innerText(), /Published English text/);
+      assert.doesNotMatch(await app.getByTestId('wiki-page').innerText(), /English draft|Draft English text/);
+      await app.getByTestId('wiki-published-shown').getByRole('button', { name: 'Entwurf zeigen' }).click();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'English draft');
+      assert.match(await app.getByTestId('wiki-content').innerText(), /Draft English text/);
+    });
+  });
 
   test('a published hit shows the published title above the published text, also when the draft has another title (TASK-105 R1)', async () => {
     await withApp({
@@ -1047,6 +1085,25 @@ describe('the wiki search of the stand in answers like the server (TASK-105 N1)'
     assert.equal(sigma.total, 1);
     assert.deepEqual(sigma.items[0].titleMarks, [{ start: 2, end: 4 }]);
     assert.deepEqual(search(backend, `q=${encodeURIComponent('\uFEFF')}`).body, { total: 0, items: [] });
+  });
+
+  test('a mark covers only the characters of its word, and the sigma is lowered as in Java (F3, F4 of the Codex review of TASK-106)', () => {
+    const backend = setup();
+    backend.addWikiPage(backend.anna, '\u30AB\u3099\u3099\uFF9E\u0334\uFF9E\u0334 end', doc('Text'), { publish: true });
+    assert.deepEqual(search(backend, `q=${encodeURIComponent('\u30AC')}`).body.items[0].titleMarks, [{ start: 0, end: 2 }]);
+    assert.deepEqual(search(backend, 'q=end').body.items[0].titleMarks, [{ start: 8, end: 11 }]);
+    // Java 21 lowers these sigmas to σ inside one word of its word break rules, and the index holds them so (SearchText.terms).
+    for (const [title, word] of [['A\u03A31A', 'a\u03C31a'], ['A\u03A3-A', 'a\u03C3'], ['A\u03A3_A', 'a\u03C3'], ['A\u03A3 A', 'a\u03C2'], ['A1\u03A3', 'a1\u03C2']]) {
+      const own = setup();
+      own.addWikiPage(own.anna, title, doc('Text'), { publish: true });
+      const found = search(own, `q=${encodeURIComponent(word)}`).body;
+      assert.equal(found.total, 1, `${title} ${word}`);
+      assert.equal(found.items[0].titleMarks[0].start, 0, title);
+      const other = word.replace(/[\u03C2\u03C3]/, (ch) => (ch === '\u03C2' ? '\u03C3' : '\u03C2'));
+      assert.equal(search(own, `q=${encodeURIComponent(other)}`).body.total, 0, `${title} ${other}`);
+    }
+    // The limit of the stand in: it follows Java's word break rules for these cases only. Where a sigma stands between letters
+    // of other scripts, such as Hangul or Katakana, Java can decide otherwise; the server alone is the measure there.
   });
 
   test('the limits count code points after NFKC and a word after the limit of the index is not found', () => {

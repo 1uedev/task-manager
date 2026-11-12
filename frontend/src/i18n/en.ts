@@ -1409,6 +1409,7 @@ export const en: Record<MessageKey, Message> = {
   'wiki.publishedGoneTitle': 'No longer published',
   'wiki.draftShown': 'You see the draft (revision {revision}). Readers see it only after publication.',
   'wiki.status.published': 'Published: revision {revision} by {person} on {time}.',
+  'wiki.status.publishedLanguage': 'The {language} version is published: revision {revision} by {person} on {time}.',
   'wiki.status.unpublished': 'Not published.',
   'wiki.status.draftNewer': 'The draft (revision {revision}) is newer.',
   'wiki.badge.draft': 'Draft',

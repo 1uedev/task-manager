@@ -1409,6 +1409,7 @@ export const de = {
   'wiki.publishedGoneTitle': 'Nicht mehr veröffentlicht',
   'wiki.draftShown': 'Du siehst den Entwurf (Revision {revision}). Leser sehen ihn erst nach der Veröffentlichung.',
   'wiki.status.published': 'Veröffentlicht: Revision {revision} von {person} am {time}.',
+  'wiki.status.publishedLanguage': 'Fassung {language} veröffentlicht: Revision {revision} von {person} am {time}.',
   'wiki.status.unpublished': 'Nicht veröffentlicht.',
   'wiki.status.draftNewer': 'Der Entwurf (Revision {revision}) ist neuer.',
   'wiki.badge.draft': 'Entwurf',

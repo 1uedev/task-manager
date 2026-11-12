@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -45,6 +43,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-104](#task-104-gemeinsame-suchübersicht-schnellsuche-und-messung-a14-teil-3) | Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
 | [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
+| [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -190,7 +189,7 @@ Nicht Teil: neue Regeln, H1 des Berichts.
 
 ## TASK-107 Befunde der Codex Prüfung von TASK-106 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-04 · **Aktualisiert:** 2026-11-12
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261112-search-04 · **Aktualisiert:** 2026-11-12
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-136; docs/REVIEW_TASK-106_PR-305.md. **Abhängigkeiten:** TASK-106 (PR #305) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-106 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-107“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-137, keine Migration geplant.
 
@@ -209,4 +208,6 @@ Nicht Teil: neue Regeln.
 3. F3 mit Unit Tests für `カ\u3099\u3099\uFF9E\u0334\uFF9E\u0334 end` (Markierung nur `カ\u3099`) und einem Vergleich der Normalform mit `SearchText.terms` über viele zufällige Texte.
 4. F4 mit Fällen am Testersatz (`AΣ1A`, `AΣ-A`, `AΣ_A`); H1 im Browsertest; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
+**Übergabe:** Ergebnis in PR #307 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache des gefundenen Treffers getrennt vom Vorrang der Veröffentlichung; die Wahl einer Sprache in der Sprachleiste oder „Fassung … zeigen“ zeigt deren veröffentlichte Fassung, den Entwurf nur „Entwurf zeigen“ (Browsertest mit Entwurfsrecht und unterschiedlichen englischen Titeln). F2: neue Klasse `Nfkc` mit demselben Ergebnis wie `java.text.Normalizer`, die lange Folgen kombinierender Zeichen selbst stabil nach Kombinationsklasse vorordnet; genutzt von `SearchText` (Index und Suchtext), `SearchService` (Kennungen) und `SearchSnippet`; 100.000 solcher Zeichen in rund 0,14 s (`aLongRunOfReorderedMarksIsMarkedQuickly`, `theLinearNormalFormIsNfkc` mit 3.000 Zufallstexten gegen den Normalizer). F3: `SearchSnippet` zerlegt an den Grenzen der Normalisierung und sucht den kürzesten Anfang eines Abschnitts mit allen seinen Buchstaben per Halbierung (`aMarkCoversOnlyTheCharactersOfItsWord`, `theWordsOfTheMarksAreThoseOfTheIndexForRandomTexts` mit 3.000 Zufallstexten gegen `SearchText.terms`); Testersatz gleich, ein Abgleich von 800 Zufallstexten mit Java ergab nur Abweichungen beim Sigma zwischen Buchstaben anderer Schriften. F4: Testersatz mit der Kleinschreibung des Sigma nach Javas Wortgrenzen für gängige Fälle (`AΣ1A`, `AΣ-A`, `AΣ_A`, `AΣ A`, `A1Σ`), Grenze im Test und in backend/README.md benannt. H1: keine Statuszeile neben „Nicht mehr veröffentlicht“, eine Ersatzfassung nennt ihre Sprache. Läufe: Backend `mvn verify` 636 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 287 grün.
+
+**Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-107.

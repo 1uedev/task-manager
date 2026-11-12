@@ -667,7 +667,7 @@ public class SearchService {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String text = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC).strip().toUpperCase(java.util.Locale.ROOT);
+        String text = Nfkc.of(raw).strip().toUpperCase(java.util.Locale.ROOT);
         java.util.regex.Matcher matcher = REQUIREMENT_KEY.matcher(text);
         return matcher.matches() ? new String[] {matcher.group(1), matcher.group(2)} : null;
     }
@@ -976,7 +976,7 @@ public class SearchService {
         if (raw == null) {
             return null;
         }
-        String text = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC).strip().toUpperCase(java.util.Locale.ROOT);
+        String text = Nfkc.of(raw).strip().toUpperCase(java.util.Locale.ROOT);
         return PROJECT_KEY.matcher(text).matches() ? text : null;
     }
 
