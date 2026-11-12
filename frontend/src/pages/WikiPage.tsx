@@ -734,6 +734,9 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
   // version, the found one no longer counts and the published version of the chosen language is shown first (F1 of the Codex
   // review of TASK-106). The draft then still needs its own action.
   const [found, setFound] = useState<WikiLanguage | undefined>(entry.language);
+  // The language whose draft the person asked for with "Entwurf zeigen" (F1 of the Codex review of TASK-107). It counts only for
+  // that language: every choice in the language bar is a new choice of a published version and forgets it.
+  const [draftLanguage, setDraftLanguage] = useState<WikiLanguage | null>(null);
   const [pinned, setPinned] = useState<WikiLanguage | null>(null);
   const wanted = pinned ?? (chosen !== null && chosen.pageId === pageId ? chosen.language : wikiLanguage(language));
   const [loaded, retry, replace] = useLoad(() => readWikiPage(api, pageId, wanted), [api, pageId, wanted]);
@@ -790,12 +793,18 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
         const usual = drafts && draft !== null && (page.published === null || draft.changed)
           ? 'draft'
           : page.published !== null ? 'published' : 'empty';
-        const stage: 'draft' | 'published' | 'gone' | 'empty' = !publishedFirst
+        // After a published hit a draft appears only for the language whose draft was asked for; a chosen language without a
+        // published version says so and offers its draft (F1 of the Codex review of TASK-107).
+        const draftChosen = !publishedFirst || draftLanguage === page.language;
+        const stage: 'draft' | 'published' | 'gone' | 'unpublished' | 'empty' = draftChosen
           ? usual
-          : found !== undefined ? (foundShown ? 'published' : 'gone') : page.published !== null ? 'published' : usual;
+          : found !== undefined ? (foundShown ? 'published' : 'gone')
+            : page.published !== null ? 'published' : drafts && draft !== null ? 'unpublished' : usual;
+        const hidden = stage === 'gone' || stage === 'unpublished';
         const shownTitle = stage === 'draft' ? draft?.title ?? ''
           : stage === 'published' ? page.published?.title ?? ''
-            : stage === 'gone' ? t('wiki.publishedGoneTitle') : draft?.title ?? '';
+            : stage === 'gone' ? t('wiki.publishedGoneTitle')
+              : stage === 'unpublished' ? t('wiki.unpublishedTitle') : draft?.title ?? '';
         return (
           <article className="stack wiki-page" data-testid="wiki-page" data-page={page.id} data-archived={page.archived ? 'true' : 'false'}>
             {page.path.length > 0 && (
@@ -808,12 +817,12 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                 ))}
               </nav>
             )}
-            <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={stage === 'gone' ? language : page.language}>{shownTitle}</h2>
+            <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={hidden ? language : page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
-              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setFound(undefined); setChosen({ pageId: page.id, language: code }); }}
+              <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setFound(undefined); setDraftLanguage(null); setChosen({ pageId: page.id, language: code }); }}
                 onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
             )}
-            {page.fallback && stage !== 'gone' && (
+            {page.fallback && !hidden && (
               <p className="mode-notice" data-testid="wiki-fallback" lang={language}>
                 {t('wiki.language.fallback', { wanted: t(languageName(wanted)), shown: t(languageName(page.language)) })}
               </p>
@@ -824,7 +833,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
             {page.translation?.outdated === true && drafts && mode !== 'edit' && <SourceChange page={page} />}
             {/* H1 of the Codex review of TASK-106: while the found version is gone, no status of another version stands beside the
                 notice; a fallback version names its language in the status. */}
-            {stage !== 'gone' && (
+            {!hidden && (
               <p className="hint" data-testid="wiki-status">
                 {page.archived && <span className="badge" data-testid="wiki-archived">{t('wiki.badge.archived')} </span>}
                 {page.published !== null
@@ -892,10 +901,10 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                 : stage === 'published' && page.published !== null
                   ? (
                     <>
-                      {publishedFirst && drafts && draft !== null && draft.changed && (
+                      {!draftChosen && drafts && draft !== null && draft.changed && (
                         <p className="mode-notice" data-testid="wiki-published-shown">
                           {t('wiki.publishedShown', { revision: page.published.revision })}{' '}
-                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
+                          <button type="button" className="secondary" onClick={() => setDraftLanguage(page.language)}>{t('wiki.showDraft')}</button>
                         </p>
                       )}
                       <div lang={page.language}><Content html={page.published.html} testId="wiki-content" /></div>
@@ -906,7 +915,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                       <p className="mode-notice" data-testid="wiki-published-gone">
                         {t('wiki.publishedGone')}{' '}
                         {drafts && draft !== null && page.language === found && (
-                          <button type="button" className="secondary" onClick={() => setPublishedFirst(false)}>{t('wiki.showDraft')}</button>
+                          <button type="button" className="secondary" onClick={() => setDraftLanguage(page.language)}>{t('wiki.showDraft')}</button>
                         )}
                         {page.published !== null && page.language !== found && (
                           <button type="button" className="secondary" onClick={() => setFound(undefined)}>
@@ -915,7 +924,14 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                         )}
                       </p>
                     )
-                    : <EmptyText text={t('wiki.empty')} />
+                    : stage === 'unpublished'
+                      ? (
+                        <p className="mode-notice" data-testid="wiki-unpublished">
+                          {t('wiki.unpublishedChosen')}{' '}
+                          <button type="button" className="secondary" onClick={() => setDraftLanguage(page.language)}>{t('wiki.showDraft')}</button>
+                        </p>
+                      )
+                      : <EmptyText text={t('wiki.empty')} />
             )}
           </article>
         );

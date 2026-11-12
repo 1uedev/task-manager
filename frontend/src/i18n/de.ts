@@ -1407,6 +1407,8 @@ export const de = {
   'wiki.publishedGoneUnavailable': 'Die Suche hat eine veröffentlichte Fassung gefunden, die Ihnen nicht mehr zur Verfügung steht.',
   'wiki.showAvailable': 'Fassung {language} zeigen',
   'wiki.publishedGoneTitle': 'Nicht mehr veröffentlicht',
+  'wiki.unpublishedTitle': 'Nicht veröffentlicht',
+  'wiki.unpublishedChosen': 'Diese Sprachfassung ist nicht veröffentlicht.',
   'wiki.draftShown': 'Du siehst den Entwurf (Revision {revision}). Leser sehen ihn erst nach der Veröffentlichung.',
   'wiki.status.published': 'Veröffentlicht: Revision {revision} von {person} am {time}.',
   'wiki.status.publishedLanguage': 'Fassung {language} veröffentlicht: Revision {revision} von {person} am {time}.',
