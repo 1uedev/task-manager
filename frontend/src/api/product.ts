@@ -578,9 +578,38 @@ export const searchTickets = (api: ServerApi, query: TicketQuery) =>
       limit: query.limit ?? 20, offset: query.offset ?? 0 } },
     querySerializer: { array: { style: 'form', explode: true } },
   }), one<{ total: number; items: TicketHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'projectId'))));
-export const searchProjects = (api: ServerApi, q: string) =>
-  run(() => api.search.GET('/search/projects', { params: { query: { q, limit: 20 } } }),
-    one<{ total: number; items: ProjectHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'name'))));
+// Projects (TASK-029): company tags only; with paging for the projects area of the search (TASK-104).
+export interface ProjectSearchQuery {
+  readonly q: string;
+  readonly tag?: readonly string[];
+  readonly tagMatch?: TagMatch;
+  readonly offset?: number;
+}
+export const searchProjects = (api: ServerApi, query: string | ProjectSearchQuery) => {
+  const { q, tag, tagMatch, offset } = typeof query === 'string' ? { q: query } as ProjectSearchQuery : query;
+  return run(() => api.search.GET('/search/projects', {
+    params: { query: { ...(q ? { q } : {}), ...(tagMatch !== 'untagged' && tag?.length ? { tag: [...tag] } : {}),
+      ...(tagMatch === 'untagged' || ((tagMatch === 'any' || tagMatch === 'none') && tag?.length) ? { tagMatch } : {}),
+      limit: 20, offset: offset ?? 0 } },
+    querySerializer: { array: { style: 'form', explode: true } },
+  }), one<{ total: number; items: ProjectHit[] }>(isPage((v) => hasStrings(v, 'id', 'key', 'name'))));
+};
+
+// The overview "Alle" and the quick search (TASK-104): five hits and the total per area, null for an area without a right,
+// and the object the text names exactly when the person may read it.
+export type SearchDirect = SearchTypes['schemas']['Direct'];
+export interface SearchOverview {
+  readonly tickets: { total: number; items: TicketHit[] } | null;
+  readonly projects: { total: number; items: ProjectHit[] } | null;
+  readonly wiki: { total: number; items: WikiHit[] } | null;
+  readonly requirements: { total: number; items: RequirementHit[] } | null;
+  readonly direct: SearchDirect | null;
+}
+const isArea = (v: unknown) => v === null || isPage(record)(v);
+export const searchAll = (api: ServerApi, q: string, preferred: string) =>
+  run(() => api.search.GET('/search/all', { params: { query: { ...(q ? { q } : {}), preferred: preferred === 'en' ? 'en' : 'de' } } }),
+    one<SearchOverview>((v) => record(v) && isArea(v.tickets) && isArea(v.projects) && isArea(v.wiki) && isArea(v.requirements)
+      && (v.direct === null || hasStrings(v.direct, 'kind', 'id', 'projectId', 'key'))));
 
 // Wiki pages (TASK-102): published revisions, or the drafts on request; archived pages on request; both languages unless one
 // is chosen. `preferred` is the language of the interface, in which a page is shown when both of its versions match.

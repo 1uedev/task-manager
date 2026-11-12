@@ -100,6 +100,14 @@ h1:focus-visible, .error-summary:focus-visible, .success:focus-visible { outline
 .theme button[aria-pressed='true'] { background: var(--surface); color: var(--brand-text); box-shadow: 0 1px 3px rgb(15 20 35 / 0.12); }
 
 .workspace { min-width: 0; display: flex; flex-direction: column; }
+/* The quick search at the top (TASK-104). */
+.topbar { width: 100%; max-width: 64rem; margin: 0 auto; padding: 1rem clamp(1rem, 4vw, 2.5rem) 0; display: flex; justify-content: flex-end; }
+.quick-search { position: relative; width: min(100%, 22rem); }
+.quick-search input { width: 100%; padding-right: 2.2rem; }
+.quick-search kbd {
+  position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); pointer-events: none;
+  font: inherit; font-size: 0.8rem; color: var(--muted); border: 1px solid var(--hairline); border-radius: 4px; padding: 0 0.35rem;
+}
 main { width: 100%; max-width: 64rem; margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 2.5rem) 2rem; }
 footer { width: 100%; max-width: 64rem; margin: auto auto 0; padding: 0 clamp(1rem, 4vw, 2.5rem) 1.5rem; color: var(--muted); font-size: 0.85rem; }
 

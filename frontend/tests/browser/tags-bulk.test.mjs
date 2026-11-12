@@ -70,7 +70,7 @@ async function holdSearch(page, matches) {
 
 describe('tag filter and bulk change', () => {
   test('the search filters by any of the tags and adds a tag to the selected tickets after a check', async () => {
-    await withApp({ hash: '#/search' }, async (page, backend) => {
+    await withApp({ hash: '#/search/tickets' }, async (page, backend) => {
       const urgent = companyTag(backend, 'Dringend');
       const customer = companyTag(backend, 'Kunde');
       const [first, second] = backend.state.tickets;
@@ -143,7 +143,7 @@ describe('tag filter and bulk change', () => {
   });
 
   test('a reader without the write rule gets every ticket refused with the reason and nothing changes', async () => {
-    await withApp({ as: BEN, hash: '#/search' }, async (page, backend) => {
+    await withApp({ as: BEN, hash: '#/search/tickets' }, async (page, backend) => {
       companyTag(backend, 'Kunde');
       await page.getByRole('button', { name: 'Suchen' }).click();
       await page.getByTestId('ticket-hits').getByText('PLAT-2').waitFor();
@@ -161,7 +161,7 @@ describe('tag filter and bulk change', () => {
     });
   });
   test('archived tags can be chosen for a filter and a removal, not for adding', async () => {
-    await withApp({ hash: '#/search', prepare: (backend) => {
+    await withApp({ hash: '#/search/tickets', prepare: (backend) => {
       const old = newTag('Altbestand', null, backend.anna, { archived: true });
       backend.state.tags.push(old);
       backend.state.ticketTags.push({ ticket: backend.state.tickets[0].id, tag: old.id });
@@ -191,7 +191,7 @@ describe('tag filter and bulk change', () => {
   });
 
   test('a late answer of an earlier search does not replace the newer one, and a reload repeats the search sent', async () => {
-    await withApp({ hash: '#/search' }, async (page, backend) => {
+    await withApp({ hash: '#/search/tickets' }, async (page, backend) => {
       const urgent = companyTag(backend, 'Dringend');
       const customer = companyTag(backend, 'Kunde');
       const [first] = backend.state.tickets;
@@ -230,7 +230,7 @@ describe('tag filter and bulk change', () => {
   });
 
   test('the stand-in checks the bulk body and the tags of a search like the server', async () => {
-    await withApp({ hash: '#/search' }, async (page) => {
+    await withApp({ hash: '#/search/tickets' }, async (page) => {
       const answer = await page.evaluate(async () => {
         const send = (path, init) => fetch(path, { credentials: 'include', ...init }).then(async (response) => ({ status: response.status, body: await response.json() }));
         const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-token-for-browser-tests-0001' }, body: JSON.stringify(body) });

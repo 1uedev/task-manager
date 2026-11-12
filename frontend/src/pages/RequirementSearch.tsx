@@ -7,6 +7,7 @@ import { hrefFor } from '../app/route.ts';
 import { useAccountName, useSession } from '../app/session.tsx';
 import { EmptyText, SelectField, TextField } from '../app/ui.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
+import type { SearchStart } from './WikiSearch.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import { Marked } from './WikiSearch.tsx';
 
@@ -36,7 +37,7 @@ const PRIORITIES = ['low', 'normal', 'high', 'critical'] as const;
 // The requirements area of the search (TASK-103). The current revision is searched, or with "zuletzt freigegeben" the newest
 // approved one; the two never mix. The server decides what is found and which fields show; a filter on priority or owner is
 // offered only where the chosen projects let the person read that field.
-export function RequirementSearch() {
+export function RequirementSearch({ start }: { readonly start?: SearchStart | undefined } = {}) {
   const { t } = useI18n();
   const { api } = useBrand();
   const { directory } = useSession();
@@ -50,6 +51,15 @@ export function RequirementSearch() {
   const latest = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const focusAfter = useRef(false);
+
+  // A text given from outside replaces the own text and searches with the other filters as they are.
+  useEffect(() => {
+    if (start === undefined) return;
+    setError(null);
+    const next = { ...query, q: start.q };
+    setQuery(next);
+    void run(0, next);
+  }, [start?.n]);
 
   const known = projects.state === 'ok' ? projects.value : [];
   const readable = (next: Query, field: string) =>
@@ -129,7 +139,7 @@ export function RequirementSearch() {
             <h2 id="requirement-hits" ref={heading} tabIndex={-1}>{t('search.requirements.found', { count: found.total })}</h2>
             {found.items.length === 0 ? <EmptyText text={t('search.none')} /> : (
               <ul className="item-list search-hits" data-testid="requirement-hits">
-                {found.items.map((hit) => <Hit key={hit.id} hit={hit} />)}
+                {found.items.map((hit) => <RequirementHitItem key={hit.id} hit={hit} />)}
               </ul>
             )}
             <p className="actions">
@@ -154,7 +164,8 @@ function OwnerField({ value, people, onChange }: { readonly value: string; reado
   );
 }
 
-function Hit({ hit }: { readonly hit: RequirementHit }) {
+/** One requirement hit; also used in the overview (TASK-104). */
+export function RequirementHitItem({ hit }: { readonly hit: RequirementHit }) {
   const { t } = useI18n();
   const snippet = hit.snippet;
   const approval = hit.approved ? t('search.requirements.isApproved')

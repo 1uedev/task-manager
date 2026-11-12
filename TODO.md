@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -32,9 +32,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-104](#task-104-gemeinsame-suchübersicht-schnellsuche-und-messung-a14-teil-3) | Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3) | claude-20261111-search-01 | 2026-11-11 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -42,6 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-102](#task-102-wiki-in-der-gemeinsamen-suche-a14-teil-1) | Wiki in der gemeinsamen Suche (A14 Teil 1) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-103](#task-103-anforderungen-in-der-gemeinsamen-suche-a14-teil-2) | Anforderungen in der gemeinsamen Suche (A14 Teil 2) | claude-20261111-search-01 | 2026-11-11 |
+| [TASK-104](#task-104-gemeinsame-suchübersicht-schnellsuche-und-messung-a14-teil-3) | Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3) | claude-20261111-search-01 | 2026-11-11 |
 | [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -137,9 +136,9 @@ Nicht Teil: neue Regeln, TASK-104.
 
 ## TASK-104 Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261111-search-01 · **Aktualisiert:** 2026-11-11
 
-**Bezug:** REQ-SRCH-001, REQ-PERF-003; DEC-047, DEC-050; OPEN-014; ACC-009; docs/TAGS_SEARCH.md (Messziele, Prüffälle T15, T20), docs/OPERATIONS.md, docs/DEMO.md. **Abhängigkeiten:** TASK-103 auf main; TASK-031. **Arbeitsstand:** Mit TASK-102 von Holger am 11. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-103 auf main ist. Geplanter Branch claude/project-thread-hulabb, Entscheidung DEC-134.
+**Bezug:** REQ-SRCH-001, REQ-PERF-003; DEC-047, DEC-050; OPEN-014; ACC-009; docs/TAGS_SEARCH.md (Messziele, Prüffälle T15, T20), docs/OPERATIONS.md, docs/DEMO.md. **Abhängigkeiten:** TASK-103 auf main; TASK-031. **Arbeitsstand:** Mit TASK-102 von Holger am 11. November 2026 beauftragt und mit den Vorschlägen bestätigt; nach TASK-103 (#300) und TASK-105 (#302) auf main umgesetzt. Geplanter Branch claude/project-thread-hulabb, Entscheidung DEC-134.
 
 **Umfang:** Suchseite mit den Reitern „Alle“, „Tickets“, „Projekte“, „Wiki“ und „Anforderungen“, der Endpunkt `/search/all`, die Schnellsuche, der erweiterte Referenzbestand, die Messung mit neuen Messklassen und einer Browsermessung, die Festlegung der Suchziele, mit Vertrag, Tests und Messbericht. Nicht Teil: zusätzlicher Suchdienst, Nachweis auf der Referenzhardware (A18).
 
@@ -159,4 +158,6 @@ Nicht Teil: neue Regeln, TASK-104.
 3. Messbericht in docs/DEMO.md und docs/measurements mit allen Klassen gegen die Ziele, ohne Mittelwerte als Ersatz (T15).
 4. Vertrag gegen Routen, Backend Tests, Browser Tests für Übersicht und Schnellsuche.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-103 auf main die Blockade aufheben und umsetzen.
+**Übergabe:** Ergebnis im PR zu Branch claude/project-thread-hulabb, ohne Migration, Vertrag `contracts/search.openapi.yaml` 0.5.0, Beschreibung in backend/README.md (Abschnitt „Übersicht „Alle“ und Schnellsuche“), DEC-134 mit den Auslegungen (1) bis (6). Nachweise: Kriterium 1 und 2 in `SearchOverviewApiTest` (7 Fälle: vier Bereiche mit einem Wort und ohne Entwurf, Bereiche ohne Recht, fünf Treffer mit Anzahl, Direkttreffer für Ticket, Anforderung und Projekt, nicht lesbare Kennung wie unbekannte, Projektschlüssel vorn, 400 und 401) und `search-overview.test.mjs` (6 Fälle: „Alle“ mit vier Bereichen, fehlende Bereiche, „Alle anzeigen“, „/“, Direktöffnen, nicht lesbare Kennung führt zu „Alle“). Kriterium 3 in docs/DEMO.md (Abschnitt „Messung mit Wiki, Anforderungen und Übersicht“) und docs/measurements/task-104: Servermessung 5.415 Aktionen ohne Fehler, alle 22 Klassen im Ziel nach Regel 6, „Alle“ p95 269 ms; Browsermessung je 200 Werte, alle p95 unter 1 s, „Alle“ 320 ms; jeweils p50, p95, p99 statt Mittelwerten. Abweichung: Messung mit dem Jar (Java 21, PostgreSQL 16) auf der Maschine statt im Image, weil Docker Hub drosselte. Kriterium 4: `SearchContractTest` mit fünf Routen, voller Backendlauf 629 Tests, Frontend `npm run verify` und 282 Browsertests grün.
+
+**Nächster Schritt:** Prüfung durch Codex (Auftrag im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-105.

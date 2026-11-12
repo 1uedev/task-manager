@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102, TASK-103)
-  version: 0.4.1
+  title: Task Manager API, Suche (TASK-029, TASK-044, TASK-073, TASK-102, TASK-103, TASK-104)
+  version: 0.5.0
   description: |
     Suche und Filter für Tickets und Projekte (DEC-069). Alle Aufrufe verlangen eine vollständige interne Anmeldung;
     Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag. Portalkonten erhalten bis zur
@@ -54,7 +54,14 @@ info:
     Anforderung für jede Person, die sie lesen darf, und steht dann vorn. Verworfene Anforderungen erscheinen nur mit einem
     Filter `status`. Ordnung nach Rang (Titelwörter zählen doppelt), dann Projektschlüssel und Nummer absteigend.
 
-    Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel). Der Index folgt
+    Übersicht (TASK-104, DEC-134): `/search/all` liefert je Bereich die ersten fünf Treffer und `total` nach den Regeln
+    des eigenen Endpunkts (Tickets und Projekte wie oben, Wikiseiten in der veröffentlichten Revision, Anforderungen in
+    der aktuellen Revision), ohne gemeinsame Rangliste. Ein Bereich, in dem die Person in keinem Projekt die Leseaktion
+    hat, ist `null`. Nennt der Text genau eine lesbare Kennung (`HELP-12`, `HELP ANF-17` oder einen Projektschlüssel),
+    steht sie in `direct`; sonst ist `direct` `null`, gleich ob es das Objekt gibt.
+
+    Ordnung: Rang absteigend, dann Projektschlüssel und Ticketnummer absteigend (Projekte nach Schlüssel; ein Text, der
+    genau ein Projektschlüssel ist, stellt dieses Projekt vorn). Der Index folgt
     jeder Änderung in derselben Transaktion. Kann eine Sperre nicht rechtzeitig genommen werden, antwortet der Server
     mit 503 `search.busy` und `Retry-After`; die Suche darf wiederholt werden.
 servers:
@@ -258,6 +265,65 @@ paths:
         '401': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /search/all:
+    get:
+      operationId: searchAll
+      summary: Übersicht „Alle“ und Schnellsuche (TASK-104)
+      parameters:
+        - $ref: '#/components/parameters/Text'
+        - name: preferred
+          in: query
+          description: Sprache der Oberfläche für Wikitreffer wie bei `/search/wiki`. Vorgabe `de`; ein anderer Wert antwortet mit `preferred.invalid`.
+          schema: {type: string, enum: [de, en]}
+      responses:
+        '200':
+          description: Je Bereich höchstens fünf Treffer und die Anzahl; `null` für einen Bereich ohne Recht.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tickets, projects, wiki, requirements, direct]
+                properties:
+                  tickets:
+                    oneOf:
+                      - type: object
+                        required: [total, items]
+                        properties:
+                          total: {type: integer, minimum: 0}
+                          items: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/TicketHit'}}
+                      - {type: 'null'}
+                  projects:
+                    oneOf:
+                      - type: object
+                        required: [total, items]
+                        properties:
+                          total: {type: integer, minimum: 0}
+                          items: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/ProjectHit'}}
+                      - {type: 'null'}
+                  wiki:
+                    oneOf:
+                      - type: object
+                        required: [total, items]
+                        properties:
+                          total: {type: integer, minimum: 0}
+                          items: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/WikiHit'}}
+                      - {type: 'null'}
+                  requirements:
+                    oneOf:
+                      - type: object
+                        required: [total, items]
+                        properties:
+                          total: {type: integer, minimum: 0}
+                          items: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RequirementHit'}}
+                      - {type: 'null'}
+                  direct:
+                    oneOf:
+                      - {$ref: '#/components/schemas/Direct'}
+                      - {type: 'null'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -297,7 +363,7 @@ components:
         auth.password_change_required. Gründe in `violations`: q.invalid, project.invalid, project.unknown,
         status.invalid, type.invalid, assignee.invalid, tag.invalid, tag.unknown, custom.invalid, paging.invalid, und für
         `/search/wiki` language.invalid, preferred.invalid, drafts.invalid, archived.invalid, für `/search/requirements`
-        stage.invalid, priority.invalid, owner.invalid, approved.invalid.
+        stage.invalid, priority.invalid, owner.invalid, approved.invalid, für `/search/all` q.invalid und preferred.invalid.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
         Retry-After: {schema: {type: integer}, description: Nur bei 503.}
@@ -319,6 +385,20 @@ components:
           type: array
           items: {type: string}
       additionalProperties: true
+    Direct:
+      type: object
+      description: |
+        Das Objekt, das der Text genau nennt und das die Person lesen darf (TASK-104): `ticket` für `KEY-12` mit der
+        Kennung des Tickets, `requirement` für `KEY ANF-17` mit der Kennung der Anforderung, `project` für einen
+        Projektschlüssel mit der Kennung des Projekts. `key` ist die Kennung, wie sie angezeigt wird, `number` die Nummer
+        des Tickets oder der Anforderung, bei einem Projekt `null`.
+      required: [kind, id, projectId, key, number]
+      properties:
+        kind: {type: string, enum: [ticket, requirement, project]}
+        id: {type: string, format: uuid}
+        projectId: {type: string, format: uuid}
+        key: {type: string}
+        number: {type: [integer, 'null'], minimum: 1}
     TagRef:
       type: object
       required: [id, name]

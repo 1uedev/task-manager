@@ -204,7 +204,7 @@ describe('two accounts with different rights', () => {
   test('a ticket created by the administration appears in the list and the search of the reader', async () => {
     const backend = createBackend();
     const anna = await start({ backend, as: ANNA, hash: `#/projects/${backend.project.id}/tickets` });
-    const ben = await start({ backend, as: BEN, hash: '#/search' });
+    const ben = await start({ backend, as: BEN, hash: '#/search/tickets' });
     try {
       await anna.page.locator('summary', { hasText: 'Neues Ticket' }).click();
       await anna.page.getByLabel(/^Titel/).fill('Tastaturbedienung prüfen');

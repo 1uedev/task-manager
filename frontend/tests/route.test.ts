@@ -65,3 +65,14 @@ test('the requirements of a project and one requirement carry checked identifier
   }
   assert.equal(section({ name: 'requirementPage', projectId: ID, requirementId: REQ }), 'requirements');
 });
+
+test('the areas of the search carry their text, an unknown area falls back to the start page (TASK-104)', () => {
+  assert.deepEqual(routeFromHash('#/search/all?q=HELP-12'), { name: 'searchArea', area: 'all', q: 'HELP-12' });
+  assert.deepEqual(routeFromHash('#/search?q=drucker'), { name: 'searchArea', area: 'all', q: 'drucker' });
+  assert.deepEqual(routeFromHash('#/search/wiki'), { name: 'searchArea', area: 'wiki', q: '' });
+  assert.deepEqual(routeFromHash('#/search/other'), { name: 'start' });
+  for (const route of [{ name: 'searchArea', area: 'tickets', q: 'a&b c/d?' }, { name: 'searchArea', area: 'requirements', q: '' }] as const) {
+    assert.deepEqual(routeFromHash(hrefFor(route)), route);
+  }
+  assert.equal(section({ name: 'searchArea', area: 'all', q: 'x' }), 'search');
+});
