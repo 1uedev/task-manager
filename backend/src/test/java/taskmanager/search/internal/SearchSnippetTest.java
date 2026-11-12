@@ -253,6 +253,22 @@ class SearchSnippetTest {
         assertTrue(millis < 3_000, millis + " ms for a letter composed after " + (late.length() - 7) + " marks");
     }
 
+    /**
+     * F2 of the Codex review of TASK-108: a text of almost 1 MiB of U+FDFA, which NFKC turns into 18 code points each, is marked
+     * in a JVM with a heap of 128 MiB; the mapping of TASK-108 ran out of memory there already with 256 MiB.
+     */
+    @Test
+    void aLargeCompatibilityDecompositionIsMarkedWithASmallHeap() throws Exception {
+        assertTrue(SnippetHeapProbe.text().getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 1_000_000);
+        String launcher = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        Process process = new ProcessBuilder(launcher, "-Xmx128m", "-cp", System.getProperty("java.class.path"),
+            SnippetHeapProbe.class.getName()).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS), "the probe ends");
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("[Mark[start=0, end=4]]"), output);
+    }
+
     /** H2 of the Codex review of TASK-107: the places are taken only from a form that is exactly the one of the index. */
     @Test
     void thePlacesComeFromTheNormalFormOfTheIndex() {
@@ -266,11 +282,9 @@ class SearchSnippetTest {
                 text.append(alphabet[random.nextInt(alphabet.length)]);
             }
             String original = text.toString();
-            List<int[]> origins = Nfkc.origins(original);
+            Nfkc.Origins origins = Nfkc.origins(original);
             assertTrue(origins != null, escaped(original));
-            StringBuilder composed = new StringBuilder();
-            origins.forEach(character -> composed.appendCodePoint(character[0]));
-            assertEquals(Normalizer.normalize(original, Normalizer.Form.NFKC), composed.toString(), escaped(original));
+            assertEquals(Normalizer.normalize(original, Normalizer.Form.NFKC), origins.text(), escaped(original));
             exactPlaces(original);
         }
     }

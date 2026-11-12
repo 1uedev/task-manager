@@ -30,90 +30,170 @@ final class Nfkc {
     /** The way through decomposition and ordered runs, always; package private for the test that compares both ways. */
     static String ordered(String text) {
         Probe probe = new Probe();
-        List<Integer> decomposed = new ArrayList<>(text.length());
-        text.codePoints().forEach(codePoint -> {
+        int length = 0;
+        for (int i = 0; i < text.length(); ) {
+            int codePoint = text.codePointAt(i);
+            length += probe.decomposition(codePoint).length;
+            i += Character.charCount(codePoint);
+        }
+        int[] decomposed = new int[length];
+        int size = 0;
+        for (int i = 0; i < text.length(); ) {
+            int codePoint = text.codePointAt(i);
             for (int part : probe.decomposition(codePoint)) {
-                decomposed.add(part);
+                decomposed[size++] = part;
             }
-        });
-        StringBuilder result = new StringBuilder(text.length());
-        int i = 0;
-        while (i < decomposed.size()) {
-            if (!probe.nonStarter(decomposed.get(i))) {
-                result.appendCodePoint(decomposed.get(i++));
+            i += Character.charCount(codePoint);
+        }
+        int[] unused = new int[size];
+        for (int i = 0; i < size; ) {
+            if (!probe.nonStarter(decomposed[i])) {
+                i++;
                 continue;
             }
             int start = i;
-            while (i < decomposed.size() && probe.nonStarter(decomposed.get(i))) {
+            while (i < size && probe.nonStarter(decomposed[i])) {
                 i++;
             }
-            List<Integer> run = new ArrayList<>(decomposed.subList(start, i));
-            run.sort(probe::order);
-            run.forEach(result::appendCodePoint);
+            order(probe, decomposed, unused, unused, start, i);
         }
-        return Normalizer.normalize(result, Normalizer.Form.NFKC);
+        return Normalizer.normalize(new String(decomposed, 0, size), Normalizer.Form.NFKC);
     }
 
     /**
-     * NFKC of a text with the original place of every character of the result (F3 of the Codex review of TASK-107): for each code
-     * point of the normal form {code point, start, end}, where start and end are UTF-16 offsets of the original characters it was
-     * made of. Every character is decomposed on its own and keeps its place, each run of marks is put into canonical order by a
-     * stable sort, and the canonical composition of Unicode then joins a starter with each following character that is not
-     * blocked and forms a primary composite with it; the joined character covers the places of both. Whether two characters
-     * compose is asked of {@link Normalizer} itself, so exclusions and Hangul follow it. The time grows with the length of the
-     * text, as each step looks only at the last starter and the last character kept after it. {@code null} when the result is
-     * not exactly {@link #of}, which no text in the tests reaches; the caller then marks nothing rather than something else.
+     * NFKC of a text with the original places of its characters: {@code text} is the normal form, and for its {@code k}th code
+     * point {@code starts[k]} and {@code ends[k]} are the UTF-16 offsets of the original characters it was made of. The arrays
+     * may be longer than the number of code points of {@code text}; the rest is unused.
      */
-    static List<int[]> origins(String text) {
-        List<int[]> result = new ArrayList<>();
+    record Origins(String text, int[] starts, int[] ends) {
+    }
+
+    /**
+     * NFKC of a text with the original place of every character of the result (F3 of the Codex review of TASK-107). Every
+     * character is decomposed on its own and keeps its place, each run of marks is put into canonical order by a stable sort,
+     * and the canonical composition of Unicode then joins a starter with each following character that is not blocked and forms
+     * a primary composite with it; the joined character covers the places of both. Whether two characters compose is asked of
+     * {@link Normalizer} itself, so exclusions and Hangul follow it. The time grows with the length of the text, as each step
+     * looks only at the last starter and the last character kept after it, and a run of marks is ordered by counting its
+     * classes. The memory is three arrays of {@code int} as long as the decomposed text, filled in place, without an object per
+     * character (F2 of the Codex review of TASK-108): about 12 bytes per code point of the decomposition. {@code null} when the
+     * result is not exactly {@link #of}, which no text in the tests reaches; the caller then marks nothing rather than something
+     * else.
+     */
+    static Origins origins(String text) {
         if (text == null || text.isEmpty()) {
-            return result;
+            return new Origins("", new int[0], new int[0]);
         }
         Probe probe = new Probe();
-        List<int[]> decomposed = new ArrayList<>(text.length());
+        int length = 0;
+        for (int i = 0; i < text.length(); ) {
+            int codePoint = text.codePointAt(i);
+            length += probe.decomposition(codePoint).length;
+            i += Character.charCount(codePoint);
+        }
+        int[] codePoints = new int[length];
+        int[] starts = new int[length];
+        int[] ends = new int[length];
+        int size = 0;
         for (int i = 0; i < text.length(); ) {
             int codePoint = text.codePointAt(i);
             int end = i + Character.charCount(codePoint);
             for (int part : probe.decomposition(codePoint)) {
-                decomposed.add(new int[] {part, i, end});
+                codePoints[size] = part;
+                starts[size] = i;
+                ends[size++] = end;
             }
             i = end;
         }
-        for (int i = 0; i < decomposed.size(); ) {
-            if (!probe.nonStarter(decomposed.get(i)[0])) {
+        for (int i = 0; i < size; ) {
+            if (!probe.nonStarter(codePoints[i])) {
                 i++;
                 continue;
             }
             int start = i;
-            while (i < decomposed.size() && probe.nonStarter(decomposed.get(i)[0])) {
+            while (i < size && probe.nonStarter(codePoints[i])) {
                 i++;
             }
-            decomposed.subList(start, i).sort((first, second) -> probe.order(first[0], second[0]));
+            order(probe, codePoints, starts, ends, start, i);
         }
+        // Composition in place: the characters kept are written to the front, never past the one read.
+        int kept = 0;
         int starter = -1;
-        int[] last = null;
-        for (int[] next : decomposed) {
-            boolean nextStarter = !probe.nonStarter(next[0]);
+        int last = -1;
+        for (int i = 0; i < size; i++) {
+            int next = codePoints[i];
+            boolean nextStarter = !probe.nonStarter(next);
             if (starter >= 0) {
-                boolean blocked = last != null && (nextStarter || !probe.nonStarter(last[0]) || probe.order(last[0], next[0]) >= 0);
-                int composite = blocked ? -1 : probe.compose(result.get(starter)[0], next[0]);
+                boolean blocked = last >= 0 && (nextStarter || !probe.nonStarter(codePoints[last]) || probe.order(codePoints[last], next) >= 0);
+                int composite = blocked ? -1 : probe.compose(codePoints[starter], next);
                 if (composite >= 0) {
-                    int[] joined = result.get(starter);
-                    result.set(starter, new int[] {composite, Math.min(joined[1], next[1]), Math.max(joined[2], next[2])});
+                    codePoints[starter] = composite;
+                    starts[starter] = Math.min(starts[starter], starts[i]);
+                    ends[starter] = Math.max(ends[starter], ends[i]);
                     continue;
                 }
             }
-            result.add(next.clone());
+            codePoints[kept] = next;
+            starts[kept] = starts[i];
+            ends[kept] = ends[i];
             if (nextStarter) {
-                starter = result.size() - 1;
-                last = null;
+                starter = kept;
+                last = -1;
             } else {
-                last = next;
+                last = kept;
             }
+            kept++;
         }
-        StringBuilder composed = new StringBuilder(text.length());
-        result.forEach(character -> composed.appendCodePoint(character[0]));
-        return of(text).contentEquals(composed) ? result : null;
+        String composed = new String(codePoints, 0, kept);
+        return of(text).equals(composed) ? new Origins(composed, starts, ends) : null;
+    }
+
+    /**
+     * Puts a run of marks from {@code from} to {@code to} into canonical order, stable within one class: the distinct marks of
+     * the run are sorted by class, which are few, and the run is then placed by counting, so a long run costs linear time.
+     */
+    private static void order(Probe probe, int[] codePoints, int[] starts, int[] ends, int from, int to) {
+        int count = to - from;
+        if (count < 2) {
+            return;
+        }
+        Map<Integer, Integer> ranks = new HashMap<>();
+        for (int k = from; k < to; k++) {
+            ranks.putIfAbsent(codePoints[k], 0);
+        }
+        if (ranks.size() == 1) {
+            return;
+        }
+        List<Integer> distinct = new ArrayList<>(ranks.keySet());
+        distinct.sort(probe::order);
+        int rank = 0;
+        for (int k = 0; k < distinct.size(); k++) {
+            if (k > 0 && probe.order(distinct.get(k - 1), distinct.get(k)) != 0) {
+                rank++;
+            }
+            ranks.put(distinct.get(k), rank);
+        }
+        int[] placed = new int[rank + 2];
+        int[] rankOf = new int[count];
+        for (int k = 0; k < count; k++) {
+            rankOf[k] = ranks.get(codePoints[from + k]);
+            placed[rankOf[k] + 1]++;
+        }
+        for (int r = 1; r < placed.length; r++) {
+            placed[r] += placed[r - 1];
+        }
+        int[] sortedPoints = new int[count];
+        int[] sortedStarts = new int[count];
+        int[] sortedEnds = new int[count];
+        for (int k = 0; k < count; k++) {
+            int target = placed[rankOf[k]]++;
+            sortedPoints[target] = codePoints[from + k];
+            sortedStarts[target] = starts[from + k];
+            sortedEnds[target] = ends[from + k];
+        }
+        System.arraycopy(sortedPoints, 0, codePoints, from, count);
+        System.arraycopy(sortedStarts, 0, starts, from, count);
+        System.arraycopy(sortedEnds, 0, ends, from, count);
     }
 
     /** The longest run of combining marks, the halfwidth sound marks that decompose into them counted as well. */
