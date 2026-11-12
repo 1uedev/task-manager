@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-108](#task-108-befunde-der-codex-prüfung-von-task-107-beheben-a14) | Befunde der Codex Prüfung von TASK-107 beheben (A14) | claude-20261112-search-05 | 2026-11-12 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-105](#task-105-befunde-der-codex-nachprüfung-von-task-102-beheben-a14) | Befunde der Codex Nachprüfung von TASK-102 beheben (A14) | claude-20261111-search-02 | 2026-11-11 |
 | [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
 | [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
+| [TASK-108](#task-108-befunde-der-codex-prüfung-von-task-107-beheben-a14) | Befunde der Codex Prüfung von TASK-107 beheben (A14) | claude-20261112-search-05 | 2026-11-12 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -216,7 +215,7 @@ Nicht Teil: neue Regeln.
 
 ## TASK-108 Befunde der Codex Prüfung von TASK-107 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-05 · **Aktualisiert:** 2026-11-12
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261112-search-05 · **Aktualisiert:** 2026-11-12
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-137; docs/REVIEW_TASK-107_PR-307.md. **Abhängigkeiten:** TASK-107 (PR #307) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-107 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-108“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-138, keine Migration geplant.
 
@@ -235,4 +234,6 @@ Nicht Teil: neue Regeln.
 3. F3 mit Unit Tests für die vier Fälle des Berichts und einem Zufallstest, der den genauen Originalbereich jedes Worts prüft; Testersatz mit `½ᅡ`.
 4. F4 mit Fällen am Testersatz; H2 mit Test oder begründeter Beschreibung; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und Ergebnis PR mit Nachweisen öffnen.
+**Übergabe:** Ergebnis im Ergebnis PR nach #308 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache eines ausdrücklich gewählten Entwurfs; jede Wahl in der Sprachleiste vergisst sie und zeigt nach einem veröffentlichten Treffer die veröffentlichte Fassung, ohne Veröffentlichung „Nicht veröffentlicht“ mit „Entwurf zeigen“ (drei Browsertests: erneute Wahl der gefundenen Sprache, Sprache nur mit Entwurf, Entwurf Deutsch dann Englisch). F2, F3, H2: neue Methode `Nfkc.origins` bildet NFKC des ganzen Texts mit den Originalzeichen jedes Zeichens (Zerlegung je Zeichen, stabile Ordnung nach Kombinationsklasse, kanonische Zusammensetzung über den Normalizer), `SearchSnippet` markiert jedes Wort vom ersten bis zum letzten eigenen Originalzeichen und markiert nichts, wenn die Form vom Index abweicht; die Abschnitte und die Halbierung entfallen (Unit Tests `severalWordsOfOneCharacterAndItsMarksKeepTheirOwnPlaces` mit den vier Fällen des Berichts, `thePlacesComeFromTheNormalFormOfTheIndex` mit 5.000 Zufallstexten und genauer Prüfung jedes Wortbereichs, späte Zusammensetzung nach 480.000 Zeichen im Laufzeittest). Testersatz gleich. F4: Testersatz bildet die Wortgrenzen des JDK für das Sigma nach, abgeglichen mit Java 21 für jedes BMP Zeichen neben einem Sigma und 200.000 Zufallstexte ohne Abweichung; Fälle `AΣ:A`, `AΣ·A`, `AΣ"A`, `A1Σ,1`, `AΣ1,1A` im Test; Grenze bei Zeichen außerhalb der BMP benannt. Läufe: Backend `mvn verify` 638 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 291 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-108.
