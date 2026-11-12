@@ -1,0 +1,128 @@
+[ {
+  "case" : "flyway-upgrade",
+  "firstMigrations" : 1,
+  "secondMigrations" : 0
+}, {
+  "case" : "migration-selection",
+  "accounts" : [ {
+    "username" : "legacy-bad",
+    "auth_kind" : "local",
+    "external_id" : null,
+    "active" : false,
+    "updated_at" : "2026-10-24 17:31:55.131761+02"
+  }, {
+    "username" : "legacy-c1",
+    "auth_kind" : "local",
+    "external_id" : null,
+    "active" : false,
+    "updated_at" : "2026-10-24 17:31:55.131761+02"
+  }, {
+    "username" : "legacy-clean",
+    "auth_kind" : "ldap",
+    "external_id" : "entry-uuid-48",
+    "active" : true,
+    "updated_at" : "2026-10-01 02:00:00+02"
+  }, {
+    "username" : "legacy-control",
+    "auth_kind" : "local",
+    "external_id" : null,
+    "active" : false,
+    "updated_at" : "2026-10-24 17:31:55.131761+02"
+  }, {
+    "username" : "legacy-del",
+    "auth_kind" : "local",
+    "external_id" : null,
+    "active" : false,
+    "updated_at" : "2026-10-24 17:31:55.131761+02"
+  }, {
+    "username" : "legacy-emoji",
+    "auth_kind" : "ldap",
+    "external_id" : "uuid-😀",
+    "active" : true,
+    "updated_at" : "2026-10-01 02:00:00+02"
+  }, {
+    "username" : "legacy-format",
+    "auth_kind" : "ldap",
+    "external_id" : "id​",
+    "active" : true,
+    "updated_at" : "2026-10-01 02:00:00+02"
+  }, {
+    "username" : "legacy-prefix",
+    "auth_kind" : "ldap",
+    "external_id" : "hex:80",
+    "active" : true,
+    "updated_at" : "2026-10-01 02:00:00+02"
+  }, {
+    "username" : "legacy-trim",
+    "auth_kind" : "ldap",
+    "external_id" : "trim-id",
+    "active" : true,
+    "updated_at" : "2026-10-01 02:00:00+02"
+  } ],
+  "revokedSessions" : [ {
+    "username" : "legacy-bad",
+    "revoked" : true,
+    "revoke_reason" : "directory.identifier_unreliable"
+  }, {
+    "username" : "legacy-c1",
+    "revoked" : true,
+    "revoke_reason" : "directory.identifier_unreliable"
+  }, {
+    "username" : "legacy-clean",
+    "revoked" : false,
+    "revoke_reason" : null
+  }, {
+    "username" : "legacy-control",
+    "revoked" : true,
+    "revoke_reason" : "directory.identifier_unreliable"
+  }, {
+    "username" : "legacy-del",
+    "revoked" : true,
+    "revoke_reason" : "directory.identifier_unreliable"
+  }, {
+    "username" : "legacy-emoji",
+    "revoked" : false,
+    "revoke_reason" : null
+  }, {
+    "username" : "legacy-format",
+    "revoked" : false,
+    "revoke_reason" : null
+  }, {
+    "username" : "legacy-prefix",
+    "revoked" : false,
+    "revoke_reason" : null
+  }, {
+    "username" : "legacy-trim",
+    "revoked" : false,
+    "revoke_reason" : null
+  } ],
+  "auditEvents" : [ {
+    "event" : "account.directory_identifier_unreliable",
+    "actor" : "migration",
+    "detail" : null
+  }, {
+    "event" : "account.directory_identifier_unreliable",
+    "actor" : "migration",
+    "detail" : null
+  }, {
+    "event" : "account.directory_identifier_unreliable",
+    "actor" : "migration",
+    "detail" : null
+  }, {
+    "event" : "account.directory_identifier_unreliable",
+    "actor" : "migration",
+    "detail" : null
+  } ],
+  "localAdministratorsAfter" : 0
+}, {
+  "case" : "relative-guard-recovery",
+  "cliExit" : 0,
+  "localAdministratorsAfterRecovery" : 1,
+  "accountsReadable" : 200,
+  "lastLocalDeactivation" : 409
+}, {
+  "case" : "migrated-account-recovery",
+  "passwordChangeStatus" : 200,
+  "authKind" : "local",
+  "memberships" : 0
+} ]

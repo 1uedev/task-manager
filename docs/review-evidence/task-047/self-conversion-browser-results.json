@@ -1,0 +1,16 @@
+[
+  {
+    "locale": "de-DE",
+    "conversionStatus": 200,
+    "otpInResponse": true,
+    "loginVisible": true,
+    "secretPanelAfterRefresh": 0
+  },
+  {
+    "locale": "en-US",
+    "conversionStatus": 200,
+    "otpInResponse": true,
+    "loginVisible": true,
+    "secretPanelAfterRefresh": 0
+  }
+]
