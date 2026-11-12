@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-109](#task-109-befunde-der-codex-prüfung-von-task-108-beheben-a14) | Befunde der Codex Prüfung von TASK-108 beheben (A14) | claude-20261112-search-06 | 2026-11-12 |
 
 ### Blockiert – BLOCKIERT
 
@@ -237,3 +239,25 @@ Nicht Teil: neue Regeln.
 **Übergabe:** Ergebnis im Ergebnis PR nach #308 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache eines ausdrücklich gewählten Entwurfs; jede Wahl in der Sprachleiste vergisst sie und zeigt nach einem veröffentlichten Treffer die veröffentlichte Fassung, ohne Veröffentlichung „Nicht veröffentlicht“ mit „Entwurf zeigen“ (drei Browsertests: erneute Wahl der gefundenen Sprache, Sprache nur mit Entwurf, Entwurf Deutsch dann Englisch). F2, F3, H2: neue Methode `Nfkc.origins` bildet NFKC des ganzen Texts mit den Originalzeichen jedes Zeichens (Zerlegung je Zeichen, stabile Ordnung nach Kombinationsklasse, kanonische Zusammensetzung über den Normalizer), `SearchSnippet` markiert jedes Wort vom ersten bis zum letzten eigenen Originalzeichen und markiert nichts, wenn die Form vom Index abweicht; die Abschnitte und die Halbierung entfallen (Unit Tests `severalWordsOfOneCharacterAndItsMarksKeepTheirOwnPlaces` mit den vier Fällen des Berichts, `thePlacesComeFromTheNormalFormOfTheIndex` mit 5.000 Zufallstexten und genauer Prüfung jedes Wortbereichs, späte Zusammensetzung nach 480.000 Zeichen im Laufzeittest). Testersatz gleich. F4: Testersatz bildet die Wortgrenzen des JDK für das Sigma nach, abgeglichen mit Java 21 für jedes BMP Zeichen neben einem Sigma und 200.000 Zufallstexte ohne Abweichung; Fälle `AΣ:A`, `AΣ·A`, `AΣ"A`, `A1Σ,1`, `AΣ1,1A` im Test; Grenze bei Zeichen außerhalb der BMP benannt. Läufe: Backend `mvn verify` 638 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 291 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
 
 **Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-108.
+
+## TASK-109 Befunde der Codex Prüfung von TASK-108 beheben (A14)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-06 · **Aktualisiert:** 2026-11-12
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-138; docs/REVIEW_TASK-108_PR-309.md. **Abhängigkeiten:** TASK-108 (PR #309) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-108 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „F1 bis F4 beheben, dann Abnahme“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-139, keine Migration geplant.
+
+**Umfang:** Befunde F1 bis F4 aus docs/REVIEW_TASK-108_PR-309.md:
+1. F1: Nach einem veröffentlichten Suchtreffer bleibt der Vorrang der Veröffentlichung auch nach Verwaltungsaktionen wie dem Verschieben erhalten; Entwürfe erscheinen in keiner Sprache ohne „Entwurf zeigen“.
+2. F2: Die Zuordnung der Originalzeichen braucht auch bei großen Kompatibilitätszerlegungen (etwa viele U+FDFA) begrenzten Speicher ohne Objekt je Zeichen.
+3. F3: Der Testersatz verarbeitet ein Wort mit 150.000 Zeichen und A mit 150.000 U+0334 und U+0301 ohne `RangeError`.
+4. F4: Die Grenze des Testersatzes bei Zeichen, die Java 21 und Node in unterschiedlichen Unicode Versionen kennen (etwa U+1ACF), ist benannt oder über dieselben Zeicheneigenschaften abgesichert.
+
+Nicht Teil: neue Regeln.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 mit einem Browsertest: Verschieben nach einem veröffentlichten Treffer, danach zeigt weder die aktuelle noch eine andere Sprache einen Entwurf ohne „Entwurf zeigen“.
+2. F2 mit einem Test für einen großen Text mit U+FDFA und einer Beschreibung des Speicherbedarfs.
+3. F3 mit Fällen am Testersatz für beide Texte des Berichts.
+4. F4 mit dem Fall `AΣ\u1ACFA` als benannte oder behobene Grenze; bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und Ergebnis PR mit Nachweisen öffnen; danach Holgers Abnahme von TASK-102 bis TASK-109.
