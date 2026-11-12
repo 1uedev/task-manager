@@ -1,0 +1,44 @@
+TASK-041 independent review, 2026-10-20
+Session: codex-20261020-projects-admin-review-01
+Reviewed main: cf89e43292ba6d7415aa507edc2d4ab8186a2401
+Runtime: Java 25.0.4.1+1, native PostgreSQL 18.6, synthetic external test database
+
+OWN EXECUTION: unchanged backend clean verify
+Tests run: 154, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+OWN EXECUTION: selected added probes (shared run with TASK-026)
+[review041] last company manager status=409
+[review041] login [18008] -> duration 24072 -> gate 8412
+[review041] exact gate holder=8412, HTTP waiters=[24072, 28156], identity locks=0
+[review041] withdraw=false, first=200, second=403
+[review041] exact gate holder=8412, HTTP waiters=[24072, 28156], identity locks=0
+[review041] withdraw=true, first=403, second=200
+AdministrationRightsApiTest: Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[review041] consumer matrix: 4 configurations x 5 actual consumer paths passed
+AdministrationConsumerReviewTest: Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+Combined TASK-041/TASK-026 probe run: Tests run: 12, Failures: 2, Errors: 0, Skipped: 0
+Both failures belong to TASK-026, not TASK-041.
+
+OWN EXECUTION: after byte-identical restoration, clean test of original classes
+AdministrationRightsApiTest, AdministrationRightsWiringTest, ProjectsApiTest
+Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Finished at: 2026-10-20T12:36:52+02:00
+
+READ CI EVIDENCE (not an own lifecycle execution)
+PR #108 head: c1e96c858a5363eacba7277e03d1f9814989b353
+Backend run: https://github.com/1uedev/task-manager/actions/runs/39385815671
+Backend job: 118505277364
+2026-10-20T07:21:24.4762417Z Tests run: 138, Failures: 0, Errors: 0, Skipped: 0
+2026-10-20T07:21:33.3661489Z PostgreSQL 18.6
+2026-10-20T07:22:10.1431117Z Lifecycle check passed
+
+Scope: selected excerpts, not a full raw log or an exhaustive proof of all interleavings.
+
+OWN DOCUMENTATION CHECKS
+Repository contract: OK
+Task board: current
+Python unittest: Ran 25 tests, OK
+git diff --cached --check: clean
+Own synthetic PostgreSQL instance stopped after PID and executable-path verification.
