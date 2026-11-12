@@ -1,0 +1,7 @@
+--- a/backend/src/main/java/taskmanager/identity/session/JdbcIdentityVerification.java
++++ b/backend/src/main/java/taskmanager/identity/session/JdbcIdentityVerification.java
+@@ -47,0 +48 @@
++        Instant reviewEarlyNow = clock.instant();
+@@ -62 +63 @@
+-                return clock.instant().isBefore(stored.isBefore(current) ? stored : current);
++                return reviewEarlyNow.isBefore(stored.isBefore(current) ? stored : current);

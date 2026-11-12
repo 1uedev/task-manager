@@ -1,0 +1,8 @@
+--- a/backend/src/main/java/taskmanager/RequestPermissionContexts.java
++++ b/backend/src/main/java/taskmanager/RequestPermissionContexts.java
+@@ -35 +35 @@
+-        if (request.isEmpty() || request.get().level() != AuthenticationLevel.FULL || companyId.isEmpty()) {
++        if (request.isEmpty() || companyId.isEmpty()) {
+@@ -43 +43 @@
+-                false, false, null));
++                who.level() != AuthenticationLevel.FULL, false, null));

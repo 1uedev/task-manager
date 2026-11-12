@@ -1,0 +1,20 @@
+Session: codex-20261019-adapter-followup-01
+Reviewed main: 635dbca39ebc1965dbfa15c0c494b8c560194539
+Final PR 97 head: 4e0407f61726465580678f9f2b71b5e731dbfc33
+Correction commit: eadfb11b3ebc45a9c625f9ca9dda58b26b322dae
+Native PostgreSQL 18.6; Temurin 25.0.4.1+1; Maven 3.9.16.
+Unchanged verify: 123 passed, no failures/errors/skips.
+Positive targeted run: 4 passed, no failures/errors/skips.
+Corrected product:
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=for share of s
+REVIEW_EXPIRY exactWait=true oldCheckAllowed=false freshAllowed=false committedEffects=0
+Early-clock mutation:
+REVIEW_AUTHOR_WAIT expectedHolderMatched=true statement=for share of s
+REVIEW_EXPIRY exactWait=true oldCheckAllowed=true freshAllowed=false committedEffects=1
+2 tests, 2 assertion failures, 0 execution errors/skips.
+Incomplete-context mutation:
+2 tests, 1 passed, 1 assertion failure at forced password change, 0 execution errors/skips.
+All three edited source/test files restored byte-for-byte after the experiments.
+Restored clean run: 21 passed, no failures/errors/skips.
+Report repository: validator/task board passed; 25 Python tests passed with PYTHONUTF8=1.
+Author CI backend run 39262111709, job 118092169402: 123 passed; PostgreSQL 18.6; Lifecycle check passed.
