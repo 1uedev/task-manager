@@ -1,0 +1,52 @@
+[
+  {
+    "case": "project-rights-real",
+    "result": "PASS",
+    "onlyHeldActions": true,
+    "descriptionOffered": false,
+    "actualWriteStatuses": [
+      204,
+      204
+    ]
+  },
+  {
+    "case": "audit-real",
+    "result": "PASS",
+    "rowCounts": [
+      50,
+      100,
+      150
+    ],
+    "previousValueColumn": true
+  },
+  {
+    "case": "appearance-real",
+    "invalidColorDisabled": true,
+    "invalidEnterWrites": 0,
+    "validColorSaved": true,
+    "width": 320,
+    "withLogoBrandSnapshot": "- img \"Firmenlogo\"",
+    "withLogoNameDisplay": "none",
+    "withLogoNameAccessible": false,
+    "withoutLogoBrandSnapshot": "- text: Task Manager",
+    "withoutLogoNameAccessible": true,
+    "horizontalOverflow": 0
+  },
+  {
+    "case": "webp-browser-decode",
+    "cases": [
+      {
+        "fixture": "anmf-only-no-image",
+        "serverAccepted": true,
+        "decoded": false,
+        "width": 0
+      },
+      {
+        "fixture": "animated-no-frame-image",
+        "serverAccepted": true,
+        "decoded": false,
+        "width": 0
+      }
+    ]
+  }
+]
