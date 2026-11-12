@@ -407,6 +407,29 @@ class RequirementSearchApiTest {
         assertEquals("\u24B6lpharegel", excerpt.get("text").asString().substring(mark.get("start").asInt(), mark.get("end").asInt()));
     }
 
+    /**
+     * F2 of the Codex review of TASK-105: compatibility jamo composed by NFKC only together pick the criterion they stand in for
+     * the excerpt and are marked there, and a final sigma behind a dotted İ is marked in the title.
+     */
+    @Test
+    void composedJamoChooseTheirCriterionAndAFinalSigmaIsMarked() {
+        Setup setup = project();
+        Browser editor = editor(setup);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("title", "\u0130 \u039F\u03A3");
+        body.put("description", paragraphDoc("Beschreibung ohne das Wort"));
+        body.put("criteria", List.of(criterion(null, "Erstes Kriterium"), criterion(null, "Zweites \u3131\u314F Kriterium")));
+        assertEquals(201, create(editor, setup, body).status());
+        JsonNode snippet = editor.get(search(setup, q("\uAC00"))).json().get("items").get(0).get("snippet");
+        assertEquals("criteria", snippet.get("field").asString(), snippet.toString());
+        assertEquals(2, snippet.get("criterion").asInt());
+        JsonNode mark = snippet.get("excerpt").get("marks").get(0);
+        assertEquals("\u3131\u314F", snippet.get("excerpt").get("text").asString().substring(mark.get("start").asInt(), mark.get("end").asInt()));
+        JsonNode hit = editor.get(search(setup, q("\u03BF\u03C2"))).json().get("items").get(0);
+        assertEquals(2, hit.get("titleMarks").get(0).get("start").asInt(), hit.toString());
+        assertEquals(4, hit.get("titleMarks").get(0).get("end").asInt());
+    }
+
     /** Rule 5: a word in a criterion gives the excerpt of that criterion with its fixed number; a description word its own. */
     @Test
     void theExcerptNamesTheCriterionItCameFrom() {
