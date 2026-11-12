@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-109](#task-109-befunde-der-codex-prüfung-von-task-108-beheben-a14) | Befunde der Codex Prüfung von TASK-108 beheben (A14) | claude-20261112-search-06 | 2026-11-12 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -47,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
 | [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
 | [TASK-108](#task-108-befunde-der-codex-prüfung-von-task-107-beheben-a14) | Befunde der Codex Prüfung von TASK-107 beheben (A14) | claude-20261112-search-05 | 2026-11-12 |
+| [TASK-109](#task-109-befunde-der-codex-prüfung-von-task-108-beheben-a14) | Befunde der Codex Prüfung von TASK-108 beheben (A14) | claude-20261112-search-06 | 2026-11-12 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -242,7 +241,7 @@ Nicht Teil: neue Regeln.
 
 ## TASK-109 Befunde der Codex Prüfung von TASK-108 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-06 · **Aktualisiert:** 2026-11-12
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261112-search-06 · **Aktualisiert:** 2026-11-12
 
 **Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-138; docs/REVIEW_TASK-108_PR-309.md. **Abhängigkeiten:** TASK-108 (PR #309) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-108 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „F1 bis F4 beheben, dann Abnahme“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-139, keine Migration geplant.
 
@@ -260,4 +259,6 @@ Nicht Teil: neue Regeln.
 3. F3 mit Fällen am Testersatz für beide Texte des Berichts.
 4. F4 mit dem Fall `AΣ\u1ACFA` als benannte oder behobene Grenze; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und Ergebnis PR mit Nachweisen öffnen; danach Holgers Abnahme von TASK-102 bis TASK-109.
+**Übergabe:** Ergebnis im Ergebnis PR nach #310 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` setzt den Vorrang der Veröffentlichung nach einer Änderung nicht mehr zurück; Verschieben, Archivieren und Wiederherstellen lassen den gezeigten Stand, Veröffentlichen, Zurückziehen, Übernehmen einer alten Revision und Hinzufügen einer Sprachfassung zählen wie „Entwurf zeigen“ nur für ihre Sprache (Browsertest: Verschieben, Archivieren, Wiederherstellen nach einem veröffentlichten Treffer, danach Englisch veröffentlicht und Entwurf nur über „Entwurf zeigen“; der Test scheitert mit dem Stand von TASK-108). F2: `Nfkc.origins` liefert `Origins` mit Normalform und zwei `int` Feldern, zerlegt in vorab bemessene Felder, ordnet Folgen kombinierender Zeichen durch Zählen ihrer Klassen und setzt an Ort und Stelle zusammen; `SearchSnippet` hält je UTF-16 Einheit nur den Index des Zeichens und besucht die Wörter einzeln. Der Text des Berichts (fast 1 MiB U+FDFA) wird mit 96 MiB Heap markiert, TASK-108 brach mit 256 MiB ab (`aLargeCompatibilityDecompositionIsMarkedWithASmallHeap` startet eine eigene JVM mit 128 MiB). F3: Testersatz ordnet Folgen nach Klassenrang und nimmt Zeichen und Wortgrenzen in Schleifen statt mit Spread (Test mit beiden Texten des Berichts, scheitert vorher mit `RangeError`). F4: Testersatz behandelt die 84 BMP Zeichen, die Java 21 nicht kennt und Node 24 kennt, wie Java (kein Wortteil, keine Kleinschreibung, keine Zerlegung, keine Verbindung); Abgleich der Suchwörter mit `SearchText.terms` für jedes BMP Zeichen in acht Umgebungen (507.648 Texte) ohne Abweichung (vorher 215), der Wortbereiche mit `SearchSnippet.words` für 100.000 Zufallstexte ohne Abweichung außer neben Zeichen außerhalb der BMP (benannte Grenze); Fälle `AΣ\u1ACFA`, `AΣ\uA7F1A`, `AΣ\u0334\u1ACFA` im Test. Läufe: siehe Ergebnis PR. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Nächster Schritt:** Holgers Abnahme von TASK-102 bis TASK-109 (ohne weitere Codex Runde, DEC-139).

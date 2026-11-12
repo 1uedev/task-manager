@@ -729,7 +729,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
   const [chosen, setChosen] = useState<{ readonly pageId: string; readonly language: WikiLanguage } | null>(
     entry.language === undefined ? null : { pageId, language: entry.language });
   // and, when it found the published revision, shows that one first even to who sees the newer draft.
-  const [publishedFirst, setPublishedFirst] = useState(entry.published);
+  const [publishedFirst] = useState(entry.published);
   // The language whose published version the search found; once the person chooses a language in the bar or the offered other
   // version, the found one no longer counts and the published version of the chosen language is shown first (F1 of the Codex
   // review of TASK-106). The draft then still needs its own action.
@@ -750,8 +750,12 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
   const flat = useMemo(() => flatten(nodes), [nodes]);
   const depth = flat.find((row) => row.item.id === pageId)?.depth ?? 1;
 
-  function changed(page: Page, text: string | null, next: Mode = 'read') {
-    setPublishedFirst(false);
+  // A change keeps the entry from a published search hit (F1 of the Codex review of TASK-108): moving, archiving and restoring
+  // leave the shown stage as it is. Only an action on the draft or the publication of one language version (publishing,
+  // withdrawing, taking an old revision over, adding a version) counts as the explicit choice of the draft of that language,
+  // and like "Entwurf zeigen" only for it; every later choice in the language bar opens a published version again.
+  function changed(page: Page, text: string | null, next: Mode = 'read', draftAction = false) {
+    if (draftAction) setDraftLanguage(page.language);
     if (page.language !== wanted) setChosen({ pageId: page.id, language: page.language });
     replace({ value: page, etag: page.draft === null ? null : `"${page.draft.revision}"` });
     setMode(next);
@@ -759,13 +763,13 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
     onTreeChanged();
   }
 
-  async function act(run: PageCall, success: MessageKey, confirmKey: MessageKey | null) {
+  async function act(run: PageCall, success: MessageKey, confirmKey: MessageKey | null, draftAction = false) {
     if (confirmKey !== null && !globalThis.confirm(t(confirmKey))) return;
     setBusy(true);
     const result = await run();
     setBusy(false);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: problem(result.problem) });
-    changed(result.data.value, t(success));
+    changed(result.data.value, t(success), 'read', draftAction);
   }
 
   // A published hit whose version nobody may read any more (F1 of the Codex review of TASK-105): a reader gets 404 once the
@@ -820,7 +824,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
             <h2 className="wiki-title" data-testid="wiki-title" data-stage={stage} lang={hidden ? language : page.language}>{shownTitle}</h2>
             {mode !== 'edit' && (
               <LanguageBar page={page} onChoose={(code) => { setNotice(null); setMode('read'); setFound(undefined); setDraftLanguage(null); setChosen({ pageId: page.id, language: code }); }}
-                onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }))} />
+                onAdded={(added) => changed(added, t('wiki.language.added', { language: t(languageName(added.language)) }), 'read', true)} />
             )}
             {page.fallback && !hidden && (
               <p className="mode-notice" data-testid="wiki-fallback" lang={language}>
@@ -856,7 +860,7 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
                 )}
                 {page.access.publish && !page.archived && page.published !== null && (
                   <button type="button" className="secondary" disabled={busy} data-testid="wiki-withdraw"
-                    onClick={() => void act(() => withdrawWikiPage(api, page.id, page.language), 'wiki.withdrawn', 'wiki.withdrawConfirm')}>{t('wiki.action.withdraw')}</button>
+                    onClick={() => void act(() => withdrawWikiPage(api, page.id, page.language), 'wiki.withdrawn', 'wiki.withdrawConfirm', true)}>{t('wiki.action.withdraw')}</button>
                 )}
                 {drafts && <button type="button" className="secondary" onClick={() => setMode('history')} data-testid="wiki-history-open">{t('wiki.action.history')}</button>}
                 {page.access.edit && !page.archived && roomBelow(depth) && (
@@ -881,14 +885,14 @@ function PageView({ pageId, projectId, projectName, tree, onTreeChanged, entry }
             )}
             {mode === 'publish' && draft !== null && (
               <PublishDialog page={{ ...page, draft }} projectName={projectName} onCancel={() => setMode('read')}
-                onDone={(published) => changed(published, t('wiki.published', { revision: draft.revision }))} />
+                onDone={(published) => changed(published, t('wiki.published', { revision: draft.revision }), 'read', true)} />
             )}
             {mode === 'move' && <MoveForm page={page} tree={nodes} onCancel={() => setMode('read')} onDone={(moved) => changed(moved, t('wiki.moved'))} />}
             {mode === 'create' && <CreateForm projectId={projectId} tree={flat} parentId={page.id} onCancel={() => setMode('read')} />}
             {/* R1 of the follow up review: the history belongs to one page and language version. A change of the version gives a
                 new panel, so a shown revision, a comparison and late answers of the former version are dropped. */}
             {mode === 'history' && (
-              <HistoryPanel key={`${page.id} ${page.language}`} page={page} onRestored={(restored) => changed(restored, null, 'history')} />
+              <HistoryPanel key={`${page.id} ${page.language}`} page={page} onRestored={(restored) => changed(restored, null, 'history', true)} />
             )}
             {(mode === 'read' || mode === 'publish' || mode === 'move' || mode === 'create') && (
               stage === 'draft' && draft !== null

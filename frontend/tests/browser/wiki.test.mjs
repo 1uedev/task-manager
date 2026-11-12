@@ -1005,6 +1005,60 @@ describe('wiki', () => {
     });
   });
 
+  test('moving, archiving and restoring after a published hit keep the published entry in every language (F1 of the Codex review of TASK-108)', async () => {
+    await withApp({
+      as: ANNA,
+      hash: '#/search',
+      prepare: (backend) => {
+        grant(backend, [backend.anna], ['wiki.read', 'wiki.edit', 'wiki.publish']);
+        backend.addWikiPage(backend.anna, 'Oberseite', doc('Oben'), { publish: true });
+        const page = backend.addWikiPage(backend.anna, 'Sprachseite', doc('Deutscher Text'), { publish: true });
+        backend.addWikiLanguage(page, 'en', backend.anna, { title: 'English published', content: doc('Published English text'), publish: true });
+        for (const [language, title, text] of [['de', 'Deutscher Entwurf', 'Entwurfstext'], ['en', 'English draft', 'Draft English text']]) {
+          const saved = backend.wikiCall(backend.anna, 'PUT', `/wiki/pages/${page.id}/draft`, { title, content: doc(text) },
+            { headers: { 'if-match': '"1"' }, query: `language=${language}` });
+          assert.equal(saved.status, 200);
+        }
+      },
+    }, async (app) => {
+      await app.getByRole('radio', { name: 'Wiki' }).check();
+      const form = app.getByRole('search', { name: 'Wiki durchsuchen' });
+      await form.getByLabel('Suchtext').fill('sprachseite');
+      await form.getByLabel('Sprache').selectOption('de');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      const hit = app.getByTestId('wiki-hits').locator('li').first();
+      await hit.waitFor();
+      await hit.getByRole('link').click();
+      await app.getByTestId('wiki-published-shown').waitFor();
+      const published = async (title, text) => {
+        assert.equal(await app.getByTestId('wiki-title').innerText(), title);
+        assert.equal(await app.getByTestId('wiki-title').getAttribute('data-stage'), 'published');
+        assert.match(await app.getByTestId('wiki-content').innerText(), text);
+        assert.doesNotMatch(await app.getByTestId('wiki-page').innerText(), /Deutscher Entwurf|Entwurfstext|English draft|Draft English text/);
+      };
+
+      await app.getByTestId('wiki-move-open').click();
+      await app.getByTestId('wiki-move').getByLabel('Elternseite').selectOption({ label: 'Oberseite' });
+      await app.getByTestId('wiki-move').getByRole('button', { name: 'Verschieben' }).click();
+      await app.getByText('Die Seite ist verschoben.').waitFor();
+      await published('Sprachseite', /Deutscher Text/);
+
+      app.once('dialog', (dialog) => void dialog.accept());
+      await app.getByTestId('wiki-archive').click();
+      await app.getByText('Die Seite ist archiviert.').waitFor();
+      await published('Sprachseite', /Deutscher Text/);
+      await app.getByTestId('wiki-unarchive').click();
+      await app.getByText('Die Seite ist wiederhergestellt.').waitFor();
+      await published('Sprachseite', /Deutscher Text/);
+
+      await app.getByTestId('wiki-languages').getByRole('button', { name: /^Englisch/ }).click();
+      await app.waitForFunction(() => document.querySelector('[data-testid=wiki-title]')?.textContent === 'English published');
+      await published('English published', /Published English text/);
+      await app.getByTestId('wiki-published-shown').getByRole('button', { name: 'Entwurf zeigen' }).click();
+      assert.equal(await app.getByTestId('wiki-title').innerText(), 'English draft', 'the draft still opens by its own action');
+    });
+  });
+
   test('a published hit shows the published title above the published text, also when the draft has another title (TASK-105 R1)', async () => {
     await withApp({
       as: ANNA,
@@ -1175,7 +1229,7 @@ describe('the wiki search of the stand in answers like the server (TASK-105 N1)'
     // a quotation mark between letters, a comma between numbers and a format character beside a hyphen do not.
     for (const [title, word] of [['A\u03A31A', 'a\u03C31a'], ['A\u03A3-A', 'a\u03C3'], ['A\u03A3_A', 'a\u03C3'], ['A\u03A3 A', 'a\u03C2'], ['A1\u03A3', 'a1\u03C2'],
       ['A\u03A3:A', 'a\u03C2'], ['A\u03A3\u00B7A', 'a\u03C2'], ['A\u03A3"A', 'a\u03C3'], ['A1\u03A3,1', 'a1\u03C2'], ['A\u03A31,1A', 'a\u03C31'],
-      ['A\u03A3\u2060-A', 'a\u03C3']]) {
+      ['A\u03A3\u2060-A', 'a\u03C3'], ['A\u03A3\u1ACFA', 'a\u03C2'], ['A\u03A3\uA7F1A', 'a\u03C2'], ['A\u03A3\u0334\u1ACFA', 'a\u03C2']]) {
       const own = setup();
       own.addWikiPage(own.anna, title, doc('Text'), { publish: true });
       const found = search(own, `q=${encodeURIComponent(word)}`).body;
@@ -1184,8 +1238,10 @@ describe('the wiki search of the stand in answers like the server (TASK-105 N1)'
       const other = word.replace(/[\u03C2\u03C3]/, (ch) => (ch === '\u03C2' ? '\u03C3' : '\u03C2'));
       assert.equal(search(own, `q=${encodeURIComponent(other)}`).body.total, 0, `${title} ${other}`);
     }
-    // The limit of the stand in: compared with Java 21 for every character of the BMP beside a sigma and for 200,000 random
-    // texts without a difference; a character outside the BMP beside a sigma can still differ, the server alone is the measure.
+    // F4 of the Codex review of TASK-108: U+1ACF and U+A7F1 are unassigned in Java 21 but known to newer JavaScript engines;
+    // the stand in treats them as Java does. The limit of the stand in: compared with Java 21 for every character of the BMP in
+    // eight contexts (507,648 texts) and for 100,000 random texts with such characters without a difference; a character outside
+    // the BMP beside a sigma can still differ, the server alone is the measure.
   });
 
   test('several words of one character and its marks keep their own places (F3 of the Codex review of TASK-107)', () => {
@@ -1197,6 +1253,20 @@ describe('the wiki search of the stand in answers like the server (TASK-105 N1)'
       const found = search(backend, `q=${encodeURIComponent(query)}`).body;
       assert.equal(found.total, 1, `${title} ${query}`);
       assert.deepEqual(found.items[0].titleMarks, marks, `${title} ${query}`);
+    }
+  });
+
+  test('a long word and a long run of marks are searched and marked without exceeding the call stack (F3 of the Codex review of TASK-108)', () => {
+    for (const [text, query, marked] of [[`wort ${'x'.repeat(150_000)}`, 'wort', 'wort'],
+      [`wort A${'\u0334'.repeat(150_000)}\u0301`, '\u00E1', `A${'\u0334'.repeat(150_000)}\u0301`]]) {
+      const backend = setup();
+      backend.addWikiPage(backend.anna, 'Langtext', doc(text), { publish: true });
+      const found = search(backend, `q=${encodeURIComponent(query)}`);
+      assert.equal(found.status, 200);
+      assert.equal(found.body.total, 1, query);
+      const { snippet } = found.body.items[0];
+      assert.equal(snippet.marks.length, 1, query);
+      assert.equal(snippet.text.slice(snippet.marks[0].start, snippet.marks[0].end), marked.slice(0, snippet.marks[0].end - snippet.marks[0].start));
     }
   });
 

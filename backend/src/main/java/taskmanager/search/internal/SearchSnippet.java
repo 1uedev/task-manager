@@ -68,17 +68,21 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
         if (text == null || text.isEmpty() || words.isEmpty()) {
             return marks;
         }
-        for (Word word : words(text)) {
-            if (words.stream().noneMatch(word.text()::startsWith)) {
-                continue;
+        each(text, (folded, start, end, place) -> {
+            boolean hit = false;
+            for (String word : words) {
+                hit |= word.length() <= end - start && folded.startsWith(word, start);
             }
-            Mark mark = word.place();
+            if (!hit) {
+                return;
+            }
+            Mark mark = place;
             if (!marks.isEmpty() && mark.start() < marks.getLast().end()) {
                 Mark last = marks.removeLast();
                 mark = new Mark(Math.min(last.start(), mark.start()), Math.max(last.end(), mark.end()));
             }
             marks.add(mark);
-        }
+        });
         return marks;
     }
 
@@ -92,9 +96,23 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
      */
     static List<Word> words(String text) {
         List<Word> found = new ArrayList<>();
+        each(text, (folded, start, end, place) -> found.add(new Word(folded.substring(start, end), place)));
+        return found;
+    }
+
+    /** One word of the normal form: its units from {@code start} to {@code end} and its original characters. */
+    private interface WordVisitor {
+        void visit(String folded, int start, int end, Mark place);
+    }
+
+    /**
+     * Visits the words of {@link #words} one after the other without keeping them, so that a long text with many words holds
+     * no object per word (F2 of the Codex review of TASK-108).
+     */
+    private static void each(String text, WordVisitor visitor) {
         Normal normal = text == null || text.isEmpty() ? null : Normal.of(text);
         if (normal == null) {
-            return found;
+            return;
         }
         String folded = normal.text();
         int i = 0;
@@ -110,14 +128,13 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
             while (i < folded.length() && wordPart(folded.codePointAt(i))) {
                 int units = Character.charCount(folded.codePointAt(i));
                 for (int k = i; k < i + units; k++) {
-                    markStart = Math.min(markStart, normal.from()[k]);
-                    markEnd = Math.max(markEnd, normal.to()[k]);
+                    markStart = Math.min(markStart, normal.from(k));
+                    markEnd = Math.max(markEnd, normal.to(k));
                 }
                 i += units;
             }
-            found.add(new Word(folded.substring(start, i), new Mark(markStart, markEnd)));
+            visitor.visit(folded, start, i, new Mark(markStart, markEnd));
         }
-        return found;
     }
 
     /** The normal form the marks search in, for tests: the same words as {@link SearchText#terms}. */
@@ -142,34 +159,41 @@ public record SearchSnippet(String text, List<Mark> marks, boolean cutStart, boo
      * the index; per character it only gives the places. {@code null} when this form is not exactly that of the index: then
      * nothing is marked rather than words of another form.
      */
-    private record Normal(String text, int[] from, int[] to) {
+    private record Normal(String text, int[] owner, int[] starts, int[] ends) {
         static Normal of(String original) {
-            List<int[]> characters = Nfkc.origins(original);
-            if (characters == null) {
+            Nfkc.Origins origins = Nfkc.origins(original);
+            if (origins == null) {
                 return null;
             }
-            List<int[]> places = new ArrayList<>();
-            StringBuilder whole = new StringBuilder(original.length());
-            for (int[] character : characters) {
-                whole.appendCodePoint(character[0]);
-                String lower = new String(Character.toChars(character[0])).toLowerCase(Locale.ROOT);
-                for (int unit = 0; unit < lower.length(); unit++) {
-                    places.add(character);
+            String whole = origins.text();
+            String text = whole.toLowerCase(Locale.ROOT);
+            // For every UTF-16 unit of the lower case text the code point of the normal form it comes from (F2 of the Codex review
+            // of TASK-108): one array of int instead of an object per unit.
+            int[] owner = new int[text.length()];
+            int unit = 0;
+            int index = 0;
+            for (int i = 0; i < whole.length(); index++) {
+                int codePoint = whole.codePointAt(i);
+                i += Character.charCount(codePoint);
+                int units = codePoint < 0x80 ? 1 : new String(Character.toChars(codePoint)).toLowerCase(Locale.ROOT).length();
+                // In the root locale only the final sigma depends on its neighbours, and it keeps the length; should another rule
+                // ever change the length, the places no longer fit and nothing is marked.
+                if (unit + units > owner.length) {
+                    return null;
+                }
+                for (int k = 0; k < units; k++) {
+                    owner[unit++] = index;
                 }
             }
-            String text = whole.toString().toLowerCase(Locale.ROOT);
-            // In the root locale only the final sigma depends on its neighbours, and it keeps the length; should another rule
-            // ever change the length, the places no longer fit and nothing is marked.
-            if (text.length() != places.size()) {
-                return null;
-            }
-            int[] from = new int[places.size()];
-            int[] to = new int[places.size()];
-            for (int k = 0; k < from.length; k++) {
-                from[k] = places.get(k)[1];
-                to[k] = places.get(k)[2];
-            }
-            return new Normal(text, from, to);
+            return unit == owner.length ? new Normal(text, owner, origins.starts(), origins.ends()) : null;
+        }
+
+        int from(int unit) {
+            return starts[owner[unit]];
+        }
+
+        int to(int unit) {
+            return ends[owner[unit]];
         }
     }
 

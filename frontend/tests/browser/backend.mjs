@@ -2453,7 +2453,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // the word, while : and · end it. Cased are the cased letters and the few others Java counts. This was compared with Java 21
   // for every BMP character and for 200,000 random texts without a difference; characters outside the BMP next to a sigma
   // still differ, as the JDK takes them apart by code units.
-  const javaCased = (ch) => /[\p{Ll}\p{Lu}\p{Lt}ʕʰ-ʸˀˁˠ-ˤͅͺᴬ-ᵡⅠ-ⅿ]/u.test(ch);
+  // Characters of the BMP that Java 21 knows as unassigned (Unicode 15.0) while newer JavaScript engines know them, such as
+  // U+1ACF, a combining mark in Unicode 17.0 (F4 of the Codex review of TASK-108): the list is the difference of the general
+  // category of Java 21 and Node 24 for every BMP character. The stand in treats them as Java does, as characters that are no
+  // word part, have no case and no decomposition and never combine; an engine that does not know them either is not affected.
+  const javaUnknownRanges = '\\u088F\\u0897\\u0C5C\\u0CDC\\u1ACF-\\u1ADD\\u1AE0-\\u1AEB\\u1B4E-\\u1B4F\\u1B7F\\u1C89-\\u1C8A\\u20C1'
+    + '\\u2427-\\u2429\\u2B96\\u2FFC-\\u2FFF\\u31E4-\\u31E5\\u31EF\\uA7CB-\\uA7CF\\uA7D2\\uA7D4\\uA7DA-\\uA7DC\\uA7F1\\uFBC3-\\uFBD2'
+    + '\\uFD90-\\uFD91\\uFDC8-\\uFDCE';
+  const javaUnknown = new RegExp(`[${javaUnknownRanges}]`, 'u');
+  const javaUnknownSplit = new RegExp(`([${javaUnknownRanges}])`, 'u');
+  const javaWordRun = new RegExp(`[[\\p{L}\\p{N}]--[${javaUnknownRanges}]]+`, 'gv');
+  const javaNonWordRun = new RegExp(`[^[\\p{L}\\p{N}]--[${javaUnknownRanges}]]+`, 'v');
+  // NFKC as Java 21: the characters it does not know stay as they are and, as starters, keep the parts around them apart.
+  const javaNormalize = (text, form = 'NFKC') => text.split(javaUnknownSplit).map((part, index) => (index % 2 === 1 ? part : part.normalize(form))).join('');
+  const javaCased = (ch) => !javaUnknown.test(ch) && /[\p{Ll}\p{Lu}\p{Lt}ʕʰ-ʸˀˁˠ-ˤͅͺᴬ-ᵡⅠ-ⅿ]/u.test(ch);
   const javaBreaks = /[々ぁ-ゔゝゞァ-ヺー-ヾ一-龥豈-鶴]/u;
   const javaMidLetter = "\"'-._­֊־᐀᠆‐‑‒–—―‧‿⁀⁔⸗⸚⸺⸻"
     + '⹀⹝〜〰゠︱︲︳︴﹍﹎﹏﹘﹣－＿';
@@ -2467,7 +2480,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         kinds.push('format');
         return;
       }
-      if (ch.codePointAt(0) >= 0x10000 || ch === '­' || javaBreaks.test(ch)) kinds.push('break');
+      if (ch.codePointAt(0) >= 0x10000 || ch === '­' || javaBreaks.test(ch) || javaUnknown.test(ch)) kinds.push('break');
       else if (/\p{M}/u.test(ch)) kinds.push(base >= 0 && (kinds[base] === 'letter' || kinds[base] === 'number') ? kinds[base] : 'break');
       else if (/\p{L}/u.test(ch)) kinds.push('letter');
       else if (/\p{N}/u.test(ch)) kinds.push('number');
@@ -2493,10 +2506,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       for (let at = index + step; inWord[at]; at += step) if (javaCased(chars[at])) return true;
       return false;
     };
-    return chars.map((ch, index) => (ch !== 'Σ' ? ch.toLowerCase()
+    return chars.map((ch, index) => (ch !== 'Σ' ? (javaUnknown.test(ch) ? ch : ch.toLowerCase())
       : casedAround(index, -1) && !casedAround(index, 1) ? 'ς' : 'σ')).join('');
   };
-  const searchWords = (text) => javaLower(text.normalize('NFKC')).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const searchWords = (text) => javaLower(javaNormalize(text)).split(javaNonWordRun).filter(Boolean);
   // As SearchText.indexTerms: the indexed words of a long text stop after 200,000 bytes in UTF-8, after a whole word.
   const indexWords = (text) => {
     const kept = [];
@@ -2510,7 +2523,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   };
   // As SearchText.parse: the limits count code points after NFKC.
   const searchTextInvalid = (q) => {
-    const text = javaStrip(q.normalize('NFKC'));
+    const text = javaStrip(javaNormalize(q));
     const words = searchWords(text);
     return [...text].length > 200 || words.length > 10 || words.some((word) => [...word].length > 50);
   };
@@ -2525,13 +2538,21 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const decomposed = [];
     for (let index = 0; index < text.length;) {
       const end = index + String.fromCodePoint(text.codePointAt(index)).length;
-      for (const part of text.slice(index, end).normalize('NFKD')) decomposed.push([part.codePointAt(0), index, end]);
+      for (const part of javaNormalize(text.slice(index, end), 'NFKD')) decomposed.push([part.codePointAt(0), index, end]);
       index = end;
     }
-    const swaps = (first, second) => first !== second
-      && String.fromCodePoint(first, second).normalize('NFD') === String.fromCodePoint(second, first);
-    const nonStarter = (codePoint) => codePoint >= 0x300 && (swaps(0x301, codePoint) || swaps(codePoint, 0x334));
+    const swapped = new Map();
+    const swaps = (first, second) => {
+      if (first === second) return false;
+      const key = `${first} ${second}`;
+      if (!swapped.has(key)) swapped.set(key, String.fromCodePoint(first, second).normalize('NFD') === String.fromCodePoint(second, first));
+      return swapped.get(key);
+    };
+    const nonStarter = (codePoint) => codePoint >= 0x300 && !javaUnknown.test(String.fromCodePoint(codePoint))
+      && (swaps(0x301, codePoint) || swaps(codePoint, 0x334));
     const order = (first, second) => (swaps(first, second) ? 1 : swaps(second, first) ? -1 : 0);
+    // A run is ordered by the rank of the class of its distinct marks, stable, and taken over one by one: a spread of a long run
+    // into push would pass one argument per mark and exceed the call stack (F3 of the Codex review of TASK-108).
     const ordered = [];
     for (let index = 0; index < decomposed.length;) {
       if (!nonStarter(decomposed[index][0])) {
@@ -2541,10 +2562,15 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       }
       const run = [];
       while (index < decomposed.length && nonStarter(decomposed[index][0])) run.push(decomposed[index++]);
-      ordered.push(...run.sort((first, second) => order(first[0], second[0])));
+      const distinct = [...new Set(run.map(([codePoint]) => codePoint))].sort(order);
+      const rank = new Map();
+      distinct.forEach((codePoint, position) => rank.set(codePoint,
+        position > 0 && order(distinct[position - 1], codePoint) === 0 ? rank.get(distinct[position - 1]) : position));
+      run.sort((first, second) => rank.get(first[0]) - rank.get(second[0]));
+      for (const character of run) ordered.push(character);
     }
     const compose = (starter, next) => {
-      const pair = String.fromCodePoint(starter, next).normalize('NFC');
+      const pair = javaNormalize(String.fromCodePoint(starter, next), 'NFC');
       return [...pair].length === 1 ? pair.codePointAt(0) : -1;
     };
     const result = [];
@@ -2569,7 +2595,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
         last = next;
       }
     }
-    return result.map(([codePoint]) => String.fromCodePoint(codePoint)).join('') === text.normalize('NFKC') ? result : null;
+    return result.map(([codePoint]) => String.fromCodePoint(codePoint)).join('') === javaNormalize(text) ? result : null;
   };
   const searchWordPlaces = (text) => {
     const origins = nfkcOrigins(text);
@@ -2579,13 +2605,20 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     for (const [codePoint, from, to] of origins) {
       const ch = String.fromCodePoint(codePoint);
       whole += ch;
-      for (let unit = 0; unit < ch.toLowerCase().length; unit += 1) units.push({ from, to });
+      for (let unit = 0; unit < (javaUnknown.test(ch) ? 1 : ch.toLowerCase().length); unit += 1) units.push({ from, to });
     }
     const folded = javaLower(whole);
     if (folded.length !== units.length) return [];
-    return [...folded.matchAll(/[\p{L}\p{N}]+/gu)].map((match) => {
-      const covered = units.slice(match.index, match.index + match[0].length);
-      return { word: match[0], start: Math.min(...covered.map((place) => place.from)), end: Math.max(...covered.map((place) => place.to)) };
+    // The first and last original character of a word in a loop: a spread of a long word into Math.min would pass one argument
+    // per unit and exceed the call stack (F3 of the Codex review of TASK-108).
+    return [...folded.matchAll(javaWordRun)].map((match) => {
+      let start = Infinity;
+      let end = 0;
+      for (let unit = match.index; unit < match.index + match[0].length; unit += 1) {
+        start = Math.min(start, units[unit].from);
+        end = Math.max(end, units[unit].to);
+      }
+      return { word: match[0], start, end };
     });
   };
   const searchMarks = (text, words) => {
