@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-106](#task-106-befunde-der-codex-prüfung-von-task-105-beheben-a14) | Befunde der Codex Prüfung von TASK-105 beheben (A14) | claude-20261112-search-03 | 2026-11-12 |
 
 ### Blockiert – BLOCKIERT
 
@@ -161,3 +163,24 @@ Nicht Teil: neue Regeln, TASK-104.
 **Übergabe:** Ergebnis im PR zu Branch claude/project-thread-hulabb, ohne Migration, Vertrag `contracts/search.openapi.yaml` 0.5.0, Beschreibung in backend/README.md (Abschnitt „Übersicht „Alle“ und Schnellsuche“), DEC-134 mit den Auslegungen (1) bis (6). Nachweise: Kriterium 1 und 2 in `SearchOverviewApiTest` (7 Fälle: vier Bereiche mit einem Wort und ohne Entwurf, Bereiche ohne Recht, fünf Treffer mit Anzahl, Direkttreffer für Ticket, Anforderung und Projekt, nicht lesbare Kennung wie unbekannte, Projektschlüssel vorn, 400 und 401) und `search-overview.test.mjs` (6 Fälle: „Alle“ mit vier Bereichen, fehlende Bereiche, „Alle anzeigen“, „/“, Direktöffnen, nicht lesbare Kennung führt zu „Alle“). Kriterium 3 in docs/DEMO.md (Abschnitt „Messung mit Wiki, Anforderungen und Übersicht“) und docs/measurements/task-104: Servermessung 5.415 Aktionen ohne Fehler, alle 22 Klassen im Ziel nach Regel 6, „Alle“ p95 269 ms; Browsermessung je 200 Werte, alle p95 unter 1 s, „Alle“ 320 ms; jeweils p50, p95, p99 statt Mittelwerten. Abweichung: Messung mit dem Jar (Java 21, PostgreSQL 16) auf der Maschine statt im Image, weil Docker Hub drosselte. Kriterium 4: `SearchContractTest` mit fünf Routen, voller Backendlauf 629 Tests, Frontend `npm run verify` und 282 Browsertests grün.
 
 **Nächster Schritt:** Prüfung durch Codex (Auftrag im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-105.
+
+## TASK-106 Befunde der Codex Prüfung von TASK-105 beheben (A14)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-03 · **Aktualisiert:** 2026-11-12
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-135; docs/REVIEW_TASK-105_PR-302.md. **Abhängigkeiten:** TASK-105 (PR #302) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-105 in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-106“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-136, keine Migration geplant.
+
+**Umfang:** Befunde F1 bis F3 und Hinweis H2 aus docs/REVIEW_TASK-105_PR-302.md:
+1. F1: Wer eine veröffentlichte Wikiseite aus der Suche öffnet, deren gefundene Fassung inzwischen zurückgezogen ist, sieht auch mit reinem Leserecht einen Hinweis statt eines Fehlers oder einer stillen Ersatzfassung; eine andere veröffentlichte Sprachfassung öffnet sich nur über eine ausdrückliche Aktion.
+2. F2: Markierungen in Titel und Ausschnitt folgen der Normalisierung des Index auch für Zeichenfolgen, die NFKC zusammensetzt (Hangul Kompatibilitätsjamo), und für die Kleinschreibung im Wortzusammenhang (Schluss Sigma); gilt für Wiki und Anforderungen.
+3. F3: Der Testersatz behandelt einen Suchtext aus U+FEFF wie der Server.
+4. H2: Der Test des Archivpfads nutzt je Stufe einen eigenen Titel der Wurzel.
+
+Nicht Teil: neue Regeln, H1 des Berichts.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 mit Browsertests für ein reines Lesekonto: nur die gefundene Fassung zurückgezogen, und zusätzlich eine andere veröffentlichte Sprachfassung vorhanden.
+2. F2 mit Unit Tests (jedes Indexwort wird markiert, auch für ㄱㅏ und İ ΟΣ) und einem API Test bei Anforderungen.
+3. F3 mit Test am Testersatz; H2 im bestehenden API Test; bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
