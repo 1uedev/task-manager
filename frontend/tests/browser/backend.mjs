@@ -2445,27 +2445,56 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // The text of a link to a wiki page is left out, a space keeps the words around it apart (as WikiDocument.plainText).
   const wikiPlain = (node) => node.type === 'text' ? ((node.marks ?? []).some((mark) => mark.type === 'link' && /^wiki:/.test(mark.attrs?.href ?? '')) ? ' ' : node.text)
     : node.type === 'hardBreak' ? '\n' : node.type === 'image' ? '' : (node.content ?? []).map(wikiPlain).join('') + (node.type === 'doc' ? '' : '\n');
-  // Lower case as Java's toLowerCase(Locale.ROOT) on the server: only the sigma depends on its neighbours, and Java decides a
-  // final sigma within a word of its word break rules, where digits, marks and one of - _ . ' : · or the soft hyphen between two
-  // word characters stay inside the word (F4 of the Codex review of TASK-106: AΣ1A gives aσ1a as in Java, not aς1a). This follows
-  // the cases compared with Java 21 in wiki.test.mjs; it is no full copy of the word break rules.
-  const javaCased = (ch) => /[\p{Lowercase}\p{Uppercase}\p{Lt}]/u.test(ch);
-  const javaWordCharacter = (ch) => ch !== "\u00ad" && /[\p{L}\p{N}\p{M}\p{Cf}]/u.test(ch) && !/[\p{Script=Han}]/u.test(ch);
-  const javaMidCharacter = (ch) => "-_.':\u00b7\u00ad".includes(ch);
+  // Lower case as Java's toLowerCase(Locale.ROOT) on the server: only the sigma depends on its neighbours. Java decides a final
+  // sigma within a word of the word break rules of the JDK, which are not those of Unicode (F4 of the Codex reviews of TASK-106
+  // and TASK-107). Letters and numbers of the BMP are word characters, except the ideographs and kana the JDK lists apart;
+  // a combining mark belongs to the letter or number before it, a format character is passed over; a single mid letter
+  // character such as - _ . ' between two letters and a mid number character such as , . ' between two numbers stay inside
+  // the word, while : and · end it. Cased are the cased letters and the few others Java counts. This was compared with Java 21
+  // for every BMP character and for 200,000 random texts without a difference; characters outside the BMP next to a sigma
+  // still differ, as the JDK takes them apart by code units.
+  const javaCased = (ch) => /[\p{Ll}\p{Lu}\p{Lt}ʕʰ-ʸˀˁˠ-ˤͅͺᴬ-ᵡⅠ-ⅿ]/u.test(ch);
+  const javaBreaks = /[々ぁ-ゔゝゞァ-ヺー-ヾ一-龥豈-鶴]/u;
+  const javaMidLetter = "\"'-._­֊־᐀᠆‐‑‒–—―‧‿⁀⁔⸗⸚⸺⸻"
+    + '⹀⹝〜〰゠︱︲︳︴﹍﹎﹏﹘﹣－＿';
+  const javaMidNumber = "\"',.٫";
   const javaLower = (text) => {
     const chars = [...text];
-    const inWord = (index, step) => {
-      const ch = chars[index];
-      if (ch === undefined) return false;
-      if (javaWordCharacter(ch)) return true;
-      return javaMidCharacter(ch) && chars[index + step] !== undefined && javaWordCharacter(chars[index + step]);
+    const kinds = [];
+    let base = -1;
+    chars.forEach((ch, index) => {
+      if (ch !== '­' && /\p{Cf}/u.test(ch)) {
+        kinds.push('format');
+        return;
+      }
+      if (ch.codePointAt(0) >= 0x10000 || ch === '­' || javaBreaks.test(ch)) kinds.push('break');
+      else if (/\p{M}/u.test(ch)) kinds.push(base >= 0 && (kinds[base] === 'letter' || kinds[base] === 'number') ? kinds[base] : 'break');
+      else if (/\p{L}/u.test(ch)) kinds.push('letter');
+      else if (/\p{N}/u.test(ch)) kinds.push('number');
+      else kinds.push('break');
+      base = index;
+    });
+    const near = (index, step) => {
+      let at = index + step;
+      while (kinds[at] === 'format') at += step;
+      return kinds[at];
     };
+    const inWord = [];
+    chars.forEach((ch, index) => {
+      if (kinds[index] === 'format') {
+        inWord.push(inWord.length > 0 && inWord.at(-1));
+        return;
+      }
+      inWord.push(kinds[index] !== 'break'
+        || (javaMidLetter.includes(ch) && near(index, -1) === 'letter' && near(index, 1) === 'letter')
+        || (javaMidNumber.includes(ch) && near(index, -1) === 'number' && near(index, 1) === 'number'));
+    });
     const casedAround = (index, step) => {
-      for (let at = index + step; inWord(at, step); at += step) if (javaCased(chars[at])) return true;
+      for (let at = index + step; inWord[at]; at += step) if (javaCased(chars[at])) return true;
       return false;
     };
-    return chars.map((ch, index) => (ch !== '\u03a3' ? ch.toLowerCase()
-      : casedAround(index, -1) && !casedAround(index, 1) ? '\u03c2' : '\u03c3')).join('');
+    return chars.map((ch, index) => (ch !== 'Σ' ? ch.toLowerCase()
+      : casedAround(index, -1) && !casedAround(index, 1) ? 'ς' : 'σ')).join('');
   };
   const searchWords = (text) => javaLower(text.normalize('NFKC')).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   // As SearchText.indexTerms: the indexed words of a long text stop after 200,000 bytes in UTF-8, after a whole word.
@@ -2487,54 +2516,87 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   };
   // javaStrip above trims like Java: U+FEFF or a non-breaking space stay, unlike trim() in JavaScript (F3 of the Codex review
   // of TASK-105), so such a text is a given search without words that finds nothing, as on the server.
-  // As SearchSnippet.marks (TASK-105 R3, F2 and F3 of the Codex reviews of TASK-105 and TASK-106): the text is cut into
-  // segments at the boundaries of the normalization, a segment starting at a character whose decomposition starts with no
-  // combining mark and no conjoining vowel or final jamo; the letters of a segment come from its shortest beginning that gives
-  // them all, found by halving. Lower case over the whole text as Java gives it; per segment it only gives the places.
-  const startsSegment = (codePoint) => {
-    if (codePoint < 0x300) return true;
-    const first = String.fromCodePoint(codePoint).normalize('NFKD').codePointAt(0);
-    return !/\p{M}/u.test(String.fromCodePoint(first)) && !(first >= 0x1160 && first <= 0x11ff) && !(first >= 0xd7b0 && first <= 0xd7ff);
+  // As Nfkc.origins and SearchSnippet.marks (TASK-105 R3, F3 of the Codex reviews of TASK-105 to TASK-107): NFKC of the whole
+  // text with the original characters each character of the normal form is made of. Every character is decomposed on its own,
+  // each run of marks is put into canonical order by a stable sort, and a starter joins each following character that is not
+  // blocked and composes with it; the combining class is compared through NFD as on the server. A word is marked from the first
+  // to the last original character of its own; lower case over the whole text as Java gives it, per character for the places.
+  const nfkcOrigins = (text) => {
+    const decomposed = [];
+    for (let index = 0; index < text.length;) {
+      const end = index + String.fromCodePoint(text.codePointAt(index)).length;
+      for (const part of text.slice(index, end).normalize('NFKD')) decomposed.push([part.codePointAt(0), index, end]);
+      index = end;
+    }
+    const swaps = (first, second) => first !== second
+      && String.fromCodePoint(first, second).normalize('NFD') === String.fromCodePoint(second, first);
+    const nonStarter = (codePoint) => codePoint >= 0x300 && (swaps(0x301, codePoint) || swaps(codePoint, 0x334));
+    const order = (first, second) => (swaps(first, second) ? 1 : swaps(second, first) ? -1 : 0);
+    const ordered = [];
+    for (let index = 0; index < decomposed.length;) {
+      if (!nonStarter(decomposed[index][0])) {
+        ordered.push(decomposed[index]);
+        index += 1;
+        continue;
+      }
+      const run = [];
+      while (index < decomposed.length && nonStarter(decomposed[index][0])) run.push(decomposed[index++]);
+      ordered.push(...run.sort((first, second) => order(first[0], second[0])));
+    }
+    const compose = (starter, next) => {
+      const pair = String.fromCodePoint(starter, next).normalize('NFC');
+      return [...pair].length === 1 ? pair.codePointAt(0) : -1;
+    };
+    const result = [];
+    let starter = -1;
+    let last = null;
+    for (const next of ordered) {
+      const nextStarter = !nonStarter(next[0]);
+      if (starter >= 0) {
+        const blocked = last !== null && (nextStarter || !nonStarter(last[0]) || order(last[0], next[0]) >= 0);
+        const composite = blocked ? -1 : compose(result[starter][0], next[0]);
+        if (composite >= 0) {
+          const joined = result[starter];
+          result[starter] = [composite, Math.min(joined[1], next[1]), Math.max(joined[2], next[2])];
+          continue;
+        }
+      }
+      result.push([...next]);
+      if (nextStarter) {
+        starter = result.length - 1;
+        last = null;
+      } else {
+        last = next;
+      }
+    }
+    return result.map(([codePoint]) => String.fromCodePoint(codePoint)).join('') === text.normalize('NFKC') ? result : null;
   };
-  const letters = (text) => (text.match(/[\p{L}\p{N}]/gu) ?? []).join('');
+  const searchWordPlaces = (text) => {
+    const origins = nfkcOrigins(text);
+    if (origins === null) return [];
+    const units = [];
+    let whole = '';
+    for (const [codePoint, from, to] of origins) {
+      const ch = String.fromCodePoint(codePoint);
+      whole += ch;
+      for (let unit = 0; unit < ch.toLowerCase().length; unit += 1) units.push({ from, to });
+    }
+    const folded = javaLower(whole);
+    if (folded.length !== units.length) return [];
+    return [...folded.matchAll(/[\p{L}\p{N}]+/gu)].map((match) => {
+      const covered = units.slice(match.index, match.index + match[0].length);
+      return { word: match[0], start: Math.min(...covered.map((place) => place.from)), end: Math.max(...covered.map((place) => place.to)) };
+    });
+  };
   const searchMarks = (text, words) => {
     if (words.length === 0) return [];
-    const units = [];
-    let joined = '';
-    for (let i = 0; i < text.length;) {
-      const start = i;
-      i += String.fromCodePoint(text.codePointAt(i)).length;
-      while (i < text.length && !startsSegment(text.codePointAt(i))) i += String.fromCodePoint(text.codePointAt(i)).length;
-      const normal = text.slice(start, i).normalize('NFKC');
-      let wordEnd = i;
-      const first = start + String.fromCodePoint(text.codePointAt(start)).length;
-      if (first < i && letters(normal) !== '') {
-        const positions = [first];
-        for (const ch of text.slice(first, i)) positions.push(positions.at(-1) + ch.length);
-        let low = 0;
-        let high = positions.length - 1;
-        while (low < high) {
-          const middle = (low + high) >>> 1;
-          if (letters(text.slice(start, positions[middle]).normalize('NFKC')) === letters(normal)) high = middle;
-          else low = middle + 1;
-        }
-        wordEnd = positions[low];
-      }
-      for (const ch of normal.toLowerCase()) {
-        const place = /[\p{L}\p{N}]/u.test(ch) ? { from: start, to: wordEnd } : { from: start, to: i };
-        for (let unit = 0; unit < ch.length; unit += 1) units.push(place);
-      }
-      joined += normal;
-    }
-    const whole = javaLower(joined);
-    const folded = whole.length === units.length ? whole : [...joined].map((ch) => ch.toLowerCase()).join('');
     const marks = [];
-    for (const match of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
-      if (!words.some((word) => match[0].startsWith(word))) continue;
-      let mark = { start: units[match.index].from, end: units[match.index + match[0].length - 1].to };
+    for (const place of searchWordPlaces(text)) {
+      if (!words.some((word) => place.word.startsWith(word))) continue;
+      let mark = { start: place.start, end: place.end };
       if (marks.length > 0 && mark.start < marks.at(-1).end) {
         const last = marks.pop();
-        mark = { start: last.start, end: Math.max(last.end, mark.end) };
+        mark = { start: Math.min(last.start, mark.start), end: Math.max(last.end, mark.end) };
       }
       marks.push(mark);
     }

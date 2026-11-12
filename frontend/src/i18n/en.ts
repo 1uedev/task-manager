@@ -1407,6 +1407,8 @@ export const en: Record<MessageKey, Message> = {
   'wiki.publishedGoneUnavailable': 'The search found a published version that is no longer available to you.',
   'wiki.showAvailable': 'Show the {language} version',
   'wiki.publishedGoneTitle': 'No longer published',
+  'wiki.unpublishedTitle': 'Not published',
+  'wiki.unpublishedChosen': 'This language version is not published.',
   'wiki.draftShown': 'You see the draft (revision {revision}). Readers see it only after publication.',
   'wiki.status.published': 'Published: revision {revision} by {person} on {time}.',
   'wiki.status.publishedLanguage': 'The {language} version is published: revision {revision} by {person} on {time}.',

@@ -155,6 +155,26 @@ class SearchSnippetTest {
     }
 
     /**
+     * F3 of the Codex review of TASK-107: where one character and the marks after it give several words of the index, each word
+     * is marked at its own original characters, counted in UTF-16 units also after a character outside the BMP.
+     */
+    @Test
+    void severalWordsOfOneCharacterAndItsMarksKeepTheirOwnPlaces() {
+        assertEquals("1 2\u1161", SearchText.terms("\u00BD\u1161"));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 1)), SearchSnippet.marks("\u00BD\u1161", List.of("1")));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 2)), SearchSnippet.marks("\u00BD\u1161", List.of("2\u1161")));
+        assertEquals("\u0E01 \u0E32", SearchText.terms("\u0E01\u0E33"));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 1)), SearchSnippet.marks("\u0E01\u0E33", List.of("\u0E01")));
+        assertEquals(List.of(new SearchSnippet.Mark(1, 2)), SearchSnippet.marks("\u0E01\u0E33", List.of("\u0E32")));
+        String astral = "\uD801\uDC00\u0334\u1161";
+        assertEquals(List.of(new SearchSnippet.Mark(3, 4)), SearchSnippet.marks(astral, List.of("\u1161")));
+        assertEquals(List.of(new SearchSnippet.Mark(0, 2)), SearchSnippet.marks(astral, List.of("\uD801\uDC28")));
+        // A letter composed only after a run of marks covers the run up to the mark it composes with.
+        String late = "A\u0334\u0334\u0301 x";
+        assertEquals(List.of(new SearchSnippet.Mark(0, 4)), SearchSnippet.marks(late, List.of("\u00E1")));
+    }
+
+    /**
      * F3 of the Codex review of TASK-106: for many random texts of characters that compose, reorder, decompose, grow in lower
      * case or lie outside the BMP, the normal form of the marks has exactly the words of the index, and every word is marked
      * at original characters whose normal form holds it.
@@ -181,7 +201,34 @@ class SearchSnippetTest {
                     Normalizer.Form.NFKC).toLowerCase(java.util.Locale.ROOT)).contains(sigma(term)));
                 assertTrue(holds, term + " in " + escaped(original) + " " + marks);
             }
+            exactPlaces(original);
         }
+    }
+
+    /**
+     * F3 of the Codex review of TASK-107: the place of every word is exact. Its original characters give the word, and without
+     * the first or the last of them the word is no longer there.
+     */
+    private static void exactPlaces(String original) {
+        List<SearchSnippet.Word> found = SearchSnippet.words(original);
+        List<String> terms = SearchText.terms(original).isEmpty() ? List.of() : List.of(SearchText.terms(original).split(" "));
+        assertEquals(terms, found.stream().map(SearchSnippet.Word::text).toList(), escaped(original));
+        for (SearchSnippet.Word word : found) {
+            int start = word.place().start();
+            int end = word.place().end();
+            String wanted = sigma(word.text());
+            assertTrue(indexWords(original.substring(start, end)).contains(wanted), word + " in " + escaped(original));
+            int afterFirst = start + Character.charCount(original.codePointAt(start));
+            int beforeLast = end - Character.charCount(original.codePointBefore(end));
+            assertFalse(afterFirst < end && indexWords(original.substring(afterFirst, end)).contains(wanted),
+                "the first character belongs to " + word + " in " + escaped(original));
+            assertFalse(beforeLast > start && indexWords(original.substring(start, beforeLast)).contains(wanted),
+                "the last character belongs to " + word + " in " + escaped(original));
+        }
+    }
+
+    private static List<String> indexWords(String text) {
+        return words(sigma(Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(java.util.Locale.ROOT)));
     }
 
     /** F2 of the Codex review of TASK-106: a long run of marks that NFKC reorders is marked in a time that grows with its length. */
@@ -198,6 +245,34 @@ class SearchSnippetTest {
         assertEquals(List.of(new SearchSnippet.Mark(0, 2)), SearchSnippet.marks(letters, List.of("\u30AC")));
         millis = (System.nanoTime() - started) / 1_000_000;
         assertTrue(millis < 3_000, millis + " ms for a letter with " + (letters.length() - 6) + " marks");
+        // F2 of the Codex review of TASK-107: a letter that is composed only by the last mark of a long run.
+        String late = "A" + "\u0334".repeat(480_000) + "\u0301 ende";
+        started = System.nanoTime();
+        assertEquals(List.of(new SearchSnippet.Mark(0, late.length() - 5)), SearchSnippet.marks(late, List.of("\u00E1")));
+        millis = (System.nanoTime() - started) / 1_000_000;
+        assertTrue(millis < 3_000, millis + " ms for a letter composed after " + (late.length() - 7) + " marks");
+    }
+
+    /** H2 of the Codex review of TASK-107: the places are taken only from a form that is exactly the one of the index. */
+    @Test
+    void thePlacesComeFromTheNormalFormOfTheIndex() {
+        String[] alphabet = {"a", "A", " ", "1", "\u0301", "\u0334", "\u0338", "\u3099", "\uFF9E", "\u30AB", "\u1100", "\u1161",
+            "\u11A8", "\uAC00", "\u00BD", "\u0E01", "\u0E33", "\u0EB3", "\u0F73", "\u0344", "\u0B47", "\u0B3E", "\uD801\uDC00",
+            "\u0323", "\u0302", "\u0345", "\u03B1", "\u05B0", "\u05BC", "\u034F", "\uFB01", "\u2126", "\u212B", "\u0130"};
+        Random random = new Random(107);
+        for (int round = 0; round < 5000; round++) {
+            StringBuilder text = new StringBuilder();
+            for (int k = random.nextInt(30) + 1; k > 0; k--) {
+                text.append(alphabet[random.nextInt(alphabet.length)]);
+            }
+            String original = text.toString();
+            List<int[]> origins = Nfkc.origins(original);
+            assertTrue(origins != null, escaped(original));
+            StringBuilder composed = new StringBuilder();
+            origins.forEach(character -> composed.appendCodePoint(character[0]));
+            assertEquals(Normalizer.normalize(original, Normalizer.Form.NFKC), composed.toString(), escaped(original));
+            exactPlaces(original);
+        }
     }
 
     /** F2 of the Codex review of TASK-106: the ordered way of {@link Nfkc} gives exactly NFKC, for random texts and long runs. */
