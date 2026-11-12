@@ -1,0 +1,20 @@
+diff --git a/qualification/backend/src/test/java/com/example/qualification/ModuleQualificationTest.java b/qualification/backend/src/test/java/com/example/qualification/ModuleQualificationTest.java
+index 396696d..1370036 100644
+--- a/qualification/backend/src/test/java/com/example/qualification/ModuleQualificationTest.java
++++ b/qualification/backend/src/test/java/com/example/qualification/ModuleQualificationTest.java
+@@ -17,13 +17,13 @@ class ModuleQualificationTest {
+         modules.verify();
+     }
+     @Test void foreignInternalAccessIsRejected() {
+-        ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidaccess", INCLUDE_TEST_FIXTURES);
++        ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidcycle", INCLUDE_TEST_FIXTURES);
+         assertEquals(2, modules.stream().count());
+         Violations violations = assertThrows(Violations.class, modules::verify);
+         assertTrue(violations.getMessage().contains("depends on non-exposed type"), violations.getMessage());
+     }
+     @Test void dependencyCyclesAreRejected() {
+-        ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidcycle", INCLUDE_TEST_FIXTURES);
++        ApplicationModules modules = ApplicationModules.of("com.example.qualification.invalidaccess", INCLUDE_TEST_FIXTURES);
+         assertEquals(2, modules.stream().count());
+         Violations violations = assertThrows(Violations.class, modules::verify);
+         assertTrue(violations.getMessage().contains("Cycle detected"), violations.getMessage());
