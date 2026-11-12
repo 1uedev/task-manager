@@ -1,0 +1,13 @@
+{
+  "wireIdA" : "80808080808040808080808080808080",
+  "wireIdB" : "81818181818140818081818181818181",
+  "wireIdsDifferent" : true,
+  "loginA" : 200,
+  "loginB" : 200,
+  "returnedUsernameB" : "binary-a",
+  "accountAId" : "0b460145-57d6-4f99-a8ca-7c0551245ccc",
+  "accountBExists" : false,
+  "storedExternalId" : "������@���������",
+  "storedExternalIdCodePoints" : [ "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+0040", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD", "U+FFFD" ],
+  "BReadsAccountsWithARight" : 200
+}

@@ -1,0 +1,157 @@
+[ {
+  "case" : "security-missing",
+  "status" : 500,
+  "code" : "server.internal_error"
+}, {
+  "case" : "security-null",
+  "status" : 500,
+  "code" : "server.internal_error"
+}, {
+  "case" : "security-blank",
+  "status" : 500,
+  "code" : "server.internal_error"
+}, {
+  "case" : "filter-configuration",
+  "filter" : "(uid={0}garbage)",
+  "status" : 200,
+  "response" : {
+    "ok" : false,
+    "reason" : "directory.user_not_found"
+  }
+}, {
+  "case" : "filter-configuration",
+  "filter" : "(uid={0}\\zz)",
+  "status" : 200,
+  "response" : {
+    "ok" : false,
+    "reason" : "directory.user_not_found"
+  }
+}, {
+  "case" : "filter-configuration",
+  "filter" : "(uid={0}\\)",
+  "status" : 400,
+  "response" : {
+    "instance" : "urn:uuid:cc303821-0464-4bde-b4ea-386bb9361e84",
+    "status" : 400,
+    "title" : "Bad Request",
+    "code" : "request.invalid",
+    "correlationId" : "cc303821-0464-4bde-b4ea-386bb9361e84",
+    "violations" : [ "ldap.userFilter.invalid" ]
+  }
+}, {
+  "case" : "filter-configuration",
+  "filter" : "(uid={0}=)",
+  "status" : 200,
+  "response" : {
+    "ok" : false,
+    "reason" : "directory.user_not_found"
+  }
+}, {
+  "case" : "known-entry-name-collision",
+  "status" : 200,
+  "returnedUsername" : "collision-a",
+  "originalIdsDistinct" : true,
+  "returnedOriginalA" : true
+}, {
+  "case" : "filter-and-password",
+  "attempts" : [ {
+    "wireFilter" : "(uid=\\2a)",
+    "name" : "*",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=literal\\2a)",
+    "name" : "literal*",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=\\2a\\29\\28uid=\\2a\\29)",
+    "name" : "*)(uid=*)",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=\\5c2a)",
+    "name" : "\\2a",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=a\\00b)",
+    "name" : "a\u0000b",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=\\28uid=\\2a\\29)",
+    "name" : "(uid=*)",
+    "present" : false
+  }, {
+    "wireFilter" : "(uid=literal-user)",
+    "name" : "literal-user",
+    "present" : true
+  } ],
+  "wildcardControlHasOneHit" : true,
+  "emptyOrOversizeOpenedNoSearch" : true,
+  "openedNoPersonBind" : true,
+  "emptyPersonBindCount" : 0
+}, {
+  "case" : "search-controls",
+  "base" : "ou=a/b,dc=review,dc=test",
+  "aliasPolicy" : "NEVER",
+  "sizeLimit" : 3,
+  "timeLimitSeconds" : 3
+}, {
+  "case" : "alias",
+  "authenticated" : false,
+  "wirePolicy" : "NEVER"
+}, {
+  "case" : "referral",
+  "reason" : "directory.search_failed",
+  "secondaryRequests" : 0
+}, {
+  "case" : "size-limit",
+  "partialResultAccepted" : false
+}, {
+  "case" : "diagnostics",
+  "timeLimit" : {
+    "ok" : false,
+    "reason" : "directory.unreachable"
+  },
+  "serverDiagnostic" : {
+    "ok" : false,
+    "reason" : "directory.search_failed"
+  },
+  "secretInResponse" : false
+}, {
+  "case" : "starttls-no-support",
+  "answer" : {
+    "ok" : false,
+    "reason" : "directory.search_failed"
+  },
+  "personBinds" : 0,
+  "searchAccountBinds" : 0,
+  "searches" : 0
+}, {
+  "case" : "forced-first-login-race",
+  "observedInsertWaiters" : 4,
+  "statuses" : [ 200, 200, 200, 200 ],
+  "accountCount" : 1
+}, {
+  "case" : "duration-race",
+  "accountWaitObserved" : true,
+  "settingWaitObserved" : true,
+  "loginStatus" : 200,
+  "shortenStatus" : 200,
+  "sessionsLimitedToOneHour" : true
+}, {
+  "case" : "deactivation-race",
+  "accountWaitObserved" : true,
+  "status" : 401,
+  "activeSessions" : 0
+}, {
+  "case" : "auth-kind-gate",
+  "knownLocalHashStillRefused" : true,
+  "directoryPasswordStillWorks" : true
+}, {
+  "case" : "network-timeout",
+  "activeDbConnectionsWhileLdapWaits" : 0,
+  "localStatus" : 200,
+  "directoryStatus" : 503,
+  "directoryCode" : "auth.directory_unavailable"
+}, {
+  "case" : "property-redaction",
+  "safe" : true
+} ]
