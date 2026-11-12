@@ -1,0 +1,15 @@
+CI evidence read independently; not locally executed.
+PR #134 head: 6203269f9738aa312d9bbded7cfd4b57cf0c627e
+Image run: https://github.com/1uedev/task-manager/actions/runs/39666854242
+Job: 119454062593, conclusion success
+Selected original log lines:
+2026-10-21T20:02:57.2893717Z #20 [frontend 6/6] RUN npm run build
+2026-10-21T20:03:41.7661418Z #25 40.16 [INFO] BUILD SUCCESS
+2026-10-21T20:03:47.6711281Z #28 5.714 [INFO] BUILD SUCCESS
+2026-10-21T20:03:48.0213431Z #30 exporting layers 0.3s done
+2026-10-21T20:04:22.9220879Z   demo: 43/43 tickets, 47 per second
+2026-10-21T20:04:24.9439714Z ok      an outdated change is a conflict (412)
+2026-10-21T20:04:40.3482708Z ok      session of anna is still valid after the restart
+2026-10-21T20:04:40.3483762Z ok      fixed end unchanged (2026-10-22T20:04:24.583037976Z before, 2026-10-22T20:04:24.583037Z after)
+2026-10-21T20:04:40.4187365Z ok      data kept, anna sees ['APP', 'HELP', 'WEB']
+2026-10-21T20:04:40.5018811Z image check passed
