@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
 
 ### Blockiert – BLOCKIERT
 
@@ -185,3 +187,26 @@ Nicht Teil: neue Regeln, H1 des Berichts.
 **Übergabe:** Ergebnis in PR #305 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung. F1: `WikiPage` zeigt bei einem veröffentlichten Treffer, dessen gefundene Fassung nicht mehr veröffentlicht oder nicht mehr lesbar ist, „Nicht mehr veröffentlicht“ mit dem Hinweis, dass die gefundene Fassung nicht mehr zur Verfügung steht, auch bei 404 und auch statt einer stillen Ersatzfassung; „Entwurf zeigen“ nur in derselben Sprache, eine andere veröffentlichte Sprachfassung über „Fassung … zeigen“ (zwei Browsertests mit reinem Lesekonto). F2: `SearchSnippet` verbindet Zeichen, die NFKC zusammensetzt, zu einem Stück und bildet die Kleinschreibung über die ganze Normalform wie `SearchText.terms` (Unit Tests mit `ㄱㅏ` und `İ ΟΣ` in der Prüfung, dass jedes Indexwort markiert wird, API Test `composedJamoChooseTheirCriterionAndAFinalSigmaIsMarked`); der Testersatz markiert gleich. F3: Der Testersatz entfernt Leerraum wie Javas `strip()`, U+FEFF bleibt Inhalt (Test direkt am Testersatz). H2: `anArchivedParentKeepsThePathUpToTheRoot` mit Wurzeltitel „Wurzel“ veröffentlicht und „Wurzel Entwurf“ im Entwurf. Läufe: Backend `mvn verify` 631 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 285 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
 
 **Nächster Schritt:** Prüfung durch Codex (Auftrag liegt im Projektordner a14), danach Holgers Abnahme von TASK-102 bis TASK-106.
+
+## TASK-107 Befunde der Codex Prüfung von TASK-106 beheben (A14)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261112-search-04 · **Aktualisiert:** 2026-11-12
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-136; docs/REVIEW_TASK-106_PR-305.md. **Abhängigkeiten:** TASK-106 (PR #305) geliefert. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-106 (Empfehlung nachbessern) in den Thread gegeben und auf der Entscheidungskarte „Alles beheben als TASK-107“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-137, keine Migration geplant.
+
+**Umfang:** Befunde F1 bis F4 und Hinweis H1 aus docs/REVIEW_TASK-106_PR-305.md:
+1. F1: Nach einem veröffentlichten Suchtreffer öffnet die Wahl einer Sprache in der Sprachleiste deren veröffentlichte Fassung, auch mit `wiki.edit` oder `wiki.publish`; den Entwurf zeigt nur die ausdrückliche Aktion.
+2. F2: Die Markierung normalisiert keine wachsenden Teilstücke mehr; ihre Laufzeit wächst linear mit der Textlänge, auch bei langen Folgen kombinierender Zeichen.
+3. F3: Wörter und Kleinschreibung der Markierung folgen genau der Normalform des Index, und eine Markierung umfasst nur die Originalzeichen, aus denen ihr Wort entsteht.
+4. F4: Der Testersatz schreibt das Sigma wie Java klein, sodass Treffer und Markierungen auch bei `AΣ1A` gleich sind.
+5. H1: Die Statuszeile einer Ersatzfassung erscheint erst mit ihr und nennt die Sprache.
+
+Nicht Teil: neue Regeln.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 mit Browsertest für ein Konto mit Entwurfsrecht und unterschiedlichen englischen Titeln von Entwurf und Veröffentlichung.
+2. F2 mit einem Test, der einen langen Text aus U+FF9E und U+0334 in kurzer Zeit markiert.
+3. F3 mit Unit Tests für `カ\u3099\u3099\uFF9E\u0334\uFF9E\u0334 end` (Markierung nur `カ\u3099`) und einem Vergleich der Normalform mit `SearchText.terms` über viele zufällige Texte.
+4. F4 mit Fällen am Testersatz (`AΣ1A`, `AΣ-A`, `AΣ_A`); H1 im Browsertest; bestehende Tests bleiben grün.
+
+**Nächster Schritt:** Nach der Reservierung auf main umsetzen.
