@@ -1222,14 +1222,18 @@ def run_action(state: UserState, kind: str, rng: random.Random) -> list[Sample]:
             search.update(selective_case(state, rng))
         response = client.call("GET", "/search/tickets", query=search, expect=None)
     hits = None
+    outcome = outcome_of(kind, response.status)
     if search is not None and response.status == 200 and isinstance(response.body, dict):
         if kind == "Übersicht Alle":
             hits = sum(area["total"] for area in response.body.values() if isinstance(area, dict) and "total" in area)
         elif kind == "Schnellsuche mit Kennung":
             hits = 0 if response.body.get("direct") is None else 1
+            # The class succeeds only with the direct hit (TASK-104, rule 5); an answer without it is no valid value (TASK-110, H4).
+            if hits == 0:
+                outcome = "error"
         else:
             hits = response.body.get("total")
-    return [Sample(kind, response.seconds * 1000, outcome_of(kind, response.status), hits)]
+    return [Sample(kind, response.seconds * 1000, outcome, hits)]
 
 
 def percentile(values: list[float], share: float) -> float:
@@ -1327,6 +1331,7 @@ def measure(args) -> None:
     result = {
         "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - args.duration - args.warmup)),
         "users": args.users, "think_seconds": args.think, "warmup_seconds": args.warmup, "duration_seconds": args.duration,
+        "commit": args.commit, "build": args.build,
         "stock": {"projects": projects, "tickets": stock, "accounts": accounts, "wiki_published": pages, "wiki_drafts": drafts,
                   "requirements": requirements},
         "client_machine": machine(), "server": args.url, "samples": total,
@@ -1341,6 +1346,7 @@ def measure(args) -> None:
         f"Messung {result['started']}: {args.users} Benutzer, Denkzeit {args.think} s, {args.warmup} s Aufwärmen, {args.duration} s Messung",
         f"Bestand: {projects} Projekte, {stock} Tickets, {accounts} Konten, {pages} veröffentlichte und {drafts} Entwurfsfassungen im Wiki, "
         f"{requirements} Anforderungen; {actions[0]} Aktionen, Fehlerquote {result['error_rate']}",
+        f"Gemessener Stand: Commit {args.commit or 'nicht angegeben'}, Build {args.build or 'nicht angegeben'}",
         "",
     ]
     report = "\n".join(lines + report_table(rows)) + "\n"
@@ -1419,6 +1425,9 @@ def main(argv: list[str]) -> None:
     run.add_argument("--warmup", type=int, default=600)
     run.add_argument("--duration", type=int, default=1800)
     run.add_argument("--out", default=os.environ.get("TASK_MANAGER_RESULTS", "results"))
+    # The measured build, written into the result so a run names exactly what it measured (TASK-110, H5).
+    run.add_argument("--commit", default=os.environ.get("TASK_MANAGER_COMMIT"), help="commit the measured application was built from")
+    run.add_argument("--build", default=os.environ.get("TASK_MANAGER_BUILD"), help="how the measured application was built and run")
 
     check = commands.add_parser("verify", help="check rights, conflict, search and session on the presentation data set")
     check.add_argument("--save", help="keep the session of anna in this file")

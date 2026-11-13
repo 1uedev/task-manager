@@ -269,6 +269,7 @@ export const de = {
   'ticket.fields': 'Felder',
   'ticket.hiddenField': '{field}: für Sie verborgen',
   'ticket.readOnly': 'Sie dürfen dieses Ticket lesen, aber nicht ändern.',
+  'ticket.projectHidden': 'Sie dürfen dieses Ticket lesen, aber nicht sein Projekt. Typ, Status und eigene Felder stehen deshalb mit ihrem Schlüssel da und lassen sich hier nicht ändern.',
   'ticket.save': 'Änderungen speichern',
   'ticket.saved': 'Gespeichert.',
   'ticket.conflict.title': 'Jemand hat das Ticket inzwischen geändert',

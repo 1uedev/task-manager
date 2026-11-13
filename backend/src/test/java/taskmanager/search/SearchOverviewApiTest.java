@@ -426,6 +426,49 @@ class SearchOverviewApiTest {
     }
 
     @Test
+    void theNormalizedProjectKeyFindsItsProjectInFilterCountAndDirectHit() {
+        // TASK-110, F5: straße names the key STRASSE after NFKC and upper case, although the index holds the word strasse.
+        String key = "STRASSE" + (100 + COUNTER.incrementAndGet() % 900);
+        Browser admin = person(AdministrationRight.PROJECTS_MANAGE);
+        Response created = admin.send("POST", "/api/v1/projects", Map.of("key", key, "name", "Wegebau"), null);
+        assertEquals(201, created.status(), created.body());
+        UUID project = UUID.fromString(created.json().get("id").asString());
+        Browser reader = person();
+        add(new Setup(project, admin, key), reader.id);
+        grant(reader.id, project, "project.read");
+        String typed = "straße" + key.substring("STRASSE".length());
+
+        Response found = reader.get("/api/v1/search/projects?q=" + URLEncoder.encode(typed, StandardCharsets.UTF_8));
+        assertEquals(200, found.status(), found.body());
+        assertEquals(1, found.json().get("total").asLong(), found.body());
+        assertEquals(List.of(key), titles(found.json(), "key"));
+
+        JsonNode overview = all(reader, typed).json();
+        assertEquals(1, overview.get("projects").get("total").asLong(), overview.toString());
+        assertEquals("project", overview.get("direct").get("kind").asString(), overview.toString());
+        assertEquals(project.toString(), overview.get("direct").get("id").asString());
+    }
+
+    @Test
+    void whoMayReadATicketButNotItsProjectFindsTheTicketDirectly() {
+        // TASK-110, F2: the direct hit names the ticket, the ticket answers 200 and the project 404 like an unknown one.
+        Setup setup = project("Nur Tickets");
+        Browser writer = member(setup, rules(ticketRules()));
+        long number = ticket(writer, setup, "Lesbar ohne Projekt");
+        Browser reader = member(setup, "ticket.read", "ticket:READ:title");
+
+        JsonNode overview = all(reader, setup.key() + "-" + number).json();
+        assertEquals("ticket", overview.get("direct").get("kind").asString(), overview.toString());
+        assertTrue(overview.get("projects").isNull(), "no project area without project.read");
+        Response ticket = reader.get("/api/v1/projects/" + setup.project() + "/tickets/" + number);
+        assertEquals(200, ticket.status(), ticket.body());
+        assertEquals("Lesbar ohne Projekt", ticket.json().get("fields").get("title").asString());
+        Response project = reader.get("/api/v1/projects/" + setup.project());
+        assertEquals(404, project.status(), project.body());
+        assertEquals("project.not_found", project.code());
+    }
+
+    @Test
     void invalidRequestsAnswer400() {
         Browser person = person();
         assertInvalid(person.get("/api/v1/search/all?q=x&preferred=fr"), "preferred.invalid");

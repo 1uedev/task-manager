@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-110](#task-110-befunde-der-codex-prüfung-von-task-104-beheben-a14) | Befunde der Codex Prüfung von TASK-104 beheben (A14) | claude-20261113-search-07 | 2026-11-13 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -48,6 +46,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-107](#task-107-befunde-der-codex-prüfung-von-task-106-beheben-a14) | Befunde der Codex Prüfung von TASK-106 beheben (A14) | claude-20261112-search-04 | 2026-11-12 |
 | [TASK-108](#task-108-befunde-der-codex-prüfung-von-task-107-beheben-a14) | Befunde der Codex Prüfung von TASK-107 beheben (A14) | claude-20261112-search-05 | 2026-11-12 |
 | [TASK-109](#task-109-befunde-der-codex-prüfung-von-task-108-beheben-a14) | Befunde der Codex Prüfung von TASK-108 beheben (A14) | claude-20261112-search-06 | 2026-11-12 |
+| [TASK-110](#task-110-befunde-der-codex-prüfung-von-task-104-beheben-a14) | Befunde der Codex Prüfung von TASK-104 beheben (A14) | claude-20261113-search-07 | 2026-11-13 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -267,7 +266,7 @@ Nicht Teil: neue Regeln.
 
 ## TASK-110 Befunde der Codex Prüfung von TASK-104 beheben (A14)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261113-search-07 · **Aktualisiert:** 2026-11-13
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261113-search-07 · **Aktualisiert:** 2026-11-13
 
 **Bezug:** REQ-SRCH-001, REQ-PERF-003, REQ-ACL-004; DEC-134, DEC-140; docs/REVIEW_TASK-104_PR-303.md. **Abhängigkeiten:** TASK-104 (PR #303) geliefert, TASK-105 bis TASK-109 auf main. **Arbeitsstand:** Holger hat am 12. November 2026 den Bericht der Codex Prüfung von TASK-104 (Empfehlung nachbessern) in den Thread gegeben und am 13. November 2026 auf der Entscheidungskarte „F1 bis F7 beheben, LAN später“ gewählt. Branch claude/project-thread-hulabb, Entscheidung DEC-140, keine Migration geplant.
 
@@ -289,4 +288,6 @@ Nicht Teil: neue Regeln, der LAN-Lauf und das vollständige T15-Lastprofil (F8, 
 3. F5 mit Backendtest für `straße`, Zähler und Direkttreffer.
 4. F7 mit Testersatzfällen, die den Serverantworten entsprechen; H2 bis H5 in README, DEMO.md und Messcode; bestehende Tests bleiben grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung umsetzen und Ergebnis PR mit Nachweisen öffnen; danach Holgers Abnahme von TASK-102 bis TASK-110.
+**Übergabe:** Ergebnis im Ergebnis PR nach #312 (Branch claude/project-thread-hulabb), ohne Migration und ohne Vertragsänderung. F1: Die Schnellsuche öffnet ihr Ziel über `navigateAsked`, das wie jeder Seitenwechsel einer Person zuerst die Rückfrage bei ungespeicherten Eingaben stellt; wer bleibt, behält Seite, Eingabe und den Text der Schnellsuche. F3: Jeder Wechsel der Adresse macht eine laufende Schnellsuche ungültig, ihre späte Antwort öffnet nichts mehr. F4: Bei gleicher Adresse eines Suchbereichs zählt `useRoute` einen neuen Besuch, die Suchseite beginnt neu mit „Alle“ und dem Text; auf jeder anderen gleichen Adresse bleibt alles ohne Rückfrage, wie es ist. F6: Nach „Alle anzeigen“ liegt der Fokus im Suchfeld des gewählten Reiters. F2: Antwortet das Projekt mit 404 und das Ticket mit 200, zeigt die Ticketseite das Ticket ohne Projektkonfiguration mit einem Hinweis, Typ, Status und eigenen Feldern mit ihrem Schlüssel und ohne deren Änderung; Titel, Beschreibung, Zuständigkeit und die Bereiche am Ticket folgen weiter den Rechten des Tickets. Backendtest `whoMayReadATicketButNotItsProjectFindsTheTicketDirectly` (Direkttreffer, Ticket 200, Projekt 404, kein Projektbereich). F5: Die Projektsuche nimmt den normalisierten Schlüssel als Alternative in die gemeinsame Bedingung von Zähler und Seite (`theNormalizedProjectKeyFindsItsProjectInFilterCountAndDirectHit` mit `straße` für STRASSE, scheitert ohne die Änderung mit `total` 0). F7: Der Testersatz zeigt Projekte nur mit `projects.manage`, `project.read` oder `project.manage`, prüft Projekt, Mitglieder, Konfiguration und Projekttags mit diesen Rechten und Tickets mit ihren eigenen, normalisiert Text und Ticketkennung wie `SearchText`, wertet Projekt-, Status-, Typ-, Personen- und eigene Feldfilter nach den lesbaren Feldern aus, sucht in Tagnamen und Textfeldern, findet mit Text ohne Wörter nichts und in Projekten auch über Tagnamen und den normalisierten Schlüssel. Neue Browsertests für F1 bis F4, F6 und die Fälle des Testersatzes; die Tests für F1 bis F4 und F6 scheitern mit dem Stand vor TASK-110. H2: Rechte der Übersicht im Backend README richtig beschrieben. H3, H4: Die Browsermessung wartet auf Startseite und Reiter ohne frühere Antwort, prüft bei der Schnellsuche genau Pfad und Kennung des Tickets und wertet eine Klasse nur mit allen gültigen Werten als erfüllt; `demo measure` zählt eine Schnellsuche ohne Direkttreffer als Fehler. H5: DEMO.md nennt die für Java 21 gebaute Anwendung statt desselben Jars, beide Messwerkzeuge schreiben Commit und Build in ihre Messdateien. Läufe: siehe Ergebnis PR.
+
+**Nächster Schritt:** Holgers Abnahme von TASK-102 bis TASK-110.

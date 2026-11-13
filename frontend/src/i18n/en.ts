@@ -269,6 +269,7 @@ export const en: Record<MessageKey, Message> = {
   'ticket.fields': 'Fields',
   'ticket.hiddenField': '{field}: hidden for you',
   'ticket.readOnly': 'You may read this ticket but not change it.',
+  'ticket.projectHidden': 'You may read this ticket but not its project. Type, status and custom fields are therefore shown with their key and cannot be changed here.',
   'ticket.save': 'Save changes',
   'ticket.saved': 'Saved.',
   'ticket.conflict.title': 'Someone changed the ticket in the meantime',

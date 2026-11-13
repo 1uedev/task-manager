@@ -53,31 +53,48 @@ export function TicketPage({ projectId, number }: { readonly projectId: string; 
   // content is not shown meanwhile, even though the ticket version stayed the same (finding F1 of the review of TASK-030).
   const [refusals, setRefusals] = useState(0);
 
+  // A person may read the ticket but not its project (TASK-110, F2): the project answers 404 like an unknown one. The ticket
+  // is shown with what its own answer allows, without the configuration of the project.
+  const hidden = project.state === 'problem' && project.problem.status === 404;
+  const view = (projectValue: Project | null) => (
+    <LoadedView loaded={ticket} retry={reloadTicket}>
+      {(ticketValue, etag) => (
+        <TicketView key={ticketValue.id} project={projectValue ?? hiddenProject(projectId, ticketValue)} limited={projectValue === null}
+          ticket={ticketValue} etag={etag ?? `"${ticketValue.version}"`} round={round} refusals={refusals}
+          onChanged={(next, nextEtag) => {
+            replaceTicket({ value: next, etag: nextEtag });
+            setRound((value) => value + 1);
+          }}
+          onRefused={() => {
+            reloadTicket();
+            setRefusals((value) => value + 1);
+          }}
+          reloadTicket={reloadTicket} />
+      )}
+    </LoadedView>
+  );
+  if (hidden) return view(null);
   return (
     <LoadedView loaded={project} retry={reloadProject}>
-      {(projectValue) => (
-        <LoadedView loaded={ticket} retry={reloadTicket}>
-          {(ticketValue, etag) => (
-            <TicketView key={ticketValue.id} project={projectValue} ticket={ticketValue} etag={etag ?? `"${ticketValue.version}"`} round={round}
-              refusals={refusals}
-              onChanged={(next, nextEtag) => {
-                replaceTicket({ value: next, etag: nextEtag });
-                setRound((value) => value + 1);
-              }}
-              onRefused={() => {
-                reloadTicket();
-                setRefusals((value) => value + 1);
-              }}
-              reloadTicket={reloadTicket} />
-          )}
-        </LoadedView>
-      )}
+      {(projectValue) => view(projectValue)}
     </LoadedView>
   );
 }
 
-function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefused, reloadTicket }: {
+// The project of a ticket whose project the person may not read: its identifier and the key from the ticket, no name and an
+// empty configuration, so types, statuses and custom fields show their keys and offer no choices.
+function hiddenProject(id: string, ticket: Ticket): Project {
+  return {
+    id, key: ticket.key.slice(0, ticket.key.lastIndexOf('-')), name: '', description: null, version: 0, manageable: false,
+    configurationVersion: ticket.configurationVersion, createdAt: ticket.createdAt, updatedAt: ticket.updatedAt,
+    configuration: { ticketTypes: [], statuses: [], initialStatus: '', transitions: [], customFields: [], fields: [] },
+  };
+}
+
+function TicketView({ project, limited, ticket, etag, round, refusals, onChanged, onRefused, reloadTicket }: {
   readonly project: Project;
+  // The person may not read the project: type, status and custom fields cannot be offered without its configuration.
+  readonly limited: boolean;
   readonly ticket: Ticket;
   readonly etag: string;
   readonly round: number;
@@ -107,7 +124,8 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
   // Counts additions and removals of attachments, which change the history but not the version of the ticket (TASK-051).
   const [attachmentChanges, setAttachmentChanges] = useState(0);
   const readable = new Set(Object.keys(ticket.fields));
-  const writable = new Set<string>(ticket.writableFields);
+  const writable = new Set<string>(limited ? ticket.writableFields.filter((field) => field !== 'type' && field !== 'status'
+    && !field.startsWith(CUSTOM_PREFIX)) : ticket.writableFields);
   const changed = FIELDS.filter((field) => writable.has(field) && draft[field] !== base[field]);
   const customChanged = customFields.filter((field) => writable.has(`${CUSTOM_PREFIX}${field.key}`) && customDraft[field.key] !== customBase[field.key]);
   useUnsavedGuard(changed.length > 0 || customChanged.length > 0);
@@ -230,7 +248,9 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
 
   return (
     <>
-      <p className="breadcrumb"><a href={hrefFor({ name: 'project', id: project.id, tab: 'tickets' })}>{`${project.key} · ${project.name}`}</a></p>
+      {limited
+        ? <p className="breadcrumb">{project.key}</p>
+        : <p className="breadcrumb"><a href={hrefFor({ name: 'project', id: project.id, tab: 'tickets' })}>{`${project.key} · ${project.name}`}</a></p>}
       <PageHead title={readable.has('title') ? `${ticket.key} · ${display('title')}` : ticket.key}
         intro={t('ticket.meta', { version: ticket.version, by: name(ticket.updatedBy), date: formatDateTime(ticket.updatedAt, language) })} />
       {conflict && (
@@ -245,6 +265,7 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
           </p>
         </div>
       )}
+      {limited && <p className="hint" data-testid="ticket-project-hidden">{t('ticket.projectHidden')}</p>}
       <NoticeView notice={notice} />
       <div className="ticket-layout">
         <section aria-labelledby="ticket-fields" className="panel">
@@ -280,6 +301,12 @@ function TicketView({ project, ticket, etag, round, refusals, onChanged, onRefus
                 </div>
               );
             })}
+            {limited && Object.entries(ticket.customFields).map(([key, value]) => (
+              <div key={key} className="field readonly" data-field={`${CUSTOM_PREFIX}${key}`}>
+                <span className="label-small">{key}</span>
+                <p>{typeof value === 'boolean' ? t(value ? 'custom.yes' : 'custom.no') : String(value)}</p>
+              </div>
+            ))}
             {writable.size > 0
               ? <button type="submit" disabled={busy || (changed.length === 0 && customChanged.length === 0)}>{t('ticket.save')}</button>
               : <p className="hint">{t('ticket.readOnly')}</p>}

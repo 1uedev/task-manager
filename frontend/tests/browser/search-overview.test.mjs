@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { ANNA, BEN, createBackend } from './backend.mjs';
+import { ANNA, BEN, createBackend, newTag } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-104: the overview "Alle" with five hits per area and "Alle anzeigen", and the quick search at the top of the
@@ -102,10 +102,15 @@ describe('the overview "Alle" (TASK-104)', () => {
       await tickets.waitFor();
       assert.match(await tickets.getByRole('heading').innerText(), /^7 Tickets/);
       assert.equal(await tickets.locator('li').count(), 5);
-      await tickets.getByRole('button', { name: 'Alle anzeigen: Tickets' }).click();
+      // With the keyboard: the button disappears with the overview, the focus goes to the search field of the area (TASK-110, F6).
+      await form.getByLabel('Suchtext').fill('anderes');
+      await tickets.getByRole('button', { name: 'Alle anzeigen: Tickets' }).focus();
+      await page.keyboard.press('Enter');
       assert.equal(await page.getByRole('radio', { name: 'Tickets' }).isChecked(), true);
       const area = page.getByRole('search', { name: 'Tickets durchsuchen' });
-      assert.equal(await area.getByLabel('Suchtext').inputValue(), 'nordlicht');
+      assert.equal(await area.getByLabel('Suchtext').inputValue(), 'nordlicht', 'the text that was searched, not the one typed since');
+      await page.waitForFunction(() => document.activeElement?.closest('form[role=search]')?.getAttribute('aria-label') === 'Tickets durchsuchen');
+      assert.equal(await area.getByLabel('Suchtext').evaluate((element) => element === document.activeElement), true);
       await page.waitForFunction(() => document.querySelectorAll('[data-testid=ticket-hits] li').length === 7);
     });
   });
@@ -167,5 +172,147 @@ describe('the quick search (TASK-104)', () => {
       await page.waitForFunction(() => location.hash === '#/search/all?q=polarlicht');
       await page.waitForFunction(() => /PLAT-1/.test(document.querySelector('[data-testid=overview-tickets]')?.textContent ?? ''));
     });
+  });
+});
+
+// TASK-110: the findings F1 to F4 of the Codex review of TASK-104 at the quick search, F2 at the ticket page and F7 at the stand in.
+describe('the quick search after the review of TASK-104 (TASK-110)', () => {
+  test('F1: unsaved input asks first, and declining keeps the page, the input and the text of the quick search', async () => {
+    await withApp({ hash: (backend) => `#/projects/${backend.project.id}/tickets/1` }, async (page) => {
+      await page.waitForSelector('[data-testid=history]');
+      await page.getByLabel(/^Titel/).fill('Noch nicht gespeichert');
+      const quick = page.getByRole('searchbox', { name: 'Schnellsuche' });
+      await quick.fill('plat-2');
+      let asked = null;
+      page.once('dialog', (dialog) => {
+        asked = dialog.message();
+        void dialog.dismiss();
+      });
+      await quick.press('Enter');
+      await page.waitForFunction(() => document.querySelector('#quick-search')?.getAttribute('aria-busy') === 'false');
+      await page.waitForTimeout(300);
+      assert.equal(asked, 'Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?');
+      assert.match(page.url(), /tickets\/1$/);
+      assert.equal(await page.getByLabel(/^Titel/).inputValue(), 'Noch nicht gespeichert');
+      assert.equal(await quick.inputValue(), 'plat-2');
+
+      page.once('dialog', (dialog) => void dialog.accept());
+      await quick.press('Enter');
+      await page.waitForSelector('h1:has-text("PLAT-2")');
+      assert.match(page.url(), /tickets\/2$/);
+      assert.equal(await quick.inputValue(), '');
+    });
+  });
+
+  test('F3: a later change of the page drops the outstanding answer of the quick search', async () => {
+    await withApp({ hash: '#/start' }, async (page, backend) => {
+      let release;
+      backend.state.hold = { '/api/v1/search/all': new Promise((resolve) => { release = resolve; }) };
+      const quick = page.getByRole('searchbox', { name: 'Schnellsuche' });
+      await quick.fill('plat-1');
+      await quick.press('Enter');
+      await page.waitForFunction(() => document.querySelector('#quick-search')?.getAttribute('aria-busy') === 'true');
+      await page.locator('nav a[href="#/projects"]').first().click();
+      await page.waitForFunction(() => location.hash === '#/projects');
+      backend.state.hold = {};
+      release();
+      await page.waitForFunction(() => document.querySelector('#quick-search')?.getAttribute('aria-busy') === 'false');
+      await page.waitForTimeout(500);
+      assert.equal(new URL(page.url()).hash, '#/projects', 'the late answer does not open the ticket');
+      assert.equal(await page.locator('main h1').innerText(), 'Projekte');
+    });
+  });
+
+  test('F4: the same address opens "Alle" again with the text of the quick search', async () => {
+    await withApp({ prepare: polarlicht, hash: '#/search/all?q=polarlicht' }, async (page) => {
+      await page.getByTestId('overview').waitFor();
+      const form = page.getByRole('search', { name: 'Alles durchsuchen' });
+      await form.getByLabel('Suchtext').fill('tags');
+      await form.getByRole('button', { name: 'Suchen' }).click();
+      await page.waitForFunction(() => /PLAT-2/.test(document.querySelector('[data-testid=overview-tickets]')?.textContent ?? ''));
+      await page.getByRole('radio', { name: 'Tickets' }).check();
+      const quick = page.getByRole('searchbox', { name: 'Schnellsuche' });
+      await quick.fill('polarlicht');
+      await quick.press('Enter');
+      await page.waitForFunction(() => document.querySelector('input[name=search-area][value=all]')?.checked === true);
+      assert.equal(new URL(page.url()).hash, '#/search/all?q=polarlicht');
+      assert.equal(await page.getByRole('search', { name: 'Alles durchsuchen' }).getByLabel('Suchtext').inputValue(), 'polarlicht');
+      await page.waitForFunction(() => /Polarlicht prüfen/.test(document.querySelector('[data-testid=overview-tickets]')?.textContent ?? '')
+        && !/PLAT-2/.test(document.querySelector('[data-testid=overview-tickets]')?.textContent ?? ''));
+      assert.equal(await quick.inputValue(), '');
+    });
+  });
+
+  test('F2: who may read a ticket but not its project opens the ticket with the data it allows', async () => {
+    const ticketOnly = (backend) => {
+      backend.state.groups.find((group) => group.name === 'Lesen').actions = [{ action: 'ticket.read', projectId: null }];
+    };
+    await withApp({ as: BEN, hash: '#/start', prepare: ticketOnly }, async (page, backend) => {
+      // The stand in answers like the server: the ticket 200, the project 404, no project area and no project as direct hit.
+      assert.equal(backend.getCall(backend.ben, `/projects/${backend.project.id}/tickets/1`).status, 200);
+      assert.equal(backend.getCall(backend.ben, `/projects/${backend.project.id}`).status, 404);
+      const overview = backend.getCall(backend.ben, '/search/all', 'q=PLAT').body;
+      assert.equal(overview.projects, null);
+      assert.equal(overview.direct, null);
+
+      const quick = page.getByRole('searchbox', { name: 'Schnellsuche' });
+      await quick.fill('plat-1');
+      await quick.press('Enter');
+      await page.waitForSelector('h1:has-text("PLAT-1 · Anmeldung prüfen")');
+      assert.match(page.url(), new RegExp(`#/projects/${backend.project.id}/tickets/1$`));
+      await page.getByTestId('ticket-project-hidden').waitFor();
+      assert.equal(await page.locator('.breadcrumb').innerText(), 'PLAT');
+      assert.equal(await page.locator('.breadcrumb a').count(), 0, 'no link to a project the person may not read');
+      assert.match(await page.locator('[data-field=status]').innerText(), /new/);
+      assert.equal(await page.getByRole('alert').count(), 0);
+    });
+  });
+});
+
+describe('the search of the stand in answers like the server (TASK-110, F7)', () => {
+  const search = (backend, area, query) => backend.getCall(backend.anna, `/search/${area}`, query);
+
+  test('only project.read or project.manage in a member project or projects.manage shows a project', () => {
+    const backend = createBackend();
+    backend.state.groups.find((group) => group.name === 'Lesen').actions = [{ action: 'ticket.read', projectId: null }];
+    assert.equal(backend.getCall(backend.ben, '/projects').body.length, 0);
+    assert.equal(backend.getCall(backend.ben, '/search/projects', 'q=plat').body.total, 0);
+    backend.state.groups.find((group) => group.name === 'Lesen').actions.push({ action: 'project.manage', projectId: null });
+    assert.equal(backend.getCall(backend.ben, '/search/projects', 'q=plat').body.total, 1);
+  });
+
+  test('a normalized ticket key finds its ticket first, a text without words finds nothing', () => {
+    const backend = createBackend();
+    for (const q of ['ＰＬＡＴ-０２', 'plat-002', ' PLAT-2 ']) {
+      const found = search(backend, 'tickets', `q=${encodeURIComponent(q)}`).body;
+      assert.deepEqual(found.items.map((hit) => hit.key), ['PLAT-2'], q);
+      assert.equal(search(backend, 'all', `q=${encodeURIComponent(q)}`).body.direct?.key, 'PLAT-2', q);
+    }
+    assert.equal(search(backend, 'tickets', 'q=plat').body.total, 0, 'the key is not a word of the ticket');
+    for (const area of ['tickets', 'projects']) assert.equal(search(backend, area, `q=${encodeURIComponent('!')}`).body.total, 0, area);
+    assert.equal(search(backend, 'tickets', 'q=').body.total, 2, 'no text finds every readable ticket');
+  });
+
+  test('the ticket filters and the readable fields decide like the server', () => {
+    const backend = createBackend();
+    backend.state.tickets[1].values.status = 'in_progress';
+    assert.deepEqual(search(backend, 'tickets', 'status=in_progress').body.items.map((hit) => hit.key), ['PLAT-2']);
+    assert.deepEqual(search(backend, 'tickets', 'type=task&q=pr%C3%BCfen').body.items.map((hit) => hit.key), ['PLAT-1']);
+    assert.equal(search(backend, 'tickets', 'project=00000000-0000-4000-8000-000000000999').status, 400);
+    // Ben may not read descriptions: a word only there finds nothing, and so does a filter on a field he may not read.
+    assert.equal(backend.getCall(backend.ben, '/search/tickets', 'q=synthetischen').body.total, 0);
+    assert.equal(backend.getCall(backend.anna, '/search/tickets', 'q=synthetischen').body.total, 1);
+    backend.state.groups.find((group) => group.name === 'Lesen').fields = backend.state.groups.find((group) => group.name === 'Lesen').fields
+      .filter((rule) => rule.field !== 'status');
+    assert.equal(backend.getCall(backend.ben, '/search/tickets', 'status=new').body.total, 0);
+  });
+
+  test('the project search finds the names of the tags of a project and the normalized key', () => {
+    const backend = createBackend();
+    const tag = newTag('Leuchtturm', null, backend.anna);
+    backend.state.tags.push(tag);
+    backend.state.projectTags.push({ project: backend.project.id, tag: tag.id });
+    assert.deepEqual(search(backend, 'projects', 'q=leucht').body.items.map((hit) => hit.key), ['PLAT']);
+    assert.equal(search(backend, 'projects', `q=${encodeURIComponent('ＰＬＡＴ')}`).body.total, 1);
   });
 });
