@@ -161,6 +161,12 @@ class RequirementRepository {
             .query((rs, n) -> requirement(rs)).optional();
     }
 
+    /** The requirement held {@code FOR SHARE}: a link of another module leaves the requirement and its version as they are. */
+    Optional<Requirement> lockShared(UUID companyId, UUID id) {
+        return jdbc.sql("select " + REQUIREMENT + " from requirement r where r.company_id = ? and r.id = ? for share").params(companyId, id)
+            .query((rs, n) -> requirement(rs)).optional();
+    }
+
     Optional<Revision> revision(UUID requirementId, int revision) {
         return jdbc.sql("select " + REVISION + " from requirement_revision v where v.requirement_id = ? and v.revision = ?")
             .params(requirementId, revision).query((rs, n) -> revision(rs)).optional();

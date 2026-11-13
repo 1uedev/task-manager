@@ -180,6 +180,51 @@ class GitStore {
         jdbc.sql("delete from git_repository where id = ?").param(id).update();
     }
 
+    /** The provider held {@code FOR SHARE}, so it is not removed while a link to it is created. */
+    Optional<Provider> shareProvider(UUID companyId, UUID id) {
+        return jdbc.sql("select * from git_provider where company_id = ? and id = ? for share").params(companyId, id)
+            .query((rs, row) -> provider(rs)).optional();
+    }
+
+    // ------------------------------------------------------------------------------------------------ links
+
+    List<GitLink> links(UUID companyId, String subjectKind, UUID subjectId) {
+        return jdbc.sql("select * from git_link where company_id = ? and subject_kind = ? and subject_id = ? order by linked_at, id")
+            .params(companyId, subjectKind, subjectId).query((rs, row) -> link(rs)).list();
+    }
+
+    /** Serializes the changes of the links of one subject until the commit, for the limit per subject. */
+    void lockLinks(String subjectKind, UUID subjectId) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtextextended(?, 0))").param("git_link:" + subjectKind + ":" + subjectId)
+            .query((rs, row) -> 1).list();
+    }
+
+    boolean linked(String subjectKind, UUID subjectId, UUID providerId, String repositoryId, String objectKind, String objectKey) {
+        return jdbc.sql("""
+                select count(*) from git_link where subject_kind = ? and subject_id = ? and provider_id = ? and repository_id = ?
+                    and object_kind = ? and object_key = ?
+                """).params(subjectKind, subjectId, providerId, repositoryId, objectKind, objectKey).query(Long.class).single() > 0;
+    }
+
+    long linkCount(String subjectKind, UUID subjectId) {
+        return jdbc.sql("select count(*) from git_link where subject_kind = ? and subject_id = ?").params(subjectKind, subjectId)
+            .query(Long.class).single();
+    }
+
+    void insertLink(GitLink l) {
+        jdbc.sql("""
+                insert into git_link (id, company_id, subject_kind, subject_id, project_id, provider_id, repository_id, object_kind, object_key,
+                    linked_at, linked_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(l.id(), l.companyId(), l.subjectKind(), l.subjectId(), l.projectId(), l.providerId(), l.repositoryId(), l.objectKind(),
+            l.objectKey(), ts(l.linkedAt()), l.linkedBy()).update();
+    }
+
+    Optional<GitLink> deleteLink(UUID companyId, String subjectKind, UUID subjectId, UUID id) {
+        return jdbc.sql("delete from git_link where company_id = ? and subject_kind = ? and subject_id = ? and id = ? returning *")
+            .params(companyId, subjectKind, subjectId, id).query((rs, row) -> link(rs)).optional();
+    }
+
     // ------------------------------------------------------------------------------------------------ audit
 
     void audit(UUID companyId, String subjectKind, UUID subjectId, String operation, String detail, UUID actor, Instant now) {
@@ -208,6 +253,13 @@ class GitStore {
     private static Release release(ResultSet rs) throws SQLException {
         return new Release(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("project_id", UUID.class),
             rs.getObject("provider_id", UUID.class), rs.getString("external_id"), instant(rs, "released_at"), rs.getObject("released_by", UUID.class));
+    }
+
+    private static GitLink link(ResultSet rs) throws SQLException {
+        return new GitLink(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getString("subject_kind"),
+            rs.getObject("subject_id", UUID.class), rs.getObject("project_id", UUID.class), rs.getObject("provider_id", UUID.class),
+            rs.getString("repository_id"), rs.getString("object_kind"), rs.getString("object_key"), instant(rs, "linked_at"),
+            rs.getObject("linked_by", UUID.class));
     }
 
     private static Timestamp ts(Instant instant) {

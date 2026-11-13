@@ -19,6 +19,8 @@ const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manag
 const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read', 'requirement.approve', 'requirement.edit', 'requirement.read'];
 // The fields of requirements in the rights core (TASK-096).
 const REQUIREMENT_FIELDS = ['criteria', 'description', 'owner', 'priority', 'title'];
+// The field of Git links of tickets and requirements (TASK-112); kept by the Git routes, like tags and attachments for tickets.
+const GIT_FIELD = 'git';
 const ADMIN_RIGHTS = ['permissions.manage', 'accounts.manage', 'session_duration.manage', 'appearance.manage', 'projects.manage'];
 const CONFIGURATION = {
   ticketTypes: [{ key: 'task', name: 'Aufgabe' }, { key: 'bug', name: 'Fehler' }],
@@ -150,7 +152,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // The Git link (TASK-111): providers, the connection state per provider and account ("providerId:accountId"), the
     // repositories each provider knows with the accounts they are hidden from, and the releases per project. Connecting
     // skips the provider: the authorize address leads straight back with a new page load with `connected`, or with `error` when the provider has `failWith`.
-    git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [] },
+    git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [],
+      links: [], limited: false },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
       // The portal conversation (TASK-076): posts of portal accounts and of the support, and when an account last opened a request
       // with the highest position of an answer of the support it acknowledged (TASK-080); `positions` counts the answers per ticket.
@@ -397,7 +400,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       customFields: customReadable(account, ticket.projectId) ? Object.fromEntries(custom.filter((entry) => ticket.custom[entry.key] !== undefined).map((entry) => [entry.key, ticket.custom[entry.key]])) : {},
       writableFields: [...writable(account, ticket.projectId), ...(customWritable(account, ticket.projectId) ? custom.filter((entry) => entry.active !== false).map((entry) => `custom.${entry.key}`) : []),
         // Like the server since review F1 of TASK-051: tags and attachments are named when their own write rule allows it.
-        ...[TAG_FIELD, ATTACHMENT_FIELD].filter((name) => may(account, 'ticket.edit', ticket.projectId) && field(account, ticket.projectId, name, 'read') && field(account, ticket.projectId, name, 'write'))],
+        ...[TAG_FIELD, ATTACHMENT_FIELD, GIT_FIELD].filter((name) => may(account, 'ticket.edit', ticket.projectId) && field(account, ticket.projectId, name, 'read') && field(account, ticket.projectId, name, 'write'))],
       createdAt: ticket.createdAt, createdBy: ticket.createdBy, updatedAt: ticket.updatedAt, updatedBy: ticket.updatedBy };
   };
   // Like the server since TASK-100 (F1 of the review of TASK-098): the custom fields of requirements only for who manages the project.
@@ -877,6 +880,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       state.members.set(created.id, [{ accountId: account.id, addedAt: now() }]);
       return ok(projectView(account, created), '"1"');
     }
+    const gitTicket = p.match(/^\/projects\/([^/]+)\/tickets\/(\d+)\/git(?:\/([^/]+))?$/);
+    if (gitTicket) return gitLinkRoute(account, method, { kind: 'ticket', projectId: gitTicket[1], number: Number(gitTicket[2]) }, gitTicket[3], query, body);
+    const gitRequirement = p.match(/^\/requirements\/([^/]+)\/git(?:\/([^/]+))?$/);
+    if (gitRequirement) return gitLinkRoute(account, method, { kind: 'requirement', id: gitRequirement[1] }, gitRequirement[2], query, body);
     if (p.startsWith('/git/')) return gitRoute(account, method, p, headers, body);
     const gitProject = p.match(/^\/projects\/([^/]+)\/git\/(repositories|candidates)(?:\/([^/]+))?$/);
     if (gitProject) return gitProjectRoute(account, method, gitProject[1], gitProject[2], gitProject[3], query, body);
@@ -1083,7 +1090,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
     if (tail.startsWith('/sla')) return ticketSlaRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
-      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : []),
+      const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : []), ...(field(account, item.id, GIT_FIELD, 'read') ? [GIT_FIELD] : []),
         // TASK-097: links of requirements only for readers of the requirements of the project.
         ...(may(account, 'requirement.read', item.id) ? ['requirements'] : [])];
       return ok(state.history.filter((entry) => entry.ticket === ticket.id)
@@ -1262,8 +1269,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const company = may(account, 'permissions.manage');
       return ok({
         actions: PROJECT_ACTIONS.filter((action) => company || may(account, action, projectId)),
-        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) },
-          { resourceType: 'requirement', fields: [...REQUIREMENT_FIELDS, ...requirementFieldsOf(projectId).map((entry) => `custom.${entry.key}`)]
+        fields: [{ resourceType: 'ticket', fields: [...[...FIELDS, TAG_FIELD, ATTACHMENT_FIELD, GIT_FIELD].sort(), ...customFieldsOf(projectId).map((entry) => `custom.${entry.key}`)].filter((name) => company || field(account, projectId, name, 'write')) },
+          { resourceType: 'requirement', fields: [...REQUIREMENT_FIELDS, GIT_FIELD, ...requirementFieldsOf(projectId).map((entry) => `custom.${entry.key}`)]
             .filter((name) => company || requirementField(account, projectId, name, 'write')) }],
         groups: state.groups.map((group) => ({ id: group.id, name: group.name,
           actions: group.actions.filter((rule) => rule.projectId === projectId).map((rule) => ({ ...rule })),
@@ -1273,8 +1280,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const delegated = method === 'PUT' && /^\/permissions\/groups\/[^/]+\/(actions|fields)$/.test(p) && body?.projectId && managesProject(account, body.projectId);
     if (!may(account, 'permissions.manage') && !delegated) return problem(403, 'auth.forbidden');
     const detail = (group) => ({ id: group.id, name: group.name, members: [...group.members], actions: group.actions.map((rule) => ({ ...rule })), fields: group.fields.map((rule) => ({ ...rule })) });
-    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD].sort() },
-      { resourceType: 'requirement', fields: REQUIREMENT_FIELDS }] });
+    if (p === '/permissions/catalog') return ok({ companyActions: COMPANY_ACTIONS, projectActions: PROJECT_ACTIONS, fields: [{ resourceType: 'ticket', fields: [...FIELDS, TAG_FIELD, ATTACHMENT_FIELD, GIT_FIELD].sort() },
+      { resourceType: 'requirement', fields: [...REQUIREMENT_FIELDS, GIT_FIELD] }] });
     if (p === '/permissions/groups' && method === 'GET') return ok(state.groups.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
     if (p === '/permissions/groups' && method === 'POST') {
       if (state.groups.some((entry) => entry.name.toLowerCase() === body.name.toLowerCase())) return problem(409, 'permissions.group_name_taken');
@@ -1302,7 +1309,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       // Custom fields of requirements (TASK-098) need a project whose current configuration has them.
       const ownField = resourceType === 'requirement' && typeof body.field === 'string' && body.field.startsWith('custom.') && body.projectId
         && requirementFieldsOf(body.projectId).some((entry) => `custom.${entry.key}` === body.field);
-      if (resourceType === 'requirement' && !REQUIREMENT_FIELDS.includes(body.field) && !ownField) return problem(400, 'request.invalid', { violations: ['field.unknown'] });
+      if (resourceType === 'requirement' && ![...REQUIREMENT_FIELDS, GIT_FIELD].includes(body.field) && !ownField) return problem(400, 'request.invalid', { violations: ['field.unknown'] });
       group.fields = group.fields.filter((rule) => !((rule.resourceType ?? 'ticket') === resourceType && rule.field === body.field && rule.operation === body.operation
         && rule.projectId === body.projectId));
       if (body.effect !== 'remove') group.fields.push({ resourceType, field: body.field, projectId: body.projectId, operation: body.operation, effect: body.effect });
@@ -2292,7 +2299,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       // TASK-097: ticket links only with ticket.read, page links for every reader with the titles the reader may see.
       const tickets = ticketReadable(account, item.projectId);
       const fieldShown = (event) => event.field === null || access.readableFields.includes(event.field) || event.field === 'pages'
-        || (event.field === 'tickets' && tickets);
+        || (event.field === 'tickets' && tickets) || (event.field === GIT_FIELD && requirementField(account, item.projectId, GIT_FIELD, 'read'));
       const events = req.events.filter((event) => event.requirementId === item.id && fieldShown(event));
       const { pageTitle } = requirementLinks(account, item, query.get('language'));
       const pageTitles = Object.fromEntries(events.filter((event) => event.field === 'pages').map((event) => event.to ?? event.from)
@@ -3686,6 +3693,144 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const index = git.releases.findIndex((release) => release.id === releaseId && release.projectId === projectId);
       if (index < 0) return problem(404, 'git.repository_not_found');
       git.releases.splice(index, 1);
+      return empty();
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  // Git links of tickets and requirements (TASK-112) as the backend: the field `git` of both resource types, objects read live
+  // through the own active connection, and an object the person cannot read named only by its kind. A repository of the stand-in
+  // lists its `commits` ({ sha, message, author, at }) and `changes` ({ number, title, state, author }).
+  const GIT_SHA = /^[0-9a-f]{7,64}$/;
+  function gitObject(provider, repo, kind, key) {
+    const url = (suffix) => (repo.url ? `${repo.url}${suffix}` : null);
+    const github = provider.kind === 'github';
+    if (kind === 'repository') return { repository: gitRepo(repo), commit: null, change: null, url: repo.url ?? null };
+    if (kind === 'commit') {
+      const commit = (repo.commits ?? []).find((entry) => entry.sha.startsWith(key));
+      return commit ? { repository: gitRepo(repo), change: null, url: url(`${github ? '' : '/-'}/commit/${commit.sha}`), key: commit.sha,
+        commit: { sha: commit.sha, shortSha: commit.sha.slice(0, 7), message: commit.message, author: commit.author, committedAt: commit.at } } : null;
+    }
+    if ((kind === 'pull_request') !== github) return null;
+    const change = (repo.changes ?? []).find((entry) => String(entry.number) === key);
+    return change ? { repository: gitRepo(repo), commit: null, key: String(change.number), url: url(github ? `/pull/${change.number}` : `/-/merge_requests/${change.number}`),
+      change: { number: change.number, title: change.title, state: change.state, author: change.author } } : null;
+  }
+  function gitLinkView(account, link) {
+    const provider = git.providers.find((entry) => entry.id === link.providerId);
+    const base = { id: link.id, kind: link.kind, providerId: link.providerId, providerName: provider && !provider.removed ? provider.name : null,
+      providerKind: provider?.kind ?? null, linkedAt: link.linkedAt, linkedBy: link.linkedBy };
+    const hidden = (reason) => ({ ...base, available: false, reason, repository: null, commit: null, change: null, url: null });
+    if (!provider || provider.removed) return hidden('git.unavailable');
+    const connection = gitConnection(account, provider.id);
+    if (!connection) return hidden('git.not_connected');
+    if (connection.state !== 'active') return hidden('git.connection_renew');
+    if (git.limited) return hidden('git.rate_limited');
+    const repo = gitReadable(account, provider.id).find((entry) => entry.externalId === link.repositoryId);
+    const object = repo && gitObject(provider, repo, link.kind, link.key);
+    if (!object) return hidden('git.unavailable');
+    return { ...base, available: true, reason: null, repository: object.repository, commit: object.commit, change: object.change, url: object.url };
+  }
+  function gitLinkRoute(account, method, target, rest, query, body) {
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    let subject;
+    if (target.kind === 'ticket') {
+      const project = state.projects.find((entry) => entry.id === target.projectId);
+      const read = project !== undefined && may(account, 'ticket.read', project.id);
+      const edit = project !== undefined && may(account, 'ticket.edit', project.id);
+      if (!read && !edit) return problem(404, 'project.not_found');
+      const ticket = state.tickets.find((entry) => entry.projectId === project.id && entry.number === target.number);
+      if (!ticket) return problem(404, 'ticket.not_found');
+      subject = { kind: 'ticket', id: ticket.id, projectId: project.id, readable: read && field(account, project.id, GIT_FIELD, 'read'),
+        writable: edit && field(account, project.id, GIT_FIELD, 'read') && field(account, project.id, GIT_FIELD, 'write'),
+        record: (from, to) => state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: GIT_FIELD, from, to }] }) };
+    } else {
+      const item = req.items.find((entry) => entry.id === target.id);
+      const read = item !== undefined && may(account, 'requirement.read', item.projectId);
+      const edit = item !== undefined && may(account, 'requirement.edit', item.projectId);
+      if (!read && !edit) return problem(404, 'requirement.not_found');
+      subject = { kind: 'requirement', id: item.id, projectId: item.projectId, readable: read && requirementField(account, item.projectId, GIT_FIELD, 'read'),
+        writable: edit && requirementField(account, item.projectId, GIT_FIELD, 'read') && requirementField(account, item.projectId, GIT_FIELD, 'write'),
+        record: (from, to) => requirementEvent(item, to ? 'git_linked' : 'git_unlinked', account, { field: GIT_FIELD, from, to }) };
+    }
+    const mine = git.links.filter((link) => link.subjectKind === subject.kind && link.subjectId === subject.id);
+    if (!rest && method === 'GET') {
+      return ok({ readable: subject.readable, writable: subject.writable, links: subject.readable ? mine.map((link) => gitLinkView(account, link)) : [] });
+    }
+    if (!subject.writable) return problem(403, 'auth.forbidden');
+    const releases = git.releases.filter((release) => release.projectId === subject.projectId);
+    if (rest === 'choices' && method === 'GET') {
+      return ok(releases.map((release) => {
+        const provider = git.providers.find((entry) => entry.id === release.providerId);
+        const connection = provider && gitConnection(account, provider.id);
+        const repo = connection?.state === 'active' ? gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId) : undefined;
+        return { releaseId: release.id, providerId: release.providerId, providerName: provider?.name ?? null, providerKind: provider?.kind ?? null,
+          available: Boolean(repo), reason: repo ? null : !connection ? 'git.not_connected' : 'git.unavailable', repository: repo ? gitRepo(repo) : null };
+      }));
+    }
+    if (!rest && method === 'POST') {
+      let provider;
+      let repo;
+      let kind;
+      let key;
+      if (typeof body.url === 'string') {
+        const address = body.url.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+        const live = git.providers.filter((entry) => !entry.removed && address.toLowerCase().startsWith(`${entry.baseUrl.toLowerCase()}/`));
+        const parsed = live.map((entry) => {
+          const tail = address.slice(entry.baseUrl.length + 1);
+          const github = entry.kind === 'github';
+          const parts = github ? tail.split('/') : tail.split('/-/');
+          const path = (github ? parts.slice(0, 2).join('/') : parts[0]).replace(/\.git$/, '');
+          const more = github ? parts.slice(2) : (parts[1] ?? '').split('/').filter(Boolean);
+          if (more.length === 0) return { provider: entry, path, kind: 'repository', key: '' };
+          if (more[0] === 'commit' && GIT_SHA.test(more[1] ?? '')) return { provider: entry, path, kind: 'commit', key: more[1] };
+          if (more[0] === (github ? 'pull' : 'merge_requests') && /^[1-9][0-9]*$/.test(more[1] ?? '')) {
+            return { provider: entry, path, kind: github ? 'pull_request' : 'merge_request', key: more[1] };
+          }
+          return null;
+        }).filter(Boolean);
+        if (parsed.length === 0) return problem(400, 'git.address_unknown');
+        const reading = parsed.find((entry) => releases.some((release) => release.providerId === entry.provider.id)) ?? parsed[0];
+        provider = reading.provider;
+        kind = reading.kind;
+        key = reading.key;
+        const connection = gitConnection(account, provider.id);
+        if (!connection) return problem(409, 'git.not_connected');
+        if (connection.state !== 'active') return problem(409, 'git.connection_renew');
+        if (git.limited) return problem(503, 'git.rate_limited');
+        repo = gitReadable(account, provider.id).find((entry) => entry.path === reading.path);
+      } else {
+        const release = releases.find((entry) => entry.id === body.releaseId);
+        if (!release) return problem(404, 'git.repository_not_found');
+        provider = git.providers.find((entry) => entry.id === release.providerId && !entry.removed);
+        if (!provider) return problem(404, 'git.provider_not_found');
+        kind = body.kind;
+        key = (body.key ?? '').toLowerCase();
+        if (!['repository', 'commit', 'pull_request', 'merge_request'].includes(kind)) return problem(400, 'request.invalid', { violations: ['kind.invalid'] });
+        const connection = gitConnection(account, provider.id);
+        if (!connection) return problem(409, 'git.not_connected');
+        if (git.limited) return problem(503, 'git.rate_limited');
+        repo = gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId);
+      }
+      const object = repo && gitObject(provider, repo, kind, key);
+      if (!object) return problem(404, 'git.object_not_found');
+      if (!releases.some((release) => release.providerId === provider.id && release.externalId === repo.externalId)) return problem(409, 'git.repository_not_released');
+      const stored = object.key ?? '';
+      if (mine.some((link) => link.providerId === provider.id && link.repositoryId === repo.externalId && link.kind === kind && link.key === stored)) {
+        return problem(409, 'git.link_exists');
+      }
+      if (mine.length >= 50) return problem(409, 'git.links_too_many');
+      const link = { id: uuid(), subjectKind: subject.kind, subjectId: subject.id, projectId: subject.projectId, providerId: provider.id,
+        repositoryId: repo.externalId, kind, key: stored, linkedAt: now(), linkedBy: account.id };
+      git.links.push(link);
+      subject.record(null, `${kind}:${link.id}`);
+      return { status: 201, body: gitLinkView(account, link) };
+    }
+    if (rest && method === 'DELETE') {
+      const index = git.links.findIndex((link) => link.id === rest && link.subjectKind === subject.kind && link.subjectId === subject.id);
+      if (index < 0) return problem(404, 'git.link_not_found');
+      const [removed] = git.links.splice(index, 1);
+      subject.record(`${removed.kind}:${removed.id}`, null);
       return empty();
     }
     return problem(404, 'resource.not_found');

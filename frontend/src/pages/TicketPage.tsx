@@ -16,6 +16,7 @@ import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { TicketAttachments } from './TicketAttachments.tsx';
+import { GitLinksPanel, useGitHistoryText } from './GitLinks.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
 import { TicketRequirements } from './TicketRequirements.tsx';
 import { TicketSla } from './TicketSla.tsx';
@@ -319,6 +320,8 @@ function TicketView({ project, limited, ticket, etag, round, refusals, onChanged
           <TicketTags key={`tags-${refusals}`} project={project} ticket={ticket} round={round} />
           <TicketRequirements key={`requirements-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketAttachments key={`attachments-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
+          <GitLinksPanel key={`git-${refusals}`} target={{ kind: 'ticket', projectId: project.id, number: ticket.number }} round={round}
+            onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <History key={`history-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />
         </div>
       </div>
@@ -457,6 +460,7 @@ function History({ project, ticket, round }: { readonly project: Project; readon
   };
 
   // A requirement link as the server keeps it in the history: "ANF-n:revision" (TASK-097).
+  const gitText = useGitHistoryText();
   const requirementText = (from: string | null | undefined, to: string | null | undefined) => {
     const part = (raw: string | null | undefined) => {
       const at = (raw ?? '').lastIndexOf(':');
@@ -494,6 +498,8 @@ function History({ project, ticket, round }: { readonly project: Project; readon
                         ? t(change.to ? 'history.tagAdded' : 'history.tagRemoved', { tag: value('tags', change.to ?? change.from) })
                         : change.field === 'requirements'
                         ? requirementText(change.from, change.to)
+                        : change.field === 'git'
+                        ? gitText(change.from, change.to)
                         : change.field === 'attachments'
                         ? attachmentText(change.to, change.from)
                         : change.field === 'mail'

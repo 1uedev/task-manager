@@ -24,6 +24,7 @@ import { CUSTOM_PREFIX } from '../app/configuration.ts';
 import { ProblemView } from '../states/StateViews.tsx';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { WikiContent } from './WikiContent.tsx';
+import { GitLinksPanel, useGitHistoryText } from './GitLinks.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
 
 // Requirements of a project (TASK-096, DEC-126). The server decides what a person sees and may do: `access` names the
@@ -787,10 +788,11 @@ function EventText({ event, projectKey, pageTitles, fields }: {
   const { t } = useI18n();
   const name = useAccountName();
   const text = useCustomText();
+  const gitText = useGitHistoryText();
   // A custom field (TASK-098) is named by its definition; the server sends its events only to whom may read it.
   const own = event.field?.startsWith(CUSTOM_PREFIX) ? fields.find((item) => `${CUSTOM_PREFIX}${item.key}` === event.field) : undefined;
   // Links name no field of the requirement (TASK-097).
-  const field = event.field === null || event.field === 'tickets' || event.field === 'pages' ? ''
+  const field = event.field === null || event.field === 'tickets' || event.field === 'pages' || event.field === 'git' ? ''
     : event.field.startsWith(CUSTOM_PREFIX) ? own?.name ?? event.field : t(`requirements.field.${event.field}` as MessageKey);
   const value = (raw: string | null) => {
     if (raw === null) return t('requirements.event.empty');
@@ -829,6 +831,7 @@ function EventText({ event, projectKey, pageTitles, fields }: {
     case 'ticket_unlinked': return <>{t('requirements.event.ticketUnlinked', { ticket: ticket(event.from) })}</>;
     case 'page_linked': return <>{t('requirements.event.pageLinked', { page: page(event.to) })}</>;
     case 'page_unlinked': return <>{t('requirements.event.pageUnlinked', { page: page(event.from) })}</>;
+    case 'git_linked': case 'git_unlinked': return <>{gitText(event.from, event.to)}</>;
     default: return <>{event.kind}</>;
   }
 }
@@ -1100,6 +1103,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
             {mode === 'history' && <HistoryPanel key={requirement.id} requirement={requirement} />}
             {(mode === 'read' || mode === 'return' || mode === 'discard') && <ContentView content={content} access={access} fields={requirement.customFields} testId="requirement-content" />}
             {mode === 'read' && <RequirementLinksPanel key={requirement.id} requirement={requirement} />}
+            {mode === 'read' && <GitLinksPanel key={`git-${requirement.id}`} target={{ kind: 'requirement', id: requirement.id }} />}
           </article>
         );
       }}

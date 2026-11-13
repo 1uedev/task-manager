@@ -1125,3 +1125,38 @@ export const releaseGitRepository = (api: ServerApi, projectId: string, provider
     one<GitRelease>((v) => hasStrings(v, 'id', 'providerId', 'externalId')));
 export const withdrawGitRepository = (api: ServerApi, projectId: string, releaseId: string) =>
   run(() => api.git.DELETE('/projects/{projectId}/git/repositories/{releaseId}', { params: { path: { projectId, releaseId } } }), nothing);
+
+// ---------------------------------------------------------------- Git links (TASK-112)
+
+export type GitLink = GitTypes['schemas']['Link'];
+export type GitChoice = GitTypes['schemas']['Choice'];
+export type GitObjectKind = GitTypes['schemas']['ObjectKind'];
+export interface GitLinks { readonly readable: boolean; readonly writable: boolean; readonly links: GitLink[] }
+// A ticket by project and number or a requirement by its identifier.
+export type GitTarget = { readonly kind: 'ticket'; readonly projectId: string; readonly number: number } | { readonly kind: 'requirement'; readonly id: string };
+export type GitLinkRequest = { readonly url: string } | { readonly releaseId: string; readonly kind: GitObjectKind; readonly key: string };
+
+const isGitLink = (v: unknown) => hasStrings(v, 'id', 'kind', 'providerId') && typeof (v as GitLink).available === 'boolean';
+const isGitLinks = (v: unknown) => record(v) && typeof v.readable === 'boolean' && typeof v.writable === 'boolean' && Array.isArray(v.links)
+  && v.links.every(isGitLink);
+const isGitChoice = (v: unknown) => hasStrings(v, 'releaseId', 'providerId') && typeof (v as GitChoice).available === 'boolean';
+
+export const listGitLinks = (api: ServerApi, target: GitTarget, refresh: boolean) => {
+  const query = refresh ? { refresh: true } : {};
+  return target.kind === 'ticket'
+    ? run(() => api.git.GET('/projects/{projectId}/tickets/{number}/git', { params: { path: { projectId: target.projectId, number: target.number }, query } }),
+      one<GitLinks>(isGitLinks))
+    : run(() => api.git.GET('/requirements/{id}/git', { params: { path: { id: target.id }, query } }), one<GitLinks>(isGitLinks));
+};
+export const listGitChoices = (api: ServerApi, target: GitTarget) => (target.kind === 'ticket'
+  ? run(() => api.git.GET('/projects/{projectId}/tickets/{number}/git/choices', { params: { path: { projectId: target.projectId, number: target.number } } }),
+    listOf<GitChoice>(isGitChoice))
+  : run(() => api.git.GET('/requirements/{id}/git/choices', { params: { path: { id: target.id } } }), listOf<GitChoice>(isGitChoice)));
+export const linkGit = (api: ServerApi, target: GitTarget, body: GitLinkRequest) => (target.kind === 'ticket'
+  ? run(() => api.git.POST('/projects/{projectId}/tickets/{number}/git', { params: { path: { projectId: target.projectId, number: target.number } }, body }),
+    one<GitLink>(isGitLink))
+  : run(() => api.git.POST('/requirements/{id}/git', { params: { path: { id: target.id } }, body }), one<GitLink>(isGitLink)));
+export const unlinkGit = (api: ServerApi, target: GitTarget, linkId: string) => (target.kind === 'ticket'
+  ? run(() => api.git.DELETE('/projects/{projectId}/tickets/{number}/git/{linkId}',
+    { params: { path: { projectId: target.projectId, number: target.number, linkId } } }), nothing)
+  : run(() => api.git.DELETE('/requirements/{id}/git/{linkId}', { params: { path: { id: target.id, linkId } } }), nothing));

@@ -44,10 +44,12 @@ public class ConnectionService {
     private final GitProperties properties;
     private final ProviderApi api;
     private final Clock clock;
+    private final GitCache cache;
     private final TransactionTemplate transaction;
 
     ConnectionService(GitStore store, GitAccess access, GitSecrets secrets, GitProperties properties, ProviderApi api, Clock clock,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions, GitCache cache) {
+        this.cache = cache;
         this.store = store;
         this.access = access;
         this.secrets = secrets;
@@ -158,6 +160,8 @@ public class ConnectionService {
                     ProviderService.json(new Connected(providerId, account.id())), person, at);
                 return null;
             });
+            // A new connection may belong to another Git account: nothing read with the former one is used again.
+            cache.forget(started.accountId(), providerId);
             return new Finished(providerId, result);
         } catch (ProviderApi.TokenRejected rejected) {
             return new Finished(providerId, "git.denied");
@@ -184,11 +188,13 @@ public class ConnectionService {
                     ProviderService.json(new Connected(providerId, null)), accountId, clock.instant());
             }
         });
+        cache.forget(accountId, providerId);
     }
 
     /** Deleting the tokens of an account belongs to its deactivation and runs in its transaction (rule 5). */
     @EventListener
     void deactivated(AccountDeactivated event) {
+        cache.forgetAccount(event.accountId());
         Instant now = clock.instant();
         for (UUID providerId : store.deleteConnectionsOfAccount(event.accountId())) {
             store.provider(providerId).ifPresent(provider -> store.audit(provider.companyId(), "connection", event.accountId(),

@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Anforderungen (TASK-096 bis TASK-098)
-  version: 0.3.1
+  version: 0.4.0
   description: |
     Anforderungen in Projekten mit Abnahmekriterien, fachlichen Revisionen und der Freigabe genau einer Revision
     (REQ-REQ-001, REQ-REQ-002, DEC-030, DEC-126). Jeder Endpunkt verlangt eine vollständige Anmeldung (vor dem
@@ -14,7 +14,8 @@ info:
     `project.not_found` beziehungsweise `requirement.not_found`). Portalkonten erhalten nie eine Anforderungsaktion. Fehlt die
     nötige Aktion für eine Änderung, antwortet der Server mit 403 `auth.forbidden`.
 
-    Feldrechte: Der Ressourcentyp `requirement` hat die Felder `title`, `description`, `criteria`, `priority` und `owner`,
+    Feldrechte: Der Ressourcentyp `requirement` hat die Felder `title`, `description`, `criteria`, `priority`, `owner` und
+    seit Version 0.4.0 `git` (Git Verknüpfungen nach dem Git Vertrag, TASK-112),
     jedes mit eigener Lese und Schreibregel in der Rechteverwaltung. Ein Feld ohne Leseregel ist in jeder Antwort `null`,
     erscheint nicht in der Historie und nicht im Vergleich. Ändern verlangt die Schreibregel jedes genannten Felds, Anlegen
     zusätzlich die für `title` (sonst 403 `auth.forbidden`). Status, Kennung, Revisionen und Freigaben sieht jede Person mit
@@ -596,7 +597,7 @@ components:
       type: string
       description: Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098)
       anyOf:
-        - {type: string, enum: [title, description, criteria, priority, owner]}
+        - {type: string, enum: [title, description, criteria, priority, owner, git]}
         - {type: string, pattern: '^custom\.[a-z][a-z0-9_]{0,39}$'}
     CustomFieldValue:
       type: [string, integer, boolean]
@@ -806,7 +807,9 @@ components:
         (`from` und `to` sind die Revisionen), submitted, approved, returned (mit `reason`), discarded (mit freiwilliger
         `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status. Verknüpfungen (TASK-097) mit dem Feld
         `tickets`: ticket_linked, ticket_switched, ticket_unlinked mit `Ticketnummer:Revision` in `from` und `to`; mit dem
-        Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt.
+        Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt. Git Verknüpfungen
+        (TASK-112) mit dem Feld `git`: git_linked (`to`) und git_unlinked (`from`) mit `Objektart:Kennung`, sichtbar mit der
+        Leseregel von `git`; sie ändern weder Version noch Revision.
       required: [kind, revision, field, criterion, from, to, reason, actorId, occurredAt]
       properties:
         kind: {type: string}

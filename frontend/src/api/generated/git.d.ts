@@ -240,6 +240,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/tickets/{number}/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Git Verknüpfungen eines Tickets, live mit dem eigenen Token
+         * @description Ohne Leseregel des Felds `git` ist `readable` falsch und `links` leer. Ein nicht verfügbares Objekt erscheint nur mit
+         *     Art und Grund (`git.not_connected`, `git.connection_renew`, `git.rate_limited` oder `git.unavailable`), ohne Pfad,
+         *     Titel, Nachricht, Adresse, SHA oder Nummer.
+         */
+        get: operations["listTicketGitLinks"];
+        put?: never;
+        /**
+         * Git Objekt mit einem Ticket verknüpfen (Schreibregel des Felds git)
+         * @description Entweder die Adresse eines Repositorys, Commits, Pull Requests oder Merge Requests in `url` oder die Auswahl eines
+         *     freigegebenen Repositorys mit `releaseId`, `kind` und `key` (Commit SHA mit 7 bis 64 Zeichen oder Nummer, leer für
+         *     das Repository). Unbekannte Instanz oder Form 400 `git.address_unknown`; ohne Verbindung 409 `git.not_connected` oder
+         *     `git.connection_renew`; nicht vorhanden oder nicht lesbar 404 `git.object_not_found`; Repository nicht für das
+         *     Projekt freigegeben 409 `git.repository_not_released`; schon verknüpft 409 `git.link_exists`; mehr als 50
+         *     Verknüpfungen 409 `git.links_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
+         *     Die Version des Tickets ändert sich nicht.
+         */
+        post: operations["linkTicketGit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/git/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Git Verknüpfung eines Tickets lösen (nur Schreibregel des Felds git) */
+        delete: operations["unlinkTicketGit"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/tickets/{number}/git/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Freigegebene Repositories des Projekts zur Auswahl (Schreibregel des Felds git) */
+        get: operations["listTicketGitChoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{id}/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Git Verknüpfungen einer Anforderung, live mit dem eigenen Token
+         * @description Wie bei Tickets; die Verknüpfung gilt für die Anforderung, nicht für eine Revision.
+         */
+        get: operations["listRequirementGitLinks"];
+        put?: never;
+        /**
+         * Git Objekt mit einer Anforderung verknüpfen (Schreibregel des Felds git)
+         * @description Fehler wie bei Tickets. Version und Revisionen der Anforderung ändern sich nicht.
+         */
+        post: operations["linkRequirementGit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{id}/git/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Git Verknüpfung einer Anforderung lösen (nur Schreibregel des Felds git) */
+        delete: operations["unlinkRequirementGit"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{id}/git/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Freigegebene Repositories des Projekts zur Auswahl (Schreibregel des Felds git) */
+        get: operations["listRequirementGitChoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -322,13 +446,72 @@ export interface components {
             /** Format: date-time */
             releasedAt: string;
         };
+        /** @enum {string} */
+        ObjectKind: "repository" | "commit" | "pull_request" | "merge_request";
+        Link: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ObjectKind"];
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            providerKind: components["schemas"]["Kind"] | null;
+            /** Format: date-time */
+            linkedAt: string;
+            /** Format: uuid */
+            linkedBy: string;
+            available: boolean;
+            /** @enum {string|null} */
+            reason: "git.not_connected" | "git.connection_renew" | "git.rate_limited" | "git.unavailable" | null;
+            repository: {
+                name: string;
+                path: string;
+                url: string | null;
+            } | null;
+            commit: {
+                sha: string;
+                shortSha: string;
+                message: string | null;
+                author: string | null;
+                /** Format: date-time */
+                committedAt: string | null;
+            } | null;
+            change: {
+                /** Format: int64 */
+                number: number;
+                title: string | null;
+                /** @enum {string} */
+                state: "open" | "draft" | "merged" | "closed";
+                author: string | null;
+            } | null;
+            /** @description Aus der Adresse des Anbieters */
+            url: string | null;
+        };
+        Choice: {
+            /** Format: uuid */
+            releaseId: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            providerKind: components["schemas"]["Kind"] | null;
+            available: boolean;
+            /** @enum {string|null} */
+            reason: "git.not_connected" | "git.connection_renew" | "git.rate_limited" | "git.unavailable" | null;
+            repository: {
+                name: string;
+                path: string;
+                url: string | null;
+            } | null;
+        };
     };
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.forbidden, project.not_found,
          *     git.provider_not_found, git.provider_name_taken, git.provider_incomplete, git.secret_key_missing,
          *     git.public_url_missing, git.not_connected, git.connection_renew, git.repository_not_found, git.repository_released,
-         *     git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter.
+         *     git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter;
+         *     für Verknüpfungen zusätzlich ticket.not_found, requirement.not_found, git.address_unknown, git.object_not_found,
+         *     git.repository_not_released, git.link_exists, git.links_too_many, git.link_not_found und git.rate_limited.
          */
         Problem: {
             headers: {
@@ -339,14 +522,61 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description Verknüpfungen in der Reihenfolge ihrer Anlage */
+        Links: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    readable: boolean;
+                    writable: boolean;
+                    links: components["schemas"]["Link"][];
+                };
+            };
+        };
+        /** @description Verknüpft */
+        Link: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Link"];
+            };
+        };
+        /** @description Freigegebene Repositories; nicht verfügbare ohne Name und Pfad */
+        Choices: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Choice"][];
+            };
+        };
     };
     parameters: {
         Id: string;
         ProjectId: string;
+        Number: number;
+        LinkId: string;
+        /** @description Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“) */
+        Refresh: boolean;
         /** @description Version aus dem ETag */
         IfMatch: string;
     };
-    requestBodies: never;
+    requestBodies: {
+        LinkRequest: {
+            content: {
+                "application/json": {
+                    url?: string;
+                    /** Format: uuid */
+                    releaseId?: string;
+                    kind?: components["schemas"]["ObjectKind"];
+                    key?: string | null;
+                };
+            };
+        };
+    };
     headers: never;
     pathItems: never;
 }
@@ -747,6 +977,180 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listTicketGitLinks: {
+        parameters: {
+            query?: {
+                /** @description Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“) */
+                refresh?: components["parameters"]["Refresh"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Links"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    linkTicketGit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["LinkRequest"];
+        responses: {
+            201: components["responses"]["Link"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    unlinkTicketGit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gelöst */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listTicketGitChoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+                number: components["parameters"]["Number"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Choices"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listRequirementGitLinks: {
+        parameters: {
+            query?: {
+                /** @description Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“) */
+                refresh?: components["parameters"]["Refresh"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Links"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    linkRequirementGit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["LinkRequest"];
+        responses: {
+            201: components["responses"]["Link"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    unlinkRequirementGit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                linkId: components["parameters"]["LinkId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gelöst */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listRequirementGitChoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Choices"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

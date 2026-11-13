@@ -835,7 +835,7 @@ class RequirementApiTest {
         boolean found = false;
         for (JsonNode fields : catalog.json().get("fields")) {
             if ("requirement".equals(fields.get("resourceType").asString())) {
-                assertEquals(List.of("criteria", "description", "owner", "priority", "title"), names(fields.get("fields")));
+                assertEquals(List.of("criteria", "description", "git", "owner", "priority", "title"), names(fields.get("fields")));
                 found = true;
             }
         }

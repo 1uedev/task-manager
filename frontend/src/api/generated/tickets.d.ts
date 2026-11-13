@@ -217,7 +217,8 @@ export interface components {
              *     als `custom.<schlüssel>`, wenn sie aktiv sind. `tags` und `attachments` erscheinen, wenn die Anfrage Tags
              *     beziehungsweise Anhänge über ihre eigenen Endpunkte ändern darf (Befund F1 der Prüfung von TASK-051). `customer` und
              *     `contact` erscheinen mit ihrer Schreibregel und werden über den Helpdeskvertrag geändert; `mail` ist nie änderbar (TASK-057).
-             *     `priority` erscheint mit seiner Schreibregel und wird über den SLA Vertrag geändert (TASK-068).
+             *     `priority` erscheint mit seiner Schreibregel und wird über den SLA Vertrag geändert (TASK-068). `git` erscheint mit
+             *     seiner Schreibregel und wird über den Git Vertrag geändert (TASK-112).
              */
             writableFields: string[];
             /** Format: date-time */
@@ -239,6 +240,9 @@ export interface components {
                 /**
                  * @description `requirements` (TASK-097): Verknüpfen, Umstellen oder Lösen einer Anforderung mit den Werten `ANF-n:Revision`,
                  *     als eigener Eintrag, der die Version des Tickets nicht ändert; nur sichtbar mit `requirement.read` im Projekt.
+                 *     `git` (TASK-112): Verknüpfen (`to`) oder Lösen (`from`) eines Git Objekts mit dem Wert `Objektart:Kennung`
+                 *     (`repository`, `commit`, `pull_request` oder `merge_request` und die Kennung der Verknüpfung), als eigener
+                 *     Eintrag, der die Version nicht ändert; nur sichtbar mit der Leseregel des Felds `git`.
                  */
                 field: string;
                 from: string | null;

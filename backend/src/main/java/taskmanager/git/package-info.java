@@ -4,7 +4,7 @@
  * and the repositories released per project. Every call to a provider uses the token of the person who looks; there is no
  * service account. Nothing is ever written to Git. Everything in sub-packages is internal.
  */
-@ApplicationModule(displayName = "Git", allowedDependencies = { "platform", "identity", "permissions", "projects" })
+@ApplicationModule(displayName = "Git", allowedDependencies = { "platform", "identity", "permissions", "projects", "tickets", "requirements" })
 package taskmanager.git;
 
 import org.springframework.modulith.ApplicationModule;

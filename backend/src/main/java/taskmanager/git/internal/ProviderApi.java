@@ -29,6 +29,8 @@ public class ProviderApi {
     static final int GITLAB_MIN_MAJOR = 16;
     private static final int MAX_REPOSITORIES = 100;
     private static final Pattern SAFE_PATH = Pattern.compile("[A-Za-z0-9._\\-]+(/[A-Za-z0-9._\\-]+){1,20}");
+    private static final Pattern SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
+    private static final Pattern FULL_SHA = Pattern.compile("[0-9a-f]{40}([0-9a-f]{24})?");
     private static final Pattern VERSION = Pattern.compile("^(\\d{1,4})\\.(\\d{1,4})");
 
     private final GitHttp http;
@@ -46,6 +48,17 @@ public class ProviderApi {
     }
 
     public record Repository(String externalId, String name, String path, String url) {
+    }
+
+    /** A commit as a person sees it (TASK-112): the full SHA, the first line of the message, the author and the time. */
+    public record Commit(String sha, String message, String author, Instant at) {
+        public String shortSha() {
+            return sha.substring(0, 7);
+        }
+    }
+
+    /** A pull or merge request (TASK-112) with its state {@code open}, {@code draft}, {@code merged} or {@code closed}. */
+    public record Change(long number, String title, String state, String author) {
     }
 
     /** The provider refused the token: it ended, was withdrawn or the grant is gone. */
@@ -210,6 +223,114 @@ public class ProviderApi {
             return Optional.empty();
         }
         return repository(provider, checked(answer)).filter(r -> r.externalId().equals(externalId));
+    }
+
+    /**
+     * One repository by its path as an address names it (TASK-112); empty when the token may not read it, it does not exist or
+     * the path is not one this module builds addresses from.
+     */
+    Optional<Repository> repositoryByPath(Provider provider, String token, String path) {
+        if (path == null || !SAFE_PATH.matcher(path).matches() || (provider.kind() == Provider.Kind.GITHUB && path.split("/").length != 2)) {
+            return Optional.empty();
+        }
+        String url = apiUrl(provider) + (provider.kind() == Provider.Kind.GITHUB ? "/repos/" + path : "/projects/" + GitHttp.encode(path));
+        return found(http.get(provider, url, token)).flatMap(json -> repository(provider, json));
+    }
+
+    /** One commit of a repository by a full or abbreviated SHA; empty when it is not there or not readable. */
+    Optional<Commit> commit(Provider provider, String token, String repositoryId, String sha) {
+        if (!repositoryId.matches("[0-9]{1,20}") || sha == null || !SHA.matcher(sha).matches()) {
+            return Optional.empty();
+        }
+        boolean github = provider.kind() == Provider.Kind.GITHUB;
+        String url = apiUrl(provider) + (github ? "/repositories/" + repositoryId + "/commits/" : "/projects/" + repositoryId + "/repository/commits/") + sha;
+        return found(http.get(provider, url, token)).flatMap(json -> {
+            String full = text(json, github ? "sha" : "id");
+            JsonNode details = github ? json.get("commit") : json;
+            JsonNode author = github && details != null ? details.get("author") : null;
+            String message = text(details, "message");
+            String name = github ? text(author, "name") : text(json, "author_name");
+            Instant at = time(github ? text(author, "date") : text(json, "committed_date"));
+            if (full == null || !FULL_SHA.matcher(full).matches() || !full.startsWith(sha.toLowerCase(Locale.ROOT))) {
+                return Optional.empty();
+            }
+            return Optional.of(new Commit(full, line(message, 300), cut(name, 200), at));
+        });
+    }
+
+    /** One pull request of GitHub or merge request of GitLab by its number; empty when it is not there or not readable. */
+    Optional<Change> change(Provider provider, String token, String repositoryId, long number) {
+        if (!repositoryId.matches("[0-9]{1,20}") || number < 1 || number > Integer.MAX_VALUE) {
+            return Optional.empty();
+        }
+        boolean github = provider.kind() == Provider.Kind.GITHUB;
+        String url = apiUrl(provider) + (github ? "/repositories/" + repositoryId + "/pulls/" : "/projects/" + repositoryId + "/merge_requests/") + number;
+        return found(http.get(provider, url, token)).flatMap(json -> {
+            JsonNode numberNode = json.get(github ? "number" : "iid");
+            if (numberNode == null || !numberNode.isNumber() || numberNode.asLong() != number) {
+                return Optional.empty();
+            }
+            boolean draft = json.path("draft").asBoolean(false) || (!github && json.path("work_in_progress").asBoolean(false));
+            String raw = text(json, "state");
+            String state;
+            if (github) {
+                state = json.hasNonNull("merged_at") ? "merged" : "closed".equals(raw) ? "closed" : draft ? "draft" : "open";
+            } else {
+                state = "merged".equals(raw) ? "merged" : "opened".equals(raw) ? (draft ? "draft" : "open") : "closed";
+            }
+            String author = text(json.get(github ? "user" : "author"), github ? "login" : "username");
+            return Optional.of(new Change(number, line(text(json, "title"), 300), state, cut(author, 200)));
+        });
+    }
+
+    /** The address of a linked object for people, built from the address of the repository; {@code null} without one. */
+    static String objectUrl(Provider provider, Repository repository, String kind, String key) {
+        if (repository.url() == null) {
+            return null;
+        }
+        boolean github = provider.kind() == Provider.Kind.GITHUB;
+        return switch (kind) {
+            case GitLink.COMMIT -> repository.url() + (github ? "/commit/" : "/-/commit/") + key;
+            case GitLink.PULL_REQUEST -> repository.url() + "/pull/" + key;
+            case GitLink.MERGE_REQUEST -> repository.url() + "/-/merge_requests/" + key;
+            default -> repository.url();
+        };
+    }
+
+    /** The JSON of a found object; empty for 404, 422 (GitHub for an unknown SHA) and a 403 that is no rate limit. */
+    private static Optional<JsonNode> found(GitHttp.Answer answer) {
+        if (answer.status() == 404 || answer.status() == 422 || (answer.status() == 403 && !answer.limited())) {
+            return Optional.empty();
+        }
+        JsonNode json = checked(answer);
+        return json != null && json.isObject() ? Optional.of(json) : Optional.empty();
+    }
+
+    private static String line(String text, int max) {
+        if (text == null) {
+            return null;
+        }
+        String first = text.strip().lines().findFirst().orElse("").strip();
+        return cut(first.isEmpty() ? null : first, max);
+    }
+
+    private static String cut(String text, int max) {
+        if (text == null) {
+            return null;
+        }
+        String clean = text.replace("\u0000", "");
+        return clean.codePointCount(0, clean.length()) <= max ? clean : clean.substring(0, clean.offsetByCodePoints(0, max - 1)) + "…";
+    }
+
+    private static Instant time(String text) {
+        if (text == null) {
+            return null;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(text).toInstant();
+        } catch (java.time.format.DateTimeParseException invalid) {
+            return null;
+        }
     }
 
     /** The version a GitLab of its own reports to the token, as major and minor; empty when it does not say. */

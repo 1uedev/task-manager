@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, Git Verknüpfung (TASK-111)
+  title: Task Manager API, Git Verknüpfung (TASK-111, TASK-112)
   version: 0.1.0
   description: |
     Anbieterinstanzen für GitHub.com, GitLab.com und ein eigenes GitLab, die Verbindung des eigenen Git Kontos über OAuth
@@ -15,6 +15,13 @@ info:
     nie Teil einer Antwort. Änderungen an Anbietern verlangen die Version aus `If-Match` (fehlt sie, 428
     `git.precondition_required`; passt sie nicht, 412 `git.version_conflict`). Ist die Datenbank kurz belegt, antwortet der
     Server mit 503 `git.busy` und `Retry-After`. Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+
+    Git Verknüpfungen an Tickets und Anforderungen (TASK-112, DEC-142) folgen dem Feld `git` der Ressourcentypen `ticket`
+    und `requirement`: die Leseregel zeigt die Verknüpfungen, die Schreibregel verknüpft und löst. Wer Ticket oder
+    Anforderung weder lesen noch bearbeiten darf, erhält 404 (`project.not_found`, `ticket.not_found`,
+    `requirement.not_found`); fehlt die Schreibregel, 403 `auth.forbidden`. Angaben aus Git werden beim Abruf live mit dem
+    Token der betrachtenden Person geladen und höchstens 60 Sekunden je Person im Arbeitsspeicher gehalten; `refresh=true`
+    liest am Zwischenspeicher vorbei. Höchstens vier Abrufe laufen je Anfrage gleichzeitig.
 servers:
   - url: /api/v1
 security:
@@ -321,6 +328,130 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '502': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/git:
+    get:
+      operationId: listTicketGitLinks
+      summary: Git Verknüpfungen eines Tickets, live mit dem eigenen Token
+      description: |
+        Ohne Leseregel des Felds `git` ist `readable` falsch und `links` leer. Ein nicht verfügbares Objekt erscheint nur mit
+        Art und Grund (`git.not_connected`, `git.connection_renew`, `git.rate_limited` oder `git.unavailable`), ohne Pfad,
+        Titel, Nachricht, Adresse, SHA oder Nummer.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: linkTicketGit
+      summary: Git Objekt mit einem Ticket verknüpfen (Schreibregel des Felds git)
+      description: |
+        Entweder die Adresse eines Repositorys, Commits, Pull Requests oder Merge Requests in `url` oder die Auswahl eines
+        freigegebenen Repositorys mit `releaseId`, `kind` und `key` (Commit SHA mit 7 bis 64 Zeichen oder Nummer, leer für
+        das Repository). Unbekannte Instanz oder Form 400 `git.address_unknown`; ohne Verbindung 409 `git.not_connected` oder
+        `git.connection_renew`; nicht vorhanden oder nicht lesbar 404 `git.object_not_found`; Repository nicht für das
+        Projekt freigegeben 409 `git.repository_not_released`; schon verknüpft 409 `git.link_exists`; mehr als 50
+        Verknüpfungen 409 `git.links_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
+        Die Version des Tickets ändert sich nicht.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      requestBody: {$ref: '#/components/requestBodies/LinkRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Link'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/git/{linkId}:
+    delete:
+      operationId: unlinkTicketGit
+      summary: Git Verknüpfung eines Tickets lösen (nur Schreibregel des Felds git)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+        - $ref: '#/components/parameters/LinkId'
+      responses:
+        '204': {description: Gelöst}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/git/choices:
+    get:
+      operationId: listTicketGitChoices
+      summary: Freigegebene Repositories des Projekts zur Auswahl (Schreibregel des Felds git)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Number'
+      responses:
+        '200': {$ref: '#/components/responses/Choices'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{id}/git:
+    get:
+      operationId: listRequirementGitLinks
+      summary: Git Verknüpfungen einer Anforderung, live mit dem eigenen Token
+      description: Wie bei Tickets; die Verknüpfung gilt für die Anforderung, nicht für eine Revision.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Refresh'
+      responses:
+        '200': {$ref: '#/components/responses/Links'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: linkRequirementGit
+      summary: Git Objekt mit einer Anforderung verknüpfen (Schreibregel des Felds git)
+      description: Fehler wie bei Tickets. Version und Revisionen der Anforderung ändern sich nicht.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody: {$ref: '#/components/requestBodies/LinkRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Link'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{id}/git/{linkId}:
+    delete:
+      operationId: unlinkRequirementGit
+      summary: Git Verknüpfung einer Anforderung lösen (nur Schreibregel des Felds git)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/LinkId'
+      responses:
+        '204': {description: Gelöst}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{id}/git/choices:
+    get:
+      operationId: listRequirementGitChoices
+      summary: Freigegebene Repositories des Projekts zur Auswahl (Schreibregel des Felds git)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200': {$ref: '#/components/responses/Choices'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -338,6 +469,22 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    LinkId:
+      name: linkId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Refresh:
+      name: refresh
+      in: query
+      required: false
+      description: Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“)
+      schema: {type: boolean, default: false}
     IfMatch:
       name: If-Match
       in: header
@@ -350,12 +497,51 @@ components:
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.forbidden, project.not_found,
         git.provider_not_found, git.provider_name_taken, git.provider_incomplete, git.secret_key_missing,
         git.public_url_missing, git.not_connected, git.connection_renew, git.repository_not_found, git.repository_released,
-        git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter.
+        git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter;
+        für Verknüpfungen zusätzlich ticket.not_found, requirement.not_found, git.address_unknown, git.object_not_found,
+        git.repository_not_released, git.link_exists, git.links_too_many, git.link_not_found und git.rate_limited.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
       content:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
+    Links:
+      description: Verknüpfungen in der Reihenfolge ihrer Anlage
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [readable, writable, links]
+            properties:
+              readable: {type: boolean}
+              writable: {type: boolean}
+              links:
+                type: array
+                items: {$ref: '#/components/schemas/Link'}
+    Link:
+      description: Verknüpft
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Link'}
+    Choices:
+      description: Freigegebene Repositories; nicht verfügbare ohne Name und Pfad
+      content:
+        application/json:
+          schema:
+            type: array
+            items: {$ref: '#/components/schemas/Choice'}
+  requestBodies:
+    LinkRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              url: {type: string, maxLength: 2000}
+              releaseId: {type: string, format: uuid}
+              kind: {$ref: '#/components/schemas/ObjectKind'}
+              key: {type: [string, 'null'], maxLength: 64}
   schemas:
     Problem:
       type: object
@@ -436,3 +622,69 @@ components:
         reason: {type: [string, 'null'], enum: [git.not_connected, git.connection_renew, git.unavailable, null]}
         repository: {oneOf: [{$ref: '#/components/schemas/Repository'}, {type: 'null'}]}
         releasedAt: {type: string, format: date-time}
+    ObjectKind:
+      type: string
+      enum: [repository, commit, pull_request, merge_request]
+    Link:
+      type: object
+      required: [id, kind, providerId, providerName, providerKind, linkedAt, linkedBy, available, reason, repository, commit, change, url]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/ObjectKind'}
+        providerId: {type: string, format: uuid}
+        providerName: {type: [string, 'null']}
+        providerKind: {oneOf: [{$ref: '#/components/schemas/Kind'}, {type: 'null'}]}
+        linkedAt: {type: string, format: date-time}
+        linkedBy: {type: string, format: uuid}
+        available: {type: boolean}
+        reason: {type: [string, 'null'], enum: [git.not_connected, git.connection_renew, git.rate_limited, git.unavailable, null]}
+        repository:
+          oneOf:
+            - type: object
+              required: [name, path, url]
+              properties:
+                name: {type: string}
+                path: {type: string}
+                url: {type: [string, 'null']}
+            - {type: 'null'}
+        commit:
+          oneOf:
+            - type: object
+              required: [sha, shortSha, message, author, committedAt]
+              properties:
+                sha: {type: string}
+                shortSha: {type: string}
+                message: {type: [string, 'null']}
+                author: {type: [string, 'null']}
+                committedAt: {type: [string, 'null'], format: date-time}
+            - {type: 'null'}
+        change:
+          oneOf:
+            - type: object
+              required: [number, title, state, author]
+              properties:
+                number: {type: integer, format: int64}
+                title: {type: [string, 'null']}
+                state: {type: string, enum: [open, draft, merged, closed]}
+                author: {type: [string, 'null']}
+            - {type: 'null'}
+        url: {type: [string, 'null'], description: Aus der Adresse des Anbieters, dem Pfad und der Kennung gebaut}
+    Choice:
+      type: object
+      required: [releaseId, providerId, providerName, providerKind, available, reason, repository]
+      properties:
+        releaseId: {type: string, format: uuid}
+        providerId: {type: string, format: uuid}
+        providerName: {type: [string, 'null']}
+        providerKind: {oneOf: [{$ref: '#/components/schemas/Kind'}, {type: 'null'}]}
+        available: {type: boolean}
+        reason: {type: [string, 'null'], enum: [git.not_connected, git.connection_renew, git.rate_limited, git.unavailable, null]}
+        repository:
+          oneOf:
+            - type: object
+              required: [name, path, url]
+              properties:
+                name: {type: string}
+                path: {type: string}
+                url: {type: [string, 'null']}
+            - {type: 'null'}

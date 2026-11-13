@@ -37,10 +37,12 @@ public class ProviderService {
     private final GitProperties properties;
     private final ProviderApi api;
     private final Clock clock;
+    private final GitCache cache;
     private final TransactionTemplate transaction;
 
     ProviderService(GitStore store, GitAccess access, GitSecrets secrets, GitProperties properties, ProviderApi api, Clock clock,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions, GitCache cache) {
+        this.cache = cache;
         this.store = store;
         this.access = access;
         this.secrets = secrets;
@@ -145,6 +147,7 @@ public class ProviderService {
     }
 
     private void endConnections(UUID companyId, UUID providerId, UUID actor, Instant now) {
+        cache.forgetProvider(providerId);
         for (UUID account : store.deleteConnectionsOfProvider(providerId)) {
             store.audit(companyId, "connection", account, "connection.ended", json(new Ended(providerId)), actor, now);
         }
