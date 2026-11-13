@@ -95,14 +95,19 @@ export function section(route: Route): RouteName {
 
 // A page with unsaved input registers a guard. When it refuses, the page stays and the previous address is put back.
 let guard: (() => boolean) | null = null;
-// A navigation the application starts itself (after a save, for example) is never held back by the guard.
+// Set by navigate and navigateAsked, so the change of the address they cause is not asked about (again).
 let bypass = false;
 export function setNavigationGuard(next: (() => boolean) | null): void {
   guard = next;
 }
 
-export function useRoute(): Route {
-  const [route, setRoute] = useState(() => routeFromHash(globalThis.location?.hash ?? ''));
+// Set while the application is shown: opens the current address once more as a new visit (TASK-110, F4).
+let revisit: (() => void) | null = null;
+
+// The current route and the number of its visit. The visit counts every change of the address and every repeated opening of
+// the same address by navigateAsked, so a page keyed by it starts again.
+export function useRoute(): readonly [Route, number] {
+  const [state, setState] = useState(() => ({ route: routeFromHash(globalThis.location?.hash ?? ''), visit: 0 }));
   useEffect(() => {
     let restoring: string | null = null;
     const onChange = (event: HashChangeEvent) => {
@@ -118,17 +123,39 @@ export function useRoute(): Route {
         globalThis.location.hash = previous;
         return;
       }
-      setRoute(routeFromHash(globalThis.location.hash));
+      setState((current) => ({ route: routeFromHash(globalThis.location.hash), visit: current.visit + 1 }));
     };
     globalThis.addEventListener('hashchange', onChange);
-    return () => globalThis.removeEventListener('hashchange', onChange);
+    revisit = () => setState((current) => ({ route: current.route, visit: current.visit + 1 }));
+    return () => {
+      globalThis.removeEventListener('hashchange', onChange);
+      revisit = null;
+    };
   }, []);
-  return route;
+  return [state.route, state.visit] as const;
 }
 
+// A navigation the application starts itself (after a save, for example) is never held back by the guard.
 export function navigate(route: Route): void {
   const target = hrefFor(route);
   if (globalThis.location.hash === target) return;
   bypass = true;
   globalThis.location.hash = target;
+}
+
+// A navigation a person starts outside the page, such as the quick search (TASK-110, F1 and F4): a page with unsaved input
+// asks first, like any other change of the page. A search area the person is on already is opened again with the new text;
+// any other address the person is on already stays as it is, without asking. Returns false when the person stays.
+export function navigateAsked(route: Route): boolean {
+  const target = hrefFor(route);
+  const same = globalThis.location.hash === target;
+  if (same && route.name !== 'searchArea') return true;
+  if (guard !== null && !guard()) return false;
+  if (same) {
+    revisit?.();
+    return true;
+  }
+  bypass = true;
+  globalThis.location.hash = target;
+  return true;
 }

@@ -381,8 +381,17 @@ public class SearchService {
             params.addAll(visible);
         }
         if (text.present()) {
-            where.append(" and s.document @@ to_tsquery('simple', ?)");
-            params.add(text.tsquery());
+            String key = projectKey(query.text());
+            if (key == null) {
+                where.append(" and s.document @@ to_tsquery('simple', ?)");
+                params.add(text.tsquery());
+            } else {
+                // The normalized key finds its project also when the words of the text differ from those of the index, as
+                // straße names the key STRASSE (TASK-110, F5); count and page share this condition.
+                where.append(" and (s.document @@ to_tsquery('simple', ?) or s.key = ?)");
+                params.add(text.tsquery());
+                params.add(key);
+            }
         }
         tagFilter(where, params, "search_project_tag", "project_id", "s.project_id", query.tags(), query.tagMatch());
         String select = "select s.project_id, s.key, s.name, s.description, " + rank + " as rank from search_project s where " + where;

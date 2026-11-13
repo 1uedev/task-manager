@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { searchAll } from '../api/product.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { useI18n } from '../i18n/I18nProvider.tsx';
-import { navigate } from './route.ts';
+import { navigateAsked, type Route } from './route.ts';
 
 // The quick search at the top of the application (TASK-104, rule 2). "/" outside a field moves the focus here. Enter asks the
 // overview: a key that names exactly one object the person may read (PLAT-12, HELP ANF-17, a project key) opens it directly,
-// anything else opens "Alle" with the text, without saying whether such an object exists.
+// anything else opens "Alle" with the text, without saying whether such an object exists. Opening asks first when the page
+// holds unsaved input, and a change of the page while the answer is outstanding drops it (TASK-110).
 export function QuickSearch() {
   const { t, language } = useI18n();
   const { api } = useBrand();
@@ -28,6 +29,16 @@ export function QuickSearch() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // The person went elsewhere while the answer was outstanding: it no longer decides where the application goes.
+  useEffect(() => {
+    const onChange = () => {
+      latest.current += 1;
+      setBusy(false);
+    };
+    globalThis.addEventListener('hashchange', onChange);
+    return () => globalThis.removeEventListener('hashchange', onChange);
+  }, []);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = q.trim().slice(0, 200);
@@ -37,16 +48,18 @@ export function QuickSearch() {
     if (ticket !== latest.current) return;
     setBusy(false);
     const direct = result?.kind === 'ok' ? result.data.value.direct : null;
+    let target: Route;
     if (direct === null) {
-      navigate({ name: 'searchArea', area: 'all', q: text });
+      target = { name: 'searchArea', area: 'all', q: text };
     } else if (direct.kind === 'ticket' && direct.number !== null) {
-      navigate({ name: 'ticket', projectId: direct.projectId, number: direct.number });
+      target = { name: 'ticket', projectId: direct.projectId, number: direct.number };
     } else if (direct.kind === 'requirement') {
-      navigate({ name: 'requirementPage', projectId: direct.projectId, requirementId: direct.id });
+      target = { name: 'requirementPage', projectId: direct.projectId, requirementId: direct.id };
     } else {
-      navigate({ name: 'project', id: direct.id, tab: 'tickets' });
+      target = { name: 'project', id: direct.id, tab: 'tickets' };
     }
-    setQ('');
+    // When the page holds unsaved input and the person stays, the text stays in the field.
+    if (navigateAsked(target)) setQ('');
   }
 
   return (

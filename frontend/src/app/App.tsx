@@ -201,7 +201,7 @@ function Shell() {
   const { t, language } = useI18n();
   const { brand } = useBrand();
   const { view, has, signOut } = useSession();
-  const route = useRoute();
+  const [route, visit] = useRoute();
   const current = section(route);
   const main = useRef<HTMLElement>(null);
   const first = useRef(true);
@@ -235,7 +235,7 @@ function Shell() {
         || active.tagName === 'H1') focus();
     }, 400);
     return () => clearTimeout(timer);
-  }, [routeKey]);
+  }, [routeKey, visit]);
 
   const link = (target: RouteName) => {
     const Icon = NAV_ICON[target];
@@ -300,7 +300,7 @@ function Shell() {
           {route.name === 'project' && <ProjectPage key={route.id} id={route.id} tab={route.tab} />}
           {route.name === 'ticket' && <TicketPage key={`${route.projectId}/${route.number}`} projectId={route.projectId} number={route.number} />}
           {route.name === 'search' && <SearchPage key="search" />}
-          {route.name === 'searchArea' && <SearchPage key={routeKey} area={route.area} q={route.q} />}
+          {route.name === 'searchArea' && <SearchPage key={`${routeKey}/${visit}`} area={route.area} q={route.q} />}
           {route.name === 'board' && <BoardPage />}
           {route.name === 'accounts' && allowed('accounts') && <AccountsPage />}
           {route.name === 'groups' && allowed('groups') && <GroupsPage />}

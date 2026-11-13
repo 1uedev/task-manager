@@ -43,9 +43,20 @@ export function SearchPage({ area: initial = 'all', q = '' }: { readonly area?: 
     setArea(value);
     setOpened((current) => new Set([...current, value]));
   };
+  // "Alle anzeigen" hides the button that was pressed; the focus goes to the search field of the chosen area (TASK-110, F6).
+  const areaBoxes = useRef<Partial<Record<Area, HTMLDivElement | null>>>({});
+  const [focusArea, setFocusArea] = useState<{ readonly area: Area; readonly n: number } | null>(null);
+  useEffect(() => {
+    if (focusArea === null) return;
+    areaBoxes.current[focusArea.area]?.querySelector<HTMLInputElement>('form[role=search] input')?.focus();
+  }, [focusArea]);
   const showAll = (value: Area, text: string) => {
     setStarts((current) => ({ ...current, [value]: { q: text, n: (current[value]?.n ?? 0) + 1 } }));
     choose(value);
+    setFocusArea((current) => ({ area: value, n: (current?.n ?? 0) + 1 }));
+  };
+  const box = (value: Area) => (element: HTMLDivElement | null) => {
+    areaBoxes.current[value] = element;
   };
   return (
     <>
@@ -60,10 +71,10 @@ export function SearchPage({ area: initial = 'all', q = '' }: { readonly area?: 
         ))}
       </fieldset>
       {opened.has('all') && <div hidden={area !== 'all'}><OverviewSearch start={starts.all} onShowAll={showAll} /></div>}
-      {opened.has('tickets') && <div hidden={area !== 'tickets'}><TicketSearch start={starts.tickets} /></div>}
-      {opened.has('projects') && <div hidden={area !== 'projects'}><ProjectSearch start={starts.projects} /></div>}
-      {opened.has('wiki') && <div hidden={area !== 'wiki'}><WikiSearch start={starts.wiki} /></div>}
-      {opened.has('requirements') && <div hidden={area !== 'requirements'}><RequirementSearch start={starts.requirements} /></div>}
+      {opened.has('tickets') && <div ref={box('tickets')} hidden={area !== 'tickets'}><TicketSearch start={starts.tickets} /></div>}
+      {opened.has('projects') && <div ref={box('projects')} hidden={area !== 'projects'}><ProjectSearch start={starts.projects} /></div>}
+      {opened.has('wiki') && <div ref={box('wiki')} hidden={area !== 'wiki'}><WikiSearch start={starts.wiki} /></div>}
+      {opened.has('requirements') && <div ref={box('requirements')} hidden={area !== 'requirements'}><RequirementSearch start={starts.requirements} /></div>}
     </>
   );
 }

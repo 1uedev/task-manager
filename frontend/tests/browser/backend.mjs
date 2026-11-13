@@ -200,7 +200,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   };
   const readable = (account, projectId) => FIELDS.filter((name) => field(account, projectId, name, 'read'));
   const writable = (account, projectId) => may(account, 'ticket.edit', projectId) ? FIELDS.filter((name) => field(account, projectId, name, 'read') && field(account, projectId, name, 'write')) : [];
-  const projectVisible = (account, item) => may(account, 'projects.manage') || (isMember(account, item.id) && PROJECT_ACTIONS.some((action) => may(account, action, item.id)));
+  // As the server (F7 of the Codex review of TASK-104): projects.manage, or project.read or project.manage in a member project.
+  const projectVisible = (account, item) => may(account, 'projects.manage') || may(account, 'project.read', item.id) || may(account, 'project.manage', item.id);
 
   // ------------------------------------------------------------------ tags (TASK-072)
   const manageTags = (account, projectId) => (projectId === null ? companyRights(account).includes('tags.manage') : may(account, 'tags.manage', projectId));
@@ -875,7 +876,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     let match = p.match(/^\/projects\/([^/]+)(\/.*)?$/);
     if (match) {
       const item = state.projects.find((entry) => entry.id === match[1]);
-      if (!item || !projectVisible(account, item)) return problem(404, 'project.not_found');
+      // A member with any project action reaches the routes below; each answers after its own rights, as on the server.
+      if (!item || !(projectVisible(account, item) || PROJECT_ACTIONS.some((action) => may(account, action, item.id)))) return problem(404, 'project.not_found');
       return projectRoute(account, item, method, match[2] ?? '', query, headers, body);
     }
     if (p === '/tags/bulk' && method === 'POST') return bulkTags(account, body);
@@ -960,6 +962,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   }
 
   function projectRoute(account, item, method, rest, query, headers, body) {
+    // The project itself, its members, configuration and tags need the project rights; tickets and catalog have their own
+    // (F2 and F7 of the Codex review of TASK-104: ticket.read alone reads the ticket, not the project).
+    const projectLevel = rest === '' || rest === '/members' || rest.startsWith('/members/') || rest.startsWith('/configuration') || rest === '/tags'
+      || rest.startsWith('/tags/');
+    if (projectLevel && !projectVisible(account, item)) return problem(404, 'project.not_found');
     if (rest === '' && method === 'GET') return ok(projectView(account, item), `"${item.version}"`);
     if (rest === '/members' && method === 'GET') return ok(state.members.get(item.id), `"${item.version}"`);
     if (rest.startsWith('/configuration/')) return configurationRoute(account, item, method, rest, headers, body);
@@ -2742,13 +2749,53 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // As the server (TASK-103, DEC-133): the current revision or, with stage=approved, the newest approved one; words only in
   // readable fields, filters on unreadable fields match nothing, the key ANF-n with or without the project key, discarded
   // requirements only with a status filter, the excerpt from the first readable field that holds a word.
+  // As the server (TASK-029, TASK-044, TASK-073; F7 of the Codex review of TASK-104): the text normalized like SearchText, every
+  // word the start of a word of title, description, tag names or a text custom field the person may read, or the normalized
+  // key such as ＰＬＡＴ-０２ of a ticket; a text without words and key finds nothing. Filters on a field the person may not
+  // read match nothing in that project.
   function ticketSearch(account, query) {
-    const words = (query.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-    const items = state.tickets.filter((ticket) => may(account, 'ticket.read', ticket.projectId))
-      .filter((ticket) => words.every((word) => readable(account, ticket.projectId).some((name) => String(ticket.values[name] ?? '').toLowerCase().split(/\W+/).some((part) => part.startsWith(word))) || ticket.key.toLowerCase().startsWith(word)))
+    const raw = query.get('q') ?? '';
+    if (searchTextInvalid(raw)) return problem(400, 'request.invalid', { violations: ['q.invalid'] });
+    const readableProjects = state.projects.filter((item) => may(account, 'ticket.read', item.id)).map((item) => item.id);
+    const wantedProjects = query.getAll('project');
+    if (wantedProjects.some((id) => !readableProjects.includes(id))) return problem(400, 'request.invalid', { violations: ['project.unknown'] });
+    const given = javaStrip(raw) !== '';
+    const text = javaStrip(javaNormalize(raw));
+    const words = searchWords(text);
+    const identifier = text.toUpperCase().match(/^([A-Z][A-Z0-9]{1,9})-([0-9]{1,18})$/);
+    const key = identifier ? `${identifier[1]}-${Number(identifier[2])}` : null;
+    const statuses = query.getAll('status');
+    const types = query.getAll('type');
+    const assignees = query.getAll('assignee');
+    const custom = query.getAll('custom').map((entry) => [entry.slice(0, entry.indexOf('=')).trim(), entry.slice(entry.indexOf('=') + 1).trim()]);
+    const filtered = (ticket, name, values) => values.length === 0 || (readable(account, ticket.projectId).includes(name) && values.includes(ticket.values[name] ?? ''));
+    const texts = (ticket) => {
+      const shown = readable(account, ticket.projectId);
+      const parts = ['title', 'description'].filter((name) => shown.includes(name)).map((name) => String(ticket.values[name] ?? ''));
+      if (field(account, ticket.projectId, TAG_FIELD, 'read')) {
+        parts.push(...state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => state.tags.find((tag) => tag.id === entry.tag)?.name ?? ''));
+      }
+      if (customReadable(account, ticket.projectId)) {
+        parts.push(...customFieldsOf(ticket.projectId).filter((entry) => ['text', 'longtext'].includes(entry.type) && ticket.custom?.[entry.key] !== undefined)
+          .map((entry) => String(ticket.custom[entry.key])));
+      }
+      return parts.map(searchWords);
+    };
+    const found = (ticket) => {
+      if (!given) return true;
+      const fields = texts(ticket);
+      const byWords = words.length > 0 && words.every((word) => fields.some((terms) => terms.some((term) => term.startsWith(word))));
+      return byWords || ticket.key === key;
+    };
+    const items = state.tickets.filter((ticket) => readableProjects.includes(ticket.projectId)
+        && (wantedProjects.length === 0 || wantedProjects.includes(ticket.projectId)))
+      .filter((ticket) => filtered(ticket, 'status', statuses) && filtered(ticket, 'type', types) && filtered(ticket, 'assignee', assignees))
+      .filter((ticket) => custom.every(([name, value]) => customReadable(account, ticket.projectId) && ticket.custom?.[name] !== undefined
+        && String(ticket.custom[name]) === value))
+      .filter(found)
       .filter((ticket) => tagFilterMatches(account, ticket, query))
-      // As the server: a text that is exactly a key puts that ticket first.
-      .sort((x, y) => Number(y.key === (query.get('q') ?? '').trim().toUpperCase()) - Number(x.key === (query.get('q') ?? '').trim().toUpperCase()))
+      // As the server: the ticket a text names by its key comes first.
+      .sort((x, y) => Number(y.key === key) - Number(x.key === key))
       .map((ticket) => ({ id: ticket.id, projectId: ticket.projectId, key: ticket.key, number: ticket.number, fields: ticketView(account, ticket).fields, customFields: ticketView(account, ticket).customFields,
         tags: field(account, ticket.projectId, TAG_FIELD, 'read') ? state.ticketTags.filter((entry) => entry.ticket === ticket.id).map((entry) => {
           const tag = state.tags.find((candidate) => candidate.id === entry.tag);
@@ -2771,19 +2818,30 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   }
   // As the server (TASK-029, TASK-104): projects by key, name and description, company tags, an exact key first.
   function projectSearch(account, query) {
-    const q = (query.get('q') ?? '').toLowerCase().trim();
-    if (searchTextInvalid(q)) return problem(400, 'request.invalid', { violations: ['q.invalid'] });
+    const raw = query.get('q') ?? '';
+    if (searchTextInvalid(raw)) return problem(400, 'request.invalid', { violations: ['q.invalid'] });
     const tags = query.getAll('tag');
     const tagMatch = query.get('tagMatch') ?? 'all';
     const projectTags = (item) => state.projectTags.filter((entry) => entry.project === item.id).map((entry) => entry.tag);
-    const words = searchWords(q);
-    const found = (item) => { const terms = searchWords(`${item.key} ${item.name} ${item.description ?? ''}`); return words.every((word) => terms.some((term) => term.startsWith(word))); };
+    // As the server (F7 and F5 of the Codex review of TASK-104): key, name, description and the names of the tags of the
+    // project; a given text without words finds nothing; the normalized key, straße for STRASSE, finds its project.
+    const given = javaStrip(raw) !== '';
+    const words = searchWords(raw);
+    const upper = javaStrip(javaNormalize(raw)).toUpperCase();
+    const key = /^[A-Z][A-Z0-9]{1,9}$/.test(upper) ? upper : null;
+    const tagNames = (item) => projectTags(item).map((id) => state.tags.find((tag) => tag.id === id)?.name ?? '').join(' ');
+    const found = (item) => {
+      if (!given) return true;
+      if (words.length === 0) return false;
+      const terms = searchWords(`${item.key} ${item.name} ${item.description ?? ''} ${tagNames(item)}`);
+      return words.every((word) => terms.some((term) => term.startsWith(word))) || item.key === key;
+    };
     const items = state.projects.filter((item) => projectVisible(account, item) && found(item))
       .filter((item) => tags.length === 0 && tagMatch !== 'untagged' ? true
         : tagMatch === 'untagged' ? projectTags(item).length === 0
           : tagMatch === 'any' ? tags.some((tag) => projectTags(item).includes(tag))
             : tagMatch === 'none' ? !tags.some((tag) => projectTags(item).includes(tag)) : tags.every((tag) => projectTags(item).includes(tag)))
-      .sort((x, y) => Number(y.key.toLowerCase() === q) - Number(x.key.toLowerCase() === q) || x.key.localeCompare(y.key))
+      .sort((x, y) => Number(y.key === key) - Number(x.key === key) || x.key.localeCompare(y.key))
       .map((item) => ({ id: item.id, key: item.key, name: item.name, description: item.description,
         tags: projectTags(item).map((id) => state.tags.find((tag) => tag.id === id)).filter(Boolean).map((tag) => ({ id: tag.id, name: tag.name })) }));
     const offset = Number(query.get('offset') ?? 0);
@@ -3541,6 +3599,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // The wiki routes without a browser, for checks of the same answers as the server (H1 of the TASK-094 review).
     wikiCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => wikiRoute(account, method, path, new URLSearchParams(query), headers, body),
     wikiSearchCall: (account, query) => wikiSearch(account, new URLSearchParams(query)),
+    // Any GET of the API without a browser, as the person, for checks of the same answers as the server (TASK-110, F7).
+    getCall: (account, path, query = '') => handle({ account }, 'GET', path, new URLSearchParams(query), {}, {}),
     // A prepared cycle of a ticket, as the server would report it (TASK-068).
     addCycle: (ticket, cycle) => sla.cycles.set(ticket.id, [...(sla.cycles.get(ticket.id) ?? []), cycle]),
     addReply: (ticket, extra = {}) => {
