@@ -65,7 +65,7 @@ class PermissionsController {
     static final String REQUIREMENT = "requirement";
     private static final String CUSTOM_FIELD = "custom\\.[a-z][a-z0-9_]{0,39}";
     /** Company wide only: no project can narrow them. */
-    static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "helpdesk.manage", "jobs.manage",
+    static final List<String> COMPANY_ACTIONS = List.of("accounts.manage", "appearance.manage", "git.manage", "helpdesk.manage", "jobs.manage",
         "permissions.audit.read", "permissions.manage", "projects.manage", "session_duration.manage", "sla.manage");
     /** For one project, or for every project the account is a member of when granted without a project. */
     static final List<String> PROJECT_ACTIONS = List.of("helpdesk.reply", "helpdesk.review", "portal.answer", "project.manage", "project.read", "requirement.approve", "requirement.edit", "requirement.read", "tag.create", "tags.manage",

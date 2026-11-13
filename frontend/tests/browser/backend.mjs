@@ -15,7 +15,7 @@ export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 // The rule of the name, the same as AppearanceService on the server and frontend/src/api/client.ts (TASK-087).
 const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
 const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage'];
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage', 'git.manage'];
 const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read', 'requirement.approve', 'requirement.edit', 'requirement.read'];
 // The fields of requirements in the rights core (TASK-096).
 const REQUIREMENT_FIELDS = ['criteria', 'description', 'owner', 'priority', 'title'];
@@ -147,6 +147,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // The helpdesk (TASK-057): customers, contacts, mailboxes with their status, mails and the customer of each ticket.
     // Service deadlines (TASK-068): calendars, rules and the priority per ticket; `cycles` holds prepared cycles per ticket.
     sla: { calendars: [], rules: [], priorities: new Map(), cycles: new Map() },
+    // The Git link (TASK-111): providers, the connection state per provider and account ("providerId:accountId"), the
+    // repositories each provider knows with the accounts they are hidden from, and the releases per project. Connecting
+    // skips the provider: the authorize address leads straight back with a new page load with `connected`, or with `error` when the provider has `failWith`.
+    git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [] },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
       // The portal conversation (TASK-076): posts of portal accounts and of the support, and when an account last opened a request
       // with the highest position of an answer of the support it acknowledged (TASK-080); `positions` counts the answers per ticket.
@@ -873,6 +877,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       state.members.set(created.id, [{ accountId: account.id, addedAt: now() }]);
       return ok(projectView(account, created), '"1"');
     }
+    if (p.startsWith('/git/')) return gitRoute(account, method, p, headers, body);
+    const gitProject = p.match(/^\/projects\/([^/]+)\/git\/(repositories|candidates)(?:\/([^/]+))?$/);
+    if (gitProject) return gitProjectRoute(account, method, gitProject[1], gitProject[2], gitProject[3], query, body);
     let match = p.match(/^\/projects\/([^/]+)(\/.*)?$/);
     if (match) {
       const item = state.projects.find((entry) => entry.id === match[1]);
@@ -3546,6 +3553,144 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   }
 
   // Installs the backend for one browser context. `as` starts the context signed in.
+  // The Git link as the backend (TASK-111): every internal full login, git.manage for the administration, the project rights for
+  // releases, and repositories only through the own active connection.
+  const git = state.git;
+  const gitConnection = (account, providerId) => git.connections.get(`${providerId}:${account.id}`) ?? null;
+  const gitAdminView = (provider) => ({ id: provider.id, kind: provider.kind, name: provider.name, baseUrl: provider.baseUrl, clientId: provider.clientId,
+    secretSet: provider.secretSet, caCertificate: provider.caCertificate ?? null, version: provider.version, updatedAt: provider.updatedAt, updatedBy: provider.updatedBy });
+  const gitReadable = (account, providerId) => (git.repositories.get(providerId) ?? []).filter((repo) => !(repo.hiddenFrom ?? []).includes(account.username));
+  const gitRepo = (repo) => ({ externalId: repo.externalId, name: repo.name, path: repo.path, url: repo.url ?? null });
+  function gitSettings(input, current) {
+    const violations = [];
+    const kind = current?.kind ?? input.kind;
+    if (!['github', 'gitlab_com', 'gitlab'].includes(input.kind ?? kind)) violations.push('kind.invalid');
+    if (current && input.kind && input.kind !== current.kind) violations.push('kind.unchangeable');
+    const name = (input.name ?? '').trim();
+    if (name === '' || name.length > 80) violations.push('name.invalid');
+    const baseUrl = kind === 'github' ? 'https://github.com' : kind === 'gitlab_com' ? 'https://gitlab.com' : (input.baseUrl ?? '').trim().replace(/\/+$/, '');
+    if (kind === 'gitlab' && !/^https:\/\/[A-Za-z0-9.\-:]+(\/[A-Za-z0-9._~\-/]*)?$/.test(baseUrl)) violations.push('baseUrl.invalid');
+    if ((input.clientId ?? '').trim() === '') violations.push('clientId.invalid');
+    if (input.caCertificate && !input.caCertificate.includes('-----BEGIN CERTIFICATE-----')) violations.push('caCertificate.invalid');
+    if (violations.length > 0) return { refused: problem(400, 'request.invalid', { violations }) };
+    return { kind, name, baseUrl, clientId: input.clientId.trim(), caCertificate: kind === 'gitlab' ? input.caCertificate ?? null : null };
+  }
+  function gitRoute(account, method, p, headers, body) {
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    const manage = may(account, 'git.manage');
+    const live = git.providers.filter((provider) => !provider.removed).sort((a, b) => a.name.localeCompare(b.name));
+    if (p === '/git/status' && method === 'GET') return ok({ secretKey: git.secretKey, callbackUrl: git.callbackUrl, manage });
+    if (p === '/git/providers' && method === 'GET') {
+      return ok(live.map((provider) => {
+        const connection = gitConnection(account, provider.id);
+        return { id: provider.id, kind: provider.kind, name: provider.name, baseUrl: provider.baseUrl, connection: connection?.state ?? 'none',
+          connectedAt: connection?.connectedAt ?? null };
+      }));
+    }
+    let match = p.match(/^\/git\/providers\/([^/]+)\/(connect|connection)$/);
+    if (match) {
+      const provider = live.find((item) => item.id === match[1]);
+      if (!provider) return problem(404, 'git.provider_not_found');
+      if (match[2] === 'connect' && method === 'POST') {
+        if (!git.secretKey) return problem(409, 'git.secret_key_missing');
+        if (!provider.secretSet) return problem(409, 'git.provider_incomplete');
+        if (provider.failWith) return ok({ authorizeUrl: `/?git=${uuid()}#/git?error=${provider.failWith}` });
+        git.connections.set(`${provider.id}:${account.id}`, { state: 'active', connectedAt: now() });
+        return ok({ authorizeUrl: `/?git=${uuid()}#/git?connected=${provider.id}` });
+      }
+      if (match[2] === 'connection' && method === 'DELETE') {
+        git.connections.delete(`${provider.id}:${account.id}`);
+        return empty();
+      }
+    }
+    if (!p.startsWith('/git/admin/')) return problem(404, 'resource.not_found');
+    if (!manage) return problem(403, 'auth.forbidden');
+    if (p === '/git/admin/providers' && method === 'GET') return ok(live.map(gitAdminView));
+    if (p === '/git/admin/providers' && method === 'POST') {
+      const checked = gitSettings(body, null);
+      if (checked.refused) return checked.refused;
+      if (live.some((item) => item.name.toLowerCase() === checked.name.toLowerCase())) return problem(409, 'git.provider_name_taken');
+      const provider = { id: uuid(), ...checked, secretSet: (body.clientSecret ?? '') !== '', version: 1, updatedAt: now(), updatedBy: account.id, removed: false };
+      git.providers.push(provider);
+      return { status: 201, body: gitAdminView(provider), etag: '"1"' };
+    }
+    match = p.match(/^\/git\/admin\/providers\/([^/]+)(\/check)?$/);
+    const provider = match && live.find((item) => item.id === match[1]);
+    if (!provider) return problem(404, 'git.provider_not_found');
+    if (match[2] && method === 'POST') return ok(provider.check ?? { ok: true, code: null, version: provider.kind === 'gitlab' ? '16.4.1' : null });
+    if (!headers['if-match']) return problem(428, 'git.precondition_required');
+    if (headers['if-match'] !== `"${provider.version}"`) return problem(412, 'git.version_conflict');
+    if (method === 'DELETE') {
+      provider.removed = true;
+      for (const key of [...git.connections.keys()]) if (key.startsWith(`${provider.id}:`)) git.connections.delete(key);
+      return empty();
+    }
+    if (method === 'PUT') {
+      const checked = gitSettings(body, provider);
+      if (checked.refused) return checked.refused;
+      if (live.some((item) => item.id !== provider.id && item.name.toLowerCase() === checked.name.toLowerCase())) return problem(409, 'git.provider_name_taken');
+      Object.assign(provider, checked, { version: provider.version + 1, updatedAt: now(), updatedBy: account.id },
+        body.clientSecret === undefined ? {} : { secretSet: body.clientSecret !== '' });
+      return ok(gitAdminView(provider), `"${provider.version}"`);
+    }
+    return problem(404, 'resource.not_found');
+  }
+  function gitProjectRoute(account, method, projectId, area, releaseId, query, body) {
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    const item = state.projects.find((entry) => entry.id === projectId);
+    if (!item || !projectVisible(account, item)) return problem(404, 'project.not_found');
+    const manageable = may(account, 'projects.manage') || may(account, 'project.manage', item.id);
+    const usable = (providerId) => {
+      const provider = git.providers.find((entry) => entry.id === providerId && !entry.removed);
+      if (!provider) return { refused: problem(404, 'git.provider_not_found') };
+      const connection = gitConnection(account, providerId);
+      if (!connection) return { refused: problem(409, 'git.not_connected') };
+      if (connection.state !== 'active') return { refused: problem(409, 'git.connection_renew') };
+      return { provider };
+    };
+    if (area === 'repositories' && method === 'GET' && !releaseId) {
+      const repositories = git.releases.filter((release) => release.projectId === projectId).flatMap((release) => {
+        const provider = git.providers.find((entry) => entry.id === release.providerId);
+        if (!provider || provider.removed) return [];
+        const connection = gitConnection(account, provider.id);
+        const repo = connection?.state === 'active' ? gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId) : undefined;
+        const reason = !connection ? 'git.not_connected' : connection.state !== 'active' ? 'git.connection_renew' : repo ? null : 'git.unavailable';
+        return [{ id: release.id, providerId: provider.id, providerName: provider.name, providerKind: provider.kind, externalId: release.externalId,
+          available: Boolean(repo), reason, repository: repo ? gitRepo(repo) : null, releasedAt: release.releasedAt }];
+      });
+      return ok({ repositories, manageable });
+    }
+    if (!manageable) return problem(403, 'auth.forbidden');
+    if (area === 'candidates' && method === 'GET') {
+      const found = usable(query.get('provider'));
+      if (found.refused) return found.refused;
+      const part = (query.get('q') ?? '').trim().toLowerCase();
+      return ok(gitReadable(account, found.provider.id).filter((repo) => part === '' || repo.name.toLowerCase().includes(part)
+        || repo.path.toLowerCase().includes(part)).slice(0, 100).map(gitRepo));
+    }
+    if (area === 'repositories' && method === 'POST') {
+      if (!/^[0-9]{1,20}$/.test(body.externalId ?? '')) return problem(400, 'request.invalid', { violations: ['externalId.invalid'] });
+      const found = usable(body.providerId);
+      if (found.refused) return found.refused;
+      if (!gitReadable(account, found.provider.id).some((repo) => repo.externalId === body.externalId)) return problem(404, 'git.repository_not_found');
+      if (git.releases.some((release) => release.projectId === projectId && release.providerId === body.providerId && release.externalId === body.externalId)) {
+        return problem(409, 'git.repository_released');
+      }
+      if (git.releases.filter((release) => release.projectId === projectId).length >= 50) return problem(409, 'git.repositories_too_many');
+      const release = { id: uuid(), projectId, providerId: body.providerId, externalId: body.externalId, releasedAt: now() };
+      git.releases.push(release);
+      return { status: 201, body: { id: release.id, providerId: release.providerId, providerName: null, providerKind: null, externalId: release.externalId,
+        available: true, reason: null, repository: null, releasedAt: release.releasedAt } };
+    }
+    if (area === 'repositories' && method === 'DELETE' && releaseId) {
+      const index = git.releases.findIndex((release) => release.id === releaseId && release.projectId === projectId);
+      if (index < 0) return problem(404, 'git.repository_not_found');
+      git.releases.splice(index, 1);
+      return empty();
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   async function install(context, page, { as = null } = {}) {
     const session = { account: as ? state.accounts.find((item) => item.username === as.username) : null };
     await context.addCookies([{ name: '__Host-tm-csrf', value: TOKEN, domain: 'localhost', path: '/', secure: true, sameSite: 'Lax' }]);

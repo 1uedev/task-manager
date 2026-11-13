@@ -44,7 +44,12 @@ public enum AdministrationRight {
      * Manage the business hours calendars and the SLA rules with their assignment to projects (TASK-068). Gives no access to
      * tickets; the deadlines of a ticket follow its read rules.
      */
-    SLA_MANAGE("sla.manage");
+    SLA_MANAGE("sla.manage"),
+    /**
+     * Manage the Git provider instances with their registered applications (TASK-111, DEC-141). Gives no access to any
+     * repository; every call to a provider runs with the token of the person who looks.
+     */
+    GIT_MANAGE("git.manage");
 
     private final String key;
 

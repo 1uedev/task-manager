@@ -5,10 +5,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import taskmanager.identity.AccountDeactivated;
 import taskmanager.identity.AccountDeactivationGuard;
 import taskmanager.identity.EmergencyResetPolicy;
 import taskmanager.identity.FirstAdministratorHandler;
@@ -36,11 +38,12 @@ public class AccountService {
     private final ObjectProvider<FirstAdministratorHandler> firstAdministrator;
     private final ObjectProvider<EmergencyResetPolicy> emergencyReset;
     private final LoginThrottle throttle;
+    private final ApplicationEventPublisher events;
 
     AccountService(AccountRepository accounts, PasswordHasher hasher, OneTimePasswords oneTimePasswords,
             JdbcClient jdbc, Clock clock, IdentityProperties properties,
             ObjectProvider<AccountDeactivationGuard> deactivationGuard, ObjectProvider<FirstAdministratorHandler> firstAdministrator,
-            ObjectProvider<EmergencyResetPolicy> emergencyReset, LoginThrottle throttle) {
+            ObjectProvider<EmergencyResetPolicy> emergencyReset, LoginThrottle throttle, ApplicationEventPublisher events) {
         this.accounts = accounts;
         this.hasher = hasher;
         this.oneTimePasswords = oneTimePasswords;
@@ -51,6 +54,7 @@ public class AccountService {
         this.firstAdministrator = firstAdministrator;
         this.emergencyReset = emergencyReset;
         this.throttle = throttle;
+        this.events = events;
     }
 
     /** An account together with the one time password that was just issued. The password is shown only once. */
@@ -213,6 +217,7 @@ public class AccountService {
             accounts.setActive(id, false, now);
             revokeSessions(id, "account.deactivated", now);
             accounts.audit(actor, "account.deactivated", id, null, now);
+            events.publishEvent(new AccountDeactivated(id));
         }
         return accounts.findById(id).orElseThrow();
     }

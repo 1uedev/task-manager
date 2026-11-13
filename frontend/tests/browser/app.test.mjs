@@ -174,8 +174,8 @@ describe('two accounts with different rights', () => {
     const ben = await start({ backend, as: BEN, hash: ticketHash(backend, 1) });
     try {
       for (const page of [anna.page, ben.page]) await page.waitForSelector('[data-testid=history]');
-      assert.deepEqual(await anna.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Konten', 'Gruppen und Rechte', 'Erscheinungsbild']);
-      assert.deepEqual(await ben.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Erscheinungsbild']);
+      assert.deepEqual(await anna.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Konten', 'Gruppen und Rechte', 'Erscheinungsbild', 'Git']);
+      assert.deepEqual(await ben.page.locator('.sidebar nav ul').nth(1).locator('a').allInnerTexts(), ['Erscheinungsbild', 'Git']);
       assert.equal(await anna.page.getByLabel(/^Beschreibung/).inputValue(), 'Ablauf mit synthetischen Konten.');
       assert.equal(await ben.page.getByLabel(/^Titel/).count(), 0, 'no input for a reader');
       assert.match(await ben.page.locator('main').innerText(), /Beschreibung: für Sie verborgen/);

@@ -6,6 +6,7 @@ import { ACCOUNTS_RIGHT, AccountsPage } from '../pages/AccountsPage.tsx';
 import { AppearancePage } from '../pages/AppearancePage.tsx';
 import { BoardPage } from '../pages/BoardPage.tsx';
 import { GroupPage, GroupsPage, PERMISSIONS_RIGHT } from '../pages/GroupsPage.tsx';
+import { GitPage } from '../pages/GitPage.tsx';
 import { HELPDESK_RIGHT, HelpdeskPage } from '../pages/HelpdeskPage.tsx';
 import { InboxPage } from '../pages/InboxPage.tsx';
 import { JOBS_RIGHT, JobsPage } from '../pages/JobsPage.tsx';
@@ -25,7 +26,7 @@ import { WikiPage } from '../pages/WikiPage.tsx';
 import { RequirementsPage } from '../pages/RequirementsPage.tsx';
 import { LoadingView, ProblemView } from '../states/StateViews.tsx';
 import {
-  AlertIcon, BoardIcon, BookIcon, BrushIcon, ChecklistIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, HourglassIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TagIcon, TimerIcon, UsersIcon,
+  AlertIcon, BoardIcon, BranchIcon, BookIcon, BrushIcon, ChecklistIcon, ClockIcon, InboxIcon, MailIcon, FolderIcon, GlobeIcon, GripIcon, HomeIcon, HourglassIcon, KeyIcon, LogoutIcon, MonitorIcon, MoonIcon, SearchIcon, ShieldIcon, SunIcon, TagIcon, TimerIcon, UsersIcon,
 } from './Icons.tsx';
 import { readStoredOrder, storeOrder } from './preferences.ts';
 import { hrefFor, section, useRoute, type Route, type RouteName } from './route.ts';
@@ -34,13 +35,13 @@ import { formatDateTime } from '../i18n/format.ts';
 import { useReorder } from './useReorder.ts';
 
 const NAV_LABEL: Record<RouteName, MessageKey> = {
-  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', escalations: 'nav.escalations', time: 'nav.time', wiki: 'nav.wiki', requirements: 'nav.requirements', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', tags: 'nav.tags', appearance: 'nav.appearance',
+  start: 'nav.start', projects: 'nav.projects', search: 'nav.search', inbox: 'nav.inbox', board: 'nav.board', escalations: 'nav.escalations', time: 'nav.time', wiki: 'nav.wiki', requirements: 'nav.requirements', accounts: 'nav.accounts', groups: 'nav.groups', helpdesk: 'nav.helpdesk', sla: 'nav.sla', jobs: 'nav.jobs', tags: 'nav.tags', appearance: 'nav.appearance', git: 'nav.git',
 };
 const NAV_ICON: Record<RouteName, () => ReactNode> = {
-  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, escalations: AlertIcon, time: HourglassIcon, wiki: BookIcon, requirements: ChecklistIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, tags: TagIcon, appearance: BrushIcon,
+  start: HomeIcon, projects: FolderIcon, search: SearchIcon, inbox: InboxIcon, board: BoardIcon, escalations: AlertIcon, time: HourglassIcon, wiki: BookIcon, requirements: ChecklistIcon, accounts: KeyIcon, groups: UsersIcon, helpdesk: MailIcon, sla: TimerIcon, jobs: ClockIcon, tags: TagIcon, appearance: BrushIcon, git: BranchIcon,
 };
 const PAGE_TITLE: Record<RouteName, MessageKey> = {
-  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', escalations: 'escalations.title', time: 'time.title', wiki: 'wiki.title', requirements: 'requirements.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', tags: 'tagsPage.title', appearance: 'appearance.title',
+  start: 'start.title', projects: 'projects.title', search: 'search.title', inbox: 'inbox.title', board: 'board.title', escalations: 'escalations.title', time: 'time.title', wiki: 'wiki.title', requirements: 'requirements.title', accounts: 'accounts.title', groups: 'groups.title', helpdesk: 'helpdesk.title', sla: 'sla.title', jobs: 'jobs.title', tags: 'tagsPage.title', appearance: 'appearance.title', git: 'git.title',
 };
 const THEME_LABEL: Record<Theme, MessageKey> = { light: 'theme.light', dark: 'theme.dark', system: 'theme.system' };
 const THEME_ICON: Record<Theme, () => ReactNode> = { light: SunIcon, dark: MoonIcon, system: MonitorIcon };
@@ -255,6 +256,7 @@ function Shell() {
     ...(has(JOBS_RIGHT) ? ['jobs' as const] : []),
     ...(has(TAGS_RIGHT) ? ['tags' as const] : []),
     'appearance',
+    'git',
   ];
   const allowed = (name: RouteName) => name !== 'accounts' && name !== 'groups' && name !== 'jobs' && name !== 'helpdesk' && name !== 'sla' && name !== 'tags'
     ? true : admin.includes(name);
@@ -319,6 +321,7 @@ function Shell() {
           {route.name === 'jobs' && allowed('jobs') && <JobsPage />}
           {route.name === 'tags' && allowed('tags') && <TagsPage />}
           {route.name === 'appearance' && <AppearancePage />}
+          {route.name === 'git' && <GitPage />}
         </main>
         <footer>
           <p>{t('notice.footer')}</p>

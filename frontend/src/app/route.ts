@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
 // Pages of the navigation. Detail pages (a project, a ticket, a group) hang below one of them.
-export const routes = ['start', 'projects', 'search', 'inbox', 'board', 'escalations', 'time', 'wiki', 'requirements', 'accounts', 'groups', 'helpdesk', 'sla', 'jobs', 'tags', 'appearance'] as const;
+export const routes = ['start', 'projects', 'search', 'inbox', 'board', 'escalations', 'time', 'wiki', 'requirements', 'accounts', 'groups', 'helpdesk', 'sla', 'jobs', 'tags', 'appearance', 'git'] as const;
 export type RouteName = (typeof routes)[number];
-export const projectTabs = ['tickets', 'members', 'tags', 'settings', 'rights'] as const;
+export const projectTabs = ['tickets', 'members', 'tags', 'git', 'settings', 'rights'] as const;
 export type ProjectTab = (typeof projectTabs)[number];
 // The areas of the search (TASK-104): the overview "Alle" and one tab per area.
 export const searchAreas = ['all', 'tickets', 'projects', 'wiki', 'requirements'] as const;
