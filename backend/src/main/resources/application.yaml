@@ -62,6 +62,11 @@ taskmanager:
     # The key that encrypts the passwords of the mailboxes in the database (TASK-057): 32 random bytes in Base64. Without it
     # no mailbox with a password can be saved or read. Limits and periods have defaults in HelpdeskProperties.
     secret-key: ${TASK_MANAGER_SECRET_KEY:}
+  git:
+    # The Git link (TASK-111): the secrets of the applications and the tokens use the same key as the mailbox passwords. The
+    # public address is where browsers reach the application; the providers send the browser back to it after connecting.
+    secret-key: ${TASK_MANAGER_SECRET_KEY:}
+    public-url: ${TASK_MANAGER_PUBLIC_URL:}
   jobs:
     # The web process runs background jobs too unless this is false; the separate process "worker" always runs them (TASK-054).
     # Limits, retries and periods have defaults in JobsProperties.

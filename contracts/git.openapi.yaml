@@ -1,0 +1,438 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, Git Verknüpfung (TASK-111)
+  version: 0.1.0
+  description: |
+    Anbieterinstanzen für GitHub.com, GitLab.com und ein eigenes GitLab, die Verbindung des eigenen Git Kontos über OAuth
+    und die je Projekt freigegebenen Repositories (DEC-036, DEC-141). Jeder Endpunkt verlangt eine vollständige Anmeldung
+    eines internen Kontos (vor dem Passwortwechsel 403 `auth.password_change_required`, Portalkonten 403 `auth.forbidden`).
+    Die Anbieterverwaltung unter `/git/admin` verlangt das Unternehmensrecht `git.manage`. Die Repositories eines Projekts
+    sieht, wer das Projekt sieht (`projects.manage`, `project.read` oder `project.manage`, sonst 404 `project.not_found`);
+    freigeben und zurücknehmen verlangt `projects.manage` oder `project.manage` (sonst 403 `auth.forbidden`).
+
+    Jeder Abruf beim Anbieter läuft mit dem Token der Person, die schaut; ein Dienstkonto gibt es nicht. Gespeichert werden
+    nur stabile Kennungen des Anbieters, nie Namen, Pfade oder Titel aus Git. Geheimnisse der Anwendungen und Token sind
+    nie Teil einer Antwort. Änderungen an Anbietern verlangen die Version aus `If-Match` (fehlt sie, 428
+    `git.precondition_required`; passt sie nicht, 412 `git.version_conflict`). Ist die Datenbank kurz belegt, antwortet der
+    Server mit 503 `git.busy` und `Retry-After`. Sitzung, CSRF und `Cache-Control: no-store` gelten wie im Identitätsvertrag.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /git/status:
+    get:
+      operationId: getGitStatus
+      summary: Stand der Einrichtung für die anfragende Person
+      responses:
+        '200':
+          description: |
+            `secretKey` sagt, ob der Schlüssel des Betriebs gesetzt ist; `callbackUrl` ist die Rückleitungsadresse, die bei den
+            Anbietern einzutragen ist, ohne öffentliche Adresse `null`; `manage` sagt, ob die Person `git.manage` hält.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Status'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /git/providers:
+    get:
+      operationId: listGitProviders
+      summary: Anbieter mit dem Stand der eigenen Verbindung
+      responses:
+        '200':
+          description: Alle nicht entfernten Anbieter, nach Namen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Provider'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /git/providers/{id}/connect:
+    post:
+      operationId: connectGitProvider
+      summary: Verbindung des eigenen Kontos beginnen
+      description: |
+        Legt einen einmaligen Zustand für zehn Minuten an und nennt die Adresse des Anbieters, zu der der Browser geht. Ohne
+        öffentliche Adresse 409 `git.public_url_missing`, ohne Schlüssel 409 `git.secret_key_missing`, ohne Geheimnis der
+        Anwendung 409 `git.provider_incomplete`, ein unbekannter oder entfernter Anbieter 404 `git.provider_not_found`.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Adresse beim Anbieter
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizeUrl]
+                properties:
+                  authorizeUrl: {type: string}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /git/providers/{id}/connection:
+    delete:
+      operationId: disconnectGitProvider
+      summary: Eigene Verbindung trennen; die Token werden sofort gelöscht
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': {description: Getrennt oder war nicht verbunden}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /git/oauth/callback:
+    get:
+      operationId: gitOAuthCallback
+      summary: Rückleitung des Anbieters
+      description: |
+        Prüft den Zustand (einmalig, zehn Minuten, dieselbe angemeldete Person), tauscht den Code mit PKCE, fragt das Konto
+        beim Anbieter und bei einem eigenen GitLab dessen Version (ab 16.0) und speichert die Token verschlüsselt. Leitet
+        immer auf `#/git` der Anwendung weiter, mit `connected={Anbieter}` oder `error={Code}`; Codes: `git.state_invalid`,
+        `git.denied`, `git.provider_not_found`, `git.version_unsupported`, `git.secret_unreadable`, `git.unreachable`,
+        `git.tls_failed`, `git.timeout`, `git.redirect_refused`, `git.rate_limited`, `git.unavailable`,
+        `git.unexpected_answer`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - {name: state, in: query, required: false, schema: {type: string}}
+        - {name: code, in: query, required: false, schema: {type: string}}
+        - {name: error, in: query, required: false, schema: {type: string}}
+      responses:
+        '303':
+          description: Weiter zur Seite „Git“ der Anwendung
+          headers:
+            Location: {schema: {type: string}}
+        '401': {$ref: '#/components/responses/Problem'}
+  /git/admin/providers:
+    get:
+      operationId: listGitAdminProviders
+      summary: Anbieter mit Einstellungen (Recht git.manage)
+      responses:
+        '200':
+          description: Alle nicht entfernten Anbieter, nach Namen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AdminProvider'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createGitProvider
+      summary: Anbieter anlegen (Recht git.manage)
+      description: |
+        Ungültige Angaben ergeben 400 `request.invalid` mit Verletzungen aus `kind.invalid`, `name.invalid`,
+        `baseUrl.invalid`, `clientId.invalid`, `clientSecret.invalid`, `caCertificate.invalid`. Ein vergebener Name ergibt
+        409 `git.provider_name_taken`, ein Geheimnis ohne Schlüssel des Betriebs 409 `git.secret_key_missing`. Bei GitHub.com
+        und GitLab.com ist die Adresse fest. Steht im Audit, ohne Geheimnis.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProviderRequest'}
+      responses:
+        '201':
+          description: Angelegt, Version 1 im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminProvider'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /git/admin/providers/{id}:
+    put:
+      operationId: updateGitProvider
+      summary: Anbieter ändern (Recht git.manage)
+      description: |
+        Wie beim Anlegen; die Art bleibt (`kind.unchangeable`). `clientSecret` weggelassen behält das gespeicherte, leer
+        entfernt es. Eine andere Adresse oder Kennung der Anwendung beendet alle Verbindungen dieses Anbieters.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProviderRequest'}
+      responses:
+        '200':
+          description: Geändert, neue Version im ETag
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminProvider'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeGitProvider
+      summary: Anbieter entfernen (Recht git.manage)
+      description: |
+        Blendet den Anbieter aus, löscht das Geheimnis und beendet sofort alle Verbindungen. Freigaben bleiben gespeichert
+        und erscheinen nicht mehr.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': {description: Entfernt}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /git/admin/providers/{id}/check:
+    post:
+      operationId: checkGitProvider
+      summary: Erreichbarkeit ohne Token prüfen (Recht git.manage)
+      description: |
+        GitHub über `/meta`, GitLab über `/api/v4/version`, wo 401 als erreichbar zählt. Nennt den ersten Fehler als Code
+        (`git.unreachable`, `git.tls_failed`, `git.timeout`, `git.redirect_refused`, `git.unavailable`,
+        `git.unexpected_answer`, `git.version_unsupported`) und die Version, wenn ein GitLab sie ohne Token nennt.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {type: boolean}
+                  code: {type: [string, 'null']}
+                  version: {type: [string, 'null']}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/git/repositories:
+    get:
+      operationId: listGitRepositories
+      summary: Freigegebene Repositories eines Projekts, live mit dem eigenen Token
+      description: |
+        Ist ein Repository für die Person nicht verfügbar, fehlt `repository` und `reason` nennt `git.not_connected`,
+        `git.connection_renew` oder `git.unavailable`; Name, Pfad und Adresse erscheinen dann nicht, und die Antwort
+        unterscheidet nicht zwischen „gibt es nicht“ und „darfst du nicht“. `manageable` sagt, ob die Person freigeben darf.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Freigaben in der Reihenfolge der Freigabe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repositories, manageable]
+                properties:
+                  repositories:
+                    type: array
+                    items: {$ref: '#/components/schemas/Release'}
+                  manageable: {type: boolean}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: releaseGitRepository
+      summary: Repository freigeben (projects.manage oder project.manage)
+      description: |
+        Das Repository muss mit der eigenen Verbindung lesbar sein, sonst 404 `git.repository_not_found`. Ohne Verbindung
+        409 `git.not_connected` oder `git.connection_renew`; schon freigegeben 409 `git.repository_released`; mehr als 50
+        Freigaben 409 `git.repositories_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503
+        `git.rate_limited`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerId, externalId]
+              properties:
+                providerId: {type: string, format: uuid}
+                externalId: {type: string, pattern: '^[0-9]{1,20}$'}
+      responses:
+        '201':
+          description: Freigegeben
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Release'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/git/repositories/{releaseId}:
+    delete:
+      operationId: withdrawGitRepository
+      summary: Freigabe zurücknehmen (projects.manage oder project.manage)
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - {name: releaseId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Zurückgenommen}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/git/candidates:
+    get:
+      operationId: listGitCandidates
+      summary: Repositories, die die eigene Verbindung lesen darf (projects.manage oder project.manage)
+      description: Höchstens 100, gefiltert nach einem Teil von Name oder Pfad. Fehler wie beim Freigeben.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - {name: provider, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: q, in: query, required: false, schema: {type: string, maxLength: 100}}
+      responses:
+        '200':
+          description: Repositories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Repository'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Version aus dem ETag
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid, auth.forbidden, project.not_found,
+        git.provider_not_found, git.provider_name_taken, git.provider_incomplete, git.secret_key_missing,
+        git.public_url_missing, git.not_connected, git.connection_renew, git.repository_not_found, git.repository_released,
+        git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    Kind:
+      type: string
+      enum: [github, gitlab_com, gitlab]
+    Status:
+      type: object
+      required: [secretKey, callbackUrl, manage]
+      properties:
+        secretKey: {type: boolean}
+        callbackUrl: {type: [string, 'null']}
+        manage: {type: boolean}
+    Provider:
+      type: object
+      required: [id, kind, name, baseUrl, connection, connectedAt]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/Kind'}
+        name: {type: string}
+        baseUrl: {type: string}
+        connection: {type: string, enum: [none, active, renew]}
+        connectedAt: {type: [string, 'null'], format: date-time}
+    AdminProvider:
+      type: object
+      required: [id, kind, name, baseUrl, clientId, secretSet, caCertificate, version, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/Kind'}
+        name: {type: string}
+        baseUrl: {type: string}
+        clientId: {type: string}
+        secretSet: {type: boolean}
+        caCertificate: {type: [string, 'null']}
+        version: {type: integer, format: int64}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string, format: uuid}
+    ProviderRequest:
+      type: object
+      required: [name, clientId]
+      properties:
+        kind: {$ref: '#/components/schemas/Kind'}
+        name: {type: string, maxLength: 80}
+        baseUrl: {type: [string, 'null'], description: 'Nur für ein eigenes GitLab: https, Rechner, optional Port und Pfad'}
+        clientId: {type: string, maxLength: 200}
+        clientSecret: {type: [string, 'null'], maxLength: 1000}
+        caCertificate: {type: [string, 'null'], description: 'Ein bis fünf Zertifikate im PEM Format'}
+    Repository:
+      type: object
+      required: [externalId, name, path, url]
+      properties:
+        externalId: {type: string}
+        name: {type: string}
+        path: {type: string}
+        url: {type: [string, 'null'], description: Aus der Adresse des Anbieters und dem Pfad gebaut}
+    Release:
+      type: object
+      required: [id, providerId, providerName, providerKind, externalId, available, reason, repository, releasedAt]
+      properties:
+        id: {type: string, format: uuid}
+        providerId: {type: string, format: uuid}
+        providerName: {type: [string, 'null']}
+        providerKind: {oneOf: [{$ref: '#/components/schemas/Kind'}, {type: 'null'}]}
+        externalId: {type: string}
+        available: {type: boolean}
+        reason: {type: [string, 'null'], enum: [git.not_connected, git.connection_renew, git.unavailable, null]}
+        repository: {oneOf: [{$ref: '#/components/schemas/Repository'}, {type: 'null'}]}
+        releasedAt: {type: string, format: date-time}

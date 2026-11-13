@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 2 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 0 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-111](#task-111-git-anbieter-kontoverbindung-und-repository-freigabe-a15-teil-1) | Git Anbieter, Kontoverbindung und Repository Freigabe (A15 Teil 1) | claude-20261113-git-01 | 2026-11-13 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -41,7 +39,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-111](#task-111-git-anbieter-kontoverbindung-und-repository-freigabe-a15-teil-1) | Git Anbieter, Kontoverbindung und Repository Freigabe (A15 Teil 1) | claude-20261113-git-01 | 2026-11-13 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -56,7 +56,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-111 Git Anbieter, Kontoverbindung und Repository Freigabe (A15 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261113-git-01 · **Aktualisiert:** 2026-11-13
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261113-git-01 · **Aktualisiert:** 2026-11-13
 
 **Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-036; OPEN-010; docs/GIT_MIGRATION.md (Verbindung und Berechtigungen, Aktualisierung, Prüffälle G05 bis G07). **Abhängigkeiten:** TASK-026, TASK-040, TASK-057 (verschlüsselte Ablage von Zugangsdaten), geliefert. **Arbeitsstand:** Holger hat am 13. November 2026 im Projektgespräch mit „lass uns mit A15 weitermachen“ den Beginn von Paket A15 beauftragt und am selben Tag die 22 Vorschläge mit „passt so“ übernommen (Regeln unten und bei TASK-112 und TASK-113). Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-141, Migrationen ab V0064.
 
@@ -79,7 +79,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Eine nicht eingetragene Adresse, eine Weiterleitung auf einen anderen Rechner und ein ungültiges Zertifikat führen zu keinem Abruf beziehungsweise einem Fehler (G07); ein GitLab unter 16.0 wird abgewiesen.
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für Verwaltung, Kontoverbindung und Freigabe.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-112 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Übergabe (2026-11-13, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR. Modul `git` mit Migration V0064, Vertrag contracts/git.openapi.yaml (14 Routen), Seite „Git“ mit eigenen Verbindungen und Anbieterverwaltung, Projektreiter „Git“ für Freigaben; Beschreibung in backend/README.md, Abschnitt Git Anbindung. Zu den Kriterien: 1 `GitApiTest.administrationKeepsTheSecretWriteOnlyAndChecksVersions` (Geheimnis in keiner Antwort, keinem Audit und keiner Logausgabe); 2 `connectingUsesPkceAStateOnceAndStoresTokensEncrypted`, `anEndingTokenIsRenewedAndARefusedRenewalAsksToReconnect`, `deactivationAndRemovalEndTheTokensAtOnce`; 3 `releasingNeedsARepositoryTheOwnConnectionMayRead`, `everyReadUsesTheTokenOfTheViewer`; 4 Weiterleitung 502 `git.redirect_refused`, `certificatesAreAlwaysCheckedAndAnOwnCaCanBeTrusted`, `aGitlabOfItsOwnNeedsVersion16`, keine Adresse aus Eingaben (Abrufe nur an die Adresse der Instanz, Repository Adresse gebaut); 5 `GitContractTest`, Browser Tests tests/browser/git.test.mjs. Präzisierungen in DEC-141: Regel 8 prüft die Version bei „Prüfen“, wenn das GitLab sie ohne Token nennt, und immer beim Verbinden; Regel 6 erlaubt auch `projects.manage`. Gelaufen: volle Backend Suite gegen PostgreSQL 16 mit Java 21, `npm run verify`, alle Browser Tests, Repository Prüfungen; der Lifecycle Check mit Docker nur in CI.
+
+**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei), danach Holgers Abnahme; TASK-112 beginnt, sobald dieses Ergebnis auf main ist.
 
 ## TASK-112 Git Verknüpfung und Anzeige an Tickets und Anforderungen (A15 Teil 2)
 

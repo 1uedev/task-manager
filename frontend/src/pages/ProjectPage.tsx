@@ -19,9 +19,10 @@ import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput } from './CustomFieldInput.tsx';
 import { ProjectConfigurationEditor } from './ProjectConfigurationEditor.tsx';
 import { ProjectRightsTab } from './ProjectRights.tsx';
+import { GitRepositoriesTab } from './GitRepositoriesTab.tsx';
 
 const TAB_LABEL: Record<ProjectTab, MessageKey> = {
-  tickets: 'project.tab.tickets', members: 'project.tab.members', tags: 'project.tab.tags', settings: 'project.tab.settings', rights: 'project.tab.rights',
+  tickets: 'project.tab.tickets', members: 'project.tab.members', tags: 'project.tab.tags', git: 'project.tab.git', settings: 'project.tab.settings', rights: 'project.tab.rights',
 };
 
 export function statusName(project: Project, key: string | null | undefined): string {
@@ -46,7 +47,7 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
         <>
           <PageHead title={`${value.key} · ${value.name}`} intro={value.description ?? undefined} />
           <nav className="tabs" aria-label={t('project.tabs')}>
-            {(['tickets', 'members', 'tags', 'settings', 'rights'] as const)
+            {(['tickets', 'members', 'tags', 'git', 'settings', 'rights'] as const)
               .filter((name) => (name !== 'settings' || value.manageable) && (name !== 'rights' || rights.state === 'ok')).map((name) => (
               <a key={name} href={hrefFor({ name: 'project', id, tab: name })} aria-current={name === tab ? 'page' : undefined}>{t(TAB_LABEL[name])}</a>
             ))}
@@ -54,6 +55,7 @@ export function ProjectPage({ id, tab }: { readonly id: string; readonly tab: Pr
           {tab === 'tickets' && <TicketsTab project={value} />}
           {tab === 'members' && <MembersTab project={value} />}
           {tab === 'tags' && <TagsTab project={value} />}
+          {tab === 'git' && <GitRepositoriesTab projectId={id} />}
           {tab === 'settings' && value.manageable && etag !== null && (
             <SettingsTab project={value} etag={etag} onSaved={(next, nextEtag) => replace({ value: next, etag: nextEtag })} />
           )}

@@ -1,6 +1,7 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
 import type { components as AppearanceTypes } from './generated/appearance';
 import type { components as FileTypes } from './generated/files';
+import type { components as GitTypes } from './generated/git';
 import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
 import type { components as JobTypes } from './generated/jobs';
@@ -1076,3 +1077,51 @@ export const unlinkRequirementPage = (api: ServerApi, id: string, pageId: string
 export const readTicketRequirements = (api: ServerApi, projectId: string, number: number) =>
   run(() => api.requirements.GET('/requirements/projects/{projectId}/tickets/{number}', { params: { path: { projectId, number } } }),
     one<TicketRequirements>(isTicketRequirements));;
+
+
+// ---------------------------------------------------------------- Git (TASK-111)
+
+export type GitStatus = GitTypes['schemas']['Status'];
+export type GitProvider = GitTypes['schemas']['Provider'];
+export type GitAdminProvider = GitTypes['schemas']['AdminProvider'];
+export type GitProviderRequest = GitTypes['schemas']['ProviderRequest'];
+export type GitRepository = GitTypes['schemas']['Repository'];
+export type GitRelease = GitTypes['schemas']['Release'];
+export type GitKind = GitTypes['schemas']['Kind'];
+export interface GitCheck { readonly ok: boolean; readonly code?: string | null; readonly version?: string | null }
+export interface GitReleases { readonly repositories: GitRelease[]; readonly manageable: boolean }
+
+const isGitStatus = (v: unknown) => record(v) && typeof v.secretKey === 'boolean' && typeof v.manage === 'boolean';
+const isGitProvider = (v: unknown) => hasStrings(v, 'id', 'kind', 'name', 'baseUrl', 'connection');
+const isGitAdminProvider = (v: unknown) => hasStrings(v, 'id', 'kind', 'name', 'baseUrl', 'clientId') && typeof (v as GitAdminProvider).version === 'number'
+  && typeof (v as GitAdminProvider).secretSet === 'boolean';
+const isGitRepository = (v: unknown) => hasStrings(v, 'externalId', 'name', 'path');
+const isGitRelease = (v: unknown) => hasStrings(v, 'id', 'providerId', 'externalId') && typeof (v as GitRelease).available === 'boolean'
+  && ((v as GitRelease).repository === null || isGitRepository((v as GitRelease).repository));
+const isGitReleases = (v: unknown) => record(v) && Array.isArray(v.repositories) && v.repositories.every(isGitRelease) && typeof v.manageable === 'boolean';
+
+export const readGitStatus = (api: ServerApi) => run(() => api.git.GET('/git/status'), one<GitStatus>(isGitStatus));
+export const listGitProviders = (api: ServerApi) => run(() => api.git.GET('/git/providers'), listOf<GitProvider>(isGitProvider));
+export const connectGitProvider = (api: ServerApi, id: string) =>
+  run(() => api.git.POST('/git/providers/{id}/connect', { params: { path: { id } } }), one<{ authorizeUrl: string }>((v) => hasStrings(v, 'authorizeUrl')));
+export const disconnectGitProvider = (api: ServerApi, id: string) =>
+  run(() => api.git.DELETE('/git/providers/{id}/connection', { params: { path: { id } } }), nothing);
+export const listGitAdminProviders = (api: ServerApi) => run(() => api.git.GET('/git/admin/providers'), listOf<GitAdminProvider>(isGitAdminProvider));
+export const createGitProvider = (api: ServerApi, body: GitProviderRequest) =>
+  run(() => api.git.POST('/git/admin/providers', { body }), one<GitAdminProvider>(isGitAdminProvider));
+export const updateGitProvider = (api: ServerApi, id: string, version: number, body: GitProviderRequest) =>
+  run(() => api.git.PUT('/git/admin/providers/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) }, body }), one<GitAdminProvider>(isGitAdminProvider));
+export const removeGitProvider = (api: ServerApi, id: string, version: number) =>
+  run(() => api.git.DELETE('/git/admin/providers/{id}', { params: { path: { id }, ...ifMatch(`"${version}"`) } }), nothing);
+export const checkGitProvider = (api: ServerApi, id: string) =>
+  run(() => api.git.POST('/git/admin/providers/{id}/check', { params: { path: { id } } }), one<GitCheck>((v) => record(v) && typeof v.ok === 'boolean'));
+export const listGitReleases = (api: ServerApi, projectId: string) =>
+  run(() => api.git.GET('/projects/{projectId}/git/repositories', { params: { path: { projectId } } }), one<GitReleases>(isGitReleases));
+export const listGitCandidates = (api: ServerApi, projectId: string, provider: string, q: string) =>
+  run(() => api.git.GET('/projects/{projectId}/git/candidates', { params: { path: { projectId }, query: { provider, ...(q === '' ? {} : { q }) } } }),
+    listOf<GitRepository>(isGitRepository));
+export const releaseGitRepository = (api: ServerApi, projectId: string, providerId: string, externalId: string) =>
+  run(() => api.git.POST('/projects/{projectId}/git/repositories', { params: { path: { projectId } }, body: { providerId, externalId } }),
+    one<GitRelease>((v) => hasStrings(v, 'id', 'providerId', 'externalId')));
+export const withdrawGitRepository = (api: ServerApi, projectId: string, releaseId: string) =>
+  run(() => api.git.DELETE('/projects/{projectId}/git/repositories/{releaseId}', { params: { path: { projectId, releaseId } } }), nothing);

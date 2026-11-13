@@ -189,7 +189,7 @@ class AdministrationRightsApiTest {
         Person some = person(false, AdministrationRight.SESSION_DURATION_MANAGE, AdministrationRight.ACCOUNTS_MANAGE);
         assertEquals(List.of("accounts.manage", "session_duration.manage"), rightsOf(some.browser().get("/api/v1/session")));
         Person all = person(true, AdministrationRight.values());
-        assertEquals(List.of("accounts.manage", "appearance.manage", "helpdesk.manage", "jobs.manage", "permissions.manage", "projects.manage",
+        assertEquals(List.of("accounts.manage", "appearance.manage", "git.manage", "helpdesk.manage", "jobs.manage", "permissions.manage", "projects.manage",
                 "session_duration.manage", "sla.manage", "tags.manage"),
             rightsOf(all.browser().get("/api/v1/session")), "since TASK-030 the session also names permissions.manage, for the group administration");
         assertEquals(List.of(), rightsOf(person(false).browser().get("/api/v1/session")));
