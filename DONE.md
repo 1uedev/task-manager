@@ -6,7 +6,7 @@ Diese Datei enthält dauerhaft nachvollziehbare Ergebnisse abgeschlossener und g
 
 ## Bisheriger Stand
 
-Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Nachtrag vom 10. November 2026: Holger hat das Wiki TASK-093 und TASK-094 mit der Korrektur TASK-095 abgenommen; diese Einträge stehen vor TASK-091. Nachtrag vom 11. November 2026: Holger hat die Anforderungen TASK-096 bis TASK-098 mit den Korrekturen TASK-099 bis TASK-101 abgenommen (Paket A13); diese Einträge stehen vor TASK-095. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
+Bis zum 18. Oktober 2026 lagen keine nach dem hier festgelegten Verfahren abgeschlossenen Aufgaben vor; TASK-034 und TASK-035 waren die ersten abgeschlossenen Einträge. TASK-022 ist als erste Produktimplementierung (Backendgrundlage ohne Fachfunktion) abgeschlossen, TASK-023 als Frontend-Grundfläche ohne Fachfunktion, TASK-024 als Identitätsmodul (lokale Anmeldung und feste Sitzungsfristen, ohne Anmeldeseite), TASK-025 als Berechtigungsmodul (Gruppen-, Projekt- und Feldrechte ohne HTTP und ohne echten Identitätsadapter) mit der Nachbesserung TASK-038, der echte Adapter zwischen Identität und Berechtigungen als TASK-039, das Projektmodul als TASK-026, der Ticketkern als TASK-027, die Serialisierung der Verwaltung als TASK-041, der Tag-Kern als TASK-028 und die Tagänderungen in der Tickethistorie als TASK-042; TASK-037 schließt eine Restlücke der Sitzungsfristen aus TASK-024. Nachtrag vom 28. Oktober 2026: Holger hat alle bis dahin zur Prüfung stehenden Aufgaben abgenommen, also die Planungs- und Einrichtungsaufgaben TASK-001 bis TASK-021, TASK-032 und TASK-033 sowie TASK-044 bis TASK-056. Die Planungsaufgaben stehen in Nummernfolge vor TASK-034, TASK-044 bis TASK-056 vor TASK-043. Nachtrag vom 29. Oktober 2026: Holger hat den Helpdesk Eingang TASK-057 mit den Korrekturen TASK-059 bis TASK-061 abgenommen (DEC-090); diese Einträge stehen vor TASK-056. Nachtrag vom 30. Oktober 2026: Holger hat die Antworten über SMTP TASK-058 mit den Korrekturen TASK-062 bis TASK-064 abgenommen; diese Einträge stehen vor TASK-061. Nachtrag vom 1. November 2026: Holger hat die Servicefristen TASK-068, die Eskalationen TASK-070 und deren Korrektur TASK-071 abgenommen; diese Einträge stehen vor TASK-066. Nachtrag vom 4. November 2026: Holger hat den Tag Bereich A3 mit TASK-072, TASK-073 und der Korrektur TASK-086 abgenommen; diese Einträge stehen vor TASK-085. Nachtrag vom 9. November 2026: Holger hat den Auftritt TASK-081 mit den Korrekturen TASK-087, TASK-089 und TASK-090 abgenommen; diese Einträge stehen vor TASK-086. Nachtrag vom 9. November 2026: Holger hat die Zeiterfassung TASK-069 mit der Korrektur TASK-092 abgenommen; diese Einträge stehen vor TASK-087. Nachtrag vom 9. November 2026: Holger hat die neuen Kundenantworten TASK-067 mit den Korrekturen TASK-088 und TASK-091 abgenommen; diese Einträge stehen vor TASK-090. Nachtrag vom 10. November 2026: Holger hat das Wiki TASK-093 und TASK-094 mit der Korrektur TASK-095 abgenommen; diese Einträge stehen vor TASK-091. Nachtrag vom 11. November 2026: Holger hat die Anforderungen TASK-096 bis TASK-098 mit den Korrekturen TASK-099 bis TASK-101 abgenommen (Paket A13); diese Einträge stehen vor TASK-095. Nachtrag vom 13. November 2026: Holger hat die Suche über Wiki und Anforderungen mit Übersicht, Schnellsuche und Messung TASK-102 bis TASK-104 mit den Korrekturen TASK-105 bis TASK-110 abgenommen (Paket A14); diese Einträge stehen vor TASK-101. Die Abnahme der Planungsaufgaben macht als Vorschlag gekennzeichnete Anforderungen und offene Fragen nicht zu Entscheidungen; maßgeblich bleiben REQUIREMENTS.md und DECISIONS.md.
 
 ## Angaben für spätere Einträge
 
@@ -662,6 +662,241 @@ Abgeschlossene Einträge bleiben bestehen. Spätere Fehler oder Erweiterungen er
 **Offen und Folgeaufgaben:** (1) Der echte Identitätsadapter, der Konto und Sitzung unter einer bis zum Commit gehaltenen Sperre prüft und Mandant, Organisation und Rechteversion führt, fehlt weiter und ist keiner Sitzung zugewiesen; er muss auch die Schranke für die letzte Administration auf dem Entzugsweg des Identitätsmoduls selbst durchsetzen. Ebenso fehlen Projekt- und Objektadapter (TASK-026). (2) P2 bis P6 des Gegenreviews sind weder entschieden noch umgesetzt; ob sie mit der Abnahme zurückgestellt sind, hat Holger nicht ausdrücklich gesagt. (3) Das Audit ist nur mit den letzten 100 Einträgen lesbar, Seitenweise Lesen gehört zu TASK-030, die Aufbewahrung zu OPEN-014. Projektverwalter können `groups()` nicht aufrufen, die Delegation braucht in TASK-030 einen eingeschränkten Lesepfad. (4) TASK-026 bis TASK-031 bleiben blockiert.
 
 **Referenz:** Reservierung #69 (0619b65), Ergebnis #74 (d60c554), Gegenreview #76 (54245fd), Reservierung der Nachbesserung #81 (370a69c), Nachbesserung #82 (dbc188b), Nachprüfbericht #87 (offen), Folgeaufgabe TASK-038 mit Reservierung #89 (d837463) und Ergebnis #90 (5dbe32e).
+
+## TASK-110 Befunde der Codex Prüfung von TASK-104 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-PERF-003, REQ-ACL-004; DEC-134, DEC-140; docs/REVIEW_TASK-104_PR-303.md. **Verantwortlich:** claude-20261113-search-07. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** F1, F3, F4, F6 mit Browsertests der Wege aus dem Bericht. F2 mit Browsertest gegen Statuscodes wie beim Server und Backendtest der Rechtekombination. F5 mit Backendtest für `straße`, Zähler und Direkttreffer. F7 mit Testersatzfällen, die den Serverantworten entsprechen; H2 bis H5 in README, DEMO.md und Messcode; bestehende Tests bleiben grün.
+
+**Umfang:** Befunde F1 bis F7 und Hinweise H2 bis H5 aus docs/REVIEW_TASK-104_PR-303.md:
+1. F1: Die Schnellsuche fragt vor dem Verwerfen ungespeicherter Eingaben wie jeder andere Seitenwechsel.
+2. F2: Wer ein Ticket lesen darf, aber nicht sein Projekt, sieht die Ticketseite mit den erlaubten Daten.
+3. F3: Ein späterer Seitenwechsel macht eine laufende Schnellsuche ungültig.
+4. F4: Die Schnellsuche öffnet „Alle“ mit dem aktuellen Text auch bei gleicher Adresse.
+5. F5: Der normalisierte Projektschlüssel (etwa `straße` zu STRASSE) zählt in Filter, Zähler und Direkttreffer der Projektsuche.
+6. F6: Nach „Alle anzeigen“ liegt der Fokus im gewählten Reiter.
+7. F7: Der Testersatz bildet die Rechte der Projektsicht, die Kennungsnormalisierung der Ticketsuche, die Ticketfilter, Projekttags und Suchtexte ohne Wörter wie der Server ab.
+8. H2 bis H5: Rechte im README richtig beschrieben, frische Ergebnisse und exakte Ziele in der Browsermessung, Zielwertung nur mit gültigen Werten und Treffern, genaue Bezeichnung des gemessenen Builds.
+
+**Ergebnis:** Ohne Migration und ohne Vertragsänderung. F1: Die Schnellsuche öffnet ihr Ziel über `navigateAsked`, das wie jeder Seitenwechsel einer Person zuerst die Rückfrage bei ungespeicherten Eingaben stellt; wer bleibt, behält Seite, Eingabe und den Text der Schnellsuche. F3: Jeder Wechsel der Adresse macht eine laufende Schnellsuche ungültig, ihre späte Antwort öffnet nichts mehr. F4: Bei gleicher Adresse eines Suchbereichs zählt `useRoute` einen neuen Besuch, die Suchseite beginnt neu mit „Alle“ und dem Text; auf jeder anderen gleichen Adresse bleibt alles ohne Rückfrage, wie es ist. F6: Nach „Alle anzeigen“ liegt der Fokus im Suchfeld des gewählten Reiters. F2: Antwortet das Projekt mit 404 und das Ticket mit 200, zeigt die Ticketseite das Ticket ohne Projektkonfiguration mit einem Hinweis, Typ, Status und eigenen Feldern mit ihrem Schlüssel und ohne deren Änderung; Titel, Beschreibung, Zuständigkeit und die Bereiche am Ticket folgen weiter den Rechten des Tickets. Backendtest `whoMayReadATicketButNotItsProjectFindsTheTicketDirectly` (Direkttreffer, Ticket 200, Projekt 404, kein Projektbereich). F5: Die Projektsuche nimmt den normalisierten Schlüssel als Alternative in die gemeinsame Bedingung von Zähler und Seite (`theNormalizedProjectKeyFindsItsProjectInFilterCountAndDirectHit` mit `straße` für STRASSE, scheitert ohne die Änderung mit `total` 0). F7: Der Testersatz zeigt Projekte nur mit `projects.manage`, `project.read` oder `project.manage`, prüft Projekt, Mitglieder, Konfiguration und Projekttags mit diesen Rechten und Tickets mit ihren eigenen, normalisiert Text und Ticketkennung wie `SearchText`, wertet Projekt-, Status-, Typ-, Personen- und eigene Feldfilter nach den lesbaren Feldern aus, sucht in Tagnamen und Textfeldern, findet mit Text ohne Wörter nichts und in Projekten auch über Tagnamen und den normalisierten Schlüssel. Neue Browsertests für F1 bis F4, F6 und die Fälle des Testersatzes; die Tests für F1 bis F4 und F6 scheitern mit dem Stand vor TASK-110. H2: Rechte der Übersicht im Backend README richtig beschrieben. H3, H4: Die Browsermessung wartet auf Startseite und Reiter ohne frühere Antwort, prüft bei der Schnellsuche genau Pfad und Kennung des Tickets und wertet eine Klasse nur mit allen gültigen Werten als erfüllt; `demo measure` zählt eine Schnellsuche ohne Direkttreffer als Fehler. H5: DEMO.md nennt die für Java 21 gebaute Anwendung statt desselben Jars, beide Messwerkzeuge schreiben Commit und Build in ihre Messdateien.
+
+**Prüfungen:** Backend lokal mit PostgreSQL 16 (641 Tests, darunter `theNormalizedProjectKeyFindsItsProjectInFilterCountAndDirectHit`, das ohne die Änderung scheitert, und `whoMayReadATicketButNotItsProjectFindsTheTicketDirectly`), `npm run verify` mit 102 Tests, Browsertests 301/301; die neuen Browsertests für F1 bis F4 und F6 scheitern mit dem Stand vor TASK-110. Repository Prüfungen grün, CI auf PR #313 grün.
+
+**Review:** Keine weitere Prüfung; Holger hat nach dem Ergebnis abgenommen.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): F8 aus der Prüfung von TASK-104 (LAN Lauf und vollständiges T15 Lastprofil) in A18.
+
+**Referenz:** Reservierung #312 (613e67c), Ergebnis #313 (68fab81); verknüpft mit TASK-104 und DEC-140.
+
+## TASK-109 Befunde der Codex Prüfung von TASK-108 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-138; docs/REVIEW_TASK-108_PR-309.md. **Verantwortlich:** claude-20261112-search-06. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** F1 mit einem Browsertest: Verschieben nach einem veröffentlichten Treffer, danach zeigt weder die aktuelle noch eine andere Sprache einen Entwurf ohne „Entwurf zeigen“. F2 mit einem Test für einen großen Text mit U+FDFA und einer Beschreibung des Speicherbedarfs. F3 mit Fällen am Testersatz für beide Texte des Berichts. F4 mit dem Fall `AΣ\u1ACFA` als benannte oder behobene Grenze; bestehende Tests bleiben grün.
+
+**Umfang:** Befunde F1 bis F4 aus docs/REVIEW_TASK-108_PR-309.md:
+1. F1: Nach einem veröffentlichten Suchtreffer bleibt der Vorrang der Veröffentlichung auch nach Verwaltungsaktionen wie dem Verschieben erhalten; Entwürfe erscheinen in keiner Sprache ohne „Entwurf zeigen“.
+2. F2: Die Zuordnung der Originalzeichen braucht auch bei großen Kompatibilitätszerlegungen (etwa viele U+FDFA) begrenzten Speicher ohne Objekt je Zeichen.
+3. F3: Der Testersatz verarbeitet ein Wort mit 150.000 Zeichen und A mit 150.000 U+0334 und U+0301 ohne `RangeError`.
+4. F4: Die Grenze des Testersatzes bei Zeichen, die Java 21 und Node in unterschiedlichen Unicode Versionen kennen (etwa U+1ACF), ist benannt oder über dieselben Zeicheneigenschaften abgesichert.
+
+**Ergebnis:** Ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` setzt den Vorrang der Veröffentlichung nach einer Änderung nicht mehr zurück; Verschieben, Archivieren und Wiederherstellen lassen den gezeigten Stand, Veröffentlichen, Zurückziehen, Übernehmen einer alten Revision und Hinzufügen einer Sprachfassung zählen wie „Entwurf zeigen“ nur für ihre Sprache (Browsertest: Verschieben, Archivieren, Wiederherstellen nach einem veröffentlichten Treffer, danach Englisch veröffentlicht und Entwurf nur über „Entwurf zeigen“; der Test scheitert mit dem Stand von TASK-108). F2: `Nfkc.origins` liefert `Origins` mit Normalform und zwei `int` Feldern, zerlegt in vorab bemessene Felder, ordnet Folgen kombinierender Zeichen durch Zählen ihrer Klassen und setzt an Ort und Stelle zusammen; `SearchSnippet` hält je UTF-16 Einheit nur den Index des Zeichens und besucht die Wörter einzeln. Der Text des Berichts (fast 1 MiB U+FDFA) wird mit 96 MiB Heap markiert, TASK-108 brach mit 256 MiB ab (`aLargeCompatibilityDecompositionIsMarkedWithASmallHeap` startet eine eigene JVM mit 128 MiB). F3: Testersatz ordnet Folgen nach Klassenrang und nimmt Zeichen und Wortgrenzen in Schleifen statt mit Spread (Test mit beiden Texten des Berichts, scheitert vorher mit `RangeError`). F4: Testersatz behandelt die 84 BMP Zeichen, die Java 21 nicht kennt und Node 24 kennt, wie Java (kein Wortteil, keine Kleinschreibung, keine Zerlegung, keine Verbindung); Abgleich der Suchwörter mit `SearchText.terms` für jedes BMP Zeichen in acht Umgebungen (507.648 Texte) ohne Abweichung (vorher 215), der Wortbereiche mit `SearchSnippet.words` für 100.000 Zufallstexte ohne Abweichung außer neben Zeichen außerhalb der BMP (benannte Grenze); Fälle `AΣ\u1ACFA`, `AΣ\uA7F1A`, `AΣ\u0334\u1ACFA` im Test. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Prüfungen:** Backend lokal mit PostgreSQL 16 (639 Tests, darunter `aLargeCompatibilityDecompositionIsMarkedWithASmallHeap`), `npm run verify` und Browsertests 293/293, Abgleich des Testersatzes mit Java wie unter Ergebnis beschrieben. CI auf PR #311 grün.
+
+**Review:** Keine weitere Prüfung; Holger hat mit „F1 bis F4 beheben, dann Abnahme“ (DEC-139) ohne weitere Codex Runde abgenommen.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Der Testersatz weicht neben Zeichen außerhalb der BMP noch von Java ab (benannte Grenze).
+
+**Referenz:** Reservierung #310 (de495f7), Ergebnis #311 (c4fb673); verknüpft mit TASK-108 und DEC-139.
+
+## TASK-108 Befunde der Codex Prüfung von TASK-107 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-137; docs/REVIEW_TASK-107_PR-307.md. **Verantwortlich:** claude-20261112-search-05. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** F1 mit Browsertests für beide im Bericht genannten Wege. F2 mit einem Laufzeittest für späte Zusammensetzung. F3 mit Unit Tests für die vier Fälle des Berichts und einem Zufallstest, der den genauen Originalbereich jedes Worts prüft; Testersatz mit `½ᅡ`. F4 mit Fällen am Testersatz; H2 mit Test oder begründeter Beschreibung; bestehende Tests bleiben grün.
+
+**Umfang:** Befunde F1 bis F4 und Hinweis H2 aus docs/REVIEW_TASK-107_PR-307.md:
+1. F1: Nach einem veröffentlichten Suchtreffer ist jede Wahl einer Sprache, auch die erneute Wahl der gefundenen Sprache und eine Sprache nur mit Entwurf, eine neue Entscheidung für deren veröffentlichte Fassung. Fehlt sie, erscheint ein Hinweis mit eigener Aktion für den Entwurf. Eine gewählte Entwurfsansicht gilt nur für ihre Sprache.
+2. F2: Die Markierung braucht auch bei später Zusammensetzung (etwa A, viele U+0334, dann U+0301) linearen Aufwand.
+3. F3: Ergibt ein Normalisierungsabschnitt mehrere Indexwörter (etwa `½ᅡ`, `กำ`), umfasst jede Markierung nur die Originalzeichen ihres Worts, mit richtigen UTF-16 Positionen auch nach ergänzenden Zeichen; Testersatz gleich.
+4. F4: Der Testersatz schreibt das Sigma an Doppelpunkt und Mittelpunkt (`AΣ:A`, `AΣ·A`) wie Java klein.
+5. H2: Weicht die verkettete Abschnittsnormalform von NFKC des ganzen Texts ab, entstehen keine Markierungen aus einer anderen Form als der des Index.
+
+**Ergebnis:** Ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache eines ausdrücklich gewählten Entwurfs; jede Wahl in der Sprachleiste vergisst sie und zeigt nach einem veröffentlichten Treffer die veröffentlichte Fassung, ohne Veröffentlichung „Nicht veröffentlicht“ mit „Entwurf zeigen“ (drei Browsertests: erneute Wahl der gefundenen Sprache, Sprache nur mit Entwurf, Entwurf Deutsch dann Englisch). F2, F3, H2: neue Methode `Nfkc.origins` bildet NFKC des ganzen Texts mit den Originalzeichen jedes Zeichens (Zerlegung je Zeichen, stabile Ordnung nach Kombinationsklasse, kanonische Zusammensetzung über den Normalizer), `SearchSnippet` markiert jedes Wort vom ersten bis zum letzten eigenen Originalzeichen und markiert nichts, wenn die Form vom Index abweicht; die Abschnitte und die Halbierung entfallen (Unit Tests `severalWordsOfOneCharacterAndItsMarksKeepTheirOwnPlaces` mit den vier Fällen des Berichts, `thePlacesComeFromTheNormalFormOfTheIndex` mit 5.000 Zufallstexten und genauer Prüfung jedes Wortbereichs, späte Zusammensetzung nach 480.000 Zeichen im Laufzeittest). Testersatz gleich. F4: Testersatz bildet die Wortgrenzen des JDK für das Sigma nach, abgeglichen mit Java 21 für jedes BMP Zeichen neben einem Sigma und 200.000 Zufallstexte ohne Abweichung; Fälle `AΣ:A`, `AΣ·A`, `AΣ"A`, `A1Σ,1`, `AΣ1,1A` im Test; Grenze bei Zeichen außerhalb der BMP benannt. Läufe: Backend `mvn verify` 638 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 291 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Prüfungen:** Backend und Browsertests laut PR #309, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-108_PR-309.md)): „nachbessern“, behoben mit TASK-109.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #308 (cafb856), Ergebnis #309 (c8fe69b); verknüpft mit TASK-107, TASK-109 und DEC-138.
+
+## TASK-107 Befunde der Codex Prüfung von TASK-106 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-136; docs/REVIEW_TASK-106_PR-305.md. **Verantwortlich:** claude-20261112-search-04. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** F1 mit Browsertest für ein Konto mit Entwurfsrecht und unterschiedlichen englischen Titeln von Entwurf und Veröffentlichung. F2 mit einem Test, der einen langen Text aus U+FF9E und U+0334 in kurzer Zeit markiert. F3 mit Unit Tests für `カ\u3099\u3099\uFF9E\u0334\uFF9E\u0334 end` (Markierung nur `カ\u3099`) und einem Vergleich der Normalform mit `SearchText.terms` über viele zufällige Texte. F4 mit Fällen am Testersatz (`AΣ1A`, `AΣ-A`, `AΣ_A`); H1 im Browsertest; bestehende Tests bleiben grün.
+
+**Umfang:** Befunde F1 bis F4 und Hinweis H1 aus docs/REVIEW_TASK-106_PR-305.md:
+1. F1: Nach einem veröffentlichten Suchtreffer öffnet die Wahl einer Sprache in der Sprachleiste deren veröffentlichte Fassung, auch mit `wiki.edit` oder `wiki.publish`; den Entwurf zeigt nur die ausdrückliche Aktion.
+2. F2: Die Markierung normalisiert keine wachsenden Teilstücke mehr; ihre Laufzeit wächst linear mit der Textlänge, auch bei langen Folgen kombinierender Zeichen.
+3. F3: Wörter und Kleinschreibung der Markierung folgen genau der Normalform des Index, und eine Markierung umfasst nur die Originalzeichen, aus denen ihr Wort entsteht.
+4. F4: Der Testersatz schreibt das Sigma wie Java klein, sodass Treffer und Markierungen auch bei `AΣ1A` gleich sind.
+5. H1: Die Statuszeile einer Ersatzfassung erscheint erst mit ihr und nennt die Sprache.
+
+**Ergebnis:** Ohne Migration und ohne Vertragsänderung; der Index ändert sich nicht. F1: `WikiPage` merkt sich die Sprache des gefundenen Treffers getrennt vom Vorrang der Veröffentlichung; die Wahl einer Sprache in der Sprachleiste oder „Fassung … zeigen“ zeigt deren veröffentlichte Fassung, den Entwurf nur „Entwurf zeigen“ (Browsertest mit Entwurfsrecht und unterschiedlichen englischen Titeln). F2: neue Klasse `Nfkc` mit demselben Ergebnis wie `java.text.Normalizer`, die lange Folgen kombinierender Zeichen selbst stabil nach Kombinationsklasse vorordnet; genutzt von `SearchText` (Index und Suchtext), `SearchService` (Kennungen) und `SearchSnippet`; 100.000 solcher Zeichen in rund 0,14 s (`aLongRunOfReorderedMarksIsMarkedQuickly`, `theLinearNormalFormIsNfkc` mit 3.000 Zufallstexten gegen den Normalizer). F3: `SearchSnippet` zerlegt an den Grenzen der Normalisierung und sucht den kürzesten Anfang eines Abschnitts mit allen seinen Buchstaben per Halbierung (`aMarkCoversOnlyTheCharactersOfItsWord`, `theWordsOfTheMarksAreThoseOfTheIndexForRandomTexts` mit 3.000 Zufallstexten gegen `SearchText.terms`); Testersatz gleich, ein Abgleich von 800 Zufallstexten mit Java ergab nur Abweichungen beim Sigma zwischen Buchstaben anderer Schriften. F4: Testersatz mit der Kleinschreibung des Sigma nach Javas Wortgrenzen für gängige Fälle (`AΣ1A`, `AΣ-A`, `AΣ_A`, `AΣ A`, `A1Σ`), Grenze im Test und in backend/README.md benannt. H1: keine Statuszeile neben „Nicht mehr veröffentlicht“, eine Ersatzfassung nennt ihre Sprache. Läufe: Backend `mvn verify` 636 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 287 grün.
+
+**Prüfungen:** Backend und Browsertests laut PR #307, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-107_PR-307.md)): „nachbessern“, behoben mit TASK-108.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #306 (a5fbdf7), Ergebnis #307 (460ef96); verknüpft mit TASK-106, TASK-108 und DEC-137.
+
+## TASK-106 Befunde der Codex Prüfung von TASK-105 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-135; docs/REVIEW_TASK-105_PR-302.md. **Verantwortlich:** claude-20261112-search-03. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** F1 mit Browsertests für ein reines Lesekonto: nur die gefundene Fassung zurückgezogen, und zusätzlich eine andere veröffentlichte Sprachfassung vorhanden. F2 mit Unit Tests (jedes Indexwort wird markiert, auch für ㄱㅏ und İ ΟΣ) und einem API Test bei Anforderungen. F3 mit Test am Testersatz; H2 im bestehenden API Test; bestehende Tests bleiben grün.
+
+**Umfang:** Befunde F1 bis F3 und Hinweis H2 aus docs/REVIEW_TASK-105_PR-302.md:
+1. F1: Wer eine veröffentlichte Wikiseite aus der Suche öffnet, deren gefundene Fassung inzwischen zurückgezogen ist, sieht auch mit reinem Leserecht einen Hinweis statt eines Fehlers oder einer stillen Ersatzfassung; eine andere veröffentlichte Sprachfassung öffnet sich nur über eine ausdrückliche Aktion.
+2. F2: Markierungen in Titel und Ausschnitt folgen der Normalisierung des Index auch für Zeichenfolgen, die NFKC zusammensetzt (Hangul Kompatibilitätsjamo), und für die Kleinschreibung im Wortzusammenhang (Schluss Sigma); gilt für Wiki und Anforderungen.
+3. F3: Der Testersatz behandelt einen Suchtext aus U+FEFF wie der Server.
+4. H2: Der Test des Archivpfads nutzt je Stufe einen eigenen Titel der Wurzel.
+
+**Ergebnis:** Ohne Migration und ohne Vertragsänderung. F1: `WikiPage` zeigt bei einem veröffentlichten Treffer, dessen gefundene Fassung nicht mehr veröffentlicht oder nicht mehr lesbar ist, „Nicht mehr veröffentlicht“ mit dem Hinweis, dass die gefundene Fassung nicht mehr zur Verfügung steht, auch bei 404 und auch statt einer stillen Ersatzfassung; „Entwurf zeigen“ nur in derselben Sprache, eine andere veröffentlichte Sprachfassung über „Fassung … zeigen“ (zwei Browsertests mit reinem Lesekonto). F2: `SearchSnippet` verbindet Zeichen, die NFKC zusammensetzt, zu einem Stück und bildet die Kleinschreibung über die ganze Normalform wie `SearchText.terms` (Unit Tests mit `ㄱㅏ` und `İ ΟΣ` in der Prüfung, dass jedes Indexwort markiert wird, API Test `composedJamoChooseTheirCriterionAndAFinalSigmaIsMarked`); der Testersatz markiert gleich. F3: Der Testersatz entfernt Leerraum wie Javas `strip()`, U+FEFF bleibt Inhalt (Test direkt am Testersatz). H2: `anArchivedParentKeepsThePathUpToTheRoot` mit Wurzeltitel „Wurzel“ veröffentlicht und „Wurzel Entwurf“ im Entwurf. Läufe: Backend `mvn verify` 631 Tests grün (Java 21, PostgreSQL 16), `npm run verify` grün, Browsertests 285 grün. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Prüfungen:** Backend und Browsertests laut PR #305, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-106_PR-305.md)): „nachbessern“, behoben mit TASK-107.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #304 (3b4a4a5), Ergebnis #305 (544906a); verknüpft mit TASK-105, TASK-107 und DEC-136.
+
+## TASK-105 Befunde der Codex Nachprüfung von TASK-102 beheben (A14)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004, REQ-ACL-004; DEC-132, DEC-133; docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md. **Verantwortlich:** claude-20261111-search-02. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** R1 mit Browsertest: unterschiedliche Titel von Entwurf und Veröffentlichung, dazu eine zwischen Suche und Klick zurückgezogene Veröffentlichung. R2 mit API Test: Kind archiviert, dann Elternseite archiviert, Pfad bis zur Wurzel in beiden Ständen. R3 mit Test für `Ⓐlpha` im Titel und einem Treffer außerhalb des Anfangsausschnitts. R4 mit Test eines Publikationswechsels am Seitenende; N1 bis N3 mit Tests, bestehende Tests bleiben grün.
+
+**Umfang:** Befunde R1 bis R4 und Hinweise N1 bis N4 aus docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md:
+1. R1: Ein Treffer im veröffentlichten Stand zeigt Titel und Inhalt der veröffentlichten Revision; ist sie inzwischen zurückgezogen, wird das kenntlich gemacht und der Entwurf erst über eine ausdrückliche Aktion gezeigt.
+2. R2: Der Pfad eines Treffers geht über archivierte Elternseiten bis zur Wurzel weiter; archivierte Ebenen erscheinen als „Seite nicht verfügbar“.
+3. R3: Markierungen in Titel und Ausschnitt folgen derselben Normalisierung und Wortzerlegung wie der Index, auch für Kompatibilitätszeichen am Wortanfang; gilt für Wiki und Anforderungen.
+4. R4: Zähler und Seite der Wikisuche kommen auch hinter der letzten Seite aus einer Anweisung (für Anforderungen schon mit PR #300 behoben).
+5. N1: Der Testersatz folgt Rangfolge, Längengrenzen und Indexgrenze des Servers.
+6. N2: Browsertest für den Wechsel in ein Projekt mit geringeren Rechten.
+7. N3: Vertrag und Kommentare beschreiben den Pfad im Suchstand mit festen Kombinationen von `available`, `id` und `title`; Tests der vier 400 Gründe und einer Antwort mit Platzhalter.
+8. N4: TODO nennt für veröffentlichte Inhalte eine der drei Wikiaktionen, für Entwürfe `wiki.edit` oder `wiki.publish`, das Archivrecht getrennt.
+
+**Ergebnis:** Ohne Migration, Vertrag `contracts/search.openapi.yaml` 0.4.1. R1: Titel und Text einer Wikiseite kommen aus demselben Stand; eine seit der Suche zurückgezogene Veröffentlichung zeigt „Nicht mehr veröffentlicht“ und den Entwurf erst nach „Entwurf zeigen“ (zwei neue Browsertests, der bestehende mit unterschiedlichen Titeln). R2: `WikiService.searchPath` liest die Elternbeziehung archivierter Seiten und geht bis zur Wurzel (`anArchivedParentKeepsThePathUpToTheRoot`, Testersatz gleich). R3: `SearchSnippet.marks` normalisiert Zeichen für Zeichen samt kombinierenden Zeichen und bildet die Wörter der Normalform auf die Stellen im Originaltext ab (Unit Tests mit Ⓐ, ℡, ½, İ und einer Prüfung, dass jedes Indexwort markiert wird; API Tests für Wiki und Anforderungen). R4: Zählzeile und optionale Trefferzeilen in einer Anweisung (`pastTheLastPageTheTotalComesFromTheSameSnapshot` mit wiederholtem Veröffentlichen und Zurückziehen). N1: Testersatz mit Rang vor Titel, Längen in Codepoints nach NFKC und Indexgrenze, dieselben vier Fälle direkt am Testersatz und am Server. N2: Browsertest mit Wechsel in ein reines Leseprojekt. N3: `PathEntry` mit zwei festen Formen, Pfadbeschreibung, Kommentar von `WikiPages.paths`, Test der vier 400 Gründe und der Formen einer echten Antwort. N4: Regeln 2 und 5 und Kriterien 1 und 3 von TASK-102 nennen die Alternativen, das Archivrecht gesondert. Beschreibung in backend/README.md, Abschnitt „Wiki in der Suche“.
+
+**Prüfungen:** Backend und Browsertests laut PR #302, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-105_PR-302.md)): „nachbessern“, behoben mit TASK-106.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): keine.
+
+**Referenz:** Reservierung #301 (cce9eec), Ergebnis #302 (2f1a4a6); verknüpft mit TASK-102, TASK-103, TASK-106 und DEC-135.
+
+## TASK-104 Gemeinsame Suchübersicht, Schnellsuche und Messung (A14 Teil 3)
+
+**Bezug:** REQ-SRCH-001, REQ-PERF-003; DEC-047, DEC-050; OPEN-014; ACC-009; docs/TAGS_SEARCH.md (Messziele, Prüffälle T15, T20), docs/OPERATIONS.md, docs/DEMO.md. **Verantwortlich:** claude-20261111-search-01. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** Vier Begriffe in je einem Ticket, Projekt, veröffentlichten Wiki und einer aktuellen Anforderung erscheinen in „Alle“ (T20); Bereiche ohne Recht fehlen. Die Schnellsuche öffnet `HELP-1` und `HELP ANF-1` direkt, eine nicht lesbare Kennung führt zur leeren Suche. Messbericht in docs/DEMO.md und docs/measurements mit allen Klassen gegen die Ziele, ohne Mittelwerte als Ersatz (T15). Vertrag gegen Routen, Backend Tests, Browser Tests für Übersicht und Schnellsuche.
+
+**Fachliche Regeln** (von Holger am 11. November 2026 bestätigt):
+1. „Alle“ zeigt je Bereich die ersten fünf Treffer mit Anzahl und „Alle anzeigen“; die Reiter zeigen Filter und Seiten ihres Bereichs. Keine gemeinsame Rangliste über die Bereiche; Bereiche ohne Recht erscheinen nicht.
+2. Ein Suchfeld oben in der Anwendung, erreichbar mit „/“. Enter öffnet „Alle“. Eine exakt passende Kennung (`HELP-12`, `HELP ANF-17`, Projektschlüssel) öffnet das lesbare Objekt direkt, sonst normale Suche ohne Hinweis auf Existenz.
+3. Je Bereich ein eigener Endpunkt, dazu `/search/all` mit fünf Treffern und Anzahl je Bereich in einer Anfrage; Grenzen wie TASK-029.
+4. Der Referenzbestand erhält zusätzlich 2.000 Wikiseiten (etwa ein Drittel mit englischer Fassung, ein Teil mit offenem Entwurf, einige archiviert) und 10.000 Anforderungen mit je ein bis acht Kriterien, ein Teil freigegeben und mit neuer Revision, über die öffentliche API.
+5. Neue Messklassen: Wiki ein Wort, Wiki Entwürfe, Anforderung ein Wort, Anforderung Kennung, Anforderung mit Filtern, Übersicht „Alle“, Schnellsuche mit Kennung; bestehende Klassen bleiben, Last wie in TASK-031 mit Wikianteil.
+6. Suchziele für V1 (Teil von OPEN-014), serverseitig p95 unter der Referenzlast: Kennung und Vorschläge höchstens 200 ms, reguläre Suche erste Seite höchstens 500 ms, komplexe Suche und Übersicht „Alle“ höchstens 1 s. Messrechner und Grenzen werden dokumentiert; der Nachweis auf 4 vCPU/16 GB bleibt Teil von A18.
+7. Browsermessung vom Auslösen bis zur sichtbaren ersten Seite, 200 Wiederholungen je Klasse im lokalen Netz, Ziel p95 höchstens 1 s.
+8. Eine Zielverfehlung wird offen dokumentiert und in A14 mit Indizes und Abfrageplänen nachgebessert; ein zusätzlicher Suchdienst nur mit eigener Entscheidung.
+
+**Ergebnis:** Ohne Migration, Vertrag `contracts/search.openapi.yaml` 0.5.0, Beschreibung in backend/README.md (Abschnitt „Übersicht „Alle“ und Schnellsuche“), DEC-134 mit den Auslegungen (1) bis (6). Nachweise: Kriterium 1 und 2 in `SearchOverviewApiTest` (7 Fälle: vier Bereiche mit einem Wort und ohne Entwurf, Bereiche ohne Recht, fünf Treffer mit Anzahl, Direkttreffer für Ticket, Anforderung und Projekt, nicht lesbare Kennung wie unbekannte, Projektschlüssel vorn, 400 und 401) und `search-overview.test.mjs` (6 Fälle: „Alle“ mit vier Bereichen, fehlende Bereiche, „Alle anzeigen“, „/“, Direktöffnen, nicht lesbare Kennung führt zu „Alle“). Kriterium 3 in docs/DEMO.md (Abschnitt „Messung mit Wiki, Anforderungen und Übersicht“) und docs/measurements/task-104: Servermessung 5.415 Aktionen ohne Fehler, alle 22 Klassen im Ziel nach Regel 6, „Alle“ p95 269 ms; Browsermessung je 200 Werte, alle p95 unter 1 s, „Alle“ 320 ms; jeweils p50, p95, p99 statt Mittelwerten. Abweichung: Messung mit dem Jar (Java 21, PostgreSQL 16) auf der Maschine statt im Image, weil Docker Hub drosselte. Kriterium 4: `SearchContractTest` mit fünf Routen, voller Backendlauf 629 Tests, Frontend `npm run verify` und 282 Browsertests grün.
+
+**Prüfungen:** `SearchOverviewApiTest`, Vertrag gegen Routen, Browsertests in `search-overview.test.mjs`, Server und Browsermessung in docs/measurements/task-104/. Läufe im PR #303, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex ([Bericht](docs/REVIEW_TASK-104_PR-303.md)): „nachbessern“ mit F1 bis F8 und H1 bis H5; F1 bis F7 und H2 bis H5 behoben mit TASK-110, F8 auf Holgers Wahl als Abweichung angenommen.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): F8: Browsermessung über eine LAN Strecke und das vollständige T15 Lastprofil mit Portalrechten und Hintergrundlast, Nachweis in A18 auf der Referenzumgebung; Vergleich mit dem Vorführimage (Java 25, PostgreSQL 18.6). H1 der Prüfung (kein kontrollierter Zeitvergleich verborgener und unbekannter Kennungen) bleibt als Hinweis.
+
+**Referenz:** Reservierung #298 (890a7c9), Ergebnis #303 (a83c069); verknüpft mit TASK-110 und DEC-134.
+
+## TASK-103 Anforderungen in der gemeinsamen Suche (A14 Teil 2)
+
+**Bezug:** REQ-SRCH-001, REQ-REQ-001, REQ-ACL-004; DEC-050; docs/TAGS_SEARCH.md (Suchumfang, Prüffälle T09, T13, T20). **Verantwortlich:** claude-20261111-search-01. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** Ein Wort, das nur in Revision 2 im Entwurf steht, findet die Anforderung in der Standardsuche, nicht aber mit „zuletzt freigegeben“. Ein Wort in einem Feld ohne Leserecht erzeugt weder Treffer noch Rang noch Ausschnitt (T09). `HELP ANF-1` findet die Anforderung für Leser direkt, für andere nichts. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Anforderungen.
+
+**Fachliche Regeln** (von Holger am 11. November 2026 bestätigt):
+1. Gefunden werden die Kennung `ANF-n` (mit Projektschlüssel, etwa `HELP ANF-17`, oder `ANF-17` mit gewähltem Projekt), Titel, Beschreibung, Text der Abnahmekriterien und eigene Felder nach der Regel der Tickets (Textfelder im Volltext, Auswahl, Zahl, Datum und Person als Filter).
+2. Standardmäßig wird die aktuelle Revision durchsucht; „Stand: zuletzt freigegeben“ sucht stattdessen in der jeweils letzten freigegebenen Revision. Ältere freigegebene Revisionen werden nicht durchsucht. Keine Mischung von Freigabe und neuem Entwurf.
+3. Suchen verlangt Mitgliedschaft und `requirement.read`. Wörter treffen nur lesbare Felder, ein Filter auf ein nicht lesbares Feld trifft im Projekt nichts; Rang, Anzahl, Seite und Ausschnitt entstehen nur aus lesbaren Feldern. Die Kennung findet, wer die Anforderung lesen darf.
+4. Filter: Projekt, Status, Priorität, verantwortliche Person und Freigabestand („mindestens einmal freigegeben“). Verworfene Anforderungen sind ausgeblendet und über den Statusfilter erreichbar.
+5. Ein Treffer zeigt Kennung, Titel, Projekt, Status, Revision mit Freigabestand, Priorität und einen Ausschnitt wie im Wiki, bei einem Treffer im Kriterium mit dessen Kennung.
+
+**Ergebnis:** DEC-133 mit den Auslegungen (1) bis (6), von Holger mit der Abnahme bestätigt. Migration V0063 mit `search_requirement`, `search_requirement_text` je Stand `current` oder `approved`, `search_requirement_criterion` und `search_requirement_custom`, geschrieben in der Transaktion jeder Änderung über `RequirementChanged` und beim Neuaufbau über `RequirementSources`; Endpunkt `GET /api/v1/search/requirements` mit Projekt, Stand, Status, Priorität, verantwortlicher Person, Freigabestand, eigenen Feldern und Seiten, Vertrag `contracts/search.openapi.yaml`; Bereich „Anforderungen“ der Suchseite. Beschreibung in backend/README.md.
+
+**Prüfungen:** `RequirementSearchApiTest` (aktuelle und freigegebene Revision, Feldrechte für Treffer, Rang und Ausschnitt, Kennung mit und ohne Projektschlüssel, Filter, Seiten), Vertrag gegen Routen, Browsertests des Bereichs „Anforderungen“. Läufe im PR #300, CI grün.
+
+**Review:** Keine eigene Codex Prüfung; R4 der Nachprüfung von TASK-102 (Zähler und Seite aus einer Anweisung) ist im PR #300 mit umgesetzt, die übrigen Befunde der Nachprüfung betrafen beide Bereiche und sind mit TASK-105 behoben. Holger hat ohne eigene Prüfung abgenommen.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Ältere freigegebene Revisionen in der Suche, Tags an Anforderungen, Verknüpfungen als Filter, Filter auf eigene Felder in der Oberfläche, Anforderungen im Portal.
+
+**Referenz:** Reservierung #298 (890a7c9), Ergebnis #300 (b542dd7); verknüpft mit TASK-105 und DEC-133.
+
+## TASK-102 Wiki in der gemeinsamen Suche (A14 Teil 1)
+
+**Bezug:** REQ-SRCH-001, REQ-DOC-004; DEC-047, DEC-050; docs/TAGS_SEARCH.md (Suchumfang, Prüffälle T09, T11, T13, T16). **Verantwortlich:** claude-20261111-search-01. **Abgeschlossen:** 2026-11-13.
+
+**Abnahmekriterien:** Ein Wort, das nur im Entwurf einer veröffentlichten Seite steht, findet ein Leser nicht; mit „Entwürfe durchsuchen“ und `wiki.edit` oder `wiki.publish` erscheint die Seite als Entwurf (T11). Ein Wort der englischen Fassung findet die Seite mit Sprachkennzeichen; der Sprachfilter grenzt ein. Ohne Mitgliedschaft oder ohne jede der drei Wikiaktionen keine Treffer und keine Zähler; Entwürfe nur mit `wiki.edit` oder `wiki.publish`; archivierte Seiten gesondert nur mit dem Filter und `wiki.publish`. Nach Veröffentlichen ist der neue Stand in der folgenden Suche sichtbar (T13); `rebuild-search` liefert dieselben Treffer. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für den Bereich Wiki.
+
+**Fachliche Regeln** (von Holger am 11. November 2026 bestätigt):
+1. Gefunden werden Titel und Text jeder Sprachfassung. Der Server gewinnt den Text aus dem geprüften Dokument: Absätze, Überschriften, Listen, Tabellen, Zitate, Codeblöcke und sichtbare Linktexte; keine Bilder, Linkadressen oder internen Kennungen.
+2. Standardmäßig wird nur die veröffentlichte Revision jeder Sprachfassung durchsucht, auch für Personen mit `wiki.edit`. Mit `wiki.edit` oder `wiki.publish` lässt sich „Entwürfe durchsuchen“ wählen; dann wird stattdessen der aktuelle Entwurf durchsucht und der Treffer als Entwurf gekennzeichnet. Nie gemischt.
+3. Beide Sprachfassungen werden durchsucht, ein Treffer je Seite: Treffen beide, zeigt der Treffer die Fassung in der Oberflächensprache, sonst die getroffene, jeweils mit Sprachkennzeichen. Filter „Sprache“ mit Deutsch, Englisch oder beide.
+4. Archivierte Seiten werden nicht gefunden; mit „Archivierte einbeziehen“ (nur mit `wiki.publish`, wie das Wiki selbst archivierte Seiten zeigt; von Holger am 11. November 2026 so entschieden, statt zuvor `wiki.edit`) erscheinen sie gekennzeichnet.
+5. Suchen verlangt Mitgliedschaft und eine der drei Wikiaktionen `wiki.read`, `wiki.edit` oder `wiki.publish` (wie das Wiki selbst veröffentlichte Inhalte zeigt), Entwürfe `wiki.edit` oder `wiki.publish`. Das Archiv verlangt gesondert `wiki.publish` im jeweiligen Projekt. Ohne Recht weder Treffer noch Zähler noch Vorschau. Portalkonten erhalten keine Wikisuche (403).
+6. Ein Treffer zeigt Titel, Projekt, Pfad der Elternseiten (nicht lesbare als „Seite nicht verfügbar“), Sprache, Stand, Zeitpunkt der Veröffentlichung und einen Ausschnitt als Klartext mit den Positionen der gefundenen Wörter, nie als HTML.
+7. Textregeln wie TASK-029: keine Wortstämme, jedes Wort als Präfix, alle Wörter verlangt, keine Suchsyntax, dieselben Grenzen und 503 `search.busy`.
+8. Die Projektion wird in derselben Transaktion geschrieben; Rechte gelten bei jeder Suche neu. `rebuild-search` baut auch das Wiki neu auf, die Migration löscht den Aufbauvermerk.
+
+**Ergebnis:** Migration V0062, Vertrag `contracts/search.openapi.yaml` 0.3.1, Beschreibung in backend/README.md (Abschnitt „Wiki in der Suche“), DEC-132 mit Nachtrag. Die Codex Prüfung (docs/REVIEW_TASK-102_PR-299.md, nachbessern) ist in #299 selbst behoben: F1 von Holger entschieden (Archiv nur mit `wiki.publish`, Regeln 4 und 5 und Kriterium 3 angepasst), F2 Pfad mit jeder Ebene, „Seite nicht verfügbar“ und dem gesuchten Stand, F3 Markierung nach der Regel des Index, F4 Zähler, Treffer und Ausschnitt aus einer Anweisung, F5 Trefferlink mit Sprachfassung und Stand, dazu H1 bis H6 soweit in TASK-102 (H2 Messung in TASK-104). Nachweise: `WikiSearchApiTest` (12, darunter Pfad, jede Änderung, gleichzeitiges Veröffentlichen, Rangfolge, Seitenende, zerlegte Akzente, Wortgrenze), `SearchSnippetTest` (6), `WikiPlainTextTest`, `SearchContractTest`, Routentest, Browsertests in `wiki.test.mjs`, vollständige Läufe.
+
+**Prüfungen:** `WikiSearchApiTest` (Rechte, Entwürfe, Archiv, Sprachfassungen, Pfad, Markierungen, Seiten), Vertrag gegen Routen, Browsertests des Bereichs „Wiki“. Läufe im PR #299, CI grün.
+
+**Review:** Getrennte Prüfung durch Codex, Sitzung codex-20261111-search-wiki-01 ([Bericht](docs/REVIEW_TASK-102_PR-299.md)): „nachbessern“, im selben PR #299 behoben. Nachprüfung codex-20261111-search-wiki-02 ([Bericht](docs/REVIEW_TASK-102_PR-299_NACHPRUEFUNG.md)): „nachbessern“, behoben mit TASK-105; die Folgeprüfungen führten zu TASK-106 bis TASK-109.
+
+**Abnahme:** Holger, 2026-11-13, auf der Entscheidungskarte „Nimmst du TASK-102 bis TASK-110 (A14 Suche) jetzt ab?“ mit „Ja, alles abnehmen“, zusammen mit den übrigen Aufgaben von TASK-102 bis TASK-110; bestätigt durch Merge dieses Abschluss PR.
+
+**Offen und Folgeaufgaben** (nicht beauftragt): Dateiinhalte und Dateinamen in der Suche, Wiki im Portal, Wortstämme, Synonyme, Tippfehlertoleranz, Phrasensuche, gespeicherte Suchen. Der Testersatz weicht neben Zeichen außerhalb der BMP noch von Java ab (benannte Grenze aus TASK-109).
+
+**Referenz:** Reservierung #298 (890a7c9), Ergebnis #299 (2c7bb37); verknüpft mit TASK-105 bis TASK-109 und DEC-132.
 
 ## TASK-101 Gespeicherte Person eines Personenfelds im Editor zeigen (A13)
 
