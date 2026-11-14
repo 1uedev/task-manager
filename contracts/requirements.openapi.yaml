@@ -808,7 +808,7 @@ components:
         `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status. Verknüpfungen (TASK-097) mit dem Feld
         `tickets`: ticket_linked, ticket_switched, ticket_unlinked mit `Ticketnummer:Revision` in `from` und `to`; mit dem
         Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt. Git Verknüpfungen
-        (TASK-112) mit dem Feld `git`: git_linked (`to`) und git_unlinked (`from`) mit `Objektart:Kennung`, sichtbar mit der
+        (TASK-112) mit dem Feld `git`: git_linked (`to`) und git_unlinked (`from`) mit der Objektart (seit TASK-114 ohne Kennung), sichtbar mit der
         Leseregel von `git`; sie ändern weder Version noch Revision.
       required: [kind, revision, field, criterion, from, to, reason, actorId, occurredAt]
       properties:

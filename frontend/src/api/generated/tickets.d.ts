@@ -240,8 +240,8 @@ export interface components {
                 /**
                  * @description `requirements` (TASK-097): Verknüpfen, Umstellen oder Lösen einer Anforderung mit den Werten `ANF-n:Revision`,
                  *     als eigener Eintrag, der die Version des Tickets nicht ändert; nur sichtbar mit `requirement.read` im Projekt.
-                 *     `git` (TASK-112): Verknüpfen (`to`) oder Lösen (`from`) eines Git Objekts mit dem Wert `Objektart:Kennung`
-                 *     (`repository`, `commit`, `pull_request` oder `merge_request` und die Kennung der Verknüpfung), als eigener
+                 *     `git` (TASK-112): Verknüpfen (`to`) oder Lösen (`from`) eines Git Objekts mit der Objektart als Wert
+                 *     (`repository`, `commit`, `pull_request` oder `merge_request`, seit TASK-114 ohne Kennung), als eigener
                  *     Eintrag, der die Version nicht ändert; nur sichtbar mit der Leseregel des Felds `git`.
                  */
                 field: string;
