@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 1 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -32,9 +32,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-13 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -42,6 +40,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-111](#task-111-git-anbieter-kontoverbindung-und-repository-freigabe-a15-teil-1) | Git Anbieter, Kontoverbindung und Repository Freigabe (A15 Teil 1) | claude-20261113-git-01 | 2026-11-13 |
 | [TASK-112](#task-112-git-verknüpfung-und-anzeige-an-tickets-und-anforderungen-a15-teil-2) | Git Verknüpfung und Anzeige an Tickets und Anforderungen (A15 Teil 2) | claude-20261113-git-01 | 2026-11-13 |
+| [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-14 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -111,13 +110,13 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe (2026-11-13, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR. Migration V0065 mit der Tabelle `git_link` (nur Instanz, Repository Kennung, Objektart, voller SHA oder Nummer) und den Ereignissen `git_linked` und `git_unlinked` der Anforderungshistorie; Feld `git` der Ressourcentypen `ticket` und `requirement` im Rechtekatalog; acht Routen in contracts/git.openapi.yaml (jetzt 22), Ergänzungen in tickets, requirements und permissions; Bereich „Git“ am Ticket und an der Anforderung mit Adresse oder Auswahl aus freigegebenen Repositories, „Aktualisieren“ und Lösen; Beschreibung in backend/README.md, Abschnitt Git Anbindung. Zu den Kriterien: 1 `GitApiTest.commitsPullAndMergeRequestsAreLinkedOnceAtTicketAndRequirement` (kurzer und voller SHA ergeben dieselbe Verknüpfung, Version von Ticket und Anforderung unverändert, beide Historien); 2 `withoutAccessOnlyTheKindIsShownAndAWithdrawnAccessEndsAtTheNextRead` (ohne Verbindung und ohne Zugriff nur die Art, Historie nur mit Art und Kennung, nach Entzug liefert „Aktualisieren“ nichts mehr, Lösen ohne Verbindung); 3 `aMergedRequestShowsItsStateAndARateLimitKeepsThePageUsable` (Zustand zusammengeführt, Anforderung bleibt freigegeben, Ratenlimit mit genau einem Abruf je Objekt); 4 `atMostFiftyLinksAndNothingOfGitInSearch` (Grenze 50, höchstens vier gleichzeitige Abrufe, keine Git Angaben in Ticket, Suche und Anforderungssuche; Export und Portal lesen das Feld nicht); 5 `GitContractTest`, `DatabaseFoundationTest`, Browser Tests tests/browser/gitLinks.test.mjs. Präzisierungen in DEC-142: mehrere Instanzen mit derselben Adresse, Gesamtzeit von 20 Sekunden je Anfrage, Gründe der Nichtverfügbarkeit, Zwischenspeicher auch für „nicht verfügbar“. Gelaufen: volle Backend Suite gegen PostgreSQL 16 mit Java 21 (654 Tests), `npm run verify`, alle Browser Tests (307), Repository Prüfungen; der Lifecycle Check mit Docker nur in CI.
 
-**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei), danach Holgers Abnahme; TASK-113 beginnt, sobald dieses Ergebnis auf main ist.
+**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei), danach Holgers Abnahme; TASK-113 läuft seit dem 14. November 2026 (PR #317 auf main).
 
 ## TASK-113 Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261113-git-01 · **Aktualisiert:** 2026-11-13
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261113-git-01 · **Aktualisiert:** 2026-11-14
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003; DEC-036; OPEN-010; ACC-006; docs/GIT_MIGRATION.md, docs/DEMO.md, README.md. **Abhängigkeiten:** TASK-112 auf main; TASK-031. **Arbeitsstand:** Mit TASK-111 von Holger am 13. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-112 auf main ist. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-143.
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003; DEC-036; OPEN-010; ACC-006; docs/GIT_MIGRATION.md, docs/DEMO.md, README.md. **Abhängigkeiten:** TASK-112 auf main (PR #317); TASK-031. **Arbeitsstand:** Mit TASK-111 von Holger am 13. November 2026 beauftragt und mit den Vorschlägen bestätigt; nach dem Ergebnis von TASK-112 auf main (PR #317) am 14. November 2026 begonnen. Branch claude/project-thread-6p8449, Entscheidung DEC-143, keine Migration.
 
 **Umfang:** Lauf gegen ein echtes GitLab 16 im Container, Anleitung zur Registrierung einer GitHub App und einer GitLab.com Anwendung, Demodaten im Vorführimage, Betriebsdokumentation und Fortschreibung von OPEN-010. Nicht Teil: dauerhafte Zugangsdaten im Repository, GitHub Enterprise Server.
 
@@ -133,4 +132,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Das Vorführimage startet mit den Demodaten; ohne Verbindung erscheinen die Beispiele als „nicht verfügbar“.
 4. Anleitung und Betriebsdokumentation liegen vor; OPEN-010 ist fortgeschrieben.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-112 auf main die Blockade aufheben und umsetzen.
+**Übergabe (2026-11-14, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR, ohne Änderung am Backend und ohne Migration. Zu den Kriterien: 1 `tools/git/gitlab-check.sh` mit `tools/git/compose.gitlab.yaml`, `tools/git/gitlab-setup.rb` und `tools/git/gitlab_check.py`, Workflow `.github/workflows/gitlab.yml` („GitLab 16“): GitLab CE 16.11.10 mit HTTPS und eigener CA, Prüfen ohne CA `git.tls_failed` und mit CA erfolgreich, Verbinden mit Anmeldung bei GitLab und PKCE, Freigabe aus einer Untergruppe, Repository, Commit über kurzen SHA und Merge Request am Ticket, Merge Request über die Freigabe an einer Anforderung, Duplikat und fremder Rechner abgewiesen, „merged“ nach dem Zusammenführen, neuer Pfad nach dem Umbenennen (G05), nach dem Löschen der Anwendung nur `git.connection_renew` ohne Angaben; lokal mit Docker Compose bestanden, Ergebnis in gitlab-run.json. 2 Offen für Holger: GitHub App und GitLab.com Anwendung nach docs/GIT_MIGRATION.md, Abschnitt Einrichtung und Betrieb, registrieren und Kennung und Geheimnis in den Demoinstanzen eintragen. 3 `demo seed --profile demo` legt die Instanzen GitHub.com und GitLab.com ohne Geheimnis an und gibt den Demogruppen das Feld `git`; `tools/demo/git-examples.sql` speichert Freigaben und Beispielverknüpfungen an WEB-1 und ANF-1 mit Historie; `demo verify` prüft im Imagecheck Instanzen, `git.provider_incomplete`, die Beispiele als nicht verfügbar und nichts für carla; compose.yaml setzt `TASK_MANAGER_PUBLIC_URL`. 4 docs/GIT_MIGRATION.md (Einrichtung und Betrieb: Voraussetzungen, Rückleitungsadresse, GitHub App, GitLab.com, eigenes GitLab mit CA, Proxy, Tokenentzug, Vorführung, GitLab Lauf), README.md, docs/DEMO.md, backend/README.md, .env.example; OPEN-010 in DECISIONS.md und docs/ARCHITECTURE_READINESS.md entschieden. Präzisierungen in DEC-143. Gelaufen: GitLab Lauf und Imagecheck mit Docker Compose gegen ein lokal aus demselben Stand gebautes Image (`GITLAB_CHECK_SKIP_BUILD=1`, `IMAGE_CHECK_SKIP_BUILD=1`, weil der Docker Build hier keinen Zugang zu den Paketquellen hat), Repository Prüfungen; der Docker Build selbst läuft nur in CI.
+
+**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei) und Registrierung der Anwendungen für Abnahmekriterium 2, danach Holgers Abnahme von TASK-111 bis TASK-113.

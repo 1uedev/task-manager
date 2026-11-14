@@ -34,8 +34,12 @@ services:
       TASK_MANAGER_FILES_DIR: /data/files
       # The background jobs run in the separate worker service below.
       TASK_MANAGER_JOBS_WORKER: "false"
-      # Encrypts the passwords of helpdesk mailboxes (TASK-057); empty leaves the helpdesk without mailboxes.
+      # Encrypts the passwords of helpdesk mailboxes (TASK-057) and the secrets and tokens of the Git link (TASK-111); empty
+      # leaves the helpdesk without mailboxes and Git without connections.
       TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:-}
+      # The address under which browsers reach the application; GitHub and GitLab send the browser back to it after
+      # "Git Konto verbinden" (TASK-111, TASK-113). The return address to register is this value plus /api/v1/git/oauth/callback.
+      TASK_MANAGER_PUBLIC_URL: ${TASK_MANAGER_PUBLIC_URL:-http://localhost:${TASK_MANAGER_PORT:-8080}}
     volumes:
       - files-data:/data/files
     # Only reachable from this computer: without TLS, browsers keep the secure session cookie only for localhost.

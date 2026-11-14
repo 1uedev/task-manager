@@ -58,7 +58,7 @@ Die Fälligkeiten entsprechen DECISIONS.md. Wo eine Frage sowohl Architektur als
 | OPEN-007 Projektregeln | Feldtypen, Versionierung, sichere Änderungen vorhandener Konfiguration und erlaubte Automationen | Fachentscheidung Holger, Technik offen | Vor Workflow- und Feldmodell |
 | OPEN-008 SLA | Start, Antwortdefinition, Budgets, Kalender, Wiedereröffnung und Eskalationen anhand berechneter Fälle bestätigen | Holger, später Serviceverantwortlicher offen | Vor Helpdesk-Datenmodell |
 | OPEN-009 Mail und Portal | Postfach-/Projektzuordnung, Mailanbieter, sichere Absender-/Threadbehandlung, CC, Übergabe/Verfall der initialen Kennwörter und Anhangsgrenzen | Technik und Mailbetreiber offen | Vor Helpdesk- und Portalimplementierung |
-| OPEN-010 Git | Lesende Benutzeranbindung, zulässige Objekte, Versionsmatrix und aktuelle Quellenprüfung | Technik offen | Vor Git-Integration |
+| OPEN-010 Git | Lesende Benutzeranbindung, zulässige Objekte, Versionsmatrix und aktuelle Quellenprüfung | Entschieden mit DEC-141 bis DEC-143 (Paket A15) | Erledigt |
 | OPEN-011 Wiki, Dateien, Suche | Editor-/Dokumentformat, Versionsumfang, Konfliktverfahren, Dateispeicher, konkrete Suchfelder/-filter, Dateinamen/Metadaten und Suchstrategie | Technik offen | Vor Speicher- und Editorwahl |
 | OPEN-012 Betrieb | Referenzplattform, TLS/Proxy/Internetziele, Update, Sicherungsziel, Servicezeit, Ersatzkapazität und Zuständigkeiten | Betreiber und Technik offen | Vor Installationsarchitektur; praktische Nachweise vor entsprechender Auslieferung |
 | OPEN-013 API | HTTP/JSON im REST-Stil mit OpenAPI bestätigt; Versionierung, Authentifizierung, Fehler, Pagination und Wiederholbarkeit konkret beschließen | Technik offen | Vor erster Fachimplementierung |

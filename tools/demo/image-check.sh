@@ -2,7 +2,7 @@
 # Checks the demonstration image end to end (TASK-031): build, refusal without settings, first start with the
 # compose file, setup with bootstrap-admin, synthetic demo data, rights, conflict and search through the API,
 # the served interface with its headers, the separate worker process (TASK-054), and a restart that keeps data and
-# the fixed session end.
+# the fixed session end, and the Git instances with the example links of TASK-113.
 # Uses throw-away synthetic passwords and removes its containers and volume at the end.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -12,6 +12,9 @@ export COMPOSE_PROJECT_NAME=$project
 export TASK_MANAGER_PORT=${TASK_MANAGER_PORT:-18090}
 export TASK_MANAGER_DB_PASSWORD="ci-$(head -c 18 /dev/urandom | base64 | tr -d '/+=')"
 export TASK_MANAGER_DEMO_PASSWORD="ci-$(head -c 18 /dev/urandom | base64 | tr -d '/+=')"
+# A key for the Git link (TASK-113): with it the demo instances answer "Git Konto verbinden" with git.provider_incomplete.
+TASK_MANAGER_SECRET_KEY=$(head -c 32 /dev/urandom | base64)
+export TASK_MANAGER_SECRET_KEY
 state=$(mktemp)
 base="http://127.0.0.1:$TASK_MANAGER_PORT"
 cleanup() {
@@ -65,6 +68,7 @@ step "Setup, demo data and checks"
 otp=$(docker compose run --rm app bootstrap-admin admin | sed -n 's/^One time password (shown only now): //p')
 [ -n "$otp" ] || { echo "no one time password" >&2; exit 1; }
 docker compose --profile tools run --rm demo seed --profile demo --one-time-password "$otp"
+docker compose exec -T db psql -U taskmanager -d taskmanager -v ON_ERROR_STOP=1 -q < tools/demo/git-examples.sql
 docker compose --profile tools run --rm -v "$state:/state.json" demo verify --save /state.json
 
 step "Restart keeps data and the fixed session end"

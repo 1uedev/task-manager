@@ -217,7 +217,7 @@ def admin_client(args) -> Client:
 
 # ---------------------------------------------------------------------- data building blocks
 
-ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments", "customer", "contact", "priority"]
+ALL_FIELDS = ["title", "description", "type", "status", "assignee", "tags", "attachments", "customer", "contact", "priority", "git"]
 PROJECT_ACTIONS_FULL = ["project.read", "project.manage", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_EDIT = ["project.read", "ticket.read", "ticket.create", "ticket.edit", "tag.create"]
 PROJECT_ACTIONS_READ = ["project.read", "ticket.read"]
@@ -398,7 +398,7 @@ def seed_demo(args) -> None:
     specs = {
         "Projektleitung": GroupSpec("Projektleitung", PROJECT_ACTIONS_FULL + WIKI_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS),
         "Entwicklung": GroupSpec("Entwicklung", PROJECT_ACTIONS_EDIT + WIKI_ACTIONS_EDIT, ALL_FIELDS,
-                                 ["title", "description", "status", "assignee", "tags", "attachments"]),
+                                 ["title", "description", "status", "assignee", "tags", "attachments", "git"]),
         "Lesen ohne Beschreibung": GroupSpec("Lesen ohne Beschreibung", PROJECT_ACTIONS_READ + WIKI_ACTIONS_READ, ["title", "type", "status", "tags"], []),
     }
     builder.group(GroupSpec("Verwaltung Demo", PROJECT_ACTIONS_FULL + WIKI_ACTIONS_FULL, ALL_FIELDS, ALL_FIELDS), [admin_id])
@@ -433,8 +433,10 @@ def seed_demo(args) -> None:
     page = seed_wiki(admin, project_ids["HELP"])
     leads = [admin_id] + [people[u] for u, _, group, _ in DEMO_PEOPLE if group == "Projektleitung"]
     seed_requirements(admin, project_ids["HELP"], page, leads)
+    seed_git(admin)
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
+    print("Example Git links: docker compose exec -T db psql -U taskmanager -d taskmanager -v ON_ERROR_STOP=1 < tools/demo/git-examples.sql")
 
 
 def _wiki_doc(*blocks: tuple[str, str]) -> dict:
@@ -480,7 +482,7 @@ def seed_wiki(admin: Client, project: str) -> str:
 
 
 REQUIREMENT_ACTIONS = ["requirement.read", "requirement.edit", "requirement.approve"]
-REQUIREMENT_FIELDS = ["title", "description", "criteria", "priority", "owner"]
+REQUIREMENT_FIELDS = ["title", "description", "criteria", "priority", "owner", "git"]
 # The custom fields of requirements in the helpdesk project (TASK-098): a required choice and a whole number.
 REQUIREMENT_CUSTOM_FIELDS = [
     {"key": "bereich", "name": "Bereich", "type": "select", "required": True, "active": True,
@@ -525,6 +527,19 @@ def seed_requirements(admin: Client, project: str, page: str, members: list[str]
     admin.call("POST", f"{path}/tickets", {"number": 1})
     admin.call("POST", f"{path}/pages", {"pageId": page})
     admin.call("PATCH", path, {"customFields": {"aufwand": 5}}, headers={"If-Match": approved.headers.get("etag")})
+
+
+# The Git instances of the demonstration (TASK-113, rule 3): GitHub.com and GitLab.com without a registered application.
+# The administration shows them and "Git Konto verbinden" answers git.provider_incomplete until the identifier and secret of
+# a GitHub App and a GitLab.com application are entered (docs/GIT_MIGRATION.md, "Einrichtung für die Vorführung").
+GIT_INSTANCES = [("github", "GitHub.com"), ("gitlab_com", "GitLab.com")]
+GIT_CLIENT_PLACEHOLDER = "noch-nicht-registriert"
+
+
+def seed_git(admin: Client) -> None:
+    print("git instances")
+    for kind, name in GIT_INSTANCES:
+        admin.call("POST", "/git/admin/providers", {"kind": kind, "name": name, "clientId": GIT_CLIENT_PLACEHOLDER})
 
 
 def seed_mail_template(admin: Client) -> None:
@@ -994,6 +1009,22 @@ def verify(args) -> None:
         check(blocked.status == 415, f"a program is refused ({blocked.status})")
         unseen = carla.call("GET", f"/projects/{web}/tickets/{ticket['number']}/attachments", expect=None)
         check(unseen.status == 403, f"carla has no read rule for attachments ({unseen.status})")
+
+        # Git (TASK-113): the two instances without application, the example links of tools/demo/git-examples.sql only with
+        # kind and reason as long as anna has no connection, and nothing of them for carla without the read rule.
+        instances = anna.call("GET", "/git/providers").body
+        check(sorted((i["name"], i["connection"]) for i in instances) == [("GitHub.com", "none"), ("GitLab.com", "none")],
+              f"anna sees the instances GitHub.com and GitLab.com without connection {[(i['name'], i['connection']) for i in instances]}")
+        refused = anna.call("POST", f"/git/providers/{instances[0]['id']}/connect", expect=None) if instances else None
+        check(refused is not None and refused.status == 409 and refused.body.get("code") == "git.provider_incomplete",
+              "connecting waits for a registered application (git.provider_incomplete)")
+        links = anna.call("GET", f"/projects/{web}/tickets/1/git").body
+        shown = sorted(link["kind"] for link in links["links"])
+        check(shown == ["commit", "pull_request", "repository"], f"WEB-1 has the three example links {shown}")
+        check(all(not link["available"] and link["reason"] == "git.not_connected" and link["repository"] is None and link["url"] is None
+                  for link in links["links"]), "without a connection the examples are only shown as not available")
+        hidden = carla.call("GET", f"/projects/{web}/tickets/1/git").body
+        check(not hidden["readable"] and hidden["links"] == [], "carla without the read rule for git sees no link")
 
         if args.save:
             with open(args.save, "w") as out:

@@ -1,6 +1,6 @@
 # Git-Verknüpfung und erster Datenimport
 
-Stand 15. Oktober 2026 · Planungsentwurf für TASK-009
+Stand 15. Oktober 2026 · Planungsentwurf für TASK-009 · Git Teil umgesetzt mit TASK-111 bis TASK-113 (DEC-141 bis DEC-143), Einrichtung und Betrieb im Abschnitt [Einrichtung und Betrieb](#einrichtung-und-betrieb-task-113)
 
 Dieses Dokument konkretisiert REQ-GIT-001 bis REQ-GIT-003, REQ-MIG-001, REQ-MIG-002 und REQ-API-002. Grundlage sind die [Anforderungen](../REQUIREMENTS.md), das [Rechtekonzept](PERMISSIONS.md) und das [Fachmodell](DOMAIN_MODEL.md). Git-Verknüpfung und Datenmigration sind unterschiedliche Funktionen: Die erste zeigt Informationen aus einem Quellcodesystem, die zweite übernimmt später einen Bestand aus einem Projektmanagementsystem.
 
@@ -57,6 +57,76 @@ Ein allgemeiner Synchronisationsdienst und eingehende Webhooks sind für diesen 
 
 Selbst betriebenes GitLab benötigt eine bekannte Basis-URL, freigegebenen Netzwerkweg und geprüfte Zertifikate, gegebenenfalls eine Kunden-CA. Beliebige Nutzereingaben dürfen keine Serverabrufe auslösen. Endpunkt-, DNS- und Weiterleitungsprüfung begrenzen ausgehenden Zugriff; explizit erlaubte interne GitLab-Adressen bleiben möglich. Zugangsdaten liegen geschützt außerhalb von normalen Logs und URLs. Proxy, Zertifikatsrotation, Tokenrotation und eine getestete Versionsmatrix gehören zur Installationsabnahme.
 
+## Einrichtung und Betrieb (TASK-113)
+
+Stand 14. November 2026 · Ergebnis von TASK-113 zur Prüfung (DEC-143). Umgesetzt sind Anbieterinstanzen, die Verbindung des eigenen Kontos, Freigaben je Projekt (TASK-111) und Verknüpfungen an Tickets und Anforderungen (TASK-112); die technischen Einzelheiten stehen in [backend/README.md](../backend/README.md), Abschnitt Git Anbindung. Dieser Abschnitt beschreibt, was beim Anbieter zu registrieren ist und was der Betrieb einstellt.
+
+### Voraussetzungen in der Installation
+
+| Einstellung | Zweck |
+|---|---|
+| `TASK_MANAGER_SECRET_KEY` | 32 zufällige Bytes in Base64 (`openssl rand -base64 32`). Verschlüsselt das Geheimnis jeder Anwendung und die Token jeder Person. Ohne Schlüssel lässt sich kein Geheimnis speichern und niemand verbinden (`git.secret_key_missing`). Der Schlüssel gehört zur Sicherung der Datenbank; ein anderer Schlüssel macht Geheimnisse und Token unlesbar, die Verbindungen stehen dann auf „erneuern“ und jedes Geheimnis muss neu eingegeben werden. |
+| `TASK_MANAGER_PUBLIC_URL` | Die Adresse, unter der Browser die Anwendung erreichen, ohne Schrägstrich am Ende, etwa `https://tasks.example.com`. In der Vorführung ist sie `http://localhost:8080` (compose.yaml setzt sie aus dem Port). Ohne sie gibt es keine Rückleitung (`git.public_url_missing`). |
+
+**Rückleitungsadresse.** Bei jedem Anbieter wird genau `TASK_MANAGER_PUBLIC_URL` plus `/api/v1/git/oauth/callback` eingetragen, in der Vorführung also `http://localhost:8080/api/v1/git/oauth/callback`. Die Seite „Git“ der Verwaltung zeigt diese Adresse an. Ändert sich die öffentliche Adresse, muss die Registrierung bei jedem Anbieter angepasst werden; bis dahin lehnt der Anbieter die Rückleitung ab.
+
+### GitHub App für GitHub.com registrieren
+
+Schritt für Schritt, mit einem Konto, das in der Organisation GitHub Apps anlegen darf (oder im eigenen Konto für eine Vorführung):
+
+1. Bei GitHub unter Settings der Organisation (oder des eigenen Kontos) „Developer settings“, dann „GitHub Apps“ und „New GitHub App“ öffnen.
+2. **GitHub App name**: ein bei GitHub eindeutiger Name, etwa „Task Manager Vorführung Firma“. **Homepage URL**: die öffentliche Adresse der Anwendung.
+3. **Callback URL**: die Rückleitungsadresse von oben. **Expire user authorization tokens**: eingeschaltet lassen (die Anwendung erneuert Token selbst). **Request user authorization (OAuth) during installation** und **Enable Device Flow**: aus.
+4. **Webhook**: „Active“ ausschalten. Die Anwendung braucht keine Webhooks und keinen von außen erreichbaren Endpunkt.
+5. **Repository permissions**: „Contents“ Read-only, „Metadata“ Read-only (Pflicht), „Pull requests“ Read-only. Alle anderen Rechte und alle „Organization“ und „Account permissions“ bleiben „No access“. Die Anwendung schreibt nie in Git.
+6. **Where can this GitHub App be installed?**: „Only on this account“, wenn nur Repositories dieser Organisation gebraucht werden, sonst „Any account“.
+7. „Create GitHub App“. Auf der Seite der App die **Client ID** notieren (nicht die App ID) und unter „Client secrets“ mit „Generate a new client secret“ ein Geheimnis erzeugen. GitHub zeigt es nur einmal.
+8. „Install App“: die App in der Organisation installieren und die Repositories wählen, die Projekte freigeben sollen („Only select repositories“ oder „All repositories“). Die Auswahl beim Freigeben zeigt nur Repositories dieser Installationen, die die verbundene Person selbst lesen darf.
+9. Im Task Manager als Person mit `git.manage` unter „Git“ die Instanz „GitHub.com“ bearbeiten (oder neu anlegen, Art GitHub.com): Kennung der Anwendung = Client ID, Geheimnis = Client secret, speichern, „Prüfen“.
+
+Jede Person verbindet danach unter „Git“ ihr eigenes Konto. GitHub fragt beim ersten Mal nach der Zustimmung zur App. Ein User Access Token sieht nur, was App und Person gemeinsam sehen dürfen; private Repositories einer Organisation also nur, wenn die App dort installiert ist und die Person Zugriff hat. Die Beispiele der Vorführung zeigen auf das öffentliche Repository dieses Projekts; ob GitHub es einer Verbindung auch ohne Installation der App im Konto `1uedev` zeigt, gehört zur Abnahme (Abnahmekriterium 2).
+
+### Anwendung für GitLab.com registrieren
+
+1. Bei GitLab.com für eine Gruppe unter „Settings“, „Applications“ (oder für das eigene Konto unter „Edit profile“, „Applications“) „Add new application“ öffnen.
+2. **Name**: etwa „Task Manager Vorführung“. **Redirect URI**: die Rückleitungsadresse von oben.
+3. **Confidential**: eingeschaltet. **Scopes**: nur `read_api`. Kein `api`, kein `read_repository`, kein `openid`.
+4. „Save application“. **Application ID** und **Secret** notieren; GitLab zeigt das Geheimnis nur einmal.
+5. Im Task Manager die Instanz „GitLab.com“ bearbeiten: Kennung der Anwendung = Application ID, Geheimnis = Secret, speichern, „Prüfen“.
+
+`read_api` erlaubt der Verbindung alles zu lesen, was die Person in GitLab lesen darf. Die Anwendung begrenzt das selbst: freigegeben wird nur, was die verbundene Person lesen kann, und angezeigt wird jedes Objekt nur mit dem Token der betrachtenden Person.
+
+### Eigenes GitLab ab Version 16.0
+
+1. In GitLab unter „Admin Area“, „Applications“ eine Anwendung für die ganze Instanz anlegen (oder wie oben für eine Gruppe): Redirect URI wie oben, Confidential an, Scope `read_api`. In der Admin Area lässt sich die Anwendung als „Trusted“ markieren; dann entfällt die Zustimmung der Personen beim Verbinden.
+2. Im Task Manager eine Instanz der Art „Eigenes GitLab“ anlegen: Adresse mit https, Rechner, optional Port und Pfad, genau so, wie GitLab sie als `external_url` kennt; Kennung und Geheimnis der Anwendung.
+3. **Eigene CA**: Ist das Zertifikat von GitLab von einer eigenen CA ausgestellt, die Zertifikate der CA (Wurzel und gegebenenfalls Zwischenstufen) im PEM Format in das Feld „Eigene Zertifizierungsstelle“ eintragen, ein bis fünf Zertifikate. TLS wird immer geprüft, auch der Rechnername; es gibt keinen Schalter, die Prüfung abzuschalten. „Prüfen“ meldet ohne passende CA `git.tls_failed`.
+4. **Version**: Beim Verbinden liest die Anwendung die Version; unter 16.0 lehnt sie mit `git.version_unsupported` ab. „Prüfen“ nennt die Version nur, wenn GitLab sie ohne Anmeldung verrät, was GitLab 16 nicht tut.
+5. **Netzweg**: Der Container der Anwendung muss den Rechner auflösen und erreichen können. Weiterleitungen folgt die Anwendung nicht (`git.redirect_refused`): die Adresse muss genau die sein, unter der GitLab ohne Umleitung antwortet, also mit https und ohne fehlenden Pfadteil.
+
+Der Lauf gegen ein echtes GitLab 16 (unten) prüft genau diesen Weg mit einer eigenen CA.
+
+### Proxy
+
+Ausgehende Abrufe gehen nur an eingetragene Instanzen und nutzen den Proxy der JVM. Im Container setzt der Betrieb ihn über `JAVA_TOOL_OPTIONS`, für Webserver und `worker` gleich, zum Beispiel `-Dhttps.proxyHost=proxy.intern -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=gitlab.intern|*.intern`; ein eigenes GitLab im internen Netz gehört in `http.nonProxyHosts`. Ein Proxy mit Anmeldung wird nicht unterstützt. Ein Proxy, der TLS aufbricht, braucht seine CA im Feld „Eigene Zertifizierungsstelle“ der Instanz; bei GitHub.com und GitLab.com wird das Feld dafür ebenso genutzt.
+
+### Verhalten bei Tokenentzug und Trennen
+
+| Ereignis | Verhalten |
+|---|---|
+| Die Person entzieht der App beim Anbieter die Zustimmung, der Anbieter läuft das Token ab, oder die Anwendung wird beim Anbieter gelöscht | Beim nächsten Abruf (nach höchstens 60 Sekunden aus dem Zwischenspeicher der Person, mit „Aktualisieren“ sofort) lehnt der Anbieter das Token ab. Die Anwendung versucht genau eine Erneuerung; misslingt sie, steht die Verbindung auf „erneuern“, beide Token sind gelöscht, und jede Verknüpfung zeigt nur ihre Art und „Verbindung erneuern“, ohne Pfad, Titel oder Adresse. Nichts davon ist gespeichert. Der GitLab Lauf zeigt das, indem er die Anwendung in GitLab löscht. |
+| „Trennen“ im Task Manager | Die Token werden sofort gelöscht, der Zwischenspeicher der Person geleert. Beim Anbieter bleibt die Zustimmung bestehen, bis die Person sie dort entzieht: GitHub unter „Settings“, „Applications“, „Authorized GitHub Apps“, GitLab unter „Preferences“, „Applications“. |
+| Konto im Task Manager deaktiviert, Instanz entfernt, Adresse oder Kennung der Anwendung geändert | Alle betroffenen Verbindungen enden in derselben Transaktion, ihre Token sind gelöscht. |
+| Geheimnis der Anwendung beim Anbieter erneuert | Das neue Geheimnis in der Instanz eintragen; bestehende Verbindungen bleiben, bis ein Token erneuert werden muss. |
+
+### Vorführung
+
+Das Vorführimage legt mit `demo seed --profile demo` die Instanzen „GitHub.com“ und „GitLab.com“ ohne Geheimnis an (Kennung `noch-nicht-registriert`) und gibt den Demogruppen die Regeln des Felds `git`. `tools/demo/git-examples.sql` speichert danach Beispielverknüpfungen auf öffentliche Repositories: an WEB-1 das Repository 1uedev/task-manager, den Merge Commit von Pull Request 317 und diesen Pull Request, an ANF-1 im Helpdesk Merge Request 1 von gitlab-org/gitlab und einen Commit daraus, dazu die Freigaben der beiden Repositories für WEB und HELP. Ohne Verbindung erscheinen sie als „nicht verfügbar“; „Git Konto verbinden“ meldet, dass die Instanz noch nicht vollständig eingerichtet ist. Nach der Registrierung wie oben und dem Eintragen von Kennung und Geheimnis verbindet jede Person ihr Konto und sieht die Beispiele mit Titel und Zustand. Ablauf in [docs/DEMO.md](DEMO.md).
+
+### Lauf gegen ein echtes GitLab 16
+
+`tools/git/gitlab-check.sh` startet mit Docker Compose GitLab CE 16.11 mit HTTPS und einem Zertifikat einer für den Lauf erzeugten CA, das Vorführimage und PostgreSQL, legt in GitLab ein Token des Administrators und eine Anwendung mit `read_api` an und führt [tools/git/gitlab_check.py](../tools/git/gitlab_check.py) aus: „Prüfen“ ohne CA meldet `git.tls_failed`, mit CA gelingt es; Verbinden mit Anmeldung bei GitLab und PKCE; Freigabe eines Repositorys einer Untergruppe; Verknüpfen von Repository, Commit über einen kurzen SHA und Merge Request am Ticket und des Merge Requests an einer Anforderung, Duplikat und fremder Rechner abgewiesen; nach dem Zusammenführen in GitLab zeigt „Aktualisieren“ den Zustand „merged“, nach dem Umbenennen den neuen Pfad unter derselben Kennung (G05); nach dem Löschen der Anwendung in GitLab nur noch „Verbindung erneuern“. Alle Kennwörter, Schlüssel und Token entstehen für den Lauf und verschwinden mit ihm. In CI läuft er als Workflow „GitLab 16“ bei Änderungen am Git Modul oder am Lauf, wöchentlich und auf Anforderung; er ist keine Pflichtprüfung, weil GitLab mehrere Minuten zum Start braucht. Lokal genügt `tools/git/gitlab-check.sh` mit Docker und mindestens 8 GB Arbeitsspeicher; ein Lauf dauert mit fertigem Image einige Minuten, fast alles davon ist der Start von GitLab.
+
 ## Erster Import nach V1: Redmine
 
 Vorschlag ist ein einmaliger, administrativ gesteuerter Import ausgewählter Projekte aus einem festgelegten Redmine-Stand. Das ist keine laufende bidirektionale Synchronisation. V1 bereitet stabile interne Kennungen, Herkunftskennungen und eine begrenzte Importschnittstelle vor; es enthält noch keinen Importer.
@@ -102,7 +172,7 @@ Vor Umschaltung kann ein fehlgeschlagener Probelauf vollständig verworfen werde
 
 ## Fachliche Prüffälle
 
-Diese Fälle sind Abnahmeentwürfe; es wurde keine Integration oder Migration ausgeführt.
+Die Git Fälle G01 bis G08 sind mit TASK-111 bis TASK-113 umgesetzt und geprüft (Tests gegen nachgebaute Anbieter in `GitApiTest`, Browser Tests und der Lauf gegen GitLab 16); die Migrationsfälle M01 bis M08 bleiben Abnahmeentwürfe, es wurde keine Migration ausgeführt.
 
 | Fall | Erwartetes Ergebnis |
 |---|---|
@@ -123,4 +193,4 @@ Diese Fälle sind Abnahmeentwürfe; es wurde keine Integration oder Migration au
 | M07 Quelle ändert sich während Extraktion | Kein ungeprüfter konsistenter Abschluss; abschließender Quellstand wird neu abgesichert. |
 | M08 Nach Umschaltung geänderte Zielobjekte | Wiederholung überschreibt keine neue Arbeit; Rückfall erfordert expliziten Abgleich. |
 
-OPEN-010 bleibt für Objektumfang, Authentifizierungsdetails und unterstützte Versionen offen; die drei V1-Betriebsvarianten sind entschieden. OPEN-016 enthält weiterhin Quellversion, vollständige Mappingregeln, Aufbewahrung und Importmengen; Redmine als erste Quelle ist entschieden. TASK-010 ergänzt Netzwerk, Dateien, Sicherung und Lastmessung. Die Detailvorschläge benötigen fachliche und technische Prüfung vor Umsetzung.
+OPEN-010 ist mit DEC-141 bis DEC-143 entschieden: GitHub App mit User Access Tokens und OAuth Anwendung mit `read_api` bei GitLab, Repositories, Commits, Pull und Merge Requests, manuelle Zuordnung mit Abruf bei Anzeige, eigenes GitLab ab 16.0; G01 bis G08 sind mit den Tests von TASK-111 und TASK-112 und dem GitLab Lauf von TASK-113 belegt. OPEN-016 enthält weiterhin Quellversion, vollständige Mappingregeln, Aufbewahrung und Importmengen; Redmine als erste Quelle ist entschieden. TASK-010 ergänzt Netzwerk, Dateien, Sicherung und Lastmessung. Die Detailvorschläge benötigen fachliche und technische Prüfung vor Umsetzung.

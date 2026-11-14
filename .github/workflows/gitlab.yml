@@ -1,0 +1,52 @@
+name: GitLab 16
+
+# Run of the Git link against a real GitLab CE 16.11 with a CA of its own (TASK-113, DEC-143, rule 1). GitLab needs several
+# minutes to start, so the run is not a required check: it runs on changes of the Git module or of the run itself, once a
+# week and on request. The automatic tests of the Git link run in the backend workflow against stand ins.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/src/main/java/taskmanager/git/**
+      - tools/git/**
+      - tools/demo/demo.py
+      - Dockerfile
+      - compose.yaml
+      - .github/workflows/gitlab.yml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitlab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitlab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Record tool versions
+        run: |
+          docker version
+          docker compose version
+      - name: Connect, link and show against GitLab 16 with a CA of its own
+        env:
+          GITLAB_CHECK_LOGS: gitlab-check.log
+          GITLAB_CHECK_RESULTS: ${{ github.workspace }}/gitlab-results
+        run: tools/git/gitlab-check.sh
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitlab-evidence
+          retention-days: 14
+          path: |
+            gitlab-check.log
+            gitlab-results/
