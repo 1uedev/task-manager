@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
+| [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 
 ### Blockiert – BLOCKIERT
 
@@ -136,7 +137,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe (2026-11-14, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR, ohne Änderung am Backend und ohne Migration. Zu den Kriterien: 1 `tools/git/gitlab-check.sh` mit `tools/git/compose.gitlab.yaml`, `tools/git/gitlab-setup.rb` und `tools/git/gitlab_check.py`, Workflow `.github/workflows/gitlab.yml` („GitLab 16“): GitLab CE 16.11.10 mit HTTPS und eigener CA, Prüfen ohne CA `git.tls_failed` und mit CA erfolgreich, Verbinden mit Anmeldung bei GitLab und PKCE, Freigabe aus einer Untergruppe, Repository, Commit über kurzen SHA und Merge Request am Ticket, Merge Request über die Freigabe an einer Anforderung, Duplikat und fremder Rechner abgewiesen, „merged“ nach dem Zusammenführen, neuer Pfad nach dem Umbenennen (G05), nach dem Löschen der Anwendung nur `git.connection_renew` ohne Angaben; lokal mit Docker Compose bestanden, Ergebnis in gitlab-run.json. 2 Offen für Holger: GitHub App und GitLab.com Anwendung nach docs/GIT_MIGRATION.md, Abschnitt Einrichtung und Betrieb, registrieren und Kennung und Geheimnis in den Demoinstanzen eintragen. 3 `demo seed --profile demo` legt die Instanzen GitHub.com und GitLab.com ohne Geheimnis an und gibt den Demogruppen das Feld `git`; `tools/demo/git-examples.sql` speichert Freigaben und Beispielverknüpfungen an WEB-1 und ANF-1 mit Historie; `demo verify` prüft im Imagecheck Instanzen, `git.provider_incomplete`, die Beispiele als nicht verfügbar und nichts für carla; compose.yaml setzt `TASK_MANAGER_PUBLIC_URL`. 4 docs/GIT_MIGRATION.md (Einrichtung und Betrieb: Voraussetzungen, Rückleitungsadresse, GitHub App, GitLab.com, eigenes GitLab mit CA, Proxy, Tokenentzug, Vorführung, GitLab Lauf), README.md, docs/DEMO.md, backend/README.md, .env.example; OPEN-010 in DECISIONS.md und docs/ARCHITECTURE_READINESS.md entschieden. Präzisierungen in DEC-143. Gelaufen: GitLab Lauf und Imagecheck mit Docker Compose gegen ein lokal aus demselben Stand gebautes Image (`GITLAB_CHECK_SKIP_BUILD=1`, `IMAGE_CHECK_SKIP_BUILD=1`, weil der Docker Build hier keinen Zugang zu den Paketquellen hat), Repository Prüfungen; der Docker Build selbst läuft nur in CI.
 
-**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei) und Registrierung der Anwendungen für Abnahmekriterium 2, danach Holgers Abnahme von TASK-111 bis TASK-113.
+**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-113_PR-318.md) empfiehlt nachbessern; F1 bis F6 und H1 bis H3 behebt TASK-115 (DEC-145). Danach Registrierung der Anwendungen für Abnahmekriterium 2 und Holgers Abnahme von TASK-111 bis TASK-113.
 
 ## TASK-114 Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben
 
@@ -163,3 +164,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Der Testersatz entspricht Regel 9; Backend, Frontend und Browsertests sind grün.
 
 **Nächster Schritt:** Nach dem Merge dieser Reservierung und von TASK-113 Umsetzung auf dem Branch, danach unabhängige Prüfung.
+
+## TASK-115 Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-143, DEC-145; docs/REVIEW_TASK-113_PR-318.md; docs/GIT_MIGRATION.md, docs/DEMO.md. **Abhängigkeiten:** TASK-113 auf main (PR #318); F6 zusammen mit TASK-114. **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-113 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-115“. Geplanter Branch claude/project-thread-6p8449 gemeinsam mit TASK-114, Entscheidung DEC-145, keine Migration.
+
+**Umfang:** Behebung der Befunde F1 bis F6 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-113_PR-318.md in Lauf, Werkzeugen, Demodaten, Workflow und Dokumentation. Nicht Teil: Änderungen am Backend außerhalb von TASK-114, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1 und H1: Der GitLab Lauf prüft vor und nach dem Tokenentzug dieselben Link IDs, Arten und Anzahlen an Ticket und Anforderung, das vollständige Rückleitungsziel mit Challenge, exakte Linkanzahlen und unveränderte Ticketversion und Anforderungsrevision beim Zusammenführen.
+2. F2: Fehlermeldungen des Laufs nennen nur Schritt, HTTP Status und Fehlercode; Zugangsdaten gehen nicht über die Argumentliste; der Workflow lädt nur Ergebnisdatei und geprüfte Diagnosen hoch.
+3. F3: Compose Projekt und Ergebnisordner sind je Lauf eindeutig, das Aufräumen greift ab dem ersten temporären Ordner und ein fehlgeschlagener Abbau wird gemeldet.
+4. F4: `git-examples.sql` prüft Anbieterart, Unternehmen, Demoakteur und Freigabegrenze und schreibt die Auditereignisse der Freigaben wie die API.
+5. F5: `demo verify` prüft beide Instanzen, WEB-1 und ANF-1 mit Anzahl, Arten, leeren Git Daten und Historie sowie Carla und eine Person ohne Git Feldrecht.
+6. F6 und H3: Die Betriebsanleitung trennt Tokenablauf, Widerruf, Verlust des Zugriffs und vorübergehende Fehler, beschreibt den Serverwechsel als neue Instanz und nennt genau die abgedeckten Prüffälle; die Vorführung nennt den Schlüssel vor dem Verbinden und den aktuellen Weg bei GitLab.com.
+7. H2: Der Workflow „GitLab 16“ startet auch bei Änderungen am Git Vertrag, an V0064 und V0065 und an der Sitzungslogik.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F6 und H1 bis H3 sind behoben; der GitLab Lauf und der Imagecheck sind grün.
+2. Ein Lauf mit erzwungenem Fehler zeigt keine Geheimnisse in Ausgabe und Artefakt.
+3. Dokumentation und DEC-143 entsprechen den Regeln 4 und 6.
+
+**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, gemeinsam mit TASK-114, danach unabhängige Prüfung.
