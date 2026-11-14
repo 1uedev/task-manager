@@ -7,14 +7,19 @@
 -- or the number, never a name, path or title. Without a connection the links appear as "nicht verfügbar"; once the person
 -- connected the own account they show the live data of the provider. The history entries name the kind of each link only,
 -- as the API does since TASK-114, and each release gets the audit event "repository.released" that "Repository freigeben"
--- writes in the same transaction (TASK-115, F4). The script only runs on the untouched synthetic demo data set: one
--- company, the account admin that seeded it, the two instances with the placeholder of the demo and without a secret,
--- the projects WEB and HELP of the demo, no Git link yet and room for the releases under the limit of 50 per project.
--- Everything is one transaction; any failed check leaves the database as it was.
+-- writes in the same transaction (TASK-115, F4). The script only runs on the untouched synthetic demo data set (TASK-116,
+-- F5): one company, the account admin that seeded it, the groups of the demo, the two instances exactly as "demo seed"
+-- created them (version 1, the placeholder of the demo, no secret and no CA of their own), the projects WEB and HELP,
+-- the ticket WEB-1 and the example requirement of HELP created by admin, no Git link yet and room for the releases
+-- under the limit of 50 per project. Everything is one transaction that first locks releases and links against a
+-- second run; any failed check leaves the database as it was.
 --
 -- The objects are public: the repository of this project at GitHub.com (1uedev/task-manager, the merge commit of
 -- pull request 317) and the project gitlab-org/gitlab at GitLab.com (merge request 1 and the last commit of its branch).
 begin;
+
+-- A second run waits here and then finds the examples (TASK-116, F5).
+lock table git_repository, git_link, git_audit_event in share row exclusive mode;
 
 -- Stops with an error when the demo data set or the two instances are not the synthetic ones of "demo seed", or when the
 -- examples exist already (TASK-115, F4).
@@ -31,16 +36,31 @@ begin
     if seeder is null then
         raise exception 'the active account admin of the demo data set is missing';
     end if;
+    if (select count(*) from permissions_group where company_id = company
+          and name in ('Verwaltung Demo', 'Projektleitung', 'Entwicklung', 'Lesen ohne Beschreibung', 'Anforderungen',
+                       'Anforderungen lesen')) <> 6 then
+        raise exception 'the groups of the demo data set are missing; run demo seed first';
+    end if;
     if (select count(*) from git_provider
-        where removed_at is null and company_id = company and created_by = seeder and client_id = 'noch-nicht-registriert'
-          and client_secret_cipher is null
+        where removed_at is null and company_id = company and created_by = seeder and updated_by = seeder and version = 1
+          and client_id = 'noch-nicht-registriert' and client_secret_cipher is null and ca_certificate is null
           and ((kind = 'github' and name = 'GitHub.com' and base_url = 'https://github.com')
             or (kind = 'gitlab_com' and name = 'GitLab.com' and base_url = 'https://gitlab.com'))) <> 2 then
         raise exception 'the instances GitHub.com and GitLab.com of the demo data set are missing or were changed; run demo seed first';
     end if;
-    if (select count(*) from project where company_id = company
+    if (select count(*) from project where company_id = company and created_by = seeder
           and ((key = 'WEB' and name = 'Webportal Relaunch') or (key = 'HELP' and name = 'Interner Helpdesk'))) <> 2 then
-        raise exception 'the projects WEB and HELP of the demo data set are missing; run demo seed first';
+        raise exception 'the projects WEB and HELP of the demo data set are missing or were not created by admin; run demo seed first';
+    end if;
+    if not exists (select 1 from ticket t join project p on p.id = t.project_id
+                   where p.company_id = company and p.key = 'WEB' and t.number = 1 and t.created_by = seeder) then
+        raise exception 'the ticket WEB-1 of the demo data set is missing or was not created by admin';
+    end if;
+    if not exists (select 1 from requirement r join project p on p.id = r.project_id
+                   join requirement_revision v on v.requirement_id = r.id and v.revision = 1
+                   where p.company_id = company and p.key = 'HELP' and r.number = 1 and r.created_by = seeder
+                     and v.title = 'Kunden sehen den Stand ihrer freigegebenen Supportanfragen') then
+        raise exception 'the example requirement ANF-1 of HELP is missing or is not the one of the demo data set';
     end if;
     if exists (select 1 from git_link) then
         raise exception 'Git links exist already; the examples were stored before';
