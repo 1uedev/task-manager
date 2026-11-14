@@ -137,7 +137,9 @@ export interface paths {
         /**
          * Anbieter ändern (Recht git.manage)
          * @description Wie beim Anlegen; die Art bleibt (`kind.unchangeable`). `clientSecret` weggelassen behält das gespeicherte, leer
-         *     entfernt es. Eine andere Adresse oder Kennung der Anwendung beendet alle Verbindungen dieses Anbieters.
+         *     entfernt es. Eine andere Adresse oder Kennung der Anwendung beendet alle Verbindungen dieses Anbieters. Die Adresse
+         *     einer Instanz mit Freigaben oder Verknüpfungen bleibt fest: 409 `git.provider_in_use`; ein anderer Server wird als
+         *     neue Instanz angelegt.
          */
         put: operations["updateGitProvider"];
         post?: never;
@@ -193,8 +195,8 @@ export interface paths {
          * Repository freigeben (projects.manage oder project.manage)
          * @description Das Repository muss mit der eigenen Verbindung lesbar sein, sonst 404 `git.repository_not_found`. Ohne Verbindung
          *     409 `git.not_connected` oder `git.connection_renew`; schon freigegeben 409 `git.repository_released`; mehr als 50
-         *     Freigaben 409 `git.repositories_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503
-         *     `git.rate_limited`.
+         *     Freigaben 409 `git.repositories_too_many`; Adresse der Instanz während der Prüfung geändert 409
+         *     `git.provider_changed`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
          */
         post: operations["releaseGitRepository"];
         delete?: never;
@@ -250,8 +252,11 @@ export interface paths {
         /**
          * Git Verknüpfungen eines Tickets, live mit dem eigenen Token
          * @description Ohne Leseregel des Felds `git` ist `readable` falsch und `links` leer. Ein nicht verfügbares Objekt erscheint nur mit
-         *     Art und Grund (`git.not_connected`, `git.connection_renew`, `git.rate_limited` oder `git.unavailable`), ohne Pfad,
-         *     Titel, Nachricht, Adresse, SHA oder Nummer.
+         *     Art und Grund (`git.not_connected`, `git.connection_renew`, `git.rate_limited` oder `git.unavailable`), ohne Instanz,
+         *     Pfad, Titel, Nachricht, Adresse, SHA, Nummer, Zeitpunkt und Person; `key` ist dann nur für Schreibende gesetzt.
+         *     Jede Verknüpfung zählt als ein Eintrag, auch ein Platzhalter. Daten aus dem Zwischenspeicher erscheinen nur, wenn
+         *     das Repository mit der aktuellen Verbindung in derselben Anfrage live lesbar war; der Zwischenspeicher gilt nur für
+         *     dieselbe Verbindung (Instanz, Adresse, Konto beim Anbieter und Zeitpunkt der Verbindung).
          */
         get: operations["listTicketGitLinks"];
         put?: never;
@@ -261,7 +266,8 @@ export interface paths {
          *     freigegebenen Repositorys mit `releaseId`, `kind` und `key` (Commit SHA mit 7 bis 64 Zeichen oder Nummer, leer für
          *     das Repository). Unbekannte Instanz oder Form 400 `git.address_unknown`; ohne Verbindung 409 `git.not_connected` oder
          *     `git.connection_renew`; nicht vorhanden oder nicht lesbar 404 `git.object_not_found`; Repository nicht für das
-         *     Projekt freigegeben 409 `git.repository_not_released`; schon verknüpft 409 `git.link_exists`; mehr als 50
+         *     Projekt und diese Instanz freigegeben 409 `git.repository_not_released`, geprüft bevor der Commit oder die Änderung
+         *     beim Anbieter gelesen wird; Adresse der Instanz inzwischen geändert 409 `git.provider_changed`; schon verknüpft 409 `git.link_exists`; mehr als 50
          *     Verknüpfungen 409 `git.links_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
          *     Die Version des Tickets ändert sich nicht.
          */
@@ -272,7 +278,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/projects/{projectId}/tickets/{number}/git/{linkId}": {
+    "/projects/{projectId}/tickets/{number}/git/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -330,7 +336,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/requirements/{id}/git/{linkId}": {
+    "/requirements/{id}/git/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -449,17 +455,17 @@ export interface components {
         /** @enum {string} */
         ObjectKind: "repository" | "commit" | "pull_request" | "merge_request";
         Link: {
-            /** Format: uuid */
-            id: string;
+            /** @description Löseschlüssel für DELETE; null ohne Schreibregel des Felds git */
+            key: string | null;
             kind: components["schemas"]["ObjectKind"];
             /** Format: uuid */
-            providerId: string;
+            providerId: string | null;
             providerName: string | null;
             providerKind: components["schemas"]["Kind"] | null;
             /** Format: date-time */
-            linkedAt: string;
+            linkedAt: string | null;
             /** Format: uuid */
-            linkedBy: string;
+            linkedBy: string | null;
             available: boolean;
             /** @enum {string|null} */
             reason: "git.not_connected" | "git.connection_renew" | "git.rate_limited" | "git.unavailable" | null;
@@ -494,14 +500,11 @@ export interface components {
             providerId: string;
             providerName: string | null;
             providerKind: components["schemas"]["Kind"] | null;
-            available: boolean;
-            /** @enum {string|null} */
-            reason: "git.not_connected" | "git.connection_renew" | "git.rate_limited" | "git.unavailable" | null;
             repository: {
                 name: string;
                 path: string;
                 url: string | null;
-            } | null;
+            };
         };
     };
     responses: {
@@ -511,7 +514,9 @@ export interface components {
          *     git.public_url_missing, git.not_connected, git.connection_renew, git.repository_not_found, git.repository_released,
          *     git.repositories_too_many, git.version_conflict, git.precondition_required, git.busy und die Codes der Anbieter;
          *     für Verknüpfungen zusätzlich ticket.not_found, requirement.not_found, git.address_unknown, git.object_not_found,
-         *     git.repository_not_released, git.link_exists, git.links_too_many, git.link_not_found und git.rate_limited.
+         *     git.repository_not_released, git.link_exists, git.links_too_many, git.link_not_found, git.rate_limited,
+         *     git.provider_in_use und git.provider_changed. Ein 403 von GitHub mit erschöpftem Kontingent, `Retry-After` oder dem
+         *     Hinweis auf das sekundäre Ratenlimit gilt als `git.rate_limited` und wird nicht zwischengespeichert.
          */
         Problem: {
             headers: {
@@ -544,7 +549,7 @@ export interface components {
                 "application/json": components["schemas"]["Link"];
             };
         };
-        /** @description Freigegebene Repositories; nicht verfügbare ohne Name und Pfad */
+        /** @description Freigegebene Repositories, die die eigene Verbindung gerade lesen kann; andere fehlen */
         Choices: {
             headers: {
                 [name: string]: unknown;
@@ -558,7 +563,11 @@ export interface components {
         Id: string;
         ProjectId: string;
         Number: number;
-        LinkId: string;
+        /**
+         * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
+         *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+         */
+        LinkKey: string;
         /** @description Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“) */
         Refresh: boolean;
         /** @description Version aus dem ETag */
@@ -1031,7 +1040,11 @@ export interface operations {
             path: {
                 projectId: components["parameters"]["ProjectId"];
                 number: components["parameters"]["Number"];
-                linkId: components["parameters"]["LinkId"];
+                /**
+                 * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
+                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+                 */
+                key: components["parameters"]["LinkKey"];
             };
             cookie?: never;
         };
@@ -1117,7 +1130,11 @@ export interface operations {
             header?: never;
             path: {
                 id: components["parameters"]["Id"];
-                linkId: components["parameters"]["LinkId"];
+                /**
+                 * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
+                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+                 */
+                key: components["parameters"]["LinkKey"];
             };
             cookie?: never;
         };

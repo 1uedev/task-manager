@@ -2,6 +2,7 @@ package taskmanager.git;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,6 +136,8 @@ class GitApiTest {
         final Set<String> denied = Collections.synchronizedSet(new HashSet<>());
         /** Every read of a repository or an object answers with the rate limit (TASK-112). */
         volatile boolean limited;
+        /** Every read of a repository or an object answers 403 with the secondary rate limit of GitHub (TASK-114, F8). */
+        volatile boolean secondaryLimited;
         /** The state of pull request 7 or merge request 3: open, draft, merged or closed. */
         volatile String changeState = "open";
         /** Milliseconds every answer waits, and the most requests seen at the same time (TASK-112). */
@@ -205,6 +208,11 @@ class GitApiTest {
             if (path.startsWith(api + "/repos/") || path.startsWith(api + "/repositories/") || path.startsWith(api + "/projects/")) {
                 if (limited) {
                     answer(exchange, 429, Map.of("message", "rate limit"));
+                    return;
+                }
+                if (secondaryLimited) {
+                    exchange.getResponseHeaders().add("x-ratelimit-remaining", "4000");
+                    answer(exchange, 403, Map.of("message", "You have exceeded a secondary rate limit. Please wait a few minutes before you try again."));
                     return;
                 }
                 if (denied.contains(token)) {
@@ -958,7 +966,7 @@ class GitApiTest {
         assertEquals(200, history.status(), history.body());
         List<JsonNode> entries = gitHistory(history.json());
         assertEquals(4, entries.size(), history.body());
-        assertEquals("commit:" + commit.json().get("id").asString(), entries.get(0).get("to").asString());
+        assertEquals("commit", entries.get(0).get("to").asString(), "the history names the kind only (TASK-114, F6)");
         assertFalse(history.body().contains("Anmeldung repariert"));
 
         Response onRequirement = link(worker, links.requirementPath(), GITLAB.url() + "/grp/gamma/-/commit/" + SHA);
@@ -970,7 +978,8 @@ class GitApiTest {
         Response requirementHistory = worker.get("/api/v1/requirements/" + links.requirement() + "/history");
         assertEquals(200, requirementHistory.status(), requirementHistory.body());
         assertTrue(requirementHistory.body().contains("\"kind\":\"git_linked\""), requirementHistory.body());
-        assertTrue(requirementHistory.body().contains("commit:" + onRequirement.json().get("id").asString()));
+        assertTrue(requirementHistory.body().contains("\"to\":\"commit\""), requirementHistory.body());
+        assertFalse(requirementHistory.body().contains("commit:"), requirementHistory.body());
 
         Response unknown = link(worker, links.ticketPath(), "https://elsewhere.example/acme/alpha");
         assertEquals(400, unknown.status());
@@ -987,11 +996,13 @@ class GitApiTest {
         assertEquals(400, worker.send("POST", links.ticketPath(), Map.of("releaseId", links.gitlabRelease(), "kind", "pull_request", "key", "3"), null)
             .status(), "pull requests are GitHub's");
 
-        Response removed = worker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null);
+        String commitKey = commit.json().get("key").asString();
+        assertEquals(404, worker.send("DELETE", links.ticketPath() + "/" + UUID.randomUUID(), null, null).status(), "the identifier is no key");
+        Response removed = worker.send("DELETE", links.ticketPath() + "/" + commitKey, null, null);
         assertEquals(204, removed.status(), removed.body());
-        assertEquals(404, worker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null).status());
+        assertEquals(404, worker.send("DELETE", links.ticketPath() + "/" + commitKey, null, null).status());
         List<JsonNode> after = gitHistory(worker.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history").json());
-        assertEquals("commit:" + commit.json().get("id").asString(), after.getLast().get("from").asString());
+        assertEquals("commit", after.getLast().get("from").asString());
         assertTrue(after.getLast().get("to").isNull());
         assertEquals(before, ticketEtag(links, worker));
     }
@@ -1010,9 +1021,11 @@ class GitApiTest {
         assertFalse(shown.get("available").asBoolean());
         assertEquals("git.not_connected", shown.get("reason").asString());
         assertEquals("commit", shown.get("kind").asString());
-        for (String field : List.of("repository", "commit", "change", "url")) {
+        // TASK-114, F6: the kind and the reason only; no key for a reader who may not remove it.
+        for (String field : List.of("key", "providerId", "providerName", "providerKind", "linkedAt", "linkedBy", "repository", "commit", "change", "url")) {
             assertTrue(shown.get(field).isNull(), field);
         }
+        assertFalse(notConnected.body().contains(commit.json().get("key").asString()), notConnected.body());
         assertFalse(notConnected.body().contains(SHA.substring(0, 7)) || notConnected.body().contains("alpha"), notConnected.body());
         assertFalse(notConnected.json().get("writable").asBoolean());
         Response refused = link(reader, links.ticketPath(), GITHUB.url() + "/acme/alpha");
@@ -1024,7 +1037,7 @@ class GitApiTest {
         assertEquals("git.unavailable", withoutAccess.json().get("links").get(0).get("reason").asString());
         assertFalse(withoutAccess.body().contains(SHA.substring(0, 7)) || withoutAccess.body().contains("alpha"), withoutAccess.body());
         Response history = reader.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history");
-        assertEquals(List.of("commit:" + commit.json().get("id").asString()), gitHistory(history.json()).stream().map(c -> c.get("to").asString()).toList());
+        assertEquals(List.of("commit"), gitHistory(history.json()).stream().map(c -> c.get("to").asString()).toList());
 
         Browser blind = person();
         join(links.setup().admin(), links.setup().project(), blind, "ticket.read", "ticket:READ:title");
@@ -1035,15 +1048,21 @@ class GitApiTest {
         assertTrue(gitHistory(blind.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history").json()).isEmpty());
         assertEquals(404, person().get(links.ticketPath()).status(), "a stranger does not see the ticket");
 
-        // G03: the worker read the commit; after the access ends a refresh reads nothing more.
+        // G03 (TASK-114, F1): the worker read the commit and it is kept; after the access ends already the next ordinary read
+        // shows nothing more, because the repository is read live before anything kept is shown.
         assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        int commitReads = GITHUB.seen("/api/repositories/101/commits/").size();
+        assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        assertEquals(commitReads, GITHUB.seen("/api/repositories/101/commits/").size(), "the commit itself is kept");
         GITHUB.denied.addAll(GITHUB.tokens);
         try {
-            assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(), "kept for 60 seconds");
+            Response next = links.worker().get(links.ticketPath());
+            assertEquals("git.unavailable", next.json().get("links").get(0).get("reason").asString(), next.body());
+            assertFalse(next.body().contains(SHA.substring(0, 7)) || next.body().contains("alpha"), next.body());
             Response refreshed = links.worker().get(links.ticketPath() + "?refresh=true");
             assertEquals("git.unavailable", refreshed.json().get("links").get(0).get("reason").asString(), refreshed.body());
-            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where id = ?", Integer.class,
-                UUID.fromString(commit.json().get("id").asString())), "a link is never removed by itself");
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where subject_id = (select id from ticket where project_id = ? and number = ?)",
+                Integer.class, links.setup().project(), links.ticket()), "a link is never removed by itself");
         } finally {
             GITHUB.denied.clear();
         }
@@ -1053,8 +1072,11 @@ class GitApiTest {
 
         Browser unlinker = person();
         join(links.setup().admin(), links.setup().project(), unlinker, "ticket.read", "ticket.edit", "ticket:READ:git", "ticket:WRITE:git");
-        assertEquals(204, unlinker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null).status(),
-            "removing needs only the write rule");
+        assertEquals(404, unlinker.send("DELETE", links.ticketPath() + "/" + commit.json().get("key").asString(), null, null).status(),
+            "the key of another person removes nothing");
+        String own = unlinker.get(links.ticketPath()).json().get("links").get(0).get("key").asString();
+        assertNotEquals(commit.json().get("key").asString(), own, "each person gets a key of their own");
+        assertEquals(204, unlinker.send("DELETE", links.ticketPath() + "/" + own, null, null).status(), "removing needs only the write rule");
     }
 
     @Test
@@ -1136,6 +1158,203 @@ class GitApiTest {
         assertFalse(requirements.body().contains(SHA.substring(0, 7)) || requirements.body().contains("repariert\""), requirements.body());
         Response ticket = links.worker().get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket());
         assertFalse(ticket.body().contains("pull_request") || ticket.body().contains("alpha"), ticket.body());
+    }
+
+    // ---------------------------------------------------------------- fixes after the review of TASK-112 (TASK-114)
+
+    @Test
+    void aNewConnectionNeverSeesWhatTheFormerOneKept() {
+        Links links = links();
+        assertEquals(201, link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        assertEquals("open", links.worker().get(links.ticketPath()).json().get("links").get(0).get("change").get("state").asString());
+        try {
+            GITHUB.changeState = "merged";
+            assertEquals("open", links.worker().get(links.ticketPath()).json().get("links").get(0).get("change").get("state").asString(),
+                "kept for the same connection");
+            // F2: connecting again starts a new generation; what the former connection read is never used again.
+            assertTrue(connect(links.worker(), links.setup().github(), "again" + COUNTER.incrementAndGet()).endsWith("connected=" + links.setup().github()));
+            assertEquals("merged", links.worker().get(links.ticketPath()).json().get("links").get(0).get("change").get("state").asString());
+        } finally {
+            GITHUB.changeState = "open";
+        }
+    }
+
+    @Test
+    void theReleaseIsCheckedBeforeTheObjectIsFetched() {
+        Links links = links();
+        int before = GITHUB.seen("/api/repositories/102/").size();
+        // F3: beta is readable but not released; an existing and a missing commit answer alike and no object is fetched.
+        Response existing = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/beta/commit/" + SHA);
+        Response missing = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/beta/commit/ffffffffff");
+        assertEquals(409, existing.status(), existing.body());
+        assertEquals("git.repository_not_released", existing.code());
+        assertEquals(409, missing.status(), missing.body());
+        assertEquals("git.repository_not_released", missing.code());
+        assertEquals(before, GITHUB.seen("/api/repositories/102/").size(), "nothing below the repository is read");
+    }
+
+    @Test
+    void overlappingInstancesKeepTheirOwnReading() {
+        Links links = links();
+        // F7: two own GitLab instances, one below the other. Only the outer one is connected and has gamma released.
+        UUID outer = createProvider(links.setup().admin(), "gitlab", GITLAB.url());
+        createProvider(links.setup().admin(), "gitlab", GITLAB.url() + "/grp");
+        assertTrue(connect(links.setup().manager(), outer, "o" + COUNTER.incrementAndGet()).endsWith("connected=" + outer));
+        assertTrue(connect(links.worker(), outer, "o" + COUNTER.incrementAndGet()).endsWith("connected=" + outer));
+        Response released = links.setup().manager().send("POST", "/api/v1/projects/" + links.setup().project() + "/git/repositories",
+            Map.of("providerId", outer, "externalId", "201"), null);
+        assertEquals(201, released.status(), released.body());
+        Response linked = link(links.worker(), links.requirementPath(), GITLAB.url() + "/grp/gamma/-/merge_requests/3");
+        assertEquals(201, linked.status(), linked.body());
+        assertEquals(outer.toString(), linked.json().get("providerId").asString());
+        assertEquals("grp/gamma", linked.json().get("repository").get("path").asString());
+    }
+
+    @Test
+    void anInstanceInUseKeepsItsAddress() {
+        Links links = links();
+        Browser admin = links.setup().admin();
+        UUID own = createProvider(admin, "gitlab", GITLAB.url());
+        Map<String, Object> moved = provider("gitlab", "Eigenes " + COUNTER.incrementAndGet(), TLS.url(), null, null);
+        moved.remove("clientSecret");
+        Response free = admin.send("PUT", "/api/v1/git/admin/providers/" + own, moved, "\"1\"");
+        assertEquals(200, free.status(), "an unused instance may move: " + free.body());
+        moved.put("baseUrl", GITLAB.url());
+        Response back = admin.send("PUT", "/api/v1/git/admin/providers/" + own, moved, free.etag());
+        assertEquals(200, back.status(), back.body());
+        assertTrue(connect(links.setup().manager(), own, "u" + COUNTER.incrementAndGet()).endsWith("connected=" + own));
+        assertEquals(201, links.setup().manager().send("POST", "/api/v1/projects/" + links.setup().project() + "/git/repositories",
+            Map.of("providerId", own, "externalId", "201"), null).status());
+        // F4: with a release the address is a trust decision of its own; a new server is a new instance.
+        moved.put("baseUrl", TLS.url());
+        Response refused = admin.send("PUT", "/api/v1/git/admin/providers/" + own, moved, back.etag());
+        assertEquals(409, refused.status(), refused.body());
+        assertEquals("git.provider_in_use", refused.code());
+        moved.put("baseUrl", GITLAB.url());
+        moved.put("name", "Umbenannt " + COUNTER.incrementAndGet());
+        assertEquals(200, admin.send("PUT", "/api/v1/git/admin/providers/" + own, moved, back.etag()).status(), "the name may change");
+    }
+
+    @Test
+    void everyGitRouteNeedsTheReadActionFirst() {
+        Links links = links();
+        Response commit = link(links.worker(), links.requirementPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA);
+        assertEquals(201, commit.status(), commit.body());
+        Response onTicket = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA);
+        assertEquals(201, onTicket.status(), onTicket.body());
+        // F5: the edit action with both field rules but without the read action sees neither requirement nor ticket.
+        Browser editor = person();
+        join(links.setup().admin(), links.setup().project(), editor, "requirement.edit", "requirement:READ:git", "requirement:WRITE:git",
+            "ticket.edit", "ticket:READ:git", "ticket:WRITE:git");
+        assertTrue(connect(editor, links.setup().github(), "e" + COUNTER.incrementAndGet()).endsWith("connected=" + links.setup().github()));
+        for (String path : List.of(links.requirementPath(), links.ticketPath())) {
+            assertEquals(404, editor.get(path).status(), path);
+            assertEquals(404, editor.get(path + "/choices").status(), path);
+            assertEquals(404, link(editor, path, GITHUB.url() + "/acme/alpha").status(), path);
+            assertEquals(404, editor.send("DELETE", path + "/" + commit.json().get("key").asString(), null, null).status(), path);
+        }
+        assertEquals(2, jdbc.queryForObject("select count(*) from git_link where provider_id = ?", Integer.class, links.setup().github()));
+    }
+
+    @Test
+    void theChoiceHoldsOnlyReadableRepositories() {
+        Links links = links();
+        Response all = links.worker().get(links.ticketPath() + "/choices");
+        assertEquals(200, all.status(), all.body());
+        assertEquals(2, all.json().size(), all.body());
+        // F6: without a connection to GitLab.com gamma is no longer offered, and nothing of it is named.
+        assertEquals(204, links.worker().send("DELETE", "/api/v1/git/providers/" + links.gitlab() + "/connection", null, null).status());
+        Response readable = links.worker().get(links.ticketPath() + "/choices");
+        assertEquals(1, readable.json().size(), readable.body());
+        assertEquals("acme/alpha", readable.json().get(0).get("repository").get("path").asString());
+        assertFalse(readable.body().contains(links.gitlabRelease().toString()), readable.body());
+        GITHUB.denied.addAll(GITHUB.tokens);
+        try {
+            assertEquals(0, links.worker().get(links.ticketPath() + "/choices").json().size(), "access is read live (F1)");
+        } finally {
+            GITHUB.denied.clear();
+        }
+    }
+
+    @Test
+    void theSecondaryRateLimitOfGitHubIsARateLimitAndNotKept() {
+        Links links = links();
+        assertEquals(201, link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        GITHUB.secondaryLimited = true;
+        try {
+            // F8: 403 with calls left but the message of the secondary limit.
+            Response limited = links.worker().get(links.ticketPath());
+            assertEquals("git.rate_limited", limited.json().get("links").get(0).get("reason").asString(), limited.body());
+            Response refused = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7");
+            assertEquals(503, refused.status(), refused.body());
+            assertEquals("git.rate_limited", refused.code());
+        } finally {
+            GITHUB.secondaryLimited = false;
+        }
+        assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(), "the limit was not kept");
+    }
+
+    @Test
+    void aWithdrawalAndALinkWaitForEachOther() throws Exception {
+        Links links = links();
+        UUID ticketId = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, links.setup().project(),
+            links.ticket());
+        UUID release = jdbc.queryForObject("select id from git_repository where project_id = ? and external_id = '101'", UUID.class,
+            links.setup().project());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            // F9, first order: a withdrawal that is not committed yet holds the release; the link waits and is refused after it.
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                held.createStatement().execute("delete from git_repository where id = '" + release + "'");
+                var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
+                waitForLockWait();
+                held.commit();
+                Response refused = adding.get(20, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(409, refused.status(), refused.body());
+                assertEquals("git.repository_not_released", refused.code());
+            }
+            assertEquals(0, jdbc.queryForObject("select count(*) from git_link where subject_id = ?", Integer.class, ticketId));
+            assertEquals(201, release(links.setup().manager(), links.setup(), "101").status());
+            UUID again = jdbc.queryForObject("select id from git_repository where project_id = ? and external_id = '101'", UUID.class,
+                links.setup().project());
+
+            // Second order: a link that holds the release row until its commit makes the withdrawal wait for it.
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                held.createStatement().execute("select pg_advisory_xact_lock(hashtextextended('git_link:ticket:" + ticketId + "', 0))");
+                var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
+                waitForLockWait();
+                var withdrawing = pool.submit(() -> links.setup().manager().send("DELETE",
+                    "/api/v1/projects/" + links.setup().project() + "/git/repositories/" + again, null, null));
+                waitForLockWaits(2);
+                held.commit();
+                assertEquals(201, adding.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
+                assertEquals(204, withdrawing.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
+            }
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where subject_id = ?", Integer.class, ticketId),
+                "the link was stored before the withdrawal and stays");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private void waitForLockWait() throws InterruptedException {
+        waitForLockWaits(1);
+    }
+
+    /** Waits until PostgreSQL shows the given number of sessions waiting for a lock. */
+    private void waitForLockWaits(int count) throws InterruptedException {
+        long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+        while (System.nanoTime() < end) {
+            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+                Integer.class);
+            if (waiting != null && waiting >= count) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("no session waited for a lock");
     }
 
     private static String challenge(String verifier) {

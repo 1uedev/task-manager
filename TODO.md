@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,10 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
-| [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -44,6 +41,8 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-111](#task-111-git-anbieter-kontoverbindung-und-repository-freigabe-a15-teil-1) | Git Anbieter, Kontoverbindung und Repository Freigabe (A15 Teil 1) | claude-20261113-git-01 | 2026-11-13 |
 | [TASK-112](#task-112-git-verknüpfung-und-anzeige-an-tickets-und-anforderungen-a15-teil-2) | Git Verknüpfung und Anzeige an Tickets und Anforderungen (A15 Teil 2) | claude-20261113-git-01 | 2026-11-13 |
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-14 |
+| [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
+| [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -141,9 +140,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-114 Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-036, DEC-142, DEC-144; docs/REVIEW_TASK-112_PR-317.md; docs/GIT_MIGRATION.md (Prüffälle G02 und G03). **Abhängigkeiten:** TASK-112 auf main (PR #317); TASK-113 auf main (PR #318). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-112 (Empfehlung nachbessern) „F1 bis F9 und H3 als TASK-114“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-144, Migration ab V0066 falls nötig.
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-036, DEC-142, DEC-144; docs/REVIEW_TASK-112_PR-317.md; docs/GIT_MIGRATION.md (Prüffälle G02 und G03). **Abhängigkeiten:** TASK-112 auf main (PR #317); TASK-113 auf main (PR #318). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-112 (Empfehlung nachbessern) „F1 bis F9 und H3 als TASK-114“. Umgesetzt auf claude/project-thread-6p8449 mit Migration V0066 (Historie nur mit Art), Entscheidung DEC-144; Ergebnis PR zusammen mit TASK-115.
 
 **Umfang:** Behebung der Befunde F1 bis F9 und des Hinweises H3 aus docs/REVIEW_TASK-112_PR-317.md mit Vertrag, Oberfläche und Tests. Nicht Teil: Hinweise H1, H2, H4 und H5 (später), weitere Git Funktionen.
 
@@ -163,13 +162,15 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Vertrag `contracts/git.openapi.yaml`, Oberfläche und README entsprechen den Regeln 4 bis 6.
 3. Der Testersatz entspricht Regel 9; Backend, Frontend und Browsertests sind grün.
 
-**Nächster Schritt:** Nach dem Merge dieser Reservierung und von TASK-113 Umsetzung auf dem Branch, danach unabhängige Prüfung.
+**Übergabe:** Backend (`ConnectionService`, `GitCache`, `GitHttp`, `GitStore`, `LinkService`, `ProviderService`, `ReleaseService`, `GitLinkController`), Migration V0066, Vertrag `contracts/git.openapi.yaml` (Pfad `{key}`, `key` statt `id`, Auswahl ohne `available`, Codes `git.provider_in_use` und `git.provider_changed`) sowie die Historientexte in `tickets.openapi.yaml` und `requirements.openapi.yaml`, Oberfläche `GitLinks.tsx`, Testersatz `frontend/tests/browser/backend.mjs`, README Abschnitt „Korrekturen (TASK-114)“. Regressionstests: `GitApiTest` (unter anderem `aNewConnectionNeverSeesWhatTheFormerOneKept`, `theReleaseIsCheckedBeforeTheObjectIsFetched`, `overlappingInstancesKeepTheirOwnReading`, `anInstanceInUseKeepsItsAddress`, `everyGitRouteNeedsTheReadActionFirst`, `theChoiceHoldsOnlyReadableRepositories`, `theSecondaryRateLimitOfGitHubIsARateLimitAndNotKept`, `aWithdrawalAndALinkWaitForEachOther` in beiden Reihenfolgen, G03 am normalen Abruf in `withoutAccessOnlyTheKindIsShownAndAWithdrawnAccessEndsAtTheNextRead`), `GitCacheTest`, `GitHistoryMigrationTest` und der Browsertest „the address, the choice and the removal key follow the server“. Präzisierungen: der Löseschlüssel ist ein HMAC über Person und Verknüpfung mit einem Schlüssel je Serverprozess, also nach einem Neustart neu; jede Verknüpfung zählt in der Liste als ein Eintrag, auch ein Platzhalter; die Auswahl lässt nicht lesbare Repositories ganz weg; F5 gilt auch für Tickets (`ticket.read` vor jedem Git Weg). Grenzen: H1, H2, H4 und H5 bleiben für später.
+
+**Nächster Schritt:** Unabhängige Prüfung (Codex), danach Holgers Abnahme.
 
 ## TASK-115 Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-143, DEC-145; docs/REVIEW_TASK-113_PR-318.md; docs/GIT_MIGRATION.md, docs/DEMO.md. **Abhängigkeiten:** TASK-113 auf main (PR #318); F6 zusammen mit TASK-114. **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-113 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-115“. Geplanter Branch claude/project-thread-6p8449 gemeinsam mit TASK-114, Entscheidung DEC-145, keine Migration.
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-143, DEC-145; docs/REVIEW_TASK-113_PR-318.md; docs/GIT_MIGRATION.md, docs/DEMO.md. **Abhängigkeiten:** TASK-113 auf main (PR #318); F6 zusammen mit TASK-114. **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-113 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-115“. Umgesetzt auf claude/project-thread-6p8449 gemeinsam mit TASK-114, Entscheidung DEC-145, keine Migration.
 
 **Umfang:** Behebung der Befunde F1 bis F6 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-113_PR-318.md in Lauf, Werkzeugen, Demodaten, Workflow und Dokumentation. Nicht Teil: Änderungen am Backend außerhalb von TASK-114, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -187,4 +188,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Ein Lauf mit erzwungenem Fehler zeigt keine Geheimnisse in Ausgabe und Artefakt.
 3. Dokumentation und DEC-143 entsprechen den Regeln 4 und 6.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, gemeinsam mit TASK-114, danach unabhängige Prüfung.
+**Übergabe:** `tools/git/gitlab_check.py` (nummerierte Schritte, Fehler nur mit Schritt, Status und festem Code, vollständige Anmeldeadresse mit Rückleitung, Zustand und Challenge, genau drei Verknüpfungen am Ticket, beide Historien, Version, Revision und Status beim Zusammenführen, Tokenentzug an denselben Löseschlüsseln, Arten und Anzahlen von Ticket und Anforderung, `GITLAB_CHECK_FAIL_AT`), `tools/git/gitlab-check.sh` (Compose Projekt und Ergebnisordner je Lauf, Aufräumen ab dem ersten temporären Ordner, gemeldeter Abbaufehler, Zugangsdaten über die Standardeingabe), neues `tools/git/redact.py` mit `tests/test_gitlab_evidence.py`, Workflow `.github/workflows/gitlab.yml` (nur `gitlab-run.json` und `diagnostics.txt`, Eingabe `fail_at`, weitere Pfade), `tools/demo/git-examples.sql` (Demobestand, Grenze 50, Audit, Historie mit Art), `tools/demo/demo.py` (`demo verify` für beide Instanzen über die Verwaltung, WEB-1 und ANF-1, Historien, Carla, David mit der neuen Gruppe „Anforderungen lesen“), docs/GIT_MIGRATION.md, docs/DEMO.md und DEC-143. Das SQL ist lokal gegen PostgreSQL 16 mit synthetischem Bestand geprüft: Einspielung, zweiter Lauf, 50 vorhandene Freigaben, geänderte Instanz, anderes Projekt und fehlende ANF-1 brechen ohne Änderung ab. Grenzen: Ein Lauf mit erzwungenem Fehler gegen ein echtes GitLab steht aus (Workflow „GitLab 16“ mit `fail_at`); Abnahmekriterium 2 von TASK-113 (Registrierung bei GitHub.com und GitLab.com) bleibt Holgers Schritt.
+
+**Nächster Schritt:** Unabhängige Prüfung (Codex), danach Holgers Abnahme.

@@ -207,7 +207,7 @@ def admin_client(args) -> Client:
     try:
         client.login(args.admin, password)
     except ApiError as error:
-        if error.status != 401 or not args.one_time_password:
+        if error.status != 401 or not getattr(args, "one_time_password", None):
             raise SystemExit(f"login of {args.admin} failed ({error}); pass --one-time-password from bootstrap-admin "
                              "or set TASK_MANAGER_DEMO_PASSWORD to the administrator's password")
         client.login(args.admin, args.one_time_password, new_password=password)
@@ -432,7 +432,7 @@ def seed_demo(args) -> None:
     seed_mail_template(admin)
     page = seed_wiki(admin, project_ids["HELP"])
     leads = [admin_id] + [people[u] for u, _, group, _ in DEMO_PEOPLE if group == "Projektleitung"]
-    seed_requirements(admin, project_ids["HELP"], page, leads)
+    seed_requirements(admin, project_ids["HELP"], page, leads, [people["david"]])
     seed_git(admin)
     print(f"done: {len(DEMO_PEOPLE)} accounts, {len(DEMO_PORTAL)} portal accounts, {len(DEMO_PROJECTS)} projects, {len(jobs)} tickets. "
           "Every demo account uses TASK_MANAGER_DEMO_PASSWORD.")
@@ -500,10 +500,11 @@ REQUIREMENT_EXAMPLE = {
 }
 
 
-def seed_requirements(admin: Client, project: str, page: str, members: list[str]) -> None:
+def seed_requirements(admin: Client, project: str, page: str, members: list[str], readers: list[str]) -> None:
     """The example requirement in the helpdesk project (TASK-098): two custom fields, three criteria, revision 1 approved and
     linked with ticket 1 and the wiki page "Serviceanfrage ergänzen", then a changed effort that opens revision 2 as draft, so
-    that the ticket shows the hint on the newer revision."""
+    that the ticket shows the hint on the newer revision. The readers read requirements without the field git (TASK-115,
+    F5): david in HELP shows the limit of the field apart from a person who cannot see the project at all."""
     print("requirements")
     current = admin.call("GET", f"/projects/{project}")
     configuration = current.body["configuration"]
@@ -519,6 +520,14 @@ def seed_requirements(admin: Client, project: str, page: str, members: list[str]
                        {"resourceType": "requirement", "field": name, "projectId": scope, "operation": operation, "effect": "allow"})
     for account in members:
         admin.call("PUT", f"/permissions/groups/{group}/members/{account}")
+    reading = admin.call("POST", "/permissions/groups", {"name": "Anforderungen lesen"}).body["id"]
+    admin.call("PUT", f"/permissions/groups/{reading}/actions", {"action": "requirement.read", "projectId": None, "enabled": True})
+    for name, scope in rules:
+        if name != "git":
+            admin.call("PUT", f"/permissions/groups/{reading}/fields",
+                       {"resourceType": "requirement", "field": name, "projectId": scope, "operation": "read", "effect": "allow"})
+    for account in readers:
+        admin.call("PUT", f"/permissions/groups/{reading}/members/{account}")
     created = admin.call("POST", f"/requirements/projects/{project}/requirements", REQUIREMENT_EXAMPLE)
     requirement = created.body["id"]
     path = f"/requirements/{requirement}"
@@ -1010,21 +1019,64 @@ def verify(args) -> None:
         unseen = carla.call("GET", f"/projects/{web}/tickets/{ticket['number']}/attachments", expect=None)
         check(unseen.status == 403, f"carla has no read rule for attachments ({unseen.status})")
 
-        # Git (TASK-113): the two instances without application, the example links of tools/demo/git-examples.sql only with
-        # kind and reason as long as anna has no connection, and nothing of them for carla without the read rule.
+        # Git (TASK-113, TASK-115 F5): the two instances without application, the example links of tools/demo/git-examples.sql
+        # at WEB-1 and ANF-1 only with kind and reason as long as anna has no connection, their history entries with the
+        # kind only, and nothing of them for carla, who cannot see HELP, nor for david, who reads ANF-1 without the field git.
+        admin = admin_client(args)
+        configured = sorted((p["kind"], p["name"], p["baseUrl"], p["clientId"], p["secretSet"])
+                            for p in admin.call("GET", "/git/admin/providers").body)
+        check(configured == [("github", "GitHub.com", "https://github.com", GIT_CLIENT_PLACEHOLDER, False),
+                             ("gitlab_com", "GitLab.com", "https://gitlab.com", GIT_CLIENT_PLACEHOLDER, False)],
+              f"the administration shows both instances with the placeholder and without secret {configured}")
         instances = anna.call("GET", "/git/providers").body
-        check(sorted((i["name"], i["connection"]) for i in instances) == [("GitHub.com", "none"), ("GitLab.com", "none")],
+        check(sorted((i["kind"], i["name"], i["connection"]) for i in instances) == [("github", "GitHub.com", "none"), ("gitlab_com", "GitLab.com", "none")],
               f"anna sees the instances GitHub.com and GitLab.com without connection {[(i['name'], i['connection']) for i in instances]}")
-        refused = anna.call("POST", f"/git/providers/{instances[0]['id']}/connect", expect=None) if instances else None
-        check(refused is not None and refused.status == 409 and refused.body.get("code") == "git.provider_incomplete",
-              "connecting waits for a registered application (git.provider_incomplete)")
+        refused = [anna.call("POST", f"/git/providers/{i['id']}/connect", expect=None) for i in instances]
+        check(len(refused) == 2 and all(r.status == 409 and isinstance(r.body, dict) and r.body.get("code") == "git.provider_incomplete" for r in refused),
+              "connecting either instance waits for a registered application (git.provider_incomplete)")
+
+        def placeholders(body: dict) -> bool:
+            return all(not link["available"] and link["reason"] == "git.not_connected" and isinstance(link["key"], str)
+                       and all(link[name] is None for name in ("providerId", "providerName", "providerKind", "linkedAt", "linkedBy",
+                                                               "repository", "commit", "change", "url"))
+                       for link in body["links"])
+
+        def git_history(entries) -> list[str]:
+            items = entries["items"] if isinstance(entries, dict) else entries
+            return sorted(change["to"] or change["from"] for entry in items for change in entry.get("changes", []) if change.get("field") == "git")
+
         links = anna.call("GET", f"/projects/{web}/tickets/1/git").body
         shown = sorted(link["kind"] for link in links["links"])
-        check(shown == ["commit", "pull_request", "repository"], f"WEB-1 has the three example links {shown}")
-        check(all(not link["available"] and link["reason"] == "git.not_connected" and link["repository"] is None and link["url"] is None
-                  for link in links["links"]), "without a connection the examples are only shown as not available")
+        check(links["readable"] and len(links["links"]) == 3 and shown == ["commit", "pull_request", "repository"],
+              f"WEB-1 has exactly the three example links {shown}")
+        check(placeholders(links), "without a connection the links of WEB-1 show kind and reason only, no Git data")
+        named = git_history(anna.call("GET", f"/projects/{web}/tickets/1/history").body)
+        check(named == ["commit", "pull_request", "repository"], f"the history of WEB-1 names the three kinds only {named}")
         hidden = carla.call("GET", f"/projects/{web}/tickets/1/git").body
-        check(not hidden["readable"] and hidden["links"] == [], "carla without the read rule for git sees no link")
+        check(not hidden["readable"] and hidden["links"] == [], "carla without the read rule for git sees no link at WEB-1")
+        check(git_history(carla.call("GET", f"/projects/{web}/tickets/1/history").body) == [], "carla sees no Git entry in the history of WEB-1")
+
+        help_id = next(p["id"] for p in anna.call("GET", "/projects").body if p["key"] == "HELP")
+        listed = anna.call("GET", f"/requirements/projects/{help_id}/requirements").body
+        first = next((item for item in (listed["items"] if isinstance(listed, dict) else listed) if item["number"] == 1), None)
+        check(first is not None, "anna finds ANF-1 in HELP")
+        if first is not None:
+            requirement = f"/requirements/{first['id']}"
+            links = anna.call("GET", f"{requirement}/git").body
+            shown = sorted(link["kind"] for link in links["links"])
+            check(links["readable"] and len(links["links"]) == 2 and shown == ["commit", "merge_request"],
+                  f"ANF-1 has exactly the two example links {shown}")
+            check(placeholders(links), "without a connection the links of ANF-1 show kind and reason only, no Git data")
+            events = anna.call("GET", f"{requirement}/history").body["events"]
+            named = sorted(e["to"] for e in events if e["kind"] == "git_linked")
+            check(named == ["commit", "merge_request"], f"the history of ANF-1 names the two kinds only {named}")
+            unseen = carla.call("GET", f"{requirement}/git", expect=None)
+            check(unseen.status == 404, f"carla cannot reach ANF-1 in HELP ({unseen.status})")
+            reader = david.call("GET", f"{requirement}/git").body
+            check(not reader["readable"] and not reader["writable"] and reader["links"] == [],
+                  "david reads ANF-1 without the field git and sees no link")
+            events = david.call("GET", f"{requirement}/history").body["events"]
+            check(not any(e["kind"] in ("git_linked", "git_unlinked") for e in events), "david sees no Git entry in the history of ANF-1")
 
         if args.save:
             with open(args.save, "w") as out:

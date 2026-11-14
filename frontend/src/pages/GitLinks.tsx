@@ -16,15 +16,15 @@ const KIND_LABEL: Record<GitObjectKind, MessageKey> = {
   merge_request: 'gitLinks.kind.merge_request',
 };
 
-// The kind of a Git object as the history names it with the internal identifier of the link: "commit:<id>" (TASK-112).
+// The kind of a Git object as the history names it, without any identifier (TASK-114). An entry written before V0066
+// may still carry "kind:<id>"; only the kind is shown.
 export function useGitHistoryText(): (from: string | null | undefined, to: string | null | undefined) => string {
   const { t } = useI18n();
   return (from, to) => {
     const raw = to ?? from ?? '';
-    const at = raw.indexOf(':');
-    const kind = raw.slice(0, at) as GitObjectKind;
+    const kind = raw.split(':')[0] as GitObjectKind;
     const label = KIND_LABEL[kind] ? t(KIND_LABEL[kind]) : kind;
-    return t(to ? 'history.gitLinked' : 'history.gitUnlinked', { kind: label, id: raw.slice(at + 1, at + 9) });
+    return t(to ? 'history.gitLinked' : 'history.gitUnlinked', { kind: label });
   };
 }
 
@@ -62,7 +62,8 @@ export function GitLinksPanel({ target, round = 0, onChanged }: {
   async function unlink(link: GitLink, name: string) {
     if (!globalThis.confirm(t('gitLinks.unlinkConfirm', { name }))) return;
     setNotice(null);
-    const result = await unlinkGit(api, target, link.id);
+    if (link.key === null) return;
+    const result = await unlinkGit(api, target, link.key);
     if (result.kind !== 'ok') return setNotice({ kind: 'info', text: problem(result.problem) });
     changed(t('gitLinks.unlinked', { name }));
   }
@@ -102,7 +103,7 @@ function LinkList({ value, onUnlink }: { readonly value: GitLinks; readonly onUn
         // The name of a link for buttons: what it shows, or its kind and position when it is not available.
         const name = link.available ? title(link) : `${kind} ${index + 1}`;
         return (
-          <li key={link.id} className="item-row" data-link={link.id} data-kind={link.kind}>
+          <li key={link.key ?? `${link.kind}-${index}`} className="item-row" data-kind={link.kind}>
             {link.available ? (
               <>
                 <span className="item-title">
@@ -121,7 +122,7 @@ function LinkList({ value, onUnlink }: { readonly value: GitLinks; readonly onUn
                 </span>
               </>
             )}
-            {value.writable && (
+            {value.writable && link.key !== null && (
               <button type="button" className="secondary danger" aria-label={t('gitLinks.unlinkAria', { name })} onClick={() => onUnlink(link, name)}>
                 {t('gitLinks.unlink')}
               </button>
@@ -165,7 +166,8 @@ function LinkForm({ target, onLinked }: { readonly target: GitTarget; readonly o
   const [kind, setKind] = useState<GitObjectKind>('commit');
   const [objectKey, setObjectKey] = useState('');
 
-  const readable = (choices ?? []).filter((choice) => choice.available && choice.repository !== null);
+  // The server offers only repositories the own connection can read right now (TASK-114).
+  const readable = choices ?? [];
   const chosen = readable.find((choice) => choice.releaseId === release) ?? readable[0];
   const kinds: GitObjectKind[] = ['commit', chosen?.providerKind === 'github' ? 'pull_request' : 'merge_request', 'repository'];
   const shownKind = kinds.includes(kind) ? kind : 'commit';

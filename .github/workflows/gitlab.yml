@@ -2,12 +2,21 @@ name: GitLab 16
 
 # Run of the Git link against a real GitLab CE 16.11 with a CA of its own (TASK-113, DEC-143, rule 1). GitLab needs several
 # minutes to start, so the run is not a required check: it runs on changes of the Git module or of the run itself, once a
-# week and on request. The automatic tests of the Git link run in the backend workflow against stand ins.
+# week and on request. The automatic tests of the Git link run in the backend workflow against stand ins. Besides the Git
+# module it starts on changes of the Git contract, of the migrations V0064 to V0066 and of the session and rights logic
+# the Git module depends on (TASK-115, H2). Only the result file and, after a failure, the checked diagnostics are kept;
+# raw logs never leave the run (TASK-115, F2). "fail_at" lets one step fail on purpose to show that.
 on:
   pull_request:
     branches: [main]
     paths:
       - backend/src/main/java/taskmanager/git/**
+      - backend/src/main/java/taskmanager/identity/**
+      - backend/src/main/java/taskmanager/permissions/**
+      - backend/src/main/resources/db/migration/V0064__*.sql
+      - backend/src/main/resources/db/migration/V0065__*.sql
+      - backend/src/main/resources/db/migration/V0066__*.sql
+      - contracts/git.openapi.yaml
       - tools/git/**
       - tools/demo/demo.py
       - Dockerfile
@@ -16,6 +25,11 @@ on:
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
+    inputs:
+      fail_at:
+        description: Number of the step of gitlab_check.py that fails on purpose (empty for a normal run)
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -38,8 +52,8 @@ jobs:
           docker compose version
       - name: Connect, link and show against GitLab 16 with a CA of its own
         env:
-          GITLAB_CHECK_LOGS: gitlab-check.log
           GITLAB_CHECK_RESULTS: ${{ github.workspace }}/gitlab-results
+          GITLAB_CHECK_FAIL_AT: ${{ github.event.inputs.fail_at }}
         run: tools/git/gitlab-check.sh
       - name: Preserve evidence
         if: always()
@@ -47,6 +61,7 @@ jobs:
         with:
           name: gitlab-evidence
           retention-days: 14
+          if-no-files-found: ignore
           path: |
-            gitlab-check.log
-            gitlab-results/
+            gitlab-results/gitlab-run.json
+            gitlab-results/diagnostics.txt

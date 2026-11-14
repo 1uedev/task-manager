@@ -1136,10 +1136,12 @@ export interface GitLinks { readonly readable: boolean; readonly writable: boole
 export type GitTarget = { readonly kind: 'ticket'; readonly projectId: string; readonly number: number } | { readonly kind: 'requirement'; readonly id: string };
 export type GitLinkRequest = { readonly url: string } | { readonly releaseId: string; readonly kind: GitObjectKind; readonly key: string };
 
-const isGitLink = (v: unknown) => hasStrings(v, 'id', 'kind', 'providerId') && typeof (v as GitLink).available === 'boolean';
+// An unavailable link carries its kind only, and a removal key only for writers (TASK-114).
+const isGitLink = (v: unknown) => hasStrings(v, 'kind') && typeof (v as GitLink).available === 'boolean'
+  && ((v as GitLink).key === null || typeof (v as GitLink).key === 'string');
 const isGitLinks = (v: unknown) => record(v) && typeof v.readable === 'boolean' && typeof v.writable === 'boolean' && Array.isArray(v.links)
   && v.links.every(isGitLink);
-const isGitChoice = (v: unknown) => hasStrings(v, 'releaseId', 'providerId') && typeof (v as GitChoice).available === 'boolean';
+const isGitChoice = (v: unknown) => hasStrings(v, 'releaseId', 'providerId') && record((v as GitChoice).repository);
 
 export const listGitLinks = (api: ServerApi, target: GitTarget, refresh: boolean) => {
   const query = refresh ? { refresh: true } : {};
@@ -1156,7 +1158,7 @@ export const linkGit = (api: ServerApi, target: GitTarget, body: GitLinkRequest)
   ? run(() => api.git.POST('/projects/{projectId}/tickets/{number}/git', { params: { path: { projectId: target.projectId, number: target.number } }, body }),
     one<GitLink>(isGitLink))
   : run(() => api.git.POST('/requirements/{id}/git', { params: { path: { id: target.id } }, body }), one<GitLink>(isGitLink)));
-export const unlinkGit = (api: ServerApi, target: GitTarget, linkId: string) => (target.kind === 'ticket'
-  ? run(() => api.git.DELETE('/projects/{projectId}/tickets/{number}/git/{linkId}',
-    { params: { path: { projectId: target.projectId, number: target.number, linkId } } }), nothing)
-  : run(() => api.git.DELETE('/requirements/{id}/git/{linkId}', { params: { path: { id: target.id, linkId } } }), nothing));
+export const unlinkGit = (api: ServerApi, target: GitTarget, key: string) => (target.kind === 'ticket'
+  ? run(() => api.git.DELETE('/projects/{projectId}/tickets/{number}/git/{key}',
+    { params: { path: { projectId: target.projectId, number: target.number, key } } }), nothing)
+  : run(() => api.git.DELETE('/requirements/{id}/git/{key}', { params: { path: { id: target.id, key } } }), nothing));

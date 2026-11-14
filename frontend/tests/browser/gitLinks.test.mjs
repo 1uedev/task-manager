@@ -4,7 +4,7 @@ import { ANNA, BEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
 // TASK-112: Git objects linked to tickets and requirements, read live with the own connection, shown only by their kind when the
-// person cannot read them, refreshed on request and named by kind and identifier in both histories, against the in-memory
+// person cannot read them, refreshed on request and named by kind only in both histories, against the in-memory
 // backend that follows the contract.
 
 let server;
@@ -115,7 +115,7 @@ describe('Git links', () => {
       assert.equal(backend.state.tickets[0].version, 1, 'links leave the version of the ticket');
 
       const history = page.getByTestId('history');
-      await history.getByText(/^Git Commit verknüpft \(Kennung [0-9a-f]{8}\)$/).waitFor();
+      await history.getByText(/^Git Commit verknüpft$/).waitFor();
       await history.getByText(/^Git Pull Request verknüpft/).waitFor();
       await panel.getByRole('button', { name: 'acme/alpha Commit a1b2c3d lösen' }).click();
       await panel.getByText('Verknüpfung mit acme/alpha Commit a1b2c3d gelöst.').waitFor();
@@ -157,6 +157,58 @@ describe('Git links', () => {
     });
   });
 
+  test('the address, the choice and the removal key follow the server (TASK-114)', async () => {
+    await withApp({
+      prepare: (backend) => {
+        withGit(backend);
+        gitRules(backend, [backend.anna, backend.ben]);
+        // A second repository on GitHub that Anna can read but that is not released, and a released one hidden from her.
+        backend.state.git.repositories.get(GITHUB).push({ externalId: '102', name: 'beta', path: 'acme/beta', url: 'https://github.com/acme/beta',
+          commits: [{ sha: 'b'.repeat(40), message: 'Geheim', author: 'Octo', at: '2026-11-12T08:30:00Z' }], changes: [] });
+        backend.state.git.releases.splice(1, 1);
+      },
+      hash: ticketHash,
+    }, async (page, backend) => {
+      const panel = page.getByTestId('git-links');
+      await panel.getByText('Noch nichts aus Git verknüpft.').waitFor();
+      // GitLab has no release for the project: refused at once, before anything is read at the provider.
+      await panel.getByLabel(/^Adresse aus Git/).fill('https://gitlab.com/grp/gamma/-/merge_requests/3');
+      await panel.getByRole('button', { name: 'Verknüpfen' }).click();
+      await panel.getByText('Dieses Repository ist für das Projekt nicht freigegeben.').waitFor();
+      // A readable repository that is not released tells nothing of its commit.
+      await panel.getByLabel(/^Adresse aus Git/).fill(`https://github.com/acme/beta/commit/${'b'.repeat(40)}`);
+      await panel.getByRole('button', { name: 'Verknüpfen' }).click();
+      await panel.getByText('Dieses Repository ist für das Projekt nicht freigegeben.').waitFor();
+      await panel.getByLabel(/^Adresse aus Git/).fill(`https://github.com/acme/beta/commit/${'c'.repeat(40)}`);
+      await panel.getByRole('button', { name: 'Verknüpfen' }).click();
+      await panel.getByText('Dieses Repository ist für das Projekt nicht freigegeben.').waitFor();
+
+      // A connection to renew refuses the choice like the server, and the choice holds only readable repositories.
+      backend.state.git.connections.set(`${GITHUB}:${backend.anna.id}`, { state: 'renew', connectedAt: '2026-11-13T08:00:00Z' });
+      await panel.getByLabel(/^Adresse aus Git/).fill(`https://github.com/acme/alpha/commit/${SHA}`);
+      await panel.getByRole('button', { name: 'Verknüpfen' }).click();
+      await panel.getByText('Deine Verbindung muss erneuert werden.').waitFor();
+      await panel.getByRole('button', { name: 'Aus freigegebenem Repository wählen' }).click();
+      await panel.getByText(/Für dieses Projekt ist kein Repository freigegeben/).waitFor();
+      backend.state.git.connections.set(`${GITHUB}:${backend.anna.id}`, { state: 'active', connectedAt: '2026-11-13T08:00:00Z' });
+
+      await panel.getByRole('button', { name: 'Adresse eingeben' }).click();
+      await panel.getByLabel(/^Adresse aus Git/).fill(`https://github.com/acme/alpha/commit/${SHA}`);
+      await panel.getByRole('button', { name: 'Verknüpfen' }).click();
+      await panel.getByText('Commit verknüpft.').waitFor();
+      const list = backend.state.requests.findLast((request) => request.method === 'GET' && request.path.endsWith('/tickets/1/git'));
+      assert.ok(list, 'the list was read again');
+      const [link] = backend.state.git.links;
+      const shown = await page.evaluate(async (path) => (await (await fetch(path)).json()).links[0], `/api/v1/projects/${backend.project.id}/tickets/1/git`);
+      assert.match(shown.key, /^[A-Za-z0-9_-]{24}$/);
+      assert.notEqual(shown.key, link.id, 'the key is not the identifier of the link');
+      assert.equal(shown.id, undefined);
+      const history = page.getByTestId('history');
+      await history.getByText(/^Git Commit verknüpft$/).waitFor();
+      assert.equal(backend.state.history.at(-1).changes[0].to, 'commit', 'the history keeps the kind only');
+    });
+  });
+
   test('a requirement links a merge request, which changes nothing when it is merged', async () => {
     await withApp({
       prepare: (backend) => {
@@ -184,7 +236,7 @@ describe('Git links', () => {
       assert.equal(item.status, 'approved', 'a merged merge request approves nothing and changes no status');
 
       await page.getByTestId('requirement-history-open').click();
-      await page.getByText(/Git Merge Request verknüpft \(Kennung [0-9a-f]{8}\)/).waitFor();
+      await page.getByText(/Git Merge Request verknüpft/).waitFor();
     });
   });
 });

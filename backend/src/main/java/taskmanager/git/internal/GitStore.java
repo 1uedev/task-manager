@@ -165,6 +165,22 @@ class GitStore {
             .params(projectId, providerId, externalId).query(Long.class).single() > 0;
     }
 
+    /**
+     * Whether the repository is released for the project, with the release row held {@code FOR SHARE} until the commit, so a
+     * withdrawal waits for a link that is being created and a link is never stored after its release was withdrawn (TASK-114, F9).
+     */
+    boolean shareReleased(UUID projectId, UUID providerId, String externalId) {
+        return !jdbc.sql("select id from git_repository where project_id = ? and provider_id = ? and external_id = ? for share")
+            .params(projectId, providerId, externalId).query((rs, row) -> rs.getObject("id", UUID.class)).list().isEmpty();
+    }
+
+    /** Whether any project released a repository of the provider or any ticket or requirement links one of its objects. */
+    boolean providerInUse(UUID providerId) {
+        return jdbc.sql("""
+                select exists (select 1 from git_repository where provider_id = ?) or exists (select 1 from git_link where provider_id = ?)
+                """).params(providerId, providerId).query(Boolean.class).single();
+    }
+
     long releaseCount(UUID projectId) {
         return jdbc.sql("select count(*) from git_repository where project_id = ?").param(projectId).query(Long.class).single();
     }

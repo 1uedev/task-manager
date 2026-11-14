@@ -2,6 +2,8 @@
 // enough for the interface: sessions, accounts, projects, tickets with versions and field rights, tags, search, groups
 // and the appearance. All data is synthetic. Several browser contexts can share one backend, each with its own session.
 
+import { createHash } from 'node:crypto';
+
 export const TOKEN = 'csrf-token-for-browser-tests-0001';
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' + '1f15c4890000000d49444154789c6360f8cfc0f01f0005000201' + 'e2d1b0a50000000049454e44ae426082', 'hex');
 const FIELDS = ['title', 'description', 'type', 'status', 'assignee'];
@@ -3636,6 +3638,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const checked = gitSettings(body, provider);
       if (checked.refused) return checked.refused;
       if (live.some((item) => item.id !== provider.id && item.name.toLowerCase() === checked.name.toLowerCase())) return problem(409, 'git.provider_name_taken');
+      // Like the server (TASK-114, F4): the address of an instance with releases or links stays fixed.
+      if (checked.baseUrl !== provider.baseUrl && (git.releases.some((release) => release.providerId === provider.id)
+        || git.links.some((link) => link.providerId === provider.id))) return problem(409, 'git.provider_in_use');
       Object.assign(provider, checked, { version: provider.version + 1, updatedAt: now(), updatedBy: account.id },
         body.clientSecret === undefined ? {} : { secretSet: body.clientSecret !== '' });
       return ok(gitAdminView(provider), `"${provider.version}"`);
@@ -3716,105 +3721,138 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return change ? { repository: gitRepo(repo), commit: null, key: String(change.number), url: url(github ? `/pull/${change.number}` : `/-/merge_requests/${change.number}`),
       change: { number: change.number, title: change.title, state: change.state, author: change.author } } : null;
   }
-  function gitLinkView(account, link) {
-    const provider = git.providers.find((entry) => entry.id === link.providerId);
-    const base = { id: link.id, kind: link.kind, providerId: link.providerId, providerName: provider && !provider.removed ? provider.name : null,
-      providerKind: provider?.kind ?? null, linkedAt: link.linkedAt, linkedBy: link.linkedBy };
-    const hidden = (reason) => ({ ...base, available: false, reason, repository: null, commit: null, change: null, url: null });
-    if (!provider || provider.removed) return hidden('git.unavailable');
+  // The removal key of a link as the server forms it (TASK-114, F6): opaque, per person, never for readers.
+  const gitRemovalKey = (account, link) => createHash('sha256').update(`${account.id}|${link.id}`).digest().subarray(0, 18).toString('base64url');
+  // Like the server: every reading of a connection fails the same way while it cannot be used or GitHub limits it.
+  function gitUsable(account, provider) {
     const connection = gitConnection(account, provider.id);
-    if (!connection) return hidden('git.not_connected');
-    if (connection.state !== 'active') return hidden('git.connection_renew');
-    if (git.limited) return hidden('git.rate_limited');
+    if (!connection) return 'git.not_connected';
+    if (connection.state !== 'active') return 'git.connection_renew';
+    if (git.limited) return 'git.rate_limited';
+    return null;
+  }
+  function gitLinkView(account, link, writable) {
+    const key = writable ? gitRemovalKey(account, link) : null;
+    // An unavailable link shows its kind and reason only, no instance, time or person (TASK-114, F6).
+    const hidden = (reason) => ({ key, kind: link.kind, providerId: null, providerName: null, providerKind: null, linkedAt: null, linkedBy: null,
+      available: false, reason, repository: null, commit: null, change: null, url: null });
+    const provider = git.providers.find((entry) => entry.id === link.providerId);
+    if (!provider || provider.removed) return hidden('git.unavailable');
+    const refused = gitUsable(account, provider);
+    if (refused) return hidden(refused);
     const repo = gitReadable(account, provider.id).find((entry) => entry.externalId === link.repositoryId);
     const object = repo && gitObject(provider, repo, link.kind, link.key);
     if (!object) return hidden('git.unavailable');
-    return { ...base, available: true, reason: null, repository: object.repository, commit: object.commit, change: object.change, url: object.url };
+    return { key, kind: link.kind, providerId: link.providerId, providerName: provider.name, providerKind: provider.kind, linkedAt: link.linkedAt,
+      linkedBy: link.linkedBy, available: true, reason: null, repository: object.repository, commit: object.commit, change: object.change, url: object.url };
+  }
+  // The address of a link as the server parses it: one candidate per instance with its own path, kind and key.
+  function gitAddressCandidates(address) {
+    const clean = address.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+    return git.providers.filter((entry) => !entry.removed && clean.toLowerCase().startsWith(`${entry.baseUrl.toLowerCase()}/`)).map((entry) => {
+      const tail = clean.slice(entry.baseUrl.length + 1);
+      const github = entry.kind === 'github';
+      const parts = github ? tail.split('/') : tail.split('/-/');
+      const path = (github ? parts.slice(0, 2).join('/') : parts[0]).replace(/\.git$/, '');
+      const more = github ? parts.slice(2) : (parts[1] ?? '').split('/').filter(Boolean);
+      if (more.length === 0) return { provider: entry, path, kind: 'repository', key: '' };
+      if (more[0] === 'commit' && GIT_SHA.test(more[1] ?? '')) return { provider: entry, path, kind: 'commit', key: more[1].toLowerCase() };
+      if (more[0] === (github ? 'pull' : 'merge_requests') && /^[1-9][0-9]{0,18}$/.test(more[1] ?? '')) {
+        return { provider: entry, path, kind: github ? 'pull_request' : 'merge_request', key: more[1] };
+      }
+      return null;
+    }).filter(Boolean);
   }
   function gitLinkRoute(account, method, target, rest, query, body) {
     if (account.kind === 'portal') return problem(403, 'auth.forbidden');
     let subject;
+    // Like the server (TASK-114, F5): every Git route needs the read action of the ticket or requirement first.
     if (target.kind === 'ticket') {
       const project = state.projects.find((entry) => entry.id === target.projectId);
       const read = project !== undefined && may(account, 'ticket.read', project.id);
-      const edit = project !== undefined && may(account, 'ticket.edit', project.id);
-      if (!read && !edit) return problem(404, 'project.not_found');
+      const edit = read && may(account, 'ticket.edit', project.id);
+      if (!read) return problem(404, 'project.not_found');
       const ticket = state.tickets.find((entry) => entry.projectId === project.id && entry.number === target.number);
       if (!ticket) return problem(404, 'ticket.not_found');
-      subject = { kind: 'ticket', id: ticket.id, projectId: project.id, readable: read && field(account, project.id, GIT_FIELD, 'read'),
+      subject = { kind: 'ticket', id: ticket.id, projectId: project.id, readable: field(account, project.id, GIT_FIELD, 'read'),
         writable: edit && field(account, project.id, GIT_FIELD, 'read') && field(account, project.id, GIT_FIELD, 'write'),
         record: (from, to) => state.history.push({ ticket: ticket.id, version: ticket.version, occurredAt: now(), actor: account.id, changes: [{ field: GIT_FIELD, from, to }] }) };
     } else {
       const item = req.items.find((entry) => entry.id === target.id);
       const read = item !== undefined && may(account, 'requirement.read', item.projectId);
-      const edit = item !== undefined && may(account, 'requirement.edit', item.projectId);
-      if (!read && !edit) return problem(404, 'requirement.not_found');
-      subject = { kind: 'requirement', id: item.id, projectId: item.projectId, readable: read && requirementField(account, item.projectId, GIT_FIELD, 'read'),
+      const edit = read && may(account, 'requirement.edit', item.projectId);
+      if (!read) return problem(404, 'requirement.not_found');
+      subject = { kind: 'requirement', id: item.id, projectId: item.projectId, readable: requirementField(account, item.projectId, GIT_FIELD, 'read'),
         writable: edit && requirementField(account, item.projectId, GIT_FIELD, 'read') && requirementField(account, item.projectId, GIT_FIELD, 'write'),
         record: (from, to) => requirementEvent(item, to ? 'git_linked' : 'git_unlinked', account, { field: GIT_FIELD, from, to }) };
     }
     const mine = git.links.filter((link) => link.subjectKind === subject.kind && link.subjectId === subject.id);
     if (!rest && method === 'GET') {
-      return ok({ readable: subject.readable, writable: subject.writable, links: subject.readable ? mine.map((link) => gitLinkView(account, link)) : [] });
+      return ok({ readable: subject.readable, writable: subject.writable,
+        links: subject.readable ? mine.map((link) => gitLinkView(account, link, subject.writable)) : [] });
     }
     if (!subject.writable) return problem(403, 'auth.forbidden');
     const releases = git.releases.filter((release) => release.projectId === subject.projectId);
     if (rest === 'choices' && method === 'GET') {
-      return ok(releases.map((release) => {
-        const provider = git.providers.find((entry) => entry.id === release.providerId);
-        const connection = provider && gitConnection(account, provider.id);
-        const repo = connection?.state === 'active' ? gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId) : undefined;
-        return { releaseId: release.id, providerId: release.providerId, providerName: provider?.name ?? null, providerKind: provider?.kind ?? null,
-          available: Boolean(repo), reason: repo ? null : !connection ? 'git.not_connected' : 'git.unavailable', repository: repo ? gitRepo(repo) : null };
+      // Only repositories the own connection can read right now (TASK-114, F9).
+      return ok(releases.flatMap((release) => {
+        const provider = git.providers.find((entry) => entry.id === release.providerId && !entry.removed);
+        if (!provider || gitUsable(account, provider)) return [];
+        const repo = gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId);
+        return repo ? [{ releaseId: release.id, providerId: release.providerId, providerName: provider.name, providerKind: provider.kind, repository: gitRepo(repo) }] : [];
       }));
     }
     if (!rest && method === 'POST') {
-      let provider;
-      let repo;
-      let kind;
-      let key;
+      let readings;
       if (typeof body.url === 'string') {
-        const address = body.url.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
-        const live = git.providers.filter((entry) => !entry.removed && address.toLowerCase().startsWith(`${entry.baseUrl.toLowerCase()}/`));
-        const parsed = live.map((entry) => {
-          const tail = address.slice(entry.baseUrl.length + 1);
-          const github = entry.kind === 'github';
-          const parts = github ? tail.split('/') : tail.split('/-/');
-          const path = (github ? parts.slice(0, 2).join('/') : parts[0]).replace(/\.git$/, '');
-          const more = github ? parts.slice(2) : (parts[1] ?? '').split('/').filter(Boolean);
-          if (more.length === 0) return { provider: entry, path, kind: 'repository', key: '' };
-          if (more[0] === 'commit' && GIT_SHA.test(more[1] ?? '')) return { provider: entry, path, kind: 'commit', key: more[1] };
-          if (more[0] === (github ? 'pull' : 'merge_requests') && /^[1-9][0-9]*$/.test(more[1] ?? '')) {
-            return { provider: entry, path, kind: github ? 'pull_request' : 'merge_request', key: more[1] };
-          }
-          return null;
-        }).filter(Boolean);
+        if (body.url.trim() === '' || body.url.length > 2000) return problem(400, 'request.invalid', { violations: ['url.invalid'] });
+        const parsed = gitAddressCandidates(body.url);
         if (parsed.length === 0) return problem(400, 'git.address_unknown');
-        const reading = parsed.find((entry) => releases.some((release) => release.providerId === entry.provider.id)) ?? parsed[0];
-        provider = reading.provider;
-        kind = reading.kind;
-        key = reading.key;
-        const connection = gitConnection(account, provider.id);
-        if (!connection) return problem(409, 'git.not_connected');
-        if (connection.state !== 'active') return problem(409, 'git.connection_renew');
-        if (git.limited) return problem(503, 'git.rate_limited');
-        repo = gitReadable(account, provider.id).find((entry) => entry.path === reading.path);
+        // Only an instance with a repository released for the project can lead to a link, otherwise 409 at once.
+        readings = parsed.filter((entry) => releases.some((release) => release.providerId === entry.provider.id));
+        if (readings.length === 0) return problem(409, 'git.repository_not_released');
       } else {
+        const kind = body.kind;
+        const key = (body.key ?? '').toLowerCase();
+        const validKey = kind === 'repository' ? key === '' : kind === 'commit' ? GIT_SHA.test(key) : /^[1-9][0-9]{0,18}$/.test(key);
+        if (!['repository', 'commit', 'pull_request', 'merge_request'].includes(kind)) return problem(400, 'request.invalid', { violations: ['kind.invalid'] });
+        if (!validKey) return problem(400, 'request.invalid', { violations: ['key.invalid'] });
         const release = releases.find((entry) => entry.id === body.releaseId);
         if (!release) return problem(404, 'git.repository_not_found');
-        provider = git.providers.find((entry) => entry.id === release.providerId && !entry.removed);
+        const provider = git.providers.find((entry) => entry.id === release.providerId && !entry.removed);
         if (!provider) return problem(404, 'git.provider_not_found');
-        kind = body.kind;
-        key = (body.key ?? '').toLowerCase();
-        if (!['repository', 'commit', 'pull_request', 'merge_request'].includes(kind)) return problem(400, 'request.invalid', { violations: ['kind.invalid'] });
-        const connection = gitConnection(account, provider.id);
-        if (!connection) return problem(409, 'git.not_connected');
-        if (git.limited) return problem(503, 'git.rate_limited');
-        repo = gitReadable(account, provider.id).find((entry) => entry.externalId === release.externalId);
+        if (kind !== 'repository' && kind !== 'commit' && (kind === 'pull_request') !== (provider.kind === 'github')) {
+          return problem(400, 'request.invalid', { violations: ['kind.invalid'] });
+        }
+        readings = [{ provider, repositoryId: release.externalId, kind, key }];
       }
-      const object = repo && gitObject(provider, repo, kind, key);
-      if (!object) return problem(404, 'git.object_not_found');
-      if (!releases.some((release) => release.providerId === provider.id && release.externalId === repo.externalId)) return problem(409, 'git.repository_not_released');
+      // Per instance: resolve the repository, check its release, only then read the object (TASK-114, F3).
+      let found = null;
+      let failure = null;
+      let notReleased = false;
+      for (const reading of readings) {
+        const refused = gitUsable(account, reading.provider);
+        if (refused) {
+          failure ??= refused;
+          continue;
+        }
+        const repo = gitReadable(account, reading.provider.id).find((entry) => (reading.path !== undefined ? entry.path === reading.path : entry.externalId === reading.repositoryId));
+        if (!repo) continue;
+        if (!releases.some((release) => release.providerId === reading.provider.id && release.externalId === repo.externalId)) {
+          notReleased = true;
+          continue;
+        }
+        const object = gitObject(reading.provider, repo, reading.kind, reading.key);
+        if (!object) continue;
+        found = { provider: reading.provider, repo, kind: reading.kind, object };
+        break;
+      }
+      if (!found) {
+        if (notReleased) return problem(409, 'git.repository_not_released');
+        if (failure) return problem(failure === 'git.rate_limited' ? 503 : 409, failure);
+        return problem(404, 'git.object_not_found');
+      }
+      const { provider, repo, kind, object } = found;
       const stored = object.key ?? '';
       if (mine.some((link) => link.providerId === provider.id && link.repositoryId === repo.externalId && link.kind === kind && link.key === stored)) {
         return problem(409, 'git.link_exists');
@@ -3823,14 +3861,16 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const link = { id: uuid(), subjectKind: subject.kind, subjectId: subject.id, projectId: subject.projectId, providerId: provider.id,
         repositoryId: repo.externalId, kind, key: stored, linkedAt: now(), linkedBy: account.id };
       git.links.push(link);
-      subject.record(null, `${kind}:${link.id}`);
-      return { status: 201, body: gitLinkView(account, link) };
+      // The history names the kind only (TASK-114, F6).
+      subject.record(null, kind);
+      return { status: 201, body: gitLinkView(account, link, true) };
     }
     if (rest && method === 'DELETE') {
-      const index = git.links.findIndex((link) => link.id === rest && link.subjectKind === subject.kind && link.subjectId === subject.id);
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(rest)) return problem(404, 'git.link_not_found');
+      const index = git.links.findIndex((link) => link.subjectKind === subject.kind && link.subjectId === subject.id && gitRemovalKey(account, link) === rest);
       if (index < 0) return problem(404, 'git.link_not_found');
       const [removed] = git.links.splice(index, 1);
-      subject.record(`${removed.kind}:${removed.id}`, null);
+      subject.record(removed.kind, null);
       return empty();
     }
     return problem(404, 'resource.not_found');

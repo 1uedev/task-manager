@@ -205,18 +205,32 @@ public class ConnectionService {
     // ------------------------------------------------------------------------------------------------ using a token
 
     /**
+     * The token of a person for one call, with the generation of the connection it belongs to: the Git account, the time of
+     * connecting and the address of the instance. Whatever is kept of an answer is bound to it, so after connecting another
+     * Git account, reconnecting or a new address nothing read before is used again, also when a late answer arrives only
+     * after the change (TASK-114, F2).
+     */
+    public record Grant(String token, String generation) {
+    }
+
+    /**
      * Calls the provider with the token of the person. A token that ends within a minute is renewed first; a token the provider
      * refuses is renewed once and the call repeated. Without a usable connection the call fails with {@link NotConnected}.
      */
     public <T> T call(UUID companyId, UUID accountId, Provider provider, Function<String, T> work) {
+        return callWith(companyId, accountId, provider, grant -> work.apply(grant.token()));
+    }
+
+    /** Like {@link #call} with the generation of the connection, for answers that are kept. */
+    public <T> T callWith(UUID companyId, UUID accountId, Provider provider, Function<Grant, T> work) {
         if (provider.removed()) {
             throw new NotConnected("git.provider_not_found");
         }
-        String token = token(companyId, accountId, provider, false);
+        Grant grant = token(companyId, accountId, provider, false);
         try {
-            return work.apply(token);
+            return work.apply(grant);
         } catch (ProviderApi.TokenRejected rejected) {
-            String renewed = token(companyId, accountId, provider, true);
+            Grant renewed = token(companyId, accountId, provider, true);
             try {
                 return work.apply(renewed);
             } catch (ProviderApi.TokenRejected again) {
@@ -226,7 +240,7 @@ public class ConnectionService {
         }
     }
 
-    private String token(UUID companyId, UUID accountId, Provider provider, boolean refused) {
+    private Grant token(UUID companyId, UUID accountId, Provider provider, boolean refused) {
         Connection connection = transaction.execute(status -> store.connection(provider.id(), accountId).orElse(null));
         if (connection == null || !connection.companyId().equals(companyId)) {
             throw new NotConnected("git.not_connected");
@@ -234,12 +248,13 @@ public class ConnectionService {
         if (!connection.active()) {
             throw new NotConnected("git.connection_renew");
         }
+        String generation = provider.id() + "|" + provider.baseUrl() + "|" + connection.externalUserId() + "|" + connection.connectedAt();
         Instant now = clock.instant();
         boolean ending = connection.accessExpiresAt() != null && connection.accessExpiresAt().isBefore(now.plus(RENEW_BEFORE));
         if (!refused && !ending) {
-            return open(Connection.accessPurpose(provider.id(), accountId), connection.accessCipher(), provider.id(), accountId);
+            return new Grant(open(Connection.accessPurpose(provider.id(), accountId), connection.accessCipher(), provider.id(), accountId), generation);
         }
-        return renew(provider, accountId, connection);
+        return new Grant(renew(provider, accountId, connection), generation);
     }
 
     /** Renews under the lock of the connection, so two requests of the same person do not both use the refresh token. */

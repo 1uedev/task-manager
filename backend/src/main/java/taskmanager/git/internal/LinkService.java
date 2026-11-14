@@ -1,15 +1,22 @@
 package taskmanager.git.internal;
 
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,6 +25,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -38,11 +47,16 @@ import taskmanager.tickets.TicketAccess;
  * failure of the provider only the kind of the object is shown, never path, title, message, link or number, and never
  * whether the object exists. A link is never removed by itself.
  *
- * <p>Rights follow the field {@code git} of the resource types {@code ticket} and {@code requirement}: its read rule shows the
- * links, its write rule links and removes them. Linking also needs the own connection with access to the object and a
+ * <p>The access of the person to the repository is read live at every request, also when the commit or change itself
+ * comes from the cache (TASK-114, F1). A link the caller cannot see shows only its kind and, for a writer, an opaque key to
+ * remove it, bound to the caller; no identifier, instance, time or author of the link (TASK-114, F6).
+ *
+ * <p>Every route needs the read action of the ticket or requirement first, otherwise 404 (TASK-114, F5). Rights then follow
+ * the field {@code git} of the resource types {@code ticket} and {@code requirement}: its read rule shows the links, its
+ * write rule links and removes them. Linking also needs the own connection with access to the object and a
  * repository released for the project of the ticket or requirement. Locks of a change, in this order: rights (held until the
- * commit), the project row, the provider {@code FOR SHARE}, the ticket or requirement row {@code FOR SHARE}, the links of
- * that subject. A link changes neither the version of the ticket nor that of the requirement.
+ * commit), the project row, the provider {@code FOR SHARE}, the ticket or requirement row {@code FOR SHARE}, the release row
+ * {@code FOR SHARE} (TASK-114, F9), the links of that subject. A link changes neither the version of the ticket nor that of the requirement.
  */
 @Service
 public class LinkService {
@@ -52,6 +66,12 @@ public class LinkService {
     static final Duration DEADLINE = Duration.ofSeconds(20);
     public static final String TICKET = "ticket";
     public static final String REQUIREMENT = "requirement";
+    /** The key of the removal keys of this process; a key from before a restart no longer matches and the list is read again. */
+    private static final byte[] KEY_SECRET = new byte[32];
+
+    static {
+        new SecureRandom().nextBytes(KEY_SECRET);
+    }
 
     private final GitStore store;
     private final ConnectionService connections;
@@ -100,14 +120,14 @@ public class LinkService {
      * A link as the caller sees it. {@code live} is {@code null} when the object is not available; then {@code reason} is
      * {@code git.not_connected}, {@code git.connection_renew}, {@code git.rate_limited} or {@code git.unavailable}.
      */
-    public record LinkView(GitLink link, Provider provider, Live live, String reason) {
+    public record LinkView(GitLink link, Provider provider, Live live, String reason, String key) {
     }
 
     public record Listing(boolean readable, boolean writable, List<LinkView> links) {
     }
 
-    /** A released repository of the project for the choice; {@code repository} is empty when the caller cannot read it. */
-    public record Choice(Release release, Provider provider, ProviderApi.Repository repository, String reason) {
+    /** A released repository of the project for the choice that the caller can read now. */
+    public record Choice(Release release, Provider provider, ProviderApi.Repository repository) {
     }
 
     private record Subject(String kind, UUID id, UUID projectId, boolean readable, boolean writable) {
@@ -123,9 +143,11 @@ public class LinkService {
             List<GitLink> links = subject.readable() ? store.links(actor.companyId(), subject.kind(), subject.id()) : List.of();
             return new Read(subject, links, providers(actor.companyId(), links.stream().map(GitLink::providerId).toList()));
         });
-        List<LinkView> views = parallel(read.links(), link -> view(actor, link, read.providers().get(link.providerId()), refresh),
-            link -> new LinkView(link, read.providers().get(link.providerId()), null, "git.unavailable"));
-        return new Listing(read.subject().readable(), read.subject().writable(), views);
+        boolean writable = read.subject().writable();
+        Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen = new ConcurrentHashMap<>();
+        List<LinkView> views = parallel(read.links(), link -> view(actor, link, read.providers().get(link.providerId()), refresh, seen, writable),
+            link -> new LinkView(link, read.providers().get(link.providerId()), null, "git.unavailable", removalKey(actor, link, writable)));
+        return new Listing(read.subject().readable(), writable, views);
     }
 
     /** The released repositories of the project of the subject, for linking; needs the write rule of {@code git}. */
@@ -140,37 +162,47 @@ public class LinkService {
             List<Release> releases = store.releases(actor.companyId(), subject.projectId());
             return new Read(releases, providers(actor.companyId(), releases.stream().map(Release::providerId).toList()));
         });
+        Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen = new ConcurrentHashMap<>();
+        // Only repositories the own connection can read now are offered (TASK-114, F6).
         return parallel(read.releases(), release -> {
             Provider provider = read.providers().get(release.providerId());
-            try {
-                Optional<ProviderApi.Repository> repository = connections.call(actor.companyId(), actor.userId(), provider,
-                    token -> repository(actor.userId(), provider, token, release.externalId(), false));
-                return new Choice(release, provider, repository.orElse(null), repository.isPresent() ? null : "git.unavailable");
-            } catch (ConnectionService.NotConnected missing) {
-                return new Choice(release, provider, null, reason(missing));
-            } catch (GitHttp.Failure failure) {
-                return new Choice(release, provider, null, reason(failure));
+            if (provider == null || provider.removed()) {
+                return null;
             }
-        }, release -> new Choice(release, read.providers().get(release.providerId()), null, "git.unavailable"));
+            try {
+                return connections.callWith(actor.companyId(), actor.userId(), provider,
+                    grant -> liveRepository(seen, provider, grant.token(), release.externalId()))
+                    .map(repository -> new Choice(release, provider, repository)).orElse(null);
+            } catch (ConnectionService.NotConnected | GitHttp.Failure unusable) {
+                return null;
+            }
+        }, release -> null).stream().filter(java.util.Objects::nonNull).toList();
     }
 
-    private LinkView view(AccessContext actor, GitLink link, Provider provider, boolean refresh) {
+    private LinkView view(AccessContext actor, GitLink link, Provider provider, boolean refresh,
+            Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen, boolean writable) {
+        String key = removalKey(actor, link, writable);
         if (provider == null || provider.removed()) {
-            return new LinkView(link, provider, null, "git.unavailable");
+            return new LinkView(link, provider, null, "git.unavailable", key);
         }
         try {
-            Live live = connections.call(actor.companyId(), actor.userId(), provider, token -> load(actor.userId(), provider, token, link, refresh));
-            return new LinkView(link, provider, live, live == null ? "git.unavailable" : null);
+            Live live = connections.callWith(actor.companyId(), actor.userId(), provider,
+                grant -> load(actor.userId(), provider, grant, link, refresh, seen));
+            return new LinkView(link, provider, live, live == null ? "git.unavailable" : null, key);
         } catch (ConnectionService.NotConnected missing) {
-            return new LinkView(link, provider, null, reason(missing));
+            return new LinkView(link, provider, null, reason(missing), key);
         } catch (GitHttp.Failure failure) {
-            return new LinkView(link, provider, null, reason(failure));
+            return new LinkView(link, provider, null, reason(failure), key);
         }
     }
 
-    /** The object of a link as the token reads it, or {@code null} when it is not available. */
-    private Live load(UUID accountId, Provider provider, String token, GitLink link, boolean refresh) {
-        Optional<ProviderApi.Repository> found = repository(accountId, provider, token, link.repositoryId(), refresh);
+    /**
+     * The object of a link as the token reads it, or {@code null} when it is not available. The repository is always read live,
+     * once per request and repository; only then a kept commit or change of the same generation of the connection is shown.
+     */
+    private Live load(UUID accountId, Provider provider, ConnectionService.Grant grant, GitLink link, boolean refresh,
+            Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen) {
+        Optional<ProviderApi.Repository> found = liveRepository(seen, provider, grant.token(), link.repositoryId());
         if (found.isEmpty()) {
             return null;
         }
@@ -178,18 +210,41 @@ public class LinkService {
         String object = link.repositoryId() + ":" + link.objectKey();
         String url = ProviderApi.objectUrl(provider, repository, link.objectKind(), link.objectKey());
         return switch (link.objectKind()) {
-            case GitLink.COMMIT -> cache.read(accountId, provider.id(), "commit:" + object, refresh,
-                () -> api.commit(provider, token, link.repositoryId(), link.objectKey()))
+            case GitLink.COMMIT -> cache.read(accountId, provider.id(), grant.generation(), "commit:" + object, refresh,
+                () -> api.commit(provider, grant.token(), link.repositoryId(), link.objectKey()))
                 .map(commit -> new Live(repository, commit, null, url)).orElse(null);
-            case GitLink.PULL_REQUEST, GitLink.MERGE_REQUEST -> cache.read(accountId, provider.id(), "change:" + object, refresh,
-                () -> api.change(provider, token, link.repositoryId(), Long.parseLong(link.objectKey())))
+            case GitLink.PULL_REQUEST, GitLink.MERGE_REQUEST -> cache.read(accountId, provider.id(), grant.generation(), "change:" + object, refresh,
+                () -> api.change(provider, grant.token(), link.repositoryId(), Long.parseLong(link.objectKey())))
                 .map(change -> new Live(repository, null, change, url)).orElse(null);
             default -> new Live(repository, null, null, url);
         };
     }
 
-    private Optional<ProviderApi.Repository> repository(UUID accountId, Provider provider, String token, String repositoryId, boolean refresh) {
-        return cache.read(accountId, provider.id(), "repository:" + repositoryId, refresh, () -> api.repository(provider, token, repositoryId));
+    /** The repository read live with the token, once per request even when several links or releases name it. */
+    private Optional<ProviderApi.Repository> liveRepository(Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen,
+            Provider provider, String token, String repositoryId) {
+        String key = provider.id() + ":" + repositoryId;
+        CompletableFuture<Optional<ProviderApi.Repository>> mine = new CompletableFuture<>();
+        CompletableFuture<Optional<ProviderApi.Repository>> running = seen.putIfAbsent(key, mine);
+        if (running == null) {
+            try {
+                Optional<ProviderApi.Repository> repository = api.repository(provider, token, repositoryId);
+                mine.complete(repository);
+                return repository;
+            } catch (RuntimeException failed) {
+                seen.remove(key, mine);
+                mine.completeExceptionally(failed);
+                throw failed;
+            }
+        }
+        try {
+            return running.join();
+        } catch (CompletionException failed) {
+            if (failed.getCause() instanceof RuntimeException cause) {
+                throw cause;
+            }
+            throw failed;
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ changing
@@ -215,25 +270,26 @@ public class LinkService {
                 throw ApiProblemException.withViolations(400, "request.invalid", violations);
             }
         }
-        record Prepared(List<Provider> providers, String repositoryId, String path, String kind, String key) {
+        // One reading per instance with its own path, kind and key (TASK-114, F7); for a selection exactly one.
+        record Reading(Provider provider, String repositoryId, String path, String kind, String key) {
         }
-        Prepared prepared = inTransaction(() -> {
+        List<Reading> readings = inTransaction(() -> {
             Subject subject = locate(actor, target, true);
             if (address != null) {
-                List<GitAddress.Parsed> readings = GitAddress.parse(address, store.providers(actor.companyId())).stream()
+                List<GitAddress.Parsed> parsed = GitAddress.parse(address, store.providers(actor.companyId())).stream()
                     .filter(p -> GitAddress.validKey(p.kind(), p.key())).toList();
-                if (readings.isEmpty()) {
+                if (parsed.isEmpty()) {
                     throw ApiProblemException.of(400, "git.address_unknown");
                 }
                 // Only an instance with a repository released for the project can lead to a link.
                 Set<UUID> released = store.releases(actor.companyId(), subject.projectId()).stream().map(Release::providerId)
                     .collect(java.util.stream.Collectors.toSet());
-                List<Provider> candidates = readings.stream().map(GitAddress.Parsed::provider).filter(p -> released.contains(p.id())).toList();
+                List<Reading> candidates = parsed.stream().filter(p -> released.contains(p.provider().id()))
+                    .map(p -> new Reading(p.provider(), null, p.repositoryPath(), p.kind(), p.key())).toList();
                 if (candidates.isEmpty()) {
                     throw ApiProblemException.of(409, "git.repository_not_released");
                 }
-                GitAddress.Parsed first = readings.get(0);
-                return new Prepared(candidates, null, first.repositoryPath(), first.kind(), first.key());
+                return candidates;
             }
             Release release = store.release(actor.companyId(), subject.projectId(), selection.releaseId())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.repository_not_found"));
@@ -243,32 +299,43 @@ public class LinkService {
                 throw ApiProblemException.withViolations(400, "request.invalid", List.of("kind.invalid"));
             }
             String key = selection.key() == null ? "" : selection.key().toLowerCase(java.util.Locale.ROOT);
-            return new Prepared(List.of(provider), release.externalId(), null, selection.kind(), key);
+            return List.of(new Reading(provider, release.externalId(), null, selection.kind(), key));
         });
-        // The check at the provider runs outside a transaction and always asks the provider again (rule 1). Of several
-        // instances with the same address the first whose connection finds the object in a released repository is taken.
+        // The check at the provider runs outside a transaction and always asks the provider again (rule 1). For each instance
+        // the path is first resolved to the stable identifier of the repository, then the release of exactly that repository
+        // is checked, and only then the object is fetched (TASK-114, F3): a repository that is not released tells nothing of
+        // the object. Of several instances the first whose connection finds the object in a released repository is taken.
         Resolved resolved = null;
+        String kind = null;
         RuntimeException failure = null;
-        boolean foundElsewhere = false;
-        for (Provider candidate : prepared.providers()) {
+        boolean notReleased = false;
+        for (Reading reading : readings) {
+            Provider candidate = reading.provider();
             try {
+                Optional<ProviderApi.Repository> repository = connections.call(actor.companyId(), actor.userId(), candidate,
+                    token -> reading.path() != null ? api.repositoryByPath(candidate, token, reading.path())
+                        : api.repository(candidate, token, reading.repositoryId()));
+                if (repository.isEmpty()) {
+                    continue;
+                }
+                if (!released(actor, target, candidate.id(), repository.get().externalId())) {
+                    notReleased = true;
+                    continue;
+                }
                 Resolved attempt = connections.call(actor.companyId(), actor.userId(), candidate,
-                    token -> resolve(candidate, token, prepared.path(), prepared.repositoryId(), prepared.kind(), prepared.key()));
+                    token -> resolve(candidate, token, repository.get(), reading.kind(), reading.key()));
                 if (attempt == null) {
                     continue;
                 }
-                if (prepared.providers().size() > 1 && !released(actor, target, candidate.id(), attempt.repository().externalId())) {
-                    foundElsewhere = true;
-                    continue;
-                }
                 resolved = attempt;
+                kind = reading.kind();
                 break;
             } catch (ConnectionService.NotConnected | GitHttp.Failure problem) {
                 failure = failure == null ? problem : failure;
             }
         }
         if (resolved == null) {
-            if (foundElsewhere) {
+            if (notReleased) {
                 throw ApiProblemException.of(409, "git.repository_not_released");
             }
             if (failure != null) {
@@ -280,19 +347,24 @@ public class LinkService {
             throw ApiProblemException.of(404, "git.object_not_found");
         }
         Resolved chosen = resolved;
+        String chosenKind = kind;
         Provider provider = chosen.provider();
         return inTransaction(() -> {
             Subject subject = locate(actor, target, true);
             require(actor, subject);
             Provider still = store.shareProvider(actor.companyId(), provider.id()).filter(p -> !p.removed())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.provider_not_found"));
+            // The object was read at exactly this address of the instance (TASK-114, F4).
+            if (!still.baseUrl().equals(provider.baseUrl())) {
+                throw ApiProblemException.of(409, "git.provider_changed");
+            }
             lockSubject(actor, subject);
             String repositoryId = chosen.repository().externalId();
-            if (!store.released(subject.projectId(), still.id(), repositoryId)) {
+            if (!store.shareReleased(subject.projectId(), still.id(), repositoryId)) {
                 throw ApiProblemException.of(409, "git.repository_not_released");
             }
             store.lockLinks(subject.kind(), subject.id());
-            if (store.linked(subject.kind(), subject.id(), still.id(), repositoryId, prepared.kind(), chosen.key())) {
+            if (store.linked(subject.kind(), subject.id(), still.id(), repositoryId, chosenKind, chosen.key())) {
                 throw ApiProblemException.of(409, "git.link_exists");
             }
             if (store.linkCount(subject.kind(), subject.id()) >= MAX_LINKS) {
@@ -300,25 +372,20 @@ public class LinkService {
             }
             Instant now = clock.instant();
             GitLink link = new GitLink(UUID.randomUUID(), actor.companyId(), subject.kind(), subject.id(), subject.projectId(), still.id(),
-                repositoryId, prepared.kind(), chosen.key(), now, actor.userId());
+                repositoryId, chosenKind, chosen.key(), now, actor.userId());
             store.insertLink(link);
             history(actor, subject, now, null, link.historyValue());
             // The answer shows what was just read only to a reader of the field; the link itself is no secret to its writer.
-            return new LinkView(link, still, subject.readable() ? chosen.live() : null, subject.readable() ? null : "git.unavailable");
+            return new LinkView(link, still, subject.readable() ? chosen.live() : null, subject.readable() ? null : "git.unavailable",
+                removalKey(actor, link, true));
         });
     }
 
     private record Resolved(Provider provider, ProviderApi.Repository repository, String key, Live live) {
     }
 
-    /** The object as the token reads it, with the full SHA or the number; {@code null} when it is not there or not readable. */
-    private Resolved resolve(Provider provider, String token, String path, String repositoryId, String kind, String key) {
-        Optional<ProviderApi.Repository> repository = path != null ? api.repositoryByPath(provider, token, path)
-            : api.repository(provider, token, repositoryId);
-        if (repository.isEmpty()) {
-            return null;
-        }
-        ProviderApi.Repository repo = repository.get();
+    /** The object in the found repository with the full SHA or the number; {@code null} when it is not there or not readable. */
+    private Resolved resolve(Provider provider, String token, ProviderApi.Repository repo, String kind, String key) {
         return switch (kind) {
             case GitLink.COMMIT -> api.commit(provider, token, repo.externalId(), key)
                 .map(commit -> new Resolved(provider, repo, commit.sha(), new Live(repo, commit, null,
@@ -336,12 +403,21 @@ public class LinkService {
         return inTransaction(() -> store.released(locate(actor, target, true).projectId(), providerId, repositoryId));
     }
 
-    /** Removes a link; needs only the write rule of {@code git}, neither a connection nor access to the object (rule 2). */
-    public void remove(AccessContext actor, Target target, UUID linkId) {
+    /**
+     * Removes a link by the opaque key the list gave the caller; needs only the write rule of {@code git}, neither a connection
+     * nor access to the object (rule 2).
+     */
+    public void remove(AccessContext actor, Target target, String key) {
+        if (key == null || !key.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw ApiProblemException.of(404, "git.link_not_found");
+        }
         inTransaction(() -> {
             Subject subject = locate(actor, target, true);
             require(actor, subject);
             lockSubject(actor, subject);
+            UUID linkId = store.links(actor.companyId(), subject.kind(), subject.id()).stream()
+                .filter(link -> key.equals(removalKey(actor, link, true))).map(GitLink::id).findFirst()
+                .orElseThrow(() -> ApiProblemException.of(404, "git.link_not_found"));
             GitLink removed = store.deleteLink(actor.companyId(), subject.kind(), subject.id(), linkId)
                 .orElseThrow(() -> ApiProblemException.of(404, "git.link_not_found"));
             history(actor, subject, clock.instant(), removed.historyValue(), null);
@@ -349,11 +425,30 @@ public class LinkService {
         });
     }
 
+    /**
+     * The key with which the caller removes a link: bound to the person and the link and of no use to anybody else, so it
+     * relates no list to another one or to the history (TASK-114, F6). {@code null} for a caller who may not remove links.
+     */
+    static String removalKey(AccessContext actor, GitLink link, boolean writable) {
+        if (!writable) {
+            return null;
+        }
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(KEY_SECRET, "HmacSHA256"));
+            byte[] digest = mac.doFinal((actor.userId() + "|" + link.id()).getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(java.util.Arrays.copyOf(digest, 18));
+        } catch (GeneralSecurityException missing) {
+            throw new IllegalStateException(missing);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------ rights and subjects
 
     /**
-     * The ticket or requirement with the rules of the caller for {@code git}. A caller who may neither read nor edit it does
-     * not see it: 404 like everywhere else. With {@code change} the write rule is needed, otherwise 403.
+     * The ticket or requirement with the rules of the caller for {@code git}. A caller who may not read it does not see it:
+     * 404 like everywhere else, also with the right to edit it (TASK-114, F5). With {@code change} the write rule is needed,
+     * otherwise 403.
      */
     private Subject locate(AccessContext actor, Target target, boolean change) {
         GitAccess.internal(actor);
@@ -369,7 +464,7 @@ public class LinkService {
         Supplier<ResourceContext> resource = resource(actor, kind, projectId);
         Decision read = permissions.inspect(actor, resource, kind + ".read", Set.of(FIELD));
         Decision edit = permissions.inspect(actor, resource, kind + ".edit", Set.of(FIELD));
-        if (!read.allowed() && !edit.allowed()) {
+        if (!read.allowed()) {
             throw kind.equals(TICKET) ? GitAccess.projectNotFound() : requirementNotFound();
         }
         UUID id = target instanceof TicketTarget ticket

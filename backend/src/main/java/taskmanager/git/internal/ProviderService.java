@@ -100,6 +100,11 @@ public class ProviderService {
         }
         Instant now = clock.instant();
         Provider changed = validated(companyId, id, settings, current, current.version() + 1, current.createdAt(), current.createdBy(), now, actor);
+        // A new address is a trust decision of its own: identifiers of repositories from the former server must never name
+        // objects of the new one. An instance that has releases or links keeps its address (TASK-114, F4).
+        if (!changed.baseUrl().equals(current.baseUrl()) && store.providerInUse(id)) {
+            throw ApiProblemException.of(409, "git.provider_in_use");
+        }
         if (store.providerNameTaken(companyId, changed.name(), id)) {
             throw ApiProblemException.of(409, "git.provider_name_taken");
         }

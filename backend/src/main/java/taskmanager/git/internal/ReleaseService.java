@@ -125,6 +125,10 @@ public class ReleaseService implements DisposableBean {
             access.requireProject(actor, projectId, true);
             Provider still = store.lockProvider(actor.companyId(), providerId).filter(p -> !p.removed())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.provider_not_found"));
+            // The repository was read at exactly this address of the instance; after a change it is read again (TASK-114, F4).
+            if (!still.baseUrl().equals(provider.baseUrl())) {
+                throw ApiProblemException.of(409, "git.provider_changed");
+            }
             if (store.released(projectId, still.id(), externalId)) {
                 throw ApiProblemException.of(409, "git.repository_released");
             }

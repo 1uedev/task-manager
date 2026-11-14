@@ -272,7 +272,7 @@ class RequirementSeedTests(unittest.TestCase):
             if path == "/projects/help" and method == "GET":
                 return demo.Response(200, {"etag": '"4"'}, {"configuration": {"statuses": [], "customFields": []}}, 0.0)
             if path == "/permissions/groups":
-                return demo.Response(200, {}, {"id": "group"}, 0.0)
+                return demo.Response(200, {}, {"id": "reading" if body["name"] == "Anforderungen lesen" else "group"}, 0.0)
             if path.endswith("/requirements") and method == "POST":
                 return demo.Response(201, {"etag": '"1"'}, {"id": "req"}, 0.0)
             if path == "/requirements/req/submit":
@@ -283,13 +283,22 @@ class RequirementSeedTests(unittest.TestCase):
 
         admin = mock.Mock()
         admin.call.side_effect = call
-        demo.seed_requirements(admin, "help", "page", ["admin", "lead"])
+        demo.seed_requirements(admin, "help", "page", ["admin", "lead"], ["david"])
         configured = next(body for method, path, body, _ in calls if method == "PUT" and path == "/projects/help/configuration")
         self.assertEqual([field["key"] for field in configured["requirementFields"]], ["bereich", "aufwand"])
         self.assertTrue(configured["requirementFields"][0]["required"])
         fields = [body for method, path, body, _ in calls if path == "/permissions/groups/group/fields"]
         self.assertIn({"resourceType": "requirement", "field": "custom.bereich", "projectId": "help", "operation": "read", "effect": "allow"}, fields)
         self.assertIn({"resourceType": "requirement", "field": "title", "projectId": None, "operation": "write", "effect": "allow"}, fields)
+        # TASK-115, F5: a reader of requirements in HELP without the field git.
+        reading = [body for method, path, body, _ in calls if path == "/permissions/groups/reading/fields"]
+        self.assertTrue(reading and all(rule["operation"] == "read" for rule in reading))
+        self.assertNotIn("git", [rule["field"] for rule in reading])
+        self.assertIn("title", [rule["field"] for rule in reading])
+        self.assertIn(("PUT", "/permissions/groups/reading/actions", {"action": "requirement.read", "projectId": None, "enabled": True}, None),
+                      calls)
+        self.assertIn(("PUT", "/permissions/groups/reading/members/david", None, None), calls)
+        self.assertIn("git", [body["field"] for method, path, body, _ in calls if path == "/permissions/groups/group/fields"])
         created = next(body for method, path, body, _ in calls if path == "/requirements/projects/help/requirements")
         self.assertEqual(created["title"], "Kunden sehen den Stand ihrer freigegebenen Supportanfragen")
         self.assertEqual(len(created["criteria"]), 3)
