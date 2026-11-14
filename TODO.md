@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 
 ### Blockiert – BLOCKIERT
 
@@ -110,7 +112,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe (2026-11-13, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR. Migration V0065 mit der Tabelle `git_link` (nur Instanz, Repository Kennung, Objektart, voller SHA oder Nummer) und den Ereignissen `git_linked` und `git_unlinked` der Anforderungshistorie; Feld `git` der Ressourcentypen `ticket` und `requirement` im Rechtekatalog; acht Routen in contracts/git.openapi.yaml (jetzt 22), Ergänzungen in tickets, requirements und permissions; Bereich „Git“ am Ticket und an der Anforderung mit Adresse oder Auswahl aus freigegebenen Repositories, „Aktualisieren“ und Lösen; Beschreibung in backend/README.md, Abschnitt Git Anbindung. Zu den Kriterien: 1 `GitApiTest.commitsPullAndMergeRequestsAreLinkedOnceAtTicketAndRequirement` (kurzer und voller SHA ergeben dieselbe Verknüpfung, Version von Ticket und Anforderung unverändert, beide Historien); 2 `withoutAccessOnlyTheKindIsShownAndAWithdrawnAccessEndsAtTheNextRead` (ohne Verbindung und ohne Zugriff nur die Art, Historie nur mit Art und Kennung, nach Entzug liefert „Aktualisieren“ nichts mehr, Lösen ohne Verbindung); 3 `aMergedRequestShowsItsStateAndARateLimitKeepsThePageUsable` (Zustand zusammengeführt, Anforderung bleibt freigegeben, Ratenlimit mit genau einem Abruf je Objekt); 4 `atMostFiftyLinksAndNothingOfGitInSearch` (Grenze 50, höchstens vier gleichzeitige Abrufe, keine Git Angaben in Ticket, Suche und Anforderungssuche; Export und Portal lesen das Feld nicht); 5 `GitContractTest`, `DatabaseFoundationTest`, Browser Tests tests/browser/gitLinks.test.mjs. Präzisierungen in DEC-142: mehrere Instanzen mit derselben Adresse, Gesamtzeit von 20 Sekunden je Anfrage, Gründe der Nichtverfügbarkeit, Zwischenspeicher auch für „nicht verfügbar“. Gelaufen: volle Backend Suite gegen PostgreSQL 16 mit Java 21 (654 Tests), `npm run verify`, alle Browser Tests (307), Repository Prüfungen; der Lifecycle Check mit Docker nur in CI.
 
-**Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei), danach Holgers Abnahme; TASK-113 läuft seit dem 14. November 2026 (PR #317 auf main).
+**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-112_PR-317.md) empfiehlt nachbessern; F1 bis F9 und H3 behebt TASK-114 (DEC-144), danach Holgers Abnahme.
 
 ## TASK-113 Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3)
 
@@ -135,3 +137,29 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe (2026-11-14, claude-20261113-git-01):** Ergebnis auf dem Branch claude/project-thread-6p8449 im Ergebnis PR, ohne Änderung am Backend und ohne Migration. Zu den Kriterien: 1 `tools/git/gitlab-check.sh` mit `tools/git/compose.gitlab.yaml`, `tools/git/gitlab-setup.rb` und `tools/git/gitlab_check.py`, Workflow `.github/workflows/gitlab.yml` („GitLab 16“): GitLab CE 16.11.10 mit HTTPS und eigener CA, Prüfen ohne CA `git.tls_failed` und mit CA erfolgreich, Verbinden mit Anmeldung bei GitLab und PKCE, Freigabe aus einer Untergruppe, Repository, Commit über kurzen SHA und Merge Request am Ticket, Merge Request über die Freigabe an einer Anforderung, Duplikat und fremder Rechner abgewiesen, „merged“ nach dem Zusammenführen, neuer Pfad nach dem Umbenennen (G05), nach dem Löschen der Anwendung nur `git.connection_renew` ohne Angaben; lokal mit Docker Compose bestanden, Ergebnis in gitlab-run.json. 2 Offen für Holger: GitHub App und GitLab.com Anwendung nach docs/GIT_MIGRATION.md, Abschnitt Einrichtung und Betrieb, registrieren und Kennung und Geheimnis in den Demoinstanzen eintragen. 3 `demo seed --profile demo` legt die Instanzen GitHub.com und GitLab.com ohne Geheimnis an und gibt den Demogruppen das Feld `git`; `tools/demo/git-examples.sql` speichert Freigaben und Beispielverknüpfungen an WEB-1 und ANF-1 mit Historie; `demo verify` prüft im Imagecheck Instanzen, `git.provider_incomplete`, die Beispiele als nicht verfügbar und nichts für carla; compose.yaml setzt `TASK_MANAGER_PUBLIC_URL`. 4 docs/GIT_MIGRATION.md (Einrichtung und Betrieb: Voraussetzungen, Rückleitungsadresse, GitHub App, GitLab.com, eigenes GitLab mit CA, Proxy, Tokenentzug, Vorführung, GitLab Lauf), README.md, docs/DEMO.md, backend/README.md, .env.example; OPEN-010 in DECISIONS.md und docs/ARCHITECTURE_READINESS.md entschieden. Präzisierungen in DEC-143. Gelaufen: GitLab Lauf und Imagecheck mit Docker Compose gegen ein lokal aus demselben Stand gebautes Image (`GITLAB_CHECK_SKIP_BUILD=1`, `IMAGE_CHECK_SKIP_BUILD=1`, weil der Docker Build hier keinen Zugang zu den Paketquellen hat), Repository Prüfungen; der Docker Build selbst läuft nur in CI.
 
 **Nächster Schritt:** Unabhängige Prüfung (Codex Prüfauftrag liegt bei) und Registrierung der Anwendungen für Abnahmekriterium 2, danach Holgers Abnahme von TASK-111 bis TASK-113.
+
+## TASK-114 Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-01 · **Aktualisiert:** 2026-11-14
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-036, DEC-142, DEC-144; docs/REVIEW_TASK-112_PR-317.md; docs/GIT_MIGRATION.md (Prüffälle G02 und G03). **Abhängigkeiten:** TASK-112 auf main (PR #317); TASK-113 auf main (PR #318). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Prüfung von TASK-112 (Empfehlung nachbessern) „F1 bis F9 und H3 als TASK-114“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-144, Migration ab V0066 falls nötig.
+
+**Umfang:** Behebung der Befunde F1 bis F9 und des Hinweises H3 aus docs/REVIEW_TASK-112_PR-317.md mit Vertrag, Oberfläche und Tests. Nicht Teil: Hinweise H1, H2, H4 und H5 (später), weitere Git Funktionen.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Positive Daten aus dem Cache erscheinen nur, wenn der aktuelle Zugriff der Person auf das Repository mit ihrer eigenen Verbindung nachgewiesen ist; ein normaler Abruf von Liste und Auswahl zeigt einen Rechteentzug beim Anbieter sofort.
+2. F2: Cacheeinträge sind an eine Generation der Verbindung und an den Stand der Instanz gebunden; eine nachlaufende Antwort einer alten Verbindung wird nicht mehr gespeichert und nicht ausgegeben.
+3. F3 und F7: Eine eingefügte Adresse wird je Instanz mit ihrer eigenen Auslegung zur Repository Kennung aufgelöst, dann wird die konkrete Projektfreigabe geprüft und erst danach das Objekt abgefragt; ein nicht freigegebenes Repository verrät nichts über das angefragte Objekt.
+4. F4: Die Adresse einer Instanz mit Freigaben oder Verknüpfungen kann nicht mehr geändert werden; für einen neuen Server wird eine neue Instanz angelegt, alte Verknüpfungen bleiben als „nicht verfügbar“ erhalten. Vor dem Speichern wird der für den Abruf genutzte Stand der Instanz mit dem gesperrten verglichen.
+5. F5: Alle Git Wege an Anforderungen und Tickets verlangen zuerst das Leserecht am Objekt (`requirement.read` beziehungsweise das Lesen des Tickets) und antworten sonst 404; Schreiben verlangt zusätzlich das Bearbeitungsrecht und die Schreibregel für `git`.
+6. F6: Die Auswahl zeigt nur Repositories, die die Person lesen kann. Ein nicht verfügbarer Eintrag zeigt nur die Art und für Schreibberechtigte einen undurchsichtigen Löseschlüssel, ohne Link ID, Instanz, Zeit und Urheber. Die Historie nennt nur die Art ohne Link ID.
+7. F8: Ein 403 von GitHub mit `Retry-After` oder dem Merkmal des sekundären Limits gilt als `git.rate_limited` und wird nicht gespeichert.
+8. F9: Die Anlage sperrt die konkrete Freigabezeile bis zum Commit; Rücknahme und Anlage sind in beiden Reihenfolgen getestet.
+9. H3: Der Testersatz der Browsertests antwortet bei Adressauswahl, Verbindungszustand `renew` und Ratenlimit wie der Server.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F9 sind behoben und je mit einem Regressionstest belegt, G02 und G03 auch am normalen Abruf.
+2. Vertrag `contracts/git.openapi.yaml`, Oberfläche und README entsprechen den Regeln 4 bis 6.
+3. Der Testersatz entspricht Regel 9; Backend, Frontend und Browsertests sind grün.
+
+**Nächster Schritt:** Nach dem Merge dieser Reservierung und von TASK-113 Umsetzung auf dem Branch, danach unabhängige Prüfung.
