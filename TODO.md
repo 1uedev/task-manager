@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
 
 ### Blockiert – BLOCKIERT
 
@@ -164,7 +166,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** Backend (`ConnectionService`, `GitCache`, `GitHttp`, `GitStore`, `LinkService`, `ProviderService`, `ReleaseService`, `GitLinkController`), Migration V0066, Vertrag `contracts/git.openapi.yaml` (Pfad `{key}`, `key` statt `id`, Auswahl ohne `available`, Codes `git.provider_in_use` und `git.provider_changed`) sowie die Historientexte in `tickets.openapi.yaml` und `requirements.openapi.yaml`, Oberfläche `GitLinks.tsx`, Testersatz `frontend/tests/browser/backend.mjs`, README Abschnitt „Korrekturen (TASK-114)“. Regressionstests: `GitApiTest` (unter anderem `aNewConnectionNeverSeesWhatTheFormerOneKept`, `theReleaseIsCheckedBeforeTheObjectIsFetched`, `overlappingInstancesKeepTheirOwnReading`, `anInstanceInUseKeepsItsAddress`, `everyGitRouteNeedsTheReadActionFirst`, `theChoiceHoldsOnlyReadableRepositories`, `theSecondaryRateLimitOfGitHubIsARateLimitAndNotKept`, `aWithdrawalAndALinkWaitForEachOther` in beiden Reihenfolgen, G03 am normalen Abruf in `withoutAccessOnlyTheKindIsShownAndAWithdrawnAccessEndsAtTheNextRead`), `GitCacheTest`, `GitHistoryMigrationTest` und der Browsertest „the address, the choice and the removal key follow the server“. Präzisierungen: der Löseschlüssel ist ein HMAC über Person und Verknüpfung mit einem Schlüssel je Serverprozess, also nach einem Neustart neu; jede Verknüpfung zählt in der Liste als ein Eintrag, auch ein Platzhalter; die Auswahl lässt nicht lesbare Repositories ganz weg; F5 gilt auch für Tickets (`ticket.read` vor jedem Git Weg). Grenzen: H1, H2, H4 und H5 bleiben für später.
 
-**Nächster Schritt:** Unabhängige Prüfung (Codex), danach Holgers Abnahme.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-114-115_PR-320.md) empfiehlt nachbessern; F1 bis F6 und H1 bis H3 behebt TASK-116 (DEC-146). Danach Holgers Abnahme von TASK-111 bis TASK-116.
 
 ## TASK-115 Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben
 
@@ -190,4 +192,28 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** `tools/git/gitlab_check.py` (nummerierte Schritte, Fehler nur mit Schritt, Status und festem Code, vollständige Anmeldeadresse mit Rückleitung, Zustand und Challenge, genau drei Verknüpfungen am Ticket, beide Historien, Version, Revision und Status beim Zusammenführen, Tokenentzug an denselben Löseschlüsseln, Arten und Anzahlen von Ticket und Anforderung, `GITLAB_CHECK_FAIL_AT`), `tools/git/gitlab-check.sh` (Compose Projekt und Ergebnisordner je Lauf, Aufräumen ab dem ersten temporären Ordner, gemeldeter Abbaufehler, Zugangsdaten über die Standardeingabe), neues `tools/git/redact.py` mit `tests/test_gitlab_evidence.py`, Workflow `.github/workflows/gitlab.yml` (nur `gitlab-run.json` und `diagnostics.txt`, Eingabe `fail_at`, weitere Pfade), `tools/demo/git-examples.sql` (Demobestand, Grenze 50, Audit, Historie mit Art), `tools/demo/demo.py` (`demo verify` für beide Instanzen über die Verwaltung, WEB-1 und ANF-1, Historien, Carla, David mit der neuen Gruppe „Anforderungen lesen“), docs/GIT_MIGRATION.md, docs/DEMO.md und DEC-143. Das SQL ist lokal gegen PostgreSQL 16 mit synthetischem Bestand geprüft: Einspielung, zweiter Lauf, 50 vorhandene Freigaben, geänderte Instanz, anderes Projekt und fehlende ANF-1 brechen ohne Änderung ab. Grenzen: Ein Lauf mit erzwungenem Fehler gegen ein echtes GitLab steht aus (Workflow „GitLab 16“ mit `fail_at`); Abnahmekriterium 2 von TASK-113 (Registrierung bei GitHub.com und GitLab.com) bleibt Holgers Schritt.
 
-**Nächster Schritt:** Unabhängige Prüfung (Codex), danach Holgers Abnahme.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-114-115_PR-320.md) empfiehlt nachbessern; F1 bis F6 und H1 bis H3 behebt TASK-116 (DEC-146). Danach Holgers Abnahme von TASK-111 bis TASK-116.
+
+## TASK-116 Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-02 · **Aktualisiert:** 2026-11-14
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144, DEC-145, DEC-146; docs/REVIEW_TASK-114-115_PR-320.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-114 und TASK-115 auf main (PR #320). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-114 und TASK-115 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-116“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-146, Migration nur falls für F2 nötig (dann V0067).
+
+**Umfang:** Behebung der Befunde F1 bis F6 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-114-115_PR-320.md im Git Modul, im Browser Testersatz, im GitLab Lauf, im Demo SQL, im Workflow und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Die Generation einer Verbindung stammt aus genau der Verbindungszeile, deren Token ein Abruf verwendet. Der Repository Nachweis innerhalb einer Anfrage gilt nur für dieselbe Generation. Vor dem Schreiben in den Zwischenspeicher, vor der Ausgabe und vor dem Wechsel auf „erneuern“ wird geprüft, ob die Generation noch gilt; sonst liefert der Abruf nichts und verändert die neue Verbindung nicht.
+2. F2: Freigabe und Verknüpfung vergleichen in der abschließenden Transaktion den Stand der Instanz, mit dem der Anbieter befragt wurde, mit dem gesperrten Stand (Version der Instanz); bei Abweichung 409 `git.provider_changed` ohne Änderung in der Datenbank.
+3. F3: Die Betriebsanleitung trennt den sofort wirksamen Entzug des Repositoryzugriffs vom Entzug eines einzelnen Objekts, der spätestens nach Ablauf des Zwischenspeichers (60 Sekunden) wirkt; ein Test zeigt den Wechsel der Objektantwort auf 403 und 404.
+4. F4: Der GitLab Lauf gibt nur bekannte Fehlercodes und eng geprüfte Ergebnisfelder aus; die hochgeladenen Diagnosen entstehen aus festen Feldern (Containerzustand, HTTP Status, Schritt) statt aus Rohprotokollen; die Prüfung vor dem Hochladen erkennt auch JSON Felder, Cookies und kodierte Werte.
+5. F5: `git-examples.sql` bindet die Beispiele an den Demobestand (Ersteller der Projekte, des Tickets und der Anforderung, Demogruppen und unveränderter Stand der Instanzen) und bricht sonst ohne Änderung ab.
+6. F6: Der Lauf legt auch unter einem vorgegebenen Basisordner ein eigenes Unterverzeichnis atomar an; der Workflow lädt nur aus dem Ordner hoch, den der geprüfte Lauf ausdrücklich freigibt.
+7. H1 bis H3: Server und Testersatz laufen über dieselben Adressvektoren einschließlich verschachtelter Instanzen, Grenzwerten und Wechsel der Client ID; der Lauf prüft Zielorigin und Fragment der Rückleitung und die Löseschlüssel bis zum Widerruf; der Vertrag nennt die Antwort auf syntaktisch falsche Eingaben, und der Sperrtest ordnet die wartenden Sitzungen über `pg_blocking_pids` zu.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F6 und H1 bis H3 sind behoben, mit Regressionstests für F1 und F2 bei blockierter Anbieterantwort.
+2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
+3. Dokumentation und DEC-146 entsprechen den Regeln.
+
+**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
