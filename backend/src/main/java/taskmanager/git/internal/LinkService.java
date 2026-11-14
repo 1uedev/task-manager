@@ -171,7 +171,7 @@ public class LinkService {
             }
             try {
                 return connections.callWith(actor.companyId(), actor.userId(), provider,
-                    grant -> liveRepository(seen, provider, grant.token(), release.externalId()))
+                    grant -> liveRepository(seen, provider, grant, release.externalId()))
                     .map(repository -> new Choice(release, provider, repository)).orElse(null);
             } catch (ConnectionService.NotConnected | GitHttp.Failure unusable) {
                 return null;
@@ -187,7 +187,7 @@ public class LinkService {
         }
         try {
             Live live = connections.callWith(actor.companyId(), actor.userId(), provider,
-                grant -> load(actor.userId(), provider, grant, link, refresh, seen));
+                grant -> load(actor, provider, grant, link, refresh, seen));
             return new LinkView(link, provider, live, live == null ? "git.unavailable" : null, key);
         } catch (ConnectionService.NotConnected missing) {
             return new LinkView(link, provider, null, reason(missing), key);
@@ -200,9 +200,11 @@ public class LinkService {
      * The object of a link as the token reads it, or {@code null} when it is not available. The repository is always read live,
      * once per request and repository; only then a kept commit or change of the same generation of the connection is shown.
      */
-    private Live load(UUID accountId, Provider provider, ConnectionService.Grant grant, GitLink link, boolean refresh,
+    private Live load(AccessContext actor, Provider provider, ConnectionService.Grant grant, GitLink link, boolean refresh,
             Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen) {
-        Optional<ProviderApi.Repository> found = liveRepository(seen, provider, grant.token(), link.repositoryId());
+        UUID accountId = actor.userId();
+        java.util.function.BooleanSupplier current = () -> connections.current(actor.companyId(), accountId, provider.id(), grant.generation());
+        Optional<ProviderApi.Repository> found = liveRepository(seen, provider, grant, link.repositoryId());
         if (found.isEmpty()) {
             return null;
         }
@@ -211,19 +213,23 @@ public class LinkService {
         String url = ProviderApi.objectUrl(provider, repository, link.objectKind(), link.objectKey());
         return switch (link.objectKind()) {
             case GitLink.COMMIT -> cache.read(accountId, provider.id(), grant.generation(), "commit:" + object, refresh,
-                () -> api.commit(provider, grant.token(), link.repositoryId(), link.objectKey()))
+                () -> api.commit(provider, grant.token(), link.repositoryId(), link.objectKey()), current)
                 .map(commit -> new Live(repository, commit, null, url)).orElse(null);
             case GitLink.PULL_REQUEST, GitLink.MERGE_REQUEST -> cache.read(accountId, provider.id(), grant.generation(), "change:" + object, refresh,
-                () -> api.change(provider, grant.token(), link.repositoryId(), Long.parseLong(link.objectKey())))
+                () -> api.change(provider, grant.token(), link.repositoryId(), Long.parseLong(link.objectKey())), current)
                 .map(change -> new Live(repository, null, change, url)).orElse(null);
             default -> new Live(repository, null, null, url);
         };
     }
 
-    /** The repository read live with the token, once per request even when several links or releases name it. */
+    /**
+     * The repository read live with the token, once per request and generation of the connection even when several links or
+     * releases name it; a read of another generation is never taken over (TASK-116, F1).
+     */
     private Optional<ProviderApi.Repository> liveRepository(Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen,
-            Provider provider, String token, String repositoryId) {
-        String key = provider.id() + ":" + repositoryId;
+            Provider provider, ConnectionService.Grant grant, String repositoryId) {
+        String token = grant.token();
+        String key = grant.generation() + ":" + repositoryId;
         CompletableFuture<Optional<ProviderApi.Repository>> mine = new CompletableFuture<>();
         CompletableFuture<Optional<ProviderApi.Repository>> running = seen.putIfAbsent(key, mine);
         if (running == null) {
@@ -312,22 +318,28 @@ public class LinkService {
         for (Reading reading : readings) {
             Provider candidate = reading.provider();
             try {
-                Optional<ProviderApi.Repository> repository = connections.call(actor.companyId(), actor.userId(), candidate,
-                    token -> reading.path() != null ? api.repositoryByPath(candidate, token, reading.path())
-                        : api.repository(candidate, token, reading.repositoryId()));
-                if (repository.isEmpty()) {
-                    continue;
-                }
-                if (!released(actor, target, candidate.id(), repository.get().externalId())) {
+                // Resolving, the release check and the object read with one generation of the connection (TASK-116, F1).
+                Attempt attempt = connections.callWith(actor.companyId(), actor.userId(), candidate, grant -> {
+                    Optional<ProviderApi.Repository> repository = reading.path() != null
+                        ? api.repositoryByPath(candidate, grant.token(), reading.path())
+                        : api.repository(candidate, grant.token(), reading.repositoryId());
+                    if (repository.isEmpty()) {
+                        return new Attempt(null, false);
+                    }
+                    if (!released(actor, target, candidate.id(), repository.get().externalId())) {
+                        return new Attempt(null, true);
+                    }
+                    Resolved found = resolve(candidate, grant.token(), repository.get(), reading.kind(), reading.key());
+                    return new Attempt(found == null ? null : found.with(grant.generation()), false);
+                });
+                if (attempt.notReleased()) {
                     notReleased = true;
                     continue;
                 }
-                Resolved attempt = connections.call(actor.companyId(), actor.userId(), candidate,
-                    token -> resolve(candidate, token, repository.get(), reading.kind(), reading.key()));
-                if (attempt == null) {
+                if (attempt.resolved() == null) {
                     continue;
                 }
-                resolved = attempt;
+                resolved = attempt.resolved();
                 kind = reading.kind();
                 break;
             } catch (ConnectionService.NotConnected | GitHttp.Failure problem) {
@@ -354,10 +366,12 @@ public class LinkService {
             require(actor, subject);
             Provider still = store.shareProvider(actor.companyId(), provider.id()).filter(p -> !p.removed())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.provider_not_found"));
-            // The object was read at exactly this address of the instance (TASK-114, F4).
-            if (!still.baseUrl().equals(provider.baseUrl())) {
+            // The object was read with exactly this state of the instance (TASK-114, F4; TASK-116, F2).
+            if (still.version() != provider.version() || !still.baseUrl().equals(provider.baseUrl())) {
                 throw ApiProblemException.of(409, "git.provider_changed");
             }
+            // The connection that read the object is still the one of the person (TASK-116, F1).
+            connections.requireCurrent(actor.companyId(), actor.userId(), still.id(), chosen.generation());
             lockSubject(actor, subject);
             String repositoryId = chosen.repository().externalId();
             if (!store.shareReleased(subject.projectId(), still.id(), repositoryId)) {
@@ -381,7 +395,17 @@ public class LinkService {
         });
     }
 
-    private record Resolved(Provider provider, ProviderApi.Repository repository, String key, Live live) {
+    private record Resolved(Provider provider, ProviderApi.Repository repository, String key, Live live, String generation) {
+        Resolved(Provider provider, ProviderApi.Repository repository, String key, Live live) {
+            this(provider, repository, key, live, null);
+        }
+
+        Resolved with(String generation) {
+            return new Resolved(provider, repository, key, live, generation);
+        }
+    }
+
+    private record Attempt(Resolved resolved, boolean notReleased) {
     }
 
     /** The object in the found repository with the full SHA or the number; {@code null} when it is not there or not readable. */
@@ -553,7 +577,8 @@ public class LinkService {
     }
 
     private static String reason(ConnectionService.NotConnected missing) {
-        return missing.code().equals("git.provider_not_found") ? "git.unavailable" : missing.code();
+        return missing.code().equals("git.provider_not_found") || missing.code().equals("git.provider_changed") ? "git.unavailable"
+            : missing.code();
     }
 
     private static String reason(GitHttp.Failure failure) {

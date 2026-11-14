@@ -88,7 +88,7 @@ public class ReleaseService implements DisposableBean {
                 token -> api.repository(provider, token, release.externalId()));
             return new View(release, provider, repository, repository.isPresent() ? null : "git.unavailable");
         } catch (ConnectionService.NotConnected missing) {
-            return new View(release, provider, Optional.empty(), missing.code());
+            return new View(release, provider, Optional.empty(), missing.code().equals("git.provider_changed") ? "git.unavailable" : missing.code());
         } catch (GitHttp.Failure failure) {
             return new View(release, provider, Optional.empty(), "git.unavailable");
         }
@@ -116,17 +116,24 @@ public class ReleaseService implements DisposableBean {
             return store.provider(actor.companyId(), providerId).filter(p -> !p.removed())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.provider_not_found"));
         });
-        Optional<ProviderApi.Repository> seen = reading(() -> connections.call(actor.companyId(), actor.userId(), provider,
-            token -> api.repository(provider, token, externalId)));
-        if (seen.isEmpty()) {
+        record Seen(Optional<ProviderApi.Repository> repository, String generation) {
+        }
+        Seen read = reading(() -> connections.callWith(actor.companyId(), actor.userId(), provider,
+            grant -> new Seen(api.repository(provider, grant.token(), externalId), grant.generation())));
+        if (read.repository().isEmpty()) {
             throw ApiProblemException.of(404, "git.repository_not_found");
         }
         return transaction.execute(status -> {
             access.requireProject(actor, projectId, true);
             Provider still = store.lockProvider(actor.companyId(), providerId).filter(p -> !p.removed())
                 .orElseThrow(() -> ApiProblemException.of(404, "git.provider_not_found"));
-            // The repository was read at exactly this address of the instance; after a change it is read again (TASK-114, F4).
-            if (!still.baseUrl().equals(provider.baseUrl())) {
+            // The repository was read with exactly this state of the instance; after a change it is read again (TASK-114, F4;
+            // TASK-116, F2).
+            if (still.version() != provider.version() || !still.baseUrl().equals(provider.baseUrl())) {
+                throw ApiProblemException.of(409, "git.provider_changed");
+            }
+            // The connection that read the repository is still the one of the person (TASK-116, F1).
+            if (!connections.current(actor.companyId(), actor.userId(), still.id(), read.generation())) {
                 throw ApiProblemException.of(409, "git.provider_changed");
             }
             if (store.released(projectId, still.id(), externalId)) {

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +16,8 @@ import org.springframework.stereotype.Component;
  * Repositories are not kept: their access is read live at every request, and a kept object is shown only after that read
  * found the repository (TASK-114, F1). An answer that the object is not available is kept like a found one; a failure, a
  * rate limit or a missing connection is never kept. Entries of an earlier generation are never read again, also when a late
- * answer wrote one after the change (TASK-114, F2). "Aktualisieren" reads past it; disconnecting forgets what the person read
+ * answer wrote one after the change (TASK-114, F2); an answer is kept only when its generation still holds after the call,
+ * otherwise it is dropped and the read fails (TASK-116, F1). "Aktualisieren" reads past it; disconnecting forgets what the person read
  * from that provider.
  */
 @Component
@@ -37,7 +39,8 @@ class GitCache {
     }
 
     @SuppressWarnings("unchecked")
-    <T> T read(UUID accountId, UUID providerId, String generation, String object, boolean refresh, Supplier<T> load) {
+    <T> T read(UUID accountId, UUID providerId, String generation, String object, boolean refresh, Supplier<T> load,
+            BooleanSupplier current) {
         Key key = new Key(accountId, providerId, generation, object);
         Instant now = clock.instant();
         Entry entry = entries.get(key);
@@ -45,6 +48,9 @@ class GitCache {
             return (T) entry.value();
         }
         T value = load.get();
+        if (!current.getAsBoolean()) {
+            throw ConnectionService.changed();
+        }
         if (entries.size() >= MAX_ENTRIES) {
             entries.values().removeIf(old -> !old.until().isAfter(now));
             if (entries.size() >= MAX_ENTRIES) {
