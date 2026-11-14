@@ -1913,7 +1913,7 @@ export const de = {
   'git.reason.links_too_many': 'Es sind höchstens 50 Git Verknüpfungen möglich.',
   'git.reason.link_not_found': 'Diese Verknüpfung gibt es nicht mehr.',
   'git.reason.provider_in_use': 'Die Adresse dieser Instanz bleibt fest, solange Repositories freigegeben oder verknüpft sind. Lege für einen anderen Server eine neue Instanz an.',
-  'git.reason.provider_changed': 'Die Adresse dieser Instanz wurde inzwischen geändert. Bitte erneut versuchen.',
+  'git.reason.provider_changed': 'Die Instanz oder die eigene Verbindung wurde inzwischen geändert. Bitte erneut versuchen.',
   'gitLinks.title': 'Git',
   'gitLinks.empty': 'Noch nichts aus Git verknüpft.',
   'gitLinks.hidden': 'Die Git Verknüpfungen sind für dich verborgen.',

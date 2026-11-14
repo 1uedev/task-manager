@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -45,6 +43,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-14 |
 | [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 | [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
+| [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -196,9 +195,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-116 Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-02 · **Aktualisiert:** 2026-11-14
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261114-gitfix-02 · **Aktualisiert:** 2026-11-14
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144, DEC-145, DEC-146; docs/REVIEW_TASK-114-115_PR-320.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-114 und TASK-115 auf main (PR #320). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-114 und TASK-115 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-116“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-146, Migration nur falls für F2 nötig (dann V0067).
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144, DEC-145, DEC-146; docs/REVIEW_TASK-114-115_PR-320.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-114 und TASK-115 auf main (PR #320). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-114 und TASK-115 (Empfehlung nachbessern) „F1 bis F6 und H1 bis H3 als TASK-116“. Umgesetzt auf claude/project-thread-6p8449, Entscheidung DEC-146, ohne Migration (F2 vergleicht die vorhandene Version der Instanz; V0067 bleibt frei).
 
 **Umfang:** Behebung der Befunde F1 bis F6 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-114-115_PR-320.md im Git Modul, im Browser Testersatz, im GitLab Lauf, im Demo SQL, im Workflow und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -216,4 +215,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
 3. Dokumentation und DEC-146 entsprechen den Regeln.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
+**Übergabe:** F1 `ConnectionService` liest Token und Generation aus derselben Zeile, `callWith` prüft sie nach dem Abruf, `GitCache.read` speichert und liefert nur bei gültiger Generation, `renewLater` markiert nur dieselbe Generation; Tests `aRunningReadOfAFormerConnectionShowsAndChangesNothing` und `anAnswerWhoseGenerationEndedDuringTheCallIsNeitherKeptNorHandedOn` mit gehaltener Anbieterantwort. F2 Freigabe und Verknüpfung vergleichen Version der Instanz und Generation in der schreibenden Transaktion (Test `aReleaseOrLinkReadWithAFormerStateOfTheInstanceIsRefused`). F3 Test `anObjectRefusedBelowAReadableRepositoryEndsWithTheCache` (403 und 404), docs/GIT_MIGRATION.md trennt Repository und Objektentzug. F4 und F6 `tools/git/redact.py` mit Diagnosen aus `docker compose ps` und strenger Prüfung von gitlab-run.json, bekannte Codes in `gitlab_check.py`, laufeigener Ordner per `mktemp -d` und Upload nur aus `steps.check.outputs.evidence`; `tests/test_gitlab_evidence.py`. F5 `tools/demo/git-examples.sql` gegen einen echten Demobestand geprüft (gültiger Lauf, sechs veränderte Bestände brechen ab, zwei gleichzeitige Läufe ergeben einen Erfolg). H1 `contracts/cases/git-addresses.json` mit `GitAddressTest` und Browsertest, Testersatz beendet Verbindungen bei neuer Adresse oder Client ID. H2 exakte Rückleitung und Löseschlüssel bis zum Widerruf im GitLab Lauf. H3 Vertrag nennt 400 `request.invalid` und 404 `git.link_not_found` vor der Leseprüfung, Sperrtest über `pg_blocking_pids`. Lokal: Backend, Frontend und alle Browsertests grün; GitLab Lauf und Imagecheck nur in CI.
+
+**Nächster Schritt:** Unabhängige Prüfung von TASK-116, danach Holgers Abnahme von TASK-111 bis TASK-116.

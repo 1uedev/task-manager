@@ -1338,8 +1338,9 @@ class GitApiTest {
             try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
                 held.setAutoCommit(false);
                 held.createStatement().execute("delete from git_repository where id = '" + release + "'");
+                int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWait();
+                waitForLockWaits(holder, 1);
                 held.commit();
                 Response refused = adding.get(20, java.util.concurrent.TimeUnit.SECONDS);
                 assertEquals(409, refused.status(), refused.body());
@@ -1354,11 +1355,12 @@ class GitApiTest {
             try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
                 held.setAutoCommit(false);
                 held.createStatement().execute("select pg_advisory_xact_lock(hashtextextended('git_link:ticket:" + ticketId + "', 0))");
+                int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWait();
+                waitForLockWaits(holder, 1);
                 var withdrawing = pool.submit(() -> links.setup().manager().send("DELETE",
                     "/api/v1/projects/" + links.setup().project() + "/git/repositories/" + again, null, null));
-                waitForLockWaits(2);
+                waitForLockWaits(holder, 2);
                 held.commit();
                 assertEquals(201, adding.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
                 assertEquals(204, withdrawing.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
@@ -1370,22 +1372,28 @@ class GitApiTest {
         }
     }
 
-    private void waitForLockWait() throws InterruptedException {
-        waitForLockWaits(1);
+    private static int backendPid(java.sql.Connection connection) throws java.sql.SQLException {
+        try (var result = connection.createStatement().executeQuery("select pg_backend_pid()")) {
+            result.next();
+            return result.getInt(1);
+        }
     }
 
-    /** Waits until PostgreSQL shows the given number of sessions waiting for a lock. */
-    private void waitForLockWaits(int count) throws InterruptedException {
+    /**
+     * Waits until PostgreSQL shows the given number of sessions blocked by exactly the holding session, read through
+     * pg_blocking_pids, so lock waits of other sessions never count (TASK-116, H3).
+     */
+    private void waitForLockWaits(int holder, int count) throws InterruptedException {
         long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < end) {
-            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
-                Integer.class);
+            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and ? = any(pg_blocking_pids(pid))",
+                Integer.class, holder);
             if (waiting != null && waiting >= count) {
                 return;
             }
             Thread.sleep(20);
         }
-        throw new AssertionError("no session waited for a lock");
+        throw new AssertionError("no session waited for the held lock");
     }
 
     // ---------------------------------------------------------------- TASK-116

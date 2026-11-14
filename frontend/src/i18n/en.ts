@@ -1913,7 +1913,7 @@ export const en: Record<MessageKey, Message> = {
   'git.reason.links_too_many': 'At most 50 Git links are possible.',
   'git.reason.link_not_found': 'This link no longer exists.',
   'git.reason.provider_in_use': 'The address of this instance stays fixed while repositories are released or linked. Add a new instance for another server.',
-  'git.reason.provider_changed': 'The address of this instance has changed meanwhile. Please try again.',
+  'git.reason.provider_changed': 'The instance or your own connection has changed meanwhile. Please try again.',
   'gitLinks.title': 'Git',
   'gitLinks.empty': 'Nothing from Git linked yet.',
   'gitLinks.hidden': 'The Git links are hidden from you.',
