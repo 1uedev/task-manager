@@ -1340,7 +1340,7 @@ class GitApiTest {
                 held.createStatement().execute("delete from git_repository where id = '" + release + "'");
                 int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWaits(holder, 1);
+                waiterOf(holder);
                 held.commit();
                 Response refused = adding.get(20, java.util.concurrent.TimeUnit.SECONDS);
                 assertEquals(409, refused.status(), refused.body());
@@ -1357,10 +1357,11 @@ class GitApiTest {
                 held.createStatement().execute("select pg_advisory_xact_lock(hashtextextended('git_link:ticket:" + ticketId + "', 0))");
                 int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWaits(holder, 1);
+                int adder = waiterOf(holder);
                 var withdrawing = pool.submit(() -> links.setup().manager().send("DELETE",
                     "/api/v1/projects/" + links.setup().project() + "/git/repositories/" + again, null, null));
-                waitForLockWaits(holder, 2);
+                // The link holds the release row and waits for the held lock; the withdrawal waits for the link.
+                waiterOf(adder);
                 held.commit();
                 assertEquals(201, adding.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
                 assertEquals(204, withdrawing.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
@@ -1380,20 +1381,20 @@ class GitApiTest {
     }
 
     /**
-     * Waits until PostgreSQL shows the given number of sessions blocked by exactly the holding session, read through
-     * pg_blocking_pids, so lock waits of other sessions never count (TASK-116, H3).
+     * Waits until PostgreSQL shows a session blocked by exactly the given session, read through pg_blocking_pids, and
+     * returns its process id, so lock waits of other sessions never count (TASK-116, H3).
      */
-    private void waitForLockWaits(int holder, int count) throws InterruptedException {
+    private int waiterOf(int blocker) throws InterruptedException {
         long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < end) {
-            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and ? = any(pg_blocking_pids(pid))",
-                Integer.class, holder);
-            if (waiting != null && waiting >= count) {
-                return;
+            List<Integer> waiting = jdbc.queryForList("select pid from pg_stat_activity where datname = current_database() and ? = any(pg_blocking_pids(pid))",
+                Integer.class, blocker);
+            if (!waiting.isEmpty()) {
+                return waiting.get(0);
             }
             Thread.sleep(20);
         }
-        throw new AssertionError("no session waited for the held lock");
+        throw new AssertionError("no session waited for the lock of session " + blocker);
     }
 
     // ---------------------------------------------------------------- TASK-116
