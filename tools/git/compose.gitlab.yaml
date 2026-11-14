@@ -62,5 +62,5 @@ services:
     volumes:
       - ./tools:/tools:ro
       - ${GITLAB_CHECK_CERTS:?set by gitlab-check.sh}/ca:/certs:ro
-      - ${GITLAB_CHECK_RESULTS:-./gitlab-results}:/results
+      - ${GITLAB_CHECK_RUN_RESULTS:?set by gitlab-check.sh}:/results
     entrypoint: ["python", "-I", "-u", "/tools/git/gitlab_check.py"]

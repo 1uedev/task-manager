@@ -17,8 +17,9 @@ nor the system knows:
        requirement (same removal keys, kinds and counts) only as "Verbindung erneuern" without instance, path or title,
        and the connection stands on "erneuern".
 
-A failure names only the step, the HTTP status and a fixed code (TASK-115, F2): never an answer body, an address with
-its query, a token or a password. GITLAB_CHECK_FAIL_AT=<step number> forces a failure at the start of that step with an
+A failure names only the step, the HTTP status and a code from a fixed list (TASK-115, F2; TASK-116, F4): never an
+answer body, an address with its query, a token, a password or a code the run does not know. The lines of the steps and
+the result file hold only fixed texts and the version of GitLab in a checked form, no value of an answer. GITLAB_CHECK_FAIL_AT=<step number> forces a failure at the start of that step with an
 error that carries the secrets of the run, to show that none of them reaches the output or the result file.
 
 Everything runs through the public HTTP API of the task manager, as the interface does it, and through the API of GitLab
@@ -57,6 +58,17 @@ from demo import ApiError, Client, account_id  # noqa: E402  (the HTTP client of
 
 
 CODE = re.compile(r"^[a-z][a-z0-9_.]{0,79}$")
+VERSION = re.compile(r"^16\.[0-9]{1,2}\.[0-9]{1,2}(-ce|-ee)?$")
+# The answers of the task manager the run may meet; any other code of an answer is reported as api.unexpected (TASK-116, F4).
+KNOWN_CODES = frozenset({
+    "auth.invalid_credentials", "auth.password_change_required", "auth.unauthenticated", "csrf.invalid", "request.invalid",
+    "forced.failure", "permissions.denied", "project.not_found", "project.key_taken", "ticket.not_found", "requirement.not_found",
+    "git.address_unknown", "git.connection_renew", "git.link_exists", "git.link_not_found", "git.links_too_many", "git.not_connected",
+    "git.object_not_found", "git.provider_changed", "git.provider_failed", "git.provider_in_use", "git.provider_incomplete",
+    "git.provider_name_taken", "git.provider_not_found", "git.rate_limited", "git.redirect_refused", "git.repositories_too_many",
+    "git.repository_not_found", "git.repository_not_released", "git.repository_released", "git.secret_key_missing",
+    "git.timeout", "git.tls_failed", "git.unavailable", "git.version_conflict", "git.version_unsupported",
+})
 SECRET_SETTINGS = ("TASK_MANAGER_ADMIN_OTP", "TASK_MANAGER_DEMO_PASSWORD", "GITLAB_ROOT_PASSWORD", "GITLAB_TOKEN", "GITLAB_APP_SECRET")
 
 
@@ -95,6 +107,7 @@ class Step:
             raise ApiError("GET", "/forced?" + urllib.parse.urlencode(secrets), 500, {"code": "forced.failure", "detail": secrets})
 
     def ok(self, detail: str = "") -> None:
+        """Ends the step with a fixed text of the run itself, never with a value of an answer (TASK-116, F4)."""
         seconds = round(time.monotonic() - self.started, 1)
         print(f"ok  {self.number}. {self.name}" + (f": {detail}" if detail else ""), flush=True)
         self.done.append({"step": self.number, "name": self.name, "detail": detail, "seconds": seconds})
@@ -105,8 +118,9 @@ def failure(error: BaseException) -> dict:
     if isinstance(error, Failed):
         return {"status": error.status, "code": error.code}
     if isinstance(error, ApiError):
-        code = error.code if isinstance(error.code, str) and CODE.match(error.code) else "api.unexpected"
-        return {"status": error.status, "code": code}
+        code = error.code if isinstance(error.code, str) and error.code in KNOWN_CODES else "api.unexpected"
+        status = error.status if isinstance(error.status, int) and 100 <= error.status <= 599 else None
+        return {"status": status, "code": code}
     return {"status": None, "code": "error." + type(error).__name__.lower()[:60]}
 
 
@@ -246,8 +260,9 @@ def run(steps: Step) -> str:
     login = setting("TASK_MANAGER_ADMIN", "admin")
 
     # ---------------------------------------------------------------- GitLab: a project in a subgroup with a merge request
-    version = gitlab.api("GET", "/version")["version"]
-    expect(version.startswith("16."), "gitlab.not_16")
+    answered = gitlab.api("GET", "/version").get("version")
+    expect(isinstance(answered, str) and VERSION.match(answered) is not None, "gitlab.not_16")
+    version = answered
     group = gitlab.api("POST", "/groups", {"name": "Demo", "path": "demo", "visibility": "private"})
     team = gitlab.api("POST", "/groups", {"name": "Team", "path": "team", "parent_id": group["id"], "visibility": "private"})
     project = gitlab.api("POST", "/projects", {"name": "Werkzeug", "path": "werkzeug", "namespace_id": team["id"],
@@ -259,7 +274,9 @@ def run(steps: Step) -> str:
     sha = commit["id"]
     change = gitlab.api("POST", f"/projects/{pid}/merge_requests", {"source_branch": "werkzeugliste", "target_branch": "main",
                                                                      "title": "Werkzeugliste für die Werkstatt"})
-    steps.ok(f"GitLab {version}, Projekt demo/team/werkzeug ({pid}), Commit {sha[:8]}, Merge Request !{change['iid']}")
+    expect(isinstance(pid, int) and isinstance(change.get("iid"), int) and re.fullmatch(r"[0-9a-f]{40}", sha or "") is not None,
+           "gitlab.unexpected_answer")
+    steps.ok("GitLab 16, Projekt demo/team/werkzeug mit Commit und Merge Request")
 
     # ---------------------------------------------------------------- task manager: administrator and instances
     steps.begin("Instanz ohne eigene CA")
@@ -281,7 +298,7 @@ def run(steps: Step) -> str:
     provider = admin.call("POST", "/git/admin/providers", {**settings, "name": "GitLab Werkstatt", "caCertificate": ca}).body["id"]
     checked = admin.call("POST", f"/git/admin/providers/{provider}/check").body
     expect(checked["ok"], "check.with_ca_failed")
-    steps.ok(f"Prüfen erfolgreich, Version {checked.get('version') or 'ohne Token nicht genannt'}")
+    steps.ok("Prüfen erfolgreich")
 
     # ---------------------------------------------------------------- OAuth with PKCE as the browser does it
     steps.begin("Git Konto verbunden")
@@ -302,7 +319,8 @@ def run(steps: Step) -> str:
     expect(f"{back.scheme}://{back.netloc}{back.path}" == callback, "oauth.return_target")
     expect(returned_query.get("state") == query["state"] and bool(returned_query.get("code")), "oauth.return_query")
     returned = admin.call("GET", "/git/oauth/callback", query=returned_query, expect=(303,))
-    expect(f"connected={provider}" in returned.headers.get("location", ""), "oauth.not_connected")
+    # The browser goes on to exactly the page "Git" of the task manager with the outcome (TASK-116, H2).
+    expect(returned.headers.get("location", "") == f"{base}/#/git?connected={provider}", "oauth.not_connected")
     connection = next(p for p in admin.call("GET", "/git/providers").body if p["id"] == provider)
     expect(connection["connection"] == "active", "oauth.connection_not_active")
     steps.ok("Anmeldung bei GitLab, Freigabe der Anwendung, Rückleitung an die Rückleitungsadresse mit Zustand und PKCE S256")
@@ -326,7 +344,7 @@ def run(steps: Step) -> str:
     candidate = next((c for c in candidates if c["path"] == "demo/team/werkzeug"), None)
     expect(candidate is not None and candidate["externalId"] == str(pid), "release.no_candidate")
     release = admin.call("POST", f"/projects/{project_id}/git/repositories", {"providerId": provider, "externalId": str(pid)}).body["id"]
-    steps.ok(f"demo/team/werkzeug mit der Kennung {pid}")
+    steps.ok("demo/team/werkzeug mit seiner Kennung")
 
     # ---------------------------------------------------------------- links by address and by release
     steps.begin("Ticket verknüpft")
@@ -356,6 +374,9 @@ def run(steps: Step) -> str:
                for change_entry in entry.get("changes", []) if change_entry.get("field") == "git"]
     # The history names the kind only (TASK-114, F6), once per link.
     expect(sorted(entries) == ["commit", "merge_request", "repository"], "ticket.history")
+    # The removal keys of the links stay the same until the revocation (TASK-116, H2).
+    ticket_keys = shape(shown)
+    expect(len({key for key, _ in ticket_keys}) == 3, "ticket.keys")
     steps.ok("Repository, Commit über kurzen SHA und Merge Request, genau drei; Duplikat und fremder Rechner abgewiesen; Version unverändert")
 
     steps.begin("Anforderung verknüpft")
@@ -368,6 +389,7 @@ def run(steps: Step) -> str:
            and linked[0]["change"]["title"] == "Werkzeugliste für die Werkstatt", "requirement.links")
     events = admin.call("GET", f"{requirement_path}/history").body["events"]
     expect([event.get("to") for event in events if event.get("kind") == "git_linked"] == ["merge_request"], "requirement.history")
+    requirement_keys = shape(linked)
     steps.ok("Merge Request über die Freigabe, Historie nennt die Art")
 
     # ---------------------------------------------------------------- merge and rename at GitLab, "Aktualisieren"
@@ -389,7 +411,8 @@ def run(steps: Step) -> str:
     after = admin.call("GET", requirement_path).body
     expect((after["version"], after["revision"], after["status"]) == (before["version"], before["revision"], before["status"]),
            "merge.requirement_changed")
-    steps.ok(f"vor dem Aktualisieren {cached}, danach {refreshed}; Ticketversion, Revision und Status der Anforderung unverändert")
+    expect(cached in ("open", "merged"), "merge.state_unknown")
+    steps.ok("nach dem Aktualisieren merged; Ticketversion, Revision und Status der Anforderung unverändert")
 
     steps.begin("Umbenannt")
     gitlab.api("PUT", f"/projects/{pid}", {"path": "werkzeug-neu", "name": "Werkzeug neu"})
@@ -401,7 +424,7 @@ def run(steps: Step) -> str:
     steps.begin("Token entzogen")
     ticket_before = shape(links_of(admin, path))
     requirement_before = shape(links_of(admin, f"{requirement_path}/git"))
-    expect(len(ticket_before) == 3 and len(requirement_before) == 1, "revoke.links_before")
+    expect(ticket_before == ticket_keys and requirement_before == requirement_keys, "revoke.links_before")
     gitlab.api("DELETE", f"/applications/{setting('GITLAB_APP_DB_ID')}")
     ticket_after = links_of(admin, path, refresh=True)
     requirement_after = links_of(admin, f"{requirement_path}/git", refresh=True)
