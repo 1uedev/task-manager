@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-14 |
 
 ### Blockiert – BLOCKIERT
 
@@ -217,4 +219,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** F1 `ConnectionService` liest Token und Generation aus derselben Zeile, `callWith` prüft sie nach dem Abruf, `GitCache.read` speichert und liefert nur bei gültiger Generation, `renewLater` markiert nur dieselbe Generation; Tests `aRunningReadOfAFormerConnectionShowsAndChangesNothing` und `anAnswerWhoseGenerationEndedDuringTheCallIsNeitherKeptNorHandedOn` mit gehaltener Anbieterantwort. F2 Freigabe und Verknüpfung vergleichen Version der Instanz und Generation in der schreibenden Transaktion (Test `aReleaseOrLinkReadWithAFormerStateOfTheInstanceIsRefused`). F3 Test `anObjectRefusedBelowAReadableRepositoryEndsWithTheCache` (403 und 404), docs/GIT_MIGRATION.md trennt Repository und Objektentzug. F4 und F6 `tools/git/redact.py` mit Diagnosen aus `docker compose ps` und strenger Prüfung von gitlab-run.json, bekannte Codes in `gitlab_check.py`, laufeigener Ordner per `mktemp -d` und Upload nur aus `steps.check.outputs.evidence`; `tests/test_gitlab_evidence.py`. F5 `tools/demo/git-examples.sql` gegen einen echten Demobestand geprüft (gültiger Lauf, sechs veränderte Bestände brechen ab, zwei gleichzeitige Läufe ergeben einen Erfolg). H1 `contracts/cases/git-addresses.json` mit `GitAddressTest` und Browsertest, Testersatz beendet Verbindungen bei neuer Adresse oder Client ID. H2 exakte Rückleitung und Löseschlüssel bis zum Widerruf im GitLab Lauf. H3 Vertrag nennt 400 `request.invalid` und 404 `git.link_not_found` vor der Leseprüfung, Sperrtest über `pg_blocking_pids`. Lokal: Backend, Frontend und alle Browsertests grün; GitLab Lauf und Imagecheck nur in CI.
 
-**Nächster Schritt:** Unabhängige Prüfung von TASK-116, danach Holgers Abnahme von TASK-111 bis TASK-116.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-116_PR-322.md) empfiehlt nachbessern; F1 bis F4 und H1, H2 behebt TASK-117 (DEC-147). Danach Holgers Abnahme von TASK-111 bis TASK-117.
+
+## TASK-117 Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-03 · **Aktualisiert:** 2026-11-14
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-147; docs/REVIEW_TASK-116_PR-322.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-116 auf main (PR #322). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-116 (Empfehlung nachbessern) „F1 bis F4, H1, H2 als TASK-117“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-147, Migration nur falls nötig (dann V0067).
+
+**Umfang:** Behebung der Befunde F1 bis F4 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-116_PR-322.md im Git Modul, im GitLab Lauf, im Demo SQL und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Die Generation enthält auch den Stand des Tokens. Ein Abruf erneuert ein Token nur, wenn die gesperrte Verbindungszeile noch genau den Stand hat, mit dem er begonnen hat; sonst endet er ohne Erneuerung, ohne Zustandsänderung und ohne Ausgabe. Eine Erneuerung durch den Abruf selbst gibt ihren neuen Stand zurück; Zwischenspeicher, Repository Nachweis, Ausgabe und die Markierung „erneuern“ hängen am tatsächlich verwendeten Stand.
+2. F2: Verknüpfen und Freigeben sperren die geprüfte Verbindungszeile in der schreibenden Transaktion bis zum Commit und vergleichen ihren Stand; Trennen, neues Verbinden und Erneuern warten darauf. Ist das Trennen zuerst festgeschrieben, antworten beide mit 409 `git.provider_changed` ohne Verknüpfung, Freigabe, Historie oder Audit.
+3. F3: Die Prüfung vor dem Upload erlaubt genau die Schritttexte und Fehlercodes des Laufs, Diagnosen nur für die Dienste des Laufs mit ihren Zustandswerten, und sucht Geheimnisse auch im decodierten JSON.
+4. F4: `git-examples.sql` prüft auch Mitgliedschaften und Git Feldregeln der Demogruppen sowie die aktuelle Revision der gewählten Anforderung und hält die geprüften Stände bis zum Schreiben stabil; sonst bricht es ohne Änderung ab.
+5. H1: Die Betriebsanleitung beschreibt die Felder der Diagnose und den Umfang des erzwungenen Fehlers genau.
+6. H2: Ein Test mit gesteuerter Uhr zeigt nach Ablauf der 60 Sekunden beim normalen Abruf die Platzhalter für entzogenen Commit und Änderung bei weiter aktiver Verbindung.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F4 und H1, H2 sind behoben, mit Regressionstests für eine blockierte alte 401 bei gelingender und abgelehnter Erneuerung (Token, Zustand, Zahl der Erneuerungen) und für beide Reihenfolgen von Trennen und Schreiben.
+2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
+3. Dokumentation und DEC-147 entsprechen den Regeln.
+
+**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
