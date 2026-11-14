@@ -31,6 +31,7 @@ import taskmanager.projects.ProjectAccess;
 import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.requirements.RequirementChanged;
+import taskmanager.requirements.RequirementGitRecords;
 import taskmanager.requirements.RequirementSources;
 import taskmanager.wiki.RichText;
 import tools.jackson.databind.JsonNode;
@@ -66,7 +67,8 @@ public class RequirementService implements RequirementSources {
     public static final String APPROVE = "requirement.approve";
     public static final String RESOURCE_TYPE = "requirement";
     public static final String KEY_PREFIX = "ANF-";
-    public static final Set<String> FIELDS = Set.of("title", "description", "criteria", "priority", "owner");
+    /** The fields of the field rules; {@code git} holds the links the git module keeps (TASK-112) and is no content. */
+    public static final Set<String> FIELDS = Set.of("title", "description", "criteria", "priority", "owner", RequirementGitRecords.FIELD);
     /** The content of a revision; a change of one of them after an approval opens a new revision. */
     public static final Set<String> CONTENT = Set.of("title", "description", "criteria", "priority");
     public static final List<String> PRIORITIES = List.of("low", "normal", "high", "critical");

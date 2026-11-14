@@ -62,7 +62,7 @@ public class TicketService {
      * attachments the files module records (TASK-051), the customer, the contact and the mails the helpdesk records (TASK-057) and the priority the SLA module records (TASK-068).
      */
     private static final Set<String> SEPARATE_FIELDS = Set.of(TicketAccess.TAGS_FIELD, TicketAccess.ATTACHMENTS_FIELD,
-        TicketAccess.CUSTOMER_FIELD, TicketAccess.CONTACT_FIELD, TicketAccess.MAIL_FIELD, TicketAccess.PRIORITY_FIELD);
+        TicketAccess.CUSTOMER_FIELD, TicketAccess.CONTACT_FIELD, TicketAccess.MAIL_FIELD, TicketAccess.PRIORITY_FIELD, TicketAccess.GIT_FIELD);
     private static final Set<String> HISTORY_FIELDS = union(FIELDS, SEPARATE_FIELDS);
     private static final int TITLE_MAX = 200;
     private static final int DESCRIPTION_MAX = 20_000;
@@ -249,7 +249,8 @@ public class TicketService {
      * attachment with the field {@code attachments} (TASK-051), and for each change of customer, contact or a mail of the
      * helpdesk (TASK-057). A custom field is shown with its read rule. Each link, unlink or switch of a requirement forms an
      * entry of its own with the field {@code requirements}, shown only to a caller who may read the requirements of the project
-     * (TASK-097), because a link is visible only to readers of both sides.
+     * (TASK-097), because a link is visible only to readers of both sides. A link or unlink of a Git object forms an entry of
+     * its own with the field {@code git} and needs its read rule (TASK-112).
      */
     @Transactional
     public List<HistoryEntry> history(AccessContext actor, UUID projectId, long number) {

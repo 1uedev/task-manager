@@ -77,8 +77,8 @@ class PermissionsController {
 
     private static Map<String, List<String>> fields() {
         Map<String, List<String>> fields = new java.util.LinkedHashMap<>();
-        fields.put(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "mail", "priority", "status", "tags", "title", "type"));
-        fields.put(REQUIREMENT, List.of("criteria", "description", "owner", "priority", "title"));
+        fields.put(TICKET, List.of("assignee", "attachments", "contact", "customer", "description", "git", "mail", "priority", "status", "tags", "title", "type"));
+        fields.put(REQUIREMENT, List.of("criteria", "description", "git", "owner", "priority", "title"));
         return java.util.Collections.unmodifiableMap(fields);
     }
 

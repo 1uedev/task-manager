@@ -159,6 +159,22 @@ class JdbcTicketAccess implements TicketAccess {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordGitChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added) {
+        if (removed == null && added == null) {
+            throw new IllegalArgumentException("nothing changed");
+        }
+        long version = tickets.lockShared(ticketId);
+        tickets.change(ticketId, version, occurredAt, actor, GIT_FIELD, removed, added);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockForGitChange(UUID ticketId) {
+        tickets.lockShared(ticketId);
+    }
+
+    @Override
     public Optional<State> state(UUID ticketId) {
         return tickets.byId(ticketId).map(ticket -> new State(ticket.companyId(), ticket.projectId(), ticket.number(), ticket.type(),
             ticket.status(), ticket.createdAt()));

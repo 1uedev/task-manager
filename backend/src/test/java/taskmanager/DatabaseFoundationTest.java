@@ -33,7 +33,7 @@ class DatabaseFoundationTest {
     void flywayAppliedExactlyTheVersionedMigrations() {
         List<String> versions = jdbc.queryForList(
             "select version from flyway_schema_history where success order by installed_rank", String.class);
-        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028", "0030", "0032", "0033", "0034", "0035", "0036", "0037", "0038", "0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064"), versions);
+        assertEquals(List.of("0001", "0002", "0003", "0004", "0005", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028", "0030", "0032", "0033", "0034", "0035", "0036", "0037", "0038", "0039", "0040", "0041", "0042", "0043", "0044", "0045", "0046", "0047", "0048", "0049", "0050", "0051", "0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065"), versions);
         assertEquals(0, jdbc.queryForObject("select count(*) from flyway_schema_history where not success", Integer.class));
     }
 
@@ -42,7 +42,7 @@ class DatabaseFoundationTest {
         List<String> tables = jdbc.queryForList(
             "select table_name from information_schema.tables where table_schema = current_schema() order by table_name",
             String.class);
-        assertEquals(List.of("appearance_audit_event", "appearance_mail_template", "appearance_setting", "file_attachment", "file_audit_event", "file_image", "flyway_schema_history", "git_audit_event", "git_connection", "git_oauth_state", "git_provider", "git_repository", "helpdesk_audit_event", "helpdesk_contact", "helpdesk_contact_address", "helpdesk_customer",
+        assertEquals(List.of("appearance_audit_event", "appearance_mail_template", "appearance_setting", "file_attachment", "file_audit_event", "file_image", "flyway_schema_history", "git_audit_event", "git_connection", "git_link", "git_oauth_state", "git_provider", "git_repository", "helpdesk_audit_event", "helpdesk_contact", "helpdesk_contact_address", "helpdesk_customer",
             "helpdesk_customer_project", "helpdesk_mailbox", "helpdesk_message", "helpdesk_portal_position", "helpdesk_portal_post", "helpdesk_portal_post_attachment", "helpdesk_portal_seen", "helpdesk_reply", "helpdesk_reply_image", "helpdesk_reply_mail", "helpdesk_ticket_customer", "identity_account", "identity_audit_event", "identity_ldap_setting", "identity_login_throttle",
             "identity_session", "identity_setting", "job", "job_audit_event", "job_schedule", "job_worker", "permissions_action", "permissions_audit", "permissions_field",
             "permissions_group", "permissions_membership", "permissions_revision", "platform_company", "project",

@@ -358,7 +358,7 @@ export interface components {
         /** @enum {string} */
         Priority: "low" | "normal" | "high" | "critical";
         /** @description Feste Felder oder ein eigenes Feld `custom.<key>` (TASK-098) */
-        Field: string | ("title" | "description" | "criteria" | "priority" | "owner");
+        Field: string | ("title" | "description" | "criteria" | "priority" | "owner" | "git");
         CustomFieldValue: string | number | boolean;
         CustomFieldOption: {
             key: string;
@@ -529,7 +529,9 @@ export interface components {
          *     (`from` und `to` sind die Revisionen), submitted, approved, returned (mit `reason`), discarded (mit freiwilliger
          *     `reason`), restored. Bei Statuswechseln sind `from` und `to` die Status. Verknüpfungen (TASK-097) mit dem Feld
          *     `tickets`: ticket_linked, ticket_switched, ticket_unlinked mit `Ticketnummer:Revision` in `from` und `to`; mit dem
-         *     Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt.
+         *     Feld `pages`: page_linked, page_unlinked mit der Seitenkennung, deren Titel `pageTitles` nennt. Git Verknüpfungen
+         *     (TASK-112) mit dem Feld `git`: git_linked (`to`) und git_unlinked (`from`) mit `Objektart:Kennung`, sichtbar mit der
+         *     Leseregel von `git`; sie ändern weder Version noch Revision.
          */
         Event: {
             kind: string;

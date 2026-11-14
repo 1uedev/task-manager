@@ -84,6 +84,17 @@ public interface TicketAccess {
     /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a requirement link change. */
     void lockForRequirementChange(UUID ticketId);
 
+    /**
+     * Records in the history that a Git object was linked ({@code removed} is {@code null}) or unlinked ({@code added} is
+     * {@code null}) (TASK-112). The value names only the kind of the object and the internal identifier of the link, never
+     * anything read from the provider. Like a tag change it leaves the version of the ticket as it is and holds the ticket row
+     * {@code FOR SHARE} until the commit; the entries are shown with the read rule of the field {@link #GIT_FIELD}.
+     */
+    void recordGitChange(UUID ticketId, Instant occurredAt, UUID actor, String removed, String added);
+
+    /** Locks the ticket row {@code FOR SHARE} before the caller takes the time of a Git link change. */
+    void lockForGitChange(UUID ticketId);
+
     /** What the deadlines of a ticket depend on (TASK-068): project, type, status and when the ticket was created. */
     record State(UUID companyId, UUID projectId, long number, String type, String status, Instant createdAt) {
     }
@@ -126,6 +137,9 @@ public interface TicketAccess {
 
     /** The requirements linked to the ticket (TASK-097); kept by the requirements module, only its changes are in the history. */
     String REQUIREMENTS_FIELD = "requirements";
+
+    /** The Git objects linked to the ticket (TASK-112); kept by the git module, only its changes are in the history. */
+    String GIT_FIELD = "git";
 
     /** The actor of what the mail intake does by itself, such as a ticket from a confirmed contact; no account has it. */
     UUID MAIL_INTAKE = new UUID(0, 0x4d41494cL);

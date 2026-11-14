@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Task Manager API, Gruppen und Rechte (TASK-030, TASK-043)
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Verwaltung der Gruppen, ihrer Mitglieder, Aktionen und Feldregeln des Berechtigungsmoduls (TASK-025, DEC-070). Jeder
     Aufruf verlangt eine vollständige Anmeldung und das Unternehmensrecht `permissions.manage`; fehlt es, ist es veraltet
@@ -179,6 +179,9 @@ paths:
         `field.unknown`. Der Katalog nennt die Projektaktionen `requirement.read`, `requirement.edit` und
         `requirement.approve`.
 
+        Seit Version 0.6.0 (TASK-112, DEC-142) haben beide Ressourcentypen das Feld `git` für ihre Git Verknüpfungen;
+        bestehende Gruppen erhalten keine Regel dafür von selbst.
+
         Seit Version 0.5.0 (TASK-098, DEC-128) gilt dasselbe für die eigenen Felder der Anforderungen: `custom.<schlüssel>`
         mit dem Ressourcentyp `requirement` braucht ein `projectId` und ein Feld aus `requirementFields` der aktuellen
         Konfiguration, sonst 400 und `field.unknown`.
@@ -192,7 +195,7 @@ paths:
               required: [resourceType, field, operation, effect]
               properties:
                 resourceType: {type: string, enum: [ticket, requirement]}
-                field: {type: string, pattern: '^(assignee|attachments|contact|criteria|customer|description|mail|owner|priority|status|tags|title|type|custom\.[a-z][a-z0-9_]{0,39})$'}
+                field: {type: string, pattern: '^(assignee|attachments|contact|criteria|customer|description|git|mail|owner|priority|status|tags|title|type|custom\.[a-z][a-z0-9_]{0,39})$'}
                 projectId: {type: [string, 'null'], format: uuid}
                 operation: {type: string, enum: [read, write]}
                 effect: {type: string, enum: [allow, deny, remove]}

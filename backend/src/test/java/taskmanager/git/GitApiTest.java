@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import org.junit.jupiter.api.AfterAll;
@@ -77,6 +78,7 @@ class GitApiTest {
     private static final Stub GITHUB = new Stub(false);
     private static final Stub GITLAB = new Stub(true);
     private static final Tls TLS = new Tls();
+    private static final String SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
 
     private static String freshDatabase() {
         try {
@@ -129,6 +131,16 @@ class GitApiTest {
         final AtomicInteger issued = new AtomicInteger();
         volatile String version = "16.4.1-ee";
         volatile boolean refuseRefresh;
+        /** Tokens whose person sees no repository and no object, as after a withdrawn access (TASK-112). */
+        final Set<String> denied = Collections.synchronizedSet(new HashSet<>());
+        /** Every read of a repository or an object answers with the rate limit (TASK-112). */
+        volatile boolean limited;
+        /** The state of pull request 7 or merge request 3: open, draft, merged or closed. */
+        volatile String changeState = "open";
+        /** Milliseconds every answer waits, and the most requests seen at the same time (TASK-112). */
+        volatile long delay;
+        final AtomicInteger inFlight = new AtomicInteger();
+        final AtomicInteger maxInFlight = new AtomicInteger();
 
         Stub(boolean gitlab) {
             this.gitlab = gitlab;
@@ -137,7 +149,20 @@ class GitApiTest {
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
-            server.createContext("/", this::handle);
+            server.createContext("/", exchange -> {
+                maxInFlight.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
+                try {
+                    if (delay > 0) {
+                        Thread.sleep(delay);
+                    }
+                    handle(exchange);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    inFlight.decrementAndGet();
+                }
+            });
+            server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
             server.start();
         }
 
@@ -177,6 +202,19 @@ class GitApiTest {
                 answer(exchange, 401, Map.of("message", "Bad credentials"));
                 return;
             }
+            if (path.startsWith(api + "/repos/") || path.startsWith(api + "/repositories/") || path.startsWith(api + "/projects/")) {
+                if (limited) {
+                    answer(exchange, 429, Map.of("message", "rate limit"));
+                    return;
+                }
+                if (denied.contains(token)) {
+                    answer(exchange, 404, Map.of("message", "Not Found"));
+                    return;
+                }
+                if (object(exchange, path, api)) {
+                    return;
+                }
+            }
             if (path.equals(api + "/user")) {
                 answer(exchange, 200, gitlab ? Map.of("id", 7, "username", "gl-user") : Map.of("id", 4711, "login", "octo"));
             } else if (!gitlab && path.equals(api + "/user/installations")) {
@@ -199,6 +237,56 @@ class GitApiTest {
             } else {
                 answer(exchange, 404, Map.of("message", "Not Found"));
             }
+        }
+
+        /** Repositories by path, commits, pull requests and merge requests as far as TASK-112 reads them. */
+        private boolean object(HttpExchange exchange, String path, String api) throws IOException {
+            java.util.regex.Matcher commit = java.util.regex.Pattern.compile(Pattern.quote(api)
+                + (gitlab ? "/projects/(\\d+)/repository/commits/([0-9a-f]+)" : "/repositories/(\\d+)/commits/([0-9a-f]+)")).matcher(path);
+            java.util.regex.Matcher change = java.util.regex.Pattern.compile(Pattern.quote(api)
+                + (gitlab ? "/projects/(\\d+)/merge_requests/(\\d+)" : "/repositories/(\\d+)/pulls/(\\d+)")).matcher(path);
+            String repository = gitlab ? "201" : "101";
+            if (path.equals(api + (gitlab ? "/projects/grp%2Fgamma" : "/repos/acme/alpha"))) {
+                answer(exchange, 200, gitlab ? repo(201, "gamma", "grp/gamma") : repo(101, "alpha", "acme/alpha"));
+            } else if (!gitlab && path.equals(api + "/repos/acme/beta")) {
+                answer(exchange, 200, repo(102, "beta", "acme/beta"));
+            } else if (commit.matches()) {
+                if (!commit.group(1).equals(repository) || !SHA.startsWith(commit.group(2))) {
+                    answer(exchange, gitlab ? 404 : 422, Map.of("message", "No commit found"));
+                } else if (gitlab) {
+                    answer(exchange, 200, Map.of("id", SHA, "title", "Anmeldung repariert", "message", "Anmeldung repariert\n\nDetails",
+                        "author_name", "Gita Lab", "committed_date", "2026-11-12T09:30:00.000+01:00"));
+                } else {
+                    answer(exchange, 200, Map.of("sha", SHA, "commit", Map.of("message", "Anmeldung repariert\n\nDetails",
+                        "author", Map.of("name", "Octo Cat", "date", "2026-11-12T08:30:00Z")), "html_url", "https://evil.example/c"));
+                }
+            } else if (change.matches()) {
+                String number = gitlab ? "3" : "7";
+                if (!change.group(1).equals(repository) || !change.group(2).equals(number)) {
+                    answer(exchange, 404, Map.of("message", "Not Found"));
+                    return true;
+                }
+                Map<String, Object> json = new LinkedHashMap<>();
+                json.put(gitlab ? "iid" : "number", Integer.parseInt(number));
+                json.put("title", gitlab ? "Merge Request Anmeldung" : "Pull Request Anmeldung");
+                json.put("draft", "draft".equals(changeState));
+                if (gitlab) {
+                    json.put("state", switch (changeState) {
+                        case "merged" -> "merged";
+                        case "closed" -> "closed";
+                        default -> "opened";
+                    });
+                    json.put("author", Map.of("username", "gl-user"));
+                } else {
+                    json.put("state", "merged".equals(changeState) || "closed".equals(changeState) ? "closed" : "open");
+                    json.put("merged_at", "merged".equals(changeState) ? "2026-11-13T10:00:00Z" : null);
+                    json.put("user", Map.of("login", "octo"));
+                }
+                answer(exchange, 200, json);
+            } else {
+                return false;
+            }
+            return true;
         }
 
         private Map<String, Object> repo(int id, String name, String path) {
@@ -369,7 +457,7 @@ class GitApiTest {
         return login(issued.account().id(), issued.account().username(), issued.oneTimePassword());
     }
 
-    /** Grants project actions in a group of its own. */
+    /** Grants project actions and field rules such as {@code ticket:READ:git} in a group of its own. */
     private void grant(UUID account, UUID project, String... actions) {
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             UUID companyId = companies.find().orElseGet(companies::create);
@@ -377,8 +465,17 @@ class GitApiTest {
             UUID group = UUID.randomUUID();
             jdbc.update("insert into permissions_group(company_id, id, name) values (?, ?, ?)", companyId, group, "fixture-" + group);
             for (String action : actions) {
-                jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
-                    companyId, group, project, action);
+                if (!action.contains(":")) {
+                    jdbc.update("insert into permissions_action(company_id, group_id, project_id, action_key) values (?, ?, ?, ?)",
+                        companyId, group, project, action);
+                    continue;
+                }
+                // "ticket:READ:git": a field rule of a resource type (TASK-112).
+                String[] parts = action.split(":");
+                jdbc.update("""
+                        insert into permissions_field(company_id, group_id, project_id, resource_type, field_key, operation, effect)
+                        values (?, ?, ?, ?, ?, ?, 'ALLOW')
+                        """, companyId, group, project, parts[0], parts[2], parts[1]);
             }
             jdbc.update("insert into permissions_membership(company_id, group_id, user_id) values (?, ?, ?)", companyId, group, account);
             jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", companyId);
@@ -744,6 +841,301 @@ class GitApiTest {
         assertEquals(403, blocked.status());
         assertEquals("auth.password_change_required", blocked.code());
         assertEquals(401, new Browser().get("/api/v1/git/providers").status());
+    }
+
+    // ---------------------------------------------------------------- links at tickets and requirements (TASK-112)
+
+    private static final String[] WORKER = { "ticket.read", "ticket.create", "ticket.edit", "requirement.read", "requirement.edit",
+        "ticket:READ:title", "ticket:WRITE:title", "ticket:READ:type", "ticket:WRITE:type", "ticket:READ:status", "ticket:READ:git",
+        "ticket:WRITE:git", "requirement:READ:title", "requirement:WRITE:title", "requirement:READ:git", "requirement:WRITE:git" };
+
+    private record Links(Setup setup, UUID gitlab, UUID gitlabRelease, Browser worker, long ticket, UUID requirement) {
+        String ticketPath() {
+            return "/api/v1/projects/" + setup.project() + "/tickets/" + ticket + "/git";
+        }
+
+        String requirementPath() {
+            return "/api/v1/requirements/" + requirement + "/git";
+        }
+    }
+
+    /** A project with alpha of GitHub and gamma of GitLab released, a ticket, a requirement and a worker connected to both. */
+    private Links links() {
+        Setup setup = setup();
+        UUID gitlab = createProvider(setup.admin(), "gitlab_com", null);
+        assertTrue(connect(setup.manager(), gitlab, "m" + COUNTER.incrementAndGet()).endsWith("connected=" + gitlab));
+        assertEquals(201, release(setup.manager(), setup, "101").status());
+        Response gamma = setup.manager().send("POST", "/api/v1/projects/" + setup.project() + "/git/repositories",
+            Map.of("providerId", gitlab, "externalId", "201"), null);
+        assertEquals(201, gamma.status(), gamma.body());
+        Browser worker = person();
+        join(setup.admin(), setup.project(), worker, WORKER);
+        assertTrue(connect(worker, setup.github(), "w" + COUNTER.incrementAndGet()).endsWith("connected=" + setup.github()));
+        assertTrue(connect(worker, gitlab, "w" + COUNTER.incrementAndGet()).endsWith("connected=" + gitlab));
+        Response ticket = worker.send("POST", "/api/v1/projects/" + setup.project() + "/tickets", Map.of("type", "task", "title", "Anmeldung"), null);
+        assertEquals(201, ticket.status(), ticket.body());
+        Response requirement = worker.send("POST", "/api/v1/requirements/projects/" + setup.project() + "/requirements",
+            Map.of("title", "Anmeldung sicher"), null);
+        assertEquals(201, requirement.status(), requirement.body());
+        return new Links(setup, gitlab, UUID.fromString(gamma.json().get("id").asString()), worker, ticket.json().get("number").asLong(),
+            UUID.fromString(requirement.json().get("id").asString()));
+    }
+
+    private static Response link(Browser browser, String path, String url) {
+        return browser.send("POST", path, Map.of("url", url), null);
+    }
+
+    private String ticketEtag(Links links, Browser browser) {
+        Response ticket = browser.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket());
+        assertEquals(200, ticket.status(), ticket.body());
+        return ticket.etag();
+    }
+
+    private String requirementEtag(Links links, Browser browser) {
+        Response requirement = browser.get("/api/v1/requirements/" + links.requirement());
+        assertEquals(200, requirement.status(), requirement.body());
+        return requirement.etag() + "|" + requirement.json().get("status").asString() + "|" + requirement.json().get("revision").asInt();
+    }
+
+    private static List<JsonNode> gitHistory(JsonNode entries) {
+        List<JsonNode> found = new ArrayList<>();
+        for (JsonNode entry : entries) {
+            for (JsonNode change : entry.get("changes")) {
+                if ("git".equals(change.get("field").asString())) {
+                    found.add(change);
+                }
+            }
+        }
+        return found;
+    }
+
+    @Test
+    void commitsPullAndMergeRequestsAreLinkedOnceAtTicketAndRequirement() {
+        Links links = links();
+        Browser worker = links.worker();
+        String before = ticketEtag(links, worker);
+        String requirementBefore = requirementEtag(links, worker);
+
+        Response commit = link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA.substring(0, 7) + "?diff=split#top");
+        assertEquals(201, commit.status(), commit.body());
+        assertEquals("commit", commit.json().get("kind").asString());
+        assertEquals(SHA, commit.json().get("commit").get("sha").asString(), "the full SHA is stored");
+        assertEquals("a1b2c3d", commit.json().get("commit").get("shortSha").asString());
+        assertEquals("Anmeldung repariert", commit.json().get("commit").get("message").asString());
+        assertEquals(GITHUB.url() + "/acme/alpha/commit/" + SHA, commit.json().get("url").asString());
+        Response again = link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA);
+        assertEquals(409, again.status(), again.body());
+        assertEquals("git.link_exists", again.code());
+
+        Response pull = link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7/files");
+        assertEquals(201, pull.status(), pull.body());
+        assertEquals("open", pull.json().get("change").get("state").asString());
+        assertEquals(7, pull.json().get("change").get("number").asInt());
+        Response merge = worker.send("POST", links.ticketPath(), Map.of("releaseId", links.gitlabRelease(), "kind", "merge_request", "key", "3"), null);
+        assertEquals(201, merge.status(), merge.body());
+        assertEquals(GITLAB.url() + "/grp/gamma/-/merge_requests/3", merge.json().get("url").asString());
+        Response repository = link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha.git");
+        assertEquals(201, repository.status(), repository.body());
+        assertEquals("repository", repository.json().get("kind").asString());
+        assertEquals(409, worker.send("POST", links.ticketPath(), Map.of("releaseId", links.gitlabRelease(), "kind", "merge_request", "key", "3"), null)
+            .status());
+
+        Response list = worker.get(links.ticketPath());
+        assertEquals(200, list.status(), list.body());
+        assertTrue(list.json().get("readable").asBoolean());
+        assertTrue(list.json().get("writable").asBoolean());
+        assertEquals(4, list.json().get("links").size());
+        for (JsonNode shown : list.json().get("links")) {
+            assertTrue(shown.get("available").asBoolean(), shown.toString());
+        }
+        assertEquals(4, jdbc.queryForObject("select count(*) from git_link where subject_id = (select id from ticket where project_id = ? and number = ?)",
+            Integer.class, links.setup().project(), links.ticket()));
+        String stored = String.join(" ", jdbc.queryForList("select object_key || ' ' || repository_id from git_link", String.class));
+        assertFalse(stored.contains("alpha") || stored.contains("Anmeldung"), "only stable identifiers are stored");
+        assertEquals(before, ticketEtag(links, worker), "a link leaves the version of the ticket");
+
+        Response history = worker.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history");
+        assertEquals(200, history.status(), history.body());
+        List<JsonNode> entries = gitHistory(history.json());
+        assertEquals(4, entries.size(), history.body());
+        assertEquals("commit:" + commit.json().get("id").asString(), entries.get(0).get("to").asString());
+        assertFalse(history.body().contains("Anmeldung repariert"));
+
+        Response onRequirement = link(worker, links.requirementPath(), GITLAB.url() + "/grp/gamma/-/commit/" + SHA);
+        assertEquals(201, onRequirement.status(), onRequirement.body());
+        assertEquals("Gita Lab", onRequirement.json().get("commit").get("author").asString());
+        assertEquals(201, link(worker, links.requirementPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        assertEquals(409, link(worker, links.requirementPath(), GITLAB.url() + "/grp/gamma/-/commit/" + SHA.substring(0, 10)).status());
+        assertEquals(requirementBefore, requirementEtag(links, worker), "version, status and revision of the requirement stay");
+        Response requirementHistory = worker.get("/api/v1/requirements/" + links.requirement() + "/history");
+        assertEquals(200, requirementHistory.status(), requirementHistory.body());
+        assertTrue(requirementHistory.body().contains("\"kind\":\"git_linked\""), requirementHistory.body());
+        assertTrue(requirementHistory.body().contains("commit:" + onRequirement.json().get("id").asString()));
+
+        Response unknown = link(worker, links.ticketPath(), "https://elsewhere.example/acme/alpha");
+        assertEquals(400, unknown.status());
+        assertEquals("git.address_unknown", unknown.code());
+        assertEquals("git.address_unknown", link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/issues/3").code());
+        Response missing = link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/ffffffffff");
+        assertEquals(404, missing.status());
+        assertEquals("git.object_not_found", missing.code());
+        Response hidden = link(worker, links.ticketPath(), GITHUB.url() + "/acme/secret");
+        assertEquals("git.object_not_found", hidden.code(), "unknown and not readable answer alike");
+        Response unreleased = link(worker, links.ticketPath(), GITHUB.url() + "/acme/beta");
+        assertEquals(409, unreleased.status());
+        assertEquals("git.repository_not_released", unreleased.code());
+        assertEquals(400, worker.send("POST", links.ticketPath(), Map.of("releaseId", links.gitlabRelease(), "kind", "pull_request", "key", "3"), null)
+            .status(), "pull requests are GitHub's");
+
+        Response removed = worker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null);
+        assertEquals(204, removed.status(), removed.body());
+        assertEquals(404, worker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null).status());
+        List<JsonNode> after = gitHistory(worker.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history").json());
+        assertEquals("commit:" + commit.json().get("id").asString(), after.getLast().get("from").asString());
+        assertTrue(after.getLast().get("to").isNull());
+        assertEquals(before, ticketEtag(links, worker));
+    }
+
+    @Test
+    void withoutAccessOnlyTheKindIsShownAndAWithdrawnAccessEndsAtTheNextRead() {
+        Links links = links();
+        Response commit = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA);
+        assertEquals(201, commit.status(), commit.body());
+
+        Browser reader = person();
+        join(links.setup().admin(), links.setup().project(), reader, "ticket.read", "ticket:READ:title", "ticket:READ:git");
+        Response notConnected = reader.get(links.ticketPath());
+        assertEquals(200, notConnected.status(), notConnected.body());
+        JsonNode shown = notConnected.json().get("links").get(0);
+        assertFalse(shown.get("available").asBoolean());
+        assertEquals("git.not_connected", shown.get("reason").asString());
+        assertEquals("commit", shown.get("kind").asString());
+        for (String field : List.of("repository", "commit", "change", "url")) {
+            assertTrue(shown.get(field).isNull(), field);
+        }
+        assertFalse(notConnected.body().contains(SHA.substring(0, 7)) || notConnected.body().contains("alpha"), notConnected.body());
+        assertFalse(notConnected.json().get("writable").asBoolean());
+        Response refused = link(reader, links.ticketPath(), GITHUB.url() + "/acme/alpha");
+        assertEquals(403, refused.status());
+
+        assertTrue(connect(reader, links.setup().github(), "r" + COUNTER.incrementAndGet()).endsWith("connected=" + links.setup().github()));
+        GITHUB.denied.add("gh-" + GITHUB.issued.get());
+        Response withoutAccess = reader.get(links.ticketPath());
+        assertEquals("git.unavailable", withoutAccess.json().get("links").get(0).get("reason").asString());
+        assertFalse(withoutAccess.body().contains(SHA.substring(0, 7)) || withoutAccess.body().contains("alpha"), withoutAccess.body());
+        Response history = reader.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history");
+        assertEquals(List.of("commit:" + commit.json().get("id").asString()), gitHistory(history.json()).stream().map(c -> c.get("to").asString()).toList());
+
+        Browser blind = person();
+        join(links.setup().admin(), links.setup().project(), blind, "ticket.read", "ticket:READ:title");
+        Response unreadable = blind.get(links.ticketPath());
+        assertEquals(200, unreadable.status());
+        assertFalse(unreadable.json().get("readable").asBoolean());
+        assertEquals(0, unreadable.json().get("links").size());
+        assertTrue(gitHistory(blind.get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket() + "/history").json()).isEmpty());
+        assertEquals(404, person().get(links.ticketPath()).status(), "a stranger does not see the ticket");
+
+        // G03: the worker read the commit; after the access ends a refresh reads nothing more.
+        assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        GITHUB.denied.addAll(GITHUB.tokens);
+        try {
+            assertTrue(links.worker().get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(), "kept for 60 seconds");
+            Response refreshed = links.worker().get(links.ticketPath() + "?refresh=true");
+            assertEquals("git.unavailable", refreshed.json().get("links").get(0).get("reason").asString(), refreshed.body());
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where id = ?", Integer.class,
+                UUID.fromString(commit.json().get("id").asString())), "a link is never removed by itself");
+        } finally {
+            GITHUB.denied.clear();
+        }
+        assertEquals(204, links.worker().send("DELETE", "/api/v1/git/providers/" + links.setup().github() + "/connection", null, null).status());
+        Response disconnected = links.worker().get(links.ticketPath());
+        assertEquals("git.not_connected", disconnected.json().get("links").get(0).get("reason").asString());
+
+        Browser unlinker = person();
+        join(links.setup().admin(), links.setup().project(), unlinker, "ticket.read", "ticket.edit", "ticket:READ:git", "ticket:WRITE:git");
+        assertEquals(204, unlinker.send("DELETE", links.ticketPath() + "/" + commit.json().get("id").asString(), null, null).status(),
+            "removing needs only the write rule");
+    }
+
+    @Test
+    void aMergedRequestShowsItsStateAndARateLimitKeepsThePageUsable() {
+        Links links = links();
+        Response merge = links.worker().send("POST", links.requirementPath(),
+            Map.of("releaseId", links.gitlabRelease(), "kind", "merge_request", "key", "3"), null);
+        assertEquals(201, merge.status(), merge.body());
+        Response pull = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7");
+        assertEquals(201, pull.status(), pull.body());
+        String requirement = requirementEtag(links, links.worker());
+        String ticket = ticketEtag(links, links.worker());
+        assertEquals("open", links.worker().get(links.requirementPath()).json().get("links").get(0).get("change").get("state").asString());
+        try {
+            GITLAB.changeState = "merged";
+            GITHUB.changeState = "draft";
+            assertEquals("open", links.worker().get(links.requirementPath()).json().get("links").get(0).get("change").get("state").asString());
+            assertEquals("merged", links.worker().get(links.requirementPath() + "?refresh=true").json().get("links").get(0).get("change").get("state")
+                .asString());
+            assertEquals("draft", links.worker().get(links.ticketPath() + "?refresh=true").json().get("links").get(0).get("change").get("state")
+                .asString());
+            GITHUB.changeState = "merged";
+            assertEquals("merged", links.worker().get(links.ticketPath() + "?refresh=true").json().get("links").get(0).get("change").get("state")
+                .asString());
+            assertEquals(requirement, requirementEtag(links, links.worker()), "a merged merge request changes nothing");
+            assertEquals(ticket, ticketEtag(links, links.worker()));
+
+            GITHUB.limited = true;
+            Response limited = links.worker().get(links.ticketPath() + "?refresh=true");
+            assertEquals(200, limited.status(), limited.body());
+            assertEquals("git.rate_limited", limited.json().get("links").get(0).get("reason").asString());
+            int calls = GITHUB.seen("/api/repositories/101").size();
+            links.worker().get(links.ticketPath() + "?refresh=true");
+            assertEquals(calls + 1, GITHUB.seen("/api/repositories/101").size(), "one call, no retry loop");
+            Response refused = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha");
+            assertEquals(503, refused.status());
+            assertEquals("git.rate_limited", refused.code());
+            assertEquals(200, links.worker().get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket()).status());
+        } finally {
+            GITHUB.limited = false;
+            GITHUB.changeState = "open";
+            GITLAB.changeState = "open";
+        }
+    }
+
+    @Test
+    void atMostFiftyLinksAndNothingOfGitInSearch() {
+        Links links = links();
+        UUID ticketId = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, links.setup().project(),
+            links.ticket());
+        UUID company = jdbc.queryForObject("select company_id from ticket where id = ?", UUID.class, ticketId);
+        for (int i = 1; i <= 50; i++) {
+            jdbc.update("""
+                    insert into git_link (id, company_id, subject_kind, subject_id, project_id, provider_id, repository_id, object_kind, object_key,
+                        linked_at, linked_by)
+                    values (?, ?, 'ticket', ?, ?, ?, '101', 'pull_request', ?, now(), ?)
+                    """, UUID.randomUUID(), company, ticketId, links.setup().project(), links.setup().github(), Integer.toString(100 + i),
+                links.worker().id);
+        }
+        Response tooMany = link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha");
+        assertEquals(409, tooMany.status(), tooMany.body());
+        assertEquals("git.links_too_many", tooMany.code());
+        Response list = links.worker().get(links.ticketPath());
+        assertEquals(50, list.json().get("links").size());
+        GITHUB.maxInFlight.set(0);
+        GITHUB.delay = 40;
+        try {
+            assertEquals(50, links.worker().get(links.ticketPath() + "?refresh=true").json().get("links").size());
+        } finally {
+            GITHUB.delay = 0;
+        }
+        assertTrue(GITHUB.maxInFlight.get() <= 4 && GITHUB.maxInFlight.get() >= 2, "at most four reads at the same time: " + GITHUB.maxInFlight.get());
+
+        assertEquals(201, link(links.worker(), links.requirementPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        Response search = links.worker().get("/api/v1/search/tickets?q=" + encode("Anmeldung repariert"));
+        assertEquals(200, search.status(), search.body());
+        assertFalse(search.body().contains("Anmeldung repariert") || search.body().contains(SHA.substring(0, 7)), search.body());
+        Response requirements = links.worker().get("/api/v1/search/requirements?q=" + encode("repariert"));
+        assertFalse(requirements.body().contains(SHA.substring(0, 7)) || requirements.body().contains("repariert\""), requirements.body());
+        Response ticket = links.worker().get("/api/v1/projects/" + links.setup().project() + "/tickets/" + links.ticket());
+        assertFalse(ticket.body().contains("pull_request") || ticket.body().contains("alpha"), ticket.body());
     }
 
     private static String challenge(String verifier) {
