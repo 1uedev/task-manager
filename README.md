@@ -27,6 +27,7 @@ Shared planning and AI collaboration workspace for an independent project manage
 - Knowledge and presentation review: [wiki drafts, languages, branding and email examples](docs/WIKI_I18N_BRANDING.md).
 - Product AI review: [four V1 use cases, skills, providers and confirmation](docs/AI_USE_CASES.md).
 - Git and migration review: [provider variants, source permissions and staged Redmine import](docs/GIT_MIGRATION.md).
+- Git link setup (TASK-113): [registering a GitHub App and a GitLab application, the return address, an own CA, the proxy and what happens when a token is revoked](docs/GIT_MIGRATION.md#einrichtung-und-betrieb-task-113); `TASK_MANAGER_SECRET_KEY` and `TASK_MANAGER_PUBLIC_URL` must be set, and tools/git/gitlab-check.sh runs the link against a real GitLab 16.
 - Operations review: [Docker, recovery targets, storage calculation and proposed load tests](docs/OPERATIONS.md).
 - Demonstration: [Docker image, synthetic demo data, acceptance walk through and search measurement](docs/DEMO.md) (TASK-031, German).
 - Review policy proposal: [risk-based checks, responsibilities and coordination examples](docs/DEVELOPMENT_REVIEW.md).
@@ -91,7 +92,7 @@ After changing task metadata, run `python3 scripts/task_board.py --write` to upd
 | docs/HELPDESK_SLA.md | Mail and portal flows, confirmed queue/pause rules and proposed SLA calculations |
 | docs/WIKI_I18N_BRANDING.md | Confirmed draft/publication flow and proposed editor, language, branding and template rules |
 | docs/AI_USE_CASES.md | Four confirmed internal V1 use cases and proposed skills, provider, data, confirmation and operating contracts |
-| docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority; proposed read access, import mapping and cutover |
+| docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority, setup and operation of the Git link (TASK-113); proposed import mapping and cutover |
 | docs/FUNCTION_INVENTORY.md | Core scope, proposed V1 priorities, later modules and AI use assessment |
 | docs/OPERATIONS.md | Confirmed recovery targets and proposed deployment, backup, retention, resource and performance profiles |
 | .github/ | CI, ownership and contribution templates |

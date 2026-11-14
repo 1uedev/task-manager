@@ -1,0 +1,66 @@
+# Run of the Git link against a real GitLab 16 (TASK-113, DEC-143). Used only together with the compose file of the
+# demonstration by tools/git/gitlab-check.sh:
+#     docker compose -f compose.yaml -f tools/git/compose.gitlab.yaml ...
+# GitLab serves HTTPS with a certificate of a CA of its own that the script creates for each run; the task manager knows
+# that CA only from the instance it registers. All passwords, keys and tokens are made up for the run and gone with it.
+services:
+  app:
+    environment:
+      # The checker reaches the application under this address and follows the return of GitLab to it.
+      TASK_MANAGER_PUBLIC_URL: http://app:8080
+      TASK_MANAGER_SECRET_KEY: ${GITLAB_CHECK_SECRET_KEY:?set by gitlab-check.sh}
+
+  gitlab:
+    # GitLab Community Edition 16.11, the last minor version of 16, pinned by tag and digest.
+    image: gitlab/gitlab-ce:16.11.10-ce.0@sha256:663478e4fd41144dc36c9cc901b6b442319cb8dec257f20ccdae56f819d5f8e7
+    hostname: gitlab.test
+    networks:
+      default:
+        aliases: [gitlab.test]
+    shm_size: 256m
+    environment:
+      GITLAB_ROOT_PASSWORD: ${GITLAB_CHECK_ROOT_PASSWORD:?set by gitlab-check.sh}
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://gitlab.test'
+        letsencrypt['enable'] = false
+        nginx['ssl_certificate'] = '/etc/gitlab/ssl/gitlab.test.crt'
+        nginx['ssl_certificate_key'] = '/etc/gitlab/ssl/gitlab.test.key'
+        prometheus_monitoring['enable'] = false
+        gitlab_rails['usage_ping_enabled'] = false
+        puma['worker_processes'] = 0
+        sidekiq['concurrency'] = 5
+    volumes:
+      - ${GITLAB_CHECK_CERTS:?set by gitlab-check.sh}/ssl:/etc/gitlab/ssl:ro
+    healthcheck:
+      test: ["CMD", "/opt/gitlab/bin/gitlab-healthcheck", "--fail", "--max-time", "10"]
+      interval: 10s
+      timeout: 15s
+      start_period: 15m
+      retries: 90
+
+  gitlab-check:
+    profiles: [tools]
+    image: python:3.13.16-slim@sha256:cf50a4f6ac4f026458b08d5222023d700ac806410dff5e9ca8728fa44f2b850f
+    depends_on:
+      app:
+        condition: service_healthy
+      gitlab:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_URL: http://app:8080
+      TASK_MANAGER_ADMIN: admin
+      TASK_MANAGER_ADMIN_OTP: ${GITLAB_CHECK_OTP:-}
+      TASK_MANAGER_DEMO_PASSWORD: ${TASK_MANAGER_DEMO_PASSWORD:?set by gitlab-check.sh}
+      GITLAB_URL: https://gitlab.test
+      GITLAB_CA: /certs/ca.crt
+      GITLAB_ROOT_PASSWORD: ${GITLAB_CHECK_ROOT_PASSWORD:?set by gitlab-check.sh}
+      GITLAB_TOKEN: ${GITLAB_CHECK_TOKEN:-}
+      GITLAB_APP_ID: ${GITLAB_CHECK_APP_ID:-}
+      GITLAB_APP_SECRET: ${GITLAB_CHECK_APP_SECRET:-}
+      GITLAB_APP_DB_ID: ${GITLAB_CHECK_APP_DB_ID:-}
+      TASK_MANAGER_RESULTS: /results
+    volumes:
+      - ./tools:/tools:ro
+      - ${GITLAB_CHECK_CERTS:?set by gitlab-check.sh}/ca:/certs:ro
+      - ${GITLAB_CHECK_RESULTS:-./gitlab-results}:/results
+    entrypoint: ["python", "-I", "-u", "/tools/git/gitlab_check.py"]
