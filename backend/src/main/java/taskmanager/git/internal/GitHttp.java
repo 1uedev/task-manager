@@ -71,9 +71,19 @@ class GitHttp {
             return status >= 200 && status < 300;
         }
 
-        /** An answer that says the rate limit is reached (429, or 403 with no calls left as GitHub answers). */
+        /**
+         * An answer that says the rate limit is reached: 429, or 403 with no calls left, with {@code Retry-After} or with the
+         * message of the secondary rate limit as GitHub answers (TASK-114, F8). Nothing of the text is passed on.
+         */
         boolean limited() {
-            return status == 429 || (status == 403 && header("x-ratelimit-remaining").map("0"::equals).orElse(false));
+            if (status == 429) {
+                return true;
+            }
+            if (status != 403) {
+                return false;
+            }
+            return header("x-ratelimit-remaining").map("0"::equals).orElse(false) || header("retry-after").isPresent()
+                || body != null && new String(body, StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT).contains("secondary rate limit");
         }
     }
 

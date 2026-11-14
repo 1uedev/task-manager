@@ -17,8 +17,9 @@ import taskmanager.git.internal.ProviderApi;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * Git links of tickets and requirements (TASK-112). An object that is not available to the caller is answered with its kind
- * and the reason only; its path, title, message, address, SHA and number stay out of the answer (rule 4).
+ * Git links of tickets and requirements (TASK-112). An object that is not available to the caller is answered with its kind,
+ * the reason and, for a writer, the opaque key to remove it only; its path, title, message, address, SHA, number, instance,
+ * time and author stay out of the answer (rule 4, TASK-114 F6). The choice holds only repositories the caller can read now.
  */
 @RestController
 class GitLinkController {
@@ -39,15 +40,14 @@ class GitLinkController {
     record ChangeBody(long number, String title, String state, String author) {
     }
 
-    record LinkBody(UUID id, String kind, UUID providerId, String providerName, String providerKind, Instant linkedAt, UUID linkedBy,
+    record LinkBody(String key, String kind, UUID providerId, String providerName, String providerKind, Instant linkedAt, UUID linkedBy,
             boolean available, String reason, RepositoryBody repository, CommitBody commit, ChangeBody change, String url) {
     }
 
     record LinksBody(boolean readable, boolean writable, List<LinkBody> links) {
     }
 
-    record ChoiceBody(UUID releaseId, UUID providerId, String providerName, String providerKind, boolean available, String reason,
-            RepositoryBody repository) {
+    record ChoiceBody(UUID releaseId, UUID providerId, String providerName, String providerKind, RepositoryBody repository) {
     }
 
     record LinkRequest(String url, UUID releaseId, String kind, String key) {
@@ -70,9 +70,9 @@ class GitLinkController {
         return add(new LinkService.TicketTarget(projectId, number), body);
     }
 
-    @DeleteMapping("/api/v1/projects/{projectId}/tickets/{number}/git/{linkId}")
-    ResponseEntity<Void> unlinkTicket(@PathVariable UUID projectId, @PathVariable long number, @PathVariable UUID linkId) {
-        return remove(new LinkService.TicketTarget(projectId, number), linkId);
+    @DeleteMapping("/api/v1/projects/{projectId}/tickets/{number}/git/{key}")
+    ResponseEntity<Void> unlinkTicket(@PathVariable UUID projectId, @PathVariable long number, @PathVariable String key) {
+        return remove(new LinkService.TicketTarget(projectId, number), key);
     }
 
     // ------------------------------------------------------------------------------------------------ requirements
@@ -92,9 +92,9 @@ class GitLinkController {
         return add(new LinkService.RequirementTarget(id), body);
     }
 
-    @DeleteMapping("/api/v1/requirements/{id}/git/{linkId}")
-    ResponseEntity<Void> unlinkRequirement(@PathVariable UUID id, @PathVariable UUID linkId) {
-        return remove(new LinkService.RequirementTarget(id), linkId);
+    @DeleteMapping("/api/v1/requirements/{id}/git/{key}")
+    ResponseEntity<Void> unlinkRequirement(@PathVariable UUID id, @PathVariable String key) {
+        return remove(new LinkService.RequirementTarget(id), key);
     }
 
     // ------------------------------------------------------------------------------------------------ shared
@@ -108,9 +108,7 @@ class GitLinkController {
     private List<ChoiceBody> choices(LinkService.Target target) {
         var actor = requests.actor();
         return GitRequests.retrying(() -> links.choices(actor, target)).stream().map(choice -> new ChoiceBody(choice.release().id(),
-            choice.release().providerId(), choice.provider() == null ? null : choice.provider().name(),
-            choice.provider() == null ? null : choice.provider().kind().key(), choice.repository() != null, choice.reason(),
-            choice.repository() == null ? null : repository(choice.repository()))).toList();
+            choice.release().providerId(), choice.provider().name(), choice.provider().kind().key(), repository(choice.repository()))).toList();
     }
 
     private ResponseEntity<LinkBody> add(LinkService.Target target, LinkRequest body) {
@@ -127,10 +125,10 @@ class GitLinkController {
         return ResponseEntity.status(HttpStatus.CREATED).body(body(view));
     }
 
-    private ResponseEntity<Void> remove(LinkService.Target target, UUID linkId) {
+    private ResponseEntity<Void> remove(LinkService.Target target, String key) {
         var actor = requests.actor();
         GitRequests.retrying(() -> {
-            links.remove(actor, target, linkId);
+            links.remove(actor, target, key);
             return null;
         });
         return ResponseEntity.noContent().build();
@@ -143,12 +141,11 @@ class GitLinkController {
         String kind = provider == null ? null : provider.kind().key();
         var live = view.live();
         if (live == null) {
-            return new LinkBody(link.id(), link.objectKind(), link.providerId(), name, kind, link.linkedAt(), link.linkedBy(), false, view.reason(),
-                null, null, null, null);
+            return new LinkBody(view.key(), link.objectKind(), null, null, null, null, null, false, view.reason(), null, null, null, null);
         }
         var commit = live.commit();
         var change = live.change();
-        return new LinkBody(link.id(), link.objectKind(), link.providerId(), name, kind, link.linkedAt(), link.linkedBy(), true, null,
+        return new LinkBody(view.key(), link.objectKind(), link.providerId(), name, kind, link.linkedAt(), link.linkedBy(), true, null,
             repository(live.repository()),
             commit == null ? null : new CommitBody(commit.sha(), commit.shortSha(), commit.message(), commit.author(), commit.at()),
             change == null ? null : new ChangeBody(change.number(), change.title(), change.state(), change.author()), live.url());

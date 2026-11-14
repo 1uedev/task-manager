@@ -14,8 +14,11 @@ public record GitLink(UUID id, UUID companyId, String subjectKind, UUID subjectI
     public static final String PULL_REQUEST = "pull_request";
     public static final String MERGE_REQUEST = "merge_request";
 
-    /** The value of a history entry: the kind of object and the internal identifier, never anything read from the provider. */
+    /**
+     * The value of a history entry: the kind of object only, never anything read from the provider and no identifier that would
+     * relate the entry to a link (TASK-114, F6).
+     */
     String historyValue() {
-        return objectKind + ":" + id;
+        return objectKind;
     }
 }
