@@ -135,6 +135,8 @@ class GitApiTest {
         volatile boolean refuseRefresh;
         /** Tokens whose person sees no repository and no object, as after a withdrawn access (TASK-112). */
         final Set<String> denied = Collections.synchronizedSet(new HashSet<>());
+        /** When not 0, every read of a commit, pull or merge request answers with this status, the repository stays (TASK-116). */
+        volatile int objectStatus;
         /** Every read of a repository or an object answers with the rate limit (TASK-112). */
         volatile boolean limited;
         /** Every read of a repository or an object answers 403 with the secondary rate limit of GitHub (TASK-114, F8). */
@@ -285,6 +287,8 @@ class GitApiTest {
                 answer(exchange, 200, gitlab ? repo(201, "gamma", "grp/gamma") : repo(101, "alpha", "acme/alpha"));
             } else if (!gitlab && path.equals(api + "/repos/acme/beta")) {
                 answer(exchange, 200, repo(102, "beta", "acme/beta"));
+            } else if ((commit.matches() || change.matches()) && objectStatus != 0) {
+                answer(exchange, objectStatus, Map.of("message", objectStatus == 403 ? "Forbidden" : "Not Found"));
             } else if (commit.matches()) {
                 if (!commit.group(1).equals(repository) || !SHA.startsWith(commit.group(2))) {
                     answer(exchange, gitlab ? 404 : 422, Map.of("message", "No commit found"));
@@ -1478,6 +1482,36 @@ class GitApiTest {
             GITHUB.open();
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void anObjectRefusedBelowAReadableRepositoryEndsWithTheCache() {
+        Links links = links();
+        Browser worker = links.worker();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        for (int status : new int[] {403, 404}) {
+            GITHUB.objectStatus = status;
+            try {
+                // F3: the repository stays readable; what was read of the objects is shown until the cache ends (60 seconds).
+                JsonNode kept = worker.get(links.ticketPath()).json().get("links");
+                assertTrue(kept.get(0).get("available").asBoolean(), "within the 60 seconds of the cache: " + kept);
+                // "Aktualisieren" reads past it, as the cache does after its 60 seconds; the objects are then not available.
+                JsonNode refreshed = worker.get(links.ticketPath() + "?refresh=true").json().get("links");
+                for (JsonNode shown : refreshed) {
+                    assertFalse(shown.get("available").asBoolean(), status + ": " + shown);
+                    assertEquals("git.unavailable", shown.get("reason").asString());
+                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
+                }
+                assertFalse(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(),
+                    "the answer that the object is not available is kept like a found one");
+            } finally {
+                GITHUB.objectStatus = 0;
+            }
+            assertTrue(worker.get(links.ticketPath() + "?refresh=true").json().get("links").get(0).get("available").asBoolean());
+        }
+        assertEquals("active", connectionState(worker, links.setup().github()));
     }
 
     /** Changes the client of the instance and back, so address and client are as before and only the version moved on. */
