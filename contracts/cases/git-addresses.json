@@ -1,0 +1,227 @@
+{
+ "description": "TASK-116 (H1 der Nachprüfung von TASK-114 und TASK-115): gemeinsame Adressvektoren für das Verknüpfen über eine eingefügte Adresse. GitAddressTest führt sie gegen GitAddress.parse mit GitAddress.validKey aus, gitLinks.test.mjs gegen den Browser Testersatz. expected nennt die Lesarten in ihrer Reihenfolge, die längste Adresse einer Instanz zuerst; eine leere Liste heißt git.address_unknown. own und inner sind zwei eigene GitLab Instanzen, inner liegt unter own.",
+ "providers": [
+  {
+   "id": "github",
+   "kind": "github",
+   "baseUrl": "https://github.com"
+  },
+  {
+   "id": "own",
+   "kind": "gitlab",
+   "baseUrl": "https://git.example"
+  },
+  {
+   "id": "inner",
+   "kind": "gitlab",
+   "baseUrl": "https://git.example/grp"
+  }
+ ],
+ "cases": [
+  {
+   "input": "https://github.com/acme/alpha",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "repository",
+     "key": ""
+    }
+   ]
+  },
+  {
+   "input": " https://github.com/acme/alpha.git/ ",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "repository",
+     "key": ""
+    }
+   ]
+  },
+  {
+   "input": "https://github.com/acme/alpha/commit/A1B2C3D?diff=split#top",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "commit",
+     "key": "a1b2c3d"
+    }
+   ]
+  },
+  {
+   "input": "https://github.com/acme/alpha/commit/a1b2c3d/extra",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "commit",
+     "key": "a1b2c3d"
+    }
+   ]
+  },
+  {
+   "input": "https://github.com/acme/alpha/commit/a1b2c3",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/commit",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/7/files",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "pull_request",
+     "key": "7"
+    }
+   ]
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/0",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/007",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/2147483647",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "acme/alpha",
+     "kind": "pull_request",
+     "key": "2147483647"
+    }
+   ]
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/2147483648",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/pull/12345678901",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/alpha/issues/3",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme//alpha",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme/al%70ha",
+   "expected": []
+  },
+  {
+   "input": "https://github.com/acme\\alpha",
+   "expected": []
+  },
+  {
+   "input": "https://github.com.evil.example/acme/alpha",
+   "expected": []
+  },
+  {
+   "input": "HTTPS://GITHUB.COM/Acme/Alpha",
+   "expected": [
+    {
+     "provider": "github",
+     "path": "Acme/Alpha",
+     "kind": "repository",
+     "key": ""
+    }
+   ]
+  },
+  {
+   "input": "https://git.example/grp/gamma",
+   "expected": [
+    {
+     "provider": "own",
+     "path": "grp/gamma",
+     "kind": "repository",
+     "key": ""
+    }
+   ]
+  },
+  {
+   "input": "https://git.example/grp/gamma/-/merge_requests/3",
+   "expected": [
+    {
+     "provider": "own",
+     "path": "grp/gamma",
+     "kind": "merge_request",
+     "key": "3"
+    }
+   ]
+  },
+  {
+   "input": "https://git.example/grp/sub/gamma/-/commit/ABCDEF1",
+   "expected": [
+    {
+     "provider": "inner",
+     "path": "sub/gamma",
+     "kind": "commit",
+     "key": "abcdef1"
+    },
+    {
+     "provider": "own",
+     "path": "grp/sub/gamma",
+     "kind": "commit",
+     "key": "abcdef1"
+    }
+   ]
+  },
+  {
+   "input": "https://git.example/grp/sub/gamma.git",
+   "expected": [
+    {
+     "provider": "inner",
+     "path": "sub/gamma",
+     "kind": "repository",
+     "key": ""
+    },
+    {
+     "provider": "own",
+     "path": "grp/sub/gamma",
+     "kind": "repository",
+     "key": ""
+    }
+   ]
+  },
+  {
+   "input": "https://git.example/grp/sub/gamma/-/merge_requests/2147483648",
+   "expected": []
+  },
+  {
+   "input": "https://git.example/grp/gamma/-/pull/3",
+   "expected": []
+  },
+  {
+   "input": "https://git.example/grp/gamma/-/issues/3",
+   "expected": []
+  },
+  {
+   "input": "https://git.example/gamma",
+   "expected": []
+  },
+  {
+   "input": "https://git.example/grp/gamma/-/commit/xyz1234",
+   "expected": []
+  }
+ ]
+}
