@@ -13,7 +13,8 @@
 -- the ticket WEB-1 and the example requirement of HELP created by admin, no Git link yet and room for the releases
 -- under the limit of 50 per project. Since TASK-117 (F4) it also checks the members of the demo groups, every rule of the
 -- field git and the current state of the requirement, and holds all of it unchanged until the commit; since TASK-118 (F4, F5) also the version of
--- the requirement, with a lock of its own against a second run taken before any table. Everything is one transaction that first locks releases and links against a
+-- the requirement, with a lock of its own against a second run taken before any table, and since TASK-119 (F2) the rows of
+-- the instances right after it. Everything is one transaction that first locks releases and links against a
 -- second run; any failed check leaves the database as it was.
 --
 -- The objects are public: the repository of this project at GitHub.com (1uedev/task-manager, the merge commit of
@@ -22,10 +23,14 @@ begin;
 
 -- A second run waits here, before any table lock, and then finds the examples (TASK-116, F5; TASK-118, F5).
 do $$ begin perform pg_advisory_xact_lock(hashtext('taskmanager.demo.git-examples')); end $$;
+-- Then the rows of the instances, in the order of their identifiers and before any table (TASK-119, F2): every write path of
+-- the application that changes an instance, releases a repository of it or links an object of it first locks or shares its
+-- row, so it either waits here for this script or this script waits until it committed, and never both. A change of an
+-- instance committed first is then seen by the checks below, which refuse it.
+do $$ begin perform 1 from git_provider order by id for update; end $$;
 -- What the checks below read stays as checked until the commit: a change of groups, rules, instances, the ticket or the
 -- requirement waits for this transaction (TASK-117, F4). The tables the application writes first come first and the
--- audit last, in the order of its own write paths: a change of an instance that holds its row waits for nothing this
--- script holds, ends and lets the script go on with the changed instance, which its checks then refuse (TASK-118, F5).
+-- audit last, in the order of its own write paths (TASK-118, F5).
 lock table permissions_group, permissions_membership, permissions_field, git_provider, project, ticket, requirement,
     requirement_revision in share mode;
 lock table git_repository, git_link in share row exclusive mode;

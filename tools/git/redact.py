@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import re
 import sys
@@ -105,9 +106,18 @@ def _constant(name: str):
     raise Unclear("not a JSON number")
 
 
+def _finite(literal: str) -> float:
+    value = float(literal)
+    if not math.isfinite(value):
+        # 1e999 overflows to infinity without being one of the spelled out constants (TASK-119, F3).
+        raise Unclear("not a finite number")
+    return value
+
+
 def strict(text: str):
-    """Decodes JSON once and refuses a key twice in any object, so no value is hidden behind a later one (TASK-118, F3)."""
-    return json.loads(text, object_pairs_hook=_pairs, parse_constant=_constant)
+    """Decodes JSON once and refuses a key twice in any object, so no value is hidden behind a later one (TASK-118, F3), and
+    every number that is not finite, spelled out or reached by an overflow (TASK-119, F3)."""
+    return json.loads(text, object_pairs_hook=_pairs, parse_constant=_constant, parse_float=_finite)
 
 
 def result_problems(text: str) -> list[str]:
@@ -115,7 +125,7 @@ def result_problems(text: str) -> list[str]:
     try:
         result = strict(text)
     except Unclear:
-        return ["result has a key twice or no JSON number"]
+        return ["result has a key twice or a number that is not finite"]
     except ValueError:
         return ["result not JSON"]
     return value_problems(result)
@@ -171,7 +181,7 @@ def leaks(text: str, known: list[str], kind: str = "text") -> list[str]:
     try:
         decoded = strict(text)
     except Unclear:
-        unreadable = "result has a key twice or no JSON number"
+        unreadable = "result has a key twice or a number that is not finite"
     except ValueError:
         unreadable = "result not JSON"
     if kind == "result":

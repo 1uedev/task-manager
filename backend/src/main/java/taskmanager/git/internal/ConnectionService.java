@@ -273,17 +273,17 @@ public class ConnectionService {
         if (providers.isEmpty()) {
             return results;
         }
-        Map<UUID, String> connections = transaction.execute(status -> {
-            Map<UUID, String> found = new java.util.HashMap<>();
-            for (UUID providerId : providers) {
-                Provider provider = store.provider(companyId, providerId).filter(p -> !p.removed()).orElse(null);
-                Connection connection = store.connection(providerId, accountId).orElse(null);
-                if (provider != null && connection != null && connection.active() && connection.companyId().equals(companyId)) {
-                    found.put(providerId, connectionOf(provider, connection));
-                }
+        // One statement, so one snapshot of every instance and connection: a disconnect, a new connection or a switch to renew
+        // of two instances between two reads cannot leave a mix of both states in the answer (TASK-119, F1).
+        Map<UUID, String> connections = new java.util.HashMap<>();
+        for (GitStore.ProviderConnection found : store.providersWithConnection(accountId, providers)) {
+            Provider provider = found.provider();
+            Connection connection = found.connection();
+            if (provider.companyId().equals(companyId) && !provider.removed() && connection.active()
+                && connection.companyId().equals(companyId)) {
+                connections.put(provider.id(), connectionOf(provider, connection));
             }
-            return found;
-        });
+        }
         return results.stream().map(result -> {
             String generation = generationOf.apply(result);
             if (generation == null) {

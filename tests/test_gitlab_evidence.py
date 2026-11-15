@@ -166,7 +166,12 @@ class RedactTest(unittest.TestCase):
             for text in ('{"passed": false, "gitlab": "16.11.10-ce", "steps": [], "passed": false}\n',
                          '{"passed": false, "gitlab": "16.11.10-ce", "steps": [' + step.replace('"detail"', '"detail": "frei", "detail"') + ']}\n',
                          '{"passed": false, "gitlab": "16.11.10-ce", "steps": [' + step.replace('"detail"', '"detail": "' + RUN_SECRETS["GITLAB_CHECK_TOKEN"] + '", "detail"') + ']}\n',
-                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "NaN") + ']}\n'):
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "NaN") + ']}\n',
+                         # TASK-119, F3: the spelled out constants and a number that only overflows to infinity.
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "Infinity") + ']}\n',
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "-Infinity") + ']}\n',
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "1e999") + ']}\n',
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "-1e999") + ']}\n'):
                 twice = Path(folder) / "gitlab-run.json"
                 twice.write_text(text)
                 run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(twice)],
