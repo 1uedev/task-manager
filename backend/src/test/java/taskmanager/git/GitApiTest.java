@@ -1733,6 +1733,120 @@ class GitApiTest {
         }
     }
 
+    /**
+     * Waits until {@code stub} saw one more read of {@code readPath} than {@code before} and answered every request but
+     * {@code held}, so the other entries of the answer are fully read while a held one waits (TASK-119, H1).
+     */
+    private static void awaitRead(Stub stub, String readPath, long before, int held) throws InterruptedException {
+        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (stub.inFlight.get() != held || reads(stub, readPath) <= before) {
+            assertTrue(System.nanoTime() < until, "the other entry was read while the held one waits");
+            Thread.sleep(10);
+        }
+    }
+
+    private static long reads(Stub stub, String readPath) {
+        return stub.seen.stream().filter(s -> s.path().contains(readPath)).count();
+    }
+
+    @Test
+    void theFinalCheckOfTwoInstancesDropsEveryEndedConnection() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        assertEquals(201, link(worker, links.ticketPath(), GITLAB.url() + "/grp/gamma/-/merge_requests/3").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // TASK-119, F1: the commit of GitHub is read and done, the merge request of GitLab.com waits. GitHub is
+            // disconnected first, then GitLab.com. The final check reads both instances in one statement, so the answer keeps
+            // the data of neither and never the earlier ended one alone.
+            long commits = reads(GITHUB, "/commits/");
+            GITLAB.hold("/merge_requests/3");
+            var reading = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITLAB.awaitHeld();
+            awaitRead(GITHUB, "/commits/", commits, 0);
+            assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
+            assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + links.gitlab() + "/connection", null, null).status());
+            GITLAB.open();
+            Response shown = reading.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(2, shown.json().get("links").size(), shown.body());
+            for (JsonNode link : shown.json().get("links")) {
+                assertFalse(link.get("available").asBoolean(), shown.body());
+                assertTrue(link.get("repository").isNull() && link.get("commit").isNull() && link.get("change").isNull(), shown.body());
+            }
+            assertFalse(shown.body().contains("acme/alpha") || shown.body().contains("grp/gamma"), shown.body());
+        } finally {
+            GITLAB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aFullyReadEntryPassesTheFinalCheckOnlyWhileItsConnectionLasts() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // TASK-119, H1, renewal: the commit is fully read with the former token, the pull request waits and gets its
+            // refusal, renews the token of the same connection and reads again. The commit passes the final check.
+            String former = accessToken(worker, github);
+            int refreshes = refreshCount();
+            long seenCommits = reads(GITHUB, "/commits/");
+            GITHUB.hold("/pulls/7");
+            var renewing = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            GITHUB.tokens.remove(former);
+            GITHUB.open();
+            Response renewed = renewing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(refreshes + 1, refreshCount(), "the second entry renews the token once");
+            assertNotEquals(former, accessToken(worker, github));
+            for (JsonNode link : renewed.json().get("links")) {
+                assertTrue(link.get("available").asBoolean(), renewed.body());
+            }
+            assertEquals(SHA, renewed.json().get("links").get(0).get("commit").get("sha").asString(), renewed.body());
+
+            // The switch to renew at the same place: the fully read commit is dropped as well.
+            seenCommits = reads(GITHUB, "/commits/");
+            GITHUB.hold("/pulls/7");
+            var switching = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            jdbc.update("""
+                update git_connection set state = 'renew', access_cipher = null, refresh_cipher = null, access_expires_at = null,
+                    refresh_expires_at = null where provider_id = ? and account_id = ?
+                """, github, worker.id);
+            GITHUB.open();
+            Response switched = switching.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            for (JsonNode link : switched.json().get("links")) {
+                assertFalse(link.get("available").asBoolean(), switched.body());
+            }
+            assertFalse(switched.body().contains("acme/alpha"), switched.body());
+
+            // Disconnecting at the same place: the fully read commit is dropped.
+            assertTrue(connect(worker, github, "h1" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            seenCommits = reads(GITHUB, "/commits/");
+            GITHUB.hold("/pulls/7");
+            var disconnecting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
+            GITHUB.open();
+            Response disconnected = disconnecting.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            for (JsonNode link : disconnected.json().get("links")) {
+                assertFalse(link.get("available").asBoolean(), disconnected.body());
+            }
+            assertFalse(disconnected.body().contains("acme/alpha"), disconnected.body());
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
     @Test
     void aLateRefusalNeverMarksANewerTokenItCannotOpen() throws Exception {
         Links links = links();

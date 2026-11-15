@@ -83,6 +83,31 @@ class GitStore {
             .query((rs, row) -> connection(rs)).optional();
     }
 
+    /** A provider together with the connection of one account, read in the same statement. */
+    record ProviderConnection(Provider provider, Connection connection) {
+    }
+
+    /**
+     * The providers among {@code ids} with the connection of the account, in a single statement and so in one snapshot of the
+     * database: no change of a connection between two reads can mix two states (TASK-119, F1).
+     */
+    List<ProviderConnection> providersWithConnection(UUID accountId, java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                select p.*, c.provider_id, c.account_id, c.company_id as c_company_id, c.external_user_id, c.state, c.access_cipher,
+                    c.refresh_cipher, c.access_expires_at, c.refresh_expires_at, c.connected_at, c.updated_at as c_updated_at
+                from git_provider p join git_connection c on c.provider_id = p.id and c.account_id = ?
+                where p.id = any(?)
+                """).params(accountId, ids.toArray(UUID[]::new))
+            .query((rs, row) -> new ProviderConnection(provider(rs), new Connection(rs.getObject("provider_id", UUID.class),
+                rs.getObject("account_id", UUID.class), rs.getObject("c_company_id", UUID.class), rs.getString("external_user_id"),
+                rs.getString("state"), rs.getBytes("access_cipher"), rs.getBytes("refresh_cipher"), instant(rs, "access_expires_at"),
+                instant(rs, "refresh_expires_at"), instant(rs, "connected_at"), instant(rs, "c_updated_at"))))
+            .list();
+    }
+
     Optional<Connection> lockConnection(UUID providerId, UUID accountId) {
         return jdbc.sql("select * from git_connection where provider_id = ? and account_id = ? for update").params(providerId, accountId)
             .query((rs, row) -> connection(rs)).optional();

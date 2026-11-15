@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-119](#task-119-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-118-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben | claude-20261115-gitfix-05 | 2026-11-15 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -48,6 +46,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
 | [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-15 |
 | [TASK-118](#task-118-befunde-f1-bis-f5-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-117-beheben) | Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben | claude-20261115-gitfix-04 | 2026-11-15 |
+| [TASK-119](#task-119-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-118-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben | claude-20261115-gitfix-05 | 2026-11-15 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -276,9 +275,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-119 Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-05 · **Aktualisiert:** 2026-11-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261115-gitfix-05 · **Aktualisiert:** 2026-11-15
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-149; docs/REVIEW_TASK-118_PR-325.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-118 auf main (PR #325). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-118 (Empfehlung nachbessern) „F1 bis F3, H1 als TASK-119“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-149, Migration V0067 nur falls nötig.
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-149; docs/REVIEW_TASK-118_PR-325.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-118 auf main (PR #325). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-118 (Empfehlung nachbessern) „F1 bis F3, H1 als TASK-119“. Umgesetzt auf claude/project-thread-6p8449, Entscheidung DEC-149, ohne Migration (V0067 bleibt frei).
 
 **Umfang:** Behebung der Befunde F1 bis F3 und des Hinweises H1 aus docs/REVIEW_TASK-118_PR-325.md im Git Modul, im Demo SQL, in der Evidenzprüfung des GitLab Laufs und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -293,4 +292,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
 3. Dokumentation und DEC-149 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** F1 `ConnectionService.keepCurrent` liest alle beteiligten Instanzen mit den Verbindungen der Person in einer einzigen Abfrage (`GitStore.providersWithConnection`) und prüft dort Unternehmen, Stand der Instanz und aktive Verbindung; der Tokenstand bleibt bei derselben aktiven Verbindung ausgenommen (Test `theFinalCheckOfTwoInstancesDropsEveryEndedConnection`: Commit von GitHub gelesen, Merge Request von GitLab.com gehalten, beide Instanzen nacheinander getrennt, die Antwort zeigt von keiner Daten). Der Abstand zwischen zwei Abfragen der Fassung von TASK-118 lässt sich über die Schnittstelle nicht gezielt herbeiführen, dieser Test besteht daher auch gegen TASK-118; die einzige Abfrage beseitigt den Abstand. F2 `git-examples.sql` sperrt nach seiner eigenen Sperre zuerst alle Instanzzeilen in der Reihenfolge der Kennungen mit FOR UPDATE, erst danach die Tabellen. Sitzungsproben auf einer Kopie des Demobestands (PostgreSQL 16) mit gehaltener Zeilensperre vor dem ersten UPDATE oder INSERT: Instanzänderung, Freigabe und Verknüpfung jeweils in beiden Startreihenfolgen enden ohne Verklemmung (Instanzänderung zuerst: Skript bricht an der geänderten Instanz ab; Verknüpfung zuerst: Skript bricht an der vorhandenen Verknüpfung ab; Freigabe in APP zuerst: Skript gelingt; Skript zuerst: die anderen warten und gelingen), zwei Läufe ergeben genau einen Erfolg. Die Fassung von TASK-118 verklemmte sich in denselben Proben mit Instanzänderung und Freigabe (`deadlock detected`). F3 `redact.py` lehnt beim Decodieren jede nicht endliche Zahl ab (`parse_float`), auch `1e999` und `-1e999`; `tests/test_gitlab_evidence.py` prüft über `--check` NaN, Infinity, -Infinity, 1e999 und -1e999 (der Überlauf scheitert gegen TASK-118). H1 Test `aFullyReadEntryPassesTheFinalCheckOnlyWhileItsConnectionLasts` wartet, bis der Commit vollständig gelesen und nur der Pull Request gehalten ist, und zeigt an genau dieser Stelle: Erneuerung durch den zweiten Eintrag mit genau einem Refresh lässt beide Einträge sichtbar, Wechsel auf „erneuern“ und Trennen entfernen auch die Daten des fertigen Eintrags. Dokumentation in docs/GIT_MIGRATION.md, docs/DEMO.md und backend/README.md („Korrekturen (TASK-119)“). Lokal geprüft: `GitApiTest` (31), `GitCacheTest`, `GitAddressTest`, `GitContractTest`, `python3 -m unittest discover -s tests`, `validate_repository.py`, `task_board.py --check`, `git diff --check`; Frontend unverändert.
+
+**Nächster Schritt:** Unabhängige Prüfung von TASK-119, danach Holgers Abnahme von TASK-111 bis TASK-119.
