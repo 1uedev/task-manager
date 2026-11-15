@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-118](#task-118-befunde-f1-bis-f5-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-117-beheben) | Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben | claude-20261115-gitfix-04 | 2026-11-15 |
 
 ### Blockiert – BLOCKIERT
 
@@ -243,4 +245,28 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** F1 `ConnectionService.generation` enthält den Stand des Tokens (Hash der verschlüsselten Form); `renew` vergleicht unter der Zeilensperre den erwarteten Stand, bevor das Erneuerungstoken gelesen oder der Zustand geändert wird, verwendet ein inzwischen erneuertes Token derselben Verbindung ohne Erneuerung und gibt nach eigener Erneuerung die neue Generation zurück; Test `aRunningReadOfAFormerConnectionShowsAndChangesNothing` mit gelingender und abgelehnter Erneuerung (Zahl der Erneuerungen, gespeichertes Token, Zustand). F2 `ConnectionService.holdCurrent` sperrt die geprüfte Verbindungszeile in Verknüpfen und Freigeben bis zum Commit; Test `disconnectingAndWritingALinkOrReleaseWaitForEachOther` mit beiden Reihenfolgen über gehaltene Sperren und `pg_blocking_pids`. Beide neuen Tests scheitern gegen den Code von TASK-116. F3 `tools/git/evidence.json` mit Schritten, Texten, Codes und Diensten, aus der `gitlab_check.py` schreibt und gegen die `redact.py --check` prüft, Geheimnissuche auch in decodierten JSON Zeichenketten; `tests/test_gitlab_evidence.py` mit unbekanntem Code, freiem Detail, Unicode Escape und fremdem Dienst. F4 `tools/demo/git-examples.sql` prüft Mitgliedschaften der Demogruppen, alle Regeln des Felds `git` und den aktuellen Stand von ANF-1 und hält die gelesenen Tabellen bis zum Commit gesperrt; gegen einen echten Demobestand geprüft (gültiger Lauf, sechs veränderte Bestände brechen ohne Änderung ab, zwei gleichzeitige Läufe ergeben einen Erfolg, ein gleichzeitiges Ändern der Mitgliedschaften wartet). H1 docs/GIT_MIGRATION.md beschreibt Felder der Belege und den Umfang des Fehlerlaufs. H2 der Objekttest stellt die Uhr der Anwendung um 61 Sekunden vor.
 
-**Nächster Schritt:** Unabhängige Prüfung von TASK-117, danach Holgers Abnahme von TASK-111 bis TASK-117.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-117_PR-323.md) empfiehlt nachbessern; F1 bis F5 und H1, H2 behebt TASK-118 (DEC-148). Danach Holgers Abnahme von TASK-111 bis TASK-118.
+
+## TASK-118 Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-04 · **Aktualisiert:** 2026-11-15
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-148; docs/REVIEW_TASK-117_PR-323.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-117 auf main (PR #323). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-117 (Empfehlung nachbessern) „F1 bis F5, H1, H2 als TASK-118“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-148, Migration nur falls nötig (dann V0067).
+
+**Umfang:** Behebung der Befunde F1 bis F5 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-117_PR-323.md im Git Modul, im GitLab Lauf, im Demo SQL und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Jeder Eintrag einer Verknüpfungsliste, der Auswahl freigegebener Repositories und der Freigabeliste behält bis zur Ausgabe die Generation, mit der er gelesen wurde. Unmittelbar vor der Ausgabe prüft die Anwendung alle Generationen gemeinsam; ein Eintrag einer nicht mehr gültigen Generation wird zum Platzhalter oder fällt aus der Auswahl.
+2. F2: Trifft eine verspätete Ablehnung auf einen neueren Tokenstand derselben Verbindung, endet ein Fehler beim Öffnen dieses Tokens ohne Schreibzugriff; markiert wird nur ein Stand, mit dem der Abruf tatsächlich begonnen hat.
+3. F3: Die Prüfung vor dem Upload lehnt doppelte JSON Schlüssel auf jeder Ebene ab und verwendet den einmal streng decodierten Wert für Schema und Geheimnissuche.
+4. F4: `git-examples.sql` prüft auch die beim Seed erreichte Version der Beispielanforderung, sodass eine Bearbeitung innerhalb derselben Revision zum Abbruch ohne Änderung führt.
+5. F5: Das Demo SQL nimmt zuerst eine eigene Sperre für parallele Läufe und sperrt die übrigen Tabellen in der Reihenfolge der normalen Schreibwege, sodass Demo SQL und Instanzänderung in beiden Startreihenfolgen terminieren.
+6. H1: Tests belegen das wartende Trennen während einer aufgehaltenen Freigabe nach `holdCurrent` sowie den erfolgreichen Refresh durch einen zweiten Abruf mit Wiederverwendung des neuen Tokens durch den ersten und genau einem Refresh.
+7. H2: Die Betriebsanleitung trennt die Suche nach den sieben bekannten Umgebungswerten von den Belegen des OAuth Ablaufs.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F5 und H1, H2 sind behoben, mit Regressionstests für einen abgeschlossenen und einen gehaltenen Abruf bei Neuverbindung und Erneuerung, für den Öffnungsfehler, für doppelte Schlüssel und für beide Startreihenfolgen von Demo SQL und Instanzänderung.
+2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
+3. Dokumentation und DEC-148 entsprechen den Regeln.
+
+**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
