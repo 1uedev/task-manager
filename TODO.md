@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-14 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-114](#task-114-befunde-f1-bis-f9-und-hinweis-h3-der-codex-prüfung-von-task-112-beheben) | Befunde F1 bis F9 und Hinweis H3 der Codex Prüfung von TASK-112 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 | [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 | [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
+| [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-15 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -223,9 +222,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-117 Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261114-gitfix-03 · **Aktualisiert:** 2026-11-14
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261114-gitfix-03 · **Aktualisiert:** 2026-11-15
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-147; docs/REVIEW_TASK-116_PR-322.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-116 auf main (PR #322). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-116 (Empfehlung nachbessern) „F1 bis F4, H1, H2 als TASK-117“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-147, Migration nur falls nötig (dann V0067).
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-147; docs/REVIEW_TASK-116_PR-322.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-116 auf main (PR #322). **Arbeitsstand:** Holger wählt am 14. November 2026 zur Codex Nachprüfung von TASK-116 (Empfehlung nachbessern) „F1 bis F4, H1, H2 als TASK-117“. Umgesetzt auf claude/project-thread-6p8449, Entscheidung DEC-147, ohne Migration (V0067 bleibt frei).
 
 **Umfang:** Behebung der Befunde F1 bis F4 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-116_PR-322.md im Git Modul, im GitLab Lauf, im Demo SQL und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -242,4 +241,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
 3. Dokumentation und DEC-147 entsprechen den Regeln.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
+**Übergabe:** F1 `ConnectionService.generation` enthält den Stand des Tokens (Hash der verschlüsselten Form); `renew` vergleicht unter der Zeilensperre den erwarteten Stand, bevor das Erneuerungstoken gelesen oder der Zustand geändert wird, verwendet ein inzwischen erneuertes Token derselben Verbindung ohne Erneuerung und gibt nach eigener Erneuerung die neue Generation zurück; Test `aRunningReadOfAFormerConnectionShowsAndChangesNothing` mit gelingender und abgelehnter Erneuerung (Zahl der Erneuerungen, gespeichertes Token, Zustand). F2 `ConnectionService.holdCurrent` sperrt die geprüfte Verbindungszeile in Verknüpfen und Freigeben bis zum Commit; Test `disconnectingAndWritingALinkOrReleaseWaitForEachOther` mit beiden Reihenfolgen über gehaltene Sperren und `pg_blocking_pids`. Beide neuen Tests scheitern gegen den Code von TASK-116. F3 `tools/git/evidence.json` mit Schritten, Texten, Codes und Diensten, aus der `gitlab_check.py` schreibt und gegen die `redact.py --check` prüft, Geheimnissuche auch in decodierten JSON Zeichenketten; `tests/test_gitlab_evidence.py` mit unbekanntem Code, freiem Detail, Unicode Escape und fremdem Dienst. F4 `tools/demo/git-examples.sql` prüft Mitgliedschaften der Demogruppen, alle Regeln des Felds `git` und den aktuellen Stand von ANF-1 und hält die gelesenen Tabellen bis zum Commit gesperrt; gegen einen echten Demobestand geprüft (gültiger Lauf, sechs veränderte Bestände brechen ohne Änderung ab, zwei gleichzeitige Läufe ergeben einen Erfolg, ein gleichzeitiges Ändern der Mitgliedschaften wartet). H1 docs/GIT_MIGRATION.md beschreibt Felder der Belege und den Umfang des Fehlerlaufs. H2 der Objekttest stellt die Uhr der Anwendung um 61 Sekunden vor.
+
+**Nächster Schritt:** Unabhängige Prüfung von TASK-117, danach Holgers Abnahme von TASK-111 bis TASK-117.

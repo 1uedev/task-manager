@@ -273,7 +273,8 @@ paths:
         Das Repository muss mit der eigenen Verbindung lesbar sein, sonst 404 `git.repository_not_found`. Ohne Verbindung
         409 `git.not_connected` oder `git.connection_renew`; schon freigegeben 409 `git.repository_released`; mehr als 50
         Freigaben 409 `git.repositories_too_many`; Instanz oder eigene Verbindung während der Prüfung geändert (andere
-        Version oder Adresse der Instanz, neu verbunden oder Token erneuert) 409 `git.provider_changed` (TASK-116, F1 und F2); ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
+        Version oder Adresse der Instanz, getrennt, neu verbunden oder Token erneuert) 409 `git.provider_changed` (TASK-116, F1
+        und F2); die geprüfte Verbindung bleibt bis zum Commit gesperrt, ein Trennen wartet darauf (TASK-117, F2); ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       requestBody:
@@ -366,8 +367,8 @@ paths:
         das Repository). Unbekannte Instanz oder Form 400 `git.address_unknown`; ohne Verbindung 409 `git.not_connected` oder
         `git.connection_renew`; nicht vorhanden oder nicht lesbar 404 `git.object_not_found`; Repository nicht für das
         Projekt und diese Instanz freigegeben 409 `git.repository_not_released`, geprüft bevor der Commit oder die Änderung
-        beim Anbieter gelesen wird; Instanz oder eigene Verbindung inzwischen geändert (andere Version oder Adresse der Instanz, neu verbunden oder Token
-        erneuert) 409 `git.provider_changed`; schon verknüpft 409 `git.link_exists`; mehr als 50
+        beim Anbieter gelesen wird; Instanz oder eigene Verbindung inzwischen geändert (andere Version oder Adresse der Instanz, getrennt, neu verbunden oder
+        Token erneuert) 409 `git.provider_changed`, die geprüfte Verbindung bleibt bis zum Commit gesperrt (TASK-117, F2); schon verknüpft 409 `git.link_exists`; mehr als 50
         Verknüpfungen 409 `git.links_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
         Die Version des Tickets ändert sich nicht.
       parameters:
