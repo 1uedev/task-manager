@@ -1,5 +1,6 @@
 package taskmanager.git;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -70,7 +71,42 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
+@org.springframework.context.annotation.Import(GitApiTest.Clocks.class)
 class GitApiTest {
+    /** The clock of the application: the time of the system moved on by hand, so the 60 seconds of the cache end at once (TASK-117, H2). */
+    static final class FollowingClock extends java.time.Clock {
+        private volatile java.time.Duration ahead = java.time.Duration.ZERO;
+
+        void advance(java.time.Duration duration) {
+            ahead = ahead.plus(duration);
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return java.time.ZoneOffset.UTC;
+        }
+
+        @Override
+        public java.time.Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public java.time.Instant instant() {
+            return java.time.Instant.now().plus(ahead);
+        }
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class Clocks {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        java.time.Clock testClock() {
+            return CLOCK;
+        }
+    }
+
+    static final FollowingClock CLOCK = new FollowingClock();
     private static final String DATABASE = freshDatabase();
     private static final String STRONG = "Correct-Horse-Battery-9";
     private static final String KEY = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
@@ -1403,6 +1439,85 @@ class GitApiTest {
         return jdbc.queryForObject("select state from git_connection where provider_id = ? and account_id = ?", String.class, provider, browser.id);
     }
 
+    @Test
+    void disconnectingAndWritingALinkOrReleaseWaitForEachOther() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        Setup setup = links.setup();
+        UUID github = setup.github();
+        UUID ticketId = jdbc.queryForObject("select id from ticket where project_id = ? and number = ?", UUID.class, setup.project(),
+            links.ticket());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            // TASK-117, F2, first order: the link holds the checked connection while it waits for the held lock of the links;
+            // disconnecting waits for it, so the link is written with the connection that read it and the disconnect follows.
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                held.createStatement().execute("select pg_advisory_xact_lock(hashtextextended('git_link:ticket:" + ticketId + "', 0))");
+                int holder = backendPid(held);
+                var adding = pool.submit(() -> link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
+                int adder = waiterOf(holder);
+                var disconnecting = pool.submit(() -> worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null));
+                waiterOf(adder);
+                held.commit();
+                assertEquals(201, adding.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
+                assertEquals(204, disconnecting.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
+            }
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where subject_id = ?", Integer.class, ticketId));
+
+            // Second order: the disconnect is committed after the link read the object and before it writes: nothing is written.
+            assertTrue(connect(worker, github, "again" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            int history = jdbc.queryForObject("select count(*) from ticket_change where ticket_id = ?", Integer.class, ticketId);
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                held.createStatement().execute("select id from git_provider where id = '" + github + "' for update");
+                int holder = backendPid(held);
+                var adding = pool.submit(() -> link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7"));
+                waiterOf(holder);
+                assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
+                held.commit();
+                Response refused = adding.get(20, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(409, refused.status(), refused.body());
+                assertEquals("git.provider_changed", refused.code());
+            }
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_link where subject_id = ?", Integer.class, ticketId), "no link");
+            assertEquals(history, jdbc.queryForObject("select count(*) from ticket_change where ticket_id = ?", Integer.class, ticketId),
+                "no history");
+
+            // The same for a release: the disconnect committed before the release writes leaves neither release nor audit.
+            Browser manager = setup.manager();
+            int audits = jdbc.queryForObject("select count(*) from git_audit_event where operation = 'repository.released' and detail->>'projectId' = ?",
+                Integer.class, setup.project().toString());
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                held.createStatement().execute("select id from git_provider where id = '" + github + "' for update");
+                int holder = backendPid(held);
+                var releasing = pool.submit(() -> release(manager, setup, "102"));
+                waiterOf(holder);
+                assertEquals(204, manager.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
+                held.commit();
+                Response refused = releasing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(409, refused.status(), refused.body());
+                assertEquals("git.provider_changed", refused.code());
+            }
+            assertEquals(0, jdbc.queryForObject("select count(*) from git_repository where project_id = ? and external_id = '102'", Integer.class,
+                setup.project()));
+            assertEquals(audits, jdbc.queryForObject("select count(*) from git_audit_event where operation = 'repository.released' and detail->>'projectId' = ?",
+                Integer.class, setup.project().toString()));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private byte[] accessCipher(Browser browser, UUID provider) {
+        return jdbc.queryForObject("select access_cipher from git_connection where provider_id = ? and account_id = ?", byte[].class, provider,
+            browser.id);
+    }
+
+    private int refreshCount() {
+        return (int) GITHUB.seen("/login/oauth/access_token").stream().filter(s -> "refresh_token".equals(s.form().get("grant_type"))).count();
+    }
+
     private String accessToken(Browser browser, UUID provider) {
         return GITHUB.seen.reversed().stream().filter(s -> s.token() != null && s.path().startsWith("/api/repositories/101")).findFirst()
             .map(Seen::token).orElseThrow();
@@ -1436,18 +1551,67 @@ class GitApiTest {
             }
 
             // The former token is refused while the read waits: the refusal neither uses nor marks the new connection.
-            String former = accessToken(worker, github);
-            GITHUB.hold("/pulls/7");
-            var refused = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
-            GITHUB.awaitHeld();
-            assertTrue(connect(worker, github, "third" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
-            GITHUB.tokens.remove(former);
+            // TASK-117, F1: both with a refresh the provider would grant and with one it refuses, the late refusal of the
+            // former token never renews, marks or changes the tokens of the newer connection.
+            for (boolean refuse : new boolean[] {false, true}) {
+                String former = accessToken(worker, github);
+                GITHUB.hold("/pulls/7");
+                var refused = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+                GITHUB.awaitHeld();
+                assertTrue(connect(worker, github, "third" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+                byte[] stored = accessCipher(worker, github);
+                int refreshes = refreshCount();
+                GITHUB.tokens.remove(former);
+                GITHUB.refuseRefresh = refuse;
+                try {
+                    GITHUB.open();
+                    JsonNode placeholder = refused.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+                    assertFalse(placeholder.get("available").asBoolean(), placeholder.toString());
+                    assertEquals("git.unavailable", placeholder.get("reason").asString());
+                } finally {
+                    GITHUB.refuseRefresh = false;
+                }
+                assertEquals(refreshes, refreshCount(), "the refusal of the former token renews nothing");
+                assertArrayEquals(stored, accessCipher(worker, github), "the token of the newer connection stays as it is");
+                assertEquals("active", connectionState(worker, github), "the new connection is not asked to be renewed");
+                assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+            }
+        } finally {
             GITHUB.open();
-            JsonNode placeholder = refused.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
-            assertFalse(placeholder.get("available").asBoolean(), placeholder.toString());
-            assertEquals("git.unavailable", placeholder.get("reason").asString());
-            assertEquals("active", connectionState(worker, github), "the new connection is not asked to be renewed");
-            assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aRefusalAfterAnotherRequestAskedToRenewShowsTheRenewalPlaceholder() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // The token is revoked while a read waits at the provider; another request of the person meets the refusal first,
+            // the refresh is refused too and the connection is asked to be renewed without a token. The waiting read then gets
+            // its refusal and compares with that row (found by the GitLab run of TASK-117).
+            String token = accessToken(worker, github);
+            GITHUB.hold("/pulls/7");
+            var waiting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            GITHUB.tokens.remove(token);
+            GITHUB.refuseRefresh = true;
+            try {
+                JsonNode first = worker.get(links.ticketPath() + "?refresh=true").json().get("links").get(0);
+                assertEquals("git.connection_renew", first.get("reason").asString(), first.toString());
+                assertEquals("renew", connectionState(worker, github));
+                GITHUB.open();
+                JsonNode late = waiting.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+                assertFalse(late.get("available").asBoolean(), late.toString());
+                assertEquals("git.connection_renew", late.get("reason").asString(), late.toString());
+                assertTrue(late.get("change").isNull(), late.toString());
+            } finally {
+                GITHUB.refuseRefresh = false;
+            }
+            assertEquals("renew", connectionState(worker, github));
         } finally {
             GITHUB.open();
             pool.shutdownNow();
@@ -1506,12 +1670,21 @@ class GitApiTest {
                 // F3: the repository stays readable; what was read of the objects is shown until the cache ends (60 seconds).
                 JsonNode kept = worker.get(links.ticketPath()).json().get("links");
                 assertTrue(kept.get(0).get("available").asBoolean(), "within the 60 seconds of the cache: " + kept);
-                // "Aktualisieren" reads past it, as the cache does after its 60 seconds; the objects are then not available.
+                // TASK-117, H2: after the 60 seconds of the cache the ordinary read shows both objects as not available.
+                CLOCK.advance(java.time.Duration.ofSeconds(61));
+                JsonNode expired = worker.get(links.ticketPath()).json().get("links");
+                assertEquals(2, expired.size(), expired.toString());
+                for (JsonNode shown : expired) {
+                    assertFalse(shown.get("available").asBoolean(), status + " after 60 seconds: " + shown);
+                    assertEquals("git.unavailable", shown.get("reason").asString());
+                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
+                }
+                assertEquals("active", connectionState(worker, links.setup().github()), "the connection stays active");
+                // "Aktualisieren" reads past the cache at once with the same result.
                 JsonNode refreshed = worker.get(links.ticketPath() + "?refresh=true").json().get("links");
                 for (JsonNode shown : refreshed) {
                     assertFalse(shown.get("available").asBoolean(), status + ": " + shown);
                     assertEquals("git.unavailable", shown.get("reason").asString());
-                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
                 }
                 assertFalse(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(),
                     "the answer that the object is not available is kept like a found one");

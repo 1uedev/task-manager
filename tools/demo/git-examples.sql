@@ -11,7 +11,8 @@
 -- F5): one company, the account admin that seeded it, the groups of the demo, the two instances exactly as "demo seed"
 -- created them (version 1, the placeholder of the demo, no secret and no CA of their own), the projects WEB and HELP,
 -- the ticket WEB-1 and the example requirement of HELP created by admin, no Git link yet and room for the releases
--- under the limit of 50 per project. Everything is one transaction that first locks releases and links against a
+-- under the limit of 50 per project. Since TASK-117 (F4) it also checks the members of the demo groups, every rule of the
+-- field git and the current state of the requirement, and holds all of it unchanged until the commit. Everything is one transaction that first locks releases and links against a
 -- second run; any failed check leaves the database as it was.
 --
 -- The objects are public: the repository of this project at GitHub.com (1uedev/task-manager, the merge commit of
@@ -20,6 +21,10 @@ begin;
 
 -- A second run waits here and then finds the examples (TASK-116, F5).
 lock table git_repository, git_link, git_audit_event in share row exclusive mode;
+-- What the checks below read stays as checked until the commit: a change of groups, rules, instances, the ticket or the
+-- requirement waits for this transaction (TASK-117, F4).
+lock table permissions_group, permissions_membership, permissions_field, git_provider, project, ticket, requirement,
+    requirement_revision in share mode;
 
 -- Stops with an error when the demo data set or the two instances are not the synthetic ones of "demo seed", or when the
 -- examples exist already (TASK-115, F4).
@@ -41,6 +46,30 @@ begin
                        'Anforderungen lesen')) <> 6 then
         raise exception 'the groups of the demo data set are missing; run demo seed first';
     end if;
+    -- The members of the groups and the rules of the field git as "demo seed" set them: David reads requirements without the
+    -- field git, Carla reads tickets without it (TASK-117, F4).
+    if (select string_agg(g.name || ':' || a.username, ',' order by g.name, a.username)
+        from permissions_membership m
+        join permissions_group g on g.company_id = m.company_id and g.id = m.group_id
+        join identity_account a on a.id = m.user_id
+        where m.company_id = company
+          and g.name in ('Verwaltung Demo', 'Projektleitung', 'Entwicklung', 'Lesen ohne Beschreibung', 'Anforderungen',
+                         'Anforderungen lesen'))
+       is distinct from 'Anforderungen:admin,Anforderungen:anna,Anforderungen lesen:david,Entwicklung:ben,Entwicklung:david,'
+                        'Lesen ohne Beschreibung:carla,Projektleitung:anna,Verwaltung Demo:admin' then
+        raise exception 'the members of the groups of the demo data set were changed';
+    end if;
+    if (select string_agg(g.name || ':' || f.resource_type || ':' || f.operation || ':' || f.effect
+                          || ':' || coalesce(f.project_id::text, '-'), ',' order by g.name, f.resource_type, f.operation)
+        from permissions_field f
+        join permissions_group g on g.company_id = f.company_id and g.id = f.group_id
+        where f.company_id = company and f.field_key = 'git')
+       is distinct from 'Anforderungen:requirement:READ:ALLOW:-,Anforderungen:requirement:WRITE:ALLOW:-,'
+                        'Entwicklung:ticket:READ:ALLOW:-,Entwicklung:ticket:WRITE:ALLOW:-,'
+                        'Projektleitung:ticket:READ:ALLOW:-,Projektleitung:ticket:WRITE:ALLOW:-,'
+                        'Verwaltung Demo:ticket:READ:ALLOW:-,Verwaltung Demo:ticket:WRITE:ALLOW:-' then
+        raise exception 'the rules of the field git of the demo data set were changed';
+    end if;
     if (select count(*) from git_provider
         where removed_at is null and company_id = company and created_by = seeder and updated_by = seeder and version = 1
           and client_id = 'noch-nicht-registriert' and client_secret_cipher is null and ca_certificate is null
@@ -56,11 +85,18 @@ begin
                    where p.company_id = company and p.key = 'WEB' and t.number = 1 and t.created_by = seeder) then
         raise exception 'the ticket WEB-1 of the demo data set is missing or was not created by admin';
     end if;
+    -- The example requirement as "demo seed" leaves it: revision 1 approved, revision 2 opened as draft by the changed effort,
+    -- both written by admin with the same title, and nothing changed since; the history entry goes to revision 2 (TASK-117, F4).
     if not exists (select 1 from requirement r join project p on p.id = r.project_id
-                   join requirement_revision v on v.requirement_id = r.id and v.revision = 1
                    where p.company_id = company and p.key = 'HELP' and r.number = 1 and r.created_by = seeder
-                     and v.title = 'Kunden sehen den Stand ihrer freigegebenen Supportanfragen') then
-        raise exception 'the example requirement ANF-1 of HELP is missing or is not the one of the demo data set';
+                     and r.updated_by = seeder and r.status = 'draft' and r.current_revision = 2 and r.approved_revision = 1
+                     and (select count(*) from requirement_revision v where v.requirement_id = r.id) = 2
+                     and (select count(*) from requirement_revision v where v.requirement_id = r.id
+                          and v.title = 'Kunden sehen den Stand ihrer freigegebenen Supportanfragen'
+                          and v.opened_by = seeder and v.saved_by = seeder
+                          and (v.approved_by is null or v.approved_by = seeder)
+                          and (v.revision = 1) = (v.approved_at is not null)) = 2) then
+        raise exception 'the example requirement ANF-1 of HELP is missing or is not in the state of the demo data set';
     end if;
     if exists (select 1 from git_link) then
         raise exception 'Git links exist already; the examples were stored before';

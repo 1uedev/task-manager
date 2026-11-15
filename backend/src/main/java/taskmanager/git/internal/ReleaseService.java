@@ -132,8 +132,11 @@ public class ReleaseService implements DisposableBean {
             if (still.version() != provider.version() || !still.baseUrl().equals(provider.baseUrl())) {
                 throw ApiProblemException.of(409, "git.provider_changed");
             }
-            // The connection that read the repository is still the one of the person (TASK-116, F1).
-            if (!connections.current(actor.companyId(), actor.userId(), still.id(), read.generation())) {
+            // The connection that read the repository is still the one of the person and stays so until the commit (TASK-116,
+            // F1; TASK-117, F2).
+            try {
+                connections.holdCurrent(actor.companyId(), actor.userId(), still.id(), read.generation());
+            } catch (ConnectionService.NotConnected changed) {
                 throw ApiProblemException.of(409, "git.provider_changed");
             }
             if (store.released(projectId, still.id(), externalId)) {

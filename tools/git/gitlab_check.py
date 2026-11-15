@@ -57,18 +57,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "demo"))
 from demo import ApiError, Client, account_id  # noqa: E402  (the HTTP client of the demo tool, standard library only)
 
 
-CODE = re.compile(r"^[a-z][a-z0-9_.]{0,79}$")
 VERSION = re.compile(r"^16\.[0-9]{1,2}\.[0-9]{1,2}(-ce|-ee)?$")
-# The answers of the task manager the run may meet; any other code of an answer is reported as api.unexpected (TASK-116, F4).
-KNOWN_CODES = frozenset({
-    "auth.invalid_credentials", "auth.password_change_required", "auth.unauthenticated", "csrf.invalid", "request.invalid",
-    "forced.failure", "permissions.denied", "project.not_found", "project.key_taken", "ticket.not_found", "requirement.not_found",
-    "git.address_unknown", "git.connection_renew", "git.link_exists", "git.link_not_found", "git.links_too_many", "git.not_connected",
-    "git.object_not_found", "git.provider_changed", "git.provider_failed", "git.provider_in_use", "git.provider_incomplete",
-    "git.provider_name_taken", "git.provider_not_found", "git.rate_limited", "git.redirect_refused", "git.repositories_too_many",
-    "git.repository_not_found", "git.repository_not_released", "git.repository_released", "git.secret_key_missing",
-    "git.timeout", "git.tls_failed", "git.unavailable", "git.version_conflict", "git.version_unsupported",
-})
+# The only step texts and codes the run may write, shared with the check of redact.py before the upload (TASK-117, F3). Any
+# other code of an answer is reported as api.unexpected (TASK-116, F4), any other code of a check as check.failed.
+EVIDENCE = json.loads((Path(__file__).resolve().parent / "evidence.json").read_text(encoding="utf-8"))
+STEPS = [(step["name"], step["detail"]) for step in EVIDENCE["steps"]]
+KNOWN_CODES = frozenset(EVIDENCE["answer_codes"])
+CHECK_CODES = frozenset(EVIDENCE["check_codes"])
 SECRET_SETTINGS = ("TASK_MANAGER_ADMIN_OTP", "TASK_MANAGER_DEMO_PASSWORD", "GITLAB_ROOT_PASSWORD", "GITLAB_TOKEN", "GITLAB_APP_SECRET")
 
 
@@ -84,7 +79,7 @@ class Failed(Exception):
 
     def __init__(self, code: str, status: int | None = None):
         super().__init__(code)
-        self.code = code if CODE.match(code) else "check.failed"
+        self.code = code if code in CHECK_CODES or code in KNOWN_CODES else "check.failed"
         self.status = status
 
 
@@ -100,6 +95,9 @@ class Step:
 
     def begin(self, name: str) -> None:
         self.number += 1
+        if self.number > len(STEPS) or STEPS[self.number - 1][0] != name:
+            self.name = "Start"
+            raise Failed("check.step_text")
         self.name = name
         if self.fail_at == str(self.number):
             # A failure on purpose with the secrets of the run in its text and its answer body (TASK-115, F2).
@@ -108,6 +106,8 @@ class Step:
 
     def ok(self, detail: str = "") -> None:
         """Ends the step with a fixed text of the run itself, never with a value of an answer (TASK-116, F4)."""
+        if STEPS[self.number - 1] != (self.name, detail):
+            raise Failed("check.step_text")
         seconds = round(time.monotonic() - self.started, 1)
         print(f"ok  {self.number}. {self.name}" + (f": {detail}" if detail else ""), flush=True)
         self.done.append({"step": self.number, "name": self.name, "detail": detail, "seconds": seconds})
@@ -121,7 +121,15 @@ def failure(error: BaseException) -> dict:
         code = error.code if isinstance(error.code, str) and error.code in KNOWN_CODES else "api.unexpected"
         status = error.status if isinstance(error.status, int) and 100 <= error.status <= 599 else None
         return {"status": status, "code": code}
-    return {"status": None, "code": "error." + type(error).__name__.lower()[:60]}
+    if isinstance(error, ssl.SSLError):
+        code = "error.tls"
+    elif isinstance(error, TimeoutError):
+        code = "error.timeout"
+    elif isinstance(error, OSError):
+        code = "error.connection"
+    else:
+        code = "error.unexpected"
+    return {"status": None, "code": code}
 
 
 def expect(condition: bool, code: str) -> None:

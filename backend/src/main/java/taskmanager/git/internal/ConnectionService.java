@@ -224,21 +224,20 @@ public class ConnectionService {
     /**
      * Like {@link #call} with the generation of the connection, for answers that are kept. The answer is handed on only when
      * the generation still holds after the call; otherwise the call fails with {@code git.provider_changed} and nothing of it
-     * is shown, kept or written (TASK-116, F1 and F2).
+     * is shown, kept or written (TASK-116, F1 and F2). A token the provider refuses is renewed only while the connection still
+     * has exactly the state of the refused token; a late refusal of a former connection or of a token renewed meanwhile never
+     * renews, marks or uses the refresh token of the newer state (TASK-117, F1).
      */
     public <T> T callWith(UUID companyId, UUID accountId, Provider provider, Function<Grant, T> work) {
         if (provider.removed()) {
             throw new NotConnected("git.provider_not_found");
         }
-        Grant grant = token(companyId, accountId, provider, false);
+        Grant grant = token(companyId, accountId, provider);
         T result;
         try {
             result = work.apply(grant);
         } catch (ProviderApi.TokenRejected rejected) {
-            Grant renewed = token(companyId, accountId, provider, true);
-            if (!renewed.generation().equals(grant.generation())) {
-                throw changed();
-            }
+            Grant renewed = renew(companyId, provider, accountId, grant.generation());
             try {
                 result = work.apply(renewed);
             } catch (ProviderApi.TokenRejected again) {
@@ -268,16 +267,52 @@ public class ConnectionService {
         }
     }
 
+    /**
+     * Holds the connection of {@code generation} until the end of the surrounding transaction, so disconnecting, connecting
+     * again and renewing wait for it, and fails with {@code git.provider_changed} when it is no longer that connection
+     * (TASK-117, F2). Writing a link or a release calls it after locking the instance and before writing anything.
+     */
+    public void holdCurrent(UUID companyId, UUID accountId, UUID providerId, String generation) {
+        Provider provider = store.provider(companyId, providerId).filter(p -> !p.removed()).orElse(null);
+        Connection connection = store.lockConnection(providerId, accountId).orElse(null);
+        if (provider == null || connection == null || !connection.active() || !connection.companyId().equals(companyId)
+            || !generation(provider, connection).equals(generation)) {
+            throw changed();
+        }
+    }
+
     static NotConnected changed() {
         return new NotConnected("git.provider_changed");
     }
 
+    /**
+     * The connection: the instance with its version and address, the Git account, the time of connecting (TASK-116, F1) and the
+     * state of the access token, a digest of its sealed form that changes with every renewal (TASK-117, F1).
+     */
     static String generation(Provider provider, Connection connection) {
+        return connectionOf(provider, connection) + "|" + tokenState(connection);
+    }
+
+    /** The generation without the state of the token: the same connection, whatever token it holds now. */
+    private static String connectionOf(Provider provider, Connection connection) {
         return provider.id() + "|" + provider.version() + "|" + provider.baseUrl() + "|" + connection.externalUserId() + "|"
             + connection.connectedAt();
     }
 
-    private Grant token(UUID companyId, UUID accountId, Provider provider, boolean refused) {
+    private static String tokenState(Connection connection) {
+        if (connection.accessCipher() == null) {
+            // A connection asked to be renewed holds no token; its state is still compared, never digested.
+            return "none";
+        }
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(connection.accessCipher());
+            return java.util.HexFormat.of().formatHex(digest, 0, 12);
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private Grant token(UUID companyId, UUID accountId, Provider provider) {
         record Rows(Provider provider, Connection connection) {
         }
         Rows rows = transaction.execute(status -> new Rows(store.provider(companyId, provider.id()).orElse(null),
@@ -298,60 +333,77 @@ public class ConnectionService {
             throw new NotConnected("git.connection_renew");
         }
         String generation = generation(fresh, connection);
-        Instant now = clock.instant();
-        boolean ending = connection.accessExpiresAt() != null && connection.accessExpiresAt().isBefore(now.plus(RENEW_BEFORE));
-        if (!refused && !ending) {
+        if (!ending(connection)) {
             return new Grant(open(companyId, Connection.accessPurpose(provider.id(), accountId), connection.accessCipher(), provider.id(),
                 accountId, generation), generation);
         }
-        return renew(companyId, fresh, accountId, connection);
+        return renew(companyId, fresh, accountId, generation);
+    }
+
+    private boolean ending(Connection connection) {
+        return connection.accessExpiresAt() != null && connection.accessExpiresAt().isBefore(clock.instant().plus(RENEW_BEFORE));
     }
 
     /**
-     * Renews under the lock of the connection, so two requests of the same person do not both use the refresh token. The token
-     * and the generation come from the locked row; a row that belongs to another connection by now is neither used nor marked.
+     * Renews the token of exactly the state {@code expected} under the lock of the connection, so two requests of the same person
+     * do not both use the refresh token (TASK-117, F1). The row is compared before the refresh token is read or the state is
+     * changed: another connection by now ends the call with {@code git.provider_changed} and changes nothing; the same connection
+     * with a token renewed meanwhile hands on that token with its own state, without a refresh. A renewal of this call returns the
+     * generation of the token it stored.
      */
-    private Grant renew(UUID companyId, Provider provider, UUID accountId, Connection seen) {
-        String expected = generation(provider, seen);
-        Object outcome = transaction.execute(status -> {
+    private Grant renew(UUID companyId, Provider provider, UUID accountId, String expected) {
+        record Outcome(String token, String generation) {
+        }
+        Outcome outcome = transaction.execute(status -> {
             Connection current = store.lockConnection(provider.id(), accountId).orElse(null);
-            if (current == null) {
-                throw new NotConnected("git.not_connected");
-            }
             Provider still = store.provider(companyId, provider.id()).filter(p -> !p.removed()).orElse(null);
-            if (still == null || !generation(still, current).equals(expected)) {
+            if (current == null || still == null || !current.companyId().equals(companyId)) {
                 throw changed();
+            }
+            String now = generation(still, current);
+            if (!now.equals(expected)) {
+                boolean sameConnection = expected.startsWith(connectionOf(still, current) + "|");
+                if (!sameConnection) {
+                    throw changed();
+                }
+                if (!current.active()) {
+                    throw new NotConnected("git.connection_renew");
+                }
+                // Renewed meanwhile by another request of the person: its token is used as it is.
+                try {
+                    return new Outcome(secrets.open(Connection.accessPurpose(provider.id(), accountId), current.accessCipher()), now);
+                } catch (GitSecrets.Unreadable | GitSecrets.KeyMissing unusable) {
+                    store.markRenew(provider.id(), accountId, clock.instant());
+                    return null;
+                }
             }
             if (!current.active()) {
                 throw new NotConnected("git.connection_renew");
             }
-            Instant now = clock.instant();
-            if (!current.updatedAt().equals(seen.updatedAt())) {
-                // Another request renewed meanwhile.
-                return open(companyId, Connection.accessPurpose(provider.id(), accountId), current.accessCipher(), provider.id(), accountId, expected);
-            }
-            boolean refreshEnded = current.refreshExpiresAt() != null && current.refreshExpiresAt().isBefore(now);
-            if (current.refreshCipher() == null || refreshEnded || !provider.secretSet()) {
-                store.markRenew(provider.id(), accountId, now);
+            Instant at = clock.instant();
+            boolean refreshEnded = current.refreshExpiresAt() != null && current.refreshExpiresAt().isBefore(at);
+            if (current.refreshCipher() == null || refreshEnded || !still.secretSet()) {
+                store.markRenew(provider.id(), accountId, at);
                 return null;
             }
             try {
                 String refresh = secrets.open(Connection.refreshPurpose(provider.id(), accountId), current.refreshCipher());
-                String secret = secrets.open(Provider.secretPurpose(provider.id()), provider.secretCipher());
-                ProviderApi.Tokens tokens = api.refresh(provider, secret, refresh, now);
-                store.saveConnection(new Connection(provider.id(), accountId, current.companyId(), current.externalUserId(), Connection.ACTIVE,
+                String secret = secrets.open(Provider.secretPurpose(provider.id()), still.secretCipher());
+                ProviderApi.Tokens tokens = api.refresh(still, secret, refresh, at);
+                Connection renewed = new Connection(provider.id(), accountId, current.companyId(), current.externalUserId(), Connection.ACTIVE,
                     secrets.seal(Connection.accessPurpose(provider.id(), accountId), tokens.access()),
                     tokens.refresh() == null ? current.refreshCipher() : secrets.seal(Connection.refreshPurpose(provider.id(), accountId), tokens.refresh()),
                     tokens.accessExpiresAt(), tokens.refresh() == null ? current.refreshExpiresAt() : tokens.refreshExpiresAt(),
-                    current.connectedAt(), now));
-                return tokens.access();
+                    current.connectedAt(), at);
+                store.saveConnection(renewed);
+                return new Outcome(tokens.access(), generation(still, renewed));
             } catch (ProviderApi.TokenRejected | GitSecrets.Unreadable | GitSecrets.KeyMissing unusable) {
-                store.markRenew(provider.id(), accountId, now);
+                store.markRenew(provider.id(), accountId, at);
                 return null;
             }
         });
-        if (outcome instanceof String token) {
-            return new Grant(token, expected);
+        if (outcome != null) {
+            return new Grant(outcome.token(), outcome.generation());
         }
         throw new NotConnected("git.connection_renew");
     }
