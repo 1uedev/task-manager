@@ -1484,8 +1484,31 @@ class GitApiTest {
             assertEquals(history, jdbc.queryForObject("select count(*) from ticket_change where ticket_id = ?", Integer.class, ticketId),
                 "no history");
 
-            // The same for a release: the disconnect committed before the release writes leaves neither release nor audit.
+            // TASK-118, H1: the release holds the checked connection while it waits to write its audit; disconnecting waits for
+            // it, so the release is written with the connection that read the repository and the disconnect follows.
             Browser manager = setup.manager();
+            try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
+                held.setAutoCommit(false);
+                // The audit of the release comes after its row and after the connection was checked and locked; a row of its
+                // own would lock the instance row through its foreign key and stop the release before the check.
+                held.createStatement().execute("lock table git_audit_event in share mode");
+                int holder = backendPid(held);
+                var releasing = pool.submit(() -> release(manager, setup, "102"));
+                int releaser = waiterOf(holder);
+                var disconnecting = pool.submit(() -> manager.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null));
+                waiterOf(releaser);
+                held.rollback();
+                Response released = releasing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(201, released.status(), released.body());
+                assertEquals(204, disconnecting.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
+            }
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_repository where project_id = ? and external_id = '102'", Integer.class,
+                setup.project()));
+            assertNull(jdbc.query("select 1 from git_connection where provider_id = ? and account_id = ?", rs -> rs.next() ? 1 : null,
+                github, manager.id), "the disconnect followed");
+            assertTrue(connect(manager, github, "back" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+
+            // The same for a release: the disconnect committed before the release writes leaves neither release nor audit.
             int audits = jdbc.queryForObject("select count(*) from git_audit_event where operation = 'repository.released' and detail->>'projectId' = ?",
                 Integer.class, setup.project().toString());
             try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
@@ -1500,8 +1523,8 @@ class GitApiTest {
                 assertEquals(409, refused.status(), refused.body());
                 assertEquals("git.provider_changed", refused.code());
             }
-            assertEquals(0, jdbc.queryForObject("select count(*) from git_repository where project_id = ? and external_id = '102'", Integer.class,
-                setup.project()));
+            assertEquals(1, jdbc.queryForObject("select count(*) from git_repository where project_id = ? and external_id = '102'", Integer.class,
+                setup.project()), "only the release written before the disconnect");
             assertEquals(audits, jdbc.queryForObject("select count(*) from git_audit_event where operation = 'repository.released' and detail->>'projectId' = ?",
                 Integer.class, setup.project().toString()));
         } finally {
@@ -1612,6 +1635,134 @@ class GitApiTest {
                 GITHUB.refuseRefresh = false;
             }
             assertEquals("renew", connectionState(worker, github));
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aFinishedReadOfAReplacedConnectionIsNotPartOfTheAnswer() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        Browser manager = links.setup().manager();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // TASK-118, F1, links: the commit is read and done, the pull request still waits at the provider when the person
+            // connects another Git account. Neither link shows what the former connection read.
+            GITHUB.hold("/pulls/7");
+            var reading = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            assertTrue(connect(worker, github, "other" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITHUB.open();
+            Response shown = reading.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            for (JsonNode link : shown.json().get("links")) {
+                assertFalse(link.get("available").asBoolean(), shown.body());
+                assertTrue(link.get("repository").isNull() && link.get("commit").isNull() && link.get("change").isNull(), shown.body());
+            }
+            assertFalse(shown.body().contains("acme/alpha"), shown.body());
+            assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(), "the new connection reads");
+
+            // The choice of released repositories: alpha was read with the former connection of GitHub and is not offered,
+            // gamma of GitLab.com waited and was read with an unchanged connection and stays.
+            GITLAB.hold("/projects/201");
+            var choosing = pool.submit(() -> worker.get(links.ticketPath() + "/choices"));
+            GITLAB.awaitHeld();
+            assertTrue(connect(worker, github, "third" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITLAB.open();
+            Response choices = choosing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(1, choices.json().size(), choices.body());
+            assertEquals(links.gitlabRelease().toString(), choices.json().get(0).get("releaseId").asString(), choices.body());
+            assertFalse(choices.body().contains("acme/alpha"), choices.body());
+
+            // The list of releases of the project, the same way for the manager.
+            GITLAB.hold("/projects/201");
+            var listing = pool.submit(() -> list(manager, links.setup()));
+            GITLAB.awaitHeld();
+            assertTrue(connect(manager, github, "again" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITLAB.open();
+            Response releases = listing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            JsonNode alpha = releases.json().get("repositories").get(0);
+            assertEquals(links.setup().github().toString(), alpha.get("providerId").asString(), releases.body());
+            assertFalse(alpha.get("available").asBoolean(), releases.body());
+            assertTrue(alpha.get("repository").isNull(), releases.body());
+            assertTrue(releases.json().get("repositories").get(1).get("available").asBoolean(), releases.body());
+            assertFalse(releases.body().contains("acme/alpha"), releases.body());
+        } finally {
+            GITHUB.open();
+            GITLAB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aTokenRenewedByAParallelReadIsUsedOnceRenewed() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // TASK-118, H1: a read waits at the provider; its token is revoked and a second read of the person renews it. The
+            // waiting read gets its refusal, takes the renewed token without a refresh of its own and shows the pull request.
+            String former = accessToken(worker, github);
+            int refreshes = refreshCount();
+            GITHUB.hold("/pulls/7");
+            var waiting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            GITHUB.tokens.remove(former);
+            JsonNode second = worker.get(links.ticketPath() + "?refresh=true").json().get("links").get(0);
+            assertTrue(second.get("available").asBoolean(), second.toString());
+            assertEquals(refreshes + 1, refreshCount(), "the second read renews once");
+            String renewed = accessToken(worker, github);
+            assertNotEquals(former, renewed);
+            GITHUB.open();
+            JsonNode late = waiting.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+            assertTrue(late.get("available").asBoolean(), late.toString());
+            assertEquals("open", late.get("change").get("state").asString(), late.toString());
+            assertEquals(refreshes + 1, refreshCount(), "the waiting read uses the renewed token without a refresh");
+            List<Seen> pulls = GITHUB.seen("/api/repositories/101/pulls/7");
+            assertEquals(renewed, pulls.getLast().token(), "the repeated read of the waiting call uses the renewed token");
+            assertEquals("active", connectionState(worker, github));
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aLateRefusalNeverMarksANewerTokenItCannotOpen() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // TASK-118, F2: while a read waits, the stored token of the connection changes into one that cannot be opened (a
+            // damaged row). The late refusal of the former token ends the read without writing: the newer state is neither
+            // marked nor emptied; only a read that begins with that state asks for the renewal.
+            String former = accessToken(worker, github);
+            GITHUB.hold("/pulls/7");
+            var waiting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            byte[] damaged = new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+            jdbc.update("update git_connection set access_cipher = ? where provider_id = ? and account_id = ?", damaged, github, worker.id);
+            GITHUB.tokens.remove(former);
+            GITHUB.open();
+            JsonNode late = waiting.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+            assertFalse(late.get("available").asBoolean(), late.toString());
+            assertEquals("git.connection_renew", late.get("reason").asString(), late.toString());
+            assertEquals("active", connectionState(worker, github), "the newer state is not marked by the former read");
+            assertArrayEquals(damaged, accessCipher(worker, github), "the newer state is not emptied");
+            assertNotNull(jdbc.queryForObject("select refresh_cipher from git_connection where provider_id = ? and account_id = ?",
+                byte[].class, github, worker.id), "the refresh token of the newer state stays");
+
+            JsonNode own = worker.get(links.ticketPath()).json().get("links").get(0);
+            assertEquals("git.connection_renew", own.get("reason").asString(), own.toString());
+            assertEquals("renew", connectionState(worker, github), "a read that began with the damaged state marks it");
         } finally {
             GITHUB.open();
             pool.shutdownNow();

@@ -145,8 +145,13 @@ public class LinkService {
         });
         boolean writable = read.subject().writable();
         Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen = new ConcurrentHashMap<>();
-        List<LinkView> views = parallel(read.links(), link -> view(actor, link, read.providers().get(link.providerId()), refresh, seen, writable),
-            link -> new LinkView(link, read.providers().get(link.providerId()), null, "git.unavailable", removalKey(actor, link, writable)));
+        List<Viewed> viewed = parallel(read.links(), link -> view(actor, link, read.providers().get(link.providerId()), refresh, seen, writable),
+            link -> new Viewed(new LinkView(link, read.providers().get(link.providerId()), null, "git.unavailable",
+                removalKey(actor, link, writable)), null));
+        // A read that ended before the person connected another account or disconnected shows nothing of it (TASK-118, F1).
+        List<LinkView> views = connections.keepCurrent(actor.companyId(), actor.userId(), viewed, v -> v.view().link().providerId(),
+            Viewed::generation, v -> new Viewed(new LinkView(v.view().link(), v.view().provider(), null, "git.unavailable", v.view().key()), null))
+            .stream().map(Viewed::view).toList();
         return new Listing(read.subject().readable(), writable, views);
     }
 
@@ -163,37 +168,49 @@ public class LinkService {
             return new Read(releases, providers(actor.companyId(), releases.stream().map(Release::providerId).toList()));
         });
         Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen = new ConcurrentHashMap<>();
-        // Only repositories the own connection can read now are offered (TASK-114, F6).
-        return parallel(read.releases(), release -> {
+        record Offered(Choice choice, String generation) {
+        }
+        Offered none = new Offered(null, null);
+        // Only repositories the own connection can read now are offered (TASK-114, F6), and only while that connection is still
+        // the one of the person when the choice is put together (TASK-118, F1).
+        List<Offered> offered = parallel(read.releases(), release -> {
             Provider provider = read.providers().get(release.providerId());
             if (provider == null || provider.removed()) {
-                return null;
+                return none;
             }
             try {
                 return connections.callWith(actor.companyId(), actor.userId(), provider,
-                    grant -> liveRepository(seen, provider, grant, release.externalId()))
-                    .map(repository -> new Choice(release, provider, repository)).orElse(null);
+                    grant -> liveRepository(seen, provider, grant, release.externalId())
+                        .map(repository -> new Offered(new Choice(release, provider, repository), grant.generation())).orElse(none));
             } catch (ConnectionService.NotConnected | GitHttp.Failure unusable) {
-                return null;
+                return none;
             }
-        }, release -> null).stream().filter(java.util.Objects::nonNull).toList();
+        }, release -> none);
+        return connections.keepCurrent(actor.companyId(), actor.userId(), offered, o -> o.choice().release().providerId(),
+            Offered::generation, o -> none).stream().map(Offered::choice).filter(java.util.Objects::nonNull).toList();
     }
 
-    private LinkView view(AccessContext actor, GitLink link, Provider provider, boolean refresh,
+    private Viewed view(AccessContext actor, GitLink link, Provider provider, boolean refresh,
             Map<String, CompletableFuture<Optional<ProviderApi.Repository>>> seen, boolean writable) {
         String key = removalKey(actor, link, writable);
         if (provider == null || provider.removed()) {
-            return new LinkView(link, provider, null, "git.unavailable", key);
+            return new Viewed(new LinkView(link, provider, null, "git.unavailable", key), null);
         }
         try {
-            Live live = connections.callWith(actor.companyId(), actor.userId(), provider,
-                grant -> load(actor, provider, grant, link, refresh, seen));
-            return new LinkView(link, provider, live, live == null ? "git.unavailable" : null, key);
+            return connections.callWith(actor.companyId(), actor.userId(), provider, grant -> {
+                Live live = load(actor, provider, grant, link, refresh, seen);
+                return new Viewed(new LinkView(link, provider, live, live == null ? "git.unavailable" : null, key),
+                    live == null ? null : grant.generation());
+            });
         } catch (ConnectionService.NotConnected missing) {
-            return new LinkView(link, provider, null, reason(missing), key);
+            return new Viewed(new LinkView(link, provider, null, reason(missing), key), null);
         } catch (GitHttp.Failure failure) {
-            return new LinkView(link, provider, null, reason(failure), key);
+            return new Viewed(new LinkView(link, provider, null, reason(failure), key), null);
         }
+    }
+
+    /** A view with the generation of the connection that read its Git data, {@code null} without such data (TASK-118, F1). */
+    private record Viewed(LinkView view, String generation) {
     }
 
     /**

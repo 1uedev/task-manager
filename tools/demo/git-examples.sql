@@ -12,19 +12,24 @@
 -- created them (version 1, the placeholder of the demo, no secret and no CA of their own), the projects WEB and HELP,
 -- the ticket WEB-1 and the example requirement of HELP created by admin, no Git link yet and room for the releases
 -- under the limit of 50 per project. Since TASK-117 (F4) it also checks the members of the demo groups, every rule of the
--- field git and the current state of the requirement, and holds all of it unchanged until the commit. Everything is one transaction that first locks releases and links against a
+-- field git and the current state of the requirement, and holds all of it unchanged until the commit; since TASK-118 (F4, F5) also the version of
+-- the requirement, with a lock of its own against a second run taken before any table. Everything is one transaction that first locks releases and links against a
 -- second run; any failed check leaves the database as it was.
 --
 -- The objects are public: the repository of this project at GitHub.com (1uedev/task-manager, the merge commit of
 -- pull request 317) and the project gitlab-org/gitlab at GitLab.com (merge request 1 and the last commit of its branch).
 begin;
 
--- A second run waits here and then finds the examples (TASK-116, F5).
-lock table git_repository, git_link, git_audit_event in share row exclusive mode;
+-- A second run waits here, before any table lock, and then finds the examples (TASK-116, F5; TASK-118, F5).
+do $$ begin perform pg_advisory_xact_lock(hashtext('taskmanager.demo.git-examples')); end $$;
 -- What the checks below read stays as checked until the commit: a change of groups, rules, instances, the ticket or the
--- requirement waits for this transaction (TASK-117, F4).
+-- requirement waits for this transaction (TASK-117, F4). The tables the application writes first come first and the
+-- audit last, in the order of its own write paths: a change of an instance that holds its row waits for nothing this
+-- script holds, ends and lets the script go on with the changed instance, which its checks then refuse (TASK-118, F5).
 lock table permissions_group, permissions_membership, permissions_field, git_provider, project, ticket, requirement,
     requirement_revision in share mode;
+lock table git_repository, git_link in share row exclusive mode;
+lock table git_audit_event in share row exclusive mode;
 
 -- Stops with an error when the demo data set or the two instances are not the synthetic ones of "demo seed", or when the
 -- examples exist already (TASK-115, F4).
@@ -87,9 +92,10 @@ begin
     end if;
     -- The example requirement as "demo seed" leaves it: revision 1 approved, revision 2 opened as draft by the changed effort,
     -- both written by admin with the same title, and nothing changed since; the history entry goes to revision 2 (TASK-117, F4).
+    -- Version 4 is the one "demo seed" reaches; every save, also one inside the open revision 2, raises it (TASK-118, F4).
     if not exists (select 1 from requirement r join project p on p.id = r.project_id
                    where p.company_id = company and p.key = 'HELP' and r.number = 1 and r.created_by = seeder
-                     and r.updated_by = seeder and r.status = 'draft' and r.current_revision = 2 and r.approved_revision = 1
+                     and r.updated_by = seeder and r.version = 4 and r.status = 'draft' and r.current_revision = 2 and r.approved_revision = 1
                      and (select count(*) from requirement_revision v where v.requirement_id = r.id) = 2
                      and (select count(*) from requirement_revision v where v.requirement_id = r.id
                           and v.title = 'Kunden sehen den Stand ihrer freigegebenen Supportanfragen'

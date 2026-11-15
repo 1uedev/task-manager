@@ -160,6 +160,19 @@ class RedactTest(unittest.TestCase):
             run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(clean)],
                                  env=environment, capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
+            # TASK-118, F3: a key twice in one object is refused by the command itself, also when the hidden value is harmless
+            # or a secret of the run, at the top and inside a step.
+            step = '{"step": 1, "name": "GitLab vorbereitet", "detail": "GitLab 16, Projekt demo/team/werkzeug mit Commit und Merge Request", "seconds": 1.0}'
+            for text in ('{"passed": false, "gitlab": "16.11.10-ce", "steps": [], "passed": false}\n',
+                         '{"passed": false, "gitlab": "16.11.10-ce", "steps": [' + step.replace('"detail"', '"detail": "frei", "detail"') + ']}\n',
+                         '{"passed": false, "gitlab": "16.11.10-ce", "steps": [' + step.replace('"detail"', '"detail": "' + RUN_SECRETS["GITLAB_CHECK_TOKEN"] + '", "detail"') + ']}\n',
+                         '{"passed": false, "gitlab": null, "steps": [' + step.replace("1.0", "NaN") + ']}\n'):
+                twice = Path(folder) / "gitlab-run.json"
+                twice.write_text(text)
+                run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(twice)],
+                                     env=environment, capture_output=True, text=True, check=False)
+                self.assertEqual(run.returncode, 1, text)
+                self.assertNotIn(RUN_SECRETS["GITLAB_CHECK_TOKEN"], run.stderr + run.stdout)
 
 
 class RunFolderTest(unittest.TestCase):

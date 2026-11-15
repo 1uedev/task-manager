@@ -9,7 +9,8 @@
         fails when a file is not what the run writes: gitlab-run.json must have exactly the fields of the result, the step
         names and texts, codes and services of tools/git/evidence.json and values of a fixed form, diagnostics.txt only
         lines of the form above for the services of the run; and no file may hold a secret of the run, also not percent,
-        base64 or JSON encoded, checked in the raw text and in every decoded JSON string (TASK-117, F3).
+        base64 or JSON encoded, checked in the raw text and in every decoded JSON string (TASK-117, F3); a key twice in one
+        JSON object fails the check, so no value hides behind a later one (TASK-118, F3).
 
 The secrets are the values of the variables the run sets for itself (passwords, the key of the application, the token
 of root, the OAuth application and the one time password). Only the Python standard library is used.
@@ -87,12 +88,41 @@ def diagnostic_line(line: str) -> bool:
                 and -1 <= int(match[4]) <= 255)
 
 
+class Unclear(ValueError):
+    """JSON that a reader could understand in more than one way: a key twice in one object, NaN or Infinity."""
+
+
+def _pairs(pairs: list) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise Unclear("duplicate key")
+        result[key] = value
+    return result
+
+
+def _constant(name: str):
+    raise Unclear("not a JSON number")
+
+
+def strict(text: str):
+    """Decodes JSON once and refuses a key twice in any object, so no value is hidden behind a later one (TASK-118, F3)."""
+    return json.loads(text, object_pairs_hook=_pairs, parse_constant=_constant)
+
+
 def result_problems(text: str) -> list[str]:
     """gitlab-run.json may hold exactly the fields, step texts and codes the run writes (TASK-116, F4; TASK-117, F3)."""
     try:
-        result = json.loads(text)
+        result = strict(text)
+    except Unclear:
+        return ["result has a key twice or no JSON number"]
     except ValueError:
         return ["result not JSON"]
+    return value_problems(result)
+
+
+def value_problems(result) -> list[str]:
+    """The form of the strictly decoded result."""
     problems = []
     if not isinstance(result, dict) or set(result) - {"gitlab", "passed", "steps", "failed"}:
         return ["result has other fields"]
@@ -136,16 +166,20 @@ def strings(value) -> list[str]:
 
 def leaks(text: str, known: list[str], kind: str = "text") -> list[str]:
     """Where a file breaks its form or holds a secret of the run; names where, never what."""
+    # The text is decoded once; form and secrets are checked on that one value (TASK-118, F3).
+    decoded, unreadable = None, None
+    try:
+        decoded = strict(text)
+    except Unclear:
+        unreadable = "result has a key twice or no JSON number"
+    except ValueError:
+        unreadable = "result not JSON"
     if kind == "result":
-        found = result_problems(text)
+        found = [unreadable] if unreadable else value_problems(decoded)
     else:
         found = [f"line {number}: not a container state" for number, line in enumerate(text.splitlines(), 1)
                  if line and not diagnostic_line(line)]
-    texts = [text]
-    try:
-        texts += strings(json.loads(text))
-    except ValueError:
-        pass
+    texts = [text] + (strings(decoded) if unreadable is None else [])
     if any(form in part for value in known for form in forms(value) for part in texts):
         found.append("secret of the run")
     return found

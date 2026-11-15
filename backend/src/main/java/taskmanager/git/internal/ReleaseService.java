@@ -74,23 +74,35 @@ public class ReleaseService implements DisposableBean {
             }
             return new Read(releases, providers, access.mayChangeProject(actor, projectId));
         });
-        List<CompletableFuture<View>> views = new ArrayList<>();
+        List<CompletableFuture<Viewed>> views = new ArrayList<>();
         for (Release release : read.releases()) {
             Provider provider = read.providers().get(release.providerId());
             views.add(CompletableFuture.supplyAsync(() -> view(actor, release, provider), pool));
         }
-        return new Listing(views.stream().map(CompletableFuture::join).toList(), read.manageable());
+        // A read that ended before the person connected another account or disconnected shows nothing of it (TASK-118, F1).
+        List<View> kept = connections.keepCurrent(actor.companyId(), actor.userId(), views.stream().map(CompletableFuture::join).toList(),
+                v -> v.view().release().providerId(), Viewed::generation,
+                v -> new Viewed(new View(v.view().release(), v.view().provider(), Optional.empty(), "git.unavailable"), null))
+            .stream().map(Viewed::view).toList();
+        return new Listing(kept, read.manageable());
     }
 
-    private View view(AccessContext actor, Release release, Provider provider) {
+    /** A view with the generation of the connection that read the repository, {@code null} without it (TASK-118, F1). */
+    private record Viewed(View view, String generation) {
+    }
+
+    private Viewed view(AccessContext actor, Release release, Provider provider) {
         try {
-            Optional<ProviderApi.Repository> repository = connections.call(actor.companyId(), actor.userId(), provider,
-                token -> api.repository(provider, token, release.externalId()));
-            return new View(release, provider, repository, repository.isPresent() ? null : "git.unavailable");
+            return connections.callWith(actor.companyId(), actor.userId(), provider, grant -> {
+                Optional<ProviderApi.Repository> repository = api.repository(provider, grant.token(), release.externalId());
+                return new Viewed(new View(release, provider, repository, repository.isPresent() ? null : "git.unavailable"),
+                    repository.isPresent() ? grant.generation() : null);
+            });
         } catch (ConnectionService.NotConnected missing) {
-            return new View(release, provider, Optional.empty(), missing.code().equals("git.provider_changed") ? "git.unavailable" : missing.code());
+            return new Viewed(new View(release, provider, Optional.empty(),
+                missing.code().equals("git.provider_changed") ? "git.unavailable" : missing.code()), null);
         } catch (GitHttp.Failure failure) {
-            return new View(release, provider, Optional.empty(), "git.unavailable");
+            return new Viewed(new View(release, provider, Optional.empty(), "git.unavailable"), null);
         }
     }
 
