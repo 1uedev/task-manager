@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-119](#task-119-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-118-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben | claude-20261115-gitfix-05 | 2026-11-15 |
 
 ### Blockiert – BLOCKIERT
 
@@ -270,4 +272,25 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** F1 `ConnectionService.keepCurrent` prüft die Verbindungen aller Einträge einer Antwort gemeinsam unmittelbar vor der Ausgabe; `LinkService.list`, `LinkService.choices` und `ReleaseService.list` führen je Eintrag die Generation des Lesens mit, veraltete Einträge werden zum Platzhalter `git.unavailable` oder fallen aus der Auswahl, ein von einem parallelen Abruf erneuertes Token derselben Verbindung behält den Eintrag (Test `aFinishedReadOfAReplacedConnectionIsNotPartOfTheAnswer` für Verknüpfungen, Auswahl und Freigabeliste; scheitert gegen TASK-117). F2 der Zweig für einen neueren Tokenstand endet bei einem Öffnungsfehler ohne Schreibzugriff (Test `aLateRefusalNeverMarksANewerTokenItCannotOpen`; scheitert gegen TASK-117). F3 `redact.py` decodiert einmal streng, lehnt doppelte Schlüssel, NaN und Infinity ab und prüft Form und Geheimnisse an diesem Wert; Negativtests über `--check`. F4 `git-examples.sql` prüft die Version 4 der Beispielanforderung; ein Speichern innerhalb der Revision 2 bricht ohne Änderung ab (gegen eine Kopie des echten Demobestands geprüft). F5 eigene Sperre `pg_advisory_xact_lock` vor allen Tabellensperren, Audit zuletzt; mit zwei Sitzungen geprüft: alte Reihenfolge verklemmt sich mit einer Instanzänderung, neue endet in beiden Startreihenfolgen (Änderung zuerst: Skript bricht an der geänderten Instanz ab; Skript zuerst: Änderung wartet und gelingt), zwei Läufe ergeben einen Erfolg. H1 Tests `aTokenRenewedByAParallelReadIsUsedOnceRenewed` (genau eine Erneuerung, erneuertes Token im wartenden Abruf) und die aufgehaltene Freigabe nach `holdCurrent` mit wartendem Trennen in `disconnectingAndWritingALinkOrReleaseWaitForEachOther`. H2 docs/GIT_MIGRATION.md trennt die Suche nach den sieben Umgebungswerten von den Belegen des OAuth Ablaufs. Lokal: Git Backend Tests (29 API, Cache, Adresse, Vertrag) und Python Tests grün; GitLab Lauf und Imagecheck nur in CI.
 
-**Nächster Schritt:** Unabhängige Prüfung von TASK-118, danach Holgers Abnahme von TASK-111 bis TASK-118.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-118_PR-325.md) empfiehlt nachbessern; F1 bis F3 und H1 behebt TASK-119 (DEC-149). Danach Holgers Abnahme von TASK-111 bis TASK-119.
+
+## TASK-119 Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-05 · **Aktualisiert:** 2026-11-15
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-149; docs/REVIEW_TASK-118_PR-325.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-118 auf main (PR #325). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-118 (Empfehlung nachbessern) „F1 bis F3, H1 als TASK-119“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-149, Migration V0067 nur falls nötig.
+
+**Umfang:** Behebung der Befunde F1 bis F3 und des Hinweises H1 aus docs/REVIEW_TASK-118_PR-325.md im Git Modul, im Demo SQL, in der Evidenzprüfung des GitLab Laufs und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Die abschließende Prüfung einer Verknüpfungsliste, der Auswahl freigegebener Repositories und der Freigabeliste liest alle beteiligten Instanzen mit den aktiven Verbindungen der Person in einer einzigen Abfrage, also in einem gemeinsamen Datenbankstand, und prüft dort Mandant, Stand der Instanz und Identität der aktiven Verbindung. Ein von einem parallelen Abruf erneuertes Token derselben weiterhin aktiven Verbindung behält den Eintrag.
+2. F2: Das Demo SQL sperrt nach seiner eigenen Sperre zuerst die beiden Demo Instanzzeilen mit FOR UPDATE und erst danach die Tabellen. Instanzänderung, Freigeben und Verknüpfen derselben Instanz warten damit auf das Skript oder das Skript auf sie, in keiner Startreihenfolge entsteht eine Verklemmung.
+3. F3: Die Evidenzprüfung lehnt jede nicht endliche Zahl ab, auch eine, die erst durch Überlauf wie `1e999` entsteht.
+4. H1: Ein deterministischer Test hält fest, dass ein vollständig gelesener Eintrag die abschließende Prüfung passiert, wenn ein zweiter Eintrag derselben Antwort das Token erneuert, und dass Trennen oder Wechsel auf „erneuern“ an derselben Stelle die Daten entfernen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F3 und H1 sind behoben, mit Regressionstests für einen Verbindungswechsel zwischen den Anbieterabrufen und der abschließenden Prüfung bei zwei Instanzen, für den Überlauf über `--check` und mit Sitzungsproben des Demo SQL gegen Instanzänderung und Freigabe vor und nach dem ersten UPDATE in beiden Startreihenfolgen.
+2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
+3. Dokumentation und DEC-149 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
