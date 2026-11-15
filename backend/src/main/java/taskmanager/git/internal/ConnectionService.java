@@ -300,6 +300,10 @@ public class ConnectionService {
     }
 
     private static String tokenState(Connection connection) {
+        if (connection.accessCipher() == null) {
+            // A connection asked to be renewed holds no token; its state is still compared, never digested.
+            return "none";
+        }
         try {
             byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(connection.accessCipher());
             return java.util.HexFormat.of().formatHex(digest, 0, 12);

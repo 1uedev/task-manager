@@ -1583,6 +1583,42 @@ class GitApiTest {
     }
 
     @Test
+    void aRefusalAfterAnotherRequestAskedToRenewShowsTheRenewalPlaceholder() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // The token is revoked while a read waits at the provider; another request of the person meets the refusal first,
+            // the refresh is refused too and the connection is asked to be renewed without a token. The waiting read then gets
+            // its refusal and compares with that row (found by the GitLab run of TASK-117).
+            String token = accessToken(worker, github);
+            GITHUB.hold("/pulls/7");
+            var waiting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            GITHUB.tokens.remove(token);
+            GITHUB.refuseRefresh = true;
+            try {
+                JsonNode first = worker.get(links.ticketPath() + "?refresh=true").json().get("links").get(0);
+                assertEquals("git.connection_renew", first.get("reason").asString(), first.toString());
+                assertEquals("renew", connectionState(worker, github));
+                GITHUB.open();
+                JsonNode late = waiting.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+                assertFalse(late.get("available").asBoolean(), late.toString());
+                assertEquals("git.connection_renew", late.get("reason").asString(), late.toString());
+                assertTrue(late.get("change").isNull(), late.toString());
+            } finally {
+                GITHUB.refuseRefresh = false;
+            }
+            assertEquals("renew", connectionState(worker, github));
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void aReleaseOrLinkReadWithAFormerStateOfTheInstanceIsRefused() throws Exception {
         Links links = links();
         Browser admin = links.setup().admin();
