@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-120](#task-120-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-119-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben | claude-20261115-gitfix-06 | 2026-11-15 |
 
 ### Blockiert – BLOCKIERT
 
@@ -294,4 +296,24 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** F1 `ConnectionService.keepCurrent` liest alle beteiligten Instanzen mit den Verbindungen der Person in einer einzigen Abfrage (`GitStore.providersWithConnection`) und prüft dort Unternehmen, Stand der Instanz und aktive Verbindung; der Tokenstand bleibt bei derselben aktiven Verbindung ausgenommen (Test `theFinalCheckOfTwoInstancesDropsEveryEndedConnection`: Commit von GitHub gelesen, Merge Request von GitLab.com gehalten, beide Instanzen nacheinander getrennt, die Antwort zeigt von keiner Daten). Der Abstand zwischen zwei Abfragen der Fassung von TASK-118 lässt sich über die Schnittstelle nicht gezielt herbeiführen, dieser Test besteht daher auch gegen TASK-118; die einzige Abfrage beseitigt den Abstand. F2 `git-examples.sql` sperrt nach seiner eigenen Sperre zuerst alle Instanzzeilen in der Reihenfolge der Kennungen mit FOR UPDATE, erst danach die Tabellen. Sitzungsproben auf einer Kopie des Demobestands (PostgreSQL 16) mit gehaltener Zeilensperre vor dem ersten UPDATE oder INSERT: Instanzänderung, Freigabe und Verknüpfung jeweils in beiden Startreihenfolgen enden ohne Verklemmung (Instanzänderung zuerst: Skript bricht an der geänderten Instanz ab; Verknüpfung zuerst: Skript bricht an der vorhandenen Verknüpfung ab; Freigabe in APP zuerst: Skript gelingt; Skript zuerst: die anderen warten und gelingen), zwei Läufe ergeben genau einen Erfolg. Die Fassung von TASK-118 verklemmte sich in denselben Proben mit Instanzänderung und Freigabe (`deadlock detected`). F3 `redact.py` lehnt beim Decodieren jede nicht endliche Zahl ab (`parse_float`), auch `1e999` und `-1e999`; `tests/test_gitlab_evidence.py` prüft über `--check` NaN, Infinity, -Infinity, 1e999 und -1e999 (der Überlauf scheitert gegen TASK-118). H1 Test `aFullyReadEntryPassesTheFinalCheckOnlyWhileItsConnectionLasts` wartet, bis der Commit vollständig gelesen und nur der Pull Request gehalten ist, und zeigt an genau dieser Stelle: Erneuerung durch den zweiten Eintrag mit genau einem Refresh lässt beide Einträge sichtbar, Wechsel auf „erneuern“ und Trennen entfernen auch die Daten des fertigen Eintrags. Dokumentation in docs/GIT_MIGRATION.md, docs/DEMO.md und backend/README.md („Korrekturen (TASK-119)“). Lokal geprüft: `GitApiTest` (31), `GitCacheTest`, `GitAddressTest`, `GitContractTest`, `python3 -m unittest discover -s tests`, `validate_repository.py`, `task_board.py --check`, `git diff --check`; Frontend unverändert.
 
-**Nächster Schritt:** Unabhängige Prüfung von TASK-119, danach Holgers Abnahme von TASK-111 bis TASK-119.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-119_PR-327.md) empfiehlt nachbessern; F1 bis F3 und H1 behebt TASK-120 (DEC-150). Danach Holgers Abnahme von TASK-111 bis TASK-120.
+
+## TASK-120 Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-06 · **Aktualisiert:** 2026-11-15
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-150; docs/REVIEW_TASK-119_PR-327.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-119 auf main (PR #327). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-119 (Empfehlung nachbessern) „F1 bis F3, H1 als TASK-120“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-150, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 bis F3 und des Hinweises H1 aus docs/REVIEW_TASK-119_PR-327.md im Demo SQL, in den Tests des Git Moduls und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Änderungen am Verhalten der Anwendung, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1 und F2: `git-examples.sql` sperrt nach seiner eigenen Sperre in einer einzigen Anweisung jede Tabelle, die es liest, schreibt oder über einen Fremdschlüssel berührt, im Modus EXCLUSIVE mit NOWAIT, bevor es irgendetwas prüft. Hält gerade eine andere Transaktion eine dieser Tabellen schreibend oder mit einer Zeilensperre, bricht das Skript sofort ohne Änderung mit einem Hinweis zum erneuten Start ab. Danach wartet das Skript auf nichts mehr; jede schreibende Transaktion der Anwendung wartet auf das Skript. Eine Verklemmung ist damit in keiner Reihenfolge möglich, und keine Instanz, kein Ticket und keine Anforderung kann zwischen Sperre und Prüfung entstehen oder sich ändern.
+2. F3: Der Test der Schlussprüfung synchronisiert in der Anwendung, nicht am Anbieter: eine Testkonfiguration ohne Haken im Produktcode meldet, wenn der Abruf des ersten Eintrags einschließlich seiner Einzelprüfung fertig ist, und prüft am Eingang der Schlussprüfung, dass dieser Eintrag noch seine Git Daten und seine alte Generation trägt. Die Barriere des zweiten Abrufs öffnet erst nach der gezielten Aktion; ein Ablauf der Wartezeit am Anbieter ist ein Testfehler.
+3. H1: Ein Test zählt über eine JDBC Testhülle die Abfragen der Schlussprüfung und belegt, dass sie zwei Instanzen mit genau einer Abfrage liest.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F3 und H1 sind behoben, mit Sitzungsproben des Demo SQL gegen gesperrte Zeilen von WEB-1, ANF-1 und einer Instanz sowie gegen das Anlegen einer Instanz während des Starts, jeweils in beiden Reihenfolgen, und mit den Tests aus Regel 2 und 3.
+2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
+3. Dokumentation und DEC-150 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
