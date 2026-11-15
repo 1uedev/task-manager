@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-118](#task-118-befunde-f1-bis-f5-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-117-beheben) | Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben | claude-20261115-gitfix-04 | 2026-11-15 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -47,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-115](#task-115-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-113-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Prüfung von TASK-113 beheben | claude-20261114-gitfix-01 | 2026-11-14 |
 | [TASK-116](#task-116-befunde-f1-bis-f6-und-hinweise-h1-bis-h3-der-codex-nachprüfung-von-task-114-und-task-115-beheben) | Befunde F1 bis F6 und Hinweise H1 bis H3 der Codex Nachprüfung von TASK-114 und TASK-115 beheben | claude-20261114-gitfix-02 | 2026-11-14 |
 | [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-15 |
+| [TASK-118](#task-118-befunde-f1-bis-f5-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-117-beheben) | Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben | claude-20261115-gitfix-04 | 2026-11-15 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -249,9 +248,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-118 Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-04 · **Aktualisiert:** 2026-11-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261115-gitfix-04 · **Aktualisiert:** 2026-11-15
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-148; docs/REVIEW_TASK-117_PR-323.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-117 auf main (PR #323). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-117 (Empfehlung nachbessern) „F1 bis F5, H1, H2 als TASK-118“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-148, Migration nur falls nötig (dann V0067).
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-148; docs/REVIEW_TASK-117_PR-323.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-117 auf main (PR #323). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-117 (Empfehlung nachbessern) „F1 bis F5, H1, H2 als TASK-118“. Umgesetzt auf claude/project-thread-6p8449, Entscheidung DEC-148, ohne Migration (V0067 bleibt frei).
 
 **Umfang:** Behebung der Befunde F1 bis F5 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-117_PR-323.md im Git Modul, im GitLab Lauf, im Demo SQL und in der Dokumentation. Nicht Teil: weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -269,4 +268,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf (auch mit erzwungenem Fehler) und Imagecheck sind grün.
 3. Dokumentation und DEC-148 entsprechen den Regeln.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung, danach unabhängige Prüfung.
+**Übergabe:** F1 `ConnectionService.keepCurrent` prüft die Verbindungen aller Einträge einer Antwort gemeinsam unmittelbar vor der Ausgabe; `LinkService.list`, `LinkService.choices` und `ReleaseService.list` führen je Eintrag die Generation des Lesens mit, veraltete Einträge werden zum Platzhalter `git.unavailable` oder fallen aus der Auswahl, ein von einem parallelen Abruf erneuertes Token derselben Verbindung behält den Eintrag (Test `aFinishedReadOfAReplacedConnectionIsNotPartOfTheAnswer` für Verknüpfungen, Auswahl und Freigabeliste; scheitert gegen TASK-117). F2 der Zweig für einen neueren Tokenstand endet bei einem Öffnungsfehler ohne Schreibzugriff (Test `aLateRefusalNeverMarksANewerTokenItCannotOpen`; scheitert gegen TASK-117). F3 `redact.py` decodiert einmal streng, lehnt doppelte Schlüssel, NaN und Infinity ab und prüft Form und Geheimnisse an diesem Wert; Negativtests über `--check`. F4 `git-examples.sql` prüft die Version 4 der Beispielanforderung; ein Speichern innerhalb der Revision 2 bricht ohne Änderung ab (gegen eine Kopie des echten Demobestands geprüft). F5 eigene Sperre `pg_advisory_xact_lock` vor allen Tabellensperren, Audit zuletzt; mit zwei Sitzungen geprüft: alte Reihenfolge verklemmt sich mit einer Instanzänderung, neue endet in beiden Startreihenfolgen (Änderung zuerst: Skript bricht an der geänderten Instanz ab; Skript zuerst: Änderung wartet und gelingt), zwei Läufe ergeben einen Erfolg. H1 Tests `aTokenRenewedByAParallelReadIsUsedOnceRenewed` (genau eine Erneuerung, erneuertes Token im wartenden Abruf) und die aufgehaltene Freigabe nach `holdCurrent` mit wartendem Trennen in `disconnectingAndWritingALinkOrReleaseWaitForEachOther`. H2 docs/GIT_MIGRATION.md trennt die Suche nach den sieben Umgebungswerten von den Belegen des OAuth Ablaufs. Lokal: Git Backend Tests (29 API, Cache, Adresse, Vertrag) und Python Tests grün; GitLab Lauf und Imagecheck nur in CI.
+
+**Nächster Schritt:** Unabhängige Prüfung von TASK-118, danach Holgers Abnahme von TASK-111 bis TASK-118.

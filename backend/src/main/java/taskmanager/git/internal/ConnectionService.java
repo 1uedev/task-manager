@@ -260,6 +260,40 @@ public class ConnectionService {
         }));
     }
 
+    /**
+     * Keeps of the read results of one answer only those whose connection is still the one of the person, all checked in one
+     * reading immediately before the answer is put together (TASK-118, F1). A result is kept when its instance and the
+     * connection of the person are unchanged and active; a token renewed by another read of the same answer keeps it, because
+     * the same Git account read it. {@code null} as generation stands for a result without Git data, which is always kept.
+     */
+    public <T> List<T> keepCurrent(UUID companyId, UUID accountId, List<T> results, Function<T, UUID> providerOf,
+            Function<T, String> generationOf, Function<T, T> withoutData) {
+        java.util.Set<UUID> providers = results.stream().filter(r -> generationOf.apply(r) != null).map(providerOf)
+            .collect(Collectors.toSet());
+        if (providers.isEmpty()) {
+            return results;
+        }
+        Map<UUID, String> connections = transaction.execute(status -> {
+            Map<UUID, String> found = new java.util.HashMap<>();
+            for (UUID providerId : providers) {
+                Provider provider = store.provider(companyId, providerId).filter(p -> !p.removed()).orElse(null);
+                Connection connection = store.connection(providerId, accountId).orElse(null);
+                if (provider != null && connection != null && connection.active() && connection.companyId().equals(companyId)) {
+                    found.put(providerId, connectionOf(provider, connection));
+                }
+            }
+            return found;
+        });
+        return results.stream().map(result -> {
+            String generation = generationOf.apply(result);
+            if (generation == null) {
+                return result;
+            }
+            String connection = connections.get(providerOf.apply(result));
+            return connection != null && generation.startsWith(connection + "|") ? result : withoutData.apply(result);
+        }).toList();
+    }
+
     /** Fails with {@code git.provider_changed} when the generation no longer holds. */
     public void requireCurrent(UUID companyId, UUID accountId, UUID providerId, String generation) {
         if (!current(companyId, accountId, providerId, generation)) {
@@ -369,12 +403,13 @@ public class ConnectionService {
                 if (!current.active()) {
                     throw new NotConnected("git.connection_renew");
                 }
-                // Renewed meanwhile by another request of the person: its token is used as it is.
+                // Renewed meanwhile by another request of the person: its token is used as it is. A token of that newer state
+                // that cannot be opened ends this call without writing anything; only a call that began with that state marks
+                // it (TASK-118, F2).
                 try {
                     return new Outcome(secrets.open(Connection.accessPurpose(provider.id(), accountId), current.accessCipher()), now);
                 } catch (GitSecrets.Unreadable | GitSecrets.KeyMissing unusable) {
-                    store.markRenew(provider.id(), accountId, clock.instant());
-                    return null;
+                    throw new NotConnected("git.connection_renew");
                 }
             }
             if (!current.active()) {
