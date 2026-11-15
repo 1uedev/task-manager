@@ -3,6 +3,7 @@ code only, a forced failure that carries every secret prints none of them, and t
 tokens and passwords."""
 
 from pathlib import Path
+import base64
 import contextlib
 import io
 import json
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,12 +39,15 @@ RUN_SECRETS = {
 
 
 class FailureTest(unittest.TestCase):
-    def test_a_failure_names_status_and_code_only(self):
+    def test_a_failure_names_status_and_a_known_code_only(self):
         error = gitlab_check.ApiError("GET", "/git/oauth/callback?code=abc&state=def", 500,
                                       {"code": "git.provider_failed", "detail": SECRETS["GITLAB_TOKEN"]})
         self.assertEqual(gitlab_check.failure(error), {"status": 500, "code": "git.provider_failed"})
         odd = gitlab_check.ApiError("GET", "/x", 502, {"code": "Bearer " + SECRETS["GITLAB_TOKEN"]})
         self.assertEqual(gitlab_check.failure(odd), {"status": 502, "code": "api.unexpected"})
+        # A code of the right form that the run does not know may be a value: it is not passed on (TASK-116, F4).
+        hexed = gitlab_check.ApiError("GET", "/x", 400, {"code": "a3f9c2e1b4d5e6f708192a3b4c5d6e7f"})
+        self.assertEqual(gitlab_check.failure(hexed), {"status": 400, "code": "api.unexpected"})
         self.assertEqual(gitlab_check.failure(gitlab_check.Failed("oauth.pkce")), {"status": None, "code": "oauth.pkce"})
         self.assertEqual(gitlab_check.failure(gitlab_check.Failed("code=" + SECRETS["GITLAB_TOKEN"])),
                          {"status": None, "code": "check.failed"})
@@ -62,34 +67,64 @@ class FailureTest(unittest.TestCase):
                 for text in (out.getvalue(), err.getvalue(), written):
                     self.assertNotIn(value, text)
             with mock.patch.dict(os.environ, RUN_SECRETS):
-                self.assertEqual(redact.leaks(written, redact.secrets()), [])
+                self.assertEqual(redact.leaks(written, redact.secrets(), "result"), [])
+
+    def test_every_step_ends_with_a_fixed_text(self):
+        # TASK-116, F4: no line of a step and no detail of the result file carries a value of an answer.
+        source = (ROOT / "tools" / "git" / "gitlab_check.py").read_text()
+        import re
+        calls = re.findall(r"steps\.ok\((.*)\)", source)
+        self.assertEqual(len(calls), 10)
+        for call in calls:
+            self.assertRegex(call, r'^"[^"{}]*"$', call)
+            self.assertRegex(call.strip('"'), redact.DETAIL)
+
+
+PS = (
+    '{"Service":"app","State":"running","Health":"healthy","ExitCode":0,"Name":"x","Command":"java -Dpw=%s"}\n'
+    '{"Service":"gitlab","State":"exited","Health":"","ExitCode":137,"Labels":"token=%s"}\n'
+    '{"Service":"db","State":"running","Health":"%s","ExitCode":0}\n'
+)
 
 
 class RedactTest(unittest.TestCase):
-    LOG = (
-        "app-1  | started on port 8080\n"
-        "app-1  | GET /api/v1/git/oauth/callback?code=abc123&state=xyz 303\n"
-        "gitlab-1  | Started POST \"/oauth/token\" with access_token=xyz\n"
-        f"gitlab-1  | personal token {RUN_SECRETS['GITLAB_CHECK_TOKEN']}\n"
-        f"app-1  | the key {RUN_SECRETS['GITLAB_CHECK_SECRET_KEY']} was read\n"
-        "gitlab-1  | Authorization: Bearer abc\n"
-        "db-1  | database system is ready\n"
-    )
-
-    def test_diagnostics_lose_every_secret_and_sensitive_line(self):
+    def test_diagnostics_hold_only_fixed_fields_of_the_containers(self):
         with mock.patch.dict(os.environ, RUN_SECRETS):
-            cleaned = "".join(redact.clean(self.LOG.splitlines(keepends=True), redact.secrets()))
-            self.assertEqual(cleaned, "app-1  | started on port 8080\napp-1  | the key [entfernt] was read\n"
-                                      "db-1  | database system is ready\n")
+            text = PS % (RUN_SECRETS["TASK_MANAGER_DB_PASSWORD"], RUN_SECRETS["GITLAB_CHECK_TOKEN"], RUN_SECRETS["GITLAB_CHECK_OTP"])
+            cleaned = "".join(line + "\n" for line in redact.diagnostics(text))
+            self.assertEqual(cleaned, "container app: state running, health healthy, exit 0\n"
+                                      "container gitlab: state exited, health -, exit 137\n"
+                                      "container state unreadable\n")
             self.assertEqual(redact.leaks(cleaned, redact.secrets()), [])
-            self.assertTrue(redact.leaks(self.LOG, redact.secrets()))
+            self.assertEqual(redact.diagnostics("app-1 | GET /callback?code=abc\n"), ["container state unreadable"])
+            array = json.dumps([{"Service": "app", "State": "running", "Health": "", "ExitCode": 0}])
+            self.assertEqual(redact.diagnostics(array), ["container app: state running, health -, exit 0"])
+
+    def test_the_check_refuses_other_forms_and_encoded_secrets(self):
+        with mock.patch.dict(os.environ, RUN_SECRETS):
+            known = redact.secrets()
+            # Lines the run never writes, as a filter on raw logs would have let them through (TASK-116, F4).
+            for line in ('{"code_verifier": "abcdefghijklmnop"}', '"access_token":"xyz"', "Cookie: __Host-tm-session=abc",
+                         "Set-Cookie: _gitlab_session=abc", "app-1  | started"):
+                self.assertTrue(redact.leaks(line + "\n", known), line)
+            key = RUN_SECRETS["GITLAB_CHECK_SECRET_KEY"]
+            for encoded in (urllib.parse.quote(key, safe=""), base64.b64encode(key.encode()).decode(), json.dumps(key)[1:-1]):
+                result = json.dumps({"gitlab": None, "passed": False, "steps": [
+                    {"step": 1, "name": "GitLab vorbereitet", "detail": encoded[:200], "seconds": 1.0}]})
+                self.assertTrue(redact.leaks(result, known, "result"), encoded)
+            good = json.dumps({"gitlab": "16.11.10-ce", "passed": False, "steps": [
+                {"step": 1, "name": "GitLab vorbereitet", "detail": "GitLab 16, Projekt demo/team/werkzeug mit Commit und Merge Request",
+                 "seconds": 3.5}], "failed": {"step": 2, "name": "Instanz ohne eigene CA", "status": 500, "code": "forced.failure"}})
+            self.assertEqual(redact.leaks(good, known, "result"), [])
+            self.assertTrue(redact.leaks(good.replace('"forced.failure"', '"forced.failure", "extra": 1'), known, "result"))
+            self.assertTrue(redact.leaks(good.replace("16.11.10-ce", "17.0.0"), known, "result"))
 
     def test_the_check_fails_on_a_leak_and_names_no_secret(self):
         with tempfile.TemporaryDirectory() as folder:
             leaked = Path(folder) / "diagnostics.txt"
-            leaked.write_text(f"value {RUN_SECRETS['GITLAB_CHECK_OTP']}\n")
+            leaked.write_text(f"container app: state running, health -, exit 0\nvalue {RUN_SECRETS['GITLAB_CHECK_OTP']}\n")
             clean = Path(folder) / "gitlab-run.json"
-            clean.write_text('{"passed": true}\n')
+            clean.write_text('{"passed": true, "gitlab": "16.11.10-ce", "steps": []}\n')
             environment = {**os.environ, **RUN_SECRETS}
             run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(clean), str(leaked)],
                                  env=environment, capture_output=True, text=True, check=False)
@@ -97,7 +132,22 @@ class RedactTest(unittest.TestCase):
             self.assertNotIn(RUN_SECRETS["GITLAB_CHECK_OTP"], run.stderr + run.stdout)
             run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(clean)],
                                  env=environment, capture_output=True, text=True, check=False)
-            self.assertEqual(run.returncode, 0)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+
+class RunFolderTest(unittest.TestCase):
+    def test_the_run_creates_its_own_folder_and_releases_only_checked_evidence(self):
+        # TASK-116, F6: the shell script creates a folder of its own below the given one and names only that one.
+        script = (ROOT / "tools" / "git" / "gitlab-check.sh").read_text()
+        self.assertIn('run_results=$(mktemp -d "$(cd "$results_base" && pwd)/$COMPOSE_PROJECT_NAME.XXXXXX")', script)
+        self.assertIn("printf 'evidence=%s\\n' \"$run_results\" >> \"$GITHUB_OUTPUT\"", script)
+        self.assertNotIn("logs --no-color", script, "no log line leaves the run")
+        workflow = (ROOT / ".github" / "workflows" / "gitlab.yml").read_text()
+        self.assertIn("if: always() && steps.check.outputs.evidence != ''", workflow)
+        self.assertIn("${{ steps.check.outputs.evidence }}/gitlab-run.json", workflow)
+        self.assertNotIn("gitlab-results/gitlab-run.json", workflow)
+        compose = (ROOT / "tools" / "git" / "compose.gitlab.yaml").read_text()
+        self.assertIn("${GITLAB_CHECK_RUN_RESULTS:?set by gitlab-check.sh}:/results", compose)
 
 
 if __name__ == "__main__":

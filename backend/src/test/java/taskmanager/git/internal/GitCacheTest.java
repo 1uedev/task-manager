@@ -34,7 +34,7 @@ class GitCacheTest {
                 Thread.currentThread().interrupt();
             }
             return "seen by the former Git account";
-        }));
+        }, () -> true));
         assertTrue(started.await(5, TimeUnit.SECONDS));
         // The person connects another Git account meanwhile; then the former answer arrives and is written.
         cache.forget(person, provider);
@@ -44,9 +44,18 @@ class GitCacheTest {
         assertEquals("fresh", cache.read(person, provider, "new", "change:1:7", false, () -> {
             loads.incrementAndGet();
             return "fresh";
-        }));
+        }, () -> true));
         assertEquals(1, loads.get(), "the new generation reads the provider itself");
-        assertEquals("fresh", cache.read(person, provider, "new", "change:1:7", false, () -> "again"), "and keeps its own answer");
+        assertEquals("fresh", cache.read(person, provider, "new", "change:1:7", false, () -> "again", () -> true), "and keeps its own answer");
+    }
+
+    @Test
+    void anAnswerWhoseGenerationEndedDuringTheCallIsNeitherKeptNorHandedOn() {
+        // TASK-116, F1: the call ran with the former connection and ends after the change.
+        ConnectionService.NotConnected changed = org.junit.jupiter.api.Assertions.assertThrows(ConnectionService.NotConnected.class,
+            () -> cache.read(person, provider, "old", "commit:1:a", false, () -> "late", () -> false));
+        assertEquals("git.provider_changed", changed.code());
+        assertEquals("read", cache.read(person, provider, "old", "commit:1:a", false, () -> "read", () -> true), "nothing was kept");
     }
 
     @Test

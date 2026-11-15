@@ -205,10 +205,10 @@ public class ConnectionService {
     // ------------------------------------------------------------------------------------------------ using a token
 
     /**
-     * The token of a person for one call, with the generation of the connection it belongs to: the Git account, the time of
-     * connecting and the address of the instance. Whatever is kept of an answer is bound to it, so after connecting another
-     * Git account, reconnecting or a new address nothing read before is used again, also when a late answer arrives only
-     * after the change (TASK-114, F2).
+     * The token of a person for one call, with the generation of the connection it belongs to: the instance with its version
+     * and address, the Git account and the time of connecting, all taken from exactly the rows whose token is used (TASK-116,
+     * F1). Whatever is kept or shown of an answer is bound to it, so after connecting another Git account, reconnecting or a
+     * change of the instance nothing read before is used again, also when a late answer arrives only after the change.
      */
     public record Grant(String token, String generation) {
     }
@@ -221,48 +221,106 @@ public class ConnectionService {
         return callWith(companyId, accountId, provider, grant -> work.apply(grant.token()));
     }
 
-    /** Like {@link #call} with the generation of the connection, for answers that are kept. */
+    /**
+     * Like {@link #call} with the generation of the connection, for answers that are kept. The answer is handed on only when
+     * the generation still holds after the call; otherwise the call fails with {@code git.provider_changed} and nothing of it
+     * is shown, kept or written (TASK-116, F1 and F2).
+     */
     public <T> T callWith(UUID companyId, UUID accountId, Provider provider, Function<Grant, T> work) {
         if (provider.removed()) {
             throw new NotConnected("git.provider_not_found");
         }
         Grant grant = token(companyId, accountId, provider, false);
+        T result;
         try {
-            return work.apply(grant);
+            result = work.apply(grant);
         } catch (ProviderApi.TokenRejected rejected) {
             Grant renewed = token(companyId, accountId, provider, true);
+            if (!renewed.generation().equals(grant.generation())) {
+                throw changed();
+            }
             try {
-                return work.apply(renewed);
+                result = work.apply(renewed);
             } catch (ProviderApi.TokenRejected again) {
-                renewLater(provider.id(), accountId);
+                renewLater(companyId, provider.id(), accountId, renewed.generation());
                 throw new NotConnected("git.connection_renew");
             }
+            grant = renewed;
+        }
+        requireCurrent(companyId, accountId, provider.id(), grant.generation());
+        return result;
+    }
+
+    /** Whether the connection of the person with the instance is still the one of {@code generation}. */
+    public boolean current(UUID companyId, UUID accountId, UUID providerId, String generation) {
+        return Boolean.TRUE.equals(transaction.execute(status -> {
+            Provider provider = store.provider(companyId, providerId).filter(p -> !p.removed()).orElse(null);
+            Connection connection = store.connection(providerId, accountId).orElse(null);
+            return provider != null && connection != null && connection.active() && connection.companyId().equals(companyId)
+                && generation(provider, connection).equals(generation);
+        }));
+    }
+
+    /** Fails with {@code git.provider_changed} when the generation no longer holds. */
+    public void requireCurrent(UUID companyId, UUID accountId, UUID providerId, String generation) {
+        if (!current(companyId, accountId, providerId, generation)) {
+            throw changed();
         }
     }
 
+    static NotConnected changed() {
+        return new NotConnected("git.provider_changed");
+    }
+
+    static String generation(Provider provider, Connection connection) {
+        return provider.id() + "|" + provider.version() + "|" + provider.baseUrl() + "|" + connection.externalUserId() + "|"
+            + connection.connectedAt();
+    }
+
     private Grant token(UUID companyId, UUID accountId, Provider provider, boolean refused) {
-        Connection connection = transaction.execute(status -> store.connection(provider.id(), accountId).orElse(null));
+        record Rows(Provider provider, Connection connection) {
+        }
+        Rows rows = transaction.execute(status -> new Rows(store.provider(companyId, provider.id()).orElse(null),
+            store.connection(provider.id(), accountId).orElse(null)));
+        Provider fresh = rows.provider();
+        if (fresh == null || fresh.removed()) {
+            throw new NotConnected("git.provider_not_found");
+        }
+        // The caller read the instance before; a call with a changed instance would mix both states (TASK-116, F2).
+        if (fresh.version() != provider.version()) {
+            throw changed();
+        }
+        Connection connection = rows.connection();
         if (connection == null || !connection.companyId().equals(companyId)) {
             throw new NotConnected("git.not_connected");
         }
         if (!connection.active()) {
             throw new NotConnected("git.connection_renew");
         }
-        String generation = provider.id() + "|" + provider.baseUrl() + "|" + connection.externalUserId() + "|" + connection.connectedAt();
+        String generation = generation(fresh, connection);
         Instant now = clock.instant();
         boolean ending = connection.accessExpiresAt() != null && connection.accessExpiresAt().isBefore(now.plus(RENEW_BEFORE));
         if (!refused && !ending) {
-            return new Grant(open(Connection.accessPurpose(provider.id(), accountId), connection.accessCipher(), provider.id(), accountId), generation);
+            return new Grant(open(companyId, Connection.accessPurpose(provider.id(), accountId), connection.accessCipher(), provider.id(),
+                accountId, generation), generation);
         }
-        return new Grant(renew(provider, accountId, connection), generation);
+        return renew(companyId, fresh, accountId, connection);
     }
 
-    /** Renews under the lock of the connection, so two requests of the same person do not both use the refresh token. */
-    private String renew(Provider provider, UUID accountId, Connection seen) {
-        return transaction.execute(status -> {
+    /**
+     * Renews under the lock of the connection, so two requests of the same person do not both use the refresh token. The token
+     * and the generation come from the locked row; a row that belongs to another connection by now is neither used nor marked.
+     */
+    private Grant renew(UUID companyId, Provider provider, UUID accountId, Connection seen) {
+        String expected = generation(provider, seen);
+        Object outcome = transaction.execute(status -> {
             Connection current = store.lockConnection(provider.id(), accountId).orElse(null);
             if (current == null) {
                 throw new NotConnected("git.not_connected");
+            }
+            Provider still = store.provider(companyId, provider.id()).filter(p -> !p.removed()).orElse(null);
+            if (still == null || !generation(still, current).equals(expected)) {
+                throw changed();
             }
             if (!current.active()) {
                 throw new NotConnected("git.connection_renew");
@@ -270,7 +328,7 @@ public class ConnectionService {
             Instant now = clock.instant();
             if (!current.updatedAt().equals(seen.updatedAt())) {
                 // Another request renewed meanwhile.
-                return open(Connection.accessPurpose(provider.id(), accountId), current.accessCipher(), provider.id(), accountId);
+                return open(companyId, Connection.accessPurpose(provider.id(), accountId), current.accessCipher(), provider.id(), accountId, expected);
             }
             boolean refreshEnded = current.refreshExpiresAt() != null && current.refreshExpiresAt().isBefore(now);
             if (current.refreshCipher() == null || refreshEnded || !provider.secretSet()) {
@@ -291,24 +349,31 @@ public class ConnectionService {
                 store.markRenew(provider.id(), accountId, now);
                 return null;
             }
-        }) instanceof String token ? token : renewNeeded();
-    }
-
-    private static String renewNeeded() {
+        });
+        if (outcome instanceof String token) {
+            return new Grant(token, expected);
+        }
         throw new NotConnected("git.connection_renew");
     }
 
-    private String open(String purpose, byte[] cipher, UUID providerId, UUID accountId) {
+    private String open(UUID companyId, String purpose, byte[] cipher, UUID providerId, UUID accountId, String generation) {
         try {
             return secrets.open(purpose, cipher);
         } catch (GitSecrets.Unreadable | GitSecrets.KeyMissing unusable) {
-            renewLater(providerId, accountId);
+            renewLater(companyId, providerId, accountId, generation);
             throw new NotConnected("git.connection_renew");
         }
     }
 
-    private void renewLater(UUID providerId, UUID accountId) {
-        transaction.executeWithoutResult(status -> store.markRenew(providerId, accountId, clock.instant()));
+    /** Asks the person to renew exactly the connection of {@code generation}; a newer connection stays as it is (TASK-116, F1). */
+    private void renewLater(UUID companyId, UUID providerId, UUID accountId, String generation) {
+        transaction.executeWithoutResult(status -> {
+            Connection current = store.lockConnection(providerId, accountId).orElse(null);
+            Provider provider = store.provider(companyId, providerId).orElse(null);
+            if (current != null && provider != null && generation(provider, current).equals(generation)) {
+                store.markRenew(providerId, accountId, clock.instant());
+            }
+        });
     }
 
     // ------------------------------------------------------------------------------------------------ helpers

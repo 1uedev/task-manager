@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import javax.net.ssl.KeyManagerFactory;
@@ -134,6 +135,8 @@ class GitApiTest {
         volatile boolean refuseRefresh;
         /** Tokens whose person sees no repository and no object, as after a withdrawn access (TASK-112). */
         final Set<String> denied = Collections.synchronizedSet(new HashSet<>());
+        /** When not 0, every read of a commit, pull or merge request answers with this status, the repository stays (TASK-116). */
+        volatile int objectStatus;
         /** Every read of a repository or an object answers with the rate limit (TASK-112). */
         volatile boolean limited;
         /** Every read of a repository or an object answers 403 with the secondary rate limit of GitHub (TASK-114, F8). */
@@ -144,6 +147,26 @@ class GitApiTest {
         volatile long delay;
         final AtomicInteger inFlight = new AtomicInteger();
         final AtomicInteger maxInFlight = new AtomicInteger();
+        /** A request whose path contains this text waits at the gate until it opens or 1.5 seconds passed (TASK-116). */
+        volatile String gatePath;
+        volatile CountDownLatch entered = new CountDownLatch(1);
+        volatile CountDownLatch gate = new CountDownLatch(0);
+
+        /** Holds the next request whose path contains {@code path}; {@link #open()} lets it go on. */
+        void hold(String path) {
+            entered = new CountDownLatch(1);
+            gate = new CountDownLatch(1);
+            gatePath = path;
+        }
+
+        void awaitHeld() throws InterruptedException {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS), "the provider saw the held request");
+        }
+
+        void open() {
+            gatePath = null;
+            gate.countDown();
+        }
 
         Stub(boolean gitlab) {
             this.gitlab = gitlab;
@@ -155,6 +178,12 @@ class GitApiTest {
             server.createContext("/", exchange -> {
                 maxInFlight.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
                 try {
+                    String held = gatePath;
+                    if (held != null && exchange.getRequestURI().getRawPath().contains(held)) {
+                        CountDownLatch waiting = gate;
+                        entered.countDown();
+                        waiting.await(1500, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    }
                     if (delay > 0) {
                         Thread.sleep(delay);
                     }
@@ -258,6 +287,8 @@ class GitApiTest {
                 answer(exchange, 200, gitlab ? repo(201, "gamma", "grp/gamma") : repo(101, "alpha", "acme/alpha"));
             } else if (!gitlab && path.equals(api + "/repos/acme/beta")) {
                 answer(exchange, 200, repo(102, "beta", "acme/beta"));
+            } else if ((commit.matches() || change.matches()) && objectStatus != 0) {
+                answer(exchange, objectStatus, Map.of("message", objectStatus == 403 ? "Forbidden" : "Not Found"));
             } else if (commit.matches()) {
                 if (!commit.group(1).equals(repository) || !SHA.startsWith(commit.group(2))) {
                     answer(exchange, gitlab ? 404 : 422, Map.of("message", "No commit found"));
@@ -1307,8 +1338,9 @@ class GitApiTest {
             try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
                 held.setAutoCommit(false);
                 held.createStatement().execute("delete from git_repository where id = '" + release + "'");
+                int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWait();
+                waiterOf(holder);
                 held.commit();
                 Response refused = adding.get(20, java.util.concurrent.TimeUnit.SECONDS);
                 assertEquals(409, refused.status(), refused.body());
@@ -1323,11 +1355,13 @@ class GitApiTest {
             try (java.sql.Connection held = jdbc.getDataSource().getConnection()) {
                 held.setAutoCommit(false);
                 held.createStatement().execute("select pg_advisory_xact_lock(hashtextextended('git_link:ticket:" + ticketId + "', 0))");
+                int holder = backendPid(held);
                 var adding = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
-                waitForLockWait();
+                int adder = waiterOf(holder);
                 var withdrawing = pool.submit(() -> links.setup().manager().send("DELETE",
                     "/api/v1/projects/" + links.setup().project() + "/git/repositories/" + again, null, null));
-                waitForLockWaits(2);
+                // The link holds the release row and waits for the held lock; the withdrawal waits for the link.
+                waiterOf(adder);
                 held.commit();
                 assertEquals(201, adding.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
                 assertEquals(204, withdrawing.get(20, java.util.concurrent.TimeUnit.SECONDS).status());
@@ -1339,22 +1373,171 @@ class GitApiTest {
         }
     }
 
-    private void waitForLockWait() throws InterruptedException {
-        waitForLockWaits(1);
+    private static int backendPid(java.sql.Connection connection) throws java.sql.SQLException {
+        try (var result = connection.createStatement().executeQuery("select pg_backend_pid()")) {
+            result.next();
+            return result.getInt(1);
+        }
     }
 
-    /** Waits until PostgreSQL shows the given number of sessions waiting for a lock. */
-    private void waitForLockWaits(int count) throws InterruptedException {
+    /**
+     * Waits until PostgreSQL shows a session blocked by exactly the given session, read through pg_blocking_pids, and
+     * returns its process id, so lock waits of other sessions never count (TASK-116, H3).
+     */
+    private int waiterOf(int blocker) throws InterruptedException {
         long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < end) {
-            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
-                Integer.class);
-            if (waiting != null && waiting >= count) {
-                return;
+            List<Integer> waiting = jdbc.queryForList("select pid from pg_stat_activity where datname = current_database() and ? = any(pg_blocking_pids(pid))",
+                Integer.class, blocker);
+            if (!waiting.isEmpty()) {
+                return waiting.get(0);
             }
             Thread.sleep(20);
         }
-        throw new AssertionError("no session waited for a lock");
+        throw new AssertionError("no session waited for the lock of session " + blocker);
+    }
+
+    // ---------------------------------------------------------------- TASK-116
+
+    private String connectionState(Browser browser, UUID provider) {
+        return jdbc.queryForObject("select state from git_connection where provider_id = ? and account_id = ?", String.class, provider, browser.id);
+    }
+
+    private String accessToken(Browser browser, UUID provider) {
+        return GITHUB.seen.reversed().stream().filter(s -> s.token() != null && s.path().startsWith("/api/repositories/101")).findFirst()
+            .map(Seen::token).orElseThrow();
+    }
+
+    @Test
+    void aRunningReadOfAFormerConnectionShowsAndChangesNothing() throws Exception {
+        Links links = links();
+        Browser worker = links.worker();
+        UUID github = links.setup().github();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // F1: the read of the pull request waits at the provider; meanwhile the person connects another Git account.
+            GITHUB.hold("/pulls/7");
+            var reading = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            assertTrue(connect(worker, github, "other" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITHUB.open();
+            JsonNode shown = reading.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+            assertFalse(shown.get("available").asBoolean(), "the answer of the former connection is not shown: " + shown);
+            assertTrue(shown.get("change").isNull(), shown.toString());
+            assertEquals("active", connectionState(worker, github));
+            GITHUB.changeState = "merged";
+            try {
+                JsonNode fresh = worker.get(links.ticketPath()).json().get("links").get(0);
+                assertTrue(fresh.get("available").asBoolean(), fresh.toString());
+                assertEquals("merged", fresh.get("change").get("state").asString(), "nothing of the former connection was kept");
+            } finally {
+                GITHUB.changeState = "open";
+            }
+
+            // The former token is refused while the read waits: the refusal neither uses nor marks the new connection.
+            String former = accessToken(worker, github);
+            GITHUB.hold("/pulls/7");
+            var refused = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
+            GITHUB.awaitHeld();
+            assertTrue(connect(worker, github, "third" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITHUB.tokens.remove(former);
+            GITHUB.open();
+            JsonNode placeholder = refused.get(20, java.util.concurrent.TimeUnit.SECONDS).json().get("links").get(0);
+            assertFalse(placeholder.get("available").asBoolean(), placeholder.toString());
+            assertEquals("git.unavailable", placeholder.get("reason").asString());
+            assertEquals("active", connectionState(worker, github), "the new connection is not asked to be renewed");
+            assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aReleaseOrLinkReadWithAFormerStateOfTheInstanceIsRefused() throws Exception {
+        Links links = links();
+        Browser admin = links.setup().admin();
+        UUID github = links.setup().github();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // F2: the client of the instance changes and changes back while the provider answers; the address stays the same.
+            GITHUB.hold("/repositories/102");
+            var releasing = pool.submit(() -> release(links.setup().manager(), links.setup(), "102"));
+            GITHUB.awaitHeld();
+            changeClientTwice(admin, github);
+            GITHUB.open();
+            Response refused = releasing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(409, refused.status(), refused.body());
+            assertEquals("git.provider_changed", refused.code());
+            assertEquals(0, jdbc.queryForObject("select count(*) from git_repository where project_id = ? and external_id = '102'", Integer.class,
+                links.setup().project()));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from git_audit_event where operation = 'repository.released' and detail->>'externalId' = '102'
+                    and detail->>'projectId' = ?
+                    """, Integer.class, links.setup().project().toString()));
+
+            assertTrue(connect(links.worker(), github, "back" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
+            GITHUB.hold("/commits/");
+            var linking = pool.submit(() -> link(links.worker(), links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA));
+            GITHUB.awaitHeld();
+            changeClientTwice(admin, github);
+            GITHUB.open();
+            Response stale = linking.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(409, stale.status(), stale.body());
+            assertEquals("git.provider_changed", stale.code());
+            assertEquals(0, jdbc.queryForObject("select count(*) from git_link where provider_id = ?", Integer.class, github));
+        } finally {
+            GITHUB.open();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void anObjectRefusedBelowAReadableRepositoryEndsWithTheCache() {
+        Links links = links();
+        Browser worker = links.worker();
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
+        assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
+        assertTrue(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean());
+        for (int status : new int[] {403, 404}) {
+            GITHUB.objectStatus = status;
+            try {
+                // F3: the repository stays readable; what was read of the objects is shown until the cache ends (60 seconds).
+                JsonNode kept = worker.get(links.ticketPath()).json().get("links");
+                assertTrue(kept.get(0).get("available").asBoolean(), "within the 60 seconds of the cache: " + kept);
+                // "Aktualisieren" reads past it, as the cache does after its 60 seconds; the objects are then not available.
+                JsonNode refreshed = worker.get(links.ticketPath() + "?refresh=true").json().get("links");
+                for (JsonNode shown : refreshed) {
+                    assertFalse(shown.get("available").asBoolean(), status + ": " + shown);
+                    assertEquals("git.unavailable", shown.get("reason").asString());
+                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
+                }
+                assertFalse(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(),
+                    "the answer that the object is not available is kept like a found one");
+            } finally {
+                GITHUB.objectStatus = 0;
+            }
+            assertTrue(worker.get(links.ticketPath() + "?refresh=true").json().get("links").get(0).get("available").asBoolean());
+        }
+        assertEquals("active", connectionState(worker, links.setup().github()));
+    }
+
+    /** Changes the client of the instance and back, so address and client are as before and only the version moved on. */
+    private void changeClientTwice(Browser admin, UUID provider) {
+        Map<String, Object> row = jdbc.queryForMap("select kind, name, client_id, version from git_provider where id = ?", provider);
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("kind", row.get("kind"));
+        settings.put("name", row.get("name"));
+        settings.put("baseUrl", null);
+        settings.put("caCertificate", null);
+        String client = (String) row.get("client_id");
+        settings.put("clientId", client + "-neu");
+        Response changed = admin.send("PUT", "/api/v1/git/admin/providers/" + provider, settings, "\"" + row.get("version") + "\"");
+        assertEquals(200, changed.status(), changed.body());
+        settings.put("clientId", client);
+        Response back = admin.send("PUT", "/api/v1/git/admin/providers/" + provider, settings, changed.etag());
+        assertEquals(200, back.status(), back.body());
     }
 
     private static String challenge(String verifier) {

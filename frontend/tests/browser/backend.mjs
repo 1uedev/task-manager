@@ -3641,6 +3641,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       // Like the server (TASK-114, F4): the address of an instance with releases or links stays fixed.
       if (checked.baseUrl !== provider.baseUrl && (git.releases.some((release) => release.providerId === provider.id)
         || git.links.some((link) => link.providerId === provider.id))) return problem(409, 'git.provider_in_use');
+      // Like the server (TASK-116, H1): another address or client ends every connection of the instance.
+      if (checked.baseUrl !== provider.baseUrl || checked.clientId !== provider.clientId) {
+        for (const key of [...git.connections.keys()]) if (key.startsWith(`${provider.id}:`)) git.connections.delete(key);
+      }
       Object.assign(provider, checked, { version: provider.version + 1, updatedAt: now(), updatedBy: account.id },
         body.clientSecret === undefined ? {} : { secretSet: body.clientSecret !== '' });
       return ok(gitAdminView(provider), `"${provider.version}"`);
@@ -3706,7 +3710,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   // Git links of tickets and requirements (TASK-112) as the backend: the field `git` of both resource types, objects read live
   // through the own active connection, and an object the person cannot read named only by its kind. A repository of the stand-in
   // lists its `commits` ({ sha, message, author, at }) and `changes` ({ number, title, state, author }).
-  const GIT_SHA = /^[0-9a-f]{7,64}$/;
+  const GIT_SHA = /^[0-9a-fA-F]{7,64}$/;
   function gitObject(provider, repo, kind, key) {
     const url = (suffix) => (repo.url ? `${repo.url}${suffix}` : null);
     const github = provider.kind === 'github';
@@ -3746,22 +3750,45 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return { key, kind: link.kind, providerId: link.providerId, providerName: provider.name, providerKind: provider.kind, linkedAt: link.linkedAt,
       linkedBy: link.linkedBy, available: true, reason: null, repository: object.repository, commit: object.commit, change: object.change, url: object.url };
   }
-  // The address of a link as the server parses it: one candidate per instance with its own path, kind and key.
+  // The address of a link as the server parses it (GitAddress.parse with GitAddress.validKey): one candidate per instance with
+  // its own path, kind and key, the longest address of an instance first (TASK-116, H1). The shared vectors of
+  // contracts/cases/git-addresses.json run against both.
+  const GIT_NUMBER = /^[1-9][0-9]{0,9}$/;
   function gitAddressCandidates(address) {
-    const clean = address.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
-    return git.providers.filter((entry) => !entry.removed && clean.toLowerCase().startsWith(`${entry.baseUrl.toLowerCase()}/`)).map((entry) => {
-      const tail = clean.slice(entry.baseUrl.length + 1);
-      const github = entry.kind === 'github';
-      const parts = github ? tail.split('/') : tail.split('/-/');
-      const path = (github ? parts.slice(0, 2).join('/') : parts[0]).replace(/\.git$/, '');
-      const more = github ? parts.slice(2) : (parts[1] ?? '').split('/').filter(Boolean);
-      if (more.length === 0) return { provider: entry, path, kind: 'repository', key: '' };
-      if (more[0] === 'commit' && GIT_SHA.test(more[1] ?? '')) return { provider: entry, path, kind: 'commit', key: more[1].toLowerCase() };
-      if (more[0] === (github ? 'pull' : 'merge_requests') && /^[1-9][0-9]{0,18}$/.test(more[1] ?? '')) {
-        return { provider: entry, path, kind: github ? 'pull_request' : 'merge_request', key: more[1] };
+    let clean = String(address ?? '').trim().replace(/[?#].*$/, '');
+    while (clean.endsWith('/')) clean = clean.slice(0, -1);
+    const lower = clean.toLowerCase();
+    const repository = (name) => (name.endsWith('.git') ? name.slice(0, -4) : name);
+    const number = (key) => GIT_NUMBER.test(key) && Number(key) <= 2147483647;
+    const parts = (entry, rest) => {
+      if (rest.includes('//') || rest.includes('%') || rest.includes('\\')) return null;
+      if (entry.kind === 'github') {
+        const segments = rest.split('/');
+        while (segments.length > 0 && segments[segments.length - 1] === '') segments.pop();
+        if (segments.length < 2) return null;
+        const path = `${segments[0]}/${repository(segments[1])}`;
+        if (segments.length === 2) return { path, kind: 'repository', key: '' };
+        if (segments.length >= 4 && segments[2] === 'commit' && GIT_SHA.test(segments[3])) return { path, kind: 'commit', key: segments[3].toLowerCase() };
+        if (segments.length >= 4 && segments[2] === 'pull' && number(segments[3])) return { path, kind: 'pull_request', key: segments[3] };
+        return null;
       }
+      const marker = rest.indexOf('/-/');
+      const path = repository(marker < 0 ? rest : rest.slice(0, marker));
+      if (path === '' || !path.includes('/')) return null;
+      if (marker < 0) return { path, kind: 'repository', key: '' };
+      const segments = rest.slice(marker + 3).split('/');
+      while (segments.length > 0 && segments[segments.length - 1] === '') segments.pop();
+      if (segments.length >= 2 && segments[0] === 'commit' && GIT_SHA.test(segments[1])) return { path, kind: 'commit', key: segments[1].toLowerCase() };
+      if (segments.length >= 2 && segments[0] === 'merge_requests' && number(segments[1])) return { path, kind: 'merge_request', key: segments[1] };
       return null;
-    }).filter(Boolean);
+    };
+    return git.providers.filter((entry) => !entry.removed && lower.startsWith(`${entry.baseUrl.toLowerCase()}/`))
+      .map((entry) => {
+        const found = parts(entry, clean.slice(entry.baseUrl.length + 1));
+        return found && { provider: entry, ...found };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.provider.baseUrl.length - a.provider.baseUrl.length);
   }
   function gitLinkRoute(account, method, target, rest, query, body) {
     if (account.kind === 'portal') return problem(403, 'auth.forbidden');
@@ -3814,7 +3841,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       } else {
         const kind = body.kind;
         const key = (body.key ?? '').toLowerCase();
-        const validKey = kind === 'repository' ? key === '' : kind === 'commit' ? GIT_SHA.test(key) : /^[1-9][0-9]{0,18}$/.test(key);
+        const validKey = kind === 'repository' ? key === '' : kind === 'commit' ? GIT_SHA.test(key)
+          : GIT_NUMBER.test(key) && Number(key) <= 2147483647;
         if (!['repository', 'commit', 'pull_request', 'merge_request'].includes(kind)) return problem(400, 'request.invalid', { violations: ['kind.invalid'] });
         if (!validKey) return problem(400, 'request.invalid', { violations: ['key.invalid'] });
         const release = releases.find((entry) => entry.id === body.releaseId);
@@ -3924,6 +3952,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     addWikiPage,
     addRequirement,
     // The requirement routes without a browser, for a change of someone else in between (TASK-096).
+    gitAdminCall: (account, method, path, body = {}, headers = {}) => gitRoute(account, method, path, headers, body),
+    gitAddressCandidates: (address) => gitAddressCandidates(address).map((found) => ({ provider: found.provider.id, path: found.path,
+      kind: found.kind, key: found.key })),
     requirementCall: (account, method, path, body = {}, { headers = {}, query = '' } = {}) => requirementRoute(account, method, path, new URLSearchParams(query), headers, body),
     addWikiLanguage,
     // The wiki routes without a browser, for checks of the same answers as the server (H1 of the TASK-094 review).

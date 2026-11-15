@@ -240,3 +240,31 @@ describe('Git links', () => {
     });
   });
 });
+
+// TASK-116 (H1): the stand in reads a pasted address like the server. The same vectors run against GitAddress in GitAddressTest.
+test('the stand in reads the shared address vectors like the server (TASK-116)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vectors = JSON.parse(await readFile(new URL('../../../contracts/cases/git-addresses.json', import.meta.url), 'utf8'));
+  const backend = createBackend();
+  const at = '2026-11-14T12:00:00Z';
+  for (const entry of vectors.providers) {
+    backend.state.git.providers.push({ id: entry.id, kind: entry.kind, name: entry.id, baseUrl: entry.baseUrl, clientId: 'client', secretSet: true,
+      version: 1, updatedAt: at, updatedBy: backend.anna.id, removed: false });
+  }
+  for (const entry of vectors.cases) {
+    assert.deepEqual(backend.gitAddressCandidates(entry.input), entry.expected, entry.input);
+  }
+});
+
+test('a new client of an instance ends its connections in the stand in like on the server (TASK-116)', async () => {
+  const backend = createBackend();
+  withGit(backend);
+  backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000116f1', name: 'Git Verwaltung', members: [backend.anna.id],
+    actions: [{ action: 'git.manage', projectId: null }], fields: [] });
+  assert.equal(backend.state.git.connections.has(`${GITHUB}:${backend.anna.id}`), true);
+  const provider = backend.state.git.providers.find((entry) => entry.id === GITHUB);
+  const settings = { kind: 'github', name: provider.name, clientId: 'Iv1.other' };
+  const changed = backend.gitAdminCall(backend.anna, 'PUT', `/git/admin/providers/${GITHUB}`, settings, { 'if-match': '"1"' });
+  assert.equal(changed.status, 200, JSON.stringify(changed.body));
+  assert.equal(backend.state.git.connections.has(`${GITHUB}:${backend.anna.id}`), false);
+});

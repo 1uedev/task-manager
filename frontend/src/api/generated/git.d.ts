@@ -195,8 +195,8 @@ export interface paths {
          * Repository freigeben (projects.manage oder project.manage)
          * @description Das Repository muss mit der eigenen Verbindung lesbar sein, sonst 404 `git.repository_not_found`. Ohne Verbindung
          *     409 `git.not_connected` oder `git.connection_renew`; schon freigegeben 409 `git.repository_released`; mehr als 50
-         *     Freigaben 409 `git.repositories_too_many`; Adresse der Instanz während der Prüfung geändert 409
-         *     `git.provider_changed`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
+         *     Freigaben 409 `git.repositories_too_many`; Instanz oder eigene Verbindung während der Prüfung geändert (andere
+         *     Version oder Adresse der Instanz, neu verbunden oder Token erneuert) 409 `git.provider_changed` (TASK-116, F1 und F2); ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
          */
         post: operations["releaseGitRepository"];
         delete?: never;
@@ -267,7 +267,8 @@ export interface paths {
          *     das Repository). Unbekannte Instanz oder Form 400 `git.address_unknown`; ohne Verbindung 409 `git.not_connected` oder
          *     `git.connection_renew`; nicht vorhanden oder nicht lesbar 404 `git.object_not_found`; Repository nicht für das
          *     Projekt und diese Instanz freigegeben 409 `git.repository_not_released`, geprüft bevor der Commit oder die Änderung
-         *     beim Anbieter gelesen wird; Adresse der Instanz inzwischen geändert 409 `git.provider_changed`; schon verknüpft 409 `git.link_exists`; mehr als 50
+         *     beim Anbieter gelesen wird; Instanz oder eigene Verbindung inzwischen geändert (andere Version oder Adresse der Instanz, neu verbunden oder Token
+         *     erneuert) 409 `git.provider_changed`; schon verknüpft 409 `git.link_exists`; mehr als 50
          *     Verknüpfungen 409 `git.links_too_many`; ein Anbieterfehler 502 mit seinem Code, das Ratenlimit 503 `git.rate_limited`.
          *     Die Version des Tickets ändert sich nicht.
          */
@@ -565,7 +566,8 @@ export interface components {
         Number: number;
         /**
          * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
-         *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+         *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`, ein Schlüssel, der nicht
+         *     dieser Form entspricht, schon vor der Leseprüfung des Tickets oder der Anforderung (TASK-116, H3).
          */
         LinkKey: string;
         /** @description Liest am Zwischenspeicher von 60 Sekunden vorbei („Aktualisieren“) */
@@ -1042,7 +1044,8 @@ export interface operations {
                 number: components["parameters"]["Number"];
                 /**
                  * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
-                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`, ein Schlüssel, der nicht
+                 *     dieser Form entspricht, schon vor der Leseprüfung des Tickets oder der Anforderung (TASK-116, H3).
                  */
                 key: components["parameters"]["LinkKey"];
             };
@@ -1132,7 +1135,8 @@ export interface operations {
                 id: components["parameters"]["Id"];
                 /**
                  * @description Undurchsichtiger Löseschlüssel aus `key` der Liste, nur für die anfragende Person und den laufenden Serverprozess
-                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`.
+                 *     gültig. Ein fremder, veralteter oder unbekannter Schlüssel ergibt 404 `git.link_not_found`, ein Schlüssel, der nicht
+                 *     dieser Form entspricht, schon vor der Leseprüfung des Tickets oder der Anforderung (TASK-116, H3).
                  */
                 key: components["parameters"]["LinkKey"];
             };

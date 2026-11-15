@@ -4,8 +4,9 @@ name: GitLab 16
 # minutes to start, so the run is not a required check: it runs on changes of the Git module or of the run itself, once a
 # week and on request. The automatic tests of the Git link run in the backend workflow against stand ins. Besides the Git
 # module it starts on changes of the Git contract, of the migrations V0064 to V0066 and of the session and rights logic
-# the Git module depends on (TASK-115, H2). Only the result file and, after a failure, the checked diagnostics are kept;
-# raw logs never leave the run (TASK-115, F2). "fail_at" lets one step fail on purpose to show that.
+# the Git module depends on (TASK-115, H2). Only the result file and, after a failure, the state of the containers are
+# kept, and only from the folder of exactly this run that passed its check (TASK-116, F4 and F6); logs never leave the
+# run. "fail_at" lets one step fail on purpose to show that.
 on:
   pull_request:
     branches: [main]
@@ -51,17 +52,18 @@ jobs:
           docker version
           docker compose version
       - name: Connect, link and show against GitLab 16 with a CA of its own
+        id: check
         env:
           GITLAB_CHECK_RESULTS: ${{ github.workspace }}/gitlab-results
           GITLAB_CHECK_FAIL_AT: ${{ github.event.inputs.fail_at }}
         run: tools/git/gitlab-check.sh
-      - name: Preserve evidence
-        if: always()
+      - name: Preserve checked evidence
+        if: always() && steps.check.outputs.evidence != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gitlab-evidence
           retention-days: 14
           if-no-files-found: ignore
           path: |
-            gitlab-results/gitlab-run.json
-            gitlab-results/diagnostics.txt
+            ${{ steps.check.outputs.evidence }}/gitlab-run.json
+            ${{ steps.check.outputs.evidence }}/diagnostics.txt
