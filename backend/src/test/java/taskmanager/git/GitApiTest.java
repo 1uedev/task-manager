@@ -71,7 +71,42 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
+@org.springframework.context.annotation.Import(GitApiTest.Clocks.class)
 class GitApiTest {
+    /** The clock of the application: the time of the system moved on by hand, so the 60 seconds of the cache end at once (TASK-117, H2). */
+    static final class FollowingClock extends java.time.Clock {
+        private volatile java.time.Duration ahead = java.time.Duration.ZERO;
+
+        void advance(java.time.Duration duration) {
+            ahead = ahead.plus(duration);
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return java.time.ZoneOffset.UTC;
+        }
+
+        @Override
+        public java.time.Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public java.time.Instant instant() {
+            return java.time.Instant.now().plus(ahead);
+        }
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class Clocks {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        java.time.Clock testClock() {
+            return CLOCK;
+        }
+    }
+
+    static final FollowingClock CLOCK = new FollowingClock();
     private static final String DATABASE = freshDatabase();
     private static final String STRONG = "Correct-Horse-Battery-9";
     private static final String KEY = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
@@ -1599,12 +1634,21 @@ class GitApiTest {
                 // F3: the repository stays readable; what was read of the objects is shown until the cache ends (60 seconds).
                 JsonNode kept = worker.get(links.ticketPath()).json().get("links");
                 assertTrue(kept.get(0).get("available").asBoolean(), "within the 60 seconds of the cache: " + kept);
-                // "Aktualisieren" reads past it, as the cache does after its 60 seconds; the objects are then not available.
+                // TASK-117, H2: after the 60 seconds of the cache the ordinary read shows both objects as not available.
+                CLOCK.advance(java.time.Duration.ofSeconds(61));
+                JsonNode expired = worker.get(links.ticketPath()).json().get("links");
+                assertEquals(2, expired.size(), expired.toString());
+                for (JsonNode shown : expired) {
+                    assertFalse(shown.get("available").asBoolean(), status + " after 60 seconds: " + shown);
+                    assertEquals("git.unavailable", shown.get("reason").asString());
+                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
+                }
+                assertEquals("active", connectionState(worker, links.setup().github()), "the connection stays active");
+                // "Aktualisieren" reads past the cache at once with the same result.
                 JsonNode refreshed = worker.get(links.ticketPath() + "?refresh=true").json().get("links");
                 for (JsonNode shown : refreshed) {
                     assertFalse(shown.get("available").asBoolean(), status + ": " + shown);
                     assertEquals("git.unavailable", shown.get("reason").asString());
-                    assertTrue(shown.get("commit").isNull() && shown.get("change").isNull(), shown.toString());
                 }
                 assertFalse(worker.get(links.ticketPath()).json().get("links").get(0).get("available").asBoolean(),
                     "the answer that the object is not available is kept like a found one");
