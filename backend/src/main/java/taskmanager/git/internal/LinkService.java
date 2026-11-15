@@ -370,8 +370,13 @@ public class LinkService {
             if (still.version() != provider.version() || !still.baseUrl().equals(provider.baseUrl())) {
                 throw ApiProblemException.of(409, "git.provider_changed");
             }
-            // The connection that read the object is still the one of the person (TASK-116, F1).
-            connections.requireCurrent(actor.companyId(), actor.userId(), still.id(), chosen.generation());
+            // The connection that read the object is still the one of the person and stays so until the commit: disconnecting,
+            // connecting again and renewing wait for this write (TASK-116, F1; TASK-117, F2).
+            try {
+                connections.holdCurrent(actor.companyId(), actor.userId(), still.id(), chosen.generation());
+            } catch (ConnectionService.NotConnected changed) {
+                throw ApiProblemException.of(409, "git.provider_changed");
+            }
             lockSubject(actor, subject);
             String repositoryId = chosen.repository().externalId();
             if (!store.shareReleased(subject.projectId(), still.id(), repositoryId)) {
