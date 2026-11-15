@@ -6,9 +6,10 @@
         service, state, health and exit code, each checked against a fixed form. Nothing else of the input, and never
         a log line, reaches the output.
     redact.py --check FILE...
-        fails when a file is not what the run writes: gitlab-run.json must have exactly the fields of the result with
-        values of a fixed form, diagnostics.txt only lines of the form above; and no file may hold a secret of the run,
-        also not percent, base64 or JSON encoded.
+        fails when a file is not what the run writes: gitlab-run.json must have exactly the fields of the result, the step
+        names and texts, codes and services of tools/git/evidence.json and values of a fixed form, diagnostics.txt only
+        lines of the form above for the services of the run; and no file may hold a secret of the run, also not percent,
+        base64 or JSON encoded, checked in the raw text and in every decoded JSON string (TASK-117, F3).
 
 The secrets are the values of the variables the run sets for itself (passwords, the key of the application, the token
 of root, the OAuth application and the one time password). Only the Python standard library is used.
@@ -22,19 +23,19 @@ import os
 import re
 import sys
 import urllib.parse
+from pathlib import Path
 
 SECRET_VARIABLES = (
     "TASK_MANAGER_DB_PASSWORD", "TASK_MANAGER_DEMO_PASSWORD", "GITLAB_CHECK_ROOT_PASSWORD", "GITLAB_CHECK_SECRET_KEY",
     "GITLAB_CHECK_TOKEN", "GITLAB_CHECK_APP_SECRET", "GITLAB_CHECK_OTP",
 )
-SERVICE = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
+EVIDENCE = json.loads((Path(__file__).resolve().parent / "evidence.json").read_text(encoding="utf-8"))
+STEPS = [(step["name"], step["detail"]) for step in EVIDENCE["steps"]]
+CODES = frozenset(EVIDENCE["answer_codes"]) | frozenset(EVIDENCE["check_codes"])
+SERVICES = frozenset(EVIDENCE["services"])
 STATES = {"created", "running", "paused", "restarting", "removing", "exited", "dead"}
 HEALTH = {"", "starting", "healthy", "unhealthy"}
-DIAGNOSTIC_LINE = re.compile(r"^container [a-z][a-z0-9-]{0,39}: state [a-z]+, health [a-z-]+, exit -?[0-9]{1,3}$")
-CODE = re.compile(r"^[a-z][a-z0-9_.]{0,79}$")
-NAME = re.compile(r"^[A-Za-zÄÖÜäöüß ]{1,40}$")
 VERSION = re.compile(r"^16\.[0-9]{1,2}\.[0-9]{1,2}(-ce|-ee)?$")
-DETAIL = re.compile(r"^[A-Za-z0-9ÄÖÜäöüß ,.;:()/_-]{0,200}$")
 
 
 def secrets() -> list[str]:
@@ -69,7 +70,7 @@ def diagnostics(text: str) -> list[str]:
         state = entry.get("State")
         health = entry.get("Health") or ""
         code = entry.get("ExitCode")
-        if not (isinstance(service, str) and SERVICE.match(service) and state in STATES and health in HEALTH
+        if not (isinstance(service, str) and service in SERVICES and state in STATES and health in HEALTH
                 and isinstance(code, int) and -1 <= code <= 255):
             lines.append("container state unreadable")
             continue
@@ -77,8 +78,17 @@ def diagnostics(text: str) -> list[str]:
     return sorted(set(lines))
 
 
+def diagnostic_line(line: str) -> bool:
+    """A line of diagnostics.txt: the state of one service of the run, or the fixed line for an unreadable state."""
+    if line == "container state unreadable":
+        return True
+    match = re.fullmatch(r"container ([a-z][a-z0-9-]{0,39}): state ([a-z]+), health ([a-z-]+), exit (-?[0-9]{1,3})", line)
+    return bool(match and match[1] in SERVICES and match[2] in STATES and (match[3] == "-" or match[3] in HEALTH)
+                and -1 <= int(match[4]) <= 255)
+
+
 def result_problems(text: str) -> list[str]:
-    """gitlab-run.json may hold exactly the fields the run writes, with values of a fixed form (TASK-116, F4)."""
+    """gitlab-run.json may hold exactly the fields, step texts and codes the run writes (TASK-116, F4; TASK-117, F3)."""
     try:
         result = json.loads(text)
     except ValueError:
@@ -91,22 +101,37 @@ def result_problems(text: str) -> list[str]:
     if result.get("gitlab") is not None and not (isinstance(result["gitlab"], str) and VERSION.match(result["gitlab"])):
         problems.append("gitlab")
     steps = result.get("steps")
-    if not isinstance(steps, list):
+    if not isinstance(steps, list) or len(steps) > len(STEPS):
         problems.append("steps")
     else:
-        for step in steps:
-            if not (isinstance(step, dict) and set(step) == {"step", "name", "detail", "seconds"} and isinstance(step["step"], int)
-                    and isinstance(step["name"], str) and NAME.match(step["name"]) and isinstance(step["detail"], str)
-                    and DETAIL.match(step["detail"]) and isinstance(step["seconds"], (int, float))):
+        for index, step in enumerate(steps):
+            if not (isinstance(step, dict) and set(step) == {"step", "name", "detail", "seconds"} and step["step"] == index + 1
+                    and (step["name"], step["detail"]) == STEPS[index]
+                    and isinstance(step["seconds"], (int, float)) and not isinstance(step["seconds"], bool) and step["seconds"] >= 0):
                 problems.append("step")
     failed = result.get("failed")
     if failed is not None:
-        if not (isinstance(failed, dict) and set(failed) == {"step", "name", "status", "code"} and isinstance(failed["step"], int)
-                and isinstance(failed["name"], str) and NAME.match(failed["name"])
-                and (failed["status"] is None or isinstance(failed["status"], int))
-                and isinstance(failed["code"], str) and CODE.match(failed["code"])):
+        known = isinstance(failed, dict) and set(failed) == {"step", "name", "status", "code"} and isinstance(failed["step"], int)
+        if not (known and 0 <= failed["step"] <= len(STEPS)
+                and failed["name"] == (STEPS[failed["step"] - 1][0] if failed["step"] > 0 and failed["name"] != "Start" else "Start")
+                and (failed["status"] is None or (isinstance(failed["status"], int) and not isinstance(failed["status"], bool)
+                                                  and 100 <= failed["status"] <= 599))
+                and failed["code"] in CODES):
             problems.append("failed")
+    if result.get("passed") is True and (failed is not None or not isinstance(steps, list) or len(steps) != len(STEPS)):
+        problems.append("passed without all steps")
     return problems
+
+
+def strings(value) -> list[str]:
+    """Every key and string of a decoded JSON value, so an escaped secret is found in its decoded form (TASK-117, F3)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [part for key, item in value.items() for part in [str(key), *strings(item)]]
+    if isinstance(value, list):
+        return [part for item in value for part in strings(item)]
+    return []
 
 
 def leaks(text: str, known: list[str], kind: str = "text") -> list[str]:
@@ -115,8 +140,14 @@ def leaks(text: str, known: list[str], kind: str = "text") -> list[str]:
         found = result_problems(text)
     else:
         found = [f"line {number}: not a container state" for number, line in enumerate(text.splitlines(), 1)
-                 if line and not DIAGNOSTIC_LINE.match(line) and line != "container state unreadable"]
-    found += ["secret of the run" for value in known for form in forms(value) if form in text]
+                 if line and not diagnostic_line(line)]
+    texts = [text]
+    try:
+        texts += strings(json.loads(text))
+    except ValueError:
+        pass
+    if any(form in part for value in known for form in forms(value) for part in texts):
+        found.append("secret of the run")
     return found
 
 

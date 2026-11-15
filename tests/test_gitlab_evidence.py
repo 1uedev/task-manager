@@ -51,7 +51,8 @@ class FailureTest(unittest.TestCase):
         self.assertEqual(gitlab_check.failure(gitlab_check.Failed("oauth.pkce")), {"status": None, "code": "oauth.pkce"})
         self.assertEqual(gitlab_check.failure(gitlab_check.Failed("code=" + SECRETS["GITLAB_TOKEN"])),
                          {"status": None, "code": "check.failed"})
-        self.assertEqual(gitlab_check.failure(ValueError(SECRETS["GITLAB_APP_SECRET"])), {"status": None, "code": "error.valueerror"})
+        self.assertEqual(gitlab_check.failure(ValueError(SECRETS["GITLAB_APP_SECRET"])), {"status": None, "code": "error.unexpected"})
+        self.assertEqual(gitlab_check.failure(TimeoutError("x")), {"status": None, "code": "error.timeout"})
 
     def test_a_forced_failure_prints_and_writes_no_secret(self):
         with tempfile.TemporaryDirectory() as results:
@@ -77,7 +78,20 @@ class FailureTest(unittest.TestCase):
         self.assertEqual(len(calls), 10)
         for call in calls:
             self.assertRegex(call, r'^"[^"{}]*"$', call)
-            self.assertRegex(call.strip('"'), redact.DETAIL)
+        # TASK-117, F3: the steps of the run are exactly those of evidence.json, in their order.
+        names = re.findall(r'steps\.begin\("([^"]*)"\)', source)
+        details = [call.strip('"') for call in calls]
+        self.assertEqual(list(zip(names, details)), redact.STEPS)
+        self.assertEqual(gitlab_check.STEPS, redact.STEPS)
+
+    def test_every_code_of_a_check_is_one_the_upload_allows(self):
+        # TASK-117, F3: the codes of the generator and of the check before the upload are the same.
+        source = (ROOT / "tools" / "git" / "gitlab_check.py").read_text()
+        import re
+        used = set(re.findall(r'Failed\("([a-z][a-z0-9_.]*)"', source)) | set(re.findall(r'"([a-z][a-z0-9_.]*)"\)\s*$', source, re.M))
+        used -= {"admin", "version", "gitlab.api_"}
+        self.assertEqual(used - gitlab_check.CHECK_CODES, set())
+        self.assertLessEqual(gitlab_check.CHECK_CODES | gitlab_check.KNOWN_CODES, redact.CODES)
 
 
 PS = (
@@ -118,13 +132,26 @@ class RedactTest(unittest.TestCase):
             self.assertEqual(redact.leaks(good, known, "result"), [])
             self.assertTrue(redact.leaks(good.replace('"forced.failure"', '"forced.failure", "extra": 1'), known, "result"))
             self.assertTrue(redact.leaks(good.replace("16.11.10-ce", "17.0.0"), known, "result"))
+            # TASK-117, F3: a code of the right form the run never writes, a free detail of the allowed characters and a
+            # known value written with Unicode escapes inside a result of the right structure are all refused.
+            self.assertTrue(redact.leaks(good.replace('"forced.failure"', '"a3f9c2e1b4d5e6f708192a3b4c5d6e7f"'), known, "result"))
+            self.assertTrue(redact.leaks(good.replace("mit Commit und Merge Request", "mit Commit und Merge Request 1"), known, "result"))
+            escaped = "".join(f"\\u{ord(c):04x}" for c in RUN_SECRETS["GITLAB_CHECK_TOKEN"])
+            self.assertNotIn(RUN_SECRETS["GITLAB_CHECK_TOKEN"], escaped)
+            hidden = json.loads(good)
+            hidden["steps"][0]["detail"] = "@@"
+            text = json.dumps(hidden).replace("@@", escaped)
+            self.assertIn("secret of the run", redact.leaks(text, known, "result"))
+            # Diagnostics of a service the run does not have are refused.
+            self.assertTrue(redact.leaks("container sidecar: state running, health -, exit 0\n", known))
+            self.assertEqual(redact.leaks("container gitlab-check: state exited, health -, exit 1\n", known), [])
 
     def test_the_check_fails_on_a_leak_and_names_no_secret(self):
         with tempfile.TemporaryDirectory() as folder:
             leaked = Path(folder) / "diagnostics.txt"
             leaked.write_text(f"container app: state running, health -, exit 0\nvalue {RUN_SECRETS['GITLAB_CHECK_OTP']}\n")
             clean = Path(folder) / "gitlab-run.json"
-            clean.write_text('{"passed": true, "gitlab": "16.11.10-ce", "steps": []}\n')
+            clean.write_text('{"passed": false, "gitlab": "16.11.10-ce", "steps": []}\n')
             environment = {**os.environ, **RUN_SECRETS}
             run = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "git" / "redact.py"), "--check", str(clean), str(leaked)],
                                  env=environment, capture_output=True, text=True, check=False)

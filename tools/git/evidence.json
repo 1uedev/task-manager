@@ -1,0 +1,154 @@
+{
+  "_comment": "The only texts and codes a GitLab run may write into gitlab-run.json and diagnostics.txt (TASK-117, F3). gitlab_check.py writes from them and redact.py --check allows exactly them.",
+  "steps": [
+    {
+      "name": "GitLab vorbereitet",
+      "detail": "GitLab 16, Projekt demo/team/werkzeug mit Commit und Merge Request"
+    },
+    {
+      "name": "Instanz ohne eigene CA",
+      "detail": "Prüfen meldet git.tls_failed"
+    },
+    {
+      "name": "Instanz mit eigener CA",
+      "detail": "Prüfen erfolgreich"
+    },
+    {
+      "name": "Git Konto verbunden",
+      "detail": "Anmeldung bei GitLab, Freigabe der Anwendung, Rückleitung an die Rückleitungsadresse mit Zustand und PKCE S256"
+    },
+    {
+      "name": "Repository freigegeben",
+      "detail": "demo/team/werkzeug mit seiner Kennung"
+    },
+    {
+      "name": "Ticket verknüpft",
+      "detail": "Repository, Commit über kurzen SHA und Merge Request, genau drei; Duplikat und fremder Rechner abgewiesen; Version unverändert"
+    },
+    {
+      "name": "Anforderung verknüpft",
+      "detail": "Merge Request über die Freigabe, Historie nennt die Art"
+    },
+    {
+      "name": "Zusammengeführt",
+      "detail": "nach dem Aktualisieren merged; Ticketversion, Revision und Status der Anforderung unverändert"
+    },
+    {
+      "name": "Umbenannt",
+      "detail": "dieselbe Kennung zeigt den neuen Pfad"
+    },
+    {
+      "name": "Token entzogen",
+      "detail": "dieselben drei Verknüpfungen am Ticket und eine an der Anforderung nur mit Art und git.connection_renew, Verbindung auf erneuern"
+    }
+  ],
+  "answer_codes": [
+    "auth.invalid_credentials",
+    "auth.password_change_required",
+    "auth.unauthenticated",
+    "csrf.invalid",
+    "forced.failure",
+    "git.address_unknown",
+    "git.connection_renew",
+    "git.link_exists",
+    "git.link_not_found",
+    "git.links_too_many",
+    "git.not_connected",
+    "git.object_not_found",
+    "git.provider_changed",
+    "git.provider_failed",
+    "git.provider_in_use",
+    "git.provider_incomplete",
+    "git.provider_name_taken",
+    "git.provider_not_found",
+    "git.rate_limited",
+    "git.redirect_refused",
+    "git.repositories_too_many",
+    "git.repository_not_found",
+    "git.repository_not_released",
+    "git.repository_released",
+    "git.secret_key_missing",
+    "git.timeout",
+    "git.tls_failed",
+    "git.unavailable",
+    "git.version_conflict",
+    "git.version_unsupported",
+    "permissions.denied",
+    "project.key_taken",
+    "project.not_found",
+    "request.invalid",
+    "requirement.not_found",
+    "ticket.not_found",
+    "api.unexpected"
+  ],
+  "check_codes": [
+    "check.failed",
+    "check.step_text",
+    "check.with_ca_failed",
+    "check.without_ca_not_refused",
+    "error.connection",
+    "error.timeout",
+    "error.tls",
+    "error.unexpected",
+    "gitlab.api_delete",
+    "gitlab.api_get",
+    "gitlab.api_post",
+    "gitlab.api_put",
+    "gitlab.not_16",
+    "gitlab.not_merged",
+    "gitlab.sign_in_page",
+    "gitlab.sign_in_refused",
+    "gitlab.sign_in_token",
+    "gitlab.unexpected_answer",
+    "link.duplicate_not_refused",
+    "link.other_host_not_refused",
+    "links.key_missing",
+    "links.kind_twice",
+    "links.not_writable",
+    "merge.requirement_changed",
+    "merge.requirement_state",
+    "merge.state_not_shown",
+    "merge.state_unknown",
+    "merge.ticket_version",
+    "oauth.authorize_client",
+    "oauth.authorize_endpoint",
+    "oauth.authorize_host",
+    "oauth.connection_not_active",
+    "oauth.no_return",
+    "oauth.not_connected",
+    "oauth.pkce",
+    "oauth.redirect_uri",
+    "oauth.return_query",
+    "oauth.return_target",
+    "oauth.scope",
+    "oauth.state",
+    "release.no_candidate",
+    "rename.not_shown",
+    "requirement.history",
+    "requirement.links",
+    "revoke.connection_not_renew",
+    "revoke.links_before",
+    "revoke.metadata_shown",
+    "revoke.requirement_links_changed",
+    "revoke.ticket_links_changed",
+    "setting.missing",
+    "taskmanager.git_not_set_up",
+    "ticket.commit",
+    "ticket.commit_url",
+    "ticket.history",
+    "ticket.keys",
+    "ticket.link_count",
+    "ticket.links",
+    "ticket.merge_request",
+    "ticket.repository_path",
+    "ticket.version_changed"
+  ],
+  "services": [
+    "app",
+    "db",
+    "demo",
+    "gitlab",
+    "gitlab-check",
+    "worker"
+  ]
+}
