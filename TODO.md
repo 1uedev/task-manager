@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 12 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-122](#task-122-befund-f1-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-121-beheben) | Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben | claude-20261116-gitfix-08 | 2026-11-16 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -51,6 +49,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-119](#task-119-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-118-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben | claude-20261115-gitfix-05 | 2026-11-15 |
 | [TASK-120](#task-120-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-119-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben | claude-20261115-gitfix-06 | 2026-11-16 |
 | [TASK-121](#task-121-befunde-f1-und-f2-und-hinweis-h1-der-codex-nachprüfung-von-task-120-beheben) | Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-120 beheben | claude-20261116-gitfix-07 | 2026-11-16 |
+| [TASK-122](#task-122-befund-f1-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-121-beheben) | Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben | claude-20261116-gitfix-08 | 2026-11-16 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -346,7 +345,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-122 Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-08 · **Aktualisiert:** 2026-11-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261116-gitfix-08 · **Aktualisiert:** 2026-11-16
 
 **Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-152; docs/REVIEW_TASK-121_PR-330.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-121 auf main (PR #330). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Nachprüfung von TASK-121 (Empfehlung nachbessern) „F1, H1, H2 als TASK-122“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-152, ohne Migration.
 
@@ -362,4 +361,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
 3. Dokumentation und DEC-152 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** Umgesetzt auf claude/project-thread-6p8449 nach der Reservierung (PR #331), ohne Migration und ohne Änderung am Produktcode oder Demo SQL. (1) `ObservedConnections` umhüllt jedes Statement, Ergebnis und jede Datenbankbeschreibung, die die Hülle herausgibt, und führt jeden Rückweg zu einem bereits umhüllten Objekt (`ResultSet.getStatement()`, `Statement.getConnection()`, `DatabaseMetaData.getConnection()`) auf dieselbe Hülle zurück; `unwrap` und `isWrapperFor` auf ein Interface der Hülle liefern die Hülle, `unwrap` auf ein anderes Ziel scheitert während der Aufzeichnung, auch an der Datenquelle. `ObservedConnectionsTest` zählt ein zweites `executeQuery()` über `getStatement()`, über `unwrap(Statement.class)` und über `getConnection()` jeweils als zweite Ausführung; mit der Hülle von TASK-121 scheitern die vier neuen Tests. (2) docs/DEMO.md nennt als wartend die Transaktionen, die eine der Tabellen ändern oder dort eine Zeile sperren. (3) Der Kommentar im Trennfall des Tests mit zwei Instanzen beschreibt Reihenfolge und Verwerfen; die gemeinsame Abfrage gehört zum Fall mit zwei aktiven Verbindungen. Belege im Ergebnis PR.
+
+**Nächster Schritt:** Codex Nachprüfung nach docs/REVIEW_TASK-121_PR-330.md, danach Holgers Abnahme von TASK-111 bis TASK-122.

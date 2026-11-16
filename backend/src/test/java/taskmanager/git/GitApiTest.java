@@ -1823,9 +1823,12 @@ class GitApiTest {
         int expired = GITLAB.expired.get();
         try {
             // TASK-119, F1 with TASK-120, F3: the commit of GitHub is read and has passed its own check inside the application,
-            // the merge request of GitLab.com waits at a gate only the test opens. GitHub is disconnected first, then GitLab.com.
-            // The final check receives the commit with its data and its former generation and reads both instances in one
-            // statement, so the answer keeps the data of neither and never the earlier ended one alone.
+            // the merge request of GitLab.com waits at a gate only the test opens. GitHub is disconnected first, then GitLab.com,
+            // and only then the test releases the merge request. Its own check of the connection now finds GitLab.com
+            // disconnected, so it leaves as a placeholder without generation. The final check receives the fully read commit
+            // with its former generation, reads the connection of GitHub with one statement, finds it ended and drops the
+            // commit, so the answer keeps the data of neither instance (TASK-122, H2; the one statement over both instances
+            // belongs to the refresh with two active connections above).
             ObservedConnections.reset();
             GITLAB.hold("/merge_requests/3", 20_000);
             var reading = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
