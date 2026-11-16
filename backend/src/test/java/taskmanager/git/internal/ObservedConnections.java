@@ -4,18 +4,19 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -28,8 +29,8 @@ import org.mockito.invocation.InvocationOnMock;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 
 /**
- * TASK-120, F3 and H1, TASK-121, F1 and F2, and TASK-122, F1: observes the connection service and the database of a test
- * context without any hook in the product code. Every call of a provider is reported when it ends, with the result it
+ * TASK-120, F3 and H1, TASK-121, F1 and F2, TASK-122, F1, and TASK-123: observes the connection service and the database
+ * of a test context without any hook in the product code. Every call of a provider is reported when it ends, with the result it
  * hands on or the failure it ended with, so a test knows that one entry of an answer is fully read before it changes the
  * connection, and that a held entry ended only after the test released it. The entry of the final check is reported with
  * the results and their generations exactly as the check receives them, together with every SQL statement the final check
@@ -121,16 +122,32 @@ public class ObservedConnections implements BeanPostProcessor {
             return Mockito.mock(ConnectionService.class, invocation -> connections(real, invocation));
         }
         if (bean instanceof DataSource real) {
-            return Mockito.mock(bean.getClass(), invocation -> {
-                if ("unwrap".equals(invocation.getMethod().getName()) && RECORDING.get() != null
-                    && !((Class<?>) invocation.getArgument(0)).isInstance(invocation.getMock())) {
-                    throw new SQLException("the final check may not leave the observed data source through unwrap");
-                }
-                Object result = delegate(real, invocation);
-                return result instanceof Connection connection ? recording(connection) : result;
-            });
+            return Mockito.mock(bean.getClass(), invocation -> dataSource(real, invocation));
         }
         return bean;
+    }
+
+    /**
+     * The observed data source (TASK-123, F1): {@code unwrap} and {@code isWrapperFor} to a target the observed data source
+     * fulfils answer with the observed data source itself and never reach the pool, which would hand out itself; another
+     * target fails while the final check records and reaches the pool otherwise. Every connection it hands out is observed.
+     */
+    private static Object dataSource(DataSource real, InvocationOnMock invocation) throws Throwable {
+        String name = invocation.getMethod().getName();
+        Object[] args = invocation.getArguments();
+        if ((name.equals("unwrap") || name.equals("isWrapperFor")) && args.length == 1 && args[0] instanceof Class<?> target) {
+            if (target.isInstance(invocation.getMock())) {
+                return name.equals("unwrap") ? invocation.getMock() : true;
+            }
+            if (RECORDING.get() != null) {
+                if (name.equals("isWrapperFor")) {
+                    return false;
+                }
+                throw new SQLException("the final check may not leave the observed data source through unwrap to " + target);
+            }
+        }
+        Object result = delegate(real, invocation);
+        return result instanceof Connection connection ? recording(connection) : result;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -183,43 +200,147 @@ public class ObservedConnections implements BeanPostProcessor {
      * Preparing a statement or translating SQL with {@code nativeSQL} executes nothing and is not written down; a prepared
      * statement executed twice, also with new parameters, is written down twice, and a batch once per statement in it.
      *
-     * <p>TASK-122, F1: every JDBC object that leaves the wrapper is observed as well. A statement, result set or database
-     * description the wrapper hands out is wrapped, and a way back to an object it already wrapped, such as
-     * {@code ResultSet.getStatement()}, {@code Statement.getConnection()} or {@code DatabaseMetaData.getConnection()}, returns
-     * the same wrapper. {@code unwrap} to an interface the wrapper fulfils itself returns the wrapper; {@code unwrap} to any
-     * other target fails while the final check records, so no SQL can run past the count.
+     * <p>TASK-122, F1, and TASK-123: one general rule for every object of {@code java.sql} and {@code javax.sql}. Every such
+     * object the wrapper hands out, as a result, inside a returned array of objects or through a way back such as
+     * {@code ResultSet.getStatement()}, is itself observed: connections, statements, results, descriptions, arrays, large
+     * objects, save points and every other JDBC type. The wrapper implements every JDBC interface of the object it wraps,
+     * and the same object always gets the same wrapper, so a way back to an object already handed out returns its wrapper.
+     * A result set an array creates over a statement of its own, for example, hands out that statement observed, and its
+     * connection is the observed connection again. {@code unwrap} and {@code isWrapperFor} to an interface the wrapper
+     * fulfils answer with the wrapper; any other target fails while the final check records. A JDBC object the wrapper
+     * cannot hand out observed fails while the final check records. An observed object handed back to the driver as an
+     * argument, for example {@code setArray}, reaches it as the original.
      */
     static Connection recording(Connection real) {
-        return new Observed().wrap(Connection.class, real, null);
+        try {
+            return (Connection) new Observed().observe(real, Connection.class);
+        } catch (SQLException e) {
+            throw new IllegalStateException("a connection is always observed", e);
+        }
     }
 
-    /** The JDBC interfaces the wrapper observes, the most specific first. */
-    private static final List<Class<?>> OBSERVED = List.of(CallableStatement.class, PreparedStatement.class, Statement.class,
-        Connection.class, ResultSet.class, DatabaseMetaData.class);
+    /** Whether {@code type} is an interface of JDBC. */
+    private static boolean jdbc(Class<?> type) {
+        String name = type.getName();
+        return type.isInterface() && (name.startsWith("java.sql.") || name.startsWith("javax.sql."));
+    }
 
-    /** The wrappers of one borrowed connection by the identity of the object they wrap. */
+    /** Every JDBC interface a class implements, also through its super classes and super interfaces. */
+    private static final ClassValue<Set<Class<?>>> JDBC_INTERFACES = new ClassValue<>() {
+        @Override
+        protected Set<Class<?>> computeValue(Class<?> type) {
+            return Set.copyOf(collectJdbcInterfaces(type));
+        }
+    };
+
+    private static Set<Class<?>> jdbcInterfaces(Class<?> type) {
+        return JDBC_INTERFACES.get(type);
+    }
+
+    private static Set<Class<?>> collectJdbcInterfaces(Class<?> type) {
+        Set<Class<?>> found = new LinkedHashSet<>();
+        Deque<Class<?>> open = new ArrayDeque<>();
+        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+            open.addAll(List.of(current.getInterfaces()));
+        }
+        while (!open.isEmpty()) {
+            Class<?> next = open.pop();
+            if (jdbc(next)) {
+                found.add(next);
+            }
+            open.addAll(List.of(next.getInterfaces()));
+        }
+        return found;
+    }
+
+    /** The wrappers of one borrowed connection, by the identity of the object they wrap and back. */
     private static final class Observed {
-        private final Map<Object, Object> wrappers = Collections.synchronizedMap(new IdentityHashMap<>());
+        private final Map<Object, Object> wrappers = new IdentityHashMap<>();
+        private final Map<Object, Object> originals = new IdentityHashMap<>();
+        /** The SQL a prepared statement was prepared with, by its original. */
+        private final Map<Object, String> prepared = new IdentityHashMap<>();
 
-        /** The wrapper of {@code real} as {@code type}, the same one for the same object; {@code prepared} is its SQL, if any. */
-        @SuppressWarnings("unchecked")
-        <T> T wrap(Class<T> type, T real, String prepared) {
-            synchronized (wrappers) {
-                Object known = wrappers.get(real);
-                if (known != null && type.isInstance(known)) {
-                    return (T) known;
+        /**
+         * {@code real} as the caller may see it: unchanged when it is no JDBC object, else its wrapper. Fails while the final
+         * check records when the wrapper would not be a {@code returned}.
+         */
+        synchronized Object observe(Object real, Class<?> returned) throws SQLException {
+            if (real == null || originals.containsKey(real)) {
+                return real;
+            }
+            if (real instanceof Object[] values && !values.getClass().getComponentType().isPrimitive()) {
+                return observeAll(values);
+            }
+            Object known = wrappers.get(real);
+            if (known == null) {
+                Set<Class<?>> types = jdbcInterfaces(real.getClass());
+                if (types.isEmpty()) {
+                    return real;
                 }
                 List<String> batch = Collections.synchronizedList(new ArrayList<>());
-                InvocationHandler handler = (proxy, method, args) -> invoke(proxy, real, prepared, batch, method, args);
-                T proxy = type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, handler));
-                wrappers.put(real, proxy);
-                return proxy;
+                InvocationHandler handler = (proxy, method, args) -> invoke(proxy, real, batch, method, args);
+                known = Proxy.newProxyInstance(ObservedConnections.class.getClassLoader(), types.toArray(Class<?>[]::new),
+                    handler);
+                wrappers.put(real, known);
+                originals.put(known, real);
             }
+            if (returned.isInstance(known)) {
+                return known;
+            }
+            return refused(real, "a " + returned.getName() + " the wrapper cannot hand out observed: " + real.getClass());
         }
 
-        private Object invoke(Object proxy, Object real, String prepared, List<String> batch, Method method, Object[] args)
-            throws Throwable {
+        /** An array of values whose JDBC objects are all observed, in a copy of the same type. */
+        private Object observeAll(Object[] values) throws SQLException {
+            Object[] copy = values.clone();
+            for (int i = 0; i < copy.length; i++) {
+                Object value = copy[i];
+                if (value != null && !jdbcInterfaces(value.getClass()).isEmpty()) {
+                    Object wrapper = observe(value, Object.class);
+                    if (!values.getClass().getComponentType().isInstance(wrapper)) {
+                        return refused(values, "an array of " + values.getClass().getComponentType().getName());
+                    }
+                    copy[i] = wrapper;
+                }
+            }
+            return copy;
+        }
+
+        /** {@code real} outside the final check; while it records, a failure. */
+        private static Object refused(Object real, String what) throws SQLException {
+            if (RECORDING.get() != null) {
+                throw new SQLException("the final check may not receive " + what);
+            }
+            return real;
+        }
+
+        /** {@code value} as the driver must see it: the original of an observed object, also inside an array of objects. */
+        private synchronized Object original(Object value) {
+            Object real = originals.get(value);
+            if (real != null) {
+                return real;
+            }
+            if (value instanceof Object[] values) {
+                Object[] copy = values.clone();
+                for (int i = 0; i < copy.length; i++) {
+                    Object inner = originals.get(copy[i]);
+                    if (inner != null) {
+                        copy[i] = inner;
+                    }
+                }
+                return copy;
+            }
+            return value;
+        }
+
+        private Object invoke(Object proxy, Object real, List<String> batch, Method method, Object[] given) throws Throwable {
             String name = method.getName();
+            Object[] args = given == null ? null : given.clone();
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    args[i] = original(args[i]);
+                }
+            }
             if ((name.equals("unwrap") || name.equals("isWrapperFor")) && args != null && args.length == 1
                 && args[0] instanceof Class<?> target) {
                 if (target.isInstance(proxy)) {
@@ -234,7 +355,7 @@ public class ObservedConnections implements BeanPostProcessor {
                 return call(real, method, args);
             }
             if (real instanceof Statement) {
-                String sql = args != null && args.length > 0 && args[0] instanceof String given ? given : prepared;
+                String sql = args != null && args.length > 0 && args[0] instanceof String text ? text : preparedOf(real);
                 if (name.equals("addBatch")) {
                     batch.add(sql);
                 } else if (name.equals("clearBatch")) {
@@ -249,23 +370,17 @@ public class ObservedConnections implements BeanPostProcessor {
                 }
             }
             Object result = call(real, method, args);
-            return observed(method, args, result);
-        }
-
-        /** {@code result} wrapped when it is a JDBC object the wrapper observes, else unchanged. */
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        private Object observed(Method method, Object[] args, Object result) {
-            if (result == null) {
-                return null;
-            }
-            for (Class<?> type : OBSERVED) {
-                if (type.isInstance(result) && method.getReturnType().isAssignableFrom(type)) {
-                    String sql = result instanceof PreparedStatement && method.getName().startsWith("prepare") && args != null
-                        && args.length > 0 && args[0] instanceof String given ? given : null;
-                    return wrap((Class) type, result, sql);
+            if (result instanceof PreparedStatement && name.startsWith("prepare") && args != null && args.length > 0
+                && args[0] instanceof String text) {
+                synchronized (this) {
+                    prepared.put(result, text);
                 }
             }
-            return result;
+            return observe(result, method.getReturnType());
+        }
+
+        private synchronized String preparedOf(Object statement) {
+            return prepared.get(statement);
         }
 
         private static Object call(Object real, Method method, Object[] args) throws Throwable {
