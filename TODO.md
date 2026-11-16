@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 12 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-123](#task-123-befunde-f1-und-f2-und-hinweis-h1-der-codex-nachprüfung-von-task-122-grundsätzlich-beheben) | Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-122 grundsätzlich beheben | claude-20261116-gitfix-09 | 2026-11-16 |
 
 ### Blockiert – BLOCKIERT
 
@@ -363,4 +365,25 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** Umgesetzt auf claude/project-thread-6p8449 nach der Reservierung (PR #331), ohne Migration und ohne Änderung am Produktcode oder Demo SQL. (1) `ObservedConnections` umhüllt jedes Statement, Ergebnis und jede Datenbankbeschreibung, die die Hülle herausgibt, und führt jeden Rückweg zu einem bereits umhüllten Objekt (`ResultSet.getStatement()`, `Statement.getConnection()`, `DatabaseMetaData.getConnection()`) auf dieselbe Hülle zurück; `unwrap` und `isWrapperFor` auf ein Interface der Hülle liefern die Hülle, `unwrap` auf ein anderes Ziel scheitert während der Aufzeichnung, auch an der Datenquelle. `ObservedConnectionsTest` zählt ein zweites `executeQuery()` über `getStatement()`, über `unwrap(Statement.class)` und über `getConnection()` jeweils als zweite Ausführung; mit der Hülle von TASK-121 scheitern die vier neuen Tests. (2) docs/DEMO.md nennt als wartend die Transaktionen, die eine der Tabellen ändern oder dort eine Zeile sperren. (3) Der Kommentar im Trennfall des Tests mit zwei Instanzen beschreibt Reihenfolge und Verwerfen; die gemeinsame Abfrage gehört zum Fall mit zwei aktiven Verbindungen. Belege im Ergebnis PR.
 
-**Nächster Schritt:** Codex Nachprüfung nach docs/REVIEW_TASK-121_PR-330.md, danach Holgers Abnahme von TASK-111 bis TASK-122.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-122_PR-332.md) empfiehlt nachbessern; F1, F2 und H1 behebt TASK-123 grundsätzlich (DEC-153). Danach Holgers Abnahme von TASK-111 bis TASK-123.
+
+## TASK-123 Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-122 grundsätzlich beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-09 · **Aktualisiert:** 2026-11-16
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-153; docs/REVIEW_TASK-122_PR-332.md. **Abhängigkeiten:** TASK-122 auf main (PR #332). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Nachprüfung von TASK-122 (Empfehlung nachbessern) „Grundsätzlich beheben als TASK-123“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-153, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 und F2 und des Hinweises H1 aus docs/REVIEW_TASK-122_PR-332.md durch eine allgemeine Regel der JDBC Testhülle in den Tests des Git Moduls, mit Dokumentation. Nicht Teil: Änderungen am Produktcode oder am Demo SQL, weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. Allgemeine Regel: Jedes Objekt aus `java.sql`, das die Hülle oder die beobachtete Datenquelle herausgibt, ist selbst beobachtet: Verbindungen, Statements, Ergebnisse, Beschreibungen, Arrays und große Objekte. Ein Objekt, das die Hülle nicht beobachten kann, gibt sie während der Aufzeichnung nicht heraus, sondern scheitert ausdrücklich. Rückwege zu einem bereits beobachteten Objekt liefern dieselbe Hülle.
+2. F1: `unwrap` und `isWrapperFor` an der Datenquelle auf ein Ziel, das die beobachtete Datenquelle erfüllt, liefern die beobachtete Datenquelle selbst, nie den Pool; ein anderes Ziel scheitert während der Aufzeichnung. Gegenprobe über `unwrap(DataSource.class)` und `unwrap(HikariDataSource.class)` mit dem echten Hikari Pool.
+3. F2: Ein Array, das die Hülle herausgibt, ist beobachtet; `getResultSet()` liefert ein beobachtetes Ergebnis, dessen `getStatement()` und Verbindung beobachtet sind oder während der Aufzeichnung verweigert werden. Wird ein beobachtetes Array als Parameter übergeben, erhält der Treiber das Original. Gegenprobe mit einer zweiten Ausführung nach `Array.getResultSet().getStatement()`.
+4. H1: Die Gegenprobe über `unwrap(Statement.class)` führt die zweite Ausführung als `PreparedStatement` mit gebundenem Parameter und `executeQuery()` ohne Argument aus.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1, F2 und H1 sind nach den Regeln behoben, mit den Gegenproben.
+2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
+3. Dokumentation und DEC-153 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
