@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 11 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-122](#task-122-befund-f1-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-121-beheben) | Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben | claude-20261116-gitfix-08 | 2026-11-16 |
 
 ### Blockiert – BLOCKIERT
 
@@ -340,4 +342,24 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** F1 `ObservedConnections` meldet jeden Abruf bei seinem Ende, auch mit Fehler, mit einer Nummer einer gemeinsamen Folge, ebenso den Eingang der Schlussprüfung und die Schritte des Tests (`mark()`). `releaseAfterAction` beendet die Aktion, prüft, dass bis dahin kein weiterer Abruf geendet hat, und gibt erst dann das Tor frei; `heldEndedAfterRelease` prüft, dass der gehaltene Abruf genau einmal, nach der Freigabe, nicht am Anbieter gescheitert und vor dem Eingang der Schlussprüfung endete. Angewandt in `theFinalCheckOfTwoInstancesDropsEveryEndedConnection` und in allen drei Abschnitten von `aFullyReadEntryPassesTheFinalCheckOnlyWhileItsConnectionLasts`. Gegenprobe: 2,5 Sekunden Pause vor dem zweiten Trennen lässt den Test mit „the held read ended in the application before the test released it“ und `git.timeout` scheitern. F2 Die JDBC Hülle schreibt den SQL Text bei jeder Ausführung auf (`execute*`, je Stapeleintrag bei `executeBatch`), nicht bei `prepare*` oder `nativeSQL`; `ObservedConnectionsTest` belegt mit einem JDBC Testdoppel zwei Einträge für ein einmal vorbereitetes, zweimal ausgeführtes Statement. H1 docs/GIT_MIGRATION.md und docs/DEMO.md nennen als wartend nur Transaktionen mit Zugriff auf die 15 Tabellen, etwa eine Anmeldung, nicht ein Abmelden oder Lesen, und raten nach einem Sperrabbruch zum erneuten Start nach Ende des laufenden Vorgangs. Dokumentation in backend/README.md (Korrekturen (TASK-121)). Ohne Migration, ohne Änderung am Produktcode und am Demo SQL.
 
-**Nächster Schritt:** Technische Nachprüfung des Ergebnis PR durch Codex, danach Holgers Abnahme von TASK-111 bis TASK-121.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-121_PR-330.md) empfiehlt nachbessern; F1, H1 und H2 behebt TASK-122 (DEC-152). Danach Holgers Abnahme von TASK-111 bis TASK-122.
+
+## TASK-122 Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-08 · **Aktualisiert:** 2026-11-16
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-152; docs/REVIEW_TASK-121_PR-330.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-121 auf main (PR #330). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Nachprüfung von TASK-121 (Empfehlung nachbessern) „F1, H1, H2 als TASK-122“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-152, ohne Migration.
+
+**Umfang:** Behebung des Befunds F1 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-121_PR-330.md in den Tests des Git Moduls und in der Dokumentation. Nicht Teil: Änderungen am Produktcode oder am Demo SQL, weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Die JDBC Testhülle gibt auf jedem Rückweg nur beobachtete Objekte heraus: `ResultSet.getStatement()` liefert das umhüllte Statement, `Statement.getConnection()` und `DatabaseMetaData.getConnection()` die umhüllte Verbindung, und `unwrap` auf ein JDBC Interface, das die Hülle selbst erfüllt, die Hülle. Ein `unwrap` auf ein anderes Ziel während der Aufzeichnung scheitert ausdrücklich. Gegenproben mit einem zweiten `executeQuery()` über `getStatement()`, über `unwrap(Statement.class)` und über `getConnection()` zählen zwei Ausführungen.
+2. H1: Die Kurzbeschreibung in docs/DEMO.md nennt als wartend die Transaktionen, die eine der 15 Tabellen ändern oder dort eine Zeile sperren.
+3. H2: Der Kommentar des Tests mit zwei Instanzen ordnet die gemeinsame Abfrage über beide Instanzen dem Fall mit zwei aktiven Verbindungen zu und beschreibt im Trennfall die Reihenfolge und das Verwerfen des fertig gelesenen GitHub Eintrags.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1, H1 und H2 sind behoben, mit den Gegenproben aus Regel 1.
+2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
+3. Dokumentation und DEC-152 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
