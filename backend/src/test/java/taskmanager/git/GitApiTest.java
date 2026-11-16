@@ -1761,6 +1761,35 @@ class GitApiTest {
         return found;
     }
 
+    /**
+     * Ends the action of the test and only then releases the read held at {@code stub}. Fails when a call of a provider ended in
+     * the application before, for example the held read after the timeout of the HTTP client or by a cancellation, because the
+     * final check would then not see it read after the action (TASK-121, F1).
+     */
+    private static long releaseAfterAction(Stub stub) {
+        long acted = ObservedConnections.mark();
+        List<ObservedConnections.Finished> early = ObservedConnections.drainFinished();
+        assertTrue(early.isEmpty(), "the held read ended in the application before the test released it: " + early);
+        long released = ObservedConnections.mark();
+        assertTrue(acted < released);
+        stub.open();
+        return released;
+    }
+
+    /**
+     * The held read: it ended exactly once, after its release, not at the provider by a timeout or another failure of the HTTP
+     * client, and before the final check began (TASK-121, F1).
+     */
+    private static ObservedConnections.Finished heldEndedAfterRelease(long released, ObservedConnections.FinalCheck check) {
+        List<ObservedConnections.Finished> ended = ObservedConnections.drainFinished();
+        assertEquals(1, ended.size(), "the held read ended once: " + ended);
+        ObservedConnections.Finished held = ended.get(0);
+        assertTrue(held.sequence() > released, "the held read ended after its release: " + held);
+        assertFalse(held.failedAtProvider(), "the held read failed at the provider: " + held);
+        assertTrue(check.sequence() > held.sequence(), "the final check began after the held read ended");
+        return held;
+    }
+
     /** The generation without the state of the token: the connection the entry was read with. */
     private static String connectionPart(String generation) {
         return generation.substring(0, generation.lastIndexOf('|'));
@@ -1806,9 +1835,10 @@ class GitApiTest {
             assertTrue(commit.result().toString().contains(SHA), commit.result().toString());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + links.gitlab() + "/connection", null, null).status());
-            GITLAB.open();
+            long released = releaseAfterAction(GITLAB);
             Response shown = reading.get(20, java.util.concurrent.TimeUnit.SECONDS);
             ObservedConnections.FinalCheck check = ObservedConnections.awaitFinalCheck();
+            assertEquals(links.gitlab(), heldEndedAfterRelease(released, check).providerId());
             assertEquals(former, check.generationOf(commit.result()), "the commit reaches the final check with its former generation");
             assertEquals(1, check.statements().size(), check.statements().toString());
             assertEquals(expired, GITLAB.expired.get(), "the test opened the gate, its time did not run out");
@@ -1848,9 +1878,10 @@ class GitApiTest {
             Object commitRead = commit.result();
             assertTrue(commitRead.toString().contains(SHA), commitRead.toString());
             GITHUB.tokens.remove(former);
-            GITHUB.open();
+            long released = releaseAfterAction(GITHUB);
             Response renewed = renewing.get(20, java.util.concurrent.TimeUnit.SECONDS);
             ObservedConnections.FinalCheck check = ObservedConnections.awaitFinalCheck();
+            assertNull(heldEndedAfterRelease(released, check).failure(), "the pull request is read with the renewed token");
             String commitGeneration = check.generationOf(commit.result());
             assertNotNull(commitGeneration, "the commit reaches the final check with its data");
             String pullGeneration = check.results().stream().filter(r -> r != commitRead).map(check::generationOf)
@@ -1875,9 +1906,11 @@ class GitApiTest {
                 update git_connection set state = 'renew', access_cipher = null, refresh_cipher = null, access_expires_at = null,
                     refresh_expires_at = null where provider_id = ? and account_id = ?
                 """, github, worker.id);
-            GITHUB.open();
+            released = releaseAfterAction(GITHUB);
             Response switched = switching.get(20, java.util.concurrent.TimeUnit.SECONDS);
-            assertNotNull(ObservedConnections.awaitFinalCheck().generationOf(commit.result()), "the commit reached the final check with its data");
+            check = ObservedConnections.awaitFinalCheck();
+            heldEndedAfterRelease(released, check);
+            assertNotNull(check.generationOf(commit.result()), "the commit reached the final check with its data");
             for (JsonNode link : switched.json().get("links")) {
                 assertFalse(link.get("available").asBoolean(), switched.body());
             }
@@ -1892,9 +1925,11 @@ class GitApiTest {
             commit = ObservedConnections.awaitFinished();
             assertTrue(commit.result().toString().contains(SHA), commit.result().toString());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
-            GITHUB.open();
+            released = releaseAfterAction(GITHUB);
             Response disconnected = disconnecting.get(20, java.util.concurrent.TimeUnit.SECONDS);
-            assertNotNull(ObservedConnections.awaitFinalCheck().generationOf(commit.result()), "the commit reached the final check with its data");
+            check = ObservedConnections.awaitFinalCheck();
+            heldEndedAfterRelease(released, check);
+            assertNotNull(check.generationOf(commit.result()), "the commit reached the final check with its data");
             for (JsonNode link : disconnected.json().get("links")) {
                 assertFalse(link.get("available").asBoolean(), disconnected.body());
             }
