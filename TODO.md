@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 13 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-124](#task-124-befunde-f1-bis-f3-und-hinweis-h1-der-codex-prüfung-von-task-123-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Prüfung von TASK-123 beheben | claude-20261116-gitfix-10 | 2026-11-16 |
 
 ### Blockiert – BLOCKIERT
 
@@ -387,4 +389,25 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** Umgesetzt auf claude/project-thread-6p8449 nach der Reservierung (PR #333), ohne Migration und ohne Änderung am Produktcode oder Demo SQL. (1) `ObservedConnections` beobachtet jedes Objekt aus `java.sql` und `javax.sql`, das die Hülle herausgibt, mit allen JDBC Interfaces des Originals und immer derselben Hülle je Objekt, auch in zurückgegebenen Objektarrays; was sie nicht beobachtet herausgeben kann, scheitert während der Aufzeichnung; beobachtete Argumente erreichen den Treiber als Original. (2) Die Datenquelle beantwortet `unwrap` und `isWrapperFor` auf erfüllte Ziele selbst und erreicht den Pool nie; andere Ziele scheitern während der Aufzeichnung. (3) Die Gegenprobe über `unwrap(Statement.class)` nutzt einen gültigen JDBC Aufruf. `ObservedConnectionsTest` hat drei neue Gegenproben (echter `HikariDataSource`, `Array.getResultSet().getStatement()`, große Objekte und Rückgabe an den Treiber); mit der Hülle von TASK-122 scheitern genau diese drei. Belege im Ergebnis PR.
 
-**Nächster Schritt:** Codex Nachprüfung nach docs/REVIEW_TASK-122_PR-332.md, danach Holgers Abnahme von TASK-111 bis TASK-123.
+**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-123_PR-334.md) empfiehlt nachbessern; F1 bis F3 und H1 behebt TASK-124 (DEC-154). Danach Holgers Abnahme von TASK-111 bis TASK-124.
+
+## TASK-124 Befunde F1 bis F3 und Hinweis H1 der Codex Prüfung von TASK-123 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-10 · **Aktualisiert:** 2026-11-16
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-154; docs/REVIEW_TASK-123_PR-334.md. **Abhängigkeiten:** TASK-123 auf main (PR #334). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Prüfung von TASK-123 (Empfehlung nachbessern) „Alles beheben als TASK-124“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-154, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 bis F3 und des Hinweises H1 aus docs/REVIEW_TASK-123_PR-334.md in der JDBC Testhülle der Tests des Git Moduls, mit Dokumentation. Nicht Teil: Änderungen am Produktcode oder am Demo SQL, weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Die beobachtete Datenquelle führt jede Rückgabe über dieselbe Regel wie die Hülle der Verbindungen: Ein JDBC Objekt, das sie herausgibt, etwa aus `getDataSource()` oder aus `createConnectionBuilder()` und dessen `build()`, ist beobachtet oder wird während der Aufzeichnung verweigert. Eine Verbindung, die auf einem solchen Weg entsteht, zählt ihre Ausführungen. Gegenprobe mit einer am Hikari Pool explizit gesetzten Datenquelle.
+2. F2: Objektarrays werden in beiden Richtungen rekursiv verarbeitet, mit erhaltenem Komponententyp und derselben Hülle je Objekt: Ein JDBC Objekt in einem inneren Array einer Rückgabe ist beobachtet, und ein beobachtetes Objekt in einem inneren Array eines Arguments erreicht den Treiber als Original. Gegenproben für beide Richtungen mit einem verschachtelten Array.
+3. F3: Ein typisierter Abruf wie `getObject(1, Typ.class)` liefert einen Wert des angeforderten Typs. Erfüllt die Hülle den Typ nicht, scheitert der Aufruf während der Aufzeichnung mit `SQLException`; außerhalb erhält der Aufrufer den Originalwert. Gegenprobe mit einer konkreten Klasse, die ein JDBC Interface erfüllt.
+4. H1: Die Gegenprobe über `unwrap(Statement.class)` bindet auch vor der ersten Ausführung einen Wert.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F3 und H1 sind nach den Regeln behoben, mit den Gegenproben.
+2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
+3. Dokumentation und DEC-154 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
