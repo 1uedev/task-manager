@@ -13,9 +13,9 @@
 -- the ticket WEB-1 and the example requirement of HELP created by admin, no Git link yet and room for the releases
 -- under the limit of 50 per project. Since TASK-117 (F4) it also checks the members of the demo groups, every rule of the
 -- field git and the current state of the requirement, and holds all of it unchanged until the commit; since TASK-118 (F4, F5) also the version of
--- the requirement, with a lock of its own against a second run taken before any table, and since TASK-119 (F2) the rows of
--- the instances right after it. Everything is one transaction that first locks releases and links against a
--- second run; any failed check leaves the database as it was.
+-- the requirement, with a lock of its own against a second run taken before any table. Since TASK-120 (F1, F2) it then takes
+-- every table it touches in one step without waiting, and stops without a change while another transaction writes one of
+-- them. Everything is one transaction; any failed check leaves the database as it was.
 --
 -- The objects are public: the repository of this project at GitHub.com (1uedev/task-manager, the merge commit of
 -- pull request 317) and the project gitlab-org/gitlab at GitLab.com (merge request 1 and the last commit of its branch).
@@ -23,18 +23,20 @@ begin;
 
 -- A second run waits here, before any table lock, and then finds the examples (TASK-116, F5; TASK-118, F5).
 do $$ begin perform pg_advisory_xact_lock(hashtext('taskmanager.demo.git-examples')); end $$;
--- Then the rows of the instances, in the order of their identifiers and before any table (TASK-119, F2): every write path of
--- the application that changes an instance, releases a repository of it or links an object of it first locks or shares its
--- row, so it either waits here for this script or this script waits until it committed, and never both. A change of an
--- instance committed first is then seen by the checks below, which refuse it.
-do $$ begin perform 1 from git_provider order by id for update; end $$;
--- What the checks below read stays as checked until the commit: a change of groups, rules, instances, the ticket or the
--- requirement waits for this transaction (TASK-117, F4). The tables the application writes first come first and the
--- audit last, in the order of its own write paths (TASK-118, F5).
-lock table permissions_group, permissions_membership, permissions_field, git_provider, project, ticket, requirement,
-    requirement_revision in share mode;
-lock table git_repository, git_link in share row exclusive mode;
-lock table git_audit_event in share row exclusive mode;
+-- Then every table the script reads, writes or touches through a foreign key, in one statement and without waiting (TASK-120,
+-- F1, F2). EXCLUSIVE lets plain reads pass but conflicts with every row lock and every write, so a transaction of the
+-- application that already changes or holds a row of one of these tables, for example a save of WEB-1 or ANF-1 or a change,
+-- release or new instance, makes the script stop at once without any change; it can simply be run again. Once the statement
+-- succeeded, every writer of the application waits for this transaction and the script waits for nothing, so no order of
+-- starts can deadlock, and no instance, ticket or requirement can appear or change between this lock and the checks below.
+do $$
+begin
+    lock table platform_company, identity_account, permissions_group, permissions_membership, permissions_field, git_provider,
+        project, ticket, requirement, requirement_revision, git_repository, git_link, git_audit_event, ticket_change,
+        requirement_event in exclusive mode nowait;
+exception when lock_not_available then
+    raise exception 'another transaction is changing the data the examples need; nothing was changed, please run the script again';
+end $$;
 
 -- Stops with an error when the demo data set or the two instances are not the synthetic ones of "demo seed", or when the
 -- examples exist already (TASK-115, F4).
