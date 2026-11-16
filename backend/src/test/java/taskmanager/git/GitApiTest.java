@@ -58,6 +58,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
+import taskmanager.git.internal.ObservedConnections;
 import taskmanager.identity.account.AccountService;
 import taskmanager.platform.AdministrationRight;
 import taskmanager.platform.CompanyContext;
@@ -71,7 +72,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
-@org.springframework.context.annotation.Import(GitApiTest.Clocks.class)
+@org.springframework.context.annotation.Import({GitApiTest.Clocks.class, taskmanager.git.internal.ObservedConnections.class})
 class GitApiTest {
     /** The clock of the application: the time of the system moved on by hand, so the 60 seconds of the cache end at once (TASK-117, H2). */
     static final class FollowingClock extends java.time.Clock {
@@ -183,15 +184,26 @@ class GitApiTest {
         volatile long delay;
         final AtomicInteger inFlight = new AtomicInteger();
         final AtomicInteger maxInFlight = new AtomicInteger();
-        /** A request whose path contains this text waits at the gate until it opens or 1.5 seconds passed (TASK-116). */
+        /**
+         * A request whose path contains this text waits at the gate until it opens or the time of the gate passed, 1.5 seconds
+         * unless given (TASK-116). A gate that let its request go by itself is counted in {@link #expired} (TASK-120, F3).
+         */
         volatile String gatePath;
+        volatile long gateMillis = 1500;
         volatile CountDownLatch entered = new CountDownLatch(1);
         volatile CountDownLatch gate = new CountDownLatch(0);
+        final AtomicInteger expired = new AtomicInteger();
 
         /** Holds the next request whose path contains {@code path}; {@link #open()} lets it go on. */
         void hold(String path) {
+            hold(path, 1500);
+        }
+
+        /** Like {@link #hold(String)} with a gate that only lets the request go by itself after {@code millis}. */
+        void hold(String path, long millis) {
             entered = new CountDownLatch(1);
             gate = new CountDownLatch(1);
+            gateMillis = millis;
             gatePath = path;
         }
 
@@ -217,8 +229,11 @@ class GitApiTest {
                     String held = gatePath;
                     if (held != null && exchange.getRequestURI().getRawPath().contains(held)) {
                         CountDownLatch waiting = gate;
+                        long millis = gateMillis;
                         entered.countDown();
-                        waiting.await(1500, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        if (!waiting.await(millis, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                            expired.incrementAndGet();
+                        }
                     }
                     if (delay > 0) {
                         Thread.sleep(delay);
@@ -1733,20 +1748,22 @@ class GitApiTest {
         }
     }
 
-    /**
-     * Waits until {@code stub} saw one more read of {@code readPath} than {@code before} and answered every request but
-     * {@code held}, so the other entries of the answer are fully read while a held one waits (TASK-119, H1).
-     */
-    private static void awaitRead(Stub stub, String readPath, long before, int held) throws InterruptedException {
-        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
-        while (stub.inFlight.get() != held || reads(stub, readPath) <= before) {
-            assertTrue(System.nanoTime() < until, "the other entry was read while the held one waits");
-            Thread.sleep(10);
+    /** The call of a provider that read the entry of the instance {@code provider} among the next {@code count} calls (TASK-120). */
+    private static ObservedConnections.Finished finishedOf(UUID provider, int count) throws InterruptedException {
+        ObservedConnections.Finished found = null;
+        for (int i = 0; i < count; i++) {
+            ObservedConnections.Finished finished = ObservedConnections.awaitFinished();
+            if (finished.providerId().equals(provider)) {
+                found = finished;
+            }
         }
+        assertNotNull(found, "an entry of the instance was read");
+        return found;
     }
 
-    private static long reads(Stub stub, String readPath) {
-        return stub.seen.stream().filter(s -> s.path().contains(readPath)).count();
+    /** The generation without the state of the token: the connection the entry was read with. */
+    private static String connectionPart(String generation) {
+        return generation.substring(0, generation.lastIndexOf('|'));
     }
 
     @Test
@@ -1756,20 +1773,45 @@ class GitApiTest {
         UUID github = links.setup().github();
         assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
         assertEquals(201, link(worker, links.ticketPath(), GITLAB.url() + "/grp/gamma/-/merge_requests/3").status());
+
+        // TASK-120, H1: with both connections unchanged the final check reads both instances and both connections through the
+        // JDBC wrapper of the test with exactly one statement.
+        ObservedConnections.reset();
+        Response both = worker.get(links.ticketPath() + "?refresh=true");
+        for (JsonNode link : both.json().get("links")) {
+            assertTrue(link.get("available").asBoolean(), both.body());
+        }
+        ObservedConnections.Finished read = finishedOf(github, 2);
+        ObservedConnections.FinalCheck plain = ObservedConnections.awaitFinalCheck();
+        assertEquals(2, plain.generations().stream().filter(java.util.Objects::nonNull).count(), plain.generations().toString());
+        assertEquals(1, plain.statements().size(), "one statement for two instances: " + plain.statements());
+        String statement = plain.statements().get(0);
+        assertTrue(statement.contains("git_provider") && statement.contains("git_connection"), statement);
+        String former = plain.generationOf(read.result());
+        assertNotNull(former);
+
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        int expired = GITLAB.expired.get();
         try {
-            // TASK-119, F1: the commit of GitHub is read and done, the merge request of GitLab.com waits. GitHub is
-            // disconnected first, then GitLab.com. The final check reads both instances in one statement, so the answer keeps
-            // the data of neither and never the earlier ended one alone.
-            long commits = reads(GITHUB, "/commits/");
-            GITLAB.hold("/merge_requests/3");
+            // TASK-119, F1 with TASK-120, F3: the commit of GitHub is read and has passed its own check inside the application,
+            // the merge request of GitLab.com waits at a gate only the test opens. GitHub is disconnected first, then GitLab.com.
+            // The final check receives the commit with its data and its former generation and reads both instances in one
+            // statement, so the answer keeps the data of neither and never the earlier ended one alone.
+            ObservedConnections.reset();
+            GITLAB.hold("/merge_requests/3", 20_000);
             var reading = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
             GITLAB.awaitHeld();
-            awaitRead(GITHUB, "/commits/", commits, 0);
+            ObservedConnections.Finished commit = ObservedConnections.awaitFinished();
+            assertEquals(github, commit.providerId());
+            assertTrue(commit.result().toString().contains(SHA), commit.result().toString());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + links.gitlab() + "/connection", null, null).status());
             GITLAB.open();
             Response shown = reading.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            ObservedConnections.FinalCheck check = ObservedConnections.awaitFinalCheck();
+            assertEquals(former, check.generationOf(commit.result()), "the commit reaches the final check with its former generation");
+            assertEquals(1, check.statements().size(), check.statements().toString());
+            assertEquals(expired, GITLAB.expired.get(), "the test opened the gate, its time did not run out");
             assertEquals(2, shown.json().get("links").size(), shown.body());
             for (JsonNode link : shown.json().get("links")) {
                 assertFalse(link.get("available").asBoolean(), shown.body());
@@ -1790,19 +1832,31 @@ class GitApiTest {
         assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/commit/" + SHA).status());
         assertEquals(201, link(worker, links.ticketPath(), GITHUB.url() + "/acme/alpha/pull/7").status());
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        int expired = GITHUB.expired.get();
         try {
-            // TASK-119, H1, renewal: the commit is fully read with the former token, the pull request waits and gets its
-            // refusal, renews the token of the same connection and reads again. The commit passes the final check.
+            // TASK-119, H1 with TASK-120, F3, renewal: the commit is fully read with the former token and has passed its own
+            // check inside the application while the pull request waits at a gate only the test opens. Then the pull request
+            // gets its refusal, renews the token of the same connection and reads again. The commit reaches the final check
+            // with the generation of the former token, the pull request with the renewed one, and both pass.
             String former = accessToken(worker, github);
             int refreshes = refreshCount();
-            long seenCommits = reads(GITHUB, "/commits/");
-            GITHUB.hold("/pulls/7");
+            ObservedConnections.reset();
+            GITHUB.hold("/pulls/7", 20_000);
             var renewing = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
             GITHUB.awaitHeld();
-            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            ObservedConnections.Finished commit = ObservedConnections.awaitFinished();
+            Object commitRead = commit.result();
+            assertTrue(commitRead.toString().contains(SHA), commitRead.toString());
             GITHUB.tokens.remove(former);
             GITHUB.open();
             Response renewed = renewing.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            ObservedConnections.FinalCheck check = ObservedConnections.awaitFinalCheck();
+            String commitGeneration = check.generationOf(commit.result());
+            assertNotNull(commitGeneration, "the commit reaches the final check with its data");
+            String pullGeneration = check.results().stream().filter(r -> r != commitRead).map(check::generationOf)
+                .filter(java.util.Objects::nonNull).findFirst().orElseThrow();
+            assertNotEquals(pullGeneration, commitGeneration, "the commit keeps the generation of the former token");
+            assertEquals(connectionPart(pullGeneration), connectionPart(commitGeneration), "both were read with the same connection");
             assertEquals(refreshes + 1, refreshCount(), "the second entry renews the token once");
             assertNotEquals(former, accessToken(worker, github));
             for (JsonNode link : renewed.json().get("links")) {
@@ -1810,37 +1864,42 @@ class GitApiTest {
             }
             assertEquals(SHA, renewed.json().get("links").get(0).get("commit").get("sha").asString(), renewed.body());
 
-            // The switch to renew at the same place: the fully read commit is dropped as well.
-            seenCommits = reads(GITHUB, "/commits/");
-            GITHUB.hold("/pulls/7");
+            // The switch to renew at the same place: the fully read commit reaches the final check with its data and is dropped.
+            ObservedConnections.reset();
+            GITHUB.hold("/pulls/7", 20_000);
             var switching = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
             GITHUB.awaitHeld();
-            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            commit = ObservedConnections.awaitFinished();
+            assertTrue(commit.result().toString().contains(SHA), commit.result().toString());
             jdbc.update("""
                 update git_connection set state = 'renew', access_cipher = null, refresh_cipher = null, access_expires_at = null,
                     refresh_expires_at = null where provider_id = ? and account_id = ?
                 """, github, worker.id);
             GITHUB.open();
             Response switched = switching.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertNotNull(ObservedConnections.awaitFinalCheck().generationOf(commit.result()), "the commit reached the final check with its data");
             for (JsonNode link : switched.json().get("links")) {
                 assertFalse(link.get("available").asBoolean(), switched.body());
             }
             assertFalse(switched.body().contains("acme/alpha"), switched.body());
 
-            // Disconnecting at the same place: the fully read commit is dropped.
+            // Disconnecting at the same place: the fully read commit reaches the final check with its data and is dropped.
             assertTrue(connect(worker, github, "h1" + COUNTER.incrementAndGet()).endsWith("connected=" + github));
-            seenCommits = reads(GITHUB, "/commits/");
-            GITHUB.hold("/pulls/7");
+            ObservedConnections.reset();
+            GITHUB.hold("/pulls/7", 20_000);
             var disconnecting = pool.submit(() -> worker.get(links.ticketPath() + "?refresh=true"));
             GITHUB.awaitHeld();
-            awaitRead(GITHUB, "/commits/", seenCommits, 1);
+            commit = ObservedConnections.awaitFinished();
+            assertTrue(commit.result().toString().contains(SHA), commit.result().toString());
             assertEquals(204, worker.send("DELETE", "/api/v1/git/providers/" + github + "/connection", null, null).status());
             GITHUB.open();
             Response disconnected = disconnecting.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertNotNull(ObservedConnections.awaitFinalCheck().generationOf(commit.result()), "the commit reached the final check with its data");
             for (JsonNode link : disconnected.json().get("links")) {
                 assertFalse(link.get("available").asBoolean(), disconnected.body());
             }
             assertFalse(disconnected.body().contains("acme/alpha"), disconnected.body());
+            assertEquals(expired, GITHUB.expired.get(), "the test opened every gate, their time did not run out");
         } finally {
             GITHUB.open();
             pool.shutdownNow();

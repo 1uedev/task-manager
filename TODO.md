@@ -18,7 +18,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 10 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -30,7 +30,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-120](#task-120-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-119-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben | claude-20261115-gitfix-06 | 2026-11-15 |
+| [TASK-121](#task-121-befunde-f1-und-f2-und-hinweis-h1-der-codex-nachprüfung-von-task-120-beheben) | Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-120 beheben | claude-20261116-gitfix-07 | 2026-11-16 |
 
 ### Blockiert – BLOCKIERT
 
@@ -49,6 +49,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-117](#task-117-befunde-f1-bis-f4-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-116-beheben) | Befunde F1 bis F4 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-116 beheben | claude-20261114-gitfix-03 | 2026-11-15 |
 | [TASK-118](#task-118-befunde-f1-bis-f5-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-117-beheben) | Befunde F1 bis F5 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-117 beheben | claude-20261115-gitfix-04 | 2026-11-15 |
 | [TASK-119](#task-119-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-118-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-118 beheben | claude-20261115-gitfix-05 | 2026-11-15 |
+| [TASK-120](#task-120-befunde-f1-bis-f3-und-hinweis-h1-der-codex-nachprüfung-von-task-119-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben | claude-20261115-gitfix-06 | 2026-11-16 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -300,7 +301,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-120 Befunde F1 bis F3 und Hinweis H1 der Codex Nachprüfung von TASK-119 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261115-gitfix-06 · **Aktualisiert:** 2026-11-15
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261115-gitfix-06 · **Aktualisiert:** 2026-11-16
 
 **Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-150; docs/REVIEW_TASK-119_PR-327.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-119 auf main (PR #327). **Arbeitsstand:** Holger wählt am 15. November 2026 zur Codex Nachprüfung von TASK-119 (Empfehlung nachbessern) „F1 bis F3, H1 als TASK-120“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-150, ohne Migration.
 
@@ -316,4 +317,26 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
 3. Dokumentation und DEC-150 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** F1 und F2 `tools/demo/git-examples.sql` nimmt nach der eigenen Sperre in einer Anweisung alle 15 berührten Tabellen im Modus EXCLUSIVE mit NOWAIT, bevor es prüft, und bricht bei `lock_not_available` ohne Änderung mit dem Hinweis zum erneuten Start ab. Sitzungsproben auf dem Demobestand mit gehaltener Zeilensperre vor dem ersten UPDATE oder INSERT, jeweils in beiden Startreihenfolgen: Speichern von WEB-1, Speichern von ANF-1, Ändern einer Instanz, Entfernen und Neuanlegen einer Instanz, Freigabe, Verknüpfung und zweiter Lauf; alle 14 enden ohne Verklemmung, die andere Transaktion zuerst lässt das Skript ohne Änderung abbrechen, das Skript zuerst lässt die anderen warten und danach gelingen. F3 Die Testkonfiguration `ObservedConnections` (nur Testcode) hüllt `ConnectionService` und die Datenquelle ein; `theFinalCheckOfTwoInstancesDropsEveryEndedConnection` und `aFullyReadEntryPassesTheFinalCheckOnlyWhileItsConnectionLasts` warten auf den fertig geprüften Abruf des Commits, handeln erst dann, öffnen danach das Tor des zweiten Abrufs und prüfen, dass der Commit mit Daten und früherer Generation in der Schlussprüfung ankommt; ein abgelaufenes Tor (20 Sekunden) ist ein Testfehler. H1 Die Hülle zählt die Anweisungen von `keepCurrent`: zwei Instanzen, genau eine Abfrage über `git_provider` und `git_connection`; eine Probe mit einer Abfrage je Instanz lässt den Test scheitern. Dokumentation in docs/GIT_MIGRATION.md, docs/DEMO.md und backend/README.md (Korrekturen (TASK-120)). Ohne Migration und ohne Änderung am Produktcode.
+
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-120_PR-329.md) empfiehlt nachbessern; F1, F2 und H1 behebt TASK-121 (DEC-151). Danach Holgers Abnahme von TASK-111 bis TASK-121.
+
+## TASK-121 Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-120 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-07 · **Aktualisiert:** 2026-11-16
+
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-151; docs/REVIEW_TASK-120_PR-329.md; docs/GIT_MIGRATION.md. **Abhängigkeiten:** TASK-120 auf main (PR #329). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Nachprüfung von TASK-120 (Empfehlung nachbessern) „F1, F2, H1 als TASK-121“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-151, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 und F2 und des Hinweises H1 aus docs/REVIEW_TASK-120_PR-329.md in den Tests des Git Moduls und in der Dokumentation. Nicht Teil: Änderungen am Produktcode oder am Demo SQL, weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Der Test der Schlussprüfung hält fest, wann die Testaktion (Trennen, Erneuern, Wechsel auf „erneuern“) vollständig abgeschlossen ist und wann der gehaltene zweite Abruf freigegeben wird, und prüft am Eingang der Schlussprüfung, dass beides in dieser Reihenfolge geschah und der zweite Abruf erst danach endete. Endet der gehaltene Abruf in der Anwendung vor seiner Freigabe, etwa durch die HTTP Frist oder einen Abbruch, ist das ein eigener Testfehler. Eine Gegenprobe verzögert das zweite Trennen über die HTTP Frist hinaus und muss scheitern.
+2. F2: Die JDBC Testhülle merkt sich den SQL Text bei der Vorbereitung und zählt jede Ausführung, auch die wiederholte Ausführung desselben vorbereiteten Statements mit neuen Parametern; `nativeSQL` zählt nicht. Eine Gegenprobe mit einmal vorbereitetem und zweimal ausgeführtem Statement muss scheitern.
+3. H1: docs/GIT_MIGRATION.md und docs/DEMO.md nennen nur die Transaktionen mit einem kollidierenden Zugriff auf die 15 Tabellen als wartend (etwa eine Anmeldung, nicht ein Logout, der nur `identity_session` ändert), behalten den Zeitpunkt direkt nach `demo seed` und raten bei einem Sperrkonflikt, nach Ende des laufenden Vorgangs erneut zu starten.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1, F2 und H1 sind behoben, mit den Gegenproben aus Regel 1 und 2.
+2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
+3. Dokumentation und DEC-151 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge von PR #329 mit dieser Reservierung umsetzen.
