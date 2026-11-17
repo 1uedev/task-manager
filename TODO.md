@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 0 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 13 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 14 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-124](#task-124-befunde-f1-bis-f3-und-hinweis-h1-der-codex-prüfung-von-task-123-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Prüfung von TASK-123 beheben | claude-20261116-gitfix-10 | 2026-11-16 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -53,6 +51,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-121](#task-121-befunde-f1-und-f2-und-hinweis-h1-der-codex-nachprüfung-von-task-120-beheben) | Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-120 beheben | claude-20261116-gitfix-07 | 2026-11-16 |
 | [TASK-122](#task-122-befund-f1-und-hinweise-h1-und-h2-der-codex-nachprüfung-von-task-121-beheben) | Befund F1 und Hinweise H1 und H2 der Codex Nachprüfung von TASK-121 beheben | claude-20261116-gitfix-08 | 2026-11-16 |
 | [TASK-123](#task-123-befunde-f1-und-f2-und-hinweis-h1-der-codex-nachprüfung-von-task-122-grundsätzlich-beheben) | Befunde F1 und F2 und Hinweis H1 der Codex Nachprüfung von TASK-122 grundsätzlich beheben | claude-20261116-gitfix-09 | 2026-11-16 |
+| [TASK-124](#task-124-befunde-f1-bis-f3-und-hinweis-h1-der-codex-prüfung-von-task-123-beheben) | Befunde F1 bis F3 und Hinweis H1 der Codex Prüfung von TASK-123 beheben | claude-20261116-gitfix-10 | 2026-11-17 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -393,9 +392,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-124 Befunde F1 bis F3 und Hinweis H1 der Codex Prüfung von TASK-123 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261116-gitfix-10 · **Aktualisiert:** 2026-11-16
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261116-gitfix-10 · **Aktualisiert:** 2026-11-17
 
-**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-154; docs/REVIEW_TASK-123_PR-334.md. **Abhängigkeiten:** TASK-123 auf main (PR #334). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Prüfung von TASK-123 (Empfehlung nachbessern) „Alles beheben als TASK-124“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-154, ohne Migration.
+**Bezug:** REQ-GIT-001, REQ-GIT-002, REQ-GIT-003, REQ-SEC-001; DEC-144 bis DEC-155; docs/REVIEW_TASK-123_PR-334.md, docs/REVIEW_TASK-124_PR-336.md. **Abhängigkeiten:** TASK-123 auf main (PR #334). **Arbeitsstand:** Holger wählt am 16. November 2026 zur Codex Prüfung von TASK-123 (Empfehlung nachbessern) „Alles beheben als TASK-124“. Geplanter Branch claude/project-thread-6p8449, Entscheidung DEC-154, ohne Migration.
 
 **Umfang:** Behebung der Befunde F1 bis F3 und des Hinweises H1 aus docs/REVIEW_TASK-123_PR-334.md in der JDBC Testhülle der Tests des Git Moduls, mit Dokumentation. Nicht Teil: Änderungen am Produktcode oder am Demo SQL, weitere Git Funktionen, Registrierung bei GitHub.com und GitLab.com (Abnahmekriterium 2 von TASK-113).
 
@@ -410,4 +409,8 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend, Frontend, Browsertests, GitLab Lauf und Imagecheck sind grün.
 3. Dokumentation und DEC-154 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** Umgesetzt auf claude/project-thread-6p8449 nach der Reservierung (PR #335), ohne Migration und ohne Änderung am Produktcode oder Demo SQL. (1) F1: Die beobachtete Datenquelle beantwortet jeden Aufruf nach derselben Regel wie jede andere Hülle; jedes JDBC Objekt, das sie zurückgibt, ist beobachtet oder wird während der Aufzeichnung verweigert, auch die am Pool gesetzte Datenquelle, ein Verbindungs-Builder und dessen Verbindung, und jede so entstandene Verbindung zählt ihre Ausführungen. (2) F2: Objektarrays werden in beiden Richtungen in jeder Tiefe mit ihrem Typ kopiert; JDBC Objekte in Rückgaben sind beobachtet, mit derselben Hülle je Objekt, und beobachtete Objekte in Argumenten erreichen den Treiber als Original, auch wenn ein Array mehrfach vorkommt oder sich selbst enthält. (3) F3: Ein Aufruf, der die Klasse seines Ergebnisses nennt, erhält einen Wert dieser Klasse; erfüllt die Hülle sie nicht, scheitert er während der Aufzeichnung mit `SQLException` und liefert sonst das Original. (4) H1: Die Gegenprobe über `unwrap(Statement.class)` bindet vor beiden Ausführungen einen Wert. `ObservedConnectionsTest` hat fünf neue Gegenproben (am echten `HikariDataSource` gesetzte Datenquelle mit Builder, verschachteltes Array als Rückgabe und als Argument, konkrete Klasse mit JDBC Interface, `SQLData` Klasse); mit der Hülle von TASK-123 scheitern genau diese fünf. Zwei Punkte gehen in der Richtung der Befunde über den Wortlaut der Regeln hinaus und stehen mit zur Prüfung: Zu F3 wird ein Objekt einer Klasse der Anwendung (`SQLData`) nie umhüllt, es scheitert während der Aufzeichnung und bleibt sonst unverändert, auch ohne genannte Klasse, weil sonst derselbe Typfehler über `getObject(1)` mit einer Typzuordnung bliebe. Zu H1 binden jetzt alle Tests der Klasse ihre Parameter, und Statements ohne Parameter haben keinen Platzhalter. Die Grenzen der Hülle stehen im Kommentar von `ObservedConnections.recording` und in backend/README.md: Verbindungen außerhalb der beobachteten Datenquelle, außerhalb der Aufzeichnung geholte Originale, JDBC Objekte in Ergebnissen, die weder JDBC Objekt noch Objektarray sind, und Rückrufe des Treibers an Objekte der Anwendung; die Schlussprüfung nutzt nichts davon. Belege im Ergebnis PR.
+
+Die Codex Prüfung (docs/REVIEW_TASK-124_PR-336.md) bestätigt die Gegenproben und den Produktpfad und empfiehlt nachbessern: SQL, das der Treiber in einer anderen Methode wie `getSchema()` ausführt, wird nicht gezählt (F1), dieselbe Verbindung kann aus der Datenquelle zwei Hüllen erhalten (F2), die beobachtete Datenquelle erreicht als Argument ein anderes JDBC Objekt als Mock (F3), SQL auf einem anderen Thread wird nicht gezählt (H1), und die Beispielparameter der Tests sollten UUIDs sein (H2). Holger wählt am 17. November 2026 „Abnehmen, Grenzen dokumentieren“ (DEC-155): F1 bis F3 und H1 stehen als Grenzen der Hülle im Kommentar von `ObservedConnections.recording` und in backend/README.md, H2 bleibt für später offen; kein neuer Code.
+
+**Nächster Schritt:** Holgers Abnahme von TASK-111 bis TASK-124, danach verschiebt ein eigener PR sie nach DONE.md.
