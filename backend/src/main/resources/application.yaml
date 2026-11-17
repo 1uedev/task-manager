@@ -71,6 +71,9 @@ taskmanager:
     # The AI foundation (TASK-125): the API keys of the provider accesses use the same key as the mailbox passwords. Times,
     # places and the size of the context have the defaults of DEC-156 in AiProperties.
     secret-key: ${TASK_MANAGER_SECRET_KEY:}
+    # Hosts (optionally with :port) an access with the local data path may reach over plain http; every other address needs
+    # https (TASK-129).
+    plain-http-hosts: ${TASK_MANAGER_AI_PLAIN_HTTP_HOSTS:}
   jobs:
     # The web process runs background jobs too unless this is false; the separate process "worker" always runs them (TASK-054).
     # Limits, retries and periods have defaults in JobsProperties.

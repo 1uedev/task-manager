@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, KI Grundlage (TASK-125)
+  title: Task Manager API, KI Grundlage (TASK-125, TASK-129)
   version: 0.1.0
   description: |
     Grundlage der KI Funktionen (DEC-156, REQ-AI-001 bis REQ-AI-010): Anbieterzugänge für OpenAI, Anthropic und Ollama,
@@ -13,14 +13,33 @@ info:
     wie eine unbekannte mit 404. Die Anwendungsfälle selbst beginnen ihre Ausführungen in ihren eigenen Modulen
     (TASK-126, TASK-127) mit der Projektaktion `ai.use`; ohne sie 403 `ai.use_forbidden`.
 
-    API Schlüssel sind nur schreibbar. Eine Antwort nennt nur `keySet`. Das Protokoll enthält nie Eingaben, Quellen oder
-    Ausgaben eines Modells. Ein Vorschlag liegt höchstens 24 Stunden vor und wird nur seiner Person gezeigt; danach,
-    nach einer Änderung von Zuordnung, Modell, Zugang oder Skill, ohne `ai.use` oder bei geänderter Quelle kommt er als
-    `content: null` mit dem Grund in `invalid`.
+    API Schlüssel sind nur schreibbar und bestehen aus 1 bis 500 sichtbaren ASCII Zeichen. Eine Antwort nennt nur `keySet`.
+    Ein Schlüssel ist an die kanonische Adresse und die CA seines Zugangs gebunden: Ändert sich eines davon ohne neuen
+    Schlüssel im selben Schreibvorgang, wird er verworfen (`keySet` falsch, Protokolleintrag `provider.key_dropped`).
+    Adressen werden kanonisch gespeichert (Schema und Host klein und in ASCII, ohne Punkt am Ende, ohne Standardport und
+    ohne Schrägstrich am Ende; Anmeldedaten, Abfrage und Fragment werden abgewiesen). Die Hosts von OpenAI und Anthropic
+    sind immer ein externer Datenweg. Unverschlüsseltes http ist nur für Hosts erlaubt, die der Betrieb in
+    `TASK_MANAGER_AI_PLAIN_HTTP_HOSTS` freigibt, und nur mit dem Datenweg `local`.
+
+    Das Protokoll enthält nie Eingaben, Quellen oder Ausgaben eines Modells. Ein abgelehnter Start einer berechtigten Person
+    (keine nutzbare Zuordnung, Tagesgrenze, alle Plätze belegt, zu großer Kontext) erscheint als `refused` mit dem Grund in
+    `code` und ohne Zugang, Modell und Skill; er zählt nicht gegen die Tagesgrenzen. Ein Vorschlag liegt höchstens 24 Stunden
+    vor und wird nur seiner Person gezeigt; danach, nach einer Änderung der Versionen von Zuordnung (auch Aus und wieder
+    Ein), Zugang, Modell oder Skill, ohne `ai.use`, bei geänderter Quelle oder ohne zuständigen Prüfer seines
+    Anwendungsfalls kommt er als `content: null` mit dem Grund in `invalid`.
+
+    Die Ausgabe eines Modells muss genau ein JSON Objekt ohne doppelte Schlüssel sein, nur von Leerraum oder einem
+    einzelnen Codeblock (optional mit `json`) umgeben, mit genau den Feldern seines Anwendungsfalls, alle Pflicht:
+    `ticket_summary` {state (1 bis 20 Punkte), open (0 bis 20)}, jeder Punkt {text, sources}; `reply_draft` {body,
+    questions, notes, sources}; `requirement_review` {findings}, jeder Befund {kind (unclear, contradiction,
+    missing_criterion, not_measurable, other), location, reason, suggestion (Text oder null), sources}; `wiki_revision`
+    {text, notes}. Sonst endet die Ausführung mit `ai.invalid_output`, eine nicht übergebene Quelle mit
+    `ai.unknown_source`, eine Antwort, die den verwendeten Schlüssel enthält, ebenfalls mit `ai.invalid_output`.
 
     Jede Änderung einer Einstellung verlangt `If-Match` mit der Version der Antwort (ohne 428 `ai.precondition_required`,
     veraltet 412 `ai.version_conflict`). Für Skills ist die Version das Kennzeichen des Entwurfs: `"none"` ohne Entwurf,
-    sonst Nummer und Änderungszeit. Sitzung, CSRF und Problemantworten gelten wie im Identitätsvertrag.
+    sonst Nummer und Revision des Entwurfs, die jedes Speichern erhöht; ein verworfener Entwurf gibt seine Nummer nicht
+    frei, sodass ein Kennzeichen nie zweimal gilt. Sitzung, CSRF und Problemantworten gelten wie im Identitätsvertrag.
 servers:
   - url: /api/v1
 security:
@@ -111,7 +130,9 @@ paths:
     put:
       operationId: updateAiProvider
       summary: Zugang ändern (Recht ai.manage)
-      description: Ohne `apiKey` bleibt der gespeicherte Schlüssel, eine leere Zeichenkette entfernt ihn. Die Art bleibt.
+      description: |
+        Ohne `apiKey` bleibt der gespeicherte Schlüssel, solange kanonische Adresse und CA gleich bleiben; ändert sich eines
+        davon, wird er verworfen. Eine leere Zeichenkette entfernt ihn. Die Art bleibt.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -542,7 +563,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Standard 50, höchstens 200.
+          description: Standard 50, höchstens 200. Gibt es weitere Einträge, nennt `next` die Folgeseite, auch bei 200.
           schema: {type: integer, minimum: 1, maximum: 200}
       responses:
         '200':
@@ -607,6 +628,7 @@ components:
         ai.use_case_not_found, ai.skill_draft_not_found, ai.skill_builtin_applies, ai.run_not_found, ai.secret_key_missing,
         ai.unavailable (409, Grund in violations), ai.use_forbidden, ai.daily_limit_person, ai.daily_limit_company (429),
         ai.context_too_large (400), ai.busy (503, alle Plätze belegt), ai.db_busy (503), auth.required, auth.forbidden,
+        violations apiKey.invalid, baseUrl.invalid, dataPath.invalid, caCertificate.invalid,
         auth.csrf_invalid, auth.password_change_required.
       headers:
         X-Correlation-Id: {schema: {type: string, format: uuid}}
@@ -686,17 +708,21 @@ components:
             Stabiler Grund eines Fehlers, etwa ai.timeout, ai.unreachable, ai.tls_failed, ai.redirect_refused,
             ai.auth_failed, ai.rate_limited, ai.model_unsuitable, ai.context_too_large, ai.output_too_long,
             ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.configuration_changed,
-            ai.cancelled oder ai.interrupted.
+            ai.account_deactivated, ai.request_invalid, ai.key_missing, ai.interrupted; bei `refused` der Grund der
+            Ablehnung, etwa ai.not_assigned, ai.disabled, ai.daily_limit_person, ai.daily_limit_company, ai.busy oder
+            ai.context_too_large.
         truncated: {type: boolean, description: Ob ältere Quellen für den Kontext weggelassen wurden.}
         projectId: {type: [string, 'null'], format: uuid}
         objectKind: {type: [string, 'null']}
         objectId: {type: [string, 'null'], format: uuid}
         objectVersion: {type: [integer, 'null'], format: int64}
-        skillVersion: {type: string, description: '`builtin-1`, `vN` oder beim Probelauf `draft-N`.'}
+        skillVersion:
+          type: [string, 'null']
+          description: '`builtin-1`, `vN` oder beim Probelauf `draft-N.R` (Revision R des Entwurfs N); null bei `refused`.'
         providerId: {type: [string, 'null'], format: uuid}
         modelId: {type: [string, 'null'], format: uuid}
-        modelKey: {type: string}
-        dataPath: {$ref: '#/components/schemas/AiDataPath'}
+        modelKey: {type: [string, 'null']}
+        dataPath: {oneOf: [{$ref: '#/components/schemas/AiDataPath'}, {type: 'null'}]}
         inputTokens: {type: [integer, 'null']}
         outputTokens: {type: [integer, 'null']}
         startedAt: {type: string, format: date-time}
@@ -708,7 +734,7 @@ components:
           additionalProperties: true
         invalid:
           type: [string, 'null']
-          enum: [ai.suggestion_expired, ai.configuration_changed, ai.rights_changed, ai.source_changed, null]
+          enum: [ai.suggestion_expired, ai.configuration_changed, ai.rights_changed, ai.source_changed, ai.source_unchecked, null]
     AiProvider:
       type: object
       required: [id, kind, name, baseUrl, keySet, caCertificate, dataPath, enabled, version, updatedAt, updatedBy]
@@ -716,7 +742,7 @@ components:
         id: {type: string, format: uuid}
         kind: {type: string, enum: [openai, anthropic, ollama]}
         name: {type: string}
-        baseUrl: {type: string, description: Bei Anthropic immer die feste Adresse.}
+        baseUrl: {type: string, description: In kanonischer Form; bei Anthropic immer die feste Adresse.}
         keySet: {type: boolean}
         caCertificate: {type: [string, 'null'], description: Eigene CA im PEM Format.}
         dataPath: {$ref: '#/components/schemas/AiDataPath'}
@@ -731,7 +757,11 @@ components:
         kind: {type: string, enum: [openai, anthropic, ollama]}
         name: {type: string, description: 1 bis 80 Zeichen, eindeutig.}
         baseUrl: {type: [string, 'null'], description: 'OpenAI: leer für die Standardadresse; Ollama: Pflicht; Anthropic: ohne Wirkung.'}
-        apiKey: {type: [string, 'null'], description: Nur schreibbar; für OpenAI und Anthropic Pflicht.}
+        apiKey:
+          type: [string, 'null']
+          maxLength: 500
+          pattern: '^[\x21-\x7e]*$'
+          description: Nur schreibbar, 1 bis 500 sichtbare ASCII Zeichen; für OpenAI und Anthropic Pflicht; leer entfernt ihn.
         caCertificate: {type: [string, 'null']}
         dataPath: {oneOf: [{$ref: '#/components/schemas/AiDataPath'}, {type: 'null'}], description: Pflicht für eine eigene Adresse.}
         enabled: {type: [boolean, 'null'], description: Standard wahr.}
@@ -799,9 +829,10 @@ components:
             activatedAt: {type: [string, 'null'], format: date-time}
         draft:
           type: [object, 'null']
-          required: [number, name, content, tag, updatedAt, updatedBy]
+          required: [number, revision, name, content, tag, updatedAt, updatedBy]
           properties:
             number: {type: integer}
+            revision: {type: integer, minimum: 1, description: Zählt bei jedem Speichern des Entwurfs hoch.}
             name: {type: string}
             content: {type: [string, 'null']}
             tag: {type: string}

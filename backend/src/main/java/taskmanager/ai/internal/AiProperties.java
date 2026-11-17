@@ -1,6 +1,8 @@
 package taskmanager.ai.internal;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -17,7 +19,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param waiting how many more wait for a free place (rule 10: four)
  * @param keep how long a suggestion stays for its person (rule 12: 24 hours)
  * @param contextCharacters the most characters of sources one execution sends (rule 9: 60,000)
- * @param allowHttp whether every access may use plain HTTP; only the tests set it, otherwise only a local data path may
+ * @param plainHttpHosts the hosts, each optionally with {@code :port}, the operation releases for plain HTTP
+ *        ({@code TASK_MANAGER_AI_PLAIN_HTTP_HOSTS}, separated by commas); only an access with the local data path may use
+ *        them, every other address needs https (TASK-129, F3)
  * @param openaiUrl the default address of OpenAI
  * @param anthropicUrl the fixed address of Anthropic, replaced only by the tests
  */
@@ -31,7 +35,7 @@ public record AiProperties(
         @DefaultValue("4") int waiting,
         @DefaultValue("24h") Duration keep,
         @DefaultValue("60000") int contextCharacters,
-        @DefaultValue("false") boolean allowHttp,
+        @DefaultValue("") List<String> plainHttpHosts,
         @DefaultValue("https://api.openai.com") String openaiUrl,
         @DefaultValue("https://api.anthropic.com") String anthropicUrl) {
     public AiProperties {
@@ -42,6 +46,13 @@ public record AiProperties(
         }
         if (running < 1 || waiting < 0 || contextCharacters < 1000) {
             throw new IllegalArgumentException("taskmanager.ai limits are out of range");
+        }
+        plainHttpHosts = plainHttpHosts == null ? List.of() : plainHttpHosts.stream().map(String::strip).filter(host -> !host.isEmpty())
+            .map(host -> host.toLowerCase(Locale.ROOT)).toList();
+        for (String host : plainHttpHosts) {
+            if (!host.matches("(\\[[0-9a-f:.]+\\]|[a-z0-9]([a-z0-9.\\-]*[a-z0-9])?)(:[0-9]{1,5})?")) {
+                throw new IllegalArgumentException("TASK_MANAGER_AI_PLAIN_HTTP_HOSTS holds an invalid host: " + host);
+            }
         }
     }
 }

@@ -1184,7 +1184,7 @@ export const AI_USE_CASES: readonly AiUseCase[] = ['ticket_summary', 'reply_draf
 
 const isAiStatus = (v: unknown) => record(v) && typeof v.secretKey === 'boolean' && typeof v.manage === 'boolean' && Array.isArray(v.useCases)
   && record(v.today);
-const isAiRun = (v: unknown) => hasStrings(v, 'id', 'kind', 'useCase', 'state', 'modelKey', 'startedAt');
+const isAiRun = (v: unknown) => hasStrings(v, 'id', 'kind', 'useCase', 'state', 'startedAt');
 const isAiProvider = (v: unknown) => hasStrings(v, 'id', 'kind', 'name', 'baseUrl', 'dataPath') && typeof (v as AiProvider).version === 'number'
   && typeof (v as AiProvider).keySet === 'boolean';
 const isAiModel = (v: unknown) => hasStrings(v, 'id', 'providerId', 'name', 'modelKey') && typeof (v as AiModel).version === 'number';

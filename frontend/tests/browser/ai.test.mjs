@@ -3,7 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import { ANNA, BEN, createBackend } from './backend.mjs';
 import { launch, open, startServer } from './support.mjs';
 
-// TASK-125: the page "KI" for ai.manage with accesses, models, assignment, skills with trial, limits and the record, against
+// TASK-125 and TASK-129: the page "KI" for ai.manage with accesses, models, assignment, skills with trial, limits and the record, against
 // the in-memory backend that follows the contract.
 
 let server;
@@ -105,7 +105,7 @@ describe('AI administration', () => {
       await form.getByLabel('Name').fill('Ollama');
       await form.getByLabel('Adresse').fill('http://ollama:11434');
       await form.getByRole('button', { name: 'Speichern' }).click();
-      await form.getByText('Bitte eine Adresse mit https eingeben, http nur mit lokalem Datenweg.').waitFor();
+      await form.getByText('Bitte eine Adresse mit https eingeben. http geht nur mit lokalem Datenweg und für Hosts, die der Betrieb freigegeben hat.').waitFor();
       await form.getByLabel('Datenweg').selectOption('local');
       await form.getByRole('button', { name: 'Speichern' }).click();
       await page.getByText('Ollama angelegt.').waitFor();
@@ -127,7 +127,7 @@ describe('AI administration', () => {
       await trial.getByLabel('Beispieltext').fill('Fehler DEMO-42 <script>alert(1)</script>');
       await trial.getByRole('button', { name: 'Probelauf starten' }).click();
       const result = page.getByTestId('ai-trial-result');
-      await result.getByText('Fertig mit draft-1 über llama3.2. Das Ergebnis ist ein Vorschlag:').waitFor();
+      await result.getByText('Fertig mit draft-1.1 über llama3.2. Das Ergebnis ist ein Vorschlag:').waitFor();
       await result.getByText(/Bericht bricht mit DEMO-42 ab/).waitFor();
       assert.equal(await page.locator('script', { hasText: 'alert(1)' }).count(), 0);
 
@@ -168,6 +168,56 @@ describe('AI administration', () => {
       await page.getByTestId('ai-trial').getByRole('button', { name: 'Probelauf starten' }).click();
       await page.getByText('Deine Tagesgrenze ist erreicht.').waitFor();
       await limits.getByText('Noch keine Nutzung.').waitFor();
+
+      // TASK-129, F12: the refused start is in the record, without model and skill.
+      const records = page.getByTestId('ai-records');
+      await records.getByRole('button', { name: 'Aktualisieren' }).click();
+      await records.getByTestId('ai-run-list').getByText('Abgelehnt: Deine Tagesgrenze ist erreicht.').waitFor();
+      await records.getByTestId('ai-run-list').getByText('Kein Modell').waitFor();
+    });
+  });
+
+  test('a running trial can be cancelled and a suggestion that no longer counts shows its reason', async () => {
+    await withApp({ prepare: withOllama }, async (page, backend) => {
+      const trial = page.getByTestId('ai-trial');
+      const result = page.getByTestId('ai-trial-result');
+      backend.state.ai.aiHold = true;
+      await trial.getByLabel('Beispieltext').fill('Fehler DEMO-42');
+      await trial.getByRole('button', { name: 'Probelauf starten' }).click();
+      await result.getByText('Läuft …').waitFor();
+      await trial.getByRole('button', { name: 'Abbrechen' }).click();
+      await result.getByText('Kein Ergebnis: Abgebrochen.').waitFor();
+      assert.equal(backend.state.ai.runs[0].state, 'cancelled');
+      await trial.getByRole('button', { name: 'Abbrechen' }).waitFor({ state: 'detached' });
+
+      backend.state.ai.aiHold = false;
+      backend.state.ai.aiInvalid = 'ai.configuration_changed';
+      await trial.getByRole('button', { name: 'Probelauf starten' }).click();
+      await result.getByText('Der Vorschlag gilt nicht mehr: Zuordnung, Anbieter, Modell oder Skill haben sich seit dem Start geändert.').waitFor();
+      assert.equal(await result.getByText(/Bericht bricht mit DEMO-42 ab/).count(), 0, 'no content of an invalid suggestion');
+    });
+  });
+
+  test('a changed address drops the stored key unless a new one is entered', async () => {
+    const withCompatible = (backend) => {
+      withAiManage(backend);
+      backend.state.ai.providers.push({ id: '00000000-0000-4000-8000-0000000092a2', kind: 'openai', name: 'Kompatibel', baseUrl: 'https://llm.example.com',
+        apiKey: 'sk-synthetic-2', caCertificate: null, dataPath: 'external', enabled: true, version: 1, updatedAt: '2026-11-17T08:00:00Z',
+        updatedBy: backend.anna.id, removed: false });
+    };
+    await withApp({ prepare: withCompatible }, async (page, backend) => {
+      const row = page.getByTestId('ai-accesses').locator('[data-provider]').filter({ hasText: 'Kompatibel' });
+      await row.getByText(/Schlüssel hinterlegt/).waitFor();
+      await row.getByRole('button', { name: 'Kompatibel bearbeiten' }).click();
+      const form = page.getByTestId('ai-provider-form');
+      assert.equal(await form.getByTestId('ai-key-dropped').count(), 0);
+      await form.getByLabel('Adresse').fill('https://LLM2.example.com/');
+      await form.getByTestId('ai-key-dropped').getByText('Adresse oder CA ändern sich.', { exact: false }).waitFor();
+      await form.getByRole('button', { name: 'Speichern' }).click();
+      await page.getByText('Kompatibel gespeichert.').waitFor();
+      await page.getByTestId('ai-accesses').locator('[data-provider]').filter({ hasText: 'Kompatibel' })
+        .getByText(/https:\/\/llm2\.example\.com · extern · Schlüssel fehlt/).waitFor();
+      assert.equal(backend.state.ai.providers.find((entry) => entry.name === 'Kompatibel').apiKey, null);
     });
   });
 });

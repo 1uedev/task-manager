@@ -82,7 +82,8 @@ export interface paths {
         get?: never;
         /**
          * Zugang ändern (Recht ai.manage)
-         * @description Ohne `apiKey` bleibt der gespeicherte Schlüssel, eine leere Zeichenkette entfernt ihn. Die Art bleibt.
+         * @description Ohne `apiKey` bleibt der gespeicherte Schlüssel, solange kanonische Adresse und CA gleich bleiben; ändert sich eines
+         *     davon, wird er verworfen. Eine leere Zeichenkette entfernt ihn. Die Art bleibt.
          */
         put: operations["updateAiProvider"];
         post?: never;
@@ -488,7 +489,9 @@ export interface components {
              * @description Stabiler Grund eines Fehlers, etwa ai.timeout, ai.unreachable, ai.tls_failed, ai.redirect_refused,
              *     ai.auth_failed, ai.rate_limited, ai.model_unsuitable, ai.context_too_large, ai.output_too_long,
              *     ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.configuration_changed,
-             *     ai.cancelled oder ai.interrupted.
+             *     ai.account_deactivated, ai.request_invalid, ai.key_missing, ai.interrupted; bei `refused` der Grund der
+             *     Ablehnung, etwa ai.not_assigned, ai.disabled, ai.daily_limit_person, ai.daily_limit_company, ai.busy oder
+             *     ai.context_too_large.
              */
             code: string | null;
             /** @description Ob ältere Quellen für den Kontext weggelassen wurden. */
@@ -500,14 +503,14 @@ export interface components {
             objectId: string | null;
             /** Format: int64 */
             objectVersion: number | null;
-            /** @description `builtin-1`, `vN` oder beim Probelauf `draft-N`. */
-            skillVersion: string;
+            /** @description `builtin-1`, `vN` oder beim Probelauf `draft-N.R` (Revision R des Entwurfs N); null bei `refused`. */
+            skillVersion: string | null;
             /** Format: uuid */
             providerId: string | null;
             /** Format: uuid */
             modelId: string | null;
-            modelKey: string;
-            dataPath: components["schemas"]["AiDataPath"];
+            modelKey: string | null;
+            dataPath: components["schemas"]["AiDataPath"] | null;
             inputTokens: number | null;
             outputTokens: number | null;
             /** Format: date-time */
@@ -521,7 +524,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** @enum {string|null} */
-            invalid: "ai.suggestion_expired" | "ai.configuration_changed" | "ai.rights_changed" | "ai.source_changed" | null;
+            invalid: "ai.suggestion_expired" | "ai.configuration_changed" | "ai.rights_changed" | "ai.source_changed" | "ai.source_unchecked" | null;
         };
         AiProvider: {
             /** Format: uuid */
@@ -529,7 +532,7 @@ export interface components {
             /** @enum {string} */
             kind: "openai" | "anthropic" | "ollama";
             name: string;
-            /** @description Bei Anthropic immer die feste Adresse. */
+            /** @description In kanonischer Form; bei Anthropic immer die feste Adresse. */
             baseUrl: string;
             keySet: boolean;
             /** @description Eigene CA im PEM Format. */
@@ -550,7 +553,7 @@ export interface components {
             name: string;
             /** @description OpenAI: leer für die Standardadresse; Ollama: Pflicht; Anthropic: ohne Wirkung. */
             baseUrl?: string | null;
-            /** @description Nur schreibbar; für OpenAI und Anthropic Pflicht. */
+            /** @description Nur schreibbar, 1 bis 500 sichtbare ASCII Zeichen; für OpenAI und Anthropic Pflicht; leer entfernt ihn. */
             apiKey?: string | null;
             caCertificate?: string | null;
             /** @description Pflicht für eine eigene Adresse. */
@@ -626,6 +629,8 @@ export interface components {
             };
             draft: {
                 number: number;
+                /** @description Zählt bei jedem Speichern des Entwurfs hoch. */
+                revision: number;
                 name: string;
                 content: string | null;
                 tag: string;
@@ -679,6 +684,7 @@ export interface components {
          *     ai.use_case_not_found, ai.skill_draft_not_found, ai.skill_builtin_applies, ai.run_not_found, ai.secret_key_missing,
          *     ai.unavailable (409, Grund in violations), ai.use_forbidden, ai.daily_limit_person, ai.daily_limit_company (429),
          *     ai.context_too_large (400), ai.busy (503, alle Plätze belegt), ai.db_busy (503), auth.required, auth.forbidden,
+         *     violations apiKey.invalid, baseUrl.invalid, dataPath.invalid, caCertificate.invalid,
          *     auth.csrf_invalid, auth.password_change_required.
          */
         Problem: {
@@ -1440,7 +1446,7 @@ export interface operations {
             query?: {
                 /** @description Wert `next` der vorigen Seite. */
                 before?: string;
-                /** @description Standard 50, höchstens 200. */
+                /** @description Standard 50, höchstens 200. Gibt es weitere Einträge, nennt `next` die Folgeseite, auch bei 200. */
                 limit?: number;
             };
             header?: never;

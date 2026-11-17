@@ -63,7 +63,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
-@Import(AiApiTest.UseController.class)
+@Import({ AiApiTest.UseController.class, AiApiTest.Guard.class })
 class AiApiTest {
     private static final String DATABASE = freshDatabase();
     private static final String STRONG = "Correct-Horse-Battery-9";
@@ -72,6 +72,9 @@ class AiApiTest {
     private static final AtomicInteger COUNTER = new AtomicInteger();
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Stub STUB = new Stub();
+    /** A second provider, the new target after a change of the address (TASK-129, F1). */
+    private static final Stub OTHER = new Stub();
+    private static final Tls TLS = new Tls();
 
     private static String freshDatabase() {
         try {
@@ -87,7 +90,7 @@ class AiApiTest {
         registry.add("spring.datasource.username", TestDatabase::username);
         registry.add("spring.datasource.password", TestDatabase::password);
         registry.add("taskmanager.ai.secret-key", () -> KEY);
-        registry.add("taskmanager.ai.allow-http", () -> "true");
+        registry.add("taskmanager.ai.plain-http-hosts", () -> "localhost,127.0.0.1");
         registry.add("taskmanager.ai.timeout", () -> "3s");
         registry.add("taskmanager.ai.check-timeout", () -> "3s");
         registry.add("taskmanager.ai.running", () -> "1");
@@ -99,6 +102,8 @@ class AiApiTest {
     @AfterAll
     static void stop() {
         STUB.server.stop(0);
+        OTHER.server.stop(0);
+        TLS.server.stop(0);
     }
 
     /** Starts a use through the port, as the modules of TASK-126 and TASK-127 will. */
@@ -127,6 +132,22 @@ class AiApiTest {
         }
     }
 
+    /** The guard of the ticket summary of this test, whose verdict a test can change (TASK-129, F8). */
+    static class Guard implements AiSuggestionGuard {
+        static volatile boolean valid = true;
+
+        @Override
+        public AiUseCase useCase() {
+            return AiUseCase.TICKET_SUMMARY;
+        }
+
+        @Override
+        public boolean stillValid(taskmanager.permissions.AccessContext actor, UUID projectId, String objectKind, UUID objectId, Long objectVersion,
+                String referencesJson) {
+            return valid;
+        }
+    }
+
     @Value("${local.server.port}") int port;
     @Autowired AccountService accounts;
     @Autowired JdbcTemplate jdbc;
@@ -134,9 +155,13 @@ class AiApiTest {
     @Autowired PlatformTransactionManager transactions;
     @Autowired RunService runService;
 
+    @Autowired javax.sql.DataSource dataSource;
+
     @BeforeEach
     void reset() {
         STUB.reset();
+        OTHER.reset();
+        Guard.valid = true;
     }
 
     // ---------------------------------------------------------------- the providers of this test
@@ -156,6 +181,8 @@ class AiApiTest {
         volatile boolean redirect;
         volatile boolean cutOff;
         volatile long delay;
+        /** Sends the head at once and keeps the body open (TASK-129, F6). */
+        volatile boolean trickle;
         volatile CountDownLatch entered = new CountDownLatch(1);
         volatile CountDownLatch gate = new CountDownLatch(0);
 
@@ -185,6 +212,7 @@ class AiApiTest {
             redirect = false;
             cutOff = false;
             delay = 0;
+            trickle = false;
             gate.countDown();
             gate = new CountDownLatch(0);
         }
@@ -231,6 +259,14 @@ class AiApiTest {
             if (delay > 0) {
                 Thread.sleep(delay);
             }
+            if (trickle) {
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, 0);
+                exchange.getResponseBody().write("{\"choices\": [".getBytes(StandardCharsets.UTF_8));
+                exchange.getResponseBody().flush();
+                Thread.sleep(8000);
+                return;
+            }
             if (redirect) {
                 exchange.getResponseHeaders().add("Location", "http://localhost:1/elsewhere");
                 answer(exchange, 302, Map.of());
@@ -245,7 +281,7 @@ class AiApiTest {
                 return;
             }
             String text = answer != null ? answer : "{\"state\": [{\"text\": \"Bericht bricht mit DEMO-42 ab\", \"sources\": [\"S1\"]}], "
-                + "\"open\": [{\"text\": \"Version fehlt\", \"sources\": []}], \"extra\": \"wird verworfen\"}";
+                + "\"open\": [{\"text\": \"Version fehlt\", \"sources\": []}]}";
             switch (path) {
                 case "/v1/chat/completions" -> answer(exchange, 200, Map.of("choices", List.of(Map.of("message", Map.of("role", "assistant", "content", text),
                     "finish_reason", cutOff ? "length" : "stop")), "usage", Map.of("prompt_tokens", 120, "completion_tokens", 30)));
@@ -257,11 +293,62 @@ class AiApiTest {
             }
         }
 
-        private static void answer(HttpExchange exchange, int status, Object body) throws IOException {
+        static void answer(HttpExchange exchange, int status, Object body) throws IOException {
             byte[] bytes = JSON.writeValueAsBytes(body);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length);
             exchange.getResponseBody().write(bytes);
+        }
+    }
+
+    /** An access over HTTPS with a certificate for the name localhost only, issued by a CA of its own (TASK-129, H4). */
+    static final class Tls {
+        final com.sun.net.httpserver.HttpsServer server;
+        final String certificate;
+
+        Tls() {
+            try {
+                java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("ai-tls");
+                java.nio.file.Path store = dir.resolve("stub.p12");
+                String keytool = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "keytool").toString();
+                run(keytool, "-genkeypair", "-alias", "stub", "-keyalg", "RSA", "-keysize", "2048", "-dname", "CN=localhost",
+                    "-ext", "SAN=dns:localhost", "-validity", "2", "-storetype", "PKCS12", "-keystore", store.toString(),
+                    "-storepass", "changeit", "-keypass", "changeit");
+                certificate = run(keytool, "-exportcert", "-rfc", "-alias", "stub", "-keystore", store.toString(), "-storepass", "changeit");
+                java.security.KeyStore keys = java.security.KeyStore.getInstance("PKCS12");
+                try (java.io.InputStream in = java.nio.file.Files.newInputStream(store)) {
+                    keys.load(in, "changeit".toCharArray());
+                }
+                javax.net.ssl.KeyManagerFactory factory = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+                factory.init(keys, "changeit".toCharArray());
+                javax.net.ssl.SSLContext context = javax.net.ssl.SSLContext.getInstance("TLS");
+                context.init(factory.getKeyManagers(), null, null);
+                server = com.sun.net.httpserver.HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                server.setHttpsConfigurator(new com.sun.net.httpserver.HttpsConfigurator(context));
+                server.createContext("/", exchange -> {
+                    try {
+                        Stub.answer(exchange, 200, Map.of("data", List.of(Map.of("id", "gpt-test"))));
+                    } finally {
+                        exchange.close();
+                    }
+                });
+                server.start();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        String url(String host) {
+            return "https://" + host + ":" + server.getAddress().getPort();
+        }
+
+        private static String run(String... command) throws IOException, InterruptedException {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (process.waitFor() != 0) {
+                throw new IllegalStateException(output);
+            }
+            return output.substring(output.indexOf("-----BEGIN") < 0 ? 0 : output.indexOf("-----BEGIN"));
         }
     }
 
@@ -602,7 +689,7 @@ class AiApiTest {
             JsonNode result = finished(setup.admin(), run);
             assertEquals("succeeded", result.get("state").asString(), kind + ": " + result);
             assertEquals("Bericht bricht mit DEMO-42 ab", result.get("content").get("state").get(0).get("text").asString());
-            assertFalse(result.get("content").has("extra"), "unknown fields are dropped");
+            assertEquals(java.util.Set.of("state", "open"), java.util.Set.copyOf(result.get("content").propertyNames()));
             assertEquals("builtin-1", result.get("skillVersion").asString());
             assertEquals("test", result.get("kind").asString());
             assertNotNull(result.get("inputTokens").asInt());
@@ -724,8 +811,8 @@ class AiApiTest {
 
         // Daily limits of the person and of the company.
         Response limits = setup.admin().get("/api/v1/ai/admin/limits");
-        long today = jdbc.queryForObject("select count(*) from ai_run where account_id = ?", Long.class, setup.admin().id);
-        long all = jdbc.queryForObject("select count(*) from ai_run", Long.class);
+        long today = jdbc.queryForObject("select count(*) from ai_run where account_id = ? and state <> 'refused'", Long.class, setup.admin().id);
+        long all = jdbc.queryForObject("select count(*) from ai_run where state <> 'refused'", Long.class);
         Response saved = setup.admin().send("PUT", "/api/v1/ai/admin/limits", Map.of("personDaily", today + 1, "companyDaily", 100000), limits.etag());
         assertEquals(200, saved.status(), saved.body());
         finished(setup.admin(), runId(trial(setup.admin(), "sechs")));
@@ -800,5 +887,465 @@ class AiApiTest {
         accounts.deactivate("test", colleague.id);
         assertEquals(0, jdbc.queryForObject("select count(*) from ai_suggestion where run_id = ?", Integer.class, kept));
         assertEquals(1, jdbc.queryForObject("select count(*) from ai_run where id = ?", Integer.class, kept));
+    }
+    // ---------------------------------------------------------------- TASK-129
+
+    private JsonNode providerEntry(Browser admin, UUID id) {
+        for (JsonNode entry : admin.get("/api/v1/ai/admin/providers").json()) {
+            if (entry.get("id").asString().equals(id.toString())) {
+                return entry;
+            }
+        }
+        throw new AssertionError(id);
+    }
+
+    private Response changeProvider(Browser admin, UUID id, Map<String, Object> change) {
+        return admin.send("PUT", "/api/v1/ai/admin/providers/" + id, change, "\"" + providerEntry(admin, id).get("version").asString() + "\"");
+    }
+
+    private static boolean sawKey(Stub stub, String key) {
+        return stub.seen.stream().anyMatch(s -> ("Bearer " + key).equals(s.authorization()) || key.equals(s.apiKey()));
+    }
+
+    private static int port(Stub stub) {
+        return stub.server.getAddress().getPort();
+    }
+
+    @Test
+    void aKeyGoesOnlyToTheTargetItWasStoredFor(CapturedOutput output) {
+        Browser admin = person(AdministrationRight.AI_MANAGE);
+        String name = "Kompatibel " + COUNTER.incrementAndGet();
+        Response created = admin.send("POST", "/api/v1/ai/admin/providers",
+            access("openai", name, "http://127.0.0.1:" + port(STUB) + "/", API_KEY, "local"), null);
+        assertEquals(201, created.status(), created.body());
+        UUID id = UUID.fromString(created.json().get("id").asString());
+        assertEquals("http://127.0.0.1:" + port(STUB), created.json().get("baseUrl").asString());
+        assertTrue(admin.send("POST", "/api/v1/ai/admin/providers/" + id + "/check", null, null).json().get("ok").asBoolean());
+        assertTrue(sawKey(STUB, API_KEY));
+
+        // F1: a new address without a new key drops the key; the new target never receives the old secret.
+        Map<String, Object> moved = access("openai", name, "http://127.0.0.1:" + port(OTHER), null, "local");
+        moved.remove("apiKey");
+        Response dropped = changeProvider(admin, id, moved);
+        assertEquals(200, dropped.status(), dropped.body());
+        assertFalse(dropped.json().get("keySet").asBoolean());
+        assertEquals(1, jdbc.queryForObject("select count(*) from ai_audit_event where subject_id = ? and operation = 'provider.key_dropped'",
+            Integer.class, id.toString()));
+        Response check = admin.send("POST", "/api/v1/ai/admin/providers/" + id + "/check", null, null);
+        assertEquals("ai.key_missing", check.json().get("code").asString(), check.body());
+        assertFalse(sawKey(OTHER, API_KEY));
+
+        // A new key in the same write goes with the new address.
+        Map<String, Object> rekeyed = access("openai", name, "http://127.0.0.1:" + port(OTHER), "sk-other-2", "local");
+        assertTrue(changeProvider(admin, id, rekeyed).json().get("keySet").asBoolean());
+        assertEquals("ai.auth_failed", admin.send("POST", "/api/v1/ai/admin/providers/" + id + "/check", null, null).json().get("code").asString(),
+            "the stub knows only its own key");
+        assertTrue(sawKey(OTHER, "sk-other-2"));
+        assertFalse(sawKey(OTHER, API_KEY));
+
+        // Another CA is another target as well.
+        Map<String, Object> ca = access("openai", name, "http://127.0.0.1:" + port(OTHER), null, "local");
+        ca.remove("apiKey");
+        ca.put("caCertificate", TLS.certificate);
+        assertFalse(changeProvider(admin, id, ca).json().get("keySet").asBoolean());
+
+        // Even a target changed past the application never receives the key.
+        Map<String, Object> back = access("openai", name, "http://127.0.0.1:" + port(STUB), "sk-stub-3", "local");
+        assertTrue(changeProvider(admin, id, back).json().get("keySet").asBoolean());
+        jdbc.update("update ai_provider set base_url = ? where id = ?", "http://127.0.0.1:" + port(OTHER), id);
+        OTHER.reset();
+        assertEquals("ai.key_missing", admin.send("POST", "/api/v1/ai/admin/providers/" + id + "/check", null, null).json().get("code").asString());
+        assertTrue(OTHER.seen.isEmpty());
+        assertFalse(output.getAll().contains(API_KEY));
+    }
+
+    @Test
+    void aKeyFitsIntoAHeaderAndNeverLeavesThroughAnAnswer(CapturedOutput output) throws InterruptedException {
+        Browser admin = person(AdministrationRight.AI_MANAGE);
+        for (String key : List.of("sk mit leer", "sk-ä", "sk-\ttab", "x".repeat(501))) {
+            Response refused = admin.send("POST", "/api/v1/ai/admin/providers", access("openai", "Schlüssel " + COUNTER.incrementAndGet(), null, key, null),
+                null);
+            assertEquals(400, refused.status(), key);
+            assertTrue(refused.body().contains("apiKey.invalid"));
+            assertFalse(refused.body().contains(key));
+        }
+        assertEquals(201, admin.send("POST", "/api/v1/ai/admin/providers", access("openai", "Lang " + COUNTER.incrementAndGet(), null,
+            "y".repeat(500), null), null).status());
+
+        // F2: an answer that repeats the key is refused as invalid output and kept nowhere.
+        Setup setup = setup("openai");
+        STUB.answer = "{\"state\": [{\"text\": \"Der Schlüssel ist " + API_KEY + "\", \"sources\": [\"S1\"]}], \"open\": []}";
+        UUID run = runId(trial(setup.admin(), "Fehler DEMO-42"));
+        JsonNode result = finished(setup.admin(), run);
+        assertEquals("failed", result.get("state").asString(), result.toString());
+        assertEquals("ai.invalid_output", result.get("code").asString());
+        assertFalse(result.toString().contains(API_KEY));
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_suggestion where run_id = ?", Integer.class, run));
+        assertFalse(output.getAll().contains(API_KEY));
+    }
+
+    @Test
+    void addressesAreCanonicalAndPlainHttpNeedsAReleasedHostAndTheLocalPath() {
+        Browser admin = person(AdministrationRight.AI_MANAGE);
+        Response openai = admin.send("POST", "/api/v1/ai/admin/providers",
+            access("openai", "Gross " + COUNTER.incrementAndGet(), "HTTP://LOCALHOST:" + port(STUB) + "/", API_KEY, "local"), null);
+        assertEquals(201, openai.status(), openai.body());
+        assertEquals(STUB.url(), openai.json().get("baseUrl").asString(), "another spelling of the address of OpenAI is that address");
+        assertEquals("external", openai.json().get("dataPath").asString());
+
+        Map<String, String> refused = new LinkedHashMap<>();
+        refused.put("http://ollama.example:11434|local", "baseUrl.invalid");
+        refused.put("http://localhost:" + port(STUB) + "|external", "baseUrl.invalid");
+        refused.put("https://api.openai.com/v1|local", "dataPath.invalid");
+        refused.put("https://API.Anthropic.com.|local", "dataPath.invalid");
+        refused.put("https://nutzer@ollama.example|local", "baseUrl.invalid");
+        refused.put("https://ollama.example/?q=1|local", "baseUrl.invalid");
+        refused.put("https://ollama.example/#teil|local", "baseUrl.invalid");
+        for (Map.Entry<String, String> entry : refused.entrySet()) {
+            String[] parts = entry.getKey().split("\\|");
+            Response answer = admin.send("POST", "/api/v1/ai/admin/providers", access("ollama", "Ollama " + COUNTER.incrementAndGet(), parts[0], null,
+                parts[1]), null);
+            assertEquals(400, answer.status(), entry.getKey() + ": " + answer.body());
+            assertTrue(answer.body().contains(entry.getValue()), entry.getKey() + ": " + answer.body());
+        }
+        Map<String, String> canonical = new LinkedHashMap<>();
+        canonical.put("https://API.OpenAI.com./v1/|external", "https://api.openai.com/v1");
+        canonical.put("https://Bücher.Example:443/|local", "https://xn--bcher-kva.example");
+        canonical.put("http://127.0.0.1:" + port(STUB) + "/api/|local", "http://127.0.0.1:" + port(STUB) + "/api");
+        for (Map.Entry<String, String> entry : canonical.entrySet()) {
+            String[] parts = entry.getKey().split("\\|");
+            Response answer = admin.send("POST", "/api/v1/ai/admin/providers", access("ollama", "Ollama " + COUNTER.incrementAndGet(), parts[0], null,
+                parts[1]), null);
+            assertEquals(201, answer.status(), entry.getKey() + ": " + answer.body());
+            assertEquals(entry.getValue(), answer.json().get("baseUrl").asString());
+            assertEquals(parts[1], answer.json().get("dataPath").asString());
+        }
+    }
+
+    @Test
+    void anExecutionEndsWhenTheVersionsItStartedWithChange() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        Map<String, Object> body = Map.of("language", "de", "goal", "Übergabe", "texts", List.of("Fehler DEMO-42"));
+        String start = "/api/v1/test-ai/" + project + "/ticket_summary";
+
+        // The same model with a new version: the waiting request is cancelled.
+        STUB.hold();
+        UUID held = runId(agent.send("POST", start, body, null));
+        STUB.awaitHeld();
+        JsonNode model = null;
+        for (JsonNode entry : setup.admin().get("/api/v1/ai/admin/models").json()) {
+            if (entry.get("id").asString().equals(setup.model().toString())) {
+                model = entry;
+            }
+        }
+        Map<String, Object> renamed = Map.of("name", model.get("name").asString() + " neu", "modelKey", "llama3.2", "contextTokens", 32000,
+            "outputTokens", 2000);
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/ai/admin/models/" + setup.model(), renamed,
+            "\"" + model.get("version").asString() + "\"").status());
+        JsonNode changed = finished(agent, held);
+        STUB.reset();
+        assertEquals("failed", changed.get("state").asString(), changed.toString());
+        assertEquals("ai.configuration_changed", changed.get("code").asString());
+
+        // Another skill: the stored suggestion is no longer shown.
+        UUID before = runId(agent.send("POST", start, body, null));
+        assertEquals("succeeded", finished(agent, before).get("state").asString());
+        Response draft = setup.admin().send("PUT", "/api/v1/ai/admin/skills/ticket_summary/de/draft", Map.of("name", "Kurz", "content", "Kurz."),
+            setup.admin().get("/api/v1/ai/admin/skills/ticket_summary/de").etag());
+        assertEquals(200, draft.status(), draft.body());
+        assertFalse(agent.get("/api/v1/ai/runs/" + before).json().get("content").isNull(), "a draft changes nothing for a use");
+        assertEquals(200, setup.admin().send("POST", "/api/v1/ai/admin/skills/ticket_summary/de/activate", null, draft.etag()).status());
+        JsonNode skill = agent.get("/api/v1/ai/runs/" + before).json();
+        assertTrue(skill.get("content").isNull());
+        assertEquals("ai.configuration_changed", skill.get("invalid").asString());
+        assertEquals(200, setup.admin().send("POST", "/api/v1/ai/admin/skills/ticket_summary/de/restore", null, null).status());
+
+        // Off and on again raises the version of the assignment.
+        UUID after = runId(agent.send("POST", start, body, null));
+        assertEquals("succeeded", finished(agent, after).get("state").asString());
+        assign(setup.admin(), "ticket_summary", setup.model(), false);
+        assign(setup.admin(), "ticket_summary", setup.model(), true);
+        JsonNode toggled = agent.get("/api/v1/ai/runs/" + after).json();
+        assertTrue(toggled.get("content").isNull());
+        assertEquals("ai.configuration_changed", toggled.get("invalid").asString());
+    }
+
+    private String runState(UUID run) throws InterruptedException {
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < until) {
+            String state = jdbc.queryForObject("select state from ai_run where id = ?", String.class, run);
+            if (!state.equals("queued") && !state.equals("running")) {
+                return state + ":" + jdbc.queryForObject("select code from ai_run where id = ?", String.class, run);
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("the execution did not end");
+    }
+
+    @Test
+    void aDeactivatedAccountGetsNoLateResult() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser colleague = person();
+        UUID project = project(setup.admin(), colleague);
+        grant(colleague.id, project, "ai.use");
+        STUB.hold();
+        UUID run = runId(colleague.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null));
+        STUB.awaitHeld();
+        accounts.deactivate("test", colleague.id);
+        assertEquals("failed:ai.account_deactivated", runState(run));
+        STUB.gate.countDown();
+        accounts.reactivate("test", colleague.id);
+        Thread.sleep(300);
+        assertEquals("failed:ai.account_deactivated", runState(run));
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_suggestion where account_id = ?", Integer.class, colleague.id));
+    }
+
+    @Test
+    void oneDeadlineCoversTheWholeBody() throws InterruptedException {
+        Setup setup = setup("openai");
+        STUB.trickle = true;
+        long started = System.nanoTime();
+        JsonNode result = finished(setup.admin(), runId(trial(setup.admin(), "Fehler DEMO-42")));
+        long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        assertEquals("failed", result.get("state").asString(), result.toString());
+        assertEquals("ai.timeout", result.get("code").asString());
+        assertTrue(millis < 6000, "ended after the deadline of 3 seconds, not with the body: " + millis);
+        STUB.reset();
+        assertEquals("succeeded", finished(setup.admin(), runId(trial(setup.admin(), "wieder frei"))).get("state").asString(), "the place is free");
+    }
+
+    @Test
+    void cancellingWaitingExecutionsFreesEachPlaceExactlyOnce() throws InterruptedException {
+        Setup setup = setup("ollama");
+        STUB.hold();
+        UUID first = runId(trial(setup.admin(), "eins"));
+        STUB.awaitHeld();
+        for (int i = 0; i < 5; i++) {
+            UUID waiting = runId(trial(setup.admin(), "wartet " + i));
+            assertEquals("cancelled", setup.admin().send("DELETE", "/api/v1/ai/runs/" + waiting, null, null).json().get("state").asString());
+            assertEquals("cancelled", setup.admin().send("DELETE", "/api/v1/ai/runs/" + waiting, null, null).json().get("state").asString());
+        }
+        STUB.gate.countDown();
+        assertEquals("succeeded", finished(setup.admin(), first).get("state").asString());
+
+        // One runs, one waits, the third is refused: no place was freed twice.
+        STUB.hold();
+        UUID running = runId(trial(setup.admin(), "läuft"));
+        STUB.awaitHeld();
+        UUID waiting = runId(trial(setup.admin(), "wartet"));
+        assertEquals(503, trial(setup.admin(), "zu viel").status());
+        STUB.gate.countDown();
+        assertEquals("succeeded", finished(setup.admin(), running).get("state").asString());
+        assertEquals("succeeded", finished(setup.admin(), waiting).get("state").asString());
+    }
+
+    @Test
+    void contentNeedsTheGuardOfItsUseCase() throws InterruptedException {
+        Setup setup = setup("ollama");
+        assign(setup.admin(), "reply_draft", setup.model(), true);
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        Map<String, Object> body = Map.of("language", "de", "goal", "Antwort", "texts", List.of("Fehler DEMO-42"));
+
+        STUB.answer = "{\"body\": \"Wir prüfen das.\", \"questions\": [], \"notes\": [], \"sources\": [\"S1\"]}";
+        UUID reply = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/reply_draft", body, null));
+        JsonNode unchecked = finished(agent, reply);
+        assertEquals("succeeded", unchecked.get("state").asString(), unchecked.toString());
+        assertTrue(unchecked.get("content").isNull(), "no guard is responsible for the reply draft in this test");
+        assertEquals("ai.source_unchecked", unchecked.get("invalid").asString());
+
+        STUB.reset();
+        UUID summary = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null));
+        assertFalse(finished(agent, summary).get("content").isNull());
+        Guard.valid = false;
+        JsonNode changed = agent.get("/api/v1/ai/runs/" + summary).json();
+        assertTrue(changed.get("content").isNull());
+        assertEquals("ai.source_changed", changed.get("invalid").asString());
+        Guard.valid = true;
+        assertFalse(agent.get("/api/v1/ai/runs/" + summary).json().get("content").isNull());
+    }
+
+    @Test
+    void theOutputIsExactlyOneObjectOfItsFormat() throws InterruptedException {
+        Setup setup = setup("ollama");
+        String valid = "{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}], \"open\": []}";
+        Map<String, String> answers = new LinkedHashMap<>();
+        answers.put("```json\n" + valid + "\n```", "succeeded");
+        answers.put("  " + valid + "\n", "succeeded");
+        answers.put("Hier: " + valid, "ai.invalid_output");
+        answers.put(valid + valid, "ai.invalid_output");
+        answers.put("```json\n" + valid + "\n```\n```json\n" + valid + "\n```", "ai.invalid_output");
+        answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}], \"state\": [], \"open\": []}", "ai.invalid_output");
+        answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}]}", "ai.invalid_output");
+        answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}], \"open\": [], \"extra\": 1}", "ai.invalid_output");
+        answers.put("{\"state\": [], \"open\": []}", "ai.invalid_output");
+        answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S9\"]}], \"open\": []}", "ai.unknown_source");
+        for (Map.Entry<String, String> entry : answers.entrySet()) {
+            STUB.reset();
+            STUB.answer = entry.getKey();
+            JsonNode result = finished(setup.admin(), runId(trial(setup.admin(), "Fehler DEMO-42")));
+            String outcome = "succeeded".equals(result.get("state").asString()) ? "succeeded" : result.get("code").asString();
+            assertEquals(entry.getValue(), outcome, entry.getKey());
+        }
+    }
+
+    @Test
+    void theFirstAssignmentIsSerializedBeforeItsVersionIsRead() throws Exception {
+        Browser one = person(AdministrationRight.AI_MANAGE);
+        Browser two = person(AdministrationRight.AI_MANAGE);
+        UUID provider = createAccess(one, "ollama", null);
+        UUID model = createModel(one, provider, "llama3.2");
+        UUID company = companies.find().orElseThrow();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try (java.sql.Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (var statement = holder.prepareStatement("select pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+                statement.setString(1, "ai.assignment:" + company + ":requirement_review");
+                statement.execute();
+            }
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("modelId", model);
+            body.put("enabled", true);
+            var first = pool.submit(() -> one.send("PUT", "/api/v1/ai/admin/assignments/requirement_review", body, "\"0\"").status());
+            var second = pool.submit(() -> two.send("PUT", "/api/v1/ai/admin/assignments/requirement_review", body, "\"0\"").status());
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (jdbc.queryForObject("select count(*) from pg_locks where locktype = 'advisory' and not granted", Integer.class) < 2) {
+                assertTrue(System.nanoTime() < until, "both writes wait for the lock of the first assignment");
+                Thread.sleep(20);
+            }
+            holder.rollback();
+            List<Integer> statuses = new ArrayList<>(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)));
+            statuses.sort(null);
+            assertEquals(List.of(200, 412), statuses);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(1L, jdbc.queryForObject("select version from ai_assignment where use_case = 'requirement_review'", Long.class));
+    }
+
+    @Test
+    void aDraftRevisionIsNeverUsedTwice() throws InterruptedException {
+        Setup setup = setup("ollama");
+        assign(setup.admin(), "wiki_revision", setup.model(), false);
+        Browser admin = setup.admin();
+        String slot = "/api/v1/ai/admin/skills/wiki_revision/en";
+        Response first = admin.send("PUT", slot + "/draft", Map.of("name", "A", "content", "One."), admin.get(slot).etag());
+        assertEquals(200, first.status(), first.body());
+        // A fixed clock: both saves carry the same time stamp, the tags still differ.
+        jdbc.update("update ai_skill_version set updated_at = timestamptz '2026-11-17 10:00:00+00' where use_case = 'wiki_revision' and language = 'en'");
+        Response second = admin.send("PUT", slot + "/draft", Map.of("name", "A", "content", "Two."), first.etag());
+        assertEquals(200, second.status(), second.body());
+        jdbc.update("update ai_skill_version set updated_at = timestamptz '2026-11-17 10:00:00+00' where use_case = 'wiki_revision' and language = 'en'");
+        assertFalse(first.etag().equals(second.etag()));
+        assertEquals(2, second.json().get("draft").get("revision").asInt());
+        assertEquals(412, admin.send("POST", slot + "/activate", null, first.etag()).status(), "activating through an old tag");
+
+        assertEquals(200, admin.send("DELETE", slot + "/draft", null, second.etag()).status());
+        Response fresh = admin.send("PUT", slot + "/draft", Map.of("name", "B", "content", "Three."), "\"none\"");
+        assertEquals(200, fresh.status(), fresh.body());
+        assertEquals(2, fresh.json().get("draft").get("number").asInt(), "the number of a discarded draft is not used again");
+        assertEquals(412, admin.send("POST", slot + "/activate", null, second.etag()).status());
+
+        JsonNode trial = finished(admin, runId(admin.send("POST", slot + "/trial", Map.of("sample", "Text", "goal", "kurz"), null)));
+        assertEquals("draft-2.1", trial.get("skillVersion").asString());
+        assertEquals(200, admin.send("DELETE", slot + "/draft", null, fresh.etag()).status());
+    }
+
+    @Test
+    void refusedStartsAreRecordedWithoutCountingAgainstTheLimits() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        Map<String, Object> body = Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42"));
+        assertEquals(403, agent.send("POST", "/api/v1/test-ai/" + project + "/wiki_revision", body, null).status());
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_run where account_id = ?", Integer.class, agent.id),
+            "a start without the right is not recorded");
+        grant(agent.id, project, "ai.use");
+        long counted = agent.get("/api/v1/ai/status").json().get("today").get("person").asLong();
+
+        assertEquals(409, agent.send("POST", "/api/v1/test-ai/" + project + "/wiki_revision", body, null).status());
+        Map<String, Object> huge = Map.of("language", "de", "goal", "x", "texts", List.of("x".repeat(70_000)));
+        assertEquals(400, agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", huge, null).status());
+        STUB.hold();
+        UUID running = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null));
+        STUB.awaitHeld();
+        UUID waiting = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null));
+        assertEquals(503, agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null).status());
+        STUB.gate.countDown();
+        finished(agent, running);
+        finished(agent, waiting);
+        Response limits = setup.admin().get("/api/v1/ai/admin/limits");
+        Response saved = setup.admin().send("PUT", "/api/v1/ai/admin/limits", Map.of("personDaily", counted + 2, "companyDaily", 100000), limits.etag());
+        assertEquals(429, agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null).status());
+        assertEquals(200, setup.admin().send("PUT", "/api/v1/ai/admin/limits", Map.of("personDaily", 50, "companyDaily", 500), saved.etag()).status());
+
+        List<String> refused = jdbc.queryForList("""
+                select code from ai_run where account_id = ? and state = 'refused' and provider_id is null and model_id is null
+                order by started_at
+                """, String.class, agent.id);
+        assertEquals(List.of("ai.not_assigned", "ai.context_too_large", "ai.busy", "ai.daily_limit_person"), refused);
+        assertEquals(counted + 2, agent.get("/api/v1/ai/status").json().get("today").get("person").asLong(), "only the two executions count");
+        assertTrue(setup.admin().get("/api/v1/ai/admin/runs?limit=50").body().contains("\"refused\""));
+    }
+
+    @Test
+    void certificatesAreCheckedWithTheOwnCaAndTheName() {
+        Browser admin = person(AdministrationRight.AI_MANAGE);
+        Map<String, Object> trusted = access("openai", "TLS " + COUNTER.incrementAndGet(), TLS.url("localhost"), API_KEY, "local");
+        trusted.put("caCertificate", TLS.certificate);
+        UUID right = UUID.fromString(admin.send("POST", "/api/v1/ai/admin/providers", trusted, null).json().get("id").asString());
+        Response ok = admin.send("POST", "/api/v1/ai/admin/providers/" + right + "/check", null, null);
+        assertTrue(ok.json().get("ok").asBoolean(), ok.body());
+
+        Map<String, Object> missing = access("openai", "TLS " + COUNTER.incrementAndGet(), TLS.url("localhost"), API_KEY, "local");
+        UUID none = UUID.fromString(admin.send("POST", "/api/v1/ai/admin/providers", missing, null).json().get("id").asString());
+        assertEquals("ai.tls_failed", admin.send("POST", "/api/v1/ai/admin/providers/" + none + "/check", null, null).json().get("code").asString());
+
+        Map<String, Object> wrongName = access("openai", "TLS " + COUNTER.incrementAndGet(), TLS.url("127.0.0.1"), API_KEY, "local");
+        wrongName.put("caCertificate", TLS.certificate);
+        UUID other = UUID.fromString(admin.send("POST", "/api/v1/ai/admin/providers", wrongName, null).json().get("id").asString());
+        assertEquals("ai.tls_failed", admin.send("POST", "/api/v1/ai/admin/providers/" + other + "/check", null, null).json().get("code").asString(),
+            "the certificate names localhost, not 127.0.0.1");
+    }
+
+    @Test
+    void aPortalAccountNeverReachesAnAiFunction() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser admin = person(AdministrationRight.ACCOUNTS_MANAGE, AdministrationRight.PROJECTS_MANAGE, AdministrationRight.HELPDESK_MANAGE);
+        UUID project = project(admin);
+        Response customer = admin.send("POST", "/api/v1/helpdesk/customers", Map.of("name", "Nordwerk " + COUNTER.incrementAndGet(), "projects",
+            List.of(project)), null);
+        assertEquals(201, customer.status(), customer.body());
+        Map<String, Object> account = new LinkedHashMap<>();
+        account.put("username", "kunde-" + COUNTER.incrementAndGet());
+        account.put("displayName", "Kunde");
+        account.put("organizationId", UUID.fromString(customer.json().get("id").asString()));
+        account.put("projectIds", List.of(project));
+        Response created = admin.send("POST", "/api/v1/portal-accounts", account, null);
+        assertEquals(201, created.status(), created.body());
+        UUID portalId = UUID.fromString(created.json().get("account").get("id").asString());
+        Browser portal = login(portalId, created.json().get("account").get("username").asString(), created.json().get("oneTimePassword").asString());
+        grant(portalId, project, "ai.use");
+
+        Browser agent = person();
+        UUID own = project(setup.admin(), agent);
+        grant(agent.id, own, "ai.use");
+        UUID run = runId(agent.send("POST", "/api/v1/test-ai/" + own + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null));
+        finished(agent, run);
+
+        assertEquals(403, portal.get("/api/v1/ai/status").status());
+        assertEquals(403, portal.get("/api/v1/ai/runs/" + run).status());
+        assertEquals(403, portal.send("DELETE", "/api/v1/ai/runs/" + run, null, null).status());
+        assertEquals(403, portal.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("x")), null).status());
+        assertEquals(403, portal.get("/api/v1/ai/admin/providers").status());
+        assertEquals(403, portal.send("POST", "/api/v1/ai/admin/skills/ticket_summary/de/trial", Map.of("sample", "x", "goal", "x"), null).status());
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_run where account_id = ?", Integer.class, portalId));
     }
 }
