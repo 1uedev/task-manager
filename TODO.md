@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 1 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-125](#task-125-ki-grundlage-mit-anbietern-modellen-skills-grenzen-und-nachweis-a16-teil-1) | KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1) | claude-20261117-ai-01 | 2026-11-17 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -45,6 +43,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-17 |
+| [TASK-125](#task-125-ki-grundlage-mit-anbietern-modellen-skills-grenzen-und-nachweis-a16-teil-1) | KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1) | claude-20261117-ai-01 | 2026-11-17 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -83,7 +82,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-125 KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-17
 
 **Bezug:** REQ-AI-002, REQ-AI-003, REQ-AI-006, REQ-AI-007, REQ-AI-008, REQ-PERF-004, REQ-SEC-001; DEC-034, DEC-035; OPEN-003, OPEN-019; docs/AI_USE_CASES.md (Administrative Skills, Offene Anbieterarchitektur, Datenfreigabe, Kosten und Ausfall). **Abhängigkeiten:** TASK-040, TASK-054 (wiederkehrende Aufträge), TASK-057 (verschlüsselte Ablage von Zugangsdaten), geliefert. **Arbeitsstand:** Holger hat am 17. November 2026 im Projektgespräch mit „Mache weiter“ den Beginn von Paket A16 beauftragt und am selben Tag die 22 Vorschläge mit „Passt so“ übernommen (/mnt/project-files/a16/fragen-a16.md; Regeln unten und bei TASK-126 bis TASK-128). Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-156, Migrationen ab V0067.
 
@@ -111,7 +110,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. Nachweis ohne Inhalt, Löschung der Vorschläge nach 24 Stunden, Portalkonten abgewiesen (A06).
 5. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für die Verwaltung.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-126 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Übergabe:** Ergebnis im Ergebnis PR auf dem Branch claude/project-thread-av1na6 mit DEC-156. Modul `taskmanager.ai` mit Migration V0067, Vertrag contracts/ai.openapi.yaml (26 Routen, `AiContractTest`), Seite „KI“ für `ai.manage`, Port `taskmanager.ai.AiRuns` für TASK-126 und TASK-127. Nachweise: `AiApiTest` gegen einen nachgebauten Anbieter, der wie OpenAI, Anthropic und Ollama antwortet (Kriterium 1 bis 4), volle Backend Suite mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich `ai`. Abweichungen zur Prüfung: „Verbindung prüfen“ liest die Modellliste und erzeugt keinen Text (keine Kosten); die Plätze für laufende und wartende Ausführungen gelten je Prozess; ein Abbruch durch Neustart endet nach höchstens 14 Minuten als `ai.interrupted`; `ai.use` lässt sich mangels Anwendungsfall bisher nur über einen Testcontroller im Backend Test prüfen. Beschreibung und Grenzen in backend/README.md, Abschnitt „KI Grundlage“.
+
+**Nächster Schritt:** Codex Prüfung und Holgers Abnahme; nach dem Merge des Ergebnisses TASK-126 entblocken und umsetzen.
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 

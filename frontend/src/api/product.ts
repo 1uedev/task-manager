@@ -1,6 +1,7 @@
 import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, type SessionState } from './client.ts';
 import type { components as AppearanceTypes } from './generated/appearance';
 import type { components as FileTypes } from './generated/files';
+import type { components as AiTypes } from './generated/ai';
 import type { components as GitTypes } from './generated/git';
 import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
@@ -1162,3 +1163,82 @@ export const unlinkGit = (api: ServerApi, target: GitTarget, key: string) => (ta
   ? run(() => api.git.DELETE('/projects/{projectId}/tickets/{number}/git/{key}',
     { params: { path: { projectId: target.projectId, number: target.number, key } } }), nothing)
   : run(() => api.git.DELETE('/requirements/{id}/git/{key}', { params: { path: { id: target.id, key } } }), nothing));
+
+// ---------------------------------------------------------------- AI foundation (TASK-125)
+
+export type AiUseCase = AiTypes['schemas']['AiUseCase'];
+export type AiStatus = AiTypes['schemas']['AiStatus'];
+export type AiRun = AiTypes['schemas']['AiRun'];
+export type AiProvider = AiTypes['schemas']['AiProvider'];
+export type AiProviderInput = AiTypes['schemas']['AiProviderInput'];
+export type AiModel = AiTypes['schemas']['AiModel'];
+export type AiModelInput = AiTypes['schemas']['AiModelInput'];
+export type AiCheck = AiTypes['schemas']['AiCheck'];
+export type AiAssignment = AiTypes['schemas']['AiAssignment'];
+export type AiLimits = AiTypes['schemas']['AiLimits'];
+export type AiSkill = AiTypes['schemas']['AiSkill'];
+export type AiUsage = AiTypes['schemas']['AiUsage'];
+export type AiLanguage = 'de' | 'en';
+export interface AiRecords { readonly runs: AiRun[]; readonly next: string | null }
+export const AI_USE_CASES: readonly AiUseCase[] = ['ticket_summary', 'reply_draft', 'requirement_review', 'wiki_revision'];
+
+const isAiStatus = (v: unknown) => record(v) && typeof v.secretKey === 'boolean' && typeof v.manage === 'boolean' && Array.isArray(v.useCases)
+  && record(v.today);
+const isAiRun = (v: unknown) => hasStrings(v, 'id', 'kind', 'useCase', 'state', 'modelKey', 'startedAt');
+const isAiProvider = (v: unknown) => hasStrings(v, 'id', 'kind', 'name', 'baseUrl', 'dataPath') && typeof (v as AiProvider).version === 'number'
+  && typeof (v as AiProvider).keySet === 'boolean';
+const isAiModel = (v: unknown) => hasStrings(v, 'id', 'providerId', 'name', 'modelKey') && typeof (v as AiModel).version === 'number';
+const isAiCheck = (v: unknown) => record(v) && typeof v.ok === 'boolean';
+const isAiAssignment = (v: unknown) => hasStrings(v, 'useCase') && typeof (v as AiAssignment).version === 'number';
+const isAiLimits = (v: unknown) => record(v) && typeof v.personDaily === 'number' && typeof v.companyDaily === 'number';
+const isAiSkill = (v: unknown) => hasStrings(v, 'useCase', 'language', 'draftTag') && record((v as AiSkill).applied) && Array.isArray((v as AiSkill).versions);
+const isAiUsage = (v: unknown) => hasStrings(v, 'day', 'useCase') && typeof (v as AiUsage).runs === 'number';
+const isAiRecords = (v: unknown) => record(v) && Array.isArray(v.runs) && v.runs.every(isAiRun);
+const skillPath = (useCase: AiUseCase, language: AiLanguage) => ({ path: { useCase, language } });
+
+export const readAiStatus = (api: ServerApi) => run(() => api.ai.GET('/ai/status'), one<AiStatus>(isAiStatus));
+export const readAiRun = (api: ServerApi, runId: string) => run(() => api.ai.GET('/ai/runs/{runId}', { params: { path: { runId } } }), one<AiRun>(isAiRun));
+export const cancelAiRun = (api: ServerApi, runId: string) => run(() => api.ai.DELETE('/ai/runs/{runId}', { params: { path: { runId } } }), one<AiRun>(isAiRun));
+export const listAiProviders = (api: ServerApi) => run(() => api.ai.GET('/ai/admin/providers'), listOf<AiProvider>(isAiProvider));
+export const createAiProvider = (api: ServerApi, body: AiProviderInput) =>
+  run(() => api.ai.POST('/ai/admin/providers', { body }), one<AiProvider>(isAiProvider));
+export const updateAiProvider = (api: ServerApi, providerId: string, version: number, body: AiProviderInput) =>
+  run(() => api.ai.PUT('/ai/admin/providers/{providerId}', { params: { path: { providerId }, ...ifMatch(`"${version}"`) }, body }), one<AiProvider>(isAiProvider));
+export const removeAiProvider = (api: ServerApi, providerId: string, version: number) =>
+  run(() => api.ai.DELETE('/ai/admin/providers/{providerId}', { params: { path: { providerId }, ...ifMatch(`"${version}"`) } }), nothing);
+export const checkAiProvider = (api: ServerApi, providerId: string) =>
+  run(() => api.ai.POST('/ai/admin/providers/{providerId}/check', { params: { path: { providerId } } }), one<AiCheck>(isAiCheck));
+export const listAiModels = (api: ServerApi) => run(() => api.ai.GET('/ai/admin/models'), listOf<AiModel>(isAiModel));
+export const createAiModel = (api: ServerApi, body: AiModelInput) => run(() => api.ai.POST('/ai/admin/models', { body }), one<AiModel>(isAiModel));
+export const updateAiModel = (api: ServerApi, modelId: string, version: number, body: AiModelInput) =>
+  run(() => api.ai.PUT('/ai/admin/models/{modelId}', { params: { path: { modelId }, ...ifMatch(`"${version}"`) }, body }), one<AiModel>(isAiModel));
+export const removeAiModel = (api: ServerApi, modelId: string, version: number) =>
+  run(() => api.ai.DELETE('/ai/admin/models/{modelId}', { params: { path: { modelId }, ...ifMatch(`"${version}"`) } }), nothing);
+export const checkAiModel = (api: ServerApi, modelId: string) =>
+  run(() => api.ai.POST('/ai/admin/models/{modelId}/check', { params: { path: { modelId } } }), one<AiCheck>(isAiCheck));
+export const listAiAssignments = (api: ServerApi) => run(() => api.ai.GET('/ai/admin/assignments'), listOf<AiAssignment>(isAiAssignment));
+export const saveAiAssignment = (api: ServerApi, useCase: AiUseCase, version: number, modelId: string | null, enabled: boolean) =>
+  run(() => api.ai.PUT('/ai/admin/assignments/{useCase}', { params: { path: { useCase }, ...ifMatch(`"${version}"`) }, body: { modelId, enabled } }),
+    one<AiAssignment>(isAiAssignment));
+export const readAiLimits = (api: ServerApi) => run(() => api.ai.GET('/ai/admin/limits'), one<AiLimits>(isAiLimits));
+export const saveAiLimits = (api: ServerApi, etag: string, personDaily: number, companyDaily: number) =>
+  run(() => api.ai.PUT('/ai/admin/limits', { params: ifMatch(etag), body: { personDaily, companyDaily } }), one<AiLimits>(isAiLimits));
+export const listAiSkills = (api: ServerApi) => run(() => api.ai.GET('/ai/admin/skills'), listOf<AiSkill>(isAiSkill));
+export const readAiSkill = (api: ServerApi, useCase: AiUseCase, language: AiLanguage) =>
+  run(() => api.ai.GET('/ai/admin/skills/{useCase}/{language}', { params: skillPath(useCase, language) }), one<AiSkill>(isAiSkill));
+export const saveAiSkillDraft = (api: ServerApi, useCase: AiUseCase, language: AiLanguage, etag: string, name: string, content: string) =>
+  run(() => api.ai.PUT('/ai/admin/skills/{useCase}/{language}/draft', { params: { ...skillPath(useCase, language), ...ifMatch(etag) }, body: { name, content } }),
+    one<AiSkill>(isAiSkill));
+export const discardAiSkillDraft = (api: ServerApi, useCase: AiUseCase, language: AiLanguage, etag: string) =>
+  run(() => api.ai.DELETE('/ai/admin/skills/{useCase}/{language}/draft', { params: { ...skillPath(useCase, language), ...ifMatch(etag) } }), one<AiSkill>(isAiSkill));
+export const activateAiSkill = (api: ServerApi, useCase: AiUseCase, language: AiLanguage, etag: string) =>
+  run(() => api.ai.POST('/ai/admin/skills/{useCase}/{language}/activate', { params: { ...skillPath(useCase, language), ...ifMatch(etag) } }), one<AiSkill>(isAiSkill));
+export const restoreAiSkill = (api: ServerApi, useCase: AiUseCase, language: AiLanguage) =>
+  run(() => api.ai.POST('/ai/admin/skills/{useCase}/{language}/restore', { params: skillPath(useCase, language) }), one<AiSkill>(isAiSkill));
+export const trialAiSkill = (api: ServerApi, useCase: AiUseCase, language: AiLanguage, sample: string, goal: string | null) =>
+  run(() => api.ai.POST('/ai/admin/skills/{useCase}/{language}/trial', { params: skillPath(useCase, language), body: { sample, goal } }),
+    one<{ runId: string }>((v) => hasStrings(v, 'runId')));
+export const readAiUsage = (api: ServerApi, days: number) =>
+  run(() => api.ai.GET('/ai/admin/usage', { params: { query: { days } } }), listOf<AiUsage>(isAiUsage));
+export const listAiRuns = (api: ServerApi, before: string | null) =>
+  run(() => api.ai.GET('/ai/admin/runs', { params: { query: before === null ? { limit: 50 } : { before, limit: 50 } } }), one<AiRecords>(isAiRecords));

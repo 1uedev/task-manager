@@ -49,7 +49,13 @@ public enum AdministrationRight {
      * Manage the Git provider instances with their registered applications (TASK-111, DEC-141). Gives no access to any
      * repository; every call to a provider runs with the token of the person who looks.
      */
-    GIT_MANAGE("git.manage");
+    GIT_MANAGE("git.manage"),
+    /**
+     * Manage the AI provider accesses with their models, the skills, the assignment of a model per use case, the daily limits,
+     * and read the usage and the record of executions (TASK-125, DEC-156). Gives no access to any object an AI function
+     * reads; using a function needs the project action {@code ai.use} and the rights of its use case.
+     */
+    AI_MANAGE("ai.manage");
 
     private final String key;
 
