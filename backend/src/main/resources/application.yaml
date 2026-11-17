@@ -67,6 +67,10 @@ taskmanager:
     # public address is where browsers reach the application; the providers send the browser back to it after connecting.
     secret-key: ${TASK_MANAGER_SECRET_KEY:}
     public-url: ${TASK_MANAGER_PUBLIC_URL:}
+  ai:
+    # The AI foundation (TASK-125): the API keys of the provider accesses use the same key as the mailbox passwords. Times,
+    # places and the size of the context have the defaults of DEC-156 in AiProperties.
+    secret-key: ${TASK_MANAGER_SECRET_KEY:}
   jobs:
     # The web process runs background jobs too unless this is false; the separate process "worker" always runs them (TASK-054).
     # Limits, retries and periods have defaults in JobsProperties.

@@ -1,0 +1,841 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, KI Grundlage (TASK-125)
+  version: 0.1.0
+  description: |
+    Grundlage der KI Funktionen (DEC-156, REQ-AI-001 bis REQ-AI-010): Anbieterzugänge für OpenAI, Anthropic und Ollama,
+    Modelle, die Zuordnung genau eines Modells je Anwendungsfall ohne Rückfall auf ein anderes, Skills je Anwendungsfall
+    und Sprache mit Entwurf, aktiver Version und Archiv, Tagesgrenzen, Nutzung und das Protokoll der Ausführungen.
+
+    Alles unter `/ai/admin` verlangt das Unternehmensrecht `ai.manage`, sonst 403 `auth.forbidden`. `/ai/status` und die
+    eigenen Ausführungen unter `/ai/runs` stehen jeder internen Person mit vollständiger Anmeldung offen; Portalkonten
+    erhalten 403. Eine Ausführung gehört der Person, die sie begonnen hat; die Kennung einer fremden beantwortet der Server
+    wie eine unbekannte mit 404. Die Anwendungsfälle selbst beginnen ihre Ausführungen in ihren eigenen Modulen
+    (TASK-126, TASK-127) mit der Projektaktion `ai.use`; ohne sie 403 `ai.use_forbidden`.
+
+    API Schlüssel sind nur schreibbar. Eine Antwort nennt nur `keySet`. Das Protokoll enthält nie Eingaben, Quellen oder
+    Ausgaben eines Modells. Ein Vorschlag liegt höchstens 24 Stunden vor und wird nur seiner Person gezeigt; danach,
+    nach einer Änderung von Zuordnung, Modell, Zugang oder Skill, ohne `ai.use` oder bei geänderter Quelle kommt er als
+    `content: null` mit dem Grund in `invalid`.
+
+    Jede Änderung einer Einstellung verlangt `If-Match` mit der Version der Antwort (ohne 428 `ai.precondition_required`,
+    veraltet 412 `ai.version_conflict`). Für Skills ist die Version das Kennzeichen des Entwurfs: `"none"` ohne Entwurf,
+    sonst Nummer und Änderungszeit. Sitzung, CSRF und Problemantworten gelten wie im Identitätsvertrag.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /ai/status:
+    get:
+      operationId: getAiStatus
+      summary: Verfügbarkeit der Anwendungsfälle und heutige Nutzung
+      description: |
+        Für jeden der vier Anwendungsfälle, ob er nutzbar ist, sonst der Grund (`ai.not_assigned`, `ai.disabled`,
+        `ai.provider_disabled`, `ai.model_disabled`, `ai.key_missing`, `ai.secret_key_missing`), dazu Name, Art und
+        Datenweg des Zugangs. `today` zählt die Ausführungen des Tages nach UTC.
+      responses:
+        '200':
+          description: Zustand
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiStatus'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /ai/runs/{runId}:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      operationId: getAiRun
+      summary: Eigene Ausführung mit Vorschlag
+      description: Mit `Cache-Control no-store`. `content` nur bei `succeeded` und gültigem Vorschlag.
+      responses:
+        '200':
+          description: Ausführung
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiRun'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: cancelAiRun
+      summary: Eigene wartende oder laufende Ausführung abbrechen
+      description: Eine beendete Ausführung bleibt, wie sie ist. Ein Abbruch liefert keinen Inhalt.
+      responses:
+        '200':
+          description: Ausführung nach dem Abbruch
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiRun'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /ai/admin/providers:
+    get:
+      operationId: listAiProviders
+      summary: Anbieterzugänge (Recht ai.manage)
+      responses:
+        '200':
+          description: Zugänge
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AiProvider'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createAiProvider
+      summary: Zugang anlegen (Recht ai.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AiProviderInput'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiProvider'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /ai/admin/providers/{providerId}:
+    parameters:
+      - $ref: '#/components/parameters/ProviderId'
+    put:
+      operationId: updateAiProvider
+      summary: Zugang ändern (Recht ai.manage)
+      description: Ohne `apiKey` bleibt der gespeicherte Schlüssel, eine leere Zeichenkette entfernt ihn. Die Art bleibt.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AiProviderInput'}
+      responses:
+        '200':
+          description: Geändert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiProvider'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeAiProvider
+      summary: Zugang mit seinen Modellen entfernen (Recht ai.manage)
+      description: Anwendungsfälle mit einem Modell dieses Zugangs stehen danach ohne Modell da; der Schlüssel wird gelöscht.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': {description: Entfernt}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/providers/{providerId}/check:
+    parameters:
+      - $ref: '#/components/parameters/ProviderId'
+    post:
+      operationId: checkAiProvider
+      summary: Verbindung und Schlüssel über die Modellliste prüfen (Recht ai.manage)
+      description: Erzeugt keinen Text und kostet keine Tokens.
+      responses:
+        '200':
+          description: Ergebnis
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiCheck'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /ai/admin/models:
+    get:
+      operationId: listAiModels
+      summary: Modelle (Recht ai.manage)
+      responses:
+        '200':
+          description: Modelle
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AiModel'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createAiModel
+      summary: Modell anlegen (Recht ai.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AiModelInput'}
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiModel'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /ai/admin/models/{modelId}:
+    parameters:
+      - $ref: '#/components/parameters/ModelId'
+    put:
+      operationId: updateAiModel
+      summary: Modell ändern (Recht ai.manage)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AiModelInput'}
+      responses:
+        '200':
+          description: Geändert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiModel'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: removeAiModel
+      summary: Modell entfernen (Recht ai.manage)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': {description: Entfernt}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/models/{modelId}/check:
+    parameters:
+      - $ref: '#/components/parameters/ModelId'
+    post:
+      operationId: checkAiModel
+      summary: Prüfen, ob der Anbieter das Modell kennt (Recht ai.manage)
+      description: Unbekannt ergibt `ok false` mit `ai.model_unknown`.
+      responses:
+        '200':
+          description: Ergebnis
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiCheck'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /ai/admin/assignments:
+    get:
+      operationId: listAiAssignments
+      summary: Zuordnung je Anwendungsfall (Recht ai.manage)
+      description: Immer alle vier Anwendungsfälle; ohne gespeicherte Zuordnung mit Version 0.
+      responses:
+        '200':
+          description: Zuordnungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AiAssignment'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /ai/admin/assignments/{useCase}:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+    put:
+      operationId: assignAiModel
+      summary: Modell zuordnen und Anwendungsfall ein oder ausschalten (Recht ai.manage)
+      description: Einschalten ohne Modell ergibt 400 mit `modelId.required`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                modelId: {type: [string, 'null'], format: uuid}
+                enabled: {type: boolean}
+      responses:
+        '200':
+          description: Gespeichert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiAssignment'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/limits:
+    get:
+      operationId: getAiLimits
+      summary: Tagesgrenzen (Recht ai.manage)
+      responses:
+        '200':
+          description: Grenzen, Standard 50 je Person und 500 je Unternehmen
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiLimits'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: saveAiLimits
+      summary: Tagesgrenzen ändern (Recht ai.manage)
+      description: Je Person 0 bis 100000, je Unternehmen 0 bis 1000000; 0 sperrt jede neue Ausführung.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [personDaily, companyDaily]
+              properties:
+                personDaily: {type: integer}
+                companyDaily: {type: integer}
+      responses:
+        '200':
+          description: Gespeichert
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiLimits'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills:
+    get:
+      operationId: listAiSkills
+      summary: Überblick der acht Skills (Recht ai.manage)
+      description: Je Anwendungsfall und Sprache die angewendete Version und ein Entwurf, ohne Inhalte.
+      responses:
+        '200':
+          description: Skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AiSkill'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills/{useCase}/{language}:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+      - $ref: '#/components/parameters/Language'
+    get:
+      operationId: getAiSkill
+      summary: Ein Skill mit Inhalt und Versionen (Recht ai.manage)
+      responses:
+        '200':
+          description: Skill; das ETag ist das Kennzeichen des Entwurfs
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiSkill'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills/{useCase}/{language}/draft:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+      - $ref: '#/components/parameters/Language'
+    put:
+      operationId: saveAiSkillDraft
+      summary: Entwurf anlegen oder ändern (Recht ai.manage)
+      description: Name 1 bis 80 Zeichen, Inhalt Markdown mit 1 bis 20000 Zeichen. Ein Entwurf wirkt erst nach dem Aktivieren.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, content]
+              properties:
+                name: {type: string}
+                content: {type: string}
+      responses:
+        '200':
+          description: Skill mit Entwurf
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiSkill'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: discardAiSkillDraft
+      summary: Entwurf verwerfen (Recht ai.manage)
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Skill ohne Entwurf
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiSkill'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills/{useCase}/{language}/activate:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+      - $ref: '#/components/parameters/Language'
+    post:
+      operationId: activateAiSkill
+      summary: Entwurf als neue Version aktivieren (Recht ai.manage)
+      description: Die bisher aktive Version wird archiviert.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Skill nach dem Aktivieren
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiSkill'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '428': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills/{useCase}/{language}/restore:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+      - $ref: '#/components/parameters/Language'
+    post:
+      operationId: restoreAiBuiltinSkill
+      summary: Mitgelieferten Skill wieder anwenden (Recht ai.manage)
+      description: Archiviert die aktive Version. Gilt bereits der mitgelieferte Skill, 409 `ai.skill_builtin_applies`.
+      responses:
+        '200':
+          description: Skill mit dem mitgelieferten Inhalt
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiSkill'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /ai/admin/skills/{useCase}/{language}/trial:
+    parameters:
+      - $ref: '#/components/parameters/UseCase'
+      - $ref: '#/components/parameters/Language'
+    post:
+      operationId: trialAiSkill
+      summary: Probelauf mit einem Beispieltext (Recht ai.manage)
+      description: |
+        Läuft mit dem Entwurf, sonst mit der angewendeten Version, über das zugeordnete Modell, auch wenn der
+        Anwendungsfall ausgeschaltet ist. Zählt in Tagesgrenzen und Protokoll als Art `test`. Das Ergebnis liest die
+        Person über `/ai/runs/{runId}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sample]
+              properties:
+                sample: {type: string, description: 1 bis 20000 Zeichen synthetischer Beispieltext.}
+                goal: {type: [string, 'null'], description: Optionales Ziel, höchstens 500 Zeichen.}
+      responses:
+        '202':
+          description: Begonnen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /ai/admin/usage:
+    get:
+      operationId: getAiUsage
+      summary: Nutzung je Tag und Anwendungsfall (Recht ai.manage)
+      parameters:
+        - name: days
+          in: query
+          required: false
+          description: Standard 30, höchstens 90 Tage nach UTC; größere Werte zählen als 90.
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Nutzung
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AiUsage'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+  /ai/admin/runs:
+    get:
+      operationId: listAiRuns
+      summary: Protokoll der Ausführungen, neueste zuerst, ohne Inhalte (Recht ai.manage)
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: Wert `next` der vorigen Seite.
+          schema: {type: string}
+        - name: limit
+          in: query
+          required: false
+          description: Standard 50, höchstens 200.
+          schema: {type: integer, minimum: 1, maximum: 200}
+      responses:
+        '200':
+          description: Eine Seite
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs, next]
+                properties:
+                  runs:
+                    type: array
+                    items: {$ref: '#/components/schemas/AiRun'}
+                  next: {type: [string, 'null']}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProviderId:
+      name: providerId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ModelId:
+      name: modelId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    UseCase:
+      name: useCase
+      in: path
+      required: true
+      description: Unbekannt ergibt 404 `ai.use_case_not_found`.
+      schema: {$ref: '#/components/schemas/AiUseCase'}
+    Language:
+      name: language
+      in: path
+      required: true
+      description: Andere Werte ergeben 400 mit `language.invalid`.
+      schema: {type: string, enum: [de, en]}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: {type: string}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid (mit violations), ai.precondition_required,
+        ai.version_conflict, ai.provider_not_found, ai.provider_name_taken, ai.model_not_found, ai.model_name_taken,
+        ai.use_case_not_found, ai.skill_draft_not_found, ai.skill_builtin_applies, ai.run_not_found, ai.secret_key_missing,
+        ai.unavailable (409, Grund in violations), ai.use_forbidden, ai.daily_limit_person, ai.daily_limit_company (429),
+        ai.context_too_large (400), ai.busy (503, alle Plätze belegt), ai.db_busy (503), auth.required, auth.forbidden,
+        auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+      additionalProperties: true
+    AiUseCase:
+      type: string
+      enum: [ticket_summary, reply_draft, requirement_review, wiki_revision]
+    AiDataPath:
+      type: string
+      enum: [local, external]
+      description: |
+        `local` nur für Ollama oder eine eigene Adresse; die Standardadresse von OpenAI und Anthropic ist immer `external`.
+        Ein Zugang über http ist nur mit `local` erlaubt.
+    AiNamed:
+      type: object
+      required: [id, name, kind, dataPath]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: [string, 'null'], enum: [openai, anthropic, ollama, null]}
+        dataPath: {oneOf: [{$ref: '#/components/schemas/AiDataPath'}, {type: 'null'}]}
+    AiStatus:
+      type: object
+      required: [secretKey, manage, useCases, today]
+      properties:
+        secretKey: {type: boolean, description: Ob TASK_MANAGER_SECRET_KEY gesetzt ist.}
+        manage: {type: boolean, description: Ob die Person ai.manage hält.}
+        useCases:
+          type: array
+          items:
+            type: object
+            required: [useCase, available, reason, provider, model]
+            properties:
+              useCase: {$ref: '#/components/schemas/AiUseCase'}
+              available: {type: boolean}
+              reason: {type: [string, 'null']}
+              provider: {oneOf: [{$ref: '#/components/schemas/AiNamed'}, {type: 'null'}]}
+              model: {oneOf: [{$ref: '#/components/schemas/AiNamed'}, {type: 'null'}]}
+        today:
+          type: object
+          required: [person, company, personLimit, companyLimit]
+          properties:
+            person: {type: integer, format: int64}
+            company: {type: integer, format: int64}
+            personLimit: {type: integer}
+            companyLimit: {type: integer}
+    AiRun:
+      type: object
+      required: [id, kind, useCase, language, state, code, truncated, projectId, objectKind, objectId, objectVersion, skillVersion,
+        providerId, modelId, modelKey, dataPath, inputTokens, outputTokens, startedAt, finishedAt, accountId, content, invalid]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [use, test]}
+        useCase: {$ref: '#/components/schemas/AiUseCase'}
+        language: {type: string, enum: [de, en]}
+        state: {type: string, enum: [queued, running, succeeded, failed, refused, cancelled]}
+        code:
+          type: [string, 'null']
+          description: |
+            Stabiler Grund eines Fehlers, etwa ai.timeout, ai.unreachable, ai.tls_failed, ai.redirect_refused,
+            ai.auth_failed, ai.rate_limited, ai.model_unsuitable, ai.context_too_large, ai.output_too_long,
+            ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.configuration_changed,
+            ai.cancelled oder ai.interrupted.
+        truncated: {type: boolean, description: Ob ältere Quellen für den Kontext weggelassen wurden.}
+        projectId: {type: [string, 'null'], format: uuid}
+        objectKind: {type: [string, 'null']}
+        objectId: {type: [string, 'null'], format: uuid}
+        objectVersion: {type: [integer, 'null'], format: int64}
+        skillVersion: {type: string, description: '`builtin-1`, `vN` oder beim Probelauf `draft-N`.'}
+        providerId: {type: [string, 'null'], format: uuid}
+        modelId: {type: [string, 'null'], format: uuid}
+        modelKey: {type: string}
+        dataPath: {$ref: '#/components/schemas/AiDataPath'}
+        inputTokens: {type: [integer, 'null']}
+        outputTokens: {type: [integer, 'null']}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: [string, 'null'], format: date-time}
+        accountId: {type: string, format: uuid}
+        content:
+          type: [object, 'null']
+          description: Der geprüfte Vorschlag im Format des Anwendungsfalls, nur für seine Person und nur als Text anzuzeigen.
+          additionalProperties: true
+        invalid:
+          type: [string, 'null']
+          enum: [ai.suggestion_expired, ai.configuration_changed, ai.rights_changed, ai.source_changed, null]
+    AiProvider:
+      type: object
+      required: [id, kind, name, baseUrl, keySet, caCertificate, dataPath, enabled, version, updatedAt, updatedBy]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [openai, anthropic, ollama]}
+        name: {type: string}
+        baseUrl: {type: string, description: Bei Anthropic immer die feste Adresse.}
+        keySet: {type: boolean}
+        caCertificate: {type: [string, 'null'], description: Eigene CA im PEM Format.}
+        dataPath: {$ref: '#/components/schemas/AiDataPath'}
+        enabled: {type: boolean}
+        version: {type: integer, format: int64}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: [string, 'null'], format: uuid}
+    AiProviderInput:
+      type: object
+      required: [kind, name]
+      properties:
+        kind: {type: string, enum: [openai, anthropic, ollama]}
+        name: {type: string, description: 1 bis 80 Zeichen, eindeutig.}
+        baseUrl: {type: [string, 'null'], description: 'OpenAI: leer für die Standardadresse; Ollama: Pflicht; Anthropic: ohne Wirkung.'}
+        apiKey: {type: [string, 'null'], description: Nur schreibbar; für OpenAI und Anthropic Pflicht.}
+        caCertificate: {type: [string, 'null']}
+        dataPath: {oneOf: [{$ref: '#/components/schemas/AiDataPath'}, {type: 'null'}], description: Pflicht für eine eigene Adresse.}
+        enabled: {type: [boolean, 'null'], description: Standard wahr.}
+    AiModel:
+      type: object
+      required: [id, providerId, name, modelKey, contextTokens, outputTokens, enabled, version, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        providerId: {type: string, format: uuid}
+        name: {type: string}
+        modelKey: {type: string}
+        contextTokens: {type: integer}
+        outputTokens: {type: integer}
+        enabled: {type: boolean}
+        version: {type: integer, format: int64}
+        updatedAt: {type: string, format: date-time}
+    AiModelInput:
+      type: object
+      required: [providerId, name, modelKey, contextTokens, outputTokens]
+      properties:
+        providerId: {type: string, format: uuid, description: Beim Ändern ohne Wirkung.}
+        name: {type: string}
+        modelKey: {type: string, description: Kennung beim Anbieter, 1 bis 200 Zeichen.}
+        contextTokens: {type: integer, minimum: 1000, maximum: 10000000}
+        outputTokens: {type: integer, minimum: 100, maximum: 100000, description: Kleiner als contextTokens.}
+        enabled: {type: [boolean, 'null']}
+    AiCheck:
+      type: object
+      required: [ok, code, models]
+      properties:
+        ok: {type: boolean}
+        code: {type: [string, 'null']}
+        models: {type: [integer, 'null'], description: Anzahl der gemeldeten Modelle.}
+    AiAssignment:
+      type: object
+      required: [useCase, modelId, enabled, version, updatedAt]
+      properties:
+        useCase: {$ref: '#/components/schemas/AiUseCase'}
+        modelId: {type: [string, 'null'], format: uuid}
+        enabled: {type: boolean}
+        version: {type: integer, format: int64}
+        updatedAt: {type: [string, 'null'], format: date-time}
+    AiLimits:
+      type: object
+      required: [personDaily, companyDaily, version, updatedAt]
+      properties:
+        personDaily: {type: integer}
+        companyDaily: {type: integer}
+        version: {type: integer, format: int64}
+        updatedAt: {type: [string, 'null'], format: date-time}
+    AiSkill:
+      type: object
+      required: [useCase, language, applied, draft, draftTag, versions]
+      properties:
+        useCase: {$ref: '#/components/schemas/AiUseCase'}
+        language: {type: string, enum: [de, en]}
+        applied:
+          type: object
+          required: [label, name, content, builtin, activatedAt]
+          properties:
+            label: {type: string}
+            name: {type: string}
+            content: {type: [string, 'null'], description: Nur in der Einzelansicht.}
+            builtin: {type: boolean}
+            activatedAt: {type: [string, 'null'], format: date-time}
+        draft:
+          type: [object, 'null']
+          required: [number, name, content, tag, updatedAt, updatedBy]
+          properties:
+            number: {type: integer}
+            name: {type: string}
+            content: {type: [string, 'null']}
+            tag: {type: string}
+            updatedAt: {type: string, format: date-time}
+            updatedBy: {type: [string, 'null'], format: uuid}
+        draftTag: {type: string}
+        versions:
+          type: array
+          description: Aktive und archivierte Versionen, neueste zuerst; im Überblick leer.
+          items:
+            type: object
+            required: [number, label, name, state, updatedAt, updatedBy, activatedAt, activatedBy, archivedAt]
+            properties:
+              number: {type: integer}
+              label: {type: string}
+              name: {type: string}
+              state: {type: string, enum: [draft, active, archived]}
+              updatedAt: {type: string, format: date-time}
+              updatedBy: {type: [string, 'null'], format: uuid}
+              activatedAt: {type: [string, 'null'], format: date-time}
+              activatedBy: {type: [string, 'null'], format: uuid}
+              archivedAt: {type: [string, 'null'], format: date-time}
+    AiStarted:
+      type: object
+      required: [runId]
+      properties:
+        runId: {type: string, format: uuid}
+    AiUsage:
+      type: object
+      required: [day, useCase, runs, succeeded, inputTokens, outputTokens]
+      properties:
+        day: {type: string, format: date}
+        useCase: {$ref: '#/components/schemas/AiUseCase'}
+        runs: {type: integer, format: int64}
+        succeeded: {type: integer, format: int64}
+        inputTokens: {type: integer, format: int64}
+        outputTokens: {type: integer, format: int64}

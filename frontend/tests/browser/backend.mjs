@@ -17,8 +17,8 @@ export const MAIL_INTAKE = '00000000-0000-0000-0000-00004d41494c';
 // The rule of the name, the same as AppearanceService on the server and frontend/src/api/client.ts (TASK-087).
 const NAME_EDGES = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/gu;
 const NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb\u{110bd}\u{110cd}\u{13430}-\u{1343f}\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\ud800-\udfff]/u;
-const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage', 'git.manage'];
-const PROJECT_ACTIONS = ['helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read', 'requirement.approve', 'requirement.edit', 'requirement.read'];
+const COMPANY_ACTIONS = ['accounts.manage', 'appearance.manage', 'helpdesk.manage', 'jobs.manage', 'permissions.audit.read', 'permissions.manage', 'projects.manage', 'session_duration.manage', 'sla.manage', 'git.manage', 'ai.manage'];
+const PROJECT_ACTIONS = ['ai.use', 'helpdesk.reply', 'helpdesk.review', 'project.manage', 'project.read', 'tag.create', 'tags.manage', 'ticket.create', 'ticket.edit', 'ticket.read', 'time.book', 'time.manage', 'time.read', 'wiki.edit', 'wiki.publish', 'wiki.read', 'requirement.approve', 'requirement.edit', 'requirement.read'];
 // The fields of requirements in the rights core (TASK-096).
 const REQUIREMENT_FIELDS = ['criteria', 'description', 'owner', 'priority', 'title'];
 // The field of Git links of tickets and requirements (TASK-112); kept by the Git routes, like tags and attachments for tickets.
@@ -154,6 +154,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // The Git link (TASK-111): providers, the connection state per provider and account ("providerId:accountId"), the
     // repositories each provider knows with the accounts they are hidden from, and the releases per project. Connecting
     // skips the provider: the authorize address leads straight back with a new page load with `connected`, or with `error` when the provider has `failWith`.
+    // The AI foundation (TASK-125): accesses, models, assignments, limits, skills per use case and language, and executions.
+    // A trial ends at once; `aiAnswer` is the content of a successful one, `aiFail` the code of a failing one.
+    ai: { secretKey: true, providers: [], models: [], assignments: new Map(), limits: { personDaily: 50, companyDaily: 500, version: 0 }, skills: new Map(),
+      runs: [], aiAnswer: { state: [{ text: 'Bericht bricht mit DEMO-42 ab', sources: ['S1'] }], open: [] }, aiFail: null },
     git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [],
       links: [], limited: false },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
@@ -887,6 +891,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const gitRequirement = p.match(/^\/requirements\/([^/]+)\/git(?:\/([^/]+))?$/);
     if (gitRequirement) return gitLinkRoute(account, method, { kind: 'requirement', id: gitRequirement[1] }, gitRequirement[2], query, body);
     if (p.startsWith('/git/')) return gitRoute(account, method, p, headers, body);
+    if (p.startsWith('/ai/')) return aiRoute(account, method, p, headers, query, body);
     const gitProject = p.match(/^\/projects\/([^/]+)\/git\/(repositories|candidates)(?:\/([^/]+))?$/);
     if (gitProject) return gitProjectRoute(account, method, gitProject[1], gitProject[2], gitProject[3], query, body);
     let match = p.match(/^\/projects\/([^/]+)(\/.*)?$/);
@@ -3562,6 +3567,260 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
   }
 
   // Installs the backend for one browser context. `as` starts the context signed in.
+  // The AI foundation as the backend (TASK-125): status and own runs for every internal full login, everything below /ai/admin
+  // with ai.manage. Keys are write only, If-Match carries the version, a skill draft the tag of its draft.
+  const ai = state.ai;
+  const AI_CASES = ['ticket_summary', 'reply_draft', 'requirement_review', 'wiki_revision'];
+  const aiProviderView = ({ apiKey, removed, ...shown }) => ({ ...shown, keySet: Boolean(apiKey) });
+  const aiModelView = ({ removed, ...shown }) => shown;
+  const aiAssignment = (useCase) => ai.assignments.get(useCase) ?? { useCase, modelId: null, enabled: false, version: 0, updatedAt: null };
+  function aiAvailability(useCase, requireEnabled) {
+    const assignment = aiAssignment(useCase);
+    const model = ai.models.find((entry) => entry.id === assignment.modelId && !entry.removed);
+    const provider = model && ai.providers.find((entry) => entry.id === model.providerId && !entry.removed);
+    if (!model || !provider) return { useCase, available: false, reason: 'ai.not_assigned', provider: null, model: null };
+    const reason = requireEnabled && !assignment.enabled ? 'ai.disabled' : !provider.enabled ? 'ai.provider_disabled' : !model.enabled ? 'ai.model_disabled'
+      : provider.kind !== 'ollama' && !provider.apiKey ? 'ai.key_missing' : !ai.secretKey ? 'ai.secret_key_missing' : null;
+    return { useCase, available: reason === null, reason, provider: { id: provider.id, name: provider.name, kind: provider.kind, dataPath: provider.dataPath },
+      model: { id: model.id, name: model.name, kind: null, dataPath: null }, modelKey: model.modelKey };
+  }
+  function aiSlot(useCase, language) {
+    const key = `${useCase}/${language}`;
+    if (!ai.skills.has(key)) ai.skills.set(key, { versions: [], draft: null, number: 0 });
+    return ai.skills.get(key);
+  }
+  function aiSkillView(useCase, language, full) {
+    const slot = aiSlot(useCase, language);
+    const active = slot.versions.find((version) => version.state === 'active');
+    const builtin = { label: 'builtin-1', name: language === 'de' ? 'Mitgeliefert' : 'Built in', content: full ? `Mitgelieferter Skill für ${useCase}.` : null, builtin: true, activatedAt: null };
+    const applied = active ? { label: `v${active.number}`, name: active.name, content: full ? active.content : null, builtin: false, activatedAt: active.activatedAt } : builtin;
+    const draftTag = slot.draft ? `${slot.draft.number}-${slot.draft.round}` : 'none';
+    return { useCase, language, applied, draft: slot.draft && { number: slot.draft.number, name: slot.draft.name, content: full ? slot.draft.content : null, tag: draftTag,
+      updatedAt: slot.draft.updatedAt, updatedBy: null }, draftTag,
+      versions: full ? [...slot.versions].sort((a, b) => b.number - a.number).map((version) => ({ number: version.number, label: `v${version.number}`, name: version.name,
+        state: version.state, updatedAt: version.activatedAt, updatedBy: null, activatedAt: version.activatedAt, activatedBy: null, archivedAt: version.archivedAt ?? null })) : [] };
+  }
+  function aiSettings(input, current) {
+    const violations = [];
+    const kind = current?.kind ?? input.kind;
+    if (!['openai', 'anthropic', 'ollama'].includes(kind)) violations.push('kind.invalid');
+    const name = (input.name ?? '').trim();
+    if (name === '' || name.length > 80) violations.push('name.invalid');
+    const own = (input.baseUrl ?? '').trim().replace(/\/+$/, '');
+    const baseUrl = kind === 'anthropic' ? 'https://api.anthropic.com' : own === '' ? (kind === 'openai' ? 'https://api.openai.com' : '') : own;
+    const custom = kind === 'ollama' || (kind === 'openai' && own !== '');
+    if (kind === 'ollama' && own === '') violations.push('baseUrl.invalid');
+    else if (own !== '' && !/^https?:\/\/[A-Za-z0-9.\-:]+(\/[A-Za-z0-9._~\-/]*)?$/.test(own)) violations.push('baseUrl.invalid');
+    const dataPath = custom ? input.dataPath : 'external';
+    if (custom && !['local', 'external'].includes(input.dataPath)) violations.push('dataPath.invalid');
+    if (own.startsWith('http:') && dataPath !== 'local') violations.push('baseUrl.invalid');
+    const apiKey = input.apiKey === undefined || input.apiKey === null ? current?.apiKey ?? null : input.apiKey === '' ? null : input.apiKey.trim();
+    if (kind !== 'ollama' && !apiKey && current === null) violations.push('apiKey.invalid');
+    if (violations.length > 0) return { refused: problem(400, 'request.invalid', { violations }) };
+    return { kind, name, baseUrl, apiKey, caCertificate: input.caCertificate ?? null, dataPath, enabled: input.enabled ?? true };
+  }
+  function aiModelSettings(input, current) {
+    const violations = [];
+    const name = (input.name ?? '').trim();
+    if (name === '' || name.length > 80) violations.push('name.invalid');
+    const modelKey = (input.modelKey ?? '').trim();
+    if (!/^[\x21-\x7e]{1,200}$/.test(modelKey)) violations.push('modelKey.invalid');
+    const contextTokens = input.contextTokens;
+    const outputTokens = input.outputTokens;
+    if (!Number.isInteger(contextTokens) || contextTokens < 1000 || contextTokens > 10000000) violations.push('contextTokens.invalid');
+    if (!Number.isInteger(outputTokens) || outputTokens < 100 || outputTokens > 100000 || (Number.isInteger(contextTokens) && outputTokens >= contextTokens)) {
+      violations.push('outputTokens.invalid');
+    }
+    if (violations.length > 0) return { refused: problem(400, 'request.invalid', { violations }) };
+    return { providerId: current?.providerId ?? input.providerId, name, modelKey, contextTokens, outputTokens, enabled: input.enabled ?? true };
+  }
+  const aiToday = (accountId) => ai.runs.filter((run) => accountId === null || run.accountId === accountId).length;
+  function aiRoute(account, method, p, headers, query, body) {
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    const manage = may(account, 'ai.manage');
+    if (p === '/ai/status' && method === 'GET') {
+      return ok({ secretKey: ai.secretKey, manage, useCases: AI_CASES.map((useCase) => (({ modelKey, ...shown }) => shown)(aiAvailability(useCase, true))),
+        today: { person: aiToday(account.id), company: aiToday(null), personLimit: ai.limits.personDaily, companyLimit: ai.limits.companyDaily } });
+    }
+    let match = p.match(/^\/ai\/runs\/([^/]+)$/);
+    if (match) {
+      const run = ai.runs.find((entry) => entry.id === match[1] && entry.accountId === account.id);
+      if (!run) return problem(404, 'ai.run_not_found');
+      if (method === 'DELETE' && (run.state === 'queued' || run.state === 'running')) Object.assign(run, { state: 'cancelled', code: 'ai.cancelled', content: null });
+      return ok({ ...run, content: method === 'DELETE' ? null : run.content, invalid: null });
+    }
+    if (!p.startsWith('/ai/admin/')) return problem(404, 'resource.not_found');
+    if (!manage) return problem(403, 'auth.forbidden');
+    const versionOf = () => {
+      const value = headers['if-match'];
+      if (!value) return { refused: problem(428, 'ai.precondition_required') };
+      return { value: value.replace(/^"|"$/g, '') };
+    };
+    const liveProviders = ai.providers.filter((entry) => !entry.removed).sort((a, b) => a.name.localeCompare(b.name));
+    const liveModels = ai.models.filter((entry) => !entry.removed).sort((a, b) => a.name.localeCompare(b.name));
+    if (p === '/ai/admin/providers' && method === 'GET') return ok(liveProviders.map(aiProviderView));
+    if (p === '/ai/admin/providers' && method === 'POST') {
+      const checked = aiSettings(body, null);
+      if (checked.refused) return checked.refused;
+      if (liveProviders.some((entry) => entry.name.toLowerCase() === checked.name.toLowerCase())) return problem(409, 'ai.provider_name_taken');
+      const provider = { id: uuid(), ...checked, version: 1, updatedAt: now(), updatedBy: account.id, removed: false };
+      ai.providers.push(provider);
+      return { status: 201, body: aiProviderView(provider), etag: '"1"' };
+    }
+    match = p.match(/^\/ai\/admin\/providers\/([^/]+)(\/check)?$/);
+    if (match) {
+      const provider = liveProviders.find((entry) => entry.id === match[1]);
+      if (!provider) return problem(404, 'ai.provider_not_found');
+      if (match[2] && method === 'POST') return ok(provider.check ?? { ok: true, code: null, models: 3 });
+      const version = versionOf();
+      if (version.refused) return version.refused;
+      if (version.value !== String(provider.version)) return problem(412, 'ai.version_conflict');
+      if (method === 'DELETE') {
+        provider.removed = true;
+        for (const model of ai.models) if (model.providerId === provider.id) model.removed = true;
+        return empty();
+      }
+      const checked = aiSettings(body, provider);
+      if (checked.refused) return checked.refused;
+      Object.assign(provider, checked, { version: provider.version + 1, updatedAt: now(), updatedBy: account.id });
+      return ok(aiProviderView(provider), `"${provider.version}"`);
+    }
+    if (p === '/ai/admin/models' && method === 'GET') return ok(liveModels.map(aiModelView));
+    if (p === '/ai/admin/models' && method === 'POST') {
+      if (!liveProviders.some((entry) => entry.id === body.providerId)) return problem(400, 'request.invalid', { violations: ['providerId.invalid'] });
+      const checked = aiModelSettings(body, null);
+      if (checked.refused) return checked.refused;
+      if (liveModels.some((entry) => entry.name.toLowerCase() === checked.name.toLowerCase())) return problem(409, 'ai.model_name_taken');
+      const model = { id: uuid(), ...checked, version: 1, updatedAt: now(), removed: false };
+      ai.models.push(model);
+      return { status: 201, body: aiModelView(model), etag: '"1"' };
+    }
+    match = p.match(/^\/ai\/admin\/models\/([^/]+)(\/check)?$/);
+    if (match) {
+      const model = liveModels.find((entry) => entry.id === match[1]);
+      if (!model) return problem(404, 'ai.model_not_found');
+      if (match[2] && method === 'POST') return ok(model.check ?? { ok: true, code: null, models: null });
+      const version = versionOf();
+      if (version.refused) return version.refused;
+      if (version.value !== String(model.version)) return problem(412, 'ai.version_conflict');
+      if (method === 'DELETE') {
+        model.removed = true;
+        return empty();
+      }
+      const checked = aiModelSettings(body, model);
+      if (checked.refused) return checked.refused;
+      Object.assign(model, checked, { version: model.version + 1, updatedAt: now() });
+      return ok(aiModelView(model), `"${model.version}"`);
+    }
+    if (p === '/ai/admin/assignments' && method === 'GET') return ok(AI_CASES.map(aiAssignment));
+    match = p.match(/^\/ai\/admin\/assignments\/([^/]+)$/);
+    if (match && method === 'PUT') {
+      if (!AI_CASES.includes(match[1])) return problem(404, 'ai.use_case_not_found');
+      const version = versionOf();
+      if (version.refused) return version.refused;
+      const current = aiAssignment(match[1]);
+      if (version.value !== String(current.version)) return problem(412, 'ai.version_conflict');
+      if (body.modelId !== null && body.modelId !== undefined && !liveModels.some((entry) => entry.id === body.modelId)) {
+        return problem(400, 'request.invalid', { violations: ['modelId.invalid'] });
+      }
+      if ((body.modelId ?? null) === null && body.enabled) return problem(400, 'request.invalid', { violations: ['modelId.required'] });
+      const saved = { useCase: match[1], modelId: body.modelId ?? null, enabled: Boolean(body.enabled), version: current.version + 1, updatedAt: now() };
+      ai.assignments.set(match[1], saved);
+      return ok(saved, `"${saved.version}"`);
+    }
+    if (p === '/ai/admin/limits') {
+      const view = () => ({ personDaily: ai.limits.personDaily, companyDaily: ai.limits.companyDaily, version: ai.limits.version, updatedAt: null });
+      if (method === 'GET') return ok(view(), `"${ai.limits.version}"`);
+      const version = versionOf();
+      if (version.refused) return version.refused;
+      if (version.value !== String(ai.limits.version)) return problem(412, 'ai.version_conflict');
+      const violations = [];
+      if (!Number.isInteger(body.personDaily) || body.personDaily < 0 || body.personDaily > 100000) violations.push('personDaily.invalid');
+      if (!Number.isInteger(body.companyDaily) || body.companyDaily < 0 || body.companyDaily > 1000000) violations.push('companyDaily.invalid');
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      Object.assign(ai.limits, { personDaily: body.personDaily, companyDaily: body.companyDaily, version: ai.limits.version + 1 });
+      return ok(view(), `"${ai.limits.version}"`);
+    }
+    if (p === '/ai/admin/skills' && method === 'GET') return ok(AI_CASES.flatMap((useCase) => ['de', 'en'].map((language) => aiSkillView(useCase, language, false))));
+    match = p.match(/^\/ai\/admin\/skills\/([^/]+)\/([^/]+)(?:\/(draft|activate|restore|trial))?$/);
+    if (match) {
+      const [, useCase, language, action] = match;
+      if (!AI_CASES.includes(useCase)) return problem(404, 'ai.use_case_not_found');
+      if (!['de', 'en'].includes(language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      const slot = aiSlot(useCase, language);
+      const answer = () => {
+        const view = aiSkillView(useCase, language, true);
+        return ok(view, `"${view.draftTag}"`);
+      };
+      if (!action && method === 'GET') return answer();
+      if (action === 'trial' && method === 'POST') {
+        const availability = aiAvailability(useCase, false);
+        if (!availability.available) return problem(409, 'ai.unavailable', { violations: [availability.reason] });
+        if (aiToday(account.id) >= ai.limits.personDaily) return problem(429, 'ai.daily_limit_person');
+        if (aiToday(null) >= ai.limits.companyDaily) return problem(429, 'ai.daily_limit_company');
+        const sample = body.sample ?? '';
+        if (sample.trim() === '' || sample.length > 20000) return problem(400, 'request.invalid', { violations: ['sample.invalid'] });
+        const active = slot.versions.find((version) => version.state === 'active');
+        const failed = ai.aiFail;
+        const run = { id: uuid(), kind: 'test', useCase, language, state: failed ? 'failed' : 'succeeded', code: failed, truncated: false, projectId: null, objectKind: null,
+          objectId: null, objectVersion: null, skillVersion: slot.draft ? `draft-${slot.draft.number}` : active ? `v${active.number}` : 'builtin-1',
+          providerId: availability.provider.id, modelId: availability.model.id, modelKey: availability.modelKey, dataPath: availability.provider.dataPath,
+          inputTokens: failed ? null : 120, outputTokens: failed ? null : 30, startedAt: now(), finishedAt: now(), accountId: account.id,
+          content: failed ? null : ai.aiAnswer, sample };
+        ai.runs.unshift(run);
+        return { status: 202, body: { runId: run.id } };
+      }
+      if (action === 'restore' && method === 'POST') {
+        const active = slot.versions.find((version) => version.state === 'active');
+        if (!active) return problem(409, 'ai.skill_builtin_applies');
+        Object.assign(active, { state: 'archived', archivedAt: now() });
+        return answer();
+      }
+      const version = versionOf();
+      if (version.refused) return version.refused;
+      const tag = slot.draft ? `${slot.draft.number}-${slot.draft.round}` : 'none';
+      if (version.value !== tag) return problem(412, 'ai.version_conflict');
+      if (action === 'draft' && method === 'PUT') {
+        const violations = [];
+        const name = (body.name ?? '').trim();
+        if (name === '' || name.length > 80) violations.push('name.invalid');
+        if ((body.content ?? '').trim() === '' || body.content.length > 20000) violations.push('content.invalid');
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        if (!slot.draft) slot.draft = { number: ++slot.number, round: 0 };
+        Object.assign(slot.draft, { name, content: body.content, round: slot.draft.round + 1, updatedAt: now() });
+        return answer();
+      }
+      if (!slot.draft) return problem(404, 'ai.skill_draft_not_found');
+      if (action === 'draft' && method === 'DELETE') {
+        slot.draft = null;
+        return answer();
+      }
+      if (action === 'activate' && method === 'POST') {
+        for (const entry of slot.versions) if (entry.state === 'active') Object.assign(entry, { state: 'archived', archivedAt: now() });
+        slot.versions.push({ number: slot.draft.number, name: slot.draft.name, content: slot.draft.content, state: 'active', activatedAt: now() });
+        slot.draft = null;
+        return answer();
+      }
+    }
+    if (p === '/ai/admin/usage' && method === 'GET') {
+      const rows = new Map();
+      for (const run of ai.runs) {
+        const key = `2026-10-21/${run.useCase}`;
+        const row = rows.get(key) ?? { day: '2026-10-21', useCase: run.useCase, runs: 0, succeeded: 0, inputTokens: 0, outputTokens: 0 };
+        row.runs += 1;
+        if (run.state === 'succeeded') row.succeeded += 1;
+        row.inputTokens += run.inputTokens ?? 0;
+        row.outputTokens += run.outputTokens ?? 0;
+        rows.set(key, row);
+      }
+      return ok([...rows.values()]);
+    }
+    if (p === '/ai/admin/runs' && method === 'GET') {
+      return ok({ runs: ai.runs.map(({ sample, ...run }) => ({ ...run, content: null, invalid: null })), next: null });
+    }
+    return problem(404, 'resource.not_found');
+  }
+
   // The Git link as the backend (TASK-111): every internal full login, git.manage for the administration, the project rights for
   // releases, and repositories only through the own active connection.
   const git = state.git;

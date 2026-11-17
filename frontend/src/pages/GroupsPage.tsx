@@ -148,6 +148,8 @@ export const ACTION_LABEL: Readonly<Record<string, MessageKey>> = {
   'session_duration.manage': 'right.session_duration.manage',
   'sla.manage': 'right.sla.manage',
   'git.manage': 'right.git.manage',
+  'ai.manage': 'right.ai.manage',
+  'ai.use': 'right.ai.use',
   'project.manage': 'right.project.manage',
   'project.read': 'right.project.read',
   'tag.create': 'right.tag.create',
