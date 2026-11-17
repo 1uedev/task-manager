@@ -206,7 +206,8 @@ public class ObservedConnections implements BeanPostProcessor {
      * object the wrapper hands out, as a result, inside a returned array of objects or through a way back such as
      * {@code ResultSet.getStatement()}, is itself observed: connections, statements, results, descriptions, arrays, large
      * objects, save points and every other JDBC type. The wrapper implements every JDBC interface of the object it wraps,
-     * and the same object always gets the same wrapper, so a way back to an object already handed out returns its wrapper.
+     * and inside one connection the same object always gets the same wrapper, so a way back to an object already handed out
+     * returns its wrapper.
      * A result set an array creates over a statement of its own, for example, hands out that statement observed, and its
      * connection is the observed connection again. {@code unwrap} and {@code isWrapperFor} to an interface the wrapper
      * fulfils answer with the wrapper; any other target fails while the final check records. A JDBC object the wrapper
@@ -228,6 +229,17 @@ public class ObservedConnections implements BeanPostProcessor {
      * used inside it; a JDBC object inside a result that is neither a JDBC object nor an array of objects, such as a
      * collection; and what the driver passes to an object of the application that it calls back, such as a listener of a
      * pooled connection or the {@code readSQL} of an {@code SQLData}. The final check uses none of these.
+     *
+     * <p>Further limits, which Holger accepted after the Codex review of TASK-124 instead of a fix (DEC-155). F1: only what
+     * an observed statement executes is written down; SQL the driver runs inside another method, such as the
+     * {@code select current_schema()} of {@code PgConnection.getSchema()}, is not. F2: the data source starts the wrappers
+     * of every connection it hands out anew, so the same connection handed out twice, for example by
+     * {@code getConnection()} and by a builder or twice in one returned array, gets two wrappers; the executions through
+     * both are written down. F3: the observed data source itself is a mock of its concrete class, not a wrapper; handed to
+     * another JDBC object as an argument, for example to {@code setDataSource} of a second pool, it reaches it as itself
+     * and not as the pool it observes. H1: only SQL executed on the thread that records is written down; an execution on
+     * another thread is not, even through an observed statement. The final check executes its one query synchronously
+     * through a prepared statement and calls none of these.
      */
     static Connection recording(Connection real) {
         try {
