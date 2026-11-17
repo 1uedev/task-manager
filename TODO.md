@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
 
 ### Blockiert – BLOCKIERT
 
@@ -112,7 +114,40 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 **Übergabe:** Ergebnis im Ergebnis PR auf dem Branch claude/project-thread-av1na6 mit DEC-156. Modul `taskmanager.ai` mit Migration V0067, Vertrag contracts/ai.openapi.yaml (26 Routen, `AiContractTest`), Seite „KI“ für `ai.manage`, Port `taskmanager.ai.AiRuns` für TASK-126 und TASK-127. Nachweise: `AiApiTest` gegen einen nachgebauten Anbieter, der wie OpenAI, Anthropic und Ollama antwortet (Kriterium 1 bis 4), volle Backend Suite mit PostgreSQL 16, `npm run verify` und alle Browsertests einschließlich `ai`. Abweichungen zur Prüfung: „Verbindung prüfen“ liest die Modellliste und erzeugt keinen Text (keine Kosten); die Plätze für laufende und wartende Ausführungen gelten je Prozess; ein Abbruch durch Neustart endet nach höchstens 14 Minuten als `ai.interrupted`; `ai.use` lässt sich mangels Anwendungsfall bisher nur über einen Testcontroller im Backend Test prüfen. Beschreibung und Grenzen in backend/README.md, Abschnitt „KI Grundlage“.
 
-**Nächster Schritt:** Codex Prüfung und Holgers Abnahme; nach dem Merge des Ergebnisses TASK-126 entblocken und umsetzen.
+**Nächster Schritt:** Die Codex Prüfung (docs/REVIEW_TASK-125_PR-339.md) empfiehlt nachbessern; F1 bis F12 und H1 bis H4 behebt TASK-129 (DEC-158). Danach Holgers Abnahme von TASK-125 und TASK-129 und der Beginn von TASK-126.
+
+## TASK-129 Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-aifix-01 · **Aktualisiert:** 2026-11-17
+
+**Bezug:** REQ-AI-002, REQ-AI-003, REQ-AI-006, REQ-AI-007, REQ-AI-008, REQ-SEC-001; DEC-156, DEC-158; docs/REVIEW_TASK-125_PR-339.md; docs/AI_USE_CASES.md (Prüffälle A06, A07, A12 bis A14). **Abhängigkeiten:** TASK-125 auf main (PR #339). **Arbeitsstand:** Holger wählt am 17. November 2026 zur Codex Prüfung von TASK-125 (Empfehlung nachbessern) „Alles beheben als TASK-129“. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-158, Migration V0068.
+
+**Umfang:** Behebung der Befunde F1 bis F12 und der Hinweise H1 bis H4 aus docs/REVIEW_TASK-125_PR-339.md im Modul `ai`, seinem Vertrag, der Seite „KI“, dem Testersatz der Browsertests und der Dokumentation, mit Migration V0068. Nicht Teil: die vier Anwendungsfälle (TASK-126, TASK-127), Prüfsatz, Demo und Lauf gegen echte Anbieter (TASK-128), weitere Anbieter oder Funktionen.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Ein gespeicherter Schlüssel ist an die kanonische Adresse und die CA seines Zugangs gebunden. Ändert sich eines davon, wird der bisherige Schlüssel verworfen, es sei denn, im selben Schreibvorgang wird ein neuer eingegeben; ein Schlüssel geht nie an ein anderes Ziel als das, für das er gespeichert wurde. Gegenprobe mit zwei nachgebauten Anbietern: Der neue Empfänger erhält das alte Geheimnis nie.
+2. F2: Ein Schlüssel besteht aus 1 bis 500 sichtbaren ASCII Zeichen und wird sonst vor dem Speichern mit 400 abgewiesen. Fehler beim Aufbau einer Anfrage werden ohne ihren Text gemeldet und protokolliert. Eine erfolgreiche Antwort, die den verwendeten Schlüssel wörtlich enthält, wird verworfen und als ungültige Ausgabe nachgewiesen. Tests prüfen API Antwort, Log und Vorschlag mit einem synthetischen Geheimnis.
+3. F3: Adressen werden vor Vergleich und Speicherung kanonisiert (Schema und Host klein und in ASCII, ohne Punkt am Ende, ohne Standardport, ohne Anmeldedaten, Abfrage und Fragment). Die Hosts von OpenAI und Anthropic gelten immer als externer Datenweg. Unverschlüsseltes http ist nur für Hosts erlaubt, die der Betreiber in der Einstellung `TASK_MANAGER_AI_PLAIN_HTTP_HOSTS` ausdrücklich freigibt, und nur mit dem Datenweg „lokal“; die allgemeine http Freigabe gibt es nur in Tests. Freigabe und Beschriftung des Datenwegs werden gemeinsam getestet.
+4. F4: Eine Ausführung hält beim Start die Versionen von Zuordnung, Zugang, Modell und angewandtem Skill fest. Vor dem Versand, beim Speichern des Ergebnisses und beim Lesen wird verglichen; bei einer Abweichung endet eine wartende oder laufende Ausführung mit `ai.configuration_changed`, eine laufende Anfrage wird abgebrochen, und ein gespeicherter Vorschlag gilt als ungültig. Auch Aus und wieder Einschalten einer Zuordnung erhöht ihre Version. Gegenproben für dieselbe Modell ID mit neuer Version, einen Skillwechsel und Aus und Einschalten.
+5. F5: Kontodeaktivierung und Speichern eines Vorschlags sind für dieselbe Person geordnet: Die Deaktivierung beendet offene Ausführungen der Person, und ein später eintreffendes Ergebnis wird für ein inaktives Konto nicht gespeichert. Gegenprobe mit gehaltener Anbieterantwort und anschließender Reaktivierung.
+6. F6: Eine gemeinsame Frist gilt für Verbindung, Antwortkopf und den ganzen begrenzten Antwortkörper. Bei Ablauf werden Anfrage und Lesen des Körpers abgebrochen, das Ergebnis ist `ai.timeout`, und der Platz wird frei. Gegenprobe mit sofortigem Kopf und offenem Körper.
+7. F7: Platz und Ausführung werden gemeinsam verwaltet. Ein Abbruch vor dem Start entfernt die Ausführung aus der Warteschlange und gibt den Platz genau einmal frei; eine laufende Ausführung gibt ihren Platz erst nach dem tatsächlichen Ende frei. Gegenprobe: wiederholter Abbruch wartender Ausführungen, danach lassen sich wieder alle Plätze belegen.
+8. F8: Eine fachliche Ausführung liefert Inhalt nur, wenn für ihren Anwendungsfall ein zuständiger Prüfer registriert ist; ohne ihn wird kein Inhalt ausgeliefert. Probeläufe ohne Fachkontext werden getrennt behandelt. Der Testcontroller erhält einen veränderlichen Prüfwert; Quellenänderung und Entzug eines Fachrechts werden getrennt geprüft.
+9. F9: Die Ausgabe ist genau ein JSON Objekt ohne doppelte Schlüssel, nur von Leerraum oder einem einzelnen Codeblock umgeben, mit den Pflichtfeldern und zulässigen Werten des Anwendungsfalls, festgelegt in Code und Vertrag. Eine unbekannte Quelle bleibt ein eigener Fehler.
+10. F10: Die erste Zuordnung eines Anwendungsfalls wird vor dem Lesen der Version serialisiert. Gegenprobe mit zwei Transaktionen auf denselben Ausgangsstand: genau eine erfolgreich, die andere 412.
+11. F11: Ein Skillentwurf hat eine eindeutige, nie wiederverwendete Revision, auch nach einem Verwerfen; ETag und Nachweis des Probelaufs stützen sich darauf. Gegenprobe mit fester Uhr: zwei Änderungen in derselben Millisekunde und Aktivieren über ein altes Kennzeichen ergibt 412.
+12. F12: Der Start einer berechtigten Person, der fachlich abgelehnt wird (keine oder ausgeschaltete Zuordnung, Tagesgrenze, Auslastung), wird ohne Inhalt als `refused` mit Grund nachgewiesen, auch nach dem Rollback, und zählt nicht gegen die Tagesgrenze.
+13. H1: Übergabe und README beschreiben das Ende unterbrochener Ausführungen genau: fällig nach 14 Minuten, beendet beim nächsten Lauf von `ai.cleanup` im 15 Minuten Takt, also nach bis zu etwa 29 Minuten und später bei stehendem Worker. Die Plätze gelten je Prozess, und Regel 10 von TASK-125 wird in DEC-158 entsprechend eindeutig formuliert.
+14. H2: Die Protokollseite mit `limit=200` liefert bei mehr Einträgen ihren Folgelink; Vertragstest mit genau 201 Einträgen.
+15. H3: Der Testersatz antwortet wie der Server (kein Feld `sample`, `content: null` mit Grund bei ungültigem Vorschlag, laufender Probelauf); die Seite „KI“ zeigt einen ungültig gewordenen Vorschlag und den Abbruch eines laufenden Probelaufs, mit Browsertests.
+16. H4: Ein lokaler HTTPS Test unterscheidet richtige CA, fehlende CA und falschen Hostnamen; ein echtes Portalkonto wird gegen Status, Lauf und Verwaltung mit 403 geprüft.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F12 und H1 bis H4 sind nach den Regeln behoben, mit den Gegenproben.
+2. Migration V0068, Vertrag, Backend Tests, `npm run verify` und alle Browsertests sind grün.
+3. Dokumentation und DEC-158 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 
