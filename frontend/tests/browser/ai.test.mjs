@@ -150,6 +150,58 @@ describe('AI administration', () => {
     });
   });
 
+  test('a discarded draft never appears in the list of versions, in German and in English', async () => {
+    for (const { locale, save, discard, draftState, discardedState, content, name } of [
+      { locale: 'de-DE', save: 'Als Entwurf speichern', discard: 'Entwurf verwerfen', draftState: 'Entwurf', discardedState: 'verworfen', content: 'Anweisungen (Markdown)', name: 'Name' },
+      { locale: 'en-US', save: 'Save as draft', discard: 'Discard draft', draftState: 'draft', discardedState: 'discarded', content: 'Instructions (Markdown)', name: 'Name' },
+    ]) {
+      const session = await open(browser, `${base()}#/ai`, { locale, setup: (context, page) => {
+        const backend = createBackend();
+        withOllama(backend);
+        return backend.install(context, page, { as: ANNA });
+      } });
+      session.page.on('dialog', (dialog) => void dialog.accept());
+      try {
+        const page = session.page;
+        await page.waitForSelector('.shell main h1');
+        const skills = page.getByTestId('ai-skills');
+        await skills.getByLabel(content).fill('Fasse knapp zusammen.');
+        await skills.getByLabel(name).fill('Knapp');
+        await skills.getByRole('button', { name: save }).click();
+        const versions = skills.getByTestId('ai-skill-versions');
+        await versions.waitFor({ state: 'attached' });
+        assert.match(await versions.textContent(), new RegExp(draftState, 'i'), locale);
+        await skills.getByRole('button', { name: discard }).click();
+        await versions.waitFor({ state: 'detached' });
+        assert.equal(await skills.getByText(discardedState, { exact: true }).count(), 0, `${locale}: the discarded state is not listed`);
+        assert.deepEqual(session.problems.filter((text) => !/Failed to load resource/.test(text)), [], 'no console warnings, errors or page errors');
+      } finally {
+        await session.context.close();
+      }
+    }
+  });
+
+  test('an access whose address breaks today\'s rules is named in the use case, in German and in English', async () => {
+    for (const { locale, text } of [
+      { locale: 'de-DE', text: 'Die Adresse des Anbieters ist nach den heutigen Regeln nicht erlaubt.' },
+      { locale: 'en-US', text: 'The address of the provider is not allowed under today\'s rules.' },
+    ]) {
+      const session = await open(browser, `${base()}#/ai`, { locale, setup: (context, page) => {
+        const backend = createBackend();
+        withOllama(backend);
+        backend.state.ai.providers[0].addressRefused = true;
+        return backend.install(context, page, { as: ANNA });
+      } });
+      try {
+        const page = session.page;
+        await page.waitForSelector('.shell main h1');
+        await page.locator('[data-use-case="ticket_summary"]').getByTestId('ai-availability').getByText(text, { exact: false }).waitFor();
+      } finally {
+        await session.context.close();
+      }
+    }
+  });
+
   test('a stale skill draft is refused and reloaded, limits and usage are shown', async () => {
     await withApp({ prepare: withOllama }, async (page, backend) => {
       const skills = page.getByTestId('ai-skills');

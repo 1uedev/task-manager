@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -47,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-17 |
 | [TASK-125](#task-125-ki-grundlage-mit-anbietern-modellen-skills-grenzen-und-nachweis-a16-teil-1) | KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
+| [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -154,7 +153,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-130 Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261118-aifix-02 · **Aktualisiert:** 2026-11-18
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261118-aifix-02 · **Aktualisiert:** 2026-11-18
 
 **Bezug:** REQ-AI-002, REQ-AI-003, REQ-AI-006, REQ-AI-007, REQ-AI-008, REQ-SEC-001; DEC-156, DEC-158, DEC-160; docs/REVIEW_TASK-129_PR-341.md; docs/AI_USE_CASES.md (Prüffälle A06, A07, A12 bis A14). **Abhängigkeiten:** TASK-129 auf main (PR #341). **Arbeitsstand:** Holger wählt am 17. November 2026 zur Codex Prüfung von TASK-129 (Empfehlung nachbessern) „Alles beheben als TASK-130“. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-160, Migration V0069.
 
@@ -176,7 +175,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Migration V0069, Vertrag, Backend Tests, `npm run verify` und alle Browsertests sind grün.
 3. Dokumentation und DEC-160 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** Umgesetzt auf claude/project-thread-av1na6 mit Migration V0069 (`ai_skill_selection`). F1 bis F7, H1 und H2 sind nach den Regeln 1 bis 9 behoben. Gegenproben: `AiApiTest` (Zugang mit heute unerlaubter Adresse vor jedem Aufruf, Schlüssel nur in dekodierten Werten, Rückkehr zum mitgelieferten Skill macht alte Vorschläge ungültig, Abbruch vor dem Aufruf bei gehaltener Auswahlsperre, Ablehnung unter zurückgerollter äußerer Transaktion, gleiche IPv6 Adressen, getrennter Fachrechtewert des Prüfers), `AiInternalsTest` (IPv6 Form und Freigabeeinträge, Schlüssel in jedem dekodierten Wert, Backticks im Codeblock, ein bereits unterbrochener Faden sendet keine Anfrage an einen zählenden Server) und der Browsertest `ai` (Verwerfen und Versionsliste, Adressgrund, je Deutsch und Englisch). Abweichung zu Regel 6: Der Server liefert verworfene Entwurfsstände nie in der Versionsliste; statt sie als Zustand zu zeigen, sind Vertrag und Typ jetzt so beschrieben, der Text `ai.skillState.discarded` steht vorsorglich in beiden Sprachen, und der Testersatz listet den Entwurf wie der Server mit dem Zustand `draft`. Hinweis zu Regel 4: Der Test mit der gehaltenen Auswahlsperre belegt den Ablauf, aber nicht allein die Prüfung im Ausführer (der Treiber bricht auch ohne sie ab); die Prüfung vor dem HTTP Aufruf belegt der Unit Test, der ohne sie fehlschlägt. Bestehende Läufe mit einem Stempel aus der Zeit vor V0069 gelten als geändert. Ausgeführt (lokal, Java 21, PostgreSQL 16): alle 730 Backend Tests, `lifecycle-check.sh` mit 66 angewandten Migrationen bis V0069, `npm run verify`, alle 319 Browsertests, `validate_repository.py`, `task_board.py --check`, `unittest`, `git diff --check`.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR (Codex), danach Holgers Abnahme von TASK-125, TASK-129 und TASK-130 und der Beginn von TASK-126.
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 

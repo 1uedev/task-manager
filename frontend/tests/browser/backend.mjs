@@ -3582,8 +3582,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const model = ai.models.find((entry) => entry.id === assignment.modelId && !entry.removed);
     const provider = model && ai.providers.find((entry) => entry.id === model.providerId && !entry.removed);
     if (!model || !provider) return { useCase, available: false, reason: 'ai.not_assigned', provider: null, model: null };
+    // TASK-130, F1: an access whose stored address breaks today's rules sends nothing, before the key is looked at.
     const reason = requireEnabled && !assignment.enabled ? 'ai.disabled' : !provider.enabled ? 'ai.provider_disabled' : !model.enabled ? 'ai.model_disabled'
-      : provider.kind !== 'ollama' && !provider.apiKey ? 'ai.key_missing' : provider.apiKey && !ai.secretKey ? 'ai.secret_key_missing' : null;
+      : provider.addressRefused ? 'ai.address_not_allowed' : provider.kind !== 'ollama' && !provider.apiKey ? 'ai.key_missing' : provider.apiKey && !ai.secretKey ? 'ai.secret_key_missing' : null;
     return { useCase, available: reason === null, reason, provider: { id: provider.id, name: provider.name, kind: provider.kind, dataPath: provider.dataPath },
       model: { id: model.id, name: model.name, kind: null, dataPath: null }, modelKey: model.modelKey };
   }
@@ -3601,8 +3602,11 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     return { useCase, language, applied, draft: slot.draft && { number: slot.draft.number, revision: slot.draft.round, name: slot.draft.name,
       content: full ? slot.draft.content : null, tag: draftTag,
       updatedAt: slot.draft.updatedAt, updatedBy: null }, draftTag,
-      versions: full ? [...slot.versions].sort((a, b) => b.number - a.number).map((version) => ({ number: version.number, label: `v${version.number}`, name: version.name,
-        state: version.state, updatedAt: version.activatedAt, updatedBy: null, activatedAt: version.activatedAt, activatedBy: null, archivedAt: version.archivedAt ?? null })) : [] };
+      // As the server: the draft is listed with its state, a discarded draft never (TASK-130, F6).
+      versions: full ? [...slot.versions.map((version) => ({ number: version.number, label: `v${version.number}`, name: version.name,
+        state: version.state, updatedAt: version.activatedAt, updatedBy: null, activatedAt: version.activatedAt, activatedBy: null, archivedAt: version.archivedAt ?? null })),
+      ...(slot.draft ? [{ number: slot.draft.number, label: `draft-${slot.draft.number}.${slot.draft.round}`, name: slot.draft.name, state: 'draft',
+        updatedAt: slot.draft.updatedAt, updatedBy: null, activatedAt: null, activatedBy: null, archivedAt: null }] : [])].sort((a, b) => b.number - a.number) : [] };
   }
   function aiSettings(input, current) {
     const violations = [];

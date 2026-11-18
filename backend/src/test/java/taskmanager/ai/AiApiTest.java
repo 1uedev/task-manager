@@ -111,13 +111,26 @@ class AiApiTest {
     static class UseController {
         private final AiRuns runs;
         private final PermissionContexts contexts;
+        private final PlatformTransactionManager transactions;
+        private final JdbcTemplate jdbc;
 
-        UseController(AiRuns runs, PermissionContexts contexts) {
+        UseController(AiRuns runs, PermissionContexts contexts, PlatformTransactionManager transactions, JdbcTemplate jdbc) {
             this.runs = runs;
             this.contexts = contexts;
+            this.transactions = transactions;
+            this.jdbc = jdbc;
         }
 
         record Body(String language, String goal, List<String> texts) {
+        }
+
+        /** A start from inside a transaction of the calling module that is rolled back afterwards (TASK-130, H2). */
+        @PostMapping("/api/v1/test-ai/{project}/{useCase}/outer")
+        Map<String, Object> startInsideTransaction(@PathVariable UUID project, @PathVariable String useCase, @RequestBody Body body) {
+            return new TransactionTemplate(transactions).execute(status -> {
+                jdbc.update("insert into test_outer_marker (id) values (?)", UUID.randomUUID());
+                return start(project, useCase, body);
+            });
         }
 
         @PostMapping("/api/v1/test-ai/{project}/{useCase}")
@@ -135,6 +148,8 @@ class AiApiTest {
     /** The guard of the ticket summary of this test, whose verdict a test can change (TASK-129, F8). */
     static class Guard implements AiSuggestionGuard {
         static volatile boolean valid = true;
+        /** The domain right to read the source object, apart from the source itself and from {@code ai.use} (TASK-130, F7). */
+        static volatile boolean readable = true;
 
         @Override
         public AiUseCase useCase() {
@@ -144,7 +159,7 @@ class AiApiTest {
         @Override
         public boolean stillValid(taskmanager.permissions.AccessContext actor, UUID projectId, String objectKind, UUID objectId, Long objectVersion,
                 String referencesJson) {
-            return valid;
+            return valid && readable;
         }
     }
 
@@ -162,6 +177,7 @@ class AiApiTest {
         STUB.reset();
         OTHER.reset();
         Guard.valid = true;
+        Guard.readable = true;
     }
 
     // ---------------------------------------------------------------- the providers of this test
@@ -1168,6 +1184,16 @@ class AiApiTest {
         assertEquals("ai.source_changed", changed.get("invalid").asString());
         Guard.valid = true;
         assertFalse(agent.get("/api/v1/ai/runs/" + summary).json().get("content").isNull());
+
+        // TASK-130, F7: the right to read the source is withdrawn while the source itself is unchanged and ai.use stays.
+        Guard.readable = false;
+        JsonNode withdrawn = agent.get("/api/v1/ai/runs/" + summary).json();
+        assertTrue(withdrawn.get("content").isNull());
+        assertEquals("ai.source_changed", withdrawn.get("invalid").asString());
+        assertEquals(200, agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary", body, null).status(),
+            "ai.use is still held, only the domain right is gone");
+        Guard.readable = true;
+        assertFalse(agent.get("/api/v1/ai/runs/" + summary).json().get("content").isNull());
     }
 
     @Test
@@ -1184,6 +1210,11 @@ class AiApiTest {
         answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}]}", "ai.invalid_output");
         answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}], \"open\": [], \"extra\": 1}", "ai.invalid_output");
         answers.put("{\"state\": [], \"open\": []}", "ai.invalid_output");
+        // TASK-130, F5: backticks inside a JSON string belong to the value, with and without the one allowed outer block.
+        String code = "{\"state\": [{\"text\": \"Aufruf ```java x()``` im Code\", \"sources\": [\"S1\"]}], \"open\": []}";
+        answers.put(code, "succeeded");
+        answers.put("```json\n" + code + "\n```", "succeeded");
+        answers.put("```json\n" + code + "\n```\n```json\n" + code + "\n```", "ai.invalid_output");
         answers.put("{\"state\": [{\"text\": \"x\", \"sources\": [\"S9\"]}], \"open\": []}", "ai.unknown_source");
         for (Map.Entry<String, String> entry : answers.entrySet()) {
             STUB.reset();
@@ -1246,6 +1277,10 @@ class AiApiTest {
         assertEquals(412, admin.send("POST", slot + "/activate", null, first.etag()).status(), "activating through an old tag");
 
         assertEquals(200, admin.send("DELETE", slot + "/draft", null, second.etag()).status());
+        // TASK-130, F6: a discarded draft is no version of the list; the states of the contract are all there is.
+        for (JsonNode version : admin.get(slot).json().get("versions")) {
+            assertTrue(List.of("draft", "active", "archived").contains(version.get("state").asString()), version.toString());
+        }
         Response fresh = admin.send("PUT", slot + "/draft", Map.of("name", "B", "content", "Three."), "\"none\"");
         assertEquals(200, fresh.status(), fresh.body());
         assertEquals(2, fresh.json().get("draft").get("number").asInt(), "the number of a discarded draft is not used again");
@@ -1347,5 +1382,180 @@ class AiApiTest {
         assertEquals(403, portal.get("/api/v1/ai/admin/providers").status());
         assertEquals(403, portal.send("POST", "/api/v1/ai/admin/skills/ticket_summary/de/trial", Map.of("sample", "x", "goal", "x"), null).status());
         assertEquals(0, jdbc.queryForObject("select count(*) from ai_run where account_id = ?", Integer.class, portalId));
+    }
+
+    // ---------------------------------------------------------------- TASK-130
+
+    @Test
+    void existingAccessesAreCheckedAgainstTodaysRulesBeforeEveryCall() throws InterruptedException {
+        Setup setup = setup("openai");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        // The state a TASK-125 installation has after V0068: a stored key bound to the address and CA the row has now.
+        String bind = "update ai_provider set base_url = ?, data_path = ?, key_target = "
+            + "encode(sha256(convert_to(? || chr(10) || coalesce(ca_certificate, ''), 'UTF8')), 'hex') where id = ?";
+        OTHER.reset();
+        String plainElsewhere = "http://localhost:" + port(OTHER);
+        for (String[] row : new String[][] { { plainElsewhere, "external" }, { plainElsewhere.replace("localhost", "127.0.0.2"), "local" },
+                { "https://api.openai.com", "local" }, { "https://api.openai.com/v1/", "external" } }) {
+            jdbc.update(bind, row[0], row[1], row[0], setup.provider());
+            String name = row[0] + " " + row[1];
+            assertFalse(OTHER.seen.stream().anyMatch(s -> s.authorization() != null), name);
+
+            JsonNode status = useCase(setup.admin().get("/api/v1/ai/status").json(), "ticket_summary");
+            assertFalse(status.get("available").asBoolean(), name);
+            assertEquals("ai.address_not_allowed", status.get("reason").asString(), name);
+            assertEquals("ai.address_not_allowed", setup.admin().send("POST", "/api/v1/ai/admin/providers/" + setup.provider() + "/check", null, null)
+                .json().get("code").asString(), name);
+            assertEquals("ai.address_not_allowed", setup.admin().send("POST", "/api/v1/ai/admin/models/" + setup.model() + "/check", null, null)
+                .json().get("code").asString(), name);
+            Response refused = agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+                Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null);
+            assertEquals(409, refused.status(), name + ": " + refused.body());
+            assertTrue(refused.body().contains("ai.address_not_allowed"), refused.body());
+        }
+        assertTrue(OTHER.seen.isEmpty(), "nothing was sent to the new target");
+        assertFalse(sawKey(OTHER, API_KEY));
+
+        // The address the application itself offers (OpenAI here) works again, with the key it was stored for.
+        jdbc.update(bind, "http://localhost:" + port(STUB), "external", "http://localhost:" + port(STUB), setup.provider());
+        assertTrue(setup.admin().send("POST", "/api/v1/ai/admin/providers/" + setup.provider() + "/check", null, null).json().get("ok").asBoolean());
+        assertEquals("succeeded", finished(agent, runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null))).get("state").asString());
+    }
+
+    @Test
+    void aKeyThatOnlyTheDecodingOrTheCleaningMakesVisibleIsNeverKept(CapturedOutput output) throws InterruptedException {
+        Setup setup = setup("openai");
+        List<String> texts = List.of(
+            // a JSON escape for the first letter
+            "Der Schlüssel \\u0073k-test-7f3a9c41 steht hier",
+            // a control character that the cleaning removes joins the parts
+            "sk-test-\\u00017f3a9c41",
+            // the key in the name of a field is not kept either
+            "x");
+        for (int i = 0; i < texts.size(); i++) {
+            String answer = i < 2
+                ? "{\"state\": [{\"text\": \"" + texts.get(i) + "\", \"sources\": [\"S1\"]}], \"open\": []}"
+                : "{\"state\": [{\"text\": \"x\", \"sources\": [\"S1\"]}], \"open\": [{\"text\": \"" + "\\u0073k-test-7f3a9c41\", \"sources\": []}]}";
+            STUB.reset();
+            STUB.answer = answer;
+            UUID run = runId(trial(setup.admin(), "Fehler DEMO-42"));
+            JsonNode result = finished(setup.admin(), run);
+            assertEquals("failed", result.get("state").asString(), answer + " " + result);
+            assertEquals("ai.invalid_output", result.get("code").asString(), answer);
+            assertFalse(result.toString().contains(API_KEY));
+            assertEquals(0, jdbc.queryForObject("select count(*) from ai_suggestion where run_id = ?", Integer.class, run), answer);
+        }
+        assertFalse(output.getAll().contains(API_KEY));
+        // A harmless answer still passes.
+        STUB.reset();
+        assertEquals("succeeded", finished(setup.admin(), runId(trial(setup.admin(), "Fehler DEMO-42"))).get("state").asString());
+    }
+
+    @Test
+    void returningToTheBuiltInSkillNeverMakesAnOldSuggestionValidAgain() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        String slot = "/api/v1/ai/admin/skills/ticket_summary/de";
+        UUID old = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null));
+        assertEquals("succeeded", finished(agent, old).get("state").asString());
+        assertFalse(agent.get("/api/v1/ai/runs/" + old).json().get("content").isNull(), "before the activation");
+
+        Response draft = setup.admin().send("PUT", slot + "/draft", Map.of("name", "Eigen", "content", "Eigen."), setup.admin().get(slot).etag());
+        assertEquals(200, setup.admin().send("POST", slot + "/activate", null, draft.etag()).status());
+        assertEquals("ai.configuration_changed", agent.get("/api/v1/ai/runs/" + old).json().get("invalid").asString(), "after the activation");
+
+        assertEquals(200, setup.admin().send("POST", slot + "/restore", null, null).status());
+        JsonNode restored = agent.get("/api/v1/ai/runs/" + old).json();
+        assertTrue(restored.get("content").isNull(), "after returning to the built-in skill the same label applies again, the stamp does not");
+        assertEquals("ai.configuration_changed", restored.get("invalid").asString());
+        assertEquals("builtin-1", restored.get("skillVersion").asString());
+    }
+
+    @Test
+    void aCancellationTakenInBeforeTheCallStopsTheExecutionBeforeAnythingIsSent() throws Exception {
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        Map<String, Object> body = Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42"));
+        String start = "/api/v1/test-ai/" + project + "/ticket_summary";
+        STUB.hold();
+        UUID first = runId(agent.send("POST", start, body, null));
+        STUB.awaitHeld();
+        UUID second = runId(agent.send("POST", start, body, null));
+        assertEquals(1, STUB.generations().size());
+        try (java.sql.Connection lock = dataSource.getConnection()) {
+            lock.setAutoCommit(false);
+            try (java.sql.Statement statement = lock.createStatement()) {
+                // The worker of the second execution stops at its read of the selection of the skill, after its checks began.
+                statement.execute("lock table ai_skill_selection in access exclusive mode");
+            }
+            assertEquals(200, agent.send("DELETE", "/api/v1/ai/runs/" + first, null, null).status());
+            assertEquals("cancelled:null", runState(first));
+            waitUntilWaitingForTheLock();
+            Response cancelled = agent.send("DELETE", "/api/v1/ai/runs/" + second, null, null);
+            assertEquals(200, cancelled.status(), cancelled.body());
+            lock.rollback();
+        }
+        String outcome = runState(second);
+        assertTrue(outcome.startsWith("cancelled") || outcome.startsWith("failed"), outcome);
+        Thread.sleep(300);
+        assertEquals(1, STUB.generations().size(), "nothing was sent for the execution that was cancelled before its call");
+    }
+
+    private void waitUntilWaitingForTheLock() throws InterruptedException {
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < until) {
+            Integer waiting = jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock' "
+                + "and query like '%ai_skill_selection%' and pid <> pg_backend_pid()", Integer.class);
+            if (waiting != null && waiting > 0) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("no execution waited at the held lock");
+    }
+
+    @Test
+    void aRefusalStaysWhenTheTransactionOfTheCallingModuleIsRolledBack() {
+        jdbc.execute("create table if not exists test_outer_marker (id uuid primary key)");
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        int before = jdbc.queryForObject("select count(*) from test_outer_marker", Integer.class);
+        Response refused = agent.send("POST", "/api/v1/test-ai/" + project + "/wiki_revision/outer",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null);
+        assertEquals(409, refused.status(), refused.body());
+        assertEquals(before, jdbc.queryForObject("select count(*) from test_outer_marker", Integer.class), "the outer change was rolled back");
+        Map<String, Object> run = jdbc.queryForMap("select state, code, provider_id, model_id from ai_run where account_id = ?", agent.id);
+        assertEquals("refused", run.get("state"));
+        assertEquals("ai.not_assigned", run.get("code"));
+        assertNull(run.get("provider_id"));
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_suggestion where run_id in (select id from ai_run where account_id = ?)",
+            Integer.class, agent.id));
+    }
+
+    @Test
+    void equalIpv6AddressesAreOneAddress() {
+        Browser admin = person(AdministrationRight.AI_MANAGE);
+        String first = null;
+        for (String spelling : List.of("https://[::1]:8443", "https://[0:0:0:0:0:0:0:1]:8443/", "https://[0000:0000:0000:0000:0000:0000:0000:0001]:8443",
+                "HTTPS://[::0001]:8443")) {
+            Response created = admin.send("POST", "/api/v1/ai/admin/providers",
+                access("ollama", "Sechs " + COUNTER.incrementAndGet(), spelling, null, "local"), null);
+            assertEquals(201, created.status(), spelling + ": " + created.body());
+            String url = created.json().get("baseUrl").asString();
+            assertEquals("https://[::1]:8443", url, spelling);
+            first = first == null ? url : first;
+        }
+        assertEquals(400, admin.send("POST", "/api/v1/ai/admin/providers",
+            access("ollama", "Sechs " + COUNTER.incrementAndGet(), "https://[1:2:3]:8443", null, "local"), null).status());
     }
 }

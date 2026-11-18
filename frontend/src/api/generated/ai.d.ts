@@ -14,7 +14,7 @@ export interface paths {
         /**
          * Verfügbarkeit der Anwendungsfälle und heutige Nutzung
          * @description Für jeden der vier Anwendungsfälle, ob er nutzbar ist, sonst der Grund (`ai.not_assigned`, `ai.disabled`,
-         *     `ai.provider_disabled`, `ai.model_disabled`, `ai.key_missing`, `ai.secret_key_missing`), dazu Name, Art und
+         *     `ai.provider_disabled`, `ai.model_disabled`, `ai.address_not_allowed`, `ai.key_missing`, `ai.secret_key_missing`), dazu Name, Art und
          *     Datenweg des Zugangs. `today` zählt die Ausführungen des Tages nach UTC.
          */
         get: operations["getAiStatus"];
@@ -489,7 +489,7 @@ export interface components {
              * @description Stabiler Grund eines Fehlers, etwa ai.timeout, ai.unreachable, ai.tls_failed, ai.redirect_refused,
              *     ai.auth_failed, ai.rate_limited, ai.model_unsuitable, ai.context_too_large, ai.output_too_long,
              *     ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.configuration_changed,
-             *     ai.account_deactivated, ai.request_invalid, ai.key_missing, ai.interrupted; bei `refused` der Grund der
+             *     ai.account_deactivated, ai.request_invalid, ai.address_not_allowed, ai.key_missing, ai.interrupted; bei `refused` der Grund der
              *     Ablehnung, etwa ai.not_assigned, ai.disabled, ai.daily_limit_person, ai.daily_limit_company, ai.busy oder
              *     ai.context_too_large.
              */
@@ -640,7 +640,10 @@ export interface components {
                 updatedBy: string | null;
             } | null;
             draftTag: string;
-            /** @description Aktive und archivierte Versionen, neueste zuerst; im Überblick leer. */
+            /**
+             * @description Entwurf, aktive und archivierte Versionen, neueste zuerst; im Überblick leer. Verworfene Entwurfsstände (`discarded`)
+             *     erscheinen hier nie, ihre Nummer wird aber nicht wieder vergeben.
+             */
             versions: {
                 number: number;
                 label: string;

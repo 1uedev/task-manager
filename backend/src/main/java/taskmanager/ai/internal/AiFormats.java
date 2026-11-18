@@ -146,7 +146,8 @@ final class AiFormats {
         String text = answer.strip();
         if (text.startsWith("```")) {
             Matcher fence = FENCE.matcher(text);
-            if (!fence.matches() || fence.group(1).contains("```")) {
+            // F5 (TASK-130): backticks inside a JSON string belong to the value; a second block fails as trailing content.
+            if (!fence.matches()) {
                 throw new Invalid("ai.invalid_output");
             }
             text = fence.group(1).strip();
@@ -166,6 +167,35 @@ final class AiFormats {
             }
             throw new Invalid("ai.invalid_output");
         }
+    }
+
+    /**
+     * Whether a text, a field name or any nested value of the cleaned answer holds the secret (TASK-130, F2). The check runs
+     * on the decoded and cleaned values, so a key written with JSON escapes or joined by the cleaning is found as well.
+     */
+    static boolean mentions(JsonNode node, String secret) {
+        if (node == null || secret == null || secret.isEmpty()) {
+            return false;
+        }
+        if (node.isString()) {
+            return node.asString().contains(secret);
+        }
+        if (node.isObject()) {
+            for (java.util.Map.Entry<String, JsonNode> entry : node.properties()) {
+                if (entry.getKey().contains(secret) || mentions(entry.getValue(), secret)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (node.isArray()) {
+            for (JsonNode element : node) {
+                if (mentions(element, secret)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** An object with exactly these fields, each present; nothing else. */

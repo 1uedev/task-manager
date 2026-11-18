@@ -345,6 +345,8 @@ public class ConfigService {
             reason = "ai.provider_disabled";
         } else if (!model.enabled()) {
             reason = "ai.model_disabled";
+        } else if (!addressAllowed(provider)) {
+            reason = "ai.address_not_allowed";
         } else if ((provider.keyRequired() && !provider.keySet())
                 || (provider.keySet() && !provider.currentTarget().equals(provider.keyTarget()))) {
             reason = "ai.key_missing";
@@ -352,6 +354,32 @@ public class ConfigService {
             reason = "ai.secret_key_missing";
         }
         return new Availability(useCase, reason == null, reason, provider, model);
+    }
+
+    /**
+     * Whether a stored access may still be used under today's rules for addresses and data paths (TASK-130, F1). Rows written
+     * before the rules or under another release of plain http hosts get no call, not even without a key: the address must be
+     * canonical, the hosts of OpenAI and Anthropic never count as local, and plain http needs the local data path and a host
+     * the operation released.
+     */
+    boolean addressAllowed(AiProvider provider) {
+        AiTargets.Canonical stored = AiTargets.canonical(provider.baseUrl());
+        if (stored == null || !stored.url().equals(provider.baseUrl())) {
+            return false;
+        }
+        boolean local = provider.dataPath() == AiProvider.DataPath.LOCAL;
+        AiTargets.Canonical anthropic = AiTargets.canonical(properties.anthropicUrl());
+        AiTargets.Canonical openai = AiTargets.canonical(properties.openaiUrl());
+        if (provider.kind() == AiProvider.Kind.ANTHROPIC) {
+            return !local && stored.url().equals(anthropic.url());
+        }
+        if (provider.kind() == AiProvider.Kind.OPENAI && stored.url().equals(openai.url())) {
+            return !local;
+        }
+        if (stored.external() && local) {
+            return false;
+        }
+        return stored.https() || (local && stored.released(properties.plainHttpHosts()));
     }
 
     /** No call is possible: a key is missing or does not open. */
@@ -368,6 +396,9 @@ public class ConfigService {
      * the address and CA it was stored for (TASK-129, F1); for any other target it counts as missing.
      */
     String key(AiProvider provider) {
+        if (!addressAllowed(provider)) {
+            throw new Unavailable("ai.address_not_allowed");
+        }
         if (provider.keySet() && !provider.currentTarget().equals(provider.keyTarget())) {
             throw new Unavailable("ai.key_missing");
         }
