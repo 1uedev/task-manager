@@ -290,6 +290,9 @@ function ProviderForm({ provider, onCancel, onSaved, onConflict }: {
   const dirty = name !== (provider?.name ?? '') || baseUrl !== initialUrl || apiKey !== '' || removeKey || ca !== (provider?.caCertificate ?? '')
     || enabled !== (provider?.enabled ?? true) || (ownUrl && dataPath !== (provider?.dataPath ?? 'external'));
   useUnsavedGuard(dirty);
+  // TASK-129, F1: a stored key stays only with its address and CA.
+  const keyDropped = provider !== null && provider.keySet && apiKey === '' && !removeKey && kind !== 'anthropic'
+    && (baseUrl.trim() !== initialUrl || ca.trim() !== (provider.caCertificate ?? '').trim());
 
   useEffect(() => {
     first.current?.querySelector<HTMLElement>('select, input')?.focus();
@@ -340,7 +343,8 @@ function ProviderForm({ provider, onCancel, onSaved, onConflict }: {
       )}
       {error('dataPath') && <p className="field-error" role="alert">{error('dataPath')}</p>}
       <TextField label={t('ai.apiKey')} hint={provider?.keySet ? t('ai.apiKeyKeep') : t(kind === 'ollama' ? 'ai.apiKeyOptional' : 'ai.apiKeyHint')}
-        value={apiKey} onChange={setApiKey} maxLength={1000} type="password" error={error('apiKey')} autoComplete="new-password" />
+        value={apiKey} onChange={setApiKey} maxLength={500} type="password" error={error('apiKey')} autoComplete="new-password" />
+      {keyDropped && <p className="hint" role="status" data-testid="ai-key-dropped">{t('ai.keyDropped')}</p>}
       {provider?.keySet && (
         <label className="check"><input type="checkbox" checked={removeKey} onChange={(event) => setRemoveKey(event.target.checked)} />{t('ai.removeKey')}</label>
       )}
@@ -592,9 +596,10 @@ function Trial({ useCase, language, withDraft }: { readonly useCase: AiUseCase; 
       {run !== null && (
         <div role="status" data-testid="ai-trial-result">
           <p className="hint">
-            {run.state === 'succeeded' ? t('ai.trialDone', { label: run.skillVersion, model: run.modelKey })
-              : run.state === 'queued' || run.state === 'running' ? t('ai.trialRunning')
-                : t('ai.trialFailed', { reason: reason(run.code ?? run.state) })}
+            {run.state === 'succeeded' && run.invalid !== null ? t('ai.trialInvalid', { reason: reason(run.invalid) })
+              : run.state === 'succeeded' ? t('ai.trialDone', { label: run.skillVersion ?? '', model: run.modelKey ?? '' })
+                : run.state === 'queued' || run.state === 'running' ? t('ai.trialRunning')
+                  : t('ai.trialFailed', { reason: reason(run.code ?? run.state) })}
             {run.truncated && <> · {t('ai.truncated')}</>}
           </p>
           {run.content && <pre className="ai-output">{JSON.stringify(run.content, null, 2)}</pre>}
@@ -714,10 +719,11 @@ function Records({ round }: { readonly round: number }) {
             {runs.map((run) => (
               <tr key={run.id}>
                 <td>{formatDateTime(run.startedAt, language)}</td>
-                <td>{t(`ai.useCase.${run.useCase}` as MessageKey)} ({run.language}) · {run.skillVersion}</td>
+                <td>{t(`ai.useCase.${run.useCase}` as MessageKey)} ({run.language}) · {run.skillVersion ?? t('ai.noSkill')}</td>
                 <td>{t(run.kind === 'test' ? 'ai.kindTest' : 'ai.kindUse')}</td>
-                <td><code>{run.modelKey}</code> · {t(`ai.dataPath.${run.dataPath}` as MessageKey)}</td>
-                <td>{run.state === 'succeeded' ? t('ai.runSucceeded') : run.state === 'queued' || run.state === 'running' ? t('ai.trialRunning') : reason(run.code ?? run.state)}</td>
+                <td>{run.modelKey === null ? t('ai.noModel') : <><code>{run.modelKey}</code> · {t(`ai.dataPath.${run.dataPath ?? 'external'}` as MessageKey)}</>}</td>
+                <td>{run.state === 'succeeded' ? t('ai.runSucceeded') : run.state === 'queued' || run.state === 'running' ? t('ai.trialRunning')
+                  : run.state === 'refused' ? t('ai.refusedRun', { reason: reason(run.code) }) : reason(run.code ?? run.state)}</td>
               </tr>
             ))}
           </tbody>

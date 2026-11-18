@@ -1,17 +1,15 @@
 package taskmanager.ai.internal;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,9 +38,11 @@ public class ConfigService {
     private final AiAdapters adapters;
     private final Clock clock;
     private final TransactionTemplate transaction;
+    private final ApplicationEventPublisher events;
 
     ConfigService(AiStore store, AiAccess access, AiSecrets secrets, AiProperties properties, AiAdapters adapters, Clock clock,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions, ApplicationEventPublisher events) {
+        this.events = events;
         this.store = store;
         this.access = access;
         this.secrets = secrets;
@@ -112,8 +112,11 @@ public class ConfigService {
             throw ApiProblemException.of(409, "ai.provider_name_taken");
         }
         store.updateProvider(changed);
-        String operation = settings.apiKey() == null ? "provider.changed" : settings.apiKey().isEmpty() ? "provider.key_removed" : "provider.key_changed";
+        String operation = settings.apiKey() == null
+            ? (current.keySet() && !changed.keySet() ? "provider.key_dropped" : "provider.changed")
+            : settings.apiKey().isEmpty() ? "provider.key_removed" : "provider.key_changed";
         store.audit(companyId, "provider", id.toString(), operation, describe(changed), actor, now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return store.provider(companyId, id).orElseThrow();
     }
 
@@ -135,6 +138,7 @@ public class ConfigService {
         for (String useCase : store.clearAssignments(models, now, actor)) {
             store.audit(companyId, "assignment", useCase, "assignment.cleared", null, actor, now);
         }
+        events.publishEvent(new AiConfigurationChanged(companyId));
     }
 
     /** Asks the access for its models; changes nothing. */
@@ -200,6 +204,7 @@ public class ConfigService {
         }
         store.updateModel(changed);
         store.audit(companyId, "model", id.toString(), "model.changed", describe(changed), actor, now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return store.model(companyId, id).orElseThrow();
     }
 
@@ -217,6 +222,7 @@ public class ConfigService {
         for (String useCase : store.clearAssignments(List.of(id), now, actor)) {
             store.audit(companyId, "assignment", useCase, "assignment.cleared", null, actor, now);
         }
+        events.publishEvent(new AiConfigurationChanged(companyId));
     }
 
     /** Asks the access whether it offers the model; changes nothing. */
@@ -267,6 +273,7 @@ public class ConfigService {
         Assignment saved = new Assignment(useCase, modelId, enabled, current + 1, now, actor);
         store.saveAssignment(companyId, saved);
         store.audit(companyId, "assignment", useCase.key(), "assignment.changed", json(new AssignmentDescription(modelId, enabled)), actor, now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return saved;
     }
 
@@ -338,7 +345,8 @@ public class ConfigService {
             reason = "ai.provider_disabled";
         } else if (!model.enabled()) {
             reason = "ai.model_disabled";
-        } else if (provider.keyRequired() && !provider.keySet()) {
+        } else if ((provider.keyRequired() && !provider.keySet())
+                || (provider.keySet() && !provider.currentTarget().equals(provider.keyTarget()))) {
             reason = "ai.key_missing";
         } else if (provider.keySet() && !secrets.available()) {
             reason = "ai.secret_key_missing";
@@ -355,8 +363,14 @@ public class ConfigService {
         }
     }
 
-    /** The API key of an access in clear, only for the call itself; {@code null} for Ollama without key. */
+    /**
+     * The API key of an access in clear, only for the call itself; {@code null} for Ollama without key. A key opens only for
+     * the address and CA it was stored for (TASK-129, F1); for any other target it counts as missing.
+     */
     String key(AiProvider provider) {
+        if (provider.keySet() && !provider.currentTarget().equals(provider.keyTarget())) {
+            throw new Unavailable("ai.key_missing");
+        }
         if (!provider.keySet()) {
             if (provider.keyRequired()) {
                 throw new Unavailable("ai.key_missing");
@@ -389,18 +403,22 @@ public class ConfigService {
         }
         AiProvider.DataPath path = AiProvider.DataPath.of(s.dataPath());
         String baseUrl = null;
+        AiTargets.Canonical openai = AiTargets.canonical(properties.openaiUrl());
+        AiTargets.Canonical given = s.baseUrl() == null || s.baseUrl().isBlank() ? null : AiTargets.canonical(s.baseUrl());
         if (kind == AiProvider.Kind.ANTHROPIC) {
-            baseUrl = trimmed(properties.anthropicUrl());
+            baseUrl = AiTargets.canonical(properties.anthropicUrl()).url();
             path = AiProvider.DataPath.EXTERNAL;
         } else if (kind == AiProvider.Kind.OPENAI && (s.baseUrl() == null || s.baseUrl().isBlank()
-                || trimmed(s.baseUrl().strip()).equals(trimmed(properties.openaiUrl())))) {
-            baseUrl = trimmed(properties.openaiUrl());
+                || (given != null && given.url().equals(openai.url())))) {
+            baseUrl = openai.url();
             path = AiProvider.DataPath.EXTERNAL;
         } else if (kind != null) {
-            if (path == null) {
+            if (given != null && given.external() && path == AiProvider.DataPath.LOCAL) {
+                violations.add("dataPath.invalid");
+            } else if (path == null) {
                 violations.add("dataPath.invalid");
             }
-            baseUrl = baseUrl(s.baseUrl(), path == AiProvider.DataPath.LOCAL);
+            baseUrl = address(given, path);
             if (baseUrl == null) {
                 violations.add("baseUrl.invalid");
             }
@@ -409,24 +427,41 @@ public class ConfigService {
         if (ca != null && (ca.length() > 20000 || AiHttp.certificates(ca).isEmpty())) {
             violations.add("caCertificate.invalid");
         }
-        if (s.apiKey() != null && (s.apiKey().length() > 1000 || s.apiKey().chars().anyMatch(Character::isISOControl))) {
+        String apiKey = s.apiKey() == null || s.apiKey().isEmpty() ? s.apiKey() : s.apiKey().strip();
+        if (apiKey != null && !apiKey.isEmpty() && !validKey(apiKey)) {
+            violations.add("apiKey.invalid");
+        } else if (apiKey != null && apiKey.isEmpty() && !s.apiKey().isEmpty()) {
             violations.add("apiKey.invalid");
         }
         if (!violations.isEmpty()) {
             throw ApiProblemException.withViolations(400, "request.invalid", violations);
         }
+        String target = AiTargets.target(baseUrl, ca);
         byte[] cipher = current == null ? null : current.keyCipher();
-        if (s.apiKey() != null) {
-            if (s.apiKey().isEmpty()) {
+        String keyTarget = current == null ? null : current.keyTarget();
+        if (apiKey == null) {
+            if (cipher != null && !target.equals(keyTarget)) {
+                // F1: a stored key never goes to another target than the one it was stored for.
                 cipher = null;
-            } else if (!secrets.available()) {
-                throw ApiProblemException.of(409, "ai.secret_key_missing");
-            } else {
-                cipher = secrets.seal(AiProvider.keyPurpose(id), s.apiKey().strip());
+                keyTarget = null;
             }
+        } else if (apiKey.isEmpty()) {
+            cipher = null;
+            keyTarget = null;
+        } else if (!secrets.available()) {
+            throw ApiProblemException.of(409, "ai.secret_key_missing");
+        } else {
+            cipher = secrets.seal(AiProvider.keyPurpose(id), apiKey);
+            keyTarget = target;
         }
         boolean enabled = s.enabled() != null ? s.enabled() : current == null || current.enabled();
-        return new AiProvider(id, companyId, kind, name, baseUrl, cipher, ca, path, enabled, version, createdAt, createdBy, now, actor, null);
+        return new AiProvider(id, companyId, kind, name, baseUrl, cipher, keyTarget, ca, path, enabled, version, createdAt, createdBy, now,
+            actor, null);
+    }
+
+    /** A key fits into a header: 1 to 500 visible ASCII characters (TASK-129, F2). */
+    static boolean validKey(String key) {
+        return key.length() <= 500 && key.chars().allMatch(c -> c >= 0x21 && c <= 0x7e);
     }
 
     private AiModel validated(UUID companyId, UUID id, UUID providerId, ModelSettings s, AiModel current, long version, Instant createdAt,
@@ -455,35 +490,18 @@ public class ConfigService {
         return new AiModel(id, companyId, providerId, name, key, context, output, enabled, version, createdAt, createdBy, now, actor, null);
     }
 
-    /** An address of an access: https, or http for a local data path; host, optional port and path, nothing else. */
-    private String baseUrl(String raw, boolean local) {
-        if (raw == null) {
+    /**
+     * The canonical address of an access (TASK-129, F3): https, or plain http only for a host the operation released in
+     * {@code TASK_MANAGER_AI_PLAIN_HTTP_HOSTS} and only with the local data path.
+     */
+    private String address(AiTargets.Canonical given, AiProvider.DataPath path) {
+        if (given == null) {
             return null;
         }
-        String text = trimmed(raw.strip());
-        if (text.length() < 8 || text.length() > 200) {
-            return null;
+        if (given.https()) {
+            return given.url();
         }
-        try {
-            URI uri = new URI(text);
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            boolean allowed = scheme.equals("https") || (scheme.equals("http") && (local || properties.allowHttp()));
-            if (!allowed || uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
-                    || !text.matches("(?i)https?://[A-Za-z0-9.\\-\\[\\]:]+(/[A-Za-z0-9._~\\-/]*)?")) {
-                return null;
-            }
-            return scheme + text.substring(scheme.length());
-        } catch (URISyntaxException invalid) {
-            return null;
-        }
-    }
-
-    private static String trimmed(String url) {
-        String result = url;
-        while (result.endsWith("/")) {
-            result = result.substring(0, result.length() - 1);
-        }
-        return result;
+        return path == AiProvider.DataPath.LOCAL && given.released(properties.plainHttpHosts()) ? given.url() : null;
     }
 
     static String clean(String text) {

@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 2 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 |---|---|---|---|
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-17 |
 | [TASK-125](#task-125-ki-grundlage-mit-anbietern-modellen-skills-grenzen-und-nachweis-a16-teil-1) | KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1) | claude-20261117-ai-01 | 2026-11-17 |
+| [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -118,7 +117,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-129 Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-aifix-01 · **Aktualisiert:** 2026-11-17
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261117-aifix-01 · **Aktualisiert:** 2026-11-17
 
 **Bezug:** REQ-AI-002, REQ-AI-003, REQ-AI-006, REQ-AI-007, REQ-AI-008, REQ-SEC-001; DEC-156, DEC-158; docs/REVIEW_TASK-125_PR-339.md; docs/AI_USE_CASES.md (Prüffälle A06, A07, A12 bis A14). **Abhängigkeiten:** TASK-125 auf main (PR #339). **Arbeitsstand:** Holger wählt am 17. November 2026 zur Codex Prüfung von TASK-125 (Empfehlung nachbessern) „Alles beheben als TASK-129“. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-158, Migration V0068.
 
@@ -147,7 +146,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Migration V0068, Vertrag, Backend Tests, `npm run verify` und alle Browsertests sind grün.
 3. Dokumentation und DEC-158 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** Umgesetzt auf claude/project-thread-av1na6 mit Migration V0068 (Schlüsselziel, Entwurfsrevision, Versionsstempel, abgelehnte Starts). F1 bis F12 und H1 bis H4 sind nach den Regeln 1 bis 16 behoben; die Gegenproben stehen in `AiApiTest` (unter anderem zwei nachgebaute Anbieter für die Schlüsselbindung, gehaltene Antwort mit Deaktivierung und Reaktivierung, Körper mit offenem Ende, wiederholter Abbruch wartender Ausführungen, gehaltene Beratungssperre der ersten Zuordnung, lokaler HTTPS Server mit eigener CA, echtes Portalkonto), `AiInternalsTest` (Kanonisierung, Schlüsselformat, Anfragefehler ohne Text) und `AiRecordsPageTest` (201 Einträge, Folgelink bei `limit=200`) sowie in den Browsertests `ai` (laufender Probelauf abbrechen, ungültiger Vorschlag, verworfener Schlüssel nach Adresswechsel, abgelehnter Start im Protokoll). Vertrag, backend/README.md (Abschnitt KI Grundlage mit H1) und DEC-158 beschreiben das Verhalten. Abweichung zur Prüfung: H1 bleibt bei Plätzen je Prozess, wie in DEC-158 festgehalten; über mehrere Webserver gilt die Zahl je Prozess.
+
+**Nächster Schritt:** Prüfung des Ergebnis PR (Codex), danach Holgers Abnahme von TASK-125 und TASK-129 und der Beginn von TASK-126.
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 

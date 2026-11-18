@@ -1,8 +1,8 @@
 package taskmanager.ai.internal;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.ProxySelector;
 import java.net.URI;
@@ -10,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -25,8 +26,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javax.net.ssl.SSLContext;
@@ -41,9 +44,11 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The only way the ai module talks to a provider (TASK-125, rule 5). It calls addresses the code builds from a registered
  * access, never one from an input; it never follows a redirect, always checks TLS with the certificates of the JVM plus the
- * own CA of the access, uses the proxy of the JVM, stops after the given time and reads at most 2 MB of an answer. A waiting
- * call ends when its thread is interrupted, which is how a person cancels. A failure carries a fixed code; texts of the
- * provider never reach a log or an answer.
+ * own CA of the access, uses the proxy of the JVM and reads at most 2 MB of an answer. One deadline covers the connection,
+ * the head and the whole body of the answer (TASK-129, F6): when it passes, the request and the reading of the body are
+ * cancelled. A waiting call ends when its thread is interrupted, which is how a person cancels. A failure carries a fixed
+ * code; texts of the provider never reach a log or an answer, and a request that cannot be built, for instance from a
+ * header value, fails without its text (F2).
  */
 @Component
 class AiHttp {
@@ -124,24 +129,28 @@ class AiHttp {
     // ------------------------------------------------------------------------------------------------ inside
 
     private HttpRequest.Builder request(String url, Map<String, String> headers, Duration timeout) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(timeout).header("Accept", "application/json")
-            .header("User-Agent", "task-manager");
-        headers.forEach(builder::header);
-        return builder;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(timeout).header("Accept", "application/json")
+                .header("User-Agent", "task-manager");
+            headers.forEach(builder::header);
+            return builder;
+        } catch (IllegalArgumentException invalid) {
+            // The text of the exception may quote a header value, that is the key; it is dropped (F2).
+            throw new Failure("ai.request_invalid", null);
+        }
     }
 
     private Answer send(AiProvider provider, HttpRequest request, Duration timeout) {
         HttpClient client = client(provider);
-        CompletableFuture<HttpResponse<InputStream>> pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream());
+        CompletableFuture<HttpResponse<byte[]>> pending;
         try {
-            HttpResponse<InputStream> response = pending.get(timeout.toMillis() + 1000, TimeUnit.MILLISECONDS);
-            byte[] body;
-            try (InputStream in = response.body()) {
-                body = in.readNBytes(MAX_BYTES + 1);
-            }
-            if (body.length > MAX_BYTES) {
-                throw new Failure("ai.unexpected_answer", null);
-            }
+            pending = client.sendAsync(request, info -> new LimitedBody());
+        } catch (IllegalArgumentException invalid) {
+            throw new Failure("ai.request_invalid", null);
+        }
+        try {
+            HttpResponse<byte[]> response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            byte[] body = response.body();
             if (response.statusCode() >= 300 && response.statusCode() < 400) {
                 throw new Failure("ai.redirect_refused", null);
             }
@@ -157,8 +166,56 @@ class AiHttp {
             throw new Failure("ai.cancelled", cancelled);
         } catch (ExecutionException failed) {
             throw failure(failed.getCause() == null ? failed : failed.getCause());
-        } catch (IOException failure) {
-            throw failure(failure);
+        }
+    }
+
+    /**
+     * Collects the body of an answer up to {@link #MAX_BYTES}; a longer body cancels the reading and fails. The body counts to
+     * the same deadline as the head, because the future of the call completes only with the whole body (F6).
+     */
+    static final class LimitedBody implements HttpResponse.BodySubscriber<byte[]> {
+        private final CompletableFuture<byte[]> result = new CompletableFuture<>();
+        private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+        private Flow.Subscription subscription;
+
+        @Override
+        public CompletionStage<byte[]> getBody() {
+            return result;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items) {
+            if (result.isDone()) {
+                return;
+            }
+            for (ByteBuffer item : items) {
+                int length = item.remaining();
+                if (out.size() + (long) length > MAX_BYTES) {
+                    subscription.cancel();
+                    result.completeExceptionally(new Failure("ai.unexpected_answer", null));
+                    return;
+                }
+                byte[] chunk = new byte[length];
+                item.get(chunk);
+                out.write(chunk, 0, length);
+            }
+            subscription.request(1);
+        }
+
+        @Override
+        public void onError(Throwable failure) {
+            result.completeExceptionally(failure);
+        }
+
+        @Override
+        public void onComplete() {
+            result.complete(out.toByteArray());
         }
     }
 

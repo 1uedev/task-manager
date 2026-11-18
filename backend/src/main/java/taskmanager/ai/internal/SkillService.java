@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import taskmanager.ai.AiUseCase;
@@ -16,7 +17,9 @@ import taskmanager.platform.ApiProblemException;
  * name; it grants nothing and runs nothing. An active version never changes: editing works on the one draft, which becomes
  * active only on an explicit activation, and the former active version is archived. Without an active version the built-in
  * skill of the application applies; "restore" archives the active version to return to it. Every change needs
- * {@code ai.manage} and the tag of the draft as it was shown, so two administrators never overwrite each other unnoticed.
+ * {@code ai.manage} and the tag of the draft as it was shown, so two administrators never overwrite each other unnoticed. The
+ * tag is the number of the draft and its revision, which every save counts up; a discarded draft keeps its row, so a tag is
+ * never valid twice (TASK-129, F11).
  */
 @Service
 public class SkillService {
@@ -26,11 +29,13 @@ public class SkillService {
     private final AiStore store;
     private final AiAccess access;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    SkillService(AiStore store, AiAccess access, Clock clock) {
+    SkillService(AiStore store, AiAccess access, Clock clock, ApplicationEventPublisher events) {
         this.store = store;
         this.access = access;
         this.clock = clock;
+        this.events = events;
     }
 
     /** The skill that applies: the active version of the company or the built-in one. */
@@ -90,10 +95,11 @@ public class SkillService {
                 now);
         } else {
             int number = store.nextSkillNumber(companyId, useCase, lang);
-            store.insertSkill(new SkillVersion(UUID.randomUUID(), companyId, useCase, lang, number, cleanName, text, SkillVersion.State.DRAFT, now,
-                actor, now, actor, null, null, null));
+            store.insertSkill(new SkillVersion(UUID.randomUUID(), companyId, useCase, lang, number, 1, cleanName, text, SkillVersion.State.DRAFT,
+                now, actor, now, actor, null, null, null));
             store.audit(companyId, "skill", slotId(useCase, lang), "skill.draft_created", ConfigService.json(new Numbered(number)), actor, now);
         }
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
     }
 
@@ -107,9 +113,11 @@ public class SkillService {
         if (!tag(draft).equals(expectedTag)) {
             throw ApiProblemException.of(412, "ai.version_conflict");
         }
-        store.deleteDraft(draft.id());
+        Instant now = clock.instant();
+        store.discardDraft(draft.id(), now, actor);
         store.audit(companyId, "skill", slotId(useCase, lang), "skill.draft_discarded", ConfigService.json(new Numbered(draft.number())), actor,
-            clock.instant());
+            now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
     }
 
@@ -127,6 +135,7 @@ public class SkillService {
         store.skill(companyId, useCase, lang, SkillVersion.State.ACTIVE).ifPresent(active -> store.archive(active.id(), now));
         store.activate(draft.id(), now, actor);
         store.audit(companyId, "skill", slotId(useCase, lang), "skill.activated", ConfigService.json(new Numbered(draft.number())), actor, now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
     }
 
@@ -141,6 +150,7 @@ public class SkillService {
         Instant now = clock.instant();
         store.archive(active.id(), now);
         store.audit(companyId, "skill", slotId(useCase, lang), "skill.restored", ConfigService.json(new Numbered(active.number())), actor, now);
+        events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
     }
 
@@ -173,7 +183,7 @@ public class SkillService {
     }
 
     static String tag(SkillVersion draft) {
-        return draft == null ? "none" : draft.number() + "-" + draft.updatedAt().toEpochMilli();
+        return draft == null ? "none" : draft.number() + "-" + draft.revision();
     }
 
     private static String slotId(AiUseCase useCase, String language) {

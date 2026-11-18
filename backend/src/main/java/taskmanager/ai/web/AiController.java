@@ -129,12 +129,12 @@ class AiController {
     record VersionBody(int number, String label, String name, String state, Instant updatedAt, UUID updatedBy, Instant activatedAt,
             UUID activatedBy, Instant archivedAt) {
         static VersionBody of(SkillVersion v) {
-            return new VersionBody(v.number(), v.state() == SkillVersion.State.DRAFT ? "draft-" + v.number() : "v" + v.number(), v.name(),
+            return new VersionBody(v.number(), v.label(), v.name(),
                 v.state().key(), v.updatedAt(), v.updatedBy(), v.activatedAt(), v.activatedBy(), v.archivedAt());
         }
     }
 
-    record DraftBody(int number, String name, String content, String tag, Instant updatedAt, UUID updatedBy) {
+    record DraftBody(int number, int revision, String name, String content, String tag, Instant updatedAt, UUID updatedBy) {
     }
 
     record SkillBody(String useCase, String language, AppliedBody applied, DraftBody draft, String draftTag, List<VersionBody> versions) {
@@ -143,7 +143,7 @@ class AiController {
             SkillService.Applied a = slot.applied();
             return new SkillBody(slot.useCase().key(), slot.language(),
                 new AppliedBody(a.label(), a.name(), full ? a.content() : null, a.builtin(), a.activatedAt()),
-                d == null ? null : new DraftBody(d.number(), d.name(), full ? d.content() : null, slot.draftTag(), d.updatedAt(), d.updatedBy()),
+                d == null ? null : new DraftBody(d.number(), d.revision(), d.name(), full ? d.content() : null, slot.draftTag(), d.updatedAt(), d.updatedBy()),
                 slot.draftTag(), full ? slot.versions().stream().map(VersionBody::of).toList() : List.of());
         }
     }

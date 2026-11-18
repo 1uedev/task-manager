@@ -47,26 +47,26 @@ class AiStore {
 
     void insertProvider(AiProvider p) {
         jdbc.sql("""
-                insert into ai_provider (id, company_id, kind, name, base_url, api_key_cipher, ca_certificate, data_path, enabled, version,
-                    created_at, created_by, updated_at, updated_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """).params(p.id(), p.companyId(), p.kind().key(), p.name(), p.baseUrl(), p.keyCipher(), p.caCertificate(), p.dataPath().key(),
+                insert into ai_provider (id, company_id, kind, name, base_url, api_key_cipher, key_target, ca_certificate, data_path, enabled,
+                    version, created_at, created_by, updated_at, updated_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(p.id(), p.companyId(), p.kind().key(), p.name(), p.baseUrl(), p.keyCipher(), p.keyTarget(), p.caCertificate(), p.dataPath().key(),
             p.enabled(), p.version(), ts(p.createdAt()), p.createdBy(), ts(p.updatedAt()), p.updatedBy()).update();
     }
 
     void updateProvider(AiProvider p) {
         jdbc.sql("""
-                update ai_provider set name = ?, base_url = ?, api_key_cipher = ?, ca_certificate = ?, data_path = ?, enabled = ?, version = ?,
-                    updated_at = ?, updated_by = ?
+                update ai_provider set name = ?, base_url = ?, api_key_cipher = ?, key_target = ?, ca_certificate = ?, data_path = ?, enabled = ?,
+                    version = ?, updated_at = ?, updated_by = ?
                 where id = ?
-                """).params(p.name(), p.baseUrl(), p.keyCipher(), p.caCertificate(), p.dataPath().key(), p.enabled(), p.version(),
+                """).params(p.name(), p.baseUrl(), p.keyCipher(), p.keyTarget(), p.caCertificate(), p.dataPath().key(), p.enabled(), p.version(),
             ts(p.updatedAt()), p.updatedBy(), p.id()).update();
     }
 
     void removeProvider(UUID id, long version, Instant now, UUID actor) {
         jdbc.sql("""
                 update ai_provider set removed_at = ?, removed_by = ?, version = ?, updated_at = ?, updated_by = ?, api_key_cipher = null,
-                    enabled = false
+                    key_target = null, enabled = false
                 where id = ?
                 """).params(ts(now), actor, version, ts(now), actor, id).update();
     }
@@ -133,7 +133,10 @@ class AiStore {
     }
 
     List<SkillVersion> skillVersions(UUID companyId, AiUseCase useCase, String language) {
-        return jdbc.sql("select * from ai_skill_version where company_id = ? and use_case = ? and language = ? order by number desc")
+        return jdbc.sql("""
+                select * from ai_skill_version where company_id = ? and use_case = ? and language = ? and state <> 'discarded'
+                order by number desc
+                """)
             .params(companyId, useCase.key(), language).query((rs, row) -> skill(rs)).list();
     }
 
@@ -154,20 +157,25 @@ class AiStore {
 
     void insertSkill(SkillVersion s) {
         jdbc.sql("""
-                insert into ai_skill_version (id, company_id, use_case, language, number, name, content, state, created_at, created_by,
-                    updated_at, updated_by)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """).params(s.id(), s.companyId(), s.useCase().key(), s.language(), s.number(), s.name(), s.content(), s.state().key(),
+                insert into ai_skill_version (id, company_id, use_case, language, number, revision, name, content, state, created_at,
+                    created_by, updated_at, updated_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).params(s.id(), s.companyId(), s.useCase().key(), s.language(), s.number(), s.revision(), s.name(), s.content(), s.state().key(),
             ts(s.createdAt()), s.createdBy(), ts(s.updatedAt()), s.updatedBy()).update();
     }
 
+    /** Saves the draft as its next revision. */
     void updateDraft(UUID id, String name, String content, Instant now, UUID actor) {
-        jdbc.sql("update ai_skill_version set name = ?, content = ?, updated_at = ?, updated_by = ? where id = ? and state = 'draft'")
-            .params(name, content, ts(now), actor, id).update();
+        jdbc.sql("""
+                update ai_skill_version set name = ?, content = ?, revision = revision + 1, updated_at = ?, updated_by = ?
+                where id = ? and state = 'draft'
+                """).params(name, content, ts(now), actor, id).update();
     }
 
-    void deleteDraft(UUID id) {
-        jdbc.sql("delete from ai_skill_version where id = ? and state = 'draft'").param(id).update();
+    /** Discards the draft; the row stays so its number is never used again (TASK-129, F11). */
+    void discardDraft(UUID id, Instant now, UUID actor) {
+        jdbc.sql("update ai_skill_version set state = 'discarded', updated_at = ?, updated_by = ? where id = ? and state = 'draft'")
+            .params(ts(now), actor, id).update();
     }
 
     void archive(UUID id, Instant now) {
@@ -191,7 +199,13 @@ class AiStore {
         return result;
     }
 
+    /**
+     * Serializes every change of the assignment of a use case, also the first one without a row, before its version is read
+     * (TASK-129, F10), and locks the row when there is one.
+     */
     Optional<Assignment> lockAssignment(UUID companyId, AiUseCase useCase) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtextextended(?, 0))").param("ai.assignment:" + companyId + ":" + useCase.key())
+            .query((rs, row) -> 1).single();
         return jdbc.sql("select * from ai_assignment where company_id = ? and use_case = ? for update").params(companyId, useCase.key())
             .query((rs, row) -> assignment(rs)).optional();
     }
@@ -241,11 +255,11 @@ class AiStore {
     void insertRun(Run r) {
         jdbc.sql("""
                 insert into ai_run (id, company_id, account_id, kind, use_case, language, project_id, object_kind, object_id, object_version,
-                    skill_version, provider_id, model_id, model_key, data_path, state, code, truncated, started_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    skill_version, provider_id, model_id, model_key, data_path, config_stamp, state, code, truncated, started_at, finished_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(r.id(), r.companyId(), r.accountId(), r.kind(), r.useCase().key(), r.language(), r.projectId(), r.objectKind(),
-            r.objectId(), r.objectVersion(), r.skillVersion(), r.providerId(), r.modelId(), r.modelKey(), r.dataPath(), r.state(), r.code(),
-            r.truncated(), ts(r.startedAt())).update();
+            r.objectId(), r.objectVersion(), r.skillVersion(), r.providerId(), r.modelId(), r.modelKey(), r.dataPath(), r.configStamp(), r.state(),
+            r.code(), r.truncated(), ts(r.startedAt()), ts(r.finishedAt())).update();
     }
 
     Optional<Run> run(UUID id) {
@@ -269,16 +283,28 @@ class AiStore {
                 """).params(state, code, truncated, inputTokens, outputTokens, ts(now), id).update() == 1;
     }
 
+    /** Locks the open runs of an account and ends them with a code; returns their identifiers (TASK-129, F5). */
+    List<UUID> failOpenOf(UUID accountId, String code, Instant now) {
+        List<UUID> open = jdbc.sql("select id from ai_run where account_id = ? and state in ('queued', 'running') order by id for update")
+            .param(accountId).query(UUID.class).list();
+        if (!open.isEmpty()) {
+            jdbc.sql("update ai_run set state = 'failed', code = :code, finished_at = :now where id in (:ids)").param("code", code)
+                .param("now", ts(now)).param("ids", open).update();
+        }
+        return open;
+    }
+
     void requestCancel(UUID id) {
         jdbc.sql("update ai_run set cancel_requested = true where id = ? and state in ('queued', 'running')").param(id).update();
     }
 
+    /** The executions since a time that count against the daily limits; refused starts never count (TASK-129, F12). */
     long countSince(UUID companyId, UUID accountId, Instant from) {
         if (accountId == null) {
-            return jdbc.sql("select count(*) from ai_run where company_id = ? and started_at >= ?").params(companyId, ts(from))
+            return jdbc.sql("select count(*) from ai_run where company_id = ? and started_at >= ? and state <> 'refused'").params(companyId, ts(from))
                 .query(Long.class).single();
         }
-        return jdbc.sql("select count(*) from ai_run where company_id = ? and account_id = ? and started_at >= ?")
+        return jdbc.sql("select count(*) from ai_run where company_id = ? and account_id = ? and started_at >= ? and state <> 'refused'")
             .params(companyId, accountId, ts(from)).query(Long.class).single();
     }
 
@@ -297,7 +323,7 @@ class AiStore {
                 select (started_at at time zone 'UTC')::date as day, use_case, count(*) as runs,
                     count(*) filter (where state = 'succeeded') as succeeded,
                     coalesce(sum(input_tokens), 0) as input_tokens, coalesce(sum(output_tokens), 0) as output_tokens
-                from ai_run where company_id = ? and started_at >= ?
+                from ai_run where company_id = ? and started_at >= ? and state <> 'refused'
                 group by 1, 2 order by 1 desc, 2
                 """).params(companyId, ts(from))
             .query((rs, row) -> new Usage(rs.getObject("day", LocalDate.class), rs.getString("use_case"), rs.getLong("runs"),
@@ -353,7 +379,7 @@ class AiStore {
 
     private static AiProvider provider(ResultSet rs) throws SQLException {
         return new AiProvider(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), AiProvider.Kind.of(rs.getString("kind")),
-            rs.getString("name"), rs.getString("base_url"), rs.getBytes("api_key_cipher"), rs.getString("ca_certificate"),
+            rs.getString("name"), rs.getString("base_url"), rs.getBytes("api_key_cipher"), rs.getString("key_target"), rs.getString("ca_certificate"),
             AiProvider.DataPath.of(rs.getString("data_path")), rs.getBoolean("enabled"), rs.getLong("version"), instant(rs, "created_at"),
             rs.getObject("created_by", UUID.class), instant(rs, "updated_at"), rs.getObject("updated_by", UUID.class), instant(rs, "removed_at"));
     }
@@ -367,7 +393,7 @@ class AiStore {
 
     private static SkillVersion skill(ResultSet rs) throws SQLException {
         return new SkillVersion(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class),
-            AiUseCase.of(rs.getString("use_case")).orElseThrow(), rs.getString("language"), rs.getInt("number"), rs.getString("name"),
+            AiUseCase.of(rs.getString("use_case")).orElseThrow(), rs.getString("language"), rs.getInt("number"), rs.getInt("revision"), rs.getString("name"),
             rs.getString("content"), SkillVersion.State.of(rs.getString("state")), instant(rs, "created_at"), rs.getObject("created_by", UUID.class),
             instant(rs, "updated_at"), rs.getObject("updated_by", UUID.class), instant(rs, "activated_at"), rs.getObject("activated_by", UUID.class),
             instant(rs, "archived_at"));
@@ -383,7 +409,8 @@ class AiStore {
             rs.getString("kind"), AiUseCase.of(rs.getString("use_case")).orElseThrow(), rs.getString("language"),
             rs.getObject("project_id", UUID.class), rs.getString("object_kind"), rs.getObject("object_id", UUID.class),
             (Long) rs.getObject("object_version"), rs.getString("skill_version"), rs.getObject("provider_id", UUID.class),
-            rs.getObject("model_id", UUID.class), rs.getString("model_key"), rs.getString("data_path"), rs.getString("state"), rs.getString("code"),
+            rs.getObject("model_id", UUID.class), rs.getString("model_key"), rs.getString("data_path"), rs.getString("config_stamp"),
+            rs.getString("state"), rs.getString("code"),
             rs.getBoolean("truncated"), (Integer) rs.getObject("input_tokens"), (Integer) rs.getObject("output_tokens"), instant(rs, "started_at"),
             instant(rs, "finished_at"), rs.getBoolean("cancel_requested"));
     }

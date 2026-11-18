@@ -4,8 +4,11 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
 
-/** A provider access of the company (TASK-125, rule 3). The API key is only ever held encrypted. */
-public record AiProvider(UUID id, UUID companyId, Kind kind, String name, String baseUrl, byte[] keyCipher, String caCertificate,
+/**
+ * A provider access of the company (TASK-125, rule 3). The API key is only ever held encrypted, together with the target it
+ * was stored for: the fingerprint of the canonical address and the own CA (TASK-129, F1). A key opens only for that target.
+ */
+public record AiProvider(UUID id, UUID companyId, Kind kind, String name, String baseUrl, byte[] keyCipher, String keyTarget, String caCertificate,
         DataPath dataPath, boolean enabled, long version, Instant createdAt, UUID createdBy, Instant updatedAt, UUID updatedBy,
         Instant removedAt) {
 
@@ -49,6 +52,11 @@ public record AiProvider(UUID id, UUID companyId, Kind kind, String name, String
 
     public boolean keySet() {
         return keyCipher != null;
+    }
+
+    /** The target of the current address and CA, which a stored key must match before it is used (TASK-129, F1). */
+    String currentTarget() {
+        return AiTargets.target(baseUrl, caCertificate);
     }
 
     public boolean removed() {

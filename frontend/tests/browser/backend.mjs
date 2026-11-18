@@ -155,9 +155,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // repositories each provider knows with the accounts they are hidden from, and the releases per project. Connecting
     // skips the provider: the authorize address leads straight back with a new page load with `connected`, or with `error` when the provider has `failWith`.
     // The AI foundation (TASK-125): accesses, models, assignments, limits, skills per use case and language, and executions.
-    // A trial ends at once; `aiAnswer` is the content of a successful one, `aiFail` the code of a failing one.
+    // A trial ends at once; `aiAnswer` is the content of a successful one, `aiFail` the code of a failing one. `aiHold` keeps a
+    // trial running until it is cancelled or `aiRelease` is called; `aiInvalid` names the reason a stored suggestion no longer
+    // counts (TASK-129, H3). `plainHttpHosts` are the hosts the operation releases for plain http.
     ai: { secretKey: true, providers: [], models: [], assignments: new Map(), limits: { personDaily: 50, companyDaily: 500, version: 0 }, skills: new Map(),
-      runs: [], aiAnswer: { state: [{ text: 'Bericht bricht mit DEMO-42 ab', sources: ['S1'] }], open: [] }, aiFail: null },
+      runs: [], aiAnswer: { state: [{ text: 'Bericht bricht mit DEMO-42 ab', sources: ['S1'] }], open: [] }, aiFail: null, aiHold: false, aiInvalid: null,
+      plainHttpHosts: ['localhost', '127.0.0.1', 'ollama:11434'] },
     git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [],
       links: [], limited: false },
     helpdesk: { secretKey: true, customers: [], contacts: [], mailboxes: [], messages: [], replies: [], ticketCustomers: new Map(),
@@ -3580,7 +3583,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const provider = model && ai.providers.find((entry) => entry.id === model.providerId && !entry.removed);
     if (!model || !provider) return { useCase, available: false, reason: 'ai.not_assigned', provider: null, model: null };
     const reason = requireEnabled && !assignment.enabled ? 'ai.disabled' : !provider.enabled ? 'ai.provider_disabled' : !model.enabled ? 'ai.model_disabled'
-      : provider.kind !== 'ollama' && !provider.apiKey ? 'ai.key_missing' : !ai.secretKey ? 'ai.secret_key_missing' : null;
+      : provider.kind !== 'ollama' && !provider.apiKey ? 'ai.key_missing' : provider.apiKey && !ai.secretKey ? 'ai.secret_key_missing' : null;
     return { useCase, available: reason === null, reason, provider: { id: provider.id, name: provider.name, kind: provider.kind, dataPath: provider.dataPath },
       model: { id: model.id, name: model.name, kind: null, dataPath: null }, modelKey: model.modelKey };
   }
@@ -3595,7 +3598,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     const builtin = { label: 'builtin-1', name: language === 'de' ? 'Mitgeliefert' : 'Built in', content: full ? `Mitgelieferter Skill für ${useCase}.` : null, builtin: true, activatedAt: null };
     const applied = active ? { label: `v${active.number}`, name: active.name, content: full ? active.content : null, builtin: false, activatedAt: active.activatedAt } : builtin;
     const draftTag = slot.draft ? `${slot.draft.number}-${slot.draft.round}` : 'none';
-    return { useCase, language, applied, draft: slot.draft && { number: slot.draft.number, name: slot.draft.name, content: full ? slot.draft.content : null, tag: draftTag,
+    return { useCase, language, applied, draft: slot.draft && { number: slot.draft.number, revision: slot.draft.round, name: slot.draft.name,
+      content: full ? slot.draft.content : null, tag: draftTag,
       updatedAt: slot.draft.updatedAt, updatedBy: null }, draftTag,
       versions: full ? [...slot.versions].sort((a, b) => b.number - a.number).map((version) => ({ number: version.number, label: `v${version.number}`, name: version.name,
         state: version.state, updatedAt: version.activatedAt, updatedBy: null, activatedAt: version.activatedAt, activatedBy: null, archivedAt: version.archivedAt ?? null })) : [] };
@@ -3606,18 +3610,43 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (!['openai', 'anthropic', 'ollama'].includes(kind)) violations.push('kind.invalid');
     const name = (input.name ?? '').trim();
     if (name === '' || name.length > 80) violations.push('name.invalid');
-    const own = (input.baseUrl ?? '').trim().replace(/\/+$/, '');
-    const baseUrl = kind === 'anthropic' ? 'https://api.anthropic.com' : own === '' ? (kind === 'openai' ? 'https://api.openai.com' : '') : own;
-    const custom = kind === 'ollama' || (kind === 'openai' && own !== '');
-    if (kind === 'ollama' && own === '') violations.push('baseUrl.invalid');
-    else if (own !== '' && !/^https?:\/\/[A-Za-z0-9.\-:]+(\/[A-Za-z0-9._~\-/]*)?$/.test(own)) violations.push('baseUrl.invalid');
+    // TASK-129, F3: the canonical address; http only for a released host with the local data path, OpenAI and Anthropic always
+    // external.
+    const canonical = (raw) => {
+      const found = /^(https?):\/\/([^/?#@\s:]+)(?::(\d{1,5}))?(\/[A-Za-z0-9._~\-/]*)?$/i.exec(raw);
+      if (!found) return null;
+      const scheme = found[1].toLowerCase();
+      let host;
+      try {
+        host = new URL(`${scheme}://${found[2].replace(/\.+$/, '')}`).hostname;
+      } catch {
+        return null;
+      }
+      const port = found[3] && Number(found[3]) !== (scheme === 'https' ? 443 : 80) ? Number(found[3]) : null;
+      const path = (found[4] ?? '').replace(/\/+$/, '');
+      return { url: `${scheme}://${host}${port ? `:${port}` : ''}${path}`, scheme, host, port: port ?? (scheme === 'https' ? 443 : 80) };
+    };
+    const raw = (input.baseUrl ?? '').trim();
+    const given = raw === '' ? null : canonical(raw);
+    const openai = kind === 'openai' && (raw === '' || given?.url === 'https://api.openai.com');
+    const custom = kind === 'ollama' || (kind === 'openai' && !openai);
+    const baseUrl = kind === 'anthropic' ? 'https://api.anthropic.com' : openai ? 'https://api.openai.com' : given?.url ?? '';
     const dataPath = custom ? input.dataPath : 'external';
     if (custom && !['local', 'external'].includes(input.dataPath)) violations.push('dataPath.invalid');
-    if (own.startsWith('http:') && dataPath !== 'local') violations.push('baseUrl.invalid');
-    const apiKey = input.apiKey === undefined || input.apiKey === null ? current?.apiKey ?? null : input.apiKey === '' ? null : input.apiKey.trim();
+    else if (custom && given && ['api.openai.com', 'api.anthropic.com'].includes(given.host) && dataPath === 'local') violations.push('dataPath.invalid');
+    if (custom && (given === null || (given.scheme === 'http'
+      && (dataPath !== 'local' || !(ai.plainHttpHosts.includes(given.host) || ai.plainHttpHosts.includes(`${given.host}:${given.port}`)))))) {
+      violations.push('baseUrl.invalid');
+    }
+    const key = input.apiKey === undefined || input.apiKey === null ? null : input.apiKey === '' ? '' : input.apiKey.trim();
+    if (key && !/^[\x21-\x7e]{1,500}$/.test(key)) violations.push('apiKey.invalid');
+    const caCertificate = input.caCertificate ?? null;
+    // TASK-129, F1: a stored key stays only with its address and CA.
+    const moved = current !== null && (current.baseUrl !== baseUrl || (current.caCertificate ?? null) !== caCertificate);
+    const apiKey = key === null ? (moved ? null : current?.apiKey ?? null) : key === '' ? null : key;
     if (kind !== 'ollama' && !apiKey && current === null) violations.push('apiKey.invalid');
     if (violations.length > 0) return { refused: problem(400, 'request.invalid', { violations }) };
-    return { kind, name, baseUrl, apiKey, caCertificate: input.caCertificate ?? null, dataPath, enabled: input.enabled ?? true };
+    return { kind, name, baseUrl, apiKey, caCertificate, dataPath, enabled: input.enabled ?? true };
   }
   function aiModelSettings(input, current) {
     const violations = [];
@@ -3634,7 +3663,14 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (violations.length > 0) return { refused: problem(400, 'request.invalid', { violations }) };
     return { providerId: current?.providerId ?? input.providerId, name, modelKey, contextTokens, outputTokens, enabled: input.enabled ?? true };
   }
-  const aiToday = (accountId) => ai.runs.filter((run) => accountId === null || run.accountId === accountId).length;
+  const aiToday = (accountId) => ai.runs.filter((run) => run.state !== 'refused' && (accountId === null || run.accountId === accountId)).length;
+  // TASK-129, F12: a refused start of an authorized person is recorded without access, model and skill.
+  const aiRefuse = (account, useCase, language, reason, answer) => {
+    ai.runs.unshift({ id: uuid(), kind: 'test', useCase, language, state: 'refused', code: reason, truncated: false, projectId: null, objectKind: null,
+      objectId: null, objectVersion: null, skillVersion: null, providerId: null, modelId: null, modelKey: null, dataPath: null, inputTokens: null,
+      outputTokens: null, startedAt: now(), finishedAt: now(), accountId: account.id, content: null, invalid: null });
+    return answer;
+  };
   function aiRoute(account, method, p, headers, query, body) {
     if (account.kind === 'portal') return problem(403, 'auth.forbidden');
     const manage = may(account, 'ai.manage');
@@ -3646,8 +3682,10 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (match) {
       const run = ai.runs.find((entry) => entry.id === match[1] && entry.accountId === account.id);
       if (!run) return problem(404, 'ai.run_not_found');
-      if (method === 'DELETE' && (run.state === 'queued' || run.state === 'running')) Object.assign(run, { state: 'cancelled', code: 'ai.cancelled', content: null });
-      return ok({ ...run, content: method === 'DELETE' ? null : run.content, invalid: null });
+      if (method === 'DELETE' && (run.state === 'queued' || run.state === 'running')) Object.assign(run, { state: 'cancelled', code: null, content: null, finishedAt: now() });
+      // As the server: a suggestion that no longer counts comes without content and with its reason.
+      const invalid = run.state === 'succeeded' && ai.aiInvalid ? ai.aiInvalid : null;
+      return ok({ ...run, content: method === 'DELETE' || invalid ? null : run.content, invalid });
     }
     if (!p.startsWith('/ai/admin/')) return problem(404, 'resource.not_found');
     if (!manage) return problem(403, 'auth.forbidden');
@@ -3754,19 +3792,22 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       };
       if (!action && method === 'GET') return answer();
       if (action === 'trial' && method === 'POST') {
-        const availability = aiAvailability(useCase, false);
-        if (!availability.available) return problem(409, 'ai.unavailable', { violations: [availability.reason] });
-        if (aiToday(account.id) >= ai.limits.personDaily) return problem(429, 'ai.daily_limit_person');
-        if (aiToday(null) >= ai.limits.companyDaily) return problem(429, 'ai.daily_limit_company');
         const sample = body.sample ?? '';
         if (sample.trim() === '' || sample.length > 20000) return problem(400, 'request.invalid', { violations: ['sample.invalid'] });
+        const availability = aiAvailability(useCase, false);
+        if (!availability.available) return aiRefuse(account, useCase, language, availability.reason, problem(409, 'ai.unavailable', { violations: [availability.reason] }));
+        if (aiToday(account.id) >= ai.limits.personDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_person', problem(429, 'ai.daily_limit_person'));
+        if (aiToday(null) >= ai.limits.companyDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_company', problem(429, 'ai.daily_limit_company'));
         const active = slot.versions.find((version) => version.state === 'active');
         const failed = ai.aiFail;
-        const run = { id: uuid(), kind: 'test', useCase, language, state: failed ? 'failed' : 'succeeded', code: failed, truncated: false, projectId: null, objectKind: null,
-          objectId: null, objectVersion: null, skillVersion: slot.draft ? `draft-${slot.draft.number}` : active ? `v${active.number}` : 'builtin-1',
+        const held = ai.aiHold;
+        // As the server: the run carries no sample, and a trial of a draft names its number and revision.
+        const run = { id: uuid(), kind: 'test', useCase, language, state: held ? 'running' : failed ? 'failed' : 'succeeded', code: held ? null : failed,
+          truncated: false, projectId: null, objectKind: null, objectId: null, objectVersion: null,
+          skillVersion: slot.draft ? `draft-${slot.draft.number}.${slot.draft.round}` : active ? `v${active.number}` : 'builtin-1',
           providerId: availability.provider.id, modelId: availability.model.id, modelKey: availability.modelKey, dataPath: availability.provider.dataPath,
-          inputTokens: failed ? null : 120, outputTokens: failed ? null : 30, startedAt: now(), finishedAt: now(), accountId: account.id,
-          content: failed ? null : ai.aiAnswer, sample };
+          inputTokens: held || failed ? null : 120, outputTokens: held || failed ? null : 30, startedAt: now(), finishedAt: held ? null : now(),
+          accountId: account.id, content: held || failed ? null : ai.aiAnswer };
         ai.runs.unshift(run);
         return { status: 202, body: { runId: run.id } };
       }
@@ -3804,7 +3845,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (p === '/ai/admin/usage' && method === 'GET') {
       const rows = new Map();
-      for (const run of ai.runs) {
+      for (const run of ai.runs.filter((entry) => entry.state !== 'refused')) {
         const key = `2026-10-21/${run.useCase}`;
         const row = rows.get(key) ?? { day: '2026-10-21', useCase: run.useCase, runs: 0, succeeded: 0, inputTokens: 0, outputTokens: 0 };
         row.runs += 1;
@@ -3816,7 +3857,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       return ok([...rows.values()]);
     }
     if (p === '/ai/admin/runs' && method === 'GET') {
-      return ok({ runs: ai.runs.map(({ sample, ...run }) => ({ ...run, content: null, invalid: null })), next: null });
+      const limit = Math.min(Math.max(Number.parseInt(query.get('limit') ?? '50', 10) || 50, 1), 200);
+      const before = query.get('before');
+      const from = before === null ? 0 : ai.runs.findIndex((run) => `${run.startedAt}_${run.id}` === before) + 1;
+      const page = ai.runs.slice(from, from + limit);
+      const next = ai.runs.length > from + limit ? `${page[page.length - 1].startedAt}_${page[page.length - 1].id}` : null;
+      return ok({ runs: page.map((run) => ({ ...run, content: null, invalid: null })), next });
     }
     return problem(404, 'resource.not_found');
   }

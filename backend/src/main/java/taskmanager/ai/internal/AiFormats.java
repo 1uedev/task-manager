@@ -2,7 +2,11 @@ package taskmanager.ai.internal;
 
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import taskmanager.ai.AiUseCase;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -10,12 +14,17 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The answer format of each use case and its validation (TASK-125, rule 8; prüffall A15). The application, not the skill,
- * decides the format. An answer is accepted only as one JSON object with the expected fields, types and lengths; unknown
- * fields are dropped, control characters other than line breaks and tabs removed, and a reference to a source that was not
- * passed refuses the whole answer. The stored suggestion holds only the cleaned fields and is always shown as plain text.
+ * decides the format. An answer is accepted only as exactly one JSON object without duplicate keys, surrounded by nothing but
+ * white space or one code block, with exactly the fields of its use case, each required, and their types, values and lengths
+ * (TASK-129, F9); control characters other than line breaks and tabs are removed, and a reference to a source that was not
+ * passed refuses the whole answer with its own code. The stored suggestion holds only the cleaned fields and is always shown
+ * as plain text.
  */
 final class AiFormats {
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final JsonMapper STRICT = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
+    private static final Pattern FENCE = Pattern.compile("```(?:json)?[ \\t]*\\r?\\n(.*)\\r?\\n[ \\t]*```", Pattern.DOTALL);
     static final List<String> FINDING_KINDS = List.of("unclear", "contradiction", "missing_criterion", "not_measurable", "other");
 
     private AiFormats() {
@@ -76,56 +85,77 @@ final class AiFormats {
         ObjectNode out = JSON.createObjectNode();
         switch (useCase) {
             case TICKET_SUMMARY -> {
-                out.set("state", points(root.path("state"), sourceIds));
-                out.set("open", points(root.path("open"), sourceIds));
+                fields(root, "state", "open");
+                ArrayNode state = points(root.get("state"), sourceIds);
+                if (state.isEmpty()) {
+                    throw new Invalid("ai.invalid_output");
+                }
+                out.set("state", state);
+                out.set("open", points(root.get("open"), sourceIds));
             }
             case REPLY_DRAFT -> {
-                out.put("body", required(root.path("body"), 20_000));
-                out.set("questions", texts(root.path("questions"), 20, 1000));
-                out.set("notes", texts(root.path("notes"), 20, 1000));
-                out.set("sources", sources(root.path("sources"), sourceIds));
+                fields(root, "body", "questions", "notes", "sources");
+                out.put("body", required(root.get("body"), 20_000));
+                out.set("questions", texts(root.get("questions"), 20, 1000));
+                out.set("notes", texts(root.get("notes"), 20, 1000));
+                out.set("sources", sources(root.get("sources"), sourceIds));
             }
             case REQUIREMENT_REVIEW -> {
-                JsonNode findings = root.path("findings");
+                fields(root, "findings");
+                JsonNode findings = root.get("findings");
                 if (!findings.isArray() || findings.size() > 30) {
                     throw new Invalid("ai.invalid_output");
                 }
                 ArrayNode list = out.putArray("findings");
                 for (JsonNode finding : findings) {
-                    String kind = optional(finding.path("kind"), 40);
+                    fields(finding, "kind", "location", "reason", "suggestion", "sources");
+                    String kind = required(finding.get("kind"), 40);
+                    if (!FINDING_KINDS.contains(kind)) {
+                        throw new Invalid("ai.invalid_output");
+                    }
                     ObjectNode item = list.addObject();
-                    item.put("kind", kind != null && FINDING_KINDS.contains(kind) ? kind : "other");
-                    item.put("location", required(finding.path("location"), 2000));
-                    item.put("reason", required(finding.path("reason"), 2000));
-                    String suggestion = optional(finding.path("suggestion"), 5000);
+                    item.put("kind", kind);
+                    item.put("location", required(finding.get("location"), 2000));
+                    item.put("reason", required(finding.get("reason"), 2000));
+                    String suggestion = optional(finding.get("suggestion"), 5000);
                     if (suggestion == null) {
                         item.putNull("suggestion");
                     } else {
                         item.put("suggestion", suggestion);
                     }
-                    item.set("sources", sources(finding.path("sources"), sourceIds));
+                    item.set("sources", sources(finding.get("sources"), sourceIds));
                 }
             }
             case WIKI_REVISION -> {
-                out.put("text", required(root.path("text"), 100_000));
-                out.set("notes", texts(root.path("notes"), 20, 1000));
+                fields(root, "text", "notes");
+                out.put("text", required(root.get("text"), 100_000));
+                out.set("notes", texts(root.get("notes"), 20, 1000));
             }
         }
         return out;
     }
 
-    /** The one JSON object of an answer, also when a model wrapped it in a code fence or a sentence. */
-    private static JsonNode object(String answer) {
+    /**
+     * The one JSON object of an answer: the whole text after white space, or the content of exactly one code block with the
+     * optional language {@code json}. Duplicate keys, trailing content and anything else refuse the answer.
+     */
+    static JsonNode object(String answer) {
         if (answer == null) {
             throw new Invalid("ai.invalid_output");
         }
-        int start = answer.indexOf('{');
-        int end = answer.lastIndexOf('}');
-        if (start < 0 || end <= start) {
+        String text = answer.strip();
+        if (text.startsWith("```")) {
+            Matcher fence = FENCE.matcher(text);
+            if (!fence.matches() || fence.group(1).contains("```")) {
+                throw new Invalid("ai.invalid_output");
+            }
+            text = fence.group(1).strip();
+        }
+        if (!text.startsWith("{")) {
             throw new Invalid("ai.invalid_output");
         }
         try {
-            JsonNode node = JSON.readTree(answer.substring(start, end + 1));
+            JsonNode node = STRICT.readTree(text);
             if (node == null || !node.isObject()) {
                 throw new Invalid("ai.invalid_output");
             }
@@ -138,30 +168,37 @@ final class AiFormats {
         }
     }
 
-    private static ArrayNode points(JsonNode node, Set<String> sourceIds) {
-        if (node.isMissingNode() || node.isNull()) {
-            return JSON.createArrayNode();
+    /** An object with exactly these fields, each present; nothing else. */
+    private static void fields(JsonNode node, String... names) {
+        if (node == null || !node.isObject() || node.size() != names.length) {
+            throw new Invalid("ai.invalid_output");
         }
+        for (String name : names) {
+            if (!node.has(name)) {
+                throw new Invalid("ai.invalid_output");
+            }
+        }
+    }
+
+    private static ArrayNode points(JsonNode node, Set<String> sourceIds) {
         if (!node.isArray() || node.size() > 20) {
             throw new Invalid("ai.invalid_output");
         }
         ArrayNode list = JSON.createArrayNode();
         for (JsonNode point : node) {
+            fields(point, "text", "sources");
             ObjectNode item = list.addObject();
-            item.put("text", required(point.path("text"), 1000));
-            item.set("sources", sources(point.path("sources"), sourceIds));
+            item.put("text", required(point.get("text"), 1000));
+            item.set("sources", sources(point.get("sources"), sourceIds));
         }
         return list;
     }
 
     private static ArrayNode texts(JsonNode node, int max, int length) {
-        ArrayNode list = JSON.createArrayNode();
-        if (node.isMissingNode() || node.isNull()) {
-            return list;
-        }
         if (!node.isArray() || node.size() > max) {
             throw new Invalid("ai.invalid_output");
         }
+        ArrayNode list = JSON.createArrayNode();
         for (JsonNode entry : node) {
             list.add(required(entry, length));
         }
@@ -169,15 +206,15 @@ final class AiFormats {
     }
 
     private static ArrayNode sources(JsonNode node, Set<String> sourceIds) {
-        ArrayNode list = JSON.createArrayNode();
-        if (node.isMissingNode() || node.isNull()) {
-            return list;
-        }
         if (!node.isArray() || node.size() > 50) {
             throw new Invalid("ai.invalid_output");
         }
+        ArrayNode list = JSON.createArrayNode();
         for (JsonNode entry : node) {
-            if (!entry.isString() || !sourceIds.contains(entry.asString())) {
+            if (!entry.isString()) {
+                throw new Invalid("ai.invalid_output");
+            }
+            if (!sourceIds.contains(entry.asString())) {
                 throw new Invalid("ai.unknown_source");
             }
             boolean seen = false;
