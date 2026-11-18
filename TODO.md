@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 3 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
 
 ### Blockiert – BLOCKIERT
 
@@ -149,6 +151,32 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** Umgesetzt auf claude/project-thread-av1na6 mit Migration V0068 (Schlüsselziel, Entwurfsrevision, Versionsstempel, abgelehnte Starts). F1 bis F12 und H1 bis H4 sind nach den Regeln 1 bis 16 behoben; die Gegenproben stehen in `AiApiTest` (unter anderem zwei nachgebaute Anbieter für die Schlüsselbindung, gehaltene Antwort mit Deaktivierung und Reaktivierung, Körper mit offenem Ende, wiederholter Abbruch wartender Ausführungen, gehaltene Beratungssperre der ersten Zuordnung, lokaler HTTPS Server mit eigener CA, echtes Portalkonto), `AiInternalsTest` (Kanonisierung, Schlüsselformat, Anfragefehler ohne Text) und `AiRecordsPageTest` (201 Einträge, Folgelink bei `limit=200`) sowie in den Browsertests `ai` (laufender Probelauf abbrechen, ungültiger Vorschlag, verworfener Schlüssel nach Adresswechsel, abgelehnter Start im Protokoll). Vertrag, backend/README.md (Abschnitt KI Grundlage mit H1) und DEC-158 beschreiben das Verhalten. Abweichung zur Prüfung: H1 bleibt bei Plätzen je Prozess, wie in DEC-158 festgehalten; über mehrere Webserver gilt die Zahl je Prozess.
 
 **Nächster Schritt:** Prüfung des Ergebnis PR (Codex), danach Holgers Abnahme von TASK-125 und TASK-129 und der Beginn von TASK-126.
+
+## TASK-130 Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261118-aifix-02 · **Aktualisiert:** 2026-11-18
+
+**Bezug:** REQ-AI-002, REQ-AI-003, REQ-AI-006, REQ-AI-007, REQ-AI-008, REQ-SEC-001; DEC-156, DEC-158, DEC-160; docs/REVIEW_TASK-129_PR-341.md; docs/AI_USE_CASES.md (Prüffälle A06, A07, A12 bis A14). **Abhängigkeiten:** TASK-129 auf main (PR #341). **Arbeitsstand:** Holger wählt am 17. November 2026 zur Codex Prüfung von TASK-129 (Empfehlung nachbessern) „Alles beheben als TASK-130“. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-160, Migration V0069.
+
+**Umfang:** Behebung der Befunde F1 bis F7 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-129_PR-341.md im Modul `ai`, seinem Vertrag, der Seite „KI“, dem Testersatz der Browsertests und der Dokumentation. Nicht Teil: die vier Anwendungsfälle (TASK-126, TASK-127), Prüfsatz, Demo und Lauf gegen echte Anbieter (TASK-128), weitere Anbieter oder Funktionen.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier F1 bis F7 und H1, H2):
+1. F1: Jeder bestehende Zugang wird vor jedem Aufruf nach den heutigen Adress- und Datenwegregeln geprüft (kanonische Adresse, unverschlüsseltes http nur für freigegebene Hosts mit dem Datenweg „lokal“, die Hosts von OpenAI und Anthropic nie „lokal“). Ein Zugang, der heute nicht mehr angelegt werden dürfte, gilt als nicht verfügbar; sein Schlüssel wird weder geöffnet noch versandt, auch nicht für die Modellliste und Prüfungen. Gegenprobe mit einer vor V0068 angelegten HTTP Zeile bei leerer Betreiberfreigabe und mit einem als „lokal“ gespeicherten Standardziel.
+2. F2: Vor dem Speichern werden auch die dekodierten und bereinigten Textwerte der endgültigen Ausgabe auf den verwendeten Schlüssel geprüft; ein Treffer ergibt `ai.invalid_output` ohne Antwortinhalt in Fehler und Nachweis. Gegenproben mit JSON Escapes und einer erst durch die Bereinigung zusammengesetzten Wiederholung.
+3. F3: Die Auswahl des geltenden Skills eines Anwendungsfalls und einer Sprache trägt eine monotone Revision, die in den Stempel eingeht und beim Aktivieren, Archivieren und Wiederherstellen nie zurückkehrt (Migration V0069). Dieselbe alte Lauf ID ist vor der Aktivierung gültig, nach der Aktivierung und nach der Wiederherstellung des eingebauten Skills ungültig.
+4. F4: Ein bereits bekannter Abbruch oder Interrupt wird vor dem Adapteraufruf und vor dem Start des HTTP Aufrufs beachtet; Benutzer und Konfigurationsabbruch nutzen denselben kontrollierten Übergang. Gegenprobe mit gehaltener Schlüsselphase: danach hat kein Anbieteraufruf begonnen.
+5. F5: Nach dem Entfernen genau eines äußeren Codeblocks wird dessen Inhalt nur mit dem strikten JSON Parser geprüft; Backticks innerhalb von JSON Zeichenketten bleiben erhalten, weitere äußere Blöcke scheitern weiter. Beide Fälle gemeinsam getestet.
+6. F6: Der Status `discarded` einer Skillversion ist in Vertrag, erzeugten Typen, Texten (Deutsch und Englisch), Seite und Testersatz durchgängig festgelegt; der Ablauf Speichern, Verwerfen, Versionsliste ist mit einer Serverantwort dieses Zustands im Browsertest geprüft.
+7. F7: Der Testguard erhält einen getrennten, veränderlichen Fachrechtewert; der Entzug des Fachrechts bei gültiger Quelle und bestehendem `ai.use` macht einen vorhandenen Vorschlag ohne Inhalt, getrennt vom Quellenfall.
+8. H1: IPv6 Literale werden einheitlich dargestellt (Adresse und Freigabeeintrag in derselben Form, ohne DNS Auflösung); `https://[::1]` und `https://[0:0:0:0:0:0:0:1]` sind dieselbe kanonische Adresse.
+9. H2: Ein Fachmodulaufruf aus einer bereits laufenden Transaktion, die nach der Ablehnung zurückgerollt wird, lässt den inhaltsfreien Ablehnungsnachweis bestehen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F7, H1 und H2 sind nach den Regeln behoben, mit den Gegenproben.
+2. Migration V0069, Vertrag, Backend Tests, `npm run verify` und alle Browsertests sind grün.
+3. Dokumentation und DEC-160 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 
