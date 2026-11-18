@@ -150,6 +150,20 @@ class AiStore {
             .params(companyId, useCase.key(), language, state.key()).query((rs, row) -> skill(rs)).optional();
     }
 
+    /** The selection counter of a slot (TASK-130, F3); 0 while nothing was ever activated or restored. */
+    long selection(UUID companyId, AiUseCase useCase, String language) {
+        return jdbc.sql("select selection from ai_skill_selection where company_id = ? and use_case = ? and language = ?")
+            .params(companyId, useCase.key(), language).query(Long.class).optional().orElse(0L);
+    }
+
+    /** Raises the counter; called with the skill lock held, whenever another skill starts to apply. */
+    void raiseSelection(UUID companyId, AiUseCase useCase, String language) {
+        jdbc.sql("""
+                insert into ai_skill_selection (company_id, use_case, language, selection) values (?, ?, ?, 1)
+                on conflict (company_id, use_case, language) do update set selection = ai_skill_selection.selection + 1
+                """).params(companyId, useCase.key(), language).update();
+    }
+
     int nextSkillNumber(UUID companyId, AiUseCase useCase, String language) {
         return jdbc.sql("select coalesce(max(number), 0) + 1 from ai_skill_version where company_id = ? and use_case = ? and language = ?")
             .params(companyId, useCase.key(), language).query(Integer.class).single();

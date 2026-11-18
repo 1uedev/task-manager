@@ -141,6 +141,10 @@ class AiHttp {
     }
 
     private Answer send(AiProvider provider, HttpRequest request, Duration timeout) {
+        if (Thread.currentThread().isInterrupted()) {
+            // TASK-130, F4: a caller that was already cancelled starts no call; nothing leaves the process.
+            throw new Failure("ai.cancelled", null);
+        }
         HttpClient client = client(provider);
         CompletableFuture<HttpResponse<byte[]>> pending;
         try {

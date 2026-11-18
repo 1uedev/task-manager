@@ -288,7 +288,7 @@ public class RunService implements AiRuns {
         UUID runId = UUID.randomUUID();
         AiProvider provider = availability.provider();
         AiModel model = availability.model();
-        String stamp = stamp(assignment, provider, model, applied.label());
+        String stamp = stamp(assignment, provider, model, applied.stampLabel());
         store.insertRun(new Run(runId, companyId, accountId, kind, request.useCase(), request.language(), request.projectId(), request.objectKind(),
             request.objectId(), request.objectVersion(), applied.label(), provider.id(), model.id(), model.modelKey(), provider.dataPath().key(),
             stamp, "queued", null, built.truncated(), null, null, now, null, false));
@@ -318,7 +318,7 @@ public class RunService implements AiRuns {
             return "ai.configuration_changed";
         }
         SkillService.Applied skill = use ? skills.applied(companyId, useCase, language) : skills.forTrial(companyId, useCase, language);
-        return stamp.equals(stamp(assignment, now.provider(), now.model(), skill.label())) ? null : "ai.configuration_changed";
+        return stamp.equals(stamp(assignment, now.provider(), now.model(), skill.stampLabel())) ? null : "ai.configuration_changed";
     }
 
     private String configurationChanged(Run run) {
@@ -382,6 +382,10 @@ public class RunService implements AiRuns {
         long started = System.nanoTime();
         try {
             String key = config.key(plan.provider());
+            if (task.abort != null || Thread.currentThread().isInterrupted()) {
+                // TASK-130, F4: a cancellation that was already taken in must stop the execution before anything is sent.
+                throw new AiHttp.Failure("ai.cancelled", null);
+            }
             AiAdapters.Completion completion = adapters.complete(plan.provider(), key, plan.model(), plan.prompt(), properties.timeout());
             ObjectNode content;
             try {
@@ -390,6 +394,10 @@ public class RunService implements AiRuns {
                     throw new AiFormats.Invalid("ai.invalid_output");
                 }
                 content = AiFormats.parse(plan.useCase(), completion.text(), new HashSet<>(plan.sourceIds()));
+                if (key != null && AiFormats.mentions(content, key)) {
+                    // TASK-130, F2: also what only the decoding or the cleaning turns into the key is never kept.
+                    throw new AiFormats.Invalid("ai.invalid_output");
+                }
             } catch (AiFormats.Invalid invalid) {
                 finish(plan.runId(), "failed", invalid.code(), completion);
                 LOG.info("AI run {} answered outside the format: {}", plan.runId(), invalid.code());

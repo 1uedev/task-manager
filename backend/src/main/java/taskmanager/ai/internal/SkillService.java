@@ -39,7 +39,11 @@ public class SkillService {
     }
 
     /** The skill that applies: the active version of the company or the built-in one. */
-    public record Applied(String label, String name, String content, boolean builtin, Instant activatedAt) {
+    public record Applied(String label, String name, String content, boolean builtin, Instant activatedAt, long selection) {
+        /** The label with the selection counter of its slot: a label that applies again later is a different stamp (TASK-130, F3). */
+        String stampLabel() {
+            return label + "@" + selection;
+        }
     }
 
     /** One use case and language: what applies, the draft and every stored version, newest first. */
@@ -134,6 +138,7 @@ public class SkillService {
         Instant now = clock.instant();
         store.skill(companyId, useCase, lang, SkillVersion.State.ACTIVE).ifPresent(active -> store.archive(active.id(), now));
         store.activate(draft.id(), now, actor);
+        store.raiseSelection(companyId, useCase, lang);
         store.audit(companyId, "skill", slotId(useCase, lang), "skill.activated", ConfigService.json(new Numbered(draft.number())), actor, now);
         events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
@@ -149,6 +154,7 @@ public class SkillService {
             .orElseThrow(() -> ApiProblemException.of(409, "ai.skill_builtin_applies"));
         Instant now = clock.instant();
         store.archive(active.id(), now);
+        store.raiseSelection(companyId, useCase, lang);
         store.audit(companyId, "skill", slotId(useCase, lang), "skill.restored", ConfigService.json(new Numbered(active.number())), actor, now);
         events.publishEvent(new AiConfigurationChanged(companyId));
         return slot(companyId, useCase, lang);
@@ -157,15 +163,16 @@ public class SkillService {
     /** What applies for an execution, read in the transaction of its start. */
     Applied applied(UUID companyId, AiUseCase useCase, String language) {
         return store.skill(companyId, useCase, language, SkillVersion.State.ACTIVE)
-            .map(active -> new Applied(active.label(), active.name(), active.content(), false, active.activatedAt()))
+            .map(active -> new Applied(active.label(), active.name(), active.content(), false, active.activatedAt(),
+                store.selection(companyId, useCase, language)))
             .orElseGet(() -> new Applied(BuiltinSkills.LABEL, BuiltinSkills.name(useCase, language), BuiltinSkills.content(useCase, language), true,
-                null));
+                null, store.selection(companyId, useCase, language)));
     }
 
     /** What a trial uses: the draft when there is one, otherwise what applies. */
     Applied forTrial(UUID companyId, AiUseCase useCase, String language) {
         return store.skill(companyId, useCase, language, SkillVersion.State.DRAFT)
-            .map(draft -> new Applied(draft.label(), draft.name(), draft.content(), false, null))
+            .map(draft -> new Applied(draft.label(), draft.name(), draft.content(), false, null, store.selection(companyId, useCase, language)))
             .orElseGet(() -> applied(companyId, useCase, language));
     }
 

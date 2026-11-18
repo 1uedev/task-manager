@@ -2,7 +2,6 @@ package taskmanager.ai.internal;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -47,12 +46,19 @@ public record AiProperties(
         if (running < 1 || waiting < 0 || contextCharacters < 1000) {
             throw new IllegalArgumentException("taskmanager.ai limits are out of range");
         }
-        plainHttpHosts = plainHttpHosts == null ? List.of() : plainHttpHosts.stream().map(String::strip).filter(host -> !host.isEmpty())
-            .map(host -> host.toLowerCase(Locale.ROOT)).toList();
-        for (String host : plainHttpHosts) {
-            if (!host.matches("(\\[[0-9a-f:.]+\\]|[a-z0-9]([a-z0-9.\\-]*[a-z0-9])?)(:[0-9]{1,5})?")) {
+        List<String> entries = new java.util.ArrayList<>();
+        for (String raw : plainHttpHosts == null ? List.<String>of() : plainHttpHosts) {
+            String host = raw.strip();
+            if (host.isEmpty()) {
+                continue;
+            }
+            // An IPv6 literal gets the same one form as an address (TASK-130, H1); names are lower case.
+            String entry = AiTargets.releasedEntry(host);
+            if (entry == null || !entry.matches("(\\[[0-9a-f:]+\\]|[a-z0-9]([a-z0-9.\\-]*[a-z0-9])?)(:[0-9]{1,5})?")) {
                 throw new IllegalArgumentException("TASK_MANAGER_AI_PLAIN_HTTP_HOSTS holds an invalid host: " + host);
             }
+            entries.add(entry);
         }
+        plainHttpHosts = List.copyOf(entries);
     }
 }
