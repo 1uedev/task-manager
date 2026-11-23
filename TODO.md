@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -391,3 +393,33 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. docs/BACKUP_RESTORE.md, TODO.md und DEC-165 entsprechen dem Code.
 
 **Nächster Schritt:** Codex prüft (Prüfauftrag /mnt/project-files/a18/codex-pruefauftrag-task-135.md), Holger nimmt TASK-131 und TASK-135 zusammen ab; danach TASK-133.
+
+## TASK-136 Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-opsfix-02 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166; docs/REVIEW_TASK-132_PR-347.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-132 auf main (PR #347), TASK-135 auf main (PR #348). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-132 (Empfehlung nachbessern) „Alles beheben als TASK-136“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-166, Migration V0072 nur falls nötig. F4 (Lesbarkeit hochgeladener Inhalte für den Sicherungsdienst) und der SFTP Nachweis aus H4 sind bereits mit TASK-135 (PR #348) umgesetzt und werden hier nur gegengeprüft.
+
+**Umfang:** Behebung der Befunde F1 bis F12 und der Hinweise H1 bis H4 aus docs/REVIEW_TASK-132_PR-347.md in der Schemaprüfung und den Einstiegen des Backends, der Betriebsvorlage `deploy/`, dem Sicherungsdienst, den Workflows „Release“ und „Update“, der Probe `tools/update` und in docs/INSTALL.md, docs/BACKUP_RESTORE.md und docs/OPERATIONS.md. Nicht Teil: Betriebsübersicht (TASK-133), Messung und Freigabe (TASK-134), weitere Proxys, Hochverfügbarkeit, eine tatsächliche Veröffentlichung.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier F1 bis F12 und H1 bis H4):
+1. F1: Nur der vom Einstieg gewählte Containerbefehl `migrate` darf Migrationen ausführen; keine Spring Eigenschaft und kein Schema Modus erteilt Webprozess, Ausführer oder anderen Befehlen diese Freigabe. Die Vorführung behält ihr Startverhalten über einen ausdrücklich eigenen Weg, den die Betriebsvorlage ablehnt. Tests für Webprozess, Ausführer und `bootstrap-admin` mit gesetzter Eigenschaft.
+2. F2: Im Betriebsmodus ist die Schemaprüfung eine zwingende Startvoraussetzung unabhängig von der Flyway Autokonfiguration; abgeschaltetes Flyway und Einstellungen, die Satz, Ziel, Historientabelle oder Baseline verändern, werden mit klarer Meldung abgelehnt. Tests mit abweichenden Einstellungen und einer tatsächlich fehlerhaften Historie.
+3. F3: Die Vorlage trennt Rollen für Verwaltung (nur Einrichtung), Migration (Eigentümer des Schemas) und Laufzeit (nur Datenrechte an Anwendungsobjekten, keine DDL, keine Rollenverwaltung); Webprozess und Ausführer laufen mit der Laufzeitrolle, `migrate` mit der Migrationsrolle. Die Abfragerechte der Sicherung beschränken sich auf ihren Bedarf. Ein Test zeigt die laufende Identität und eine abgelehnte Schemaänderung mit dem Laufzeitkonto; bestehende Installationen erhalten einen beschriebenen Übergang.
+4. F4: mit TASK-135 umgesetzt; gegengeprüft mit einem über die Anwendung geschriebenen Anhang und Wikibild in einem Sicherungspunkt der Update Probe.
+5. F5: Ein manueller Punkt wird über den laufenden Sicherungsdienst angefordert oder nur bei angehaltenem Dienst gestartet; die lokale Basis und Punkterstellung ist exklusiv serialisiert. Gegenprobe mit gleichzeitig fälligem Dauerlauf und anschließend verwendbarem Rückkehrpunkt.
+6. F6: Das Access Log von Caddy enthält keine Query; Gegenprobe mit synthetischem OAuth Rückruf.
+7. F7: Die Veröffentlichung läuft in einer geschützten GitHub Umgebung, die Holgers Freigabe verlangt; Release Tags sind durch eine Repository Regel geschützt. Holger richtet beides in GitHub ein, die Anleitung beschreibt es; der Prüfschritt des Tags wird für erlaubte und abgelehnte Fälle ohne Veröffentlichung nachgewiesen.
+8. F8: Pull, Start und Update der Betriebsvorlage lassen nur vollständige Digestreferenzen der erwarteten Registry zu und lehnen Tags ab; CI nutzt einen ausdrücklich getrennten Testweg.
+9. F9: Die Update Basis ist die neueste tatsächlich veröffentlichte Version mit ihren veröffentlichten Referenzen, nie der geprüfte Zielstand; vor der ersten Veröffentlichung bleibt der festgelegte Stand. Identität und Herkunft von Basis und Ziel stehen im Nachweis.
+10. F10: Die Update Probe vergleicht ein inhaltliches Inventar der gesäten Fachobjekte (unter anderem Beschreibungen, Mitgliedschaften, Wiki, Anforderungen, Dateibytes), weist einen Upload mit Download und Prüfsumme vor und nach dem Containerwechsel nach, prüft die Kernabläufe der Anleitung und nennt die geprüfte Datenmenge.
+11. F11: Der Rückkehrweg ist für genau die ausgelieferte Vorlage beschrieben, die Vormerkung der Rücksicherung ist mit den Rechten der Vorlage möglich, und die Probe führt ein synthetisch gescheitertes Update mit Wiederanlauf am vorherigen Punkt aus.
+12. F12: Für einen eigenen Proxy gibt es einen vollständigen Betriebsweg ohne Caddy mit auf den Proxy begrenzter Verbindung; das Release Paket enthält die verlinkten Anleitungen oder verweist auf die Quellen des Releases; die nötigen Registries sind genannt.
+13. H1 bis H4: Ein ungültiger Modus nennt die zulässigen Werte ohne Rohwert, frühere und aktuelle Migrationsfehler sind in Anleitung und Tests unterschieden; Passwörter der Einrichtung und der Probe laufen nicht über Prozessargumente, und temporäre Dateien liegen im aufgeräumten Verzeichnis; die Pfadfilter des Workflows nennen die beteiligten Start und Seed Dateien, und jeder Lauf hat einen eigenen Compose Projektnamen; der Paketstand des ssh Clients wird über das SBOM erfasst.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F12 und H1 bis H4 sind nach den Regeln behoben, mit den Gegenproben; F7 ist in GitHub eingerichtet oder als offener Schritt für Holger benannt.
+2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
+3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-166 entsprechen dem Code.
+
+**Nächster Schritt:** Umsetzung durch claude-20261123-opsfix-02 nach dem Merge dieser Reservierung.
