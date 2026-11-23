@@ -625,6 +625,57 @@ class FilesApiTest {
         Files.deleteIfExists(freshPart);
     }
 
+    @Test
+    void theCleanUpDeletesNoContentWhileABackupHoldsIt() throws Exception {
+        // TASK-135, finding F4 of the review of TASK-131: from the hold of the backup service on until its point is stored,
+        // the clean up deletes nothing, so the point never names a content its file store lacks.
+        Person worker = person();
+        Project project = project(worker);
+        grant(worker.id(), project.id(), TICKETS);
+        long number = ticket(worker, project, "Sicherung hält");
+        UUID removed = uploaded(worker, project, number, "gehalten.txt", bytes(100, 7));
+        assertEquals(204, delete(worker, attachments(project, number) + "/" + removed).status());
+        jdbc.update("update file_attachment set removed_at = ? where id = ?",
+            java.sql.Timestamp.from(Instant.now().minusSeconds(8 * 86_400)), removed);
+        try {
+            jdbc.execute("select files_purge_hold_begin('backup-test')");
+            assertEquals(0, cleanup.run().purged(), "nothing is deleted while the backup holds the clean up");
+            assertTrue(Files.exists(path(removed)));
+            assertEquals(0, jdbc.queryForObject("select count(*) from file_attachment where id = ? and purged_at is not null",
+                Integer.class, removed));
+
+            // A hold older than six hours is left over from a backup service that ended without removing it.
+            jdbc.update("update files_purge_hold set started_at = now() - interval '7 hours'");
+            assertTrue(cleanup.run().purged() >= 1, "a stale hold does not stop the clean up for ever");
+            assertFalse(Files.exists(path(removed)));
+        } finally {
+            jdbc.execute("select files_purge_hold_end('backup-test')");
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from files_purge_hold", Integer.class));
+    }
+
+    @Test
+    void theHoldOfTheBackupWaitsForADeletionThatIsRunning() throws Exception {
+        // A deletion of the clean up holds the shared lock until its commit; the hold takes the exclusive one, so when it
+        // returns no deletion runs any more and every later one sees it.
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try (java.sql.Connection deleting = jdbc.getDataSource().getConnection()) {
+            deleting.setAutoCommit(false);
+            try (java.sql.Statement statement = deleting.createStatement()) {
+                statement.execute("select pg_advisory_xact_lock_shared(7310135001)");
+            }
+            Future<?> hold = pool.submit(() -> jdbc.execute("select files_purge_hold_begin('backup-wartet')"));
+            Thread.sleep(500);
+            assertFalse(hold.isDone(), "the hold must wait for the deletion that is running");
+            deleting.commit();
+            hold.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(1, jdbc.queryForObject("select count(*) from files_purge_hold where holder = 'backup-wartet'", Integer.class));
+        } finally {
+            jdbc.execute("select files_purge_hold_end('backup-wartet')");
+            pool.shutdownNow();
+        }
+    }
+
     private static Path path(UUID id) {
         return STORE.resolve("content").resolve(id.toString().substring(0, 2)).resolve(id.toString());
     }

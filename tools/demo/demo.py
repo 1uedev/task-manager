@@ -201,16 +201,20 @@ def demo_password() -> str:
 
 
 def admin_client(args) -> Client:
-    """The administrator from bootstrap-admin. With --one-time-password the first login sets the demo password."""
+    """The administrator from bootstrap-admin. With the one time password the first login sets the demo password. It comes
+    from TASK_MANAGER_ONE_TIME_PASSWORD, which keeps it out of the process arguments (hint H2 of the review of TASK-131),
+    or from --one-time-password for a person at the console."""
     password = demo_password()
+    one_time = getattr(args, "one_time_password", None) or os.environ.get("TASK_MANAGER_ONE_TIME_PASSWORD") or None
     client = Client(args.url)
     try:
         client.login(args.admin, password)
     except ApiError as error:
-        if error.status != 401 or not getattr(args, "one_time_password", None):
-            raise SystemExit(f"login of {args.admin} failed ({error}); pass --one-time-password from bootstrap-admin "
-                             "or set TASK_MANAGER_DEMO_PASSWORD to the administrator's password")
-        client.login(args.admin, args.one_time_password, new_password=password)
+        if error.status != 401 or not one_time:
+            raise SystemExit(f"login of {args.admin} failed ({error}); set TASK_MANAGER_ONE_TIME_PASSWORD or pass "
+                             "--one-time-password from bootstrap-admin, or set TASK_MANAGER_DEMO_PASSWORD to the "
+                             "administrator's password")
+        client.login(args.admin, one_time, new_password=password)
         print(f"{args.admin}: one time password replaced by TASK_MANAGER_DEMO_PASSWORD")
     return client
 

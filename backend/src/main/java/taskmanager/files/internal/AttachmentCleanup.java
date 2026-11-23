@@ -34,6 +34,8 @@ public class AttachmentCleanup {
     public record Result(int staging, int orphans, int expired, int purged) {
     }
 
+    private enum Purge { DONE, SKIPPED, HELD }
+
     private final AttachmentRepository attachments;
     private final FileStorage storage;
     private final FilesProperties properties;
@@ -84,19 +86,29 @@ public class AttachmentCleanup {
         int purged = 0;
         List<Attachment> due = transaction.execute(status -> attachments.toPurge(limit, BATCH));
         for (Attachment candidate : due) {
-            // The row is locked while its content goes, so a second instance or run cannot do it twice.
-            Boolean done = transaction.execute(status -> attachments.lockForPurge(candidate.id(), limit).map(attachment -> {
-                try {
-                    storage.delete(attachment.id());
-                } catch (IOException failure) {
-                    throw new java.io.UncheckedIOException(failure);
+            // The row is locked while its content goes, so a second instance or run cannot do it twice. A running backup
+            // holds every deletion until its point is stored (TASK-135); the contents then go in a later run.
+            Purge outcome = transaction.execute(status -> {
+                if (attachments.purgeHeld()) {
+                    return Purge.HELD;
                 }
-                Instant at = clock.instant();
-                attachments.markPurged(attachment.id(), at);
-                attachments.audit(attachment.companyId(), attachment.id(), attachment.ticketId(), "attachment.purged", null, null, at);
-                return true;
-            }).orElse(false));
-            if (Boolean.TRUE.equals(done)) {
+                return attachments.lockForPurge(candidate.id(), limit).map(attachment -> {
+                    try {
+                        storage.delete(attachment.id());
+                    } catch (IOException failure) {
+                        throw new java.io.UncheckedIOException(failure);
+                    }
+                    Instant at = clock.instant();
+                    attachments.markPurged(attachment.id(), at);
+                    attachments.audit(attachment.companyId(), attachment.id(), attachment.ticketId(), "attachment.purged", null, null, at);
+                    return Purge.DONE;
+                }).orElse(Purge.SKIPPED);
+            });
+            if (outcome == Purge.HELD) {
+                LOG.info("File clean up: a backup is running; the contents of removed attachments are deleted in a later run.");
+                break;
+            }
+            if (outcome == Purge.DONE) {
                 purged++;
             }
         }

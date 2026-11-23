@@ -31,7 +31,7 @@ class ApplicationLifecycleTest {
         first.close();
         assertFalse(first.isActive());
         List<Timestamp> installedAfterFirstStart = installedOn(jdbc);
-        assertEquals(67, installedAfterFirstStart.size());
+        assertEquals(68, installedAfterFirstStart.size());
 
         ConfigurableApplicationContext second = startPlain(url);
         assertHealthy(second);
@@ -74,8 +74,10 @@ class ApplicationLifecycleTest {
         }
         assertEquals(0, jdbc.queryForObject("select count(*) from job_worker", Integer.class), "the executor signs off when it stops");
 
-        ConfigurableApplicationContext command = new SpringApplicationBuilder(TaskManagerApplication.class)
-            .web(org.springframework.boot.WebApplicationType.NONE).properties("taskmanager.process=command").run(database);
+        SpringApplicationBuilder commandBuilder = new SpringApplicationBuilder(TaskManagerApplication.class)
+            .web(org.springframework.boot.WebApplicationType.NONE).properties("taskmanager.process=command");
+        taskmanager.operations.ContainerCommand.register(commandBuilder.application(), "test");
+        ConfigurableApplicationContext command = commandBuilder.run(database);
         try {
             assertFalse(command.containsBean("jobExecutor"));
             assertFalse(command.containsBean("filesLifecycle"));

@@ -2,7 +2,7 @@
 """The writer of the restore drill (TASK-131, DEC-161).
 
 It logs in as the administrator and creates one ticket after another in a project until it is stopped, and writes a line
-for every confirmed write: the time the server answered and the number of the ticket. The drill compares that log with
+for every confirmed write: the time the server answered, the number of the ticket and the time the request left. The drill compares that log with
 the state after the restore and so measures the data loss (rule 12): the newest confirmed write that is gone.
 
 Only synthetic data, only against the installation of the drill; it is no load test.
@@ -94,12 +94,15 @@ def main(argv: list[str]) -> None:
         while running:
             serial += 1
             title = f"Wiederherstellungsprobe {serial}"
+            sent = datetime.datetime.now(datetime.timezone.utc).isoformat()
             created = client.call("POST", f"/projects/{args.project}/tickets",
                                   {"title": title, "description": "Synthetischer Eintrag der Probe", "type": "task"})
             confirmed = datetime.datetime.now(datetime.timezone.utc).isoformat()
             # The line is written and flushed only after the server confirmed the write, so every line in this log is a
             # write the installation acknowledged.
-            log.write(f"{confirmed} {created.get('number')} {title}\n")
+            # Besides the moment of the confirmation it keeps the moment the request left: a write sent after the boundary of
+            # a point can never be in that point (TASK-135, finding F10).
+            log.write(f"{confirmed} {created.get('number')} {sent} {title}\n")
             time.sleep(args.pause)
     print(f"writer stopped after {serial} confirmed writes", file=sys.stderr)
 

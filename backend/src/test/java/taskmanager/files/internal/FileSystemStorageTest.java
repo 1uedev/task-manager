@@ -57,6 +57,26 @@ class FileSystemStorageTest {
     }
 
     @Test
+    void storedContentIsReadableForTheGroupOfTheApplicationOnly() throws Exception {
+        // TASK-135: the backup service reads the file store as a member of the group of the application.
+        UUID id = UUID.randomUUID();
+        storage.store(storage.stage(new ByteArrayInputStream(bytes(10)), 100), id);
+        Path stored = root.resolve("files/content").resolve(id.toString().substring(0, 2)).resolve(id.toString());
+        assertEquals("rw-r-----", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(stored)));
+
+        // Content of an earlier version that only its owner could read gets the permissions once at the next start.
+        UUID old = UUID.randomUUID();
+        Path earlier = root.resolve("files/content").resolve(old.toString().substring(0, 2)).resolve(old.toString());
+        Files.createDirectories(earlier.getParent());
+        Files.write(earlier, bytes(5));
+        Files.setPosixFilePermissions(earlier, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        Files.delete(root.resolve("files/.content-group-readable"));
+        new FileSystemStorage(root.resolve("files").toString()).prepare();
+        assertEquals("rw-r-----", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(earlier)));
+        assertTrue(Files.exists(root.resolve("files/.content-group-readable")));
+    }
+
+    @Test
     void aStreamBeyondTheLimitStopsOneByteAfterIt() throws Exception {
         var staged = storage.stage(new ByteArrayInputStream(bytes(5_000)), 4_096);
         assertEquals(4_097, staged.size(), "one byte more than the limit shows that the stream was larger");

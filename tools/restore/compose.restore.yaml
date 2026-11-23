@@ -1,11 +1,17 @@
-# The restore drill (TASK-131, DEC-161): an installation with a backup service, and a second, empty environment in which
-# the restore happens. Started only by tools/restore/restore-check.sh; the demonstration environment of docs/DEMO.md is a
-# different file and stays untouched. Every password comes from the environment and is thrown away with the run.
+# The restore drill (TASK-131, DEC-161; extended by TASK-135, DEC-165): an installation with a backup service onto a
+# synthetic SFTP target, a synthetic mail server, and a second, empty environment in which the restore happens. Started
+# only by tools/restore/restore-check.sh; the demonstration environment of docs/DEMO.md is a different file and stays
+# untouched. Every password and key is made by the drill and thrown away with the run.
 name: task-manager-restore
 
+x-app-environment: &app-environment
+  TASK_MANAGER_DB_USER: taskmanager
+  TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+  TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:?set TASK_MANAGER_SECRET_KEY}
+
 services:
-  # The database of the installation that is going to be lost. It archives its write ahead log into a volume the backup
-  # service reads, and closes a segment at least every 5 minutes (rule 7).
+  # The database of the installation that is going to be lost, set up as in deploy/compose.yaml: the archive command of
+  # the operations template and the role of the backup service.
   db:
     image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     command:
@@ -15,17 +21,19 @@ services:
       - -c
       - archive_mode=on
       - -c
-      - archive_command=test ! -f /archive/%f && cp %p /archive/%f
+      - archive_command=/opt/taskmanager/archive-wal.sh %p %f
       - -c
       - archive_timeout=300
     environment:
       POSTGRES_DB: taskmanager
       POSTGRES_USER: taskmanager
       POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_BACKUP_DB_PASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql
       - wal-archive:/archive
-      - ./db-replication.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
+      - ../../deploy/archive-wal.sh:/opt/taskmanager/archive-wal.sh:ro
+      - ../../deploy/db-init.sh:/docker-entrypoint-initdb.d/10-backup-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
       interval: 2s
@@ -39,9 +47,8 @@ services:
       db:
         condition: service_healthy
     environment:
+      <<: *app-environment
       TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
-      TASK_MANAGER_DB_USER: taskmanager
-      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
       TASK_MANAGER_FILES_DIR: /data/files
       TASK_MANAGER_JOBS_WORKER: "false"
     volumes:
@@ -56,55 +63,83 @@ services:
       app:
         condition: service_healthy
     environment:
+      <<: *app-environment
       TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
-      TASK_MANAGER_DB_USER: taskmanager
-      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
       TASK_MANAGER_FILES_DIR: /data/files
     volumes:
       - files-data:/data/files
     stop_grace_period: 30s
 
-  # The backup service. The drill starts it with the argument "once" for a single point; in an installation it runs as a
-  # service and makes a point every 15 minutes.
+  # The synthetic mail server: it holds every connection in "hold" mode, so a reply stays in "sending", and stores every
+  # mail it receives in "accept" mode. Both installations send their replies to it.
+  mail:
+    image: python:3.13-slim@sha256:cf50a4f6ac4f026458b08d5222023d700ac806410dff5e9ca8728fa44f2b850f
+    command: ["python", "-I", "-u", "/sink/mail-sink.py", "/var/sink"]
+    volumes:
+      - ./mail-sink.py:/sink/mail-sink.py:ro
+      - mail-data:/var/sink
+
+  # The synthetic SFTP target on "another computer". Its user "drill" may only use SFTP inside its home; the key of the
+  # backup service is the only way in.
+  sftp:
+    image: atmoz/sftp:debian@sha256:54efe2a6cda236d713042e17a836d970342eea5a7568e4f60800432cec4da205
+    command: ["drill::999:999:upload"]
+    volumes:
+      - sftp-keys:/home/drill/.ssh/keys:ro
+      - sftp-data:/home/drill/upload
+
+  # The backup service with the files of deploy/backup. The drill starts it with "once" for single points and with
+  # "loop" for the checks of the loop.
   backup:
     build: ../../deploy/backup
     image: task-manager-backup:drill
+    group_add: ["10001"]
+    # One host name for every run, so that restic recognizes the locks of runs that were killed (TASK-135).
+    hostname: backup
     depends_on:
       db:
         condition: service_healthy
     environment:
-      TASK_MANAGER_BACKUP_REPOSITORY: /target/repository
+      TASK_MANAGER_BACKUP_REPOSITORY: ${TASK_MANAGER_BACKUP_REPOSITORY:-sftp:sftp:/upload/repository}
       TASK_MANAGER_BACKUP_INTERVAL: ${TASK_MANAGER_BACKUP_INTERVAL:-900}
       TASK_MANAGER_BACKUP_STATE: /state
       RESTIC_PASSWORD: ${TASK_MANAGER_BACKUP_PASSWORD:?set TASK_MANAGER_BACKUP_PASSWORD}
-      # The backup reads the database with a role of its own that may use pg_switch_wal and pg_basebackup; the drill uses
-      # the account the image created, which has those rights, and the installation creates the role (docs/OPERATIONS.md).
+      RESTIC_CACHE_DIR: /state/cache
       PGHOST: db
-      PGUSER: taskmanager
-      PGPASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      PGUSER: taskmanager_backup
+      PGPASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
       PGDATABASE: taskmanager
     volumes:
-      - wal-archive:/archive:ro
+      - wal-archive:/archive
       - files-data:/data/files:ro
       - backup-state:/state
-      - backup-target:/target
+      - ssh-client:/var/lib/postgresql/.ssh:ro
       - restore-target:/restore
 
-  # The fresh environment: an empty database container that takes the restored data directory, and a web process that
-  # refuses to start until after-restore ran.
+  # The fresh environment, set up like deploy/compose.yaml: restore-place moves the restored data into the volumes of the
+  # database and the file store, the database starts the already recovered data directory, and web process and worker
+  # refuse to start until after-restore ran.
+  restore-place:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    profiles: [restored]
+    user: "0:0"
+    entrypoint: ["sh", "/opt/taskmanager/restore-place.sh"]
+    volumes:
+      - ../../deploy/restore-place.sh:/opt/taskmanager/restore-place.sh:ro
+      - restore-target:/restore:ro
+      - restored-db-data:/var/lib/postgresql
+      - restored-files:/data/files
+    network_mode: none
+
   restored-db:
     image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     profiles: [restored]
-    user: "999:999"
     environment:
       POSTGRES_DB: taskmanager
       POSTGRES_USER: taskmanager
       POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
-      PGDATA: /restore/pgdata
     volumes:
-      # The same path as in the backup service, because the restored database reads the write ahead log archive from the
-      # path that the restore wrote into its configuration.
-      - restore-target:/restore
+      - restored-db-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
       interval: 2s
@@ -118,20 +153,38 @@ services:
       restored-db:
         condition: service_healthy
     environment:
+      <<: *app-environment
       TASK_MANAGER_DB_URL: jdbc:postgresql://restored-db:5432/taskmanager
-      TASK_MANAGER_DB_USER: taskmanager
-      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
-      TASK_MANAGER_FILES_DIR: /restore/files
+      TASK_MANAGER_FILES_DIR: /data/files
       TASK_MANAGER_JOBS_WORKER: "false"
     volumes:
-      - restore-target:/restore
+      - restored-files:/data/files
     ports:
       - "127.0.0.1:${TASK_MANAGER_RESTORED_PORT:-18092}:8080"
+
+  restored-worker:
+    image: task-manager:demo
+    profiles: [restored]
+    command: ["worker"]
+    depends_on:
+      restored-db:
+        condition: service_healthy
+    environment:
+      <<: *app-environment
+      TASK_MANAGER_DB_URL: jdbc:postgresql://restored-db:5432/taskmanager
+      TASK_MANAGER_FILES_DIR: /data/files
+    volumes:
+      - restored-files:/data/files
 
 volumes:
   db-data:
   files-data:
   wal-archive:
   backup-state:
-  backup-target:
   restore-target:
+  mail-data:
+  sftp-keys:
+  sftp-data:
+  ssh-client:
+  restored-db-data:
+  restored-files:

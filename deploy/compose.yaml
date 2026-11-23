@@ -67,7 +67,8 @@ services:
       - -c
       - archive_mode=on
       - -c
-      - archive_command=test ! -f /archive/%f && cp %p /archive/%f
+      # A segment reaches the archive under its final name only when it is complete (TASK-135, F3).
+      - archive_command=/opt/taskmanager/archive-wal.sh %p %f
       - -c
       - archive_timeout=300
     environment:
@@ -79,6 +80,7 @@ services:
       - db-data:/var/lib/postgresql
       - wal-archive:/archive
       - ./db-init.sh:/docker-entrypoint-initdb.d/10-backup-role.sh:ro
+      - ./archive-wal.sh:/opt/taskmanager/archive-wal.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
       interval: 5s
@@ -156,6 +158,10 @@ services:
       db:
         condition: service_healthy
     command: ["loop"]
+    # One host name for every run, so that restic recognizes the locks of runs that were killed (TASK-135).
+    hostname: backup
+    # The group of the application, whose stored content is readable for its group only (TASK-135).
+    group_add: ["10001"]
     environment:
       TASK_MANAGER_BACKUP_REPOSITORY: ${TASK_MANAGER_BACKUP_REPOSITORY:?set TASK_MANAGER_BACKUP_REPOSITORY}
       TASK_MANAGER_BACKUP_STATE: /state
@@ -169,7 +175,8 @@ services:
       PGPASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
       PGDATABASE: taskmanager
     volumes:
-      - wal-archive:/archive:ro
+      # Writable, because the service removes the segments no point needs any more (TASK-135, H3).
+      - wal-archive:/archive
       - files-data:/data/files:ro
       - backup-state:/state
       - ${TASK_MANAGER_BACKUP_SSH_DIR:-./ssh}:/var/lib/postgresql/.ssh:ro
@@ -179,6 +186,24 @@ services:
     mem_limit: 1g
     cpus: 1
     restart: unless-stopped
+
+  # Step 4 of a restore (docs/BACKUP_RESTORE.md): moves the restored data directory and file store from the restore target
+  # into the volumes of database and application with their owners. Never started by "up"; refuses to overwrite data.
+  restore-place:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    profiles: [maintenance]
+    user: "0:0"
+    entrypoint: ["sh", "/opt/taskmanager/restore-place.sh"]
+    volumes:
+      - ./restore-place.sh:/opt/taskmanager/restore-place.sh:ro
+      - restore-target:/restore:ro
+      - db-data:/var/lib/postgresql
+      - files-data:/data/files
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
 
 volumes:
   db-data:

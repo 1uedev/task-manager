@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -52,6 +50,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
 | [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
+| [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -366,9 +365,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-135 Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-opsfix-01 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-opsfix-01 · **Aktualisiert:** 2026-11-23
 
-**Bezug:** REQ-OPS-004, REQ-OPS-006, REQ-DATA-003, REQ-SEC-001; ACC-008; DEC-161, DEC-165; docs/REVIEW_TASK-131_PR-345.md; docs/OPERATIONS.md (Prüffälle O06 bis O10). **Abhängigkeiten:** TASK-131 auf main (PR #345). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-131 (Empfehlung nachbessern) „Alles beheben als TASK-135“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-165, Migration V0071 nur falls nötig. Die Umsetzung beginnt nach dem Ergebnis-PR von TASK-132, weil beide den Sicherungsdienst und die Anleitungen ändern.
+**Bezug:** REQ-OPS-004, REQ-OPS-006, REQ-DATA-003, REQ-SEC-001; ACC-008; DEC-161, DEC-165; docs/REVIEW_TASK-131_PR-345.md; docs/OPERATIONS.md (Prüffälle O06 bis O10). **Abhängigkeiten:** TASK-131 auf main (PR #345). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-131 (Empfehlung nachbessern) „Alles beheben als TASK-135“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-165, Migration V0071 nur falls nötig. Die Umsetzung beginnt nach dem Ergebnis-PR von TASK-132, weil beide den Sicherungsdienst und die Anleitungen ändern. Umgesetzt auf demselben Branch nach dem Merge von TASK-132 (PR #347), mit Migration V0071 (`files_purge_hold`). Übergabe: alle Befunde und Hinweise nach den Regeln behoben; die Probe läuft jetzt gegen ein synthetisches SFTP Ziel und deckte drei weitere Lücken auf, die mit behoben sind (Lesbarkeit hochgeladener Inhalte für den Sicherungsdienst, verwaiste restic Sperre nach einem abgebrochenen Lauf, Wartungsdienst `restore-place` für Schritt 4 der Anleitung, siehe DEC-165). Lokaler Lauf der Probe am 23. November 2026: bestanden, Datenverlust 77 s (einschließlich der drei absichtlich beschädigten neuesten Punkte), Wiederanlauf 128 s; Nachweise in /mnt/project-files/a18/probe-135-2026-11-23/. Grenzen: der KI Lauf mit Vorschlag entsteht in der Probe per SQL, weil kein Anbieter erreichbar ist; die verlangsamte Archivkopie ist nur durch den Aufbau des Archivkommandos abgedeckt, nicht durch einen eigenen Lauf.
 
 **Umfang:** Behebung der Befunde F1 bis F11 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-131_PR-345.md im Sicherungsdienst `deploy/backup`, im Modul `operations` und seinen Zugängen, in der Probe `tools/restore`, im Workflow „Restore“ und in docs/BACKUP_RESTORE.md. Nicht Teil: Betriebsübersicht (TASK-133), Messung mit vollem Bestand und Freigabe (TASK-134), Hochverfügbarkeit, weitere Sicherungsziele.
 
@@ -391,4 +390,4 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend Tests, Lebenszyklusprüfung und der Workflow „Restore“ mit den neuen Fehlerfällen sind grün.
 3. docs/BACKUP_RESTORE.md, TODO.md und DEC-165 entsprechen dem Code.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung und dem Ergebnis-PR von TASK-132 umsetzen.
+**Nächster Schritt:** Codex prüft (Prüfauftrag /mnt/project-files/a18/codex-pruefauftrag-task-135.md), Holger nimmt TASK-131 und TASK-135 zusammen ab; danach TASK-133.

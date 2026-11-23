@@ -147,7 +147,7 @@ step "Update: backup point, stop, new image"
 # no backup point to wait for. Every released version has it.
 if [ "$((10#$old_newest))" -ge 70 ]; then
   dc run --rm backup once > "$results/backup.log" 2>&1 || { cat "$results/backup.log"; fail "no backup point before the update"; }
-  grep -q "complete as snapshot" "$results/backup.log" || fail "the backup point was not confirmed"
+  grep -q "point [0-9TZ]* complete" "$results/backup.log" || fail "the backup point was not confirmed"
 else
   echo "the older version predates the backup service (V0070); no backup point to wait for"
 fi
@@ -193,7 +193,7 @@ echo "data and configuration kept"
 
 step "The backup service of the template makes a point with its own role"
 dc run --rm backup once > "$results/backup-after.log" 2>&1 || { cat "$results/backup-after.log"; fail "the backup service failed after the update"; }
-grep -q "complete as snapshot" "$results/backup-after.log" || fail "the backup point after the update was not confirmed"
+grep -q "point [0-9TZ]* complete" "$results/backup-after.log" || fail "the backup point after the update was not confirmed"
 tail -n 1 "$results/backup-after.log"
 
 step "O01: no secret in the image, no privileged container"

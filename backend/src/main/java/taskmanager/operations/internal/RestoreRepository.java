@@ -26,6 +26,21 @@ class RestoreRepository {
             .query((rs, row) -> new Pending(rs.getString("point"), rs.getTimestamp("restored_at").toInstant())).optional();
     }
 
+    /**
+     * Locks the marker for the command until its transaction ends (TASK-135, finding F7). A marker a second command holds
+     * is skipped, so that command learns at once that another one runs instead of waiting for the lock.
+     */
+    @Transactional
+    Optional<Pending> lockPending() {
+        return jdbc.sql("select point, restored_at from operations_restore_pending order by point limit 1 for update skip locked")
+            .query((rs, row) -> new Pending(rs.getString("point"), rs.getTimestamp("restored_at").toInstant())).optional();
+    }
+
+    @Transactional(readOnly = true)
+    boolean anyPending() {
+        return jdbc.sql("select exists (select 1 from operations_restore_pending)").query(Boolean.class).single();
+    }
+
     @Transactional
     void release(String point) {
         jdbc.sql("delete from operations_restore_pending where point = ?").param(point).update();
