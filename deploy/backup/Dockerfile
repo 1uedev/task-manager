@@ -9,9 +9,9 @@ COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 RUN apt-get update \
  && apt-get install --yes --no-install-recommends openssh-client \
  && rm -rf /var/lib/apt/lists/*
-COPY backup.sh restore.sh lib.sh /opt/backup/
-RUN chmod 0555 /opt/backup/*.sh && restic version && ssh -V
+COPY entrypoint.sh backup.sh restore.sh lib.sh /opt/backup/
+RUN chmod 0555 /opt/backup/*.sh && restic version && ssh -V && command -v flock pg_archivecleanup sha256sum
 # The service runs as the postgres account of the image, which owns nothing of the application: it reads the write ahead
 # log archive and the file store and writes only to the backup target and its own state directory.
 USER postgres
-ENTRYPOINT ["/opt/backup/backup.sh"]
+ENTRYPOINT ["/opt/backup/entrypoint.sh"]

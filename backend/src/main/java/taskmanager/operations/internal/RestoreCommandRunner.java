@@ -3,6 +3,7 @@ package taskmanager.operations.internal;
 import java.io.PrintStream;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ExitCodeGenerator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import taskmanager.ai.AiRestore;
 import taskmanager.files.FilesRestore;
 import taskmanager.helpdesk.HelpdeskRestore;
@@ -38,7 +41,8 @@ import taskmanager.platform.CompanyContext;
  *       (rule 11: the application does not do that by itself).</li>
  * </ol>
  *
- * <p>The report names identifiers and counts, never content. The marker is removed at the end, even when the file store is
+ * <p>All steps, the audit and the removal of the marker are one transaction under the lock of the marker (TASK-135).
+ * The report names identifiers and counts, never content. The marker is removed at the end, even when the file store is
  * incomplete: the report says so and the operator decides, because a missing content does not make the installation
  * unusable. Exit codes: 0 everything consistent, 3 ran but contents are missing or damaged, 2 refused (no restore waits),
  * 1 unexpected error.
@@ -60,12 +64,13 @@ class RestoreCommandRunner implements ApplicationRunner, ExitCodeGenerator {
     private final Clock clock;
     private final String operator;
     private final String filesDirectory;
+    private final TransactionTemplate transaction;
     private int exitCode;
 
     RestoreCommandRunner(RestoreRepository repository, IdentityRestore identity, HelpdeskRestore helpdesk, AiRestore ai,
             FilesRestore files, CompanyAdministration administration, CompanyContext companies, Clock clock,
             @Value("${taskmanager.operations-operator:}") String operator,
-            @Value("${taskmanager.files.directory:}") String filesDirectory) {
+            @Value("${taskmanager.files.directory:}") String filesDirectory, PlatformTransactionManager transactions) {
         this.repository = repository;
         this.identity = identity;
         this.helpdesk = helpdesk;
@@ -76,67 +81,93 @@ class RestoreCommandRunner implements ApplicationRunner, ExitCodeGenerator {
         this.clock = clock;
         this.operator = operator;
         this.filesDirectory = filesDirectory;
+        this.transaction = new TransactionTemplate(transactions);
     }
 
     @Override
     public void run(ApplicationArguments arguments) {
         PrintStream out = System.out;
         PrintStream err = System.err;
+        if (filesDirectory.isBlank()) {
+            err.println("Refused: files.directory_missing");
+            err.println("The command checks the file store and therefore needs TASK_MANAGER_FILES_DIR"
+                + " (taskmanager.files.directory), the same directory as the web process.");
+            exitCode = 2;
+            return;
+        }
+        // Every change, the audit and the removal of the marker are one transaction under the lock of the marker (TASK-135,
+        // finding F7): a failure or an abort in the middle leaves the installation exactly as before, still locked, and a
+        // second command at the same time is refused instead of repeating or splitting the work. The report is printed only
+        // after the commit.
+        List<String> report = new ArrayList<>();
+        Outcome outcome;
         try {
-            if (filesDirectory.isBlank()) {
-                err.println("Refused: files.directory_missing");
-                err.println("The command checks the file store and therefore needs TASK_MANAGER_FILES_DIR"
-                    + " (taskmanager.files.directory), the same directory as the web process.");
-                exitCode = 2;
-                return;
-            }
-            Optional<RestoreRepository.Pending> pending = repository.pending();
-            if (pending.isEmpty()) {
+            outcome = transaction.execute(status -> release(report));
+        } catch (RuntimeException failed) {
+            err.println("The command failed and changed nothing; the restore still waits. See the application log for the reason.");
+            exitCode = 1;
+            throw failed;
+        }
+        switch (outcome) {
+            case NOT_PENDING -> {
                 err.println("Refused: restore.not_pending");
                 err.println("No restore waits for this command. A restore writes its marker into operations_restore_pending;"
                     + " the restore script of the backup service does that.");
                 exitCode = 2;
-                return;
             }
-            String point = pending.get().point();
-            Instant now = clock.instant();
-            out.println("Backup point: " + point);
-            out.println("Restored at: " + pending.get().restoredAt());
-
-            int sessions = identity.revokeAllSessions(now);
-            out.println("Sessions ended: " + sessions);
-            int replies = helpdesk.holdOpenReplies(now);
-            out.println("Mail replies held as uncertain: " + replies);
-            int suggestions = ai.discardSuggestions();
-            out.println("AI suggestions discarded: " + suggestions);
-
-            FilesRestore.Check check = files.checkContents();
-            out.println("Contents checked: " + check.checked());
-            out.println("Contents missing: " + check.missing().size());
-            check.missing().forEach(id -> out.println("  missing " + id));
-            out.println("Contents damaged: " + check.damaged().size());
-            check.damaged().forEach(id -> out.println("  damaged " + id));
-
-            List<String> holders = companyRightHolders();
-            out.println("Accounts with company rights: " + holders.size());
-            holders.forEach(line -> out.println("  " + line));
-
-            repository.audit("restore.released", point, operator, detail(sessions, replies, suggestions, check), now);
-            repository.release(point);
-            if (check.complete()) {
-                out.println("The installation is released. Start the web process and the worker.");
-            } else {
-                exitCode = 3;
-                out.println("The installation is released, but the file store is incomplete. Check whether database and file"
-                    + " store belong to the same backup point before you start the processes.");
+            case BUSY -> {
+                err.println("Refused: restore.busy");
+                err.println("Another after-restore command is running for this restore. Wait for its report.");
+                exitCode = 2;
             }
-            out.println("Repeat the account locks and withdrawals of rights that happened after the backup point; the"
-                + " application does not know them.");
-        } catch (RuntimeException failed) {
-            err.println("The command failed. See the application log for the reason.");
-            exitCode = 1;
-            throw failed;
+            case COMPLETE, INCOMPLETE -> {
+                report.forEach(out::println);
+                if (outcome == Outcome.COMPLETE) {
+                    out.println("The installation is released. Start the web process and the worker.");
+                } else {
+                    exitCode = 3;
+                    out.println("The installation is released, but the file store is incomplete. Check whether database and file"
+                        + " store belong to the same backup point before you start the processes.");
+                }
+                out.println("Repeat the account locks and withdrawals of rights that happened after the backup point; the"
+                    + " application does not know them.");
+            }
         }
+    }
+
+    private enum Outcome { NOT_PENDING, BUSY, COMPLETE, INCOMPLETE }
+
+    private Outcome release(List<String> report) {
+        Optional<RestoreRepository.Pending> pending = repository.lockPending();
+        if (pending.isEmpty()) {
+            return repository.anyPending() ? Outcome.BUSY : Outcome.NOT_PENDING;
+        }
+        String point = pending.get().point();
+        Instant now = clock.instant();
+        report.add("Backup point: " + point);
+        report.add("Restored at: " + pending.get().restoredAt());
+
+        int sessions = identity.revokeAllSessions(now);
+        report.add("Sessions ended: " + sessions);
+        int replies = helpdesk.holdOpenReplies(now);
+        report.add("Mail replies held as uncertain: " + replies);
+        int suggestions = ai.discardSuggestions();
+        report.add("AI suggestions discarded: " + suggestions);
+
+        FilesRestore.Check check = files.checkContents();
+        report.add("Contents checked: " + check.checked());
+        report.add("Contents missing: " + check.missing().size());
+        check.missing().forEach(id -> report.add("  missing " + id));
+        report.add("Contents damaged: " + check.damaged().size());
+        check.damaged().forEach(id -> report.add("  damaged " + id));
+
+        List<String> holders = companyRightHolders();
+        report.add("Accounts with company rights: " + holders.size());
+        holders.forEach(line -> report.add("  " + line));
+
+        repository.audit("restore.released", point, operator, detail(sessions, replies, suggestions, check), now);
+        repository.release(point);
+        return check.complete() ? Outcome.COMPLETE : Outcome.INCOMPLETE;
     }
 
     /** Every account with company rights as "identifier login-name right,right"; an inactive account has no login name. */

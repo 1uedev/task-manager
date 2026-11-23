@@ -36,14 +36,14 @@ Eine eigene PostgreSQL 18 Instanz des Kunden ist erlaubt, wenn die Sicherung nac
 
 ## Installation
 
-1. **Release holen.** Aus dem Release der gewünschten Version `task-manager-VERSION-deploy.tar.gz` und `SHA256SUMS-VERSION` laden, mit `sha256sum --check --ignore-missing SHA256SUMS-VERSION` prüfen und entpacken. Das Paket enthält `compose.yaml`, `Caddyfile`, `db-init.sh`, `.env.example` mit den Digests genau dieser Version und diese Anleitung.
+1. **Release holen.** Aus dem Release der gewünschten Version `task-manager-VERSION-deploy.tar.gz` und `SHA256SUMS-VERSION` laden, mit `sha256sum --check --ignore-missing SHA256SUMS-VERSION` prüfen und entpacken. Das Paket enthält `compose.yaml`, `Caddyfile`, `db-init.sh`, `archive-wal.sh`, `restore-place.sh`, `.env.example` mit den Digests genau dieser Version und diese Anleitung.
 2. **Einstellungen anlegen.** `.env.example` nach `.env` kopieren und mit `chmod 600 .env` schützen. Domain, TLS Art, Sicherungsziel eintragen; Passwörter und Schlüssel mit `openssl rand -base64 32` erzeugen. `TASK_MANAGER_SECRET_KEY`, das Sicherungspasswort und die Zugangsdaten des Ziels zusätzlich getrennt vom Host ablegen und prüfen, dass sie dort lesbar sind (Regel 9 von TASK-131).
 3. **Zertifikat.** Mit `TASK_MANAGER_TLS=acme` holt Caddy das Zertifikat selbst. Mit `TASK_MANAGER_TLS=own` liegen `certificate.pem` (mit Zwischenzertifikaten) und `key.pem` im Verzeichnis `TASK_MANAGER_TLS_DIR` (Vorgabe `./tls`), lesbar für den Container.
 4. **Images holen:** `docker compose pull`.
 5. **Schema anlegen:** `docker compose run --rm migrate`. Der Befehl meldet `Migrations applied: N` und die Schemaversion.
 6. **Erste Verwaltung:** `docker compose run --rm app bootstrap-admin <Anmeldename>`. Das Einmalpasswort steht nur in dieser Ausgabe.
 7. **Starten:** `docker compose up -d`. Danach unter `https://<Domain>` anmelden und das Passwort ändern.
-8. **Sicherung prüfen:** `docker compose logs backup` zeigt nach spätestens 15 Minuten `point ... complete as snapshot`. Vor der ersten Nutzung einmal die Probe aus [BACKUP_RESTORE.md](BACKUP_RESTORE.md) durchgehen und die Vorlage für Zuständigkeiten ausfüllen.
+8. **Sicherung prüfen:** `docker compose logs backup` zeigt nach spätestens 15 Minuten `point NAME complete (database up to ...)`. Vor der ersten Nutzung einmal die Probe aus [BACKUP_RESTORE.md](BACKUP_RESTORE.md) durchgehen und die Vorlage für Zuständigkeiten ausfüllen.
 
 Die Vorlage gibt keinem Container den Docker Socket und keinen privilegierten Modus. Webprozess, Ausführer und Caddy laufen mit schreibgeschütztem Dateisystem, ohne Linux Capabilities (Caddy nur mit dem Recht, Port 80 und 443 zu öffnen) und ohne Rechteerweiterung. Daten liegen nur in den benannten Volumes `db-data`, `files-data`, `wal-archive`, `backup-state`, `restore-target`, `caddy-data` und `caddy-config`; ein Austausch der Container behält sie (Prüffall O01). Das Image enthält keine Passwörter und keine Schlüssel.
 
@@ -77,7 +77,7 @@ Webprozess, Ausführer und alle Befehle außer `migrate` laufen in der Vorlage m
 Ein Update unterbricht den Betrieb für die Dauer von `migrate` und dem Start, in der Regel wenige Minuten.
 
 1. **Hinweise der Version lesen.** Das Release nennt die Digests und Besonderheiten.
-2. **Sicherungspunkt abwarten.** `docker compose run --rm backup once` legt sofort einen Punkt an und meldet `point NAME complete as snapshot`. Den Namen notieren; er ist der Rückweg.
+2. **Sicherungspunkt abwarten.** `docker compose run --rm backup once` legt sofort einen Punkt an und meldet `point NAME complete (database up to ...)`. Den Namen notieren; er ist der Rückweg.
 3. **Anhalten:** `docker compose stop app worker caddy`.
 4. **Neue Version eintragen:** in `.env` `TASK_MANAGER_IMAGE` und `TASK_MANAGER_BACKUP_IMAGE` auf die Digests des Releases setzen, neue Fassungen von `compose.yaml` und `Caddyfile` aus dem Release übernehmen, dann `docker compose pull`.
 5. **Schema ändern:** `docker compose run --rm migrate`, genau einmal.

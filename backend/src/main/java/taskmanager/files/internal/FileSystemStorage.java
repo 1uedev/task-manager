@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -25,9 +28,15 @@ import java.util.stream.Stream;
  * {@code content/<first two characters>/<identifier>} for stored content and {@code quarantine/<identifier>} for content
  * without attachment that waits to be deleted. The identifier is that of the attachment, so nothing the client sends ever
  * becomes part of a path.
+ *
+ * <p>Stored content is readable for the owner and the group of the application and for nobody else (TASK-135): the backup
+ * service reads the file store as a member of that group, without being the application. Content of an earlier version,
+ * which only its owner could read, gets these permissions once at the first start.
  */
 final class FileSystemStorage implements FileStorage {
     private static final int HEAD = 16;
+    private static final Set<PosixFilePermission> CONTENT = PosixFilePermissions.fromString("rw-r-----");
+    private static final String GROUP_READABLE = ".content-group-readable";
     private final String configured;
     private Path root;
 
@@ -69,6 +78,30 @@ final class FileSystemStorage implements FileStorage {
         Files.createDirectories(quarantine());
         Path probe = Files.createTempFile(staging(), "probe-", ".tmp");
         Files.delete(probe);
+        Path marker = root().resolve(GROUP_READABLE);
+        if (!Files.exists(marker)) {
+            try (Stream<Path> files = Files.walk(content())) {
+                for (Path file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
+                    readableForTheGroup(file);
+                }
+            }
+            try {
+                Files.createFile(marker);
+            } catch (java.nio.file.FileAlreadyExistsException otherProcess) {
+                // Web process and worker prepare the same store; one of them was first.
+            }
+        }
+    }
+
+    /** Sets the permissions of stored content; a file system without POSIX permissions keeps its own. */
+    private static void readableForTheGroup(Path file) throws IOException {
+        try {
+            Files.setPosixFilePermissions(file, CONTENT);
+        } catch (UnsupportedOperationException noPosix) {
+            // Nothing to set.
+        } catch (NoSuchFileException gone) {
+            // Removed meanwhile by the clean up of another process.
+        }
     }
 
     @Override
@@ -127,6 +160,7 @@ final class FileSystemStorage implements FileStorage {
         }
         // The age of a file counts from the moment it was put in place, not from the start of a slow upload.
         Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
+        readableForTheGroup(target);
     }
 
     @Override

@@ -1,24 +1,41 @@
 name: Restore
 
-# The restore drill of TASK-131: it plays the complete loss of the host through and measures data loss and recovery
-# time. It runs on demand, weekly, and whenever the backup service, the restore, the operations module or the drill
-# itself changes.
+# The restore drill of TASK-131 and TASK-135: it plays the complete loss of the host through against a synthetic SFTP
+# target and measures data loss and recovery time. It runs on demand, weekly, and whenever the backup service, the
+# archive command, the restore, the restore steps of the modules, the file store, the entry point, the guide or the drill
+# itself changes (hint H1 of the review of TASK-131).
 on:
   pull_request:
     branches: [main]
     paths:
       - deploy/backup/**
+      - deploy/archive-wal.sh
+      - deploy/db-init.sh
+      - deploy/restore-place.sh
       - tools/restore/**
+      - tools/demo/demo.py
+      - backend/src/main/java/taskmanager/TaskManagerApplication.java
       - backend/src/main/java/taskmanager/operations/**
+      - backend/src/main/java/taskmanager/**/*Restore*.java
+      - backend/src/main/java/taskmanager/files/internal/**
       - backend/src/main/resources/db/migration/**
+      - docs/BACKUP_RESTORE.md
       - .github/workflows/restore.yml
   push:
     branches: [main]
     paths:
       - deploy/backup/**
+      - deploy/archive-wal.sh
+      - deploy/db-init.sh
+      - deploy/restore-place.sh
       - tools/restore/**
+      - tools/demo/demo.py
+      - backend/src/main/java/taskmanager/TaskManagerApplication.java
       - backend/src/main/java/taskmanager/operations/**
+      - backend/src/main/java/taskmanager/**/*Restore*.java
+      - backend/src/main/java/taskmanager/files/internal/**
       - backend/src/main/resources/db/migration/**
+      - docs/BACKUP_RESTORE.md
       - .github/workflows/restore.yml
   schedule:
     # Weekly, as docs/OPERATIONS.md asks for recurring restore tests.
@@ -35,7 +52,7 @@ concurrency:
 jobs:
   restore:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

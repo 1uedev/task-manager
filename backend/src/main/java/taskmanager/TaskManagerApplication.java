@@ -57,6 +57,7 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.admin-command=" + args[0], "taskmanager.admin-username=" + args[1],
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
+        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
         // Command line arguments, so that tests can override settings that application.yaml resolves from the environment.
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
@@ -71,6 +72,7 @@ public class TaskManagerApplication {
             .web(WebApplicationType.NONE)
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.search-command=" + args[0], "logging.level.root=WARN", "spring.main.log-startup-info=false");
+        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }
@@ -85,6 +87,7 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.operations-command=" + args[0], "taskmanager.operations-operator=" + args[1],
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
+        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }
@@ -103,6 +106,7 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.operations-command=" + MIGRATE, "logging.level.root=WARN",
                 "spring.main.log-startup-info=false");
+        taskmanager.operations.ContainerCommand.register(builder.application(), MIGRATE);
         try {
             var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
             return SpringApplication.exit(context);

@@ -86,6 +86,18 @@ class AttachmentRepository {
             .params(id, Timestamp.from(removedBefore)).query(AttachmentRepository::map).optional();
     }
 
+    /**
+     * Whether a backup holds the clean up (TASK-135). Takes the shared form of the lock the backup service takes exclusively
+     * when it sets its hold, and keeps it until the commit of the calling transaction, so a deletion either ends before the
+     * hold is set or sees it.
+     */
+    boolean purgeHeld() {
+        return jdbc.sql("""
+                select pg_advisory_xact_lock_shared(7310135001) is not null
+                   and exists (select 1 from files_purge_hold where started_at > clock_timestamp() - interval '6 hours')
+                """).query(Boolean.class).single();
+    }
+
     void markPurged(UUID id, Instant at) {
         jdbc.sql("update file_attachment set purged_at = ? where id = ?").params(Timestamp.from(at), id).update();
     }

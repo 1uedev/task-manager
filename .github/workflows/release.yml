@@ -96,7 +96,7 @@ jobs:
         run: |
           bundle="$RUNNER_TEMP/task-manager-$VERSION"
           mkdir -p "$bundle/docs"
-          cp deploy/compose.yaml deploy/Caddyfile deploy/db-init.sh deploy/.gitignore "$bundle/"
+          cp deploy/compose.yaml deploy/Caddyfile deploy/db-init.sh deploy/archive-wal.sh deploy/restore-place.sh deploy/.gitignore "$bundle/"
           # The example settings name the digests of exactly this version.
           app=$(sed -n 's/^TASK_MANAGER_IMAGE=//p' "release/digests-$VERSION.env")
           backup=$(sed -n 's/^TASK_MANAGER_BACKUP_IMAGE=//p' "release/digests-$VERSION.env")

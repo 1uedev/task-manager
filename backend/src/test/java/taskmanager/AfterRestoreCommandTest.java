@@ -229,6 +229,82 @@ class AfterRestoreCommandTest {
     }
 
     @Test
+    void aFailureAfterTheStepsChangesNothingAndARepetitionCountsEverythingOnce(@TempDir Path store) throws Exception {
+        // TASK-135, finding F7: the steps, the audit and the release are one transaction. A failure at its very end, here at
+        // the audit, leaves sessions, replies, suggestion and marker as they were and writes no audit.
+        String database = database();
+        UUID present = UUID.randomUUID();
+        UUID gone = UUID.randomUUID();
+        workOfBeforeTheFailure(database, store, present, gone);
+        update(database, "insert into operations_restore_pending (point, restored_at) values ('20261123T120000Z', now())",
+            "create function drill_refuse() returns trigger language plpgsql as $$ begin raise exception 'injected failure'; end $$",
+            "create trigger drill_refuse before insert on operations_audit_event for each row execute function drill_refuse()");
+
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+        try {
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> TaskManagerApplication.runRestoreCommand(
+                new String[] { "after-restore", "Betrieb" }, "spring.datasource.url=" + database,
+                "spring.datasource.username=" + TestDatabase.username(), "spring.datasource.password=" + TestDatabase.password(),
+                "taskmanager.files.directory=" + store));
+        } finally {
+            System.setErr(originalErr);
+            System.setOut(originalOut);
+        }
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains("changed nothing; the restore still waits"), err.toString(StandardCharsets.UTF_8));
+        assertFalse(out.toString(StandardCharsets.UTF_8).contains("Sessions ended"), "no report before the commit");
+        assertEquals(List.of("1"), query(database, "select count(*) from identity_session where revoked_at is null"));
+        assertEquals(List.of("raus|sent", "unterwegs|sending", "wartet|pending"),
+            query(database, "select subject || '|' || state from helpdesk_reply order by subject"));
+        assertEquals(List.of("0"), query(database, "select count(*) from helpdesk_audit_event where operation = 'reply.held_after_restore'"));
+        assertEquals(List.of("1"), query(database, "select count(*) from ai_suggestion"));
+        assertEquals(List.of("1"), query(database, "select count(*) from operations_restore_pending"));
+        assertEquals(List.of("0"), query(database, "select count(*) from operations_audit_event"));
+
+        // The repetition after the cause is gone does all steps and counts each of them once.
+        update(database, "drop trigger drill_refuse on operations_audit_event");
+        Result result = run(database, store, "after-restore", "Betrieb");
+        assertEquals(3, result.exitCode(), result.err());
+        assertTrue(result.out().contains("Sessions ended: 1"), result.out());
+        assertTrue(result.out().contains("Mail replies held as uncertain: 2"), result.out());
+        assertTrue(result.out().contains("AI suggestions discarded: 1"), result.out());
+        assertEquals(List.of("1|2|1"), query(database,
+            "select (detail->>'sessions') || '|' || (detail->>'replies') || '|' || (detail->>'suggestions') from operations_audit_event"));
+    }
+
+    @Test
+    void aSecondCommandWhileTheFirstHoldsTheRestoreIsRefusedAndChangesNothing(@TempDir Path store) throws Exception {
+        String database = database();
+        UUID present = UUID.randomUUID();
+        UUID gone = UUID.randomUUID();
+        workOfBeforeTheFailure(database, store, present, gone);
+        update(database, "insert into operations_restore_pending (point, restored_at) values ('20261123T120000Z', now())");
+
+        // The first command holds the marker in its transaction, as a running after-restore does.
+        try (Connection first = DriverManager.getConnection(database, TestDatabase.username(), TestDatabase.password())) {
+            first.setAutoCommit(false);
+            try (Statement statement = first.createStatement()) {
+                statement.executeQuery("select point from operations_restore_pending for update").close();
+            }
+            Result second = run(database, store, "after-restore", "Betrieb");
+            assertEquals(2, second.exitCode(), second.err());
+            assertTrue(second.err().contains("restore.busy"), second.err());
+            first.rollback();
+        }
+        assertEquals(List.of("1"), query(database, "select count(*) from identity_session where revoked_at is null"));
+        assertEquals(List.of("1"), query(database, "select count(*) from operations_restore_pending"));
+        assertEquals(List.of("0"), query(database, "select count(*) from operations_audit_event"));
+
+        // Once the first is gone, the command runs.
+        assertEquals(3, run(database, store, "after-restore", "Betrieb").exitCode());
+        assertEquals(List.of("1"), query(database, "select count(*) from operations_audit_event"));
+    }
+
+    @Test
     void reportsAContentWithAnotherChecksumAsDamagedAndReleasesACompleteStore(@TempDir Path store) throws Exception {
         String database = database();
         UUID present = UUID.randomUUID();
