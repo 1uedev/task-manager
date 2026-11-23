@@ -1059,6 +1059,7 @@ export const de = {
   'helpdesk.code.helpdesk.send_refused': 'Der Mailserver hat die Mail abgelehnt',
   'helpdesk.code.helpdesk.send_uncertain': 'Die Antwort des Mailservers fehlt; die Mail kann angekommen sein',
   'helpdesk.code.helpdesk.send_interrupted': 'Der Versand wurde unterbrochen; die Mail kann angekommen sein',
+  'helpdesk.code.helpdesk.restored': 'Nach einer Rücksicherung angehalten; die Mail kann angekommen sein',
   'helpdesk.code.helpdesk.job_ended': 'Der Versandauftrag endete, ohne die Mail zu übergeben; sie wurde nicht gesendet',
   'helpdesk.code.helpdesk.job_invalid': 'Der Versandauftrag nennt keine gültige bestätigende Person; nichts wurde gesendet',
   'helpdesk.code.helpdesk.send_broken': 'Der Mailserver brach vor dem Ende der Mail ab; sie wurde nicht gesendet',

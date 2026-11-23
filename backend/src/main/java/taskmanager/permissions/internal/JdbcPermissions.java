@@ -352,6 +352,15 @@ public class JdbcPermissions implements Permissions, PermissionAdministration, C
     }
 
     @Override
+    public java.util.SortedMap<UUID, java.util.SortedSet<String>> companyRightHolders(UUID companyId) {
+        java.util.SortedMap<UUID, java.util.SortedSet<String>> holders = new java.util.TreeMap<>();
+        if (companyId == null) return holders;
+        jdbc.query("select distinct m.user_id, a.action_key from permissions_membership m join permissions_action a on a.company_id = m.company_id and a.group_id = m.group_id where a.company_id = ? and a.project_id is null",
+            (rs, row) -> holders.computeIfAbsent(rs.getObject(1, UUID.class), id -> new java.util.TreeSet<>()).add(rs.getString(2)), companyId);
+        return holders;
+    }
+
+    @Override
     public List<Group> groups(AccessContext actor) {
         bounded(() -> companyManager(actor, lock(actor, false).policy()));
         return jdbc.query("select id, name from permissions_group where company_id = ? order by name, id",

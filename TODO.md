@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -51,6 +49,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-125](#task-125-ki-grundlage-mit-anbietern-modellen-skills-grenzen-und-nachweis-a16-teil-1) | KI Grundlage mit Anbietern, Modellen, Skills, Grenzen und Nachweis (A16 Teil 1) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
 | [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
+| [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -247,7 +246,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-131 Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
 
 **Bezug:** REQ-OPS-004, REQ-OPS-006, REQ-DATA-003, REQ-SEC-001; DEC-038; OPEN-012; ACC-008; docs/OPERATIONS.md (Sicherungsziel und vollständige Wiederherstellung, Prüffälle O06 bis O10). **Abhängigkeiten:** TASK-031 (Vorführimage), TASK-051 (Dateispeicher), TASK-054 (Hintergrundaufträge), TASK-058 (Mailantworten mit Zustand unsicher), TASK-125 (KI Vorschläge), geliefert. **Arbeitsstand:** Holger hat am 23. November 2026 im Projektgespräch mit „ja dann mache weiter“ den Beginn von Paket A18 beauftragt und am selben Tag die 24 Vorschläge mit „ok“ übernommen (/mnt/project-files/a18/fragen-a18.md; Regeln unten und bei TASK-132 bis TASK-134). Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-161, Migrationen ab V0070.
 
@@ -274,7 +273,20 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 4. `after-restore` hält offene Mailantworten an, beendet Sitzungen, verwirft KI Vorschläge und meldet fehlende Inhalte (O09, O10); Tests dafür.
 5. Anleitung mit Einrichtung, Schlüsselablage, Zielen, Rücksicherung und Vorlage für Zuständigkeiten.
 
-**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-132 in derselben Sitzung, sobald das Ergebnis auf main ist.
+**Ergebnis** (claude-20261123-ops-01, 23. November 2026): Umgesetzt auf dem Branch claude/project-thread-elfpvq.
+
+- Migration V0070: Sicht `operations_backup_content` (Inhalte mit Größe und Prüfsumme), Tabelle `operations_restore_pending` (Vormerkung der Rücksicherung) und `operations_audit_event` für den Betrieb.
+- Modul `operations` mit dem Befehl `after-restore <Name>`: beendet alle Sitzungen, hält offene Mailantworten als `uncertain` mit dem Code `helpdesk.restored` an, verwirft KI Vorschläge, prüft jeden Inhalt des Dateispeichers über Größe und SHA-256, listet die Konten mit Rechten für das ganze Unternehmen, entfernt die Vormerkung und schreibt den Auditeintrag `restore.released`. Rückgabewerte 0, 3 (Inhalte fehlen oder sind beschädigt), 2 (abgelehnt), 1 (Fehler). Webserver und Ausführer verweigern den Start, solange die Vormerkung besteht.
+- Neue Zugänge der Module: `IdentityRestore`, `HelpdeskRestore`, `AiRestore`, `FilesRestore` und `CompanyAdministration.companyRightHolders`.
+- Dienst `deploy/backup` (restic 0.18.1 im PostgreSQL 18.6 Image) mit `backup.sh` (Basissicherung, Protokollwechsel, Prüfung der Inhalte vor dem Punkt, Beschreibung, Aufbewahrung) und `restore.sh` (`points`, `restore`, `mark`) mit Rückfall auf den älteren Punkt und Rücksicherung auf die Schreibposition des Punkts.
+- Probe `tools/restore/restore-check.sh` mit eigenem Compose und Schreiber, Workflow `.github/workflows/restore.yml` (bei Änderungen, wöchentlich, manuell).
+- Anleitung `docs/BACKUP_RESTORE.md` (Einrichtung, Ziele, Schlüsselablage, neunschrittiger Wiederanlauf, Probe, Zuständigkeitsvorlage, ausgehende Verbindungen, Grenzen), Hinweise in docs/OPERATIONS.md und backend/README.md, Entscheidung DEC-161.
+
+**Geprüft:** `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests` (50 Tests), Backend `./mvnw test` mit Java 21 lokal (CI prüft Java 25), `backend/scripts/lifecycle-check.sh` einschließlich der neuen Phase `after-restore`, Frontend `npm run verify`. Die Probe lief vollständig auf diesem Rechner (Linux x86 64, 4 vCPU): Punkt mit fehlendem Inhalt abgelehnt (O06), beschädigter neuester Punkt übersprungen und der ältere genommen (O08), `after-restore` hat 7 Sitzungen beendet und die Rechteliste ausgegeben (O09, O10), Datenverlust 11 s, wieder nutzbar nach 105 s (Ziele 3600 s und 14400 s). Bericht und Protokolle: /mnt/project-files/a18/probe-2026-11-23/.
+
+**Abweichungen:** Die gemessenen Werte gelten für diesen Rechner und einen kleinen Bestand; der Nachweis auf der Referenzumgebung mit vollem Daten- und Dateibestand bleibt nach DEC-038 Teil von TASK-134. Der Dateispeicher gehört nach der Rücksicherung dem Konto des Sicherungsdienstes und wird in Schritt 4 der Anleitung an das Konto der Anwendung übergeben.
+
+**Nächster Schritt:** Holger nimmt ab (Ergebnis-PR und Codex Prüfauftrag /mnt/project-files/a18/codex-pruefauftrag-task-131.md); danach TASK-132 in derselben Sitzung, sobald das Ergebnis auf main ist.
 
 ## TASK-132 Installation, Version und Update für den Betrieb (A18 Teil 2)
 

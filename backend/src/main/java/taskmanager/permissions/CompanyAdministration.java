@@ -33,4 +33,11 @@ public interface CompanyAdministration {
      * the last active local account with both company rights {@code permissions.manage} and {@code accounts.manage} (TASK-047).
      */
     boolean remainsWithout(UUID companyId, UUID userId);
+
+    /**
+     * Every account that holds at least one company wide right (an action without project), with the keys of those rights in
+     * sorted order, by account in sorted order. A plain read without locks for the command {@code after-restore} (TASK-131),
+     * which lists them so that the operator can repeat known withdrawals; it grants nothing.
+     */
+    java.util.SortedMap<UUID, java.util.SortedSet<String>> companyRightHolders(UUID companyId);
 }

@@ -1059,6 +1059,7 @@ export const en: Record<MessageKey, Message> = {
   'helpdesk.code.helpdesk.send_refused': 'The mail server refused the mail',
   'helpdesk.code.helpdesk.send_uncertain': 'The answer of the mail server is missing; the mail may have arrived',
   'helpdesk.code.helpdesk.send_interrupted': 'Sending was interrupted; the mail may have arrived',
+  'helpdesk.code.helpdesk.restored': 'Held after a restore; the mail may have arrived',
   'helpdesk.code.helpdesk.job_ended': 'The send job ended without handing the mail over; it was not sent',
   'helpdesk.code.helpdesk.job_invalid': 'The send job names no valid confirming person; nothing was sent',
   'helpdesk.code.helpdesk.send_broken': 'The mail server broke off before the end of the mail; it was not sent',

@@ -86,16 +86,16 @@ run first-start
 phase="first-start: history"
 after_first=$(history)
 echo "$after_first"
-[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true,0025:true,0026:true,0027:true,0028:true,0030:true,0032:true,0033:true,0034:true,0035:true,0036:true,0037:true,0038:true,0039:true,0040:true,0041:true,0042:true,0043:true,0044:true,0045:true,0046:true,0047:true,0048:true,0049:true,0050:true,0051:true,0052:true,0053:true,0054:true,0055:true,0056:true,0057:true,0058:true,0059:true,0060:true,0061:true,0062:true,0063:true,0064:true,0065:true,0066:true,0067:true,0068:true,0069:true' ] \
+[ "$(sql "select string_agg(version || ':' || success, ',' order by installed_rank) from flyway_schema_history")" = '0001:true,0002:true,0003:true,0004:true,0005:true,0007:true,0008:true,0009:true,0010:true,0011:true,0012:true,0013:true,0014:true,0015:true,0016:true,0017:true,0018:true,0019:true,0020:true,0021:true,0022:true,0023:true,0024:true,0025:true,0026:true,0027:true,0028:true,0030:true,0032:true,0033:true,0034:true,0035:true,0036:true,0037:true,0038:true,0039:true,0040:true,0041:true,0042:true,0043:true,0044:true,0045:true,0046:true,0047:true,0048:true,0049:true,0050:true,0051:true,0052:true,0053:true,0054:true,0055:true,0056:true,0057:true,0058:true,0059:true,0060:true,0061:true,0062:true,0063:true,0064:true,0065:true,0066:true,0067:true,0068:true,0069:true,0070:true' ] \
   || fail "unexpected history after first start"
-grep -q 'Successfully applied 66 migrations' "$logs/first-start.log" || fail "first start did not migrate"
+grep -q 'Successfully applied 67 migrations' "$logs/first-start.log" || fail "first start did not migrate"
 
 phase=restart
 echo "== Restart"
 run restart
 [ "$(history)" = "$after_first" ] || fail "restart changed the migration history"
 grep -q 'Schema "public" is up to date. No migration necessary.' "$logs/restart.log" || fail "restart did not report an up-to-date schema"
-[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'ai_assignment,ai_audit_event,ai_limit,ai_model,ai_provider,ai_run,ai_skill_selection,ai_skill_version,ai_suggestion,appearance_audit_event,appearance_mail_template,appearance_setting,file_attachment,file_audit_event,file_image,flyway_schema_history,git_audit_event,git_connection,git_link,git_oauth_state,git_provider,git_repository,helpdesk_audit_event,helpdesk_contact,helpdesk_contact_address,helpdesk_customer,helpdesk_customer_project,helpdesk_mailbox,helpdesk_message,helpdesk_portal_position,helpdesk_portal_post,helpdesk_portal_post_attachment,helpdesk_portal_seen,helpdesk_reply,helpdesk_reply_image,helpdesk_reply_mail,helpdesk_ticket_customer,identity_account,identity_audit_event,identity_ldap_setting,identity_login_throttle,identity_session,identity_setting,job,job_audit_event,job_schedule,job_worker,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_configuration_draft,project_member,requirement,requirement_counter,requirement_event,requirement_page_link,requirement_revision,requirement_ticket_link,search_project,search_project_tag,search_requirement,search_requirement_criterion,search_requirement_custom,search_requirement_text,search_state,search_tag,search_ticket,search_ticket_custom,search_ticket_tag,search_wiki_page,search_wiki_text,sla_audit_event,sla_calendar,sla_calendar_version,sla_clock,sla_cycle,sla_escalation,sla_rule,sla_rule_version,sla_ticket,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter,time_entry,time_entry_revision,wiki_event,wiki_image,wiki_page,wiki_revision,wiki_revision_image,wiki_variant' ] \
+[ "$(sql "select string_agg(table_name, ',' order by table_name) from information_schema.tables where table_schema = 'public'")" = 'ai_assignment,ai_audit_event,ai_limit,ai_model,ai_provider,ai_run,ai_skill_selection,ai_skill_version,ai_suggestion,appearance_audit_event,appearance_mail_template,appearance_setting,file_attachment,file_audit_event,file_image,flyway_schema_history,git_audit_event,git_connection,git_link,git_oauth_state,git_provider,git_repository,helpdesk_audit_event,helpdesk_contact,helpdesk_contact_address,helpdesk_customer,helpdesk_customer_project,helpdesk_mailbox,helpdesk_message,helpdesk_portal_position,helpdesk_portal_post,helpdesk_portal_post_attachment,helpdesk_portal_seen,helpdesk_reply,helpdesk_reply_image,helpdesk_reply_mail,helpdesk_ticket_customer,identity_account,identity_audit_event,identity_ldap_setting,identity_login_throttle,identity_session,identity_setting,job,job_audit_event,job_schedule,job_worker,operations_audit_event,operations_backup_content,operations_restore_pending,permissions_action,permissions_audit,permissions_field,permissions_group,permissions_membership,permissions_revision,platform_company,project,project_audit_event,project_configuration,project_configuration_draft,project_member,requirement,requirement_counter,requirement_event,requirement_page_link,requirement_revision,requirement_ticket_link,search_project,search_project_tag,search_requirement,search_requirement_criterion,search_requirement_custom,search_requirement_text,search_state,search_tag,search_ticket,search_ticket_custom,search_ticket_tag,search_wiki_page,search_wiki_text,sla_audit_event,sla_calendar,sla_calendar_version,sla_clock,sla_cycle,sla_escalation,sla_rule,sla_rule_version,sla_ticket,tag,tag_audit_event,tag_project,tag_ticket,ticket,ticket_change,ticket_counter,time_entry,time_entry_revision,wiki_event,wiki_image,wiki_page,wiki_revision,wiki_revision_image,wiki_variant' ] \
   || fail "unexpected schema objects"
 [ "$(sql "select (select count(*) from platform_company) + (select count(*) from permissions_revision) + (select count(*) from permissions_action) + (select count(*) from permissions_membership)")" = 0 ] \
   || fail "unexpected default identities or grants"
@@ -138,6 +138,32 @@ set -e
 [ "$code" -eq 0 ] || { cat "$logs/rebuild-search.out" "$logs/rebuild-search.err"; fail "rebuild-search exited with $code"; }
 grep -q '^Search projection rebuilt.$' "$logs/rebuild-search.out" || fail "rebuild-search did not report the rebuild"
 [ "$(sql "select count(*) from search_state")" = 1 ] || fail "rebuild-search did not record the built projection"
+
+phase=after-restore
+echo "== Container command: after a restore (TASK-131)"
+set +e
+java -jar "$jar" after-restore "Lifecycle" > "$logs/after-restore-none.out" 2> "$logs/after-restore-none.err"
+code=$?
+set -e
+[ "$code" -eq 2 ] || fail "after-restore without a waiting restore exited with $code instead of 2"
+grep -q 'restore.not_pending' "$logs/after-restore-none.err" || fail "after-restore did not name the reason"
+sql "insert into operations_restore_pending (point, restored_at) values ('20261123T000000Z', now())" > /dev/null
+set +e
+env TASK_MANAGER_HTTP_PORT=$port timeout 120 java -jar "$jar" > "$logs/restore-pending.log" 2>&1
+code=$?
+set -e
+[ "$code" -ne 0 ] && [ "$code" -ne 124 ] || fail "the web server started although a restore waits"
+grep -q "was not released yet" "$logs/restore-pending.log" || fail "the refusal does not name the waiting restore"
+set +e
+java -jar "$jar" after-restore "Lifecycle" > "$logs/after-restore.out" 2> "$logs/after-restore.err"
+code=$?
+set -e
+[ "$code" -eq 0 ] || { cat "$logs/after-restore.out" "$logs/after-restore.err"; fail "after-restore exited with $code"; }
+grep -q '^Backup point: 20261123T000000Z$' "$logs/after-restore.out" || fail "after-restore did not name the point"
+grep -q 'The installation is released.' "$logs/after-restore.out" || fail "after-restore did not release the installation"
+[ "$(sql "select count(*) from operations_restore_pending")" = 0 ] || fail "after-restore left the marker"
+[ "$(sql "select operation || ' ' || operator from operations_audit_event")" = 'restore.released Lifecycle' ] \
+  || fail "after-restore did not record what it did"
 
 phase=started-with-admin
 echo "== Start with an existing account"

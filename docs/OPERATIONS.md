@@ -202,4 +202,6 @@ Diese Fälle beschreiben spätere Tests. Jetzt wurden nur Dokumentkonsistenz und
 | O15 Mailspitze / 30 Sitzungen / KI-Last | Begrenzte Warteschlangen und nachvollziehbare Überlastreaktion; keine unbegrenzten Wiederholungen. |
 | O16 Fernwartung / Diagnose / Zielmanipulation | Zeitlich begrenzte Zugänge, bereinigte Diagnosen und nur freigegebene Netzwerkziele. |
 
+**Umgesetzt mit TASK-131 (DEC-161):** Das Sicherungsverfahren, der gemeinsame Sicherungspunkt, die Rücksicherung, der Befehl `after-restore` und die gemessene Probe stehen in [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Damit sind aus OPEN-012 die Referenzplattform, das Sicherungswerkzeug und -ziel, die ausgehenden Verbindungen und die Zuordnung von Verantwortung und Servicezeit entschieden; der Nachweis auf der Referenzumgebung mit vollem Daten- und Dateibestand bleibt bei TASK-134.
+
 OPEN-012 bleibt für Plattformmatrix, Sicherungswerkzeug/-ziel, Netzwege, Servicezeit und Verantwortlichkeit offen; DEC-038 bestätigt die Wiederherstellungsziele. OPEN-014 entscheidet Lastprofil und Leistungswerte; OPEN-016 die Aufbewahrung. Primärquellen zu Docker und PostgreSQL wurden am 15. Oktober 2026 geprüft. Es wurden keine Container installiert, Daten gesichert, Wiederherstellungen durchgeführt oder Leistungs-/Sicherheitstests an einer Anwendung ausgeführt.
