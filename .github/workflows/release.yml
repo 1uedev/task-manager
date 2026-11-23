@@ -75,6 +75,12 @@ jobs:
               "sbom:/out/sbom-$part-$VERSION.spdx.json" -o json --file "/out/vulnerabilities-$part-$VERSION.json"
           done
           rm -f "$RUNNER_TEMP/app.tar" "$RUNNER_TEMP/backup.tar"
+          # The ssh client of the backup image comes from the Debian sources at the build; its version is in the bill of
+          # materials, and the release names it (H4 of the review of TASK-132).
+          ssh=$(jq -r '[.packages[] | select(.name == "openssh-client") | .versionInfo] | first // empty' \
+            "release/sbom-backup-$VERSION.spdx.json")
+          [ -n "$ssh" ] || { echo "::error::the bill of materials of the backup image names no openssh-client"; exit 1; }
+          echo "openssh-client $ssh" | tee "release/ssh-client-$VERSION.txt"
       - name: Publish both images
         env:
           VERSION: ${{ steps.tag.outputs.version }}

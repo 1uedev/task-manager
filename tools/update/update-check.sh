@@ -165,7 +165,7 @@ fingerprint() {
   done
   local files
   files=$(docker run --rm --network none -v "${project}_files-data:/files:ro" --entrypoint sh "$python_image" -c \
-    'cd /files && find . -type f -print0 | sort -z | xargs -0r sha256sum | tee /tmp/sums > /dev/null;
+    'mkdir -p /tmp/none && cd /files/content 2> /dev/null || cd /tmp/none; find . -type f -print0 | sort -z | xargs -0r sha256sum | tee /tmp/sums > /dev/null;
      printf "%s %s %s" "$(wc -l < /tmp/sums)" "$(find . -type f -print0 | xargs -0r cat | wc -c)" "$(sha256sum < /tmp/sums | cut -c1-64)"')
   read -r file_count file_bytes file_sum <<< "$files"
   echo "$rows rows in $tables tables, $file_count files with $file_bytes bytes; $(printf '%s' "$sums $file_sum" | sha256sum | cut -c1-16)"

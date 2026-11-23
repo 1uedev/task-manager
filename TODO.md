@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -53,6 +51,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
+| [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -396,7 +395,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-136 Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-opsfix-02 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-opsfix-02 · **Aktualisiert:** 2026-11-23
 
 **Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166; docs/REVIEW_TASK-132_PR-347.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-132 auf main (PR #347), TASK-135 auf main (PR #348). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-132 (Empfehlung nachbessern) „Alles beheben als TASK-136“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-166, Migration V0072 nur falls nötig. F4 (Lesbarkeit hochgeladener Inhalte für den Sicherungsdienst) und der SFTP Nachweis aus H4 sind bereits mit TASK-135 (PR #348) umgesetzt und werden hier nur gegengeprüft.
 
@@ -422,4 +421,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
 3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-166 entsprechen dem Code.
 
-**Nächster Schritt:** Umsetzung durch claude-20261123-opsfix-02 nach dem Merge dieser Reservierung.
+**Übergabe:** Umgesetzt auf claude/project-thread-elfpvq mit Migration V0072. F1: der Einstieg registriert den Befehl, `MigrateCommandRunner` und `RestoreCommandRunner` hängen an `@ConditionalOnContainerCommand`, keine Eigenschaft gibt das Recht (`MigrateCommandTest.noSettingLetsAWebProcessAWorkerOrAnotherCommandMigrate`). F2 und H1: `SchemaGuard` lehnt für `migrate` und `verify` abgeschaltetes Flyway und jede Flyway Einstellung außer den vier festen ab und verweigert einen Start ohne Prüfung; unbekannter Modus ohne Rohwert, Fehler „in this run“ und „in an earlier run“ getrennt (vier neue Tests). F3: `deploy/db-roles.sql` mit `DatabaseRolesTest` (neue Installation, Übergang einer älteren zweimal, Vorführung ohne Rollen; Laufzeitrolle ohne DDL, Sicherungsrolle nur mit ihrem Anteil), V0072. F4: Punkt der Updateprüfung mit drei Anhängen und Wikibild (4 Inhalte). F5: Sperre im Zustandsvolume für jeden Punkt, Gegenprobe in der Updateprüfung mit laufendem Punkt des Dienstes und Rückkehr auf genau diesen Punkt. F6: Filter in `Caddyfile`, `tools/caddy/check-log.sh` grün und gegen das alte Format rot. F7: `environment: release`, `tools/release/check-tag.sh` mit `tests/test_release_tools.py`; **offen für Holger:** Umgebung `release` und Tag Regelsatz nach docs/INSTALL.md, „Veröffentlichen einer Version“. F8: Dienst `images` mit `check-images.sh`, Testweg `tools/update/compose.test.yaml`, Tag in der Updateprüfung abgelehnt. F9: `tools/update/choose_base.py` mit `tests/test_update_base.py`, Weg über Release Paket und Digests im Workflow; bis zum ersten Release fester Stand. F10: 27 Tabellen und Inhalte des Dateispeichers, Hoch und Herunterladen vor und nach dem Austausch, Kernabläufe über TLS. F11: Abschnitt „Rückkehr“ und Lauf nach synthetisch gescheitertem Update. F12: `compose.proxy.yaml`, Paket nach `tools/release/bundle.py` mit Verweisprüfung, Registries genannt. H2: Passwörter nur über Umgebung, Dateien unter dem Arbeitsverzeichnis. H3: Pfadfilter, Projektname je Lauf, Aufräumfehler protokolliert, Schritt für abgebrochene Läufe. H4: Release nennt die Version von `openssh-client` aus dem SBOM. Nachweise: Repository Prüfungen und 63 Python Tests grün, Backend `./mvnw verify` mit Java 21, Lebenszyklusprüfung, lokaler Lauf von `tools/update/update-check.sh` von V0069 auf V0072 (461 Zeilen in 27 Tabellen und 3 Dateien gleich, Rückweg grün). Grenzen: der Weg über ein veröffentlichtes Release läuft erst mit dem ersten Release; die Probe der Rücksicherung behält für ihre eigenen Prozesse das Verwaltungskonto.
+
+**Nächster Schritt:** Codex Prüfung des Ergebnis PR, danach Abnahme von TASK-132 und TASK-136 durch Holger; Holger richtet die Umgebung `release` und den Tag Regelsatz ein.
