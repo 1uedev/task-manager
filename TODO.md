@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-138](#task-138-befunde-f1-und-f2-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-130-beheben) | Befunde F1 und F2 und Hinweise H1 bis H3 der Codex Prüfung von TASK-130 beheben | claude-20261123-aifix-03 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -424,3 +426,25 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** Umgesetzt auf claude/project-thread-elfpvq mit Migration V0072. F1: der Einstieg registriert den Befehl, `MigrateCommandRunner` und `RestoreCommandRunner` hängen an `@ConditionalOnContainerCommand`, keine Eigenschaft gibt das Recht (`MigrateCommandTest.noSettingLetsAWebProcessAWorkerOrAnotherCommandMigrate`). F2 und H1: `SchemaGuard` lehnt für `migrate` und `verify` abgeschaltetes Flyway und jede Flyway Einstellung außer den vier festen ab und verweigert einen Start ohne Prüfung; unbekannter Modus ohne Rohwert, Fehler „in this run“ und „in an earlier run“ getrennt (vier neue Tests). F3: `deploy/db-roles.sql` mit `DatabaseRolesTest` (neue Installation, Übergang einer älteren zweimal, Vorführung ohne Rollen; Laufzeitrolle ohne DDL, Sicherungsrolle nur mit ihrem Anteil), V0072. F4: Punkt der Updateprüfung mit drei Anhängen und Wikibild (4 Inhalte). F5: Sperre im Zustandsvolume für jeden Punkt, Gegenprobe in der Updateprüfung mit laufendem Punkt des Dienstes und Rückkehr auf genau diesen Punkt. F6: Filter in `Caddyfile`, `tools/caddy/check-log.sh` grün und gegen das alte Format rot. F7: `environment: release`, `tools/release/check-tag.sh` mit `tests/test_release_tools.py`; **offen für Holger:** Umgebung `release` und Tag Regelsatz nach docs/INSTALL.md, „Veröffentlichen einer Version“. F8: Dienst `images` mit `check-images.sh`, Testweg `tools/update/compose.test.yaml`, Tag in der Updateprüfung abgelehnt. F9: `tools/update/choose_base.py` mit `tests/test_update_base.py`, Weg über Release Paket und Digests im Workflow; bis zum ersten Release fester Stand. F10: 27 Tabellen und Inhalte des Dateispeichers, Hoch und Herunterladen vor und nach dem Austausch, Kernabläufe über TLS. F11: Abschnitt „Rückkehr“ und Lauf nach synthetisch gescheitertem Update. F12: `compose.proxy.yaml`, Paket nach `tools/release/bundle.py` mit Verweisprüfung, Registries genannt. H2: Passwörter nur über Umgebung, Dateien unter dem Arbeitsverzeichnis. H3: Pfadfilter, Projektname je Lauf, Aufräumfehler protokolliert, Schritt für abgebrochene Läufe. H4: Release nennt die Version von `openssh-client` aus dem SBOM. Nachweise: Repository Prüfungen und 63 Python Tests grün, Backend `./mvnw verify` mit Java 21, Lebenszyklusprüfung, lokaler Lauf von `tools/update/update-check.sh` von V0069 auf V0072 (461 Zeilen in 27 Tabellen und 3 Dateien gleich, Rückweg grün). Grenzen: der Weg über ein veröffentlichtes Release läuft erst mit dem ersten Release; die Probe der Rücksicherung behält für ihre eigenen Prozesse das Verwaltungskonto.
 
 **Nächster Schritt:** Codex Prüfung des Ergebnis PR, danach Abnahme von TASK-132 und TASK-136 durch Holger; Holger richtet die Umgebung `release` und den Tag Regelsatz ein.
+
+## TASK-138 Befunde F1 und F2 und Hinweise H1 bis H3 der Codex Prüfung von TASK-130 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-aifix-03 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-AI-002, REQ-AI-006, REQ-AI-007, REQ-SEC-001; DEC-156, DEC-158, DEC-160, DEC-168; docs/REVIEW_TASK-130_PR-343.md. **Abhängigkeiten:** TASK-130 auf main (PR #343). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-130 (Empfehlung nachbessern) „Alles beheben“ mit der zuerst vorgeschlagenen Aufgabennummer 137; diese Nummer ging zur gleichen Zeit an Paket A18, daher TASK-138. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-168, keine Migration.
+
+**Umfang:** Behebung der Befunde F1 und F2 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-130_PR-343.md im Modul `ai`, im Testersatz der Browsertests und in der Dokumentation. Nicht Teil: die vier Anwendungsfälle (TASK-126, TASK-127), Prüfsatz, Demo und Lauf gegen echte Anbieter (TASK-128), weitere Anbieter oder Funktionen.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier F1, F2 und H1 bis H3):
+1. F1: Der Stempel eines Probelaufs enthält zusätzlich die höchste je vergebene Entwurfsnummer seines Falls und seiner Sprache (verworfene Nummern bleiben belegt). Ein Probelauf vor dem Anlegen eines Entwurfs bleibt nach Speichern und Verwerfen dieses Entwurfs ungültig. Der Stempel fachlicher Läufe ändert sich durch bloße Entwurfsarbeit nicht. Gegenprobe mit derselben alten Lauf ID über alle drei Lesestände.
+2. F2: Vom Anbieter gemeldete Tokenzahlen werden bei einem erkannten Schlüsseltreffer verworfen und bei jedem übrigen Abschluss vor dem Speichern mit dem verwendeten Schlüssel verglichen; eine Zahl, deren Dezimaldarstellung den Schlüssel enthält, wird nicht gespeichert. Gegenprobe mit einem zulässigen numerischen Schlüssel und mit unverfänglichen Tokenzahlen.
+3. H1: Ein eigener dauerhafter Test hält die Schlüsselphase des Ausführers an, bricht den Lauf ab und belegt, dass danach kein Adapteraufruf beginnt; er schlägt ohne die Prüfung im Ausführer fehl.
+4. H2: Nach dem Holen oder Erzeugen des HTTP Clients wird der Interrupt unmittelbar vor der Übergabe der Anfrage erneut geprüft. Die Grenze bleibt kooperativ; ein gleichzeitig eintreffender Abbruch kann den Versand nicht absolut verhindern, das ist dokumentiert.
+5. H3: Der Testersatz der Browsertests antwortet bei gesperrter Adresse auch bei Zugangsprüfung und Modellprüfung wie der Server (`ok: false`, `code: ai.address_not_allowed`, `models: null`); der Browsertest prüft die angezeigte Meldung.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1, F2 und H1 bis H3 sind nach den Regeln behoben, mit den Gegenproben.
+2. Backend Tests, `npm run verify` und alle Browsertests sind grün.
+3. Dokumentation und DEC-168 entsprechen den Regeln.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
