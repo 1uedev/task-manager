@@ -17,8 +17,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
 | Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -39,7 +39,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-128](#task-128-ki-prüfsatz-demo-lauf-gegen-echte-anbieter-und-betriebsdokumentation-a16-teil-4) | KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4) | claude-20261117-ai-01 | 2026-11-17 |
-| [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-133](#task-133-betriebszustand-und-überwachung-a18-teil-3) | Betriebszustand und Überwachung (A18 Teil 3) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-134](#task-134-referenzmessung-und-v1-freigabeprüfung-a18-teil-4) | Referenzmessung und V1 Freigabeprüfung (A18 Teil 4) | claude-20261123-ops-01 | 2026-11-23 |
 
@@ -52,6 +51,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-129](#task-129-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-125-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-125 beheben | claude-20261117-aifix-01 | 2026-11-17 |
 | [TASK-130](#task-130-befunde-f1-bis-f7-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-129-beheben) | Befunde F1 bis F7 und Hinweise H1 und H2 der Codex Prüfung von TASK-129 beheben | claude-20261118-aifix-02 | 2026-11-18 |
 | [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
+| [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -292,9 +292,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-132 Installation, Version und Update für den Betrieb (A18 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
 
-**Bezug:** REQ-OPS-001, REQ-OPS-002, REQ-OPS-003, REQ-OPS-005, REQ-SEC-001; OPEN-012; ACC-008; docs/OPERATIONS.md (Referenzinstallation, Updates und Rückkehr, Prüffälle O01, O11). **Abhängigkeiten:** TASK-131 auf main. **Arbeitsstand:** Mit TASK-131 von Holger am 23. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-131 auf main ist. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-162.
+**Bezug:** REQ-OPS-001, REQ-OPS-002, REQ-OPS-003, REQ-OPS-005, REQ-SEC-001; OPEN-012; ACC-008; docs/OPERATIONS.md (Referenzinstallation, Updates und Rückkehr, Prüffälle O01, O11). **Abhängigkeiten:** TASK-131 auf main. **Arbeitsstand:** Mit TASK-131 von Holger am 23. November 2026 beauftragt und mit den Vorschlägen bestätigt; nach dem Ergebnis von TASK-131 auf main (PR #345) umgesetzt. Branch claude/project-thread-elfpvq, Entscheidung DEC-162.
 
 **Umfang:** Betriebsvorlage `deploy/compose.yaml` mit TLS Einstieg, Versionen und Veröffentlichung des Images auf ein Tag von Holger, der Befehl `migrate` mit Startprüfung der Schemaversion, der Updatepfad mit Workflow und die Installations und Updateanleitung. Nicht Teil: unterbrechungsfreie Updates, automatische Updates, andere Plattformen, Fernwartungswerkzeug.
 
@@ -310,7 +310,17 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Der Workflow „Update“ besteht mit Datenerhalt; der Veröffentlichungsworkflow erzeugt Digest, SBOM und Schwachstellenbericht und veröffentlicht nur auf ein Tag.
 4. Installations und Updateanleitung mit Versionsmatrix und Liste der ausgehenden Verbindungen.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-131 auf main die Blockade aufheben und umsetzen.
+**Ergebnis (Übergabe):**
+- Befehl `migrate` (`MigrateCommandRunner`) und Startprüfung `SchemaGuard` mit `TASK_MANAGER_SCHEMA_MODE`: `migrate` (Vorgabe, Vorführung unverändert) oder `verify` (Betriebsvorlage). `verify` startet nicht bei fehlenden Migrationen, bei einer Datenbank, die neuer ist als das Image, oder nach einer gescheiterten Migration, jeweils mit klarer Meldung; `migrate` lehnt eine neuere Datenbank mit Rückgabewert 2 ab und läuft dank der Sperre von Flyway genau einmal.
+- Betriebsvorlage `deploy/compose.yaml` mit Caddy 2.10.2 (ACME oder eigenes Zertifikat), Webprozess, Ausführer, PostgreSQL 18.6, Sicherungsdienst und Dienst `migrate`, Grenzen für Speicher und CPU, schreibgeschützte Dateisysteme, ohne Capabilities, Docker Socket und privilegierte Container; dazu `Caddyfile`, `db-init.sh` (Rolle des Sicherungsdienstes) und `.env.example`. Das Sicherungsimage enthält jetzt den ssh Client für SFTP.
+- Versionsangaben im Image (`TASK_MANAGER_VERSION`, OCI Labels), Workflow `release.yml` nur auf ein Tag `vMAJOR.MINOR.PATCH` auf main (beide Images, SPDX Komponentenverzeichnis, Schwachstellenbericht, Digests, Vorlage mit Prüfsummen), Workflow `update.yml` mit der Prüfung `tools/update/update-check.sh` vom festen Stand 7731cd0 beziehungsweise der letzten Version.
+- Anleitung `docs/INSTALL.md` (Versionsmatrix, Installation, eigener Proxy, Startprüfung, Update, Rückkehr, ausgehende Verbindungen, Grenzen), Entscheidung DEC-162, Hinweise in README.md, backend/README.md, docs/OPERATIONS.md und docs/BACKUP_RESTORE.md.
+
+**Geprüft:** `python3 scripts/validate_repository.py`, `python3 scripts/task_board.py --check`, `python3 -m unittest discover -s tests`, Backend `./mvnw test` mit Java 21 lokal (CI prüft Java 25) einschließlich der sechs Tests von `MigrateCommandTest`, `backend/scripts/lifecycle-check.sh` mit der neuen Phase `schema` und einem Start im Modus `verify`. Die Updateprüfung lief vollständig auf diesem Rechner: V0069 nach V0070 mit Demodaten hinter TLS mit eigener CA, Start vor `migrate` abgewiesen, zweiter `migrate` ohne Änderung, Datenfingerabdruck gleich (4 Projekte, 43 Tickets, 16 Tags, 7 Konten), Kernabläufe über TLS, Austausch der Container, Sicherungspunkt mit eigener Rolle, keine Geheimnisse im Image, keine privilegierten Container. Protokolle: /mnt/project-files/a18/update-2026-11-23/.
+
+**Abweichungen:** Der Veröffentlichungsworkflow wurde nicht ausgeführt, weil er nur auf ein Tag von Holger läuft; das Komponentenverzeichnis wurde lokal mit derselben syft Version aus dem Image erzeugt, der Schwachstellenbericht nicht. Das Sicherungsimage mit ssh Client ließ sich lokal nicht bauen (Paketquellen gesperrt); den Bau prüft die CI im Workflow „Update“. Befund F8 der Prüfung von TASK-131 ist damit erst teilweise behoben; der SFTP Nachweis gehört zur Behebung dieser Befunde.
+
+**Nächster Schritt:** Holger nimmt ab (Ergebnis-PR und Codex Prüfauftrag /mnt/project-files/a18/codex-pruefauftrag-task-132.md); danach TASK-133 in derselben Sitzung, sobald das Ergebnis auf main ist.
 
 ## TASK-133 Betriebszustand und Überwachung (A18 Teil 3)
 

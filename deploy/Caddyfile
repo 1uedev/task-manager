@@ -1,0 +1,33 @@
+# TLS entry of the operations template (TASK-132, DEC-162, rule 1). Caddy ends TLS and hands every request to the web
+# process. The certificate comes either from ACME (TASK_MANAGER_TLS=acme, the default, needs ports 80 and 443 reachable
+# from the internet and an address in DNS) or from the operator (TASK_MANAGER_TLS=own, the files certificate.pem and key.pem
+# in the directory TASK_MANAGER_TLS_DIR). Nothing else is configured here; see docs/INSTALL.md.
+{
+	# No administration endpoint: the configuration changes only with this file and a restart.
+	admin off
+}
+
+(tls-acme) {
+	tls {
+		issuer acme
+	}
+}
+
+(tls-own) {
+	tls /certs/certificate.pem /certs/key.pem
+}
+
+{$TASK_MANAGER_DOMAIN} {
+	import tls-{$TASK_MANAGER_TLS:acme}
+	encode zstd gzip
+	# Caddy sets X-Forwarded-For, X-Forwarded-Proto and X-Forwarded-Host itself.
+	reverse_proxy app:8080
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	log {
+		output stdout
+		format console
+	}
+}

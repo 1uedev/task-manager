@@ -47,6 +47,11 @@ logging:
     level: "%5p [%X{correlationId:-}]"
 
 taskmanager:
+  schema:
+    # Who changes the schema (TASK-132): "migrate" migrates at every start, as the demonstration does; "verify", the mode
+    # of the operations template deploy/compose.yaml, changes nothing and refuses a schema that does not fit the image.
+    # The command "migrate" always migrates.
+    mode: ${TASK_MANAGER_SCHEMA_MODE:migrate}
   identity:
     ldap:
       # Secrets and the private trust of the directory connection come from the environment only (TASK-046). The connection

@@ -1,2 +1,3 @@
 org.springframework.boot.diagnostics.FailureAnalyzer=\
-taskmanager.platform.config.MissingSettingsFailureAnalyzer
+taskmanager.platform.config.MissingSettingsFailureAnalyzer,\
+taskmanager.operations.internal.SchemaVersionFailureAnalyzer

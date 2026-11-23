@@ -1,0 +1,78 @@
+name: Update
+
+# The update check of TASK-132 (DEC-162, rule 4): the way from the last released version to this change with the
+# operations template deploy/compose.yaml, TLS and synthetic demo data, with all data kept. Until the first version exists
+# the way starts at a fixed earlier state of main. It runs on demand and whenever migrations, the template, the operations
+# module or the check change.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/src/main/resources/db/migration/**
+      - backend/src/main/java/taskmanager/operations/**
+      - deploy/**
+      - tools/update/**
+      - Dockerfile
+      - .github/workflows/update.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/src/main/resources/db/migration/**
+      - backend/src/main/java/taskmanager/operations/**
+      - deploy/**
+      - tools/update/**
+      - Dockerfile
+      - .github/workflows/update.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The state of main before package A18 (TASK-130, V0069): the starting point until a version was released.
+  UPDATE_FIRST_BASE: 7731cd0851ad662d57bad5830ef451e0f5c1cc6f
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Choose the older version
+        id: base
+        run: |
+          base=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --merged HEAD --sort=-v:refname \
+            | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | head -n 1 || true)
+          [ -n "$base" ] || base=$UPDATE_FIRST_BASE
+          echo "Older version: $base"
+          git worktree add --detach "$RUNNER_TEMP/old" "$base"
+      - name: Record tool versions
+        run: |
+          docker version
+          docker compose version
+      - name: Build the older version, this change and the backup service
+        run: |
+          docker build --tag task-manager:update-old "$RUNNER_TEMP/old"
+          docker build --tag task-manager:update-new .
+          docker build --tag task-manager-backup:update deploy/backup
+      - name: Update with the operations template and check the data
+        env:
+          UPDATE_CHECK_OLD_IMAGE: task-manager:update-old
+          UPDATE_CHECK_NEW_IMAGE: task-manager:update-new
+          UPDATE_CHECK_BACKUP_IMAGE: task-manager-backup:update
+          UPDATE_CHECK_RESULTS: update-results
+        run: UPDATE_CHECK_OLD_SOURCE="$RUNNER_TEMP/old" tools/update/update-check.sh
+      - name: Preserve the evidence of the update
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: update-evidence
+          retention-days: 7
+          path: update-results

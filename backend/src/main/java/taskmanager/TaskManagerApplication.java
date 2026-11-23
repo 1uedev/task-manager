@@ -20,6 +20,8 @@ public class TaskManagerApplication {
     static final String WORKER = "worker";
     /** Prepares and releases an installation that was restored from a backup point (TASK-131). */
     static final String AFTER_RESTORE = "after-restore";
+    /** The one schema change of an update in the operations template (TASK-132). */
+    static final String MIGRATE = "migrate";
 
     public static void main(String[] args) {
         if (args.length > 0 && ADMIN_COMMANDS.contains(args[0])) {
@@ -30,6 +32,9 @@ public class TaskManagerApplication {
         }
         if (args.length > 0 && AFTER_RESTORE.equals(args[0])) {
             System.exit(runRestoreCommand(args, new String[0]));
+        }
+        if (args.length > 0 && MIGRATE.equals(args[0])) {
+            System.exit(runMigrateCommand(args, new String[0]));
         }
         if (args.length > 0 && WORKER.equals(args[0])) {
             int code = runWorker(args, new String[0]);
@@ -82,6 +87,34 @@ public class TaskManagerApplication {
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
+    }
+
+    /**
+     * Applies the pending migrations once and reports the schema version (TASK-132). Exit codes: 0 done or already up to
+     * date, 2 refused (usage, a database newer than the image or a failed migration), 1 unexpected error.
+     */
+    static int runMigrateCommand(String[] args, String... extraProperties) {
+        if (args.length != 1) {
+            System.err.println("Usage: " + MIGRATE);
+            return 2;
+        }
+        var builder = new SpringApplicationBuilder(TaskManagerApplication.class)
+            .web(WebApplicationType.NONE)
+            .bannerMode(org.springframework.boot.Banner.Mode.OFF)
+            .properties("taskmanager.process=command", "taskmanager.operations-command=" + MIGRATE, "logging.level.root=WARN",
+                "spring.main.log-startup-info=false");
+        try {
+            var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
+            return SpringApplication.exit(context);
+        } catch (RuntimeException failure) {
+            for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                if (cause instanceof taskmanager.operations.SchemaVersionException refused) {
+                    System.err.println("Refused: " + refused.getMessage());
+                    return 2;
+                }
+            }
+            throw failure;
+        }
     }
 
     /**

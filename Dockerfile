@@ -27,6 +27,14 @@ RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests package \
  && cp target/task-manager-backend-0.0.1-SNAPSHOT.jar /build/app.jar
 
 FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5
+# The version a release names (TASK-132): set only by the workflow "Release" from the tag; every other build is "dev".
+ARG TASK_MANAGER_VERSION=dev
+ARG TASK_MANAGER_REVISION=unknown
+ENV TASK_MANAGER_VERSION=${TASK_MANAGER_VERSION}
+LABEL org.opencontainers.image.title="task-manager" \
+      org.opencontainers.image.source="https://github.com/1uedev/task-manager" \
+      org.opencontainers.image.version="${TASK_MANAGER_VERSION}" \
+      org.opencontainers.image.revision="${TASK_MANAGER_REVISION}"
 RUN groupadd --system --gid 10001 taskmanager \
  && useradd --system --uid 10001 --gid taskmanager --home-dir /app --shell /usr/sbin/nologin taskmanager
 WORKDIR /app

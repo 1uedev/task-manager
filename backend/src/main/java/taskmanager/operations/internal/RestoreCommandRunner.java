@@ -44,7 +44,7 @@ import taskmanager.platform.CompanyContext;
  * 1 unexpected error.
  */
 @Component
-@ConditionalOnProperty("taskmanager.operations-command")
+@ConditionalOnProperty(name = "taskmanager.operations-command", havingValue = RestoreCommandRunner.AFTER_RESTORE)
 class RestoreCommandRunner implements ApplicationRunner, ExitCodeGenerator {
     static final String AFTER_RESTORE = "after-restore";
 
