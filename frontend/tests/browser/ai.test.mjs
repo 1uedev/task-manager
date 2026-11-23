@@ -181,10 +181,12 @@ describe('AI administration', () => {
     }
   });
 
-  test('an access whose address breaks today\'s rules is named in the use case, in German and in English', async () => {
-    for (const { locale, text } of [
-      { locale: 'de-DE', text: 'Die Adresse des Anbieters ist nach den heutigen Regeln nicht erlaubt.' },
-      { locale: 'en-US', text: 'The address of the provider is not allowed under today\'s rules.' },
+  test('an access whose address breaks today\'s rules is named in the use case and in both checks, in German and in English', async () => {
+    for (const { locale, text, check, failed } of [
+      { locale: 'de-DE', text: 'Die Adresse des Anbieters ist nach den heutigen Regeln nicht erlaubt.', check: (name) => `${name} prüfen`,
+        failed: (name) => `Prüfung von ${name} fehlgeschlagen: Die Adresse des Anbieters ist nach den heutigen Regeln nicht erlaubt.` },
+      { locale: 'en-US', text: 'The address of the provider is not allowed under today\'s rules.', check: (name) => `Check ${name}`,
+        failed: (name) => `Check of ${name} failed: The address of the provider is not allowed under today's rules.` },
     ]) {
       const session = await open(browser, `${base()}#/ai`, { locale, setup: (context, page) => {
         const backend = createBackend();
@@ -196,6 +198,13 @@ describe('AI administration', () => {
         const page = session.page;
         await page.waitForSelector('.shell main h1');
         await page.locator('[data-use-case="ticket_summary"]').getByTestId('ai-availability').getByText(text, { exact: false }).waitFor();
+        // TASK-138, H3: both checks answer like the server, without a list of models.
+        const accesses = page.getByTestId('ai-accesses');
+        await accesses.getByRole('button', { name: check('Ollama im Haus') }).click();
+        await page.getByText(failed('Ollama im Haus'), { exact: false }).waitFor();
+        await accesses.getByRole('button', { name: check('Llama') }).click();
+        await page.getByText(failed('Llama'), { exact: false }).waitFor();
+        assert.deepEqual(session.problems.filter((entry) => !/Failed to load resource/.test(entry)), [], 'no console warnings, errors or page errors');
       } finally {
         await session.context.close();
       }

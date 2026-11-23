@@ -146,6 +146,12 @@ class AiHttp {
             throw new Failure("ai.cancelled", null);
         }
         HttpClient client = client(provider);
+        if (Thread.currentThread().isInterrupted()) {
+            // TASK-138, H2: building the client, the first time with its trust store, takes a while; a cancellation that came in
+            // meanwhile also starts no call. The boundary stays cooperative: a cancellation after this check can no longer stop the
+            // request that is handed to the client.
+            throw new Failure("ai.cancelled", null);
+        }
         CompletableFuture<HttpResponse<byte[]>> pending;
         try {
             pending = client.sendAsync(request, info -> new LimitedBody());
@@ -248,7 +254,8 @@ class AiHttp {
         return false;
     }
 
-    private HttpClient client(AiProvider provider) {
+    /** The client of an access and its version; package visible for the test of a cancellation while it is built (TASK-138, H2). */
+    HttpClient client(AiProvider provider) {
         String key = provider.id() + ":" + provider.version();
         return clients.computeIfAbsent(key, ignored -> {
             clients.keySet().removeIf(other -> other.startsWith(provider.id() + ":"));

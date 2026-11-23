@@ -666,7 +666,7 @@ Erster Teil von Paket A15 (DEC-141, Regeln 1 bis 8 in TODO.md). Modul `taskmanag
 
 **Grenzen der JDBC Testhülle (DEC-155).** Die Codex Prüfung von TASK-124 (docs/REVIEW_TASK-124_PR-336.md) empfiehlt nachbessern. Holger wählt am 17. November 2026 „Abnehmen, Grenzen dokumentieren“, weil die Befunde nur die Testhülle und Wege betreffen, die die Schlussprüfung nicht nutzt; Codex bestätigt den Produktpfad und die Vertretbarkeit der Grenzen. Deshalb gelten zusätzlich diese Grenzen, festgehalten auch im Kommentar von `ObservedConnections.recording`: (F1) Gezählt wird nur, was ein beobachtetes Statement ausführt. SQL, das der Treiber innerhalb einer anderen Methode ausführt, etwa `select current_schema()` in `PgConnection.getSchema()`, wird nicht gezählt. (F2) Die Datenquelle legt die Hüllen jeder herausgegebenen Verbindung neu an. Dieselbe Verbindung, zweimal herausgegeben, etwa über `getConnection()` und einen Builder oder zweimal in einem Array, erhält zwei Hüllen; die Ausführungen über beide werden gezählt. (F3) Die beobachtete Datenquelle selbst ist ein Mock ihrer konkreten Klasse, keine Hülle. Als Argument an ein anderes JDBC Objekt übergeben, etwa an `setDataSource` eines zweiten Pools, erreicht sie es als Mock und nicht als der Pool, den sie beobachtet. (H1) Gezählt wird nur SQL auf dem Thread, der aufzeichnet; eine Ausführung auf einem anderen Thread nicht, auch nicht über ein beobachtetes Statement. Die Schlussprüfung führt ihre eine Abfrage synchron über ein vorbereitetes Statement aus und nutzt nichts davon. Der Hinweis H2, in den Tests von `ObservedConnectionsTest` UUIDs statt Texten als Beispielparameter zu binden, bleibt für später offen.
 
-## KI Grundlage (TASK-125, TASK-129, TASK-130)
+## KI Grundlage (TASK-125, TASK-129, TASK-130, TASK-138)
 
 Erster Teil von Paket A16 (DEC-156, Regeln 1 bis 13 in TODO.md). Modul `taskmanager.ai` mit Migration V0067 (`ai_provider`, `ai_model`, `ai_skill_version`, `ai_assignment`, `ai_limit`, `ai_run`, `ai_suggestion`, `ai_audit_event`), Vertrag [contracts/ai.openapi.yaml](../contracts/ai.openapi.yaml), Tests `AiApiTest` gegen nachgebaute Anbieter (ein HTTP Server im Test, der wie OpenAI, Anthropic und Ollama antwortet; kein Aufruf verlässt den Rechner) und `AiContractTest`, Browsertests `ai` gegen den Testersatz. Die vier Anwendungsfälle selbst folgen mit TASK-126 und TASK-127; sie beginnen ihre Ausführungen über den Port `taskmanager.ai.AiRuns` und prüfen ihre Vorschläge mit `AiSuggestionGuard`.
 
@@ -713,6 +713,14 @@ Erster Teil von Paket A16 (DEC-156, Regeln 1 bis 13 in TODO.md). Modul `taskmana
 - *Rechtefall des Prüfers (F7).* Der Prüfer eines Anwendungsfalls hat einen eigenen Testfall für das Leserecht der Quelle; ohne Lesen bleibt `content: null`.
 - *IPv6 (H1).* Gleiche Adressen in IPv6 Schreibweise haben eine Form (klein, kürzeste Kompression nach RFC 5952, IPv4 Endung als zwei Gruppen), auch in `TASK_MANAGER_AI_PLAIN_HTTP_HOSTS`.
 - *Ablehnung unter äußerer Transaktion (H2).* Der Protokolleintrag einer abgelehnten Ausführung bleibt bestehen, wenn die Transaktion des aufrufenden Moduls zurückgerollt wird.
+
+**Nachbesserung (TASK-138, DEC-168).** Nach der Codex Prüfung (docs/REVIEW_TASK-130_PR-343.md), ohne Migration, mit Tests in `AiApiTest` (mit der Testkonfiguration `HeldKeyPhase`) und `AiInternalsTest` und dem Browsertest `ai`:
+
+- *Stempel eines Probelaufs (F1).* Der Stempel eines Probelaufs trägt zusätzlich die höchste je vergebene Entwurfsnummer seines Falls und seiner Sprache (`Bezeichnung@Zähler#Nummer`). Verworfene Entwürfe behalten ihre Nummer, daher bleibt ein Probelauf vor einem Entwurf auch nach dessen Verwerfen ungültig. Fachliche Läufe tragen diesen Teil nicht; bloße Entwurfsarbeit lässt ihre Vorschläge gültig. Probeläufe aus der Zeit vor TASK-138 gelten als geändert.
+- *Tokenzahlen (F2).* Wiederholt eine Antwort den Schlüssel, speichert die Ausführung keine der gemeldeten Zahlen. Bei jedem übrigen Abschluss entfällt eine Zahl, deren Dezimalform den Schlüssel enthält; ein zulässiger Schlüssel nur aus Ziffern erscheint so nie im Protokoll.
+- *Prüfung im Ausführer (H1).* Ein eigener Test hält die Schlüsselphase an, bricht ab und belegt mit einem Zähler der Adapteraufrufe, dass kein Adapter gefragt wird.
+- *Grenze vor dem Versand (H2).* Nach dem Holen oder Erzeugen des HTTP Clients prüft `AiHttp` den Interrupt erneut, bevor die Anfrage übergeben wird. Die Grenze bleibt kooperativ: ein Abbruch nach dieser Prüfung hält eine schon übergebene Anfrage nicht mehr auf.
+- *Testersatz (H3).* Zugangs- und Modellprüfung eines gesperrten Zugangs antworten im Testersatz wie der Server mit `ok: false`, `ai.address_not_allowed` und ohne Modellzahl.
 
 ## Suche (TASK-029)
 
