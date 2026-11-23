@@ -129,7 +129,8 @@ db() { dc exec -T db psql -X -A -t -q -v ON_ERROR_STOP=1 -U taskmanager -d taskm
 probe() {
   local command=$1
   shift
-  docker run --rm --network host -v "$PWD/tools:/tools:ro" -v "$work/tls/certificate.pem:/ca.pem:ro" \
+  # As the account of the check, so that the state it writes stays the check's own and the end can remove it.
+  docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD/tools:/tools:ro" -v "$work/tls/certificate.pem:/ca.pem:ro" \
     -v "$work/state:/state" -e SSL_CERT_FILE=/ca.pem -e TASK_MANAGER_DEMO_PASSWORD -e TASK_MANAGER_ONE_TIME_PASSWORD \
     "$python_image" python -I -u /tools/update/probe.py "$command" --url "$url" "$@"
 }
