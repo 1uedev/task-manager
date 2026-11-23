@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -351,3 +353,32 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. docs/RELEASE.md und docs/RELEASE_V1.md liegen vor; jede V1 Anforderung hat Stand, Nachweis und Lücke.
 
 **Nächster Schritt:** Nach dem Ergebnis von TASK-133 auf main die Blockade aufheben und umsetzen.
+
+## TASK-135 Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-opsfix-01 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-OPS-004, REQ-OPS-006, REQ-DATA-003, REQ-SEC-001; ACC-008; DEC-161, DEC-165; docs/REVIEW_TASK-131_PR-345.md; docs/OPERATIONS.md (Prüffälle O06 bis O10). **Abhängigkeiten:** TASK-131 auf main (PR #345). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-131 (Empfehlung nachbessern) „Alles beheben als TASK-135“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-165, Migration V0071 nur falls nötig. Die Umsetzung beginnt nach dem Ergebnis-PR von TASK-132, weil beide den Sicherungsdienst und die Anleitungen ändern.
+
+**Umfang:** Behebung der Befunde F1 bis F11 und der Hinweise H1 bis H3 aus docs/REVIEW_TASK-131_PR-345.md im Sicherungsdienst `deploy/backup`, im Modul `operations` und seinen Zugängen, in der Probe `tools/restore`, im Workflow „Restore“ und in docs/BACKUP_RESTORE.md. Nicht Teil: Betriebsübersicht (TASK-133), Messung mit vollem Bestand und Freigabe (TASK-134), Hochverfügbarkeit, weitere Sicherungsziele.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier F1 bis F11 und H1 bis H3):
+1. F1: Jeder fehlerkritische Schritt von `backup.sh` wird ausdrücklich ausgewertet, auch im Dauermodus; ein Fehler beendet den Lauf ohne Meldung „complete“. Ein restic Stand gilt erst als Punkt, wenn restic mit 0 endet und die Beschreibung geprüft ist; nur solche Stände bietet `restore.sh points` an. Gegenproben im Dauermodus: Fehler der Basissicherung, SQL Fehler, Uploadfehler, restic Status 3.
+2. F2: Die Grenze eines Punkts ist ein benannter Wiederherstellungspunkt (`pg_create_restore_point`); T ist dessen Zeit, die Rücksicherung zielt auf diesen Namen, und vor dem Punkt ist das Segment mit diesem Datensatz nachweislich archiviert. Gegenproben mit echtem PostgreSQL 18: Commit kurz vor und nach der Grenze, eine vorher begonnene und danach bestätigte Transaktion, ein weiterer Punkt ohne neue Schreibvorgänge.
+3. F3: Das Archivkommando schreibt unter einem temporären Namen, schließt dauerhaft ab und benennt atomar um; ein liegengebliebener Rest blockiert die Wiederholung nicht. Vor dem Punkt wird die Kette der Segmente von der Basis bis zur Grenze geprüft. Gegenprobe mit abgebrochener Kopie.
+4. F4: Die Inhaltsmenge wird zur Grenze festgehalten, und die Bereinigung der Anhänge löscht keinen Inhalt, solange eine Sicherung läuft (gemeinsame Sperre oder Vormerkung in der Datenbank). Gegenprobe mit einer Bereinigung nach T und anschließender Rücksicherung.
+5. F5: Ein Punkt gilt bei der Rücksicherung erst als gelungen, wenn eine isolierte PostgreSQL Instanz das Ziel erreicht hat und die genannten Inhalte nach Kennung, Größe und Prüfsumme vorliegen; sonst wird der nächstältere versucht. Dateisystemfehler werden ausdrücklich geprüft. Gegenproben: fehlende mittlere WAL Datei, beschädigte Basis, ersetzte Datei bei gleicher Anzahl, Fehler beim Verschieben.
+6. F6: Prozessart und Anwendungstyp sind aneinander gebunden; nur die Befehle ohne Webserver lassen die Startsperre aus, eine unzulässige Kombination wird abgelehnt. Tests für Webstart und Ausführer mit gesetztem Parameter und einen Lesefehler der Vormerkung.
+7. F7: `after-restore` führt seine Änderungen, den Audit und das Entfernen der Vormerkung in einer Transaktion unter exklusiver Sperre der Vormerkung aus; ein zweiter gleichzeitiger Aufruf wartet oder wird abgewiesen. Tests mit Fehler zwischen den Schritten, Abbruch und zwei gleichzeitigen Aufrufen.
+8. F8: Das Sicherungsimage enthält den ssh Client; die Anleitung beschreibt Schlüssel und `known_hosts` für das Dienstkonto; die Probe sichert und spielt zurück über eine synthetische SFTP Gegenstelle.
+9. F9: Die Anleitung nennt Speicherbereiche, Besitzer, Entrypoints, Mounts und Zielverbindungen vollständig; jeder abgedruckte Befehl wird in einer frischen Umgebung genau so ausgeführt.
+10. F10: Die Probe erzeugt vor dem Punkt Anhänge und Wikibilder mit bekannten Prüfsummen, Mailantworten in `pending` und `sending` mit Aufträgen, interne und Portalsitzungen und einen KI Vorschlag; nach der Rücksicherung startet ein Ausführer mit synthetischer Mailgegenstelle, und es wird nichts erneut gesendet. Geprüft werden Anmeldung, Projekt, Ticketänderung, Suche und Download sowie die Schreibvorgänge vor und nach T.
+11. F11: Der Schreiber wird vor dem Ablesen angehalten, Zeit und Nummer stammen aus derselben letzten Zeile, die Wiederanlaufzeit endet nach den Kernprüfungen, negative Werte und Lücken werden abgewiesen.
+12. H1 bis H3: Die Pfadfilter des Workflows nennen alle beteiligten Dateien; Einmal- und Demopasswort laufen nicht über Prozessargumente; die lokale WAL Ablage wird nach der ältesten aufbewahrten Basis sicher bereinigt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F11 und H1 bis H3 sind nach den Regeln behoben, mit den Gegenproben.
+2. Backend Tests, Lebenszyklusprüfung und der Workflow „Restore“ mit den neuen Fehlerfällen sind grün.
+3. docs/BACKUP_RESTORE.md, TODO.md und DEC-165 entsprechen dem Code.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung und dem Ergebnis-PR von TASK-132 umsetzen.
