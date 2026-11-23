@@ -1,0 +1,16 @@
+# The operations template behind a reverse proxy of the operator instead of Caddy (TASK-136, finding F12 of the review of
+# TASK-132). Used together with compose.yaml for every command, best through COMPOSE_FILE in .env:
+#
+#   COMPOSE_FILE=compose.yaml:compose.proxy.yaml
+#
+# Caddy then never starts and no port 80 or 443 is taken. The web process listens on TASK_MANAGER_PROXY_BIND, by default
+# only on the loopback interface of the host, where the proxy on the same host reaches it; a proxy on another host needs
+# the address of an interface only it reaches. The proxy ends TLS for TASK_MANAGER_DOMAIN and passes Host unchanged with
+# X-Forwarded-For, X-Forwarded-Proto and X-Forwarded-Host, as docs/INSTALL.md describes.
+services:
+  caddy:
+    # A profile nobody starts: "up" leaves the service out.
+    profiles: [caddy-not-used]
+  app:
+    ports:
+      - "${TASK_MANAGER_PROXY_BIND:-127.0.0.1:8080}:8080"

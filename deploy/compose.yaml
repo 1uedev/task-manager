@@ -2,12 +2,14 @@
 # file runs a released version behind TLS with a backup service. Every setting comes from deploy/.env (see .env.example);
 # no password has a default. The walk through is in docs/INSTALL.md, the backup in docs/BACKUP_RESTORE.md.
 #
+#   docker compose run --rm images                      the check that both images are referenced by digest
 #   docker compose run --rm migrate                     the one schema change of an installation or an update
 #   docker compose run --rm app bootstrap-admin NAME    the first administrator
 #   docker compose up -d                                TLS entry, web process, worker, database and backup
 #
 # No container gets the Docker socket or runs privileged. Web process and worker never change the schema
-# (TASK_MANAGER_SCHEMA_MODE=verify) and refuse to start when it does not fit the image.
+# (TASK_MANAGER_SCHEMA_MODE=verify), refuse to start when it does not fit the image, and connect with the runtime role
+# taskmanager_app, which may not change it either; only "migrate" uses the migration role (TASK-136, db-roles.sql).
 name: task-manager
 
 x-app: &app
@@ -18,8 +20,8 @@ x-app: &app
       condition: service_healthy
   environment: &app-environment
     TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
-    TASK_MANAGER_DB_USER: taskmanager
-    TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+    TASK_MANAGER_DB_USER: taskmanager_app
+    TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_APP_DB_PASSWORD:?set TASK_MANAGER_APP_DB_PASSWORD}
     TASK_MANAGER_FILES_DIR: /data/files
     TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:?set TASK_MANAGER_SECRET_KEY}
     TASK_MANAGER_PUBLIC_URL: https://${TASK_MANAGER_DOMAIN:?set TASK_MANAGER_DOMAIN}
@@ -37,6 +39,25 @@ x-app: &app
   restart: unless-stopped
 
 services:
+  # Refuses every start with an image reference that is not a digest of the release (TASK-136, F8). Every process of the
+  # application waits for the database, and the database waits for this check.
+  images:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    entrypoint: ["sh", "/opt/taskmanager/check-images.sh"]
+    environment:
+      TASK_MANAGER_IMAGE: ${TASK_MANAGER_IMAGE:-}
+      TASK_MANAGER_BACKUP_IMAGE: ${TASK_MANAGER_BACKUP_IMAGE:-}
+      TASK_MANAGER_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager@sha256:[0-9a-f]{64}'
+      TASK_MANAGER_BACKUP_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager-backup@sha256:[0-9a-f]{64}'
+    volumes:
+      - ./check-images.sh:/opt/taskmanager/check-images.sh:ro
+    network_mode: none
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
   # Hands the named volumes of the write ahead log archive, the backup state and the restore target to the account of the
   # database and of the backup service; a new named volume belongs to root. Runs at every start and ends.
   prepare:
@@ -56,6 +77,8 @@ services:
   db:
     image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     depends_on:
+      images:
+        condition: service_completed_successfully
       prepare:
         condition: service_completed_successfully
     # The write ahead log goes into the archive the backup service reads; a segment closes at least every 5 minutes
@@ -73,13 +96,18 @@ services:
       - archive_timeout=300
     environment:
       POSTGRES_DB: taskmanager
+      # The administration account: it sets up the roles and is used by no process of the application (TASK-136, F3).
       POSTGRES_USER: taskmanager
       POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_APP_DB_PASSWORD: ${TASK_MANAGER_APP_DB_PASSWORD:?set TASK_MANAGER_APP_DB_PASSWORD}
+      TASK_MANAGER_MIGRATE_DB_PASSWORD: ${TASK_MANAGER_MIGRATE_DB_PASSWORD:?set TASK_MANAGER_MIGRATE_DB_PASSWORD}
       TASK_MANAGER_BACKUP_DB_PASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql
       - wal-archive:/archive
-      - ./db-init.sh:/docker-entrypoint-initdb.d/10-backup-role.sh:ro
+      - ./db-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+      - ./db-roles.sh:/opt/taskmanager/db-roles.sh:ro
+      - ./db-roles.sql:/opt/taskmanager/db-roles.sql:ro
       - ./archive-wal.sh:/opt/taskmanager/archive-wal.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
@@ -93,13 +121,16 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
 
-  # The one schema change of an installation or an update; never started by "up".
+  # The one schema change of an installation or an update; never started by "up". The only process with the migration
+  # role, which owns the schema (TASK-136, F3).
   migrate:
     <<: *app
     profiles: [maintenance]
     command: ["migrate"]
     environment:
       <<: *app-environment
+      TASK_MANAGER_DB_USER: taskmanager_migrate
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_MIGRATE_DB_PASSWORD:?set TASK_MANAGER_MIGRATE_DB_PASSWORD}
     restart: "no"
 
   app:
@@ -174,6 +205,9 @@ services:
       PGUSER: taskmanager_backup
       PGPASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
       PGDATABASE: taskmanager
+      # The restore checks a point in an isolated instance of its own over a local socket, as the administration account
+      # of the restored data directory; it marks the restore there for after-restore (TASK-136, F11).
+      TASK_MANAGER_RESTORE_DB_USER: taskmanager
     volumes:
       # Writable, because the service removes the segments no point needs any more (TASK-135, H3).
       - wal-archive:/archive

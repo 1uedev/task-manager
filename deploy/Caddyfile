@@ -26,8 +26,19 @@
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
+	# The access log keeps method, path, status and duration, never the query or the referrer: an OAuth return carries
+	# its code and state there (TASK-136, finding F6 of the review of TASK-132; tools/caddy/check-log.sh tests it).
 	log {
 		output stdout
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>uri regexp "\?.*$" "?"
+				request>headers>Referer delete
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
 	}
 }

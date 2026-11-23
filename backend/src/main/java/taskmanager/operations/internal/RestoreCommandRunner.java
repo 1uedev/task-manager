@@ -16,7 +16,6 @@ import tools.jackson.databind.json.JsonMapper;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ExitCodeGenerator;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -48,7 +47,7 @@ import taskmanager.platform.CompanyContext;
  * 1 unexpected error.
  */
 @Component
-@ConditionalOnProperty(name = "taskmanager.operations-command", havingValue = RestoreCommandRunner.AFTER_RESTORE)
+@ConditionalOnContainerCommand(RestoreCommandRunner.AFTER_RESTORE)
 class RestoreCommandRunner implements ApplicationRunner, ExitCodeGenerator {
     static final String AFTER_RESTORE = "after-restore";
 

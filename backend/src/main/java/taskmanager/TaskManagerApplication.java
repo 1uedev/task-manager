@@ -85,7 +85,7 @@ public class TaskManagerApplication {
         var builder = new SpringApplicationBuilder(TaskManagerApplication.class)
             .web(WebApplicationType.NONE)
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
-            .properties("taskmanager.process=command", "taskmanager.operations-command=" + args[0], "taskmanager.operations-operator=" + args[1],
+            .properties("taskmanager.process=command", "taskmanager.operations-operator=" + args[1],
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
         taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
@@ -94,7 +94,8 @@ public class TaskManagerApplication {
 
     /**
      * Applies the pending migrations once and reports the schema version (TASK-132). Exit codes: 0 done or already up to
-     * date, 2 refused (usage, a database newer than the image or a failed migration), 1 unexpected error.
+     * date, 2 refused or failed (usage, a database newer than the image, a migration that failed in an earlier run or in
+     * this one, changed Flyway settings), 1 unexpected error.
      */
     static int runMigrateCommand(String[] args, String... extraProperties) {
         if (args.length != 1) {
@@ -104,7 +105,7 @@ public class TaskManagerApplication {
         var builder = new SpringApplicationBuilder(TaskManagerApplication.class)
             .web(WebApplicationType.NONE)
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
-            .properties("taskmanager.process=command", "taskmanager.operations-command=" + MIGRATE, "logging.level.root=WARN",
+            .properties("taskmanager.process=command", "logging.level.root=WARN",
                 "spring.main.log-startup-info=false");
         taskmanager.operations.ContainerCommand.register(builder.application(), MIGRATE);
         try {

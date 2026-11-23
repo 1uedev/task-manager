@@ -202,12 +202,18 @@ clean_archive() {
 run_once() {
   require_settings || return 1
   mkdir -p "$state" || return 1
+  # One run at a time, also when the operator asks for a point next to the running service (TASK-136, F5): every step
+  # from here on, the set up of the target, the base backup, the manifest, the list of contents and the snapshot, runs
+  # under this lock on the state volume, which "exec" in the service and "run" in a container of its own share. A second
+  # run waits until the first one ended.
+  exec 9> "$state/lock" || return 1
+  if ! flock -n 9; then
+    log "another point is being made; this one waits for it"
+    flock 9 || return 1
+  fi
   [ -d "$archive" ] || { fail "the archive directory $archive does not exist"; return 1; }
   [ -d "$files" ] || { fail "the file store $files does not exist"; return 1; }
   ensure_repository || return 1
-  # One run at a time, also when the operator starts "once" next to the service.
-  exec 9> "$state/lock" || return 1
-  flock 9 || return 1
   # A run that was killed (a stopped container, a lost connection) leaves its lock on the target, and every later run would
   # fail on it. Under the lock above no other run of this installation uses the target, and every run of the service has
   # the same host name, so restic removes exactly the locks of processes that no longer exist and those older than 30
