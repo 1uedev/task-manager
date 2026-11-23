@@ -7,14 +7,17 @@
 #   docker compose run --rm app bootstrap-admin NAME    the first administrator
 #   docker compose up -d                                TLS entry, web process, worker, database and backup
 #
-# No container gets the Docker socket or runs privileged. Web process and worker never change the schema
-# (TASK_MANAGER_SCHEMA_MODE=verify), refuse to start when it does not fit the image, and connect with the runtime role
-# taskmanager_app, which may not change it either; only "migrate" uses the migration role (TASK-136, db-roles.sql).
+# No container gets the Docker socket or runs privileged. Every process of the application starts through the entry point
+# argument "operations" (TASK-137, N1): web process, worker and commands never change the schema, whatever a setting says,
+# refuse to start when it does not fit the image, and connect with the runtime role taskmanager_app, which may not change it
+# either; only "migrate" changes it, with the migration role (TASK-136, db-roles.sql).
 name: task-manager
 
 x-app: &app
   # The application only by digest: ghcr.io/1uedev/task-manager@sha256:..., as the release names it.
   image: ${TASK_MANAGER_IMAGE:?set TASK_MANAGER_IMAGE to the digest of a released version}
+  # The entry point of the image with the argument "operations" in front of every command (TASK-137, N1).
+  entrypoint: ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar", "operations"]
   depends_on:
     db:
       condition: service_healthy

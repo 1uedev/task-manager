@@ -24,30 +24,72 @@ public class TaskManagerApplication {
     static final String MIGRATE = "migrate";
 
     public static void main(String[] args) {
+        // The operations template puts "operations" in front of every command (TASK-137, N1): such a process never migrates
+        // at the start. The demonstration starts without it and keeps its behaviour.
+        boolean operations = args.length > 0 && taskmanager.operations.OperationsStart.ARGUMENT.equals(args[0]);
+        if (operations) {
+            args = java.util.Arrays.copyOfRange(args, 1, args.length);
+        }
         if (args.length > 0 && ADMIN_COMMANDS.contains(args[0])) {
-            System.exit(runAdminCommand(args, new String[0]));
+            System.exit(runAdminCommand(operations, args, new String[0]));
         }
         if (args.length > 0 && REBUILD_SEARCH.equals(args[0])) {
-            System.exit(runSearchCommand(args, new String[0]));
+            System.exit(runSearchCommand(operations, args, new String[0]));
         }
         if (args.length > 0 && AFTER_RESTORE.equals(args[0])) {
-            System.exit(runRestoreCommand(args, new String[0]));
+            System.exit(runRestoreCommand(operations, args, new String[0]));
         }
         if (args.length > 0 && MIGRATE.equals(args[0])) {
-            System.exit(runMigrateCommand(args, new String[0]));
+            System.exit(runMigrateCommand(operations, args, new String[0]));
         }
         if (args.length > 0 && WORKER.equals(args[0])) {
-            int code = runWorker(args, new String[0]);
+            int code = runWorker(operations, args, new String[0]);
             // After a regular stop the JVM is already shutting down; only a usage error needs its own exit code.
             if (code != 0) {
                 System.exit(code);
             }
             return;
         }
-        SpringApplication.run(TaskManagerApplication.class, args);
+        runWeb(operations, args);
+    }
+
+    /** The web process; with {@code operations} it checks the schema and never migrates (TASK-137, N1). */
+    static org.springframework.context.ConfigurableApplicationContext runWeb(boolean operations, String... args) {
+        var application = new SpringApplication(TaskManagerApplication.class);
+        if (operations) {
+            taskmanager.operations.OperationsStart.register(application);
+        }
+        return application.run(args);
+    }
+
+    private static SpringApplicationBuilder marked(SpringApplicationBuilder builder, boolean operations) {
+        if (operations) {
+            taskmanager.operations.OperationsStart.register(builder.application());
+        }
+        return builder;
     }
 
     static int runAdminCommand(String[] args, String... extraProperties) {
+        return runAdminCommand(false, args, extraProperties);
+    }
+
+    static int runSearchCommand(String[] args, String... extraProperties) {
+        return runSearchCommand(false, args, extraProperties);
+    }
+
+    static int runRestoreCommand(String[] args, String... extraProperties) {
+        return runRestoreCommand(false, args, extraProperties);
+    }
+
+    static int runMigrateCommand(String[] args, String... extraProperties) {
+        return runMigrateCommand(false, args, extraProperties);
+    }
+
+    static int runWorker(String[] args, String... extraProperties) {
+        return runWorker(false, args, extraProperties);
+    }
+
+    static int runAdminCommand(boolean operations, String[] args, String... extraProperties) {
         if (args.length != 2) {
             System.err.println("Usage: " + args[0] + " <login name>");
             return 2;
@@ -57,13 +99,13 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.admin-command=" + args[0], "taskmanager.admin-username=" + args[1],
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
-        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
+        taskmanager.operations.ContainerCommand.register(marked(builder, operations).application(), args[0]);
         // Command line arguments, so that tests can override settings that application.yaml resolves from the environment.
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }
 
-    static int runSearchCommand(String[] args, String... extraProperties) {
+    static int runSearchCommand(boolean operations, String[] args, String... extraProperties) {
         if (args.length != 1) {
             System.err.println("Usage: " + REBUILD_SEARCH);
             return 2;
@@ -72,12 +114,12 @@ public class TaskManagerApplication {
             .web(WebApplicationType.NONE)
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.search-command=" + args[0], "logging.level.root=WARN", "spring.main.log-startup-info=false");
-        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
+        taskmanager.operations.ContainerCommand.register(marked(builder, operations).application(), args[0]);
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }
 
-    static int runRestoreCommand(String[] args, String... extraProperties) {
+    static int runRestoreCommand(boolean operations, String[] args, String... extraProperties) {
         if (args.length != 2 || args[1].isBlank() || args[1].length() > 200) {
             System.err.println("Usage: " + AFTER_RESTORE + " <operator>");
             return 2;
@@ -87,7 +129,7 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.operations-operator=" + args[1],
                 "logging.level.root=WARN", "spring.main.log-startup-info=false");
-        taskmanager.operations.ContainerCommand.register(builder.application(), args[0]);
+        taskmanager.operations.ContainerCommand.register(marked(builder, operations).application(), args[0]);
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }
@@ -97,7 +139,7 @@ public class TaskManagerApplication {
      * date, 2 refused or failed (usage, a database newer than the image, a migration that failed in an earlier run or in
      * this one, changed Flyway settings), 1 unexpected error.
      */
-    static int runMigrateCommand(String[] args, String... extraProperties) {
+    static int runMigrateCommand(boolean operations, String[] args, String... extraProperties) {
         if (args.length != 1) {
             System.err.println("Usage: " + MIGRATE);
             return 2;
@@ -107,7 +149,7 @@ public class TaskManagerApplication {
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "logging.level.root=WARN",
                 "spring.main.log-startup-info=false");
-        taskmanager.operations.ContainerCommand.register(builder.application(), MIGRATE);
+        taskmanager.operations.ContainerCommand.register(marked(builder, operations).application(), MIGRATE);
         try {
             var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
             return SpringApplication.exit(context);
@@ -126,7 +168,7 @@ public class TaskManagerApplication {
      * Starts the job executor without a web server and waits until the context closes, which a stop of the container does
      * through the shutdown hook; running jobs get the grace period of the executor.
      */
-    static int runWorker(String[] args, String... extraProperties) {
+    static int runWorker(boolean operations, String[] args, String... extraProperties) {
         if (args.length != 1) {
             System.err.println("Usage: " + WORKER);
             return 2;
@@ -136,6 +178,7 @@ public class TaskManagerApplication {
             .web(WebApplicationType.NONE)
             .properties("taskmanager.process=worker")
             .listeners((org.springframework.context.ApplicationListener<org.springframework.context.event.ContextClosedEvent>) event -> closed.countDown());
+        marked(builder, operations);
         builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         try {
             closed.await();

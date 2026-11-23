@@ -2,10 +2,12 @@
 -- administration account of the database (POSTGRES_USER), at the creation of the database and again after an update of
 -- the template; every statement can run any number of times.
 --
---   POSTGRES_USER         administration only: creates roles, owns the database. No process of the application uses it.
---   taskmanager_migrate   owns the schema and its objects; only the command "migrate" uses it.
---   taskmanager_app       the web process, the worker and the other commands: reads and writes rows, never changes the
---                         schema, owns nothing and manages no roles.
+--   POSTGRES_USER         administration only: creates roles, owns the database and the extension pg_trgm. No process of
+--                         the application uses it.
+--   taskmanager_migrate   owns the schema public and its objects; only the command "migrate" uses it.
+--   taskmanager_app       the web process, the worker and the other commands: reads and writes rows of the business tables,
+--                         never changes the schema, owns nothing and manages no roles. It only reads the history of the
+--                         migrations and the hold of the clean up, and may not call the hold functions (TASK-137, N3).
 --   taskmanager_backup    the backup service: replication for the base backup, the restore point and the switch of the
 --                         write ahead log, and reading only what backup.sh reads (granted by migration V0072).
 --
@@ -31,7 +33,13 @@ alter role taskmanager_migrate with login nosuperuser nocreatedb nocreaterole no
 alter role taskmanager_app with login nosuperuser nocreatedb nocreaterole noreplication nobypassrls password :'app_password';
 alter role taskmanager_backup with login replication nosuperuser nocreatedb nocreaterole nobypassrls password :'backup_password';
 
--- Only the migration role creates objects; nobody else may create in the schema.
+-- The extension pg_trgm of V0033 belongs to the administration account in every installation (TASK-137, N3): PostgreSQL
+-- cannot hand an extension to another owner, an installation from before TASK-136 created it with that account, and a new
+-- one creates it here before the first migration, so that V0033 finds it. No migration changes it.
+create extension if not exists pg_trgm with schema public;
+
+-- The migration role owns the schema public; only it creates objects there (TASK-137, N3).
+alter schema public owner to taskmanager_migrate;
 revoke create on schema public from public;
 grant usage, create on schema public to taskmanager_migrate;
 grant usage on schema public to taskmanager_app, taskmanager_backup;
@@ -42,7 +50,8 @@ grant connect on database :"DBNAME" to taskmanager_migrate, taskmanager_app, tas
 grant create, temporary on database :"DBNAME" to taskmanager_migrate;
 
 -- An installation from before TASK-136: the objects belong to the administration account, which ran the migrations then.
--- They move to the migration role, so that the next migrations can change them.
+-- They move to the migration role, so that the next migrations can change them. Sequences bound to a column follow their
+-- table; objects of an extension stay with the extension (TASK-137, N3).
 do $$
 declare
     owner text := current_setting('taskmanager.owner');
@@ -63,11 +72,24 @@ begin
                       pg_get_function_identity_arguments(p.oid))
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and pg_get_userbyid(p.proowner) = owner
+          and not exists (select from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
         union all
         select format('alter type %I.%I owner to taskmanager_migrate', n.nspname, t.typname)
         from pg_type t join pg_namespace n on n.oid = t.typnamespace
         where n.nspname = 'public' and t.typtype in ('e', 'd', 'c') and pg_get_userbyid(t.typowner) = owner
           and not exists (select from pg_class c where c.oid = t.typrelid and c.relkind <> 'c')
+          and not exists (select from pg_depend d where d.classid = 'pg_type'::regclass and d.objid = t.oid and d.deptype = 'e')
+    loop
+        execute item.statement;
+    end loop;
+    -- The script of TASK-136 also moved routines of the extension; they go back to the owner of the extension.
+    for item in
+        select format('alter routine %I.%I(%s) owner to %I', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid),
+                      pg_get_userbyid(e.extowner)) as statement
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        join pg_depend d on d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e'
+        join pg_extension e on e.oid = d.refobjid
+        where p.proowner <> e.extowner
     loop
         execute item.statement;
     end loop;
@@ -84,6 +106,21 @@ alter default privileges for role taskmanager_migrate in schema public
     grant usage, select, update on sequences to taskmanager_app;
 alter default privileges for role taskmanager_migrate in schema public
     grant execute on routines to taskmanager_app;
+-- Not its work (TASK-137, N3; migration V0073 does the same when the migrations create these objects): the history of the
+-- migrations and the hold of the clean up are only read, the hold functions belong to the backup service.
+do $$
+begin
+    if to_regclass('public.flyway_schema_history') is not null then
+        revoke insert, update, delete, truncate, references, trigger on public.flyway_schema_history from taskmanager_app;
+    end if;
+    if to_regclass('public.files_purge_hold') is not null then
+        revoke insert, update, delete, truncate, references, trigger on public.files_purge_hold from taskmanager_app;
+    end if;
+    if to_regprocedure('public.files_purge_hold_begin(text)') is not null then
+        revoke execute on function public.files_purge_hold_begin(text), public.files_purge_hold_end(text) from taskmanager_app;
+    end if;
+end;
+$$;
 
 -- The backup role reads only what backup.sh reads; the template of TASK-132 gave it every table, which ends here.
 alter default privileges for role :"owner" in schema public revoke select on tables from taskmanager_backup;
