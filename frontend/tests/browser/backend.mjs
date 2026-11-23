@@ -3713,7 +3713,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (match) {
       const provider = liveProviders.find((entry) => entry.id === match[1]);
       if (!provider) return problem(404, 'ai.provider_not_found');
-      if (match[2] && method === 'POST') return ok(provider.check ?? { ok: true, code: null, models: 3 });
+      // As the server: an access whose stored address breaks today's rules fails its check before anything is sent (TASK-138, H3).
+      if (match[2] && method === 'POST') return ok(provider.addressRefused ? { ok: false, code: 'ai.address_not_allowed', models: null }
+        : provider.check ?? { ok: true, code: null, models: 3 });
       const version = versionOf();
       if (version.refused) return version.refused;
       if (version.value !== String(provider.version)) return problem(412, 'ai.version_conflict');
@@ -3741,7 +3743,9 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (match) {
       const model = liveModels.find((entry) => entry.id === match[1]);
       if (!model) return problem(404, 'ai.model_not_found');
-      if (match[2] && method === 'POST') return ok(model.check ?? { ok: true, code: null, models: null });
+      const owner = ai.providers.find((entry) => entry.id === model.providerId);
+      if (match[2] && method === 'POST') return ok(owner?.addressRefused ? { ok: false, code: 'ai.address_not_allowed', models: null }
+        : model.check ?? { ok: true, code: null, models: null });
       const version = versionOf();
       if (version.refused) return version.refused;
       if (version.value !== String(model.version)) return problem(412, 'ai.version_conflict');

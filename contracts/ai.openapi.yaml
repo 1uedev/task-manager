@@ -723,8 +723,12 @@ components:
         modelId: {type: [string, 'null'], format: uuid}
         modelKey: {type: [string, 'null']}
         dataPath: {oneOf: [{$ref: '#/components/schemas/AiDataPath'}, {type: 'null'}]}
-        inputTokens: {type: [integer, 'null']}
-        outputTokens: {type: [integer, 'null']}
+        inputTokens:
+          type: [integer, 'null']
+          description: Vom Anbieter gemeldet; leer, wenn die Antwort den Schlüssel wiederholte oder die Zahl den Schlüssel enthält.
+        outputTokens:
+          type: [integer, 'null']
+          description: Wie inputTokens.
         startedAt: {type: string, format: date-time}
         finishedAt: {type: [string, 'null'], format: date-time}
         accountId: {type: string, format: uuid}

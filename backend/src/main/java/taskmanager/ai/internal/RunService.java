@@ -386,18 +386,24 @@ public class RunService implements AiRuns {
                 // TASK-130, F4: a cancellation that was already taken in must stop the execution before anything is sent.
                 throw new AiHttp.Failure("ai.cancelled", null);
             }
-            AiAdapters.Completion completion = adapters.complete(plan.provider(), key, plan.model(), plan.prompt(), properties.timeout());
+            AiAdapters.Completion completion = counted(adapters.complete(plan.provider(), key, plan.model(), plan.prompt(), properties.timeout()),
+                key);
             ObjectNode content;
             try {
                 if (key != null && completion.text().contains(key)) {
                     // F2: an answer that repeats the key is never kept.
-                    throw new AiFormats.Invalid("ai.invalid_output");
+                    throw new KeyRepeated();
                 }
                 content = AiFormats.parse(plan.useCase(), completion.text(), new HashSet<>(plan.sourceIds()));
                 if (key != null && AiFormats.mentions(content, key)) {
                     // TASK-130, F2: also what only the decoding or the cleaning turns into the key is never kept.
-                    throw new AiFormats.Invalid("ai.invalid_output");
+                    throw new KeyRepeated();
                 }
+            } catch (KeyRepeated repeated) {
+                // TASK-138, F2: an answer that repeats the key keeps none of the counts its provider reported.
+                finish(plan.runId(), "failed", repeated.code(), null);
+                LOG.info("AI run {} answered outside the format: {}", plan.runId(), repeated.code());
+                return;
             } catch (AiFormats.Invalid invalid) {
                 finish(plan.runId(), "failed", invalid.code(), completion);
                 LOG.info("AI run {} answered outside the format: {}", plan.runId(), invalid.code());
@@ -422,6 +428,30 @@ public class RunService implements AiRuns {
             LOG.warn("AI run {} failed unexpectedly: {}", plan.runId(), unexpected.getClass().getName());
             finish(plan.runId(), "failed", task.abort != null ? task.abort : "ai.internal_error", null);
         }
+    }
+
+    /** An answer that repeats the key; it ends like any answer outside the format, but without counts (TASK-138, F2). */
+    private static final class KeyRepeated extends AiFormats.Invalid {
+        private static final long serialVersionUID = 1L;
+
+        KeyRepeated() {
+            super("ai.invalid_output");
+        }
+    }
+
+    /**
+     * The counts a provider reported, without any whose decimal form contains the key (TASK-138, F2): a key of digits only is
+     * allowed, and a provider could hand it back as a number of tokens, which the record of the execution shows its person.
+     */
+    static AiAdapters.Completion counted(AiAdapters.Completion completion, String key) {
+        if (key == null) {
+            return completion;
+        }
+        return new AiAdapters.Completion(completion.text(), safeCount(completion.inputTokens(), key), safeCount(completion.outputTokens(), key));
+    }
+
+    private static Integer safeCount(Integer count, String key) {
+        return count == null || String.valueOf(count).contains(key) ? null : count;
     }
 
     /**

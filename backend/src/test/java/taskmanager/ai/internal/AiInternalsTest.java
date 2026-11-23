@@ -73,6 +73,149 @@ class AiInternalsTest {
     }
 
     @Test
+    void aCancellationWhileTheClientIsBuiltSendsNothing() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger requests = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        server.start();
+        try {
+            String base = "http://localhost:" + server.getAddress().getPort();
+            java.util.concurrent.atomic.AtomicBoolean cancelWhileBuilding = new java.util.concurrent.atomic.AtomicBoolean();
+            java.util.concurrent.atomic.AtomicInteger dispatched = new java.util.concurrent.atomic.AtomicInteger();
+            // TASK-138, H2: the cancellation arrives while the client is fetched or built, after the check at the entry. The client
+            // counts every request handed to it, because a request cancelled at once may never reach the network.
+            AiHttp http = new AiHttp(PROPERTIES) {
+                @Override
+                java.net.http.HttpClient client(AiProvider provider) {
+                    java.net.http.HttpClient client = new Counting(super.client(provider), dispatched);
+                    if (cancelWhileBuilding.get()) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return client;
+                }
+            };
+            AiProvider provider = new AiProvider(UUID.randomUUID(), UUID.randomUUID(), AiProvider.Kind.OLLAMA, "x", base, null, null, null,
+                AiProvider.DataPath.LOCAL, true, 1, Instant.now(), UUID.randomUUID(), Instant.now(), UUID.randomUUID(), null);
+            assertEquals(200, http.get(provider, base + "/api/tags", Map.of(), Duration.ofSeconds(2)).status());
+            assertEquals(1, requests.get());
+            cancelWhileBuilding.set(true);
+            try {
+                AiHttp.Failure failure = assertThrows(AiHttp.Failure.class,
+                    () -> http.postJson(provider, base + "/api/chat", Map.of(), "{}", Duration.ofSeconds(2)));
+                assertEquals("ai.cancelled", failure.code());
+            } finally {
+                Thread.interrupted();
+            }
+            Thread.sleep(200);
+            assertEquals(1, dispatched.get(), "no request was handed to the client after the cancellation while it was built");
+            assertEquals(1, requests.get(), "no request left the process after the cancellation while the client was built");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** A client that hands everything to the real one and counts the requests it is given. */
+    private static final class Counting extends java.net.http.HttpClient {
+        private final java.net.http.HttpClient real;
+        private final java.util.concurrent.atomic.AtomicInteger dispatched;
+
+        Counting(java.net.http.HttpClient real, java.util.concurrent.atomic.AtomicInteger dispatched) {
+            this.real = real;
+            this.dispatched = dispatched;
+        }
+
+        @Override
+        public java.util.Optional<java.net.CookieHandler> cookieHandler() {
+            return real.cookieHandler();
+        }
+
+        @Override
+        public java.util.Optional<Duration> connectTimeout() {
+            return real.connectTimeout();
+        }
+
+        @Override
+        public Redirect followRedirects() {
+            return real.followRedirects();
+        }
+
+        @Override
+        public java.util.Optional<java.net.ProxySelector> proxy() {
+            return real.proxy();
+        }
+
+        @Override
+        public javax.net.ssl.SSLContext sslContext() {
+            return real.sslContext();
+        }
+
+        @Override
+        public javax.net.ssl.SSLParameters sslParameters() {
+            return real.sslParameters();
+        }
+
+        @Override
+        public java.util.Optional<java.net.Authenticator> authenticator() {
+            return real.authenticator();
+        }
+
+        @Override
+        public Version version() {
+            return real.version();
+        }
+
+        @Override
+        public java.util.Optional<java.util.concurrent.Executor> executor() {
+            return real.executor();
+        }
+
+        @Override
+        public <T> java.net.http.HttpResponse<T> send(java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> handler)
+                throws java.io.IOException, InterruptedException {
+            dispatched.incrementAndGet();
+            return real.send(request, handler);
+        }
+
+        @Override
+        public <T> java.util.concurrent.CompletableFuture<java.net.http.HttpResponse<T>> sendAsync(java.net.http.HttpRequest request,
+                java.net.http.HttpResponse.BodyHandler<T> handler) {
+            dispatched.incrementAndGet();
+            return real.sendAsync(request, handler);
+        }
+
+        @Override
+        public <T> java.util.concurrent.CompletableFuture<java.net.http.HttpResponse<T>> sendAsync(java.net.http.HttpRequest request,
+                java.net.http.HttpResponse.BodyHandler<T> handler, java.net.http.HttpResponse.PushPromiseHandler<T> pushes) {
+            dispatched.incrementAndGet();
+            return real.sendAsync(request, handler, pushes);
+        }
+    }
+
+    @Test
+    void countsThatCarryTheKeyAreNeverKept() {
+        AiAdapters.Completion reported = new AiAdapters.Completion("{}", 120, 834512);
+        AiAdapters.Completion numeric = RunService.counted(reported, "834512");
+        assertEquals(120, numeric.inputTokens());
+        assertNull(numeric.outputTokens(), "a count whose digits are the key is dropped");
+        assertEquals("{}", numeric.text());
+        AiAdapters.Completion inside = RunService.counted(new AiAdapters.Completion("{}", 98345120, 7), "834512");
+        assertNull(inside.inputTokens(), "a count that contains the key is dropped");
+        assertEquals(7, inside.outputTokens());
+        AiAdapters.Completion harmless = RunService.counted(reported, "sk-synthetic-1");
+        assertEquals(120, harmless.inputTokens());
+        assertEquals(834512, harmless.outputTokens(), "harmless counts stay");
+        AiAdapters.Completion noKey = RunService.counted(reported, null);
+        assertEquals(834512, noKey.outputTokens());
+        AiAdapters.Completion missing = RunService.counted(new AiAdapters.Completion("{}", null, null), "834512");
+        assertNull(missing.inputTokens());
+        assertNull(missing.outputTokens());
+    }
+
+    @Test
     void theTargetOfAKeyCoversAddressAndCa() {
         String plain = AiTargets.target("https://a.example", null);
         assertEquals(plain, AiTargets.target("https://a.example", null));
