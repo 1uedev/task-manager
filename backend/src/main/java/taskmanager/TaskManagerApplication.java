@@ -18,6 +18,8 @@ public class TaskManagerApplication {
     static final String REBUILD_SEARCH = "rebuild-search";
     /** Runs the background jobs without a web server, from the same image as the web process (TASK-054). */
     static final String WORKER = "worker";
+    /** Prepares and releases an installation that was restored from a backup point (TASK-131). */
+    static final String AFTER_RESTORE = "after-restore";
 
     public static void main(String[] args) {
         if (args.length > 0 && ADMIN_COMMANDS.contains(args[0])) {
@@ -25,6 +27,9 @@ public class TaskManagerApplication {
         }
         if (args.length > 0 && REBUILD_SEARCH.equals(args[0])) {
             System.exit(runSearchCommand(args, new String[0]));
+        }
+        if (args.length > 0 && AFTER_RESTORE.equals(args[0])) {
+            System.exit(runRestoreCommand(args, new String[0]));
         }
         if (args.length > 0 && WORKER.equals(args[0])) {
             int code = runWorker(args, new String[0]);
@@ -61,6 +66,20 @@ public class TaskManagerApplication {
             .web(WebApplicationType.NONE)
             .bannerMode(org.springframework.boot.Banner.Mode.OFF)
             .properties("taskmanager.process=command", "taskmanager.search-command=" + args[0], "logging.level.root=WARN", "spring.main.log-startup-info=false");
+        var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
+        return SpringApplication.exit(context);
+    }
+
+    static int runRestoreCommand(String[] args, String... extraProperties) {
+        if (args.length != 2 || args[1].isBlank() || args[1].length() > 200) {
+            System.err.println("Usage: " + AFTER_RESTORE + " <operator>");
+            return 2;
+        }
+        var builder = new SpringApplicationBuilder(TaskManagerApplication.class)
+            .web(WebApplicationType.NONE)
+            .bannerMode(org.springframework.boot.Banner.Mode.OFF)
+            .properties("taskmanager.process=command", "taskmanager.operations-command=" + args[0], "taskmanager.operations-operator=" + args[1],
+                "logging.level.root=WARN", "spring.main.log-startup-info=false");
         var context = builder.run(java.util.Arrays.stream(extraProperties).map(property -> "--" + property).toArray(String[]::new));
         return SpringApplication.exit(context);
     }

@@ -1,0 +1,137 @@
+# The restore drill (TASK-131, DEC-161): an installation with a backup service, and a second, empty environment in which
+# the restore happens. Started only by tools/restore/restore-check.sh; the demonstration environment of docs/DEMO.md is a
+# different file and stays untouched. Every password comes from the environment and is thrown away with the run.
+name: task-manager-restore
+
+services:
+  # The database of the installation that is going to be lost. It archives its write ahead log into a volume the backup
+  # service reads, and closes a segment at least every 5 minutes (rule 7).
+  db:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /archive/%f && cp %p /archive/%f
+      - -c
+      - archive_timeout=300
+    environment:
+      POSTGRES_DB: taskmanager
+      POSTGRES_USER: taskmanager
+      POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql
+      - wal-archive:/archive
+      - ./db-replication.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: task-manager:demo
+    build: ../..
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_FILES_DIR: /data/files
+      TASK_MANAGER_JOBS_WORKER: "false"
+    volumes:
+      - files-data:/data/files
+    ports:
+      - "127.0.0.1:${TASK_MANAGER_PORT:-18091}:8080"
+
+  worker:
+    image: task-manager:demo
+    command: ["worker"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_FILES_DIR: /data/files
+    volumes:
+      - files-data:/data/files
+    stop_grace_period: 30s
+
+  # The backup service. The drill starts it with the argument "once" for a single point; in an installation it runs as a
+  # service and makes a point every 15 minutes.
+  backup:
+    build: ../../deploy/backup
+    image: task-manager-backup:drill
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_BACKUP_REPOSITORY: /target/repository
+      TASK_MANAGER_BACKUP_INTERVAL: ${TASK_MANAGER_BACKUP_INTERVAL:-900}
+      TASK_MANAGER_BACKUP_STATE: /state
+      RESTIC_PASSWORD: ${TASK_MANAGER_BACKUP_PASSWORD:?set TASK_MANAGER_BACKUP_PASSWORD}
+      # The backup reads the database with a role of its own that may use pg_switch_wal and pg_basebackup; the drill uses
+      # the account the image created, which has those rights, and the installation creates the role (docs/OPERATIONS.md).
+      PGHOST: db
+      PGUSER: taskmanager
+      PGPASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      PGDATABASE: taskmanager
+    volumes:
+      - wal-archive:/archive:ro
+      - files-data:/data/files:ro
+      - backup-state:/state
+      - backup-target:/target
+      - restore-target:/restore
+
+  # The fresh environment: an empty database container that takes the restored data directory, and a web process that
+  # refuses to start until after-restore ran.
+  restored-db:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    profiles: [restored]
+    user: "999:999"
+    environment:
+      POSTGRES_DB: taskmanager
+      POSTGRES_USER: taskmanager
+      POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      PGDATA: /restore/pgdata
+    volumes:
+      # The same path as in the backup service, because the restored database reads the write ahead log archive from the
+      # path that the restore wrote into its configuration.
+      - restore-target:/restore
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  restored-app:
+    image: task-manager:demo
+    profiles: [restored]
+    depends_on:
+      restored-db:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DB_URL: jdbc:postgresql://restored-db:5432/taskmanager
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_FILES_DIR: /restore/files
+      TASK_MANAGER_JOBS_WORKER: "false"
+    volumes:
+      - restore-target:/restore
+    ports:
+      - "127.0.0.1:${TASK_MANAGER_RESTORED_PORT:-18092}:8080"
+
+volumes:
+  db-data:
+  files-data:
+  wal-archive:
+  backup-state:
+  backup-target:
+  restore-target:

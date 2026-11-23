@@ -1004,7 +1004,8 @@ export interface components {
              * @description Letzter Fehler ohne Text des Mailservers, etwa helpdesk.connection_failed, helpdesk.authentication_failed,
              *     helpdesk.recipient_refused, helpdesk.send_refused, helpdesk.send_uncertain, helpdesk.send_interrupted,
              *     helpdesk.mailbox_unavailable, helpdesk.recipient_changed, helpdesk.author_inactive, helpdesk.job_ended,
-             *     helpdesk.send_broken, helpdesk.message_invalid, helpdesk.job_invalid.
+             *     helpdesk.send_broken, helpdesk.message_invalid, helpdesk.job_invalid, helpdesk.restored
+             *     (nach einer Rücksicherung angehalten, TASK-131).
              */
             errorCode: string | null;
             /** @description Wie oft eine Person den Versand bestätigt hat. */
