@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 6 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 4 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -37,6 +39,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-128](#task-128-ki-prüfsatz-demo-lauf-gegen-echte-anbieter-und-betriebsdokumentation-a16-teil-4) | KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4) | claude-20261117-ai-01 | 2026-11-17 |
+| [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
+| [TASK-133](#task-133-betriebszustand-und-überwachung-a18-teil-3) | Betriebszustand und Überwachung (A18 Teil 3) | claude-20261123-ops-01 | 2026-11-23 |
+| [TASK-134](#task-134-referenzmessung-und-v1-freigabeprüfung-a18-teil-4) | Referenzmessung und V1 Freigabeprüfung (A18 Teil 4) | claude-20261123-ops-01 | 2026-11-23 |
 
 ### Zur Prüfung bereit – BEREIT ZUR PRÜFUNG
 
@@ -239,3 +244,98 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Dokumentation liegt vor; OPEN-003 und OPEN-019 sind fortgeschrieben.
 
 **Nächster Schritt:** Nach dem Ergebnis von TASK-127 auf main die Blockade aufheben und umsetzen.
+
+## TASK-131 Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1)
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-OPS-004, REQ-OPS-006, REQ-DATA-003, REQ-SEC-001; DEC-038; OPEN-012; ACC-008; docs/OPERATIONS.md (Sicherungsziel und vollständige Wiederherstellung, Prüffälle O06 bis O10). **Abhängigkeiten:** TASK-031 (Vorführimage), TASK-051 (Dateispeicher), TASK-054 (Hintergrundaufträge), TASK-058 (Mailantworten mit Zustand unsicher), TASK-125 (KI Vorschläge), geliefert. **Arbeitsstand:** Holger hat am 23. November 2026 im Projektgespräch mit „ja dann mache weiter“ den Beginn von Paket A18 beauftragt und am selben Tag die 24 Vorschläge mit „ok“ übernommen (/mnt/project-files/a18/fragen-a18.md; Regeln unten und bei TASK-132 bis TASK-134). Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-161, Migrationen ab V0070.
+
+**Umfang:** Dienst `backup` mit `pg_basebackup`, fortlaufender Archivierung der Schreibprotokolle und restic, gemeinsame Sicherungspunkte von Datenbank und Dateispeicher, Rücksicherung genau bis zum Zeitpunkt eines Punkts, der Befehl `after-restore`, die Prüfung der Dateiinhalte, die Anleitung und ein Workflow, der den vollständigen Ausfall durchspielt und Datenverlust und Wiederanlaufzeit misst. Nicht Teil: Betriebsvorlage mit TLS und Updates (TASK-132), Betriebsübersicht (TASK-133), Messung und Freigabe (TASK-134), Hochverfügbarkeit, automatischer Abgleich von Rechten nach dem Sicherungspunkt, Aufbewahrungsregeln mit Löschung von Fachdaten.
+
+**Fachliche Regeln** (von Holger am 23. November 2026 bestätigt):
+1. Paket A18 liefert Sicherung und Wiederherstellung mit praktischem Nachweis, Installation und Update für den Betrieb, Betriebszustand für das Betriebspersonal und die V1 Freigabeprüfung. Nicht dabei: Hochverfügbarkeit, Kubernetes, ARM64, unterbrechungsfreie Updates, Fernwartungswerkzeug, Telemetrie, Lizenzprüfung, Virenscanner, Aufbewahrungsregeln mit Löschung (OPEN-016) und Benachrichtigungen (REQ-TKT-005).
+2. Referenzplattform ist Linux x86 64 mit Ubuntu 24.04 LTS, Docker Engine und Docker Compose in der bei der Freigabe gewarteten Version und PostgreSQL 18 als Container aus der Lieferung. Eine eigene PostgreSQL 18 Instanz des Kunden ist erlaubt, wenn die Sicherung nach demselben Verfahren läuft. Anderes ist bis zu einer eigenen Prüfung nicht unterstützt; die Versionsmatrix steht in der Betriebsanleitung.
+3. Der Betreiber (Kunde oder ausdrücklich beauftragter Anbieter) verantwortet Host, Netz, TLS Zertifikat, Sicherungsziel, Schlüssel und Erreichbarkeit. Keine Bereitschaft rund um die Uhr; die 4 Stunden gelten ab Feststellung des Ausfalls innerhalb der vereinbarten Servicezeit. Die Anleitung enthält eine Vorlage für Betreiber, Servicezeit, Sicherungsziel und Ansprechpartner je Installation.
+4. Die Anleitung listet jede ausgehende Verbindung mit Zweck (Mailserver, LDAP, Git, KI, Sicherungsziel, Image Registry). Keine Telemetrie, keine Verbindung zum Hersteller; ohne Internet bleiben Tickets, Wiki, Anforderungen und Zeiten nutzbar.
+5. Werkzeug sind die Mittel von PostgreSQL (`pg_basebackup`, Archivierung der Schreibprotokolle) mit restic für das Sicherungsziel, in einem eigenen Dienst `backup`, nicht im Anwendungsprozess.
+6. Ein Sicherungspunkt ist genau ein restic Stand mit Schreibprotokollen bis zu einem festgehaltenen Zeitpunkt T und dem nach T gelesenen Dateispeicher; die Datenbank wird genau bis T wiederhergestellt. Ein Punkt gilt erst als vollständig, wenn restic ihn auf dem Ziel bestätigt hat.
+7. Wechsel der Schreibprotokolle spätestens alle 5 Minuten, ein Sicherungspunkt alle 15 Minuten, eine Basissicherung täglich. Warnung ab 30 Minuten ohne neuen vollständigen Punkt, kritisch ab 45 Minuten.
+8. Unterstützte Ziele sind ein S3 kompatibler Objektspeicher und SFTP auf einem anderen Rechner, jeweils mit eigenem Zugang, der nach Möglichkeit nicht löschen darf. Ein Verzeichnis auf demselben Rechner ist nur für Tests erlaubt und wird als „kein Schutz bei Hostverlust“ gekennzeichnet. Aufbewahrung 14 Tage vollständig wiederherstellbar.
+9. `TASK_MANAGER_SECRET_KEY`, das restic Passwort und die Zugangsdaten des Ziels liegen nicht im Sicherungsstand, sondern getrennt beim Betreiber; die Anleitung verlangt beim Einrichten eine Prüfung, dass sie dort vorhanden sind. Ohne Schlüssel müssen Postfachpasswörter, Git Tokens und KI Schlüssel neu eingetragen werden.
+10. Der Befehl `after-restore` läuft vor der Freigabe einmal: er beendet alle Sitzungen, setzt Mailantworten, die noch nicht als gesendet galten, auf „unsicher“ und hält sie an, verwirft KI Vorschläge, prüft zu jedem Anhang und Wikibild Inhalt und Prüfsumme, schreibt einen Bericht mit den Kennungen ohne Inhalt, listet alle aktiven Konten mit Verwaltungsrechten und hält im Audit fest, wer ihn wann zu welchem Sicherungspunkt ausgeführt hat. Webprozess und Ausführer starten erst danach. Der IMAP Abruf holt erneut ab, was nach T kam.
+11. Kein automatischer Abgleich von Rechten und Löschungen nach T: der Betreiber führt bekannte Kontosperren und Rechteentzüge vor der Freigabe erneut aus. Lokale Passwörter bleiben auf dem Stand von T.
+12. Ein eigener Workflow „Wiederherstellung“ (manuell und wöchentlich) baut die Umgebung mit Sicherung auf, erzeugt Demodaten und Last, sichert laufend, zerstört Datenbank und Dateien vollständig, stellt auf einer frischen Umgebung wieder her, führt `after-restore` aus und prüft Kernabläufe. Er misst den Datenverlust und die Zeit vom Ausfall bis zur geprüften Nutzung und prüft O06 (fehlende Datei, kein vollständiger Punkt) und O08 (beschädigter Stand oder fehlender Schlüssel, Rückfall auf den älteren Punkt).
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Der Dienst `backup` legt alle 15 Minuten einen vollständigen Punkt auf dem Ziel an; eine fehlende Datei oder ein gescheiterter Upload ergibt keinen vollständigen Punkt (O06).
+2. Die Rücksicherung auf einer frischen Umgebung stellt Datenbank bis T und passende Dateien wieder her; der Workflow weist Datenverlust unter 60 Minuten und Wiederanlauf unter 240 Minuten für den dokumentierten Bestand aus (O07).
+3. Ein beschädigter Punkt oder fehlender Schlüssel führt zum Rückfall auf den älteren Punkt mit Meldung, nie zu einem falschen Erfolg (O08).
+4. `after-restore` hält offene Mailantworten an, beendet Sitzungen, verwirft KI Vorschläge und meldet fehlende Inhalte (O09, O10); Tests dafür.
+5. Anleitung mit Einrichtung, Schlüsselablage, Zielen, Rücksicherung und Vorlage für Zuständigkeiten.
+
+**Nächster Schritt:** Reservierung mergen, danach Umsetzung auf dem Branch; anschließend TASK-132 in derselben Sitzung, sobald das Ergebnis auf main ist.
+
+## TASK-132 Installation, Version und Update für den Betrieb (A18 Teil 2)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-OPS-001, REQ-OPS-002, REQ-OPS-003, REQ-OPS-005, REQ-SEC-001; OPEN-012; ACC-008; docs/OPERATIONS.md (Referenzinstallation, Updates und Rückkehr, Prüffälle O01, O11). **Abhängigkeiten:** TASK-131 auf main. **Arbeitsstand:** Mit TASK-131 von Holger am 23. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-131 auf main ist. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-162.
+
+**Umfang:** Betriebsvorlage `deploy/compose.yaml` mit TLS Einstieg, Versionen und Veröffentlichung des Images auf ein Tag von Holger, der Befehl `migrate` mit Startprüfung der Schemaversion, der Updatepfad mit Workflow und die Installations und Updateanleitung. Nicht Teil: unterbrechungsfreie Updates, automatische Updates, andere Plattformen, Fernwartungswerkzeug.
+
+**Fachliche Regeln** (von Holger am 23. November 2026 bestätigt):
+1. Eigene Datei `deploy/compose.yaml` neben der Vorführung mit Caddy als TLS Einstieg (eigenes Zertifikat oder ACME, wählbar), Webprozess, Ausführer, PostgreSQL und Sicherung, Grenzen für Speicher und CPU, ohne Docker Socket und ohne privilegierte Container. Ein vorhandener Proxy des Kunden ist erlaubt, die Anleitung nennt die nötigen Kopfzeilen. Die Vorführung bleibt unverändert.
+2. Versionen nach dem Schema 1.0.0. Eine Version entsteht nur, wenn Holger ein Tag setzt; dann baut ein Workflow das Image, veröffentlicht es in `ghcr.io/1uedev/task-manager` und legt Digest, Komponentenverzeichnis (SBOM) und den Bericht der Schwachstellenprüfung zur Version. Die Betriebsvorlage bezieht das Image nur über den Digest. Ohne Tag wird nichts veröffentlicht.
+3. Genau ein Schemaänderungslauf je Update über den Befehl `migrate`. Webprozess und Ausführer ändern das Schema in der Betriebsvorlage nicht selbst und starten nicht, wenn Migrationen fehlen oder die Datenbank neuer ist als das Image. Die Vorführung behält das heutige Verhalten.
+4. Update: Sicherungspunkt abwarten, Anwendung anhalten, `migrate`, starten, Kernabläufe prüfen. Rückkehr nur durch Rücksicherung des Punkts von vor dem Update, nie durch ein älteres Image. Ein Workflow „Update“ prüft bei jeder Änderung an Migrationen den Weg vom Stand der letzten Version (bis zur ersten Version von einem festen früheren Stand auf main) mit Demodaten auf den neuen Stand mit Datenerhalt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Eine Installation nach Anleitung mit `deploy/compose.yaml` startet mit TLS; ein Austausch der Container behält Daten und Konfiguration, das Image enthält keine Geheimnisse (O01).
+2. Ein Start mit fehlender Migration oder neuerer Datenbank wird mit klarer Meldung abgewiesen; `migrate` läuft genau einmal (O11).
+3. Der Workflow „Update“ besteht mit Datenerhalt; der Veröffentlichungsworkflow erzeugt Digest, SBOM und Schwachstellenbericht und veröffentlicht nur auf ein Tag.
+4. Installations und Updateanleitung mit Versionsmatrix und Liste der ausgehenden Verbindungen.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-131 auf main die Blockade aufheben und umsetzen.
+
+## TASK-133 Betriebszustand und Überwachung (A18 Teil 3)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-OPS-006, REQ-SEC-001; OPEN-012; docs/OPERATIONS.md (Betriebsverantwortung, Ressourcen und Speicherrechnung, Prüffälle O03, O04, O12, O16). **Abhängigkeiten:** TASK-132 auf main. **Arbeitsstand:** Mit TASK-131 von Holger am 23. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-132 auf main ist. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-163.
+
+**Umfang:** Unternehmensrecht `operations.read`, Seite „Betrieb“, Endpunkt für externe Überwachung mit eigenem Schlüssel, Befehle `backup-status` und `diagnostics`, die Speichergrenze für Uploads, Migration, Vertrag, Oberfläche und Tests. Nicht Teil: Alarmversand durch das Produkt, Telemetrie, Fernwartungszugang.
+
+**Fachliche Regeln** (von Holger am 23. November 2026 bestätigt):
+1. Neues Unternehmensrecht `operations.read` und eine Seite „Betrieb“ mit Version und Schema, Erreichbarkeit der Datenbank, freiem Platz des Dateispeichers mit den Stufen 70 und 85 Prozent, Rückstand und gescheiterten Hintergrundaufträgen, gescheiterten und unsicheren Mailantworten, Postfächern mit letztem erfolgreichen Abruf und dem Alter des letzten vollständigen Sicherungspunkts. Ein Ausfall von KI oder Git macht die Anwendung nicht unbereit.
+2. Endpunkt `GET /api/v1/operations/status` mit eigenem Überwachungsschlüssel, nicht an ein Konto gebunden, nur lesend und ohne Fachinhalte. Der Befehl `backup-status` prüft direkt am Sicherungsziel das Alter des letzten Punkts und bemerkt so auch einen ausgefallenen Host. Ab 90 Prozent belegtem Dateispeicher werden neue Uploads mit 507 abgelehnt.
+3. Der Befehl `diagnostics` schreibt ein Paket mit Version, Konfiguration ohne Geheimnisse, Zustand und den letzten Fehlerkennungen, ohne Tickettexte, Mails oder Schlüssel.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Die Seite „Betrieb“ zeigt alle Angaben nur mit `operations.read`; ohne das Recht wird abgewiesen.
+2. Der Überwachungsendpunkt antwortet nur mit gültigem Schlüssel und ohne Fachinhalte; `backup-status` meldet Warnung und kritisch nach den Stufen aus TASK-131.
+3. Uploads ab 90 Prozent werden mit 507 abgelehnt, ohne falschen Erfolg (O12); das Diagnosepaket enthält keine Geheimnisse und Fachinhalte (O16).
+4. Migration, Vertrag gegen Routen, Backend Tests, Browser Tests für die Seite.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-132 auf main die Blockade aufheben und umsetzen.
+
+## TASK-134 Referenzmessung und V1 Freigabeprüfung (A18 Teil 4)
+
+**Status:** BLOCKIERT · **Verantwortlich:** claude-20261123-ops-01 · **Aktualisiert:** 2026-11-23
+
+**Bezug:** REQ-PERF-001 bis REQ-PERF-004, REQ-OPS-004, REQ-DEV-004, REQ-DEV-005; DEC-038, DEC-040, DEC-047; OPEN-014, OPEN-017; docs/OPERATIONS.md (Lastprofil und Messziele, Prüffälle O14, O15), docs/TAGS_SEARCH.md (T15), F8 der Prüfung von TASK-104. **Abhängigkeiten:** TASK-133 auf main. **Arbeitsstand:** Mit TASK-131 von Holger am 23. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-133 auf main ist. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-164.
+
+**Umfang:** Messung des vollständigen T15 Profils und des Browserlaufs über eine nachgebildete LAN Strecke auf einem Rechner mit 4 vCPU und 16 GB, der Wiederherstellungsnachweis mit vollem Ticketbestand, die Freigaberegel docs/RELEASE.md und der Bericht docs/RELEASE_V1.md. Nicht Teil: das Schließen der im Bericht gefundenen Lücken, der Nachweis mit vollem Dateibestand auf Kundenhardware, eine zusätzliche menschliche technische Prüfung.
+
+**Fachliche Regeln** (von Holger am 23. November 2026 bestätigt):
+1. Gemessen wird auf den Standardrechnern von GitHub Actions für öffentliche Repositories (4 vCPU, 16 GB, SSD): das vollständige T15 Profil mit 15 Sitzungen inklusive Portalkonten und Hintergrundlast (Mailabruf, SLA, Sicherung) über 30 Minuten nach 10 Minuten Aufwärmen, dazu der Browserlauf über eine mit `tc` nachgebildete LAN Strecke mit fester Verzögerung und Bandbreite, dokumentiert als Nachbildung. Damit ist F8 der Prüfung von TASK-104 erledigt.
+2. Wiederherstellung und Messung laufen mit vollem Ticketbestand (90.000) und verkleinertem Dateibestand; der Bericht rechnet aus dem gemessenen Durchsatz die Zeit für den vollen Dateibestand hoch. Der Nachweis mit vollem Daten und Dateibestand auf echter Hardware bleibt nach DEC-038 Pflicht vor der ersten Kundenzusage und steht als Bedingung in der Freigaberegel.
+3. docs/RELEASE.md: V1 ist freigabefähig, wenn alle V1 Anforderungen umgesetzt oder als bewusste Abweichung von Holger bestätigt sind, alle Aufgaben abgenommen in DONE.md stehen, keine offenen Befunde aus Prüfungen ohne Holgers Entscheidung bleiben, CI auf dem Freigabestand grün ist, Wiederherstellung, Update und Messung auf genau diesem Stand bestanden haben, die Schwachstellenprüfung keine offenen kritischen oder hohen Funde zeigt und Holger fachlich abnimmt. Eine zusätzliche menschliche technische Prüfung ist keine Bedingung, steht aber als bekanntes Risiko im Bericht.
+4. docs/RELEASE_V1.md führt jede V1 Anforderung mit Stand, Nachweis und Lücke. Der Bericht schließt keine Lücke selbst; Holger entscheidet je Punkt über Nachholen oder Abweichung.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Der Messbericht weist je Klasse p50, p95, p99 und Ziel für das vollständige T15 Profil und den Browserlauf mit nachgebildeter LAN Strecke aus (O14, O15).
+2. Der Wiederherstellungsnachweis mit vollem Ticketbestand und hochgerechneter Dateizeit liegt vor.
+3. docs/RELEASE.md und docs/RELEASE_V1.md liegen vor; jede V1 Anforderung hat Stand, Nachweis und Lücke.
+
+**Nächster Schritt:** Nach dem Ergebnis von TASK-133 auf main die Blockade aufheben und umsetzen.
