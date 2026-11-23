@@ -454,6 +454,8 @@ next_failing=$(printf '%04d' $((10#$new_newest + 2)))
 container=$(docker create "$new_image")
 docker cp "$container:/app/app.jar" "$work/next/app.jar" > /dev/null
 docker rm "$container" > /dev/null
+# The archive comes out read only (0444 in the image); the check appends to its own copy.
+chmod u+w "$work/next/app.jar"
 python3 - "$work/next/app.jar" "$next_applied" "$next_failing" <<'PY'
 import sys, zipfile
 jar, applied, failing = sys.argv[1:]
