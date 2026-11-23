@@ -31,7 +31,7 @@ final class AiFormats {
     }
 
     /** An answer that does not meet the format; the code says why. */
-    static final class Invalid extends RuntimeException {
+    static class Invalid extends RuntimeException {
         private static final long serialVersionUID = 1L;
         private final String code;
 

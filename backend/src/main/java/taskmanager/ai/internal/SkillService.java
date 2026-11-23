@@ -39,10 +39,24 @@ public class SkillService {
     }
 
     /** The skill that applies: the active version of the company or the built-in one. */
-    public record Applied(String label, String name, String content, boolean builtin, Instant activatedAt, long selection) {
-        /** The label with the selection counter of its slot: a label that applies again later is a different stamp (TASK-130, F3). */
+    public record Applied(String label, String name, String content, boolean builtin, Instant activatedAt, long selection, long drafts) {
+        /** What applies to an execution of a use case; {@code drafts} is only known for a trial. */
+        public Applied(String label, String name, String content, boolean builtin, Instant activatedAt, long selection) {
+            this(label, name, content, builtin, activatedAt, selection, -1);
+        }
+
+        /**
+         * The label with the selection counter of its slot: a label that applies again later is a different stamp (TASK-130, F3). A
+         * trial also carries the highest draft number its slot ever gave out, discarded ones included, so that saving and discarding
+         * a draft never brings an earlier stamp of a trial back (TASK-138, F1); executions of the use cases do not, so mere work on a
+         * draft leaves their suggestions valid.
+         */
         String stampLabel() {
-            return label + "@" + selection;
+            return label + "@" + selection + (drafts < 0 ? "" : "#" + drafts);
+        }
+
+        Applied withDrafts(long highest) {
+            return new Applied(label, name, content, builtin, activatedAt, selection, highest);
         }
     }
 
@@ -171,9 +185,11 @@ public class SkillService {
 
     /** What a trial uses: the draft when there is one, otherwise what applies. */
     Applied forTrial(UUID companyId, AiUseCase useCase, String language) {
+        long drafts = store.nextSkillNumber(companyId, useCase, language) - 1L;
         return store.skill(companyId, useCase, language, SkillVersion.State.DRAFT)
             .map(draft -> new Applied(draft.label(), draft.name(), draft.content(), false, null, store.selection(companyId, useCase, language)))
-            .orElseGet(() -> applied(companyId, useCase, language));
+            .orElseGet(() -> applied(companyId, useCase, language))
+            .withDrafts(drafts);
     }
 
     private Slot slot(UUID companyId, AiUseCase useCase, String language) {

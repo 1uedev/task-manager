@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-138](#task-138-befunde-f1-und-f2-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-130-beheben) | Befunde F1 und F2 und Hinweise H1 bis H3 der Codex Prüfung von TASK-130 beheben | claude-20261123-aifix-03 | 2026-11-23 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -54,6 +52,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
 | [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
+| [TASK-138](#task-138-befunde-f1-und-f2-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-130-beheben) | Befunde F1 und F2 und Hinweise H1 bis H3 der Codex Prüfung von TASK-130 beheben | claude-20261123-aifix-03 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -429,7 +428,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-138 Befunde F1 und F2 und Hinweise H1 bis H3 der Codex Prüfung von TASK-130 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-aifix-03 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-aifix-03 · **Aktualisiert:** 2026-11-23
 
 **Bezug:** REQ-AI-002, REQ-AI-006, REQ-AI-007, REQ-SEC-001; DEC-156, DEC-158, DEC-160, DEC-168; docs/REVIEW_TASK-130_PR-343.md. **Abhängigkeiten:** TASK-130 auf main (PR #343). **Arbeitsstand:** Holger wählt am 23. November 2026 zur Codex Prüfung von TASK-130 (Empfehlung nachbessern) „Alles beheben“ mit der zuerst vorgeschlagenen Aufgabennummer 137; diese Nummer ging zur gleichen Zeit an Paket A18, daher TASK-138. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-168, keine Migration.
 
@@ -447,4 +446,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend Tests, `npm run verify` und alle Browsertests sind grün.
 3. Dokumentation und DEC-168 entsprechen den Regeln.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe:** Umgesetzt auf claude/project-thread-av1na6 ohne Migration. F1, F2 und H1 bis H3 sind nach den Regeln 1 bis 5 behoben. F1: Der Stempel eines Probelaufs trägt hinter `label@auswahl` die höchste je vergebene Entwurfsnummer (`#n`, gezählt über alle Skillstände einschließlich verworfener); fachliche Läufe behalten `label@auswahl`. F2: Tokenzahlen eines Abschlusses mit Schlüsseltreffer werden mit dem Lauf verworfen, bei jedem übrigen Abschluss wird eine Zahl, deren Dezimaldarstellung den Schlüssel enthält, leer gespeichert; Vertrag und Typ beschreiben das. H1: Die Testkonfiguration `HeldKeyPhase` hält die Schlüsselphase des Ausführers an und zählt Adapteraufrufe; der Test belegt null Aufrufe nach dem Abbruch. H2: `AiHttp` prüft den Interrupt nach dem Holen des Clients unmittelbar vor `sendAsync` erneut; die Grenze bleibt kooperativ und ist so im README beschrieben. H3: Der Testersatz antwortet bei gesperrter Adresse auch bei Zugangs und Modellprüfung mit `ok: false`, `ai.address_not_allowed` und `models: null`; der Browsertest prüft beide Meldungen auf Deutsch und Englisch. Gegenproben: `AiApiTest` (alte Lauf ID über alle drei Lesestände nach Speichern und Verwerfen eines Entwurfs, fachlicher Stempel unverändert; numerischer Schlüssel als Tokenzahl nicht gespeichert, unverfängliche Zahlen gespeichert; Abbruch in der gehaltenen Schlüsselphase), `AiInternalsTest` (Interrupt beim Erzeugen des Clients sendet nichts an einen zählenden Client; Zählungen mit Schlüssel werden geleert) und der Browsertest `ai`. Jeder neue Test schlägt ohne seine Behebung fehl (lokal je einzeln zurückgenommen). Ausgeführt (lokal, Java 21, PostgreSQL 16): alle 763 Backend Tests, `npm run verify`, alle 320 Browsertests (`app.test.mjs` fiel einmal auf Dateiebene durch einen späten Routenaufruf nach dem Schließen des Browsers bei grünen Einzeltests, die Wiederholung dieser Datei war mit 31 von 31 grün), `validate_repository.py`, `task_board.py --check`, `unittest`, `git diff --check`. `lifecycle-check.sh` nicht ausgeführt, da keine Migration.
+
+**Nächster Schritt:** Die Codex Nachprüfung vom 23. November 2026 empfiehlt die Abnahme ohne neue Befunde und Hinweise (docs/REVIEW_TASK-138_PR-353.md). Abnahme von TASK-125, TASK-129, TASK-130 und TASK-138 durch Holger, einschließlich der Abweichung zu Regel 6 von TASK-130 (verworfene Entwurfsstände nie in der Versionsliste).

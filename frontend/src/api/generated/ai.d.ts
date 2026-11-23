@@ -511,7 +511,9 @@ export interface components {
             modelId: string | null;
             modelKey: string | null;
             dataPath: components["schemas"]["AiDataPath"] | null;
+            /** @description Vom Anbieter gemeldet; leer, wenn die Antwort den Schlüssel wiederholte oder die Zahl den Schlüssel enthält. */
             inputTokens: number | null;
+            /** @description Wie inputTokens. */
             outputTokens: number | null;
             /** Format: date-time */
             startedAt: string;

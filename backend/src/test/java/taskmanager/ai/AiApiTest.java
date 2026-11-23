@@ -47,6 +47,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import taskmanager.AdministrationFixture;
 import taskmanager.TestDatabase;
+import taskmanager.ai.internal.HeldKeyPhase;
 import taskmanager.ai.internal.RunService;
 import taskmanager.identity.account.AccountService;
 import taskmanager.permissions.PermissionContexts;
@@ -63,12 +64,14 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
-@Import({ AiApiTest.UseController.class, AiApiTest.Guard.class })
+@Import({ AiApiTest.UseController.class, AiApiTest.Guard.class, HeldKeyPhase.class })
 class AiApiTest {
     private static final String DATABASE = freshDatabase();
     private static final String STRONG = "Correct-Horse-Battery-9";
     private static final String KEY = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
     private static final String API_KEY = "sk-test-7f3a9c41";
+    /** A key of digits only, which the rules allow (TASK-138, F2). */
+    private static final String NUMERIC_KEY = "834512907";
     private static final AtomicInteger COUNTER = new AtomicInteger();
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Stub STUB = new Stub();
@@ -174,6 +177,7 @@ class AiApiTest {
 
     @BeforeEach
     void reset() {
+        HeldKeyPhase.disarm();
         STUB.reset();
         OTHER.reset();
         Guard.valid = true;
@@ -201,6 +205,9 @@ class AiApiTest {
         volatile boolean trickle;
         volatile CountDownLatch entered = new CountDownLatch(1);
         volatile CountDownLatch gate = new CountDownLatch(0);
+        /** Counts OpenAI reports instead of 120 and 30 (TASK-138, F2). */
+        volatile int promptTokens = 120;
+        volatile int completionTokens = 30;
 
         Stub() {
             try {
@@ -229,6 +236,8 @@ class AiApiTest {
             cutOff = false;
             delay = 0;
             trickle = false;
+            promptTokens = 120;
+            completionTokens = 30;
             gate.countDown();
             gate = new CountDownLatch(0);
         }
@@ -257,7 +266,8 @@ class AiApiTest {
             seen.add(new Seen(path, exchange.getRequestHeaders().getFirst("Authorization"), exchange.getRequestHeaders().getFirst("x-api-key"),
                 exchange.getRequestHeaders().getFirst("anthropic-version"), body));
             boolean keyed = ("Bearer " + API_KEY).equals(exchange.getRequestHeaders().getFirst("Authorization"))
-                || API_KEY.equals(exchange.getRequestHeaders().getFirst("x-api-key"));
+                || API_KEY.equals(exchange.getRequestHeaders().getFirst("x-api-key"))
+                || ("Bearer " + NUMERIC_KEY).equals(exchange.getRequestHeaders().getFirst("Authorization"));
             if (path.equals("/v1/models") || path.equals("/api/tags")) {
                 if (path.startsWith("/v1") && !keyed) {
                     answer(exchange, 401, Map.of("error", Map.of("message", "invalid key")));
@@ -300,7 +310,7 @@ class AiApiTest {
                 + "\"open\": [{\"text\": \"Version fehlt\", \"sources\": []}]}";
             switch (path) {
                 case "/v1/chat/completions" -> answer(exchange, 200, Map.of("choices", List.of(Map.of("message", Map.of("role", "assistant", "content", text),
-                    "finish_reason", cutOff ? "length" : "stop")), "usage", Map.of("prompt_tokens", 120, "completion_tokens", 30)));
+                    "finish_reason", cutOff ? "length" : "stop")), "usage", Map.of("prompt_tokens", promptTokens, "completion_tokens", completionTokens)));
                 case "/v1/messages" -> answer(exchange, 200, Map.of("content", List.of(Map.of("type", "text", "text", text)), "stop_reason",
                     cutOff ? "max_tokens" : "end_turn", "usage", Map.of("input_tokens", 110, "output_tokens", 25)));
                 case "/api/chat" -> answer(exchange, 200, Map.of("message", Map.of("role", "assistant", "content", text), "done", true, "done_reason",
@@ -1475,6 +1485,96 @@ class AiApiTest {
         assertTrue(restored.get("content").isNull(), "after returning to the built-in skill the same label applies again, the stamp does not");
         assertEquals("ai.configuration_changed", restored.get("invalid").asString());
         assertEquals("builtin-1", restored.get("skillVersion").asString());
+    }
+
+    @Test
+    void discardingADraftNeverMakesAnOldTrialValidAgain() throws InterruptedException {
+        Setup setup = setup("ollama");
+        Browser admin = setup.admin();
+        Browser agent = person();
+        UUID project = project(admin, agent);
+        grant(agent.id, project, "ai.use");
+        String slot = "/api/v1/ai/admin/skills/ticket_summary/de";
+        UUID use = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null));
+        assertEquals("succeeded", finished(agent, use).get("state").asString());
+        UUID old = runId(trial(admin, "Fehler DEMO-42"));
+        assertEquals("succeeded", finished(admin, old).get("state").asString());
+        JsonNode before = admin.get("/api/v1/ai/runs/" + old).json();
+        assertFalse(before.get("content").isNull(), "with the built-in skill");
+        assertTrue(before.get("invalid").isNull());
+
+        Response draft = admin.send("PUT", slot + "/draft", Map.of("name", "Eigen", "content", "Eigen."), admin.get(slot).etag());
+        assertEquals(200, draft.status(), draft.body());
+        JsonNode withDraft = admin.get("/api/v1/ai/runs/" + old).json();
+        assertTrue(withDraft.get("content").isNull(), "a trial now runs with the draft");
+        assertEquals("ai.configuration_changed", withDraft.get("invalid").asString());
+
+        assertEquals(200, admin.send("DELETE", slot + "/draft", null, draft.etag()).status());
+        JsonNode discarded = admin.get("/api/v1/ai/runs/" + old).json();
+        assertTrue(discarded.get("content").isNull(), "after the draft was discarded the old trial stays invalid");
+        assertEquals("ai.configuration_changed", discarded.get("invalid").asString());
+        assertEquals("builtin-1", discarded.get("skillVersion").asString());
+
+        JsonNode domain = agent.get("/api/v1/ai/runs/" + use).json();
+        assertFalse(domain.get("content").isNull(), "work on a draft leaves a suggestion of a use case valid");
+        assertTrue(domain.get("invalid").isNull());
+    }
+
+    @Test
+    void countsThatRepeatANumericKeyAreNeverRecorded() throws InterruptedException {
+        Browser admin = person(AdministrationRight.AI_MANAGE, AdministrationRight.PROJECTS_MANAGE);
+        UUID provider = createAccess(admin, "openai", NUMERIC_KEY);
+        UUID model = createModel(admin, provider, "gpt-test");
+        assign(admin, "ticket_summary", model, true);
+
+        STUB.answer = "{\"state\": [{\"text\": \"Schlüssel " + NUMERIC_KEY + "\", \"sources\": [\"S1\"]}], \"open\": []}";
+        STUB.promptTokens = 120;
+        STUB.completionTokens = Integer.parseInt(NUMERIC_KEY);
+        UUID repeated = runId(trial(admin, "Fehler DEMO-42"));
+        JsonNode failed = finished(admin, repeated);
+        assertEquals("failed", failed.get("state").asString());
+        assertEquals("ai.invalid_output", failed.get("code").asString());
+        assertTrue(failed.get("inputTokens").isNull(), "an answer that repeats the key keeps none of its counts");
+        assertTrue(failed.get("outputTokens").isNull());
+
+        STUB.answer = null;
+        UUID counted = runId(trial(admin, "Fehler DEMO-42"));
+        JsonNode succeeded = finished(admin, counted);
+        assertEquals("succeeded", succeeded.get("state").asString());
+        assertEquals(120, succeeded.get("inputTokens").asInt(), "a harmless count stays");
+        assertTrue(succeeded.get("outputTokens").isNull(), "a count whose digits are the key is not recorded");
+        for (UUID run : List.of(repeated, counted)) {
+            assertFalse(admin.get("/api/v1/ai/runs/" + run).body().contains(NUMERIC_KEY));
+            assertFalse(admin.get("/api/v1/ai/admin/runs").body().contains(NUMERIC_KEY));
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from ai_run where input_tokens = ? or output_tokens = ?", Integer.class,
+            Integer.parseInt(NUMERIC_KEY), Integer.parseInt(NUMERIC_KEY)));
+    }
+
+    @Test
+    void aCancellationDuringTheKeyPhaseStopsTheExecutionBeforeTheAdapter() throws Exception {
+        Setup setup = setup("ollama");
+        Browser agent = person();
+        UUID project = project(setup.admin(), agent);
+        grant(agent.id, project, "ai.use");
+        HeldKeyPhase.arm();
+        UUID run = runId(agent.send("POST", "/api/v1/test-ai/" + project + "/ticket_summary",
+            Map.of("language", "de", "goal", "x", "texts", List.of("Fehler DEMO-42")), null));
+        HeldKeyPhase.awaitHeld();
+        // TASK-138, H1: the cancellation reaches the execution while its key is opened; the check of the runner alone stops it.
+        assertEquals(200, agent.send("DELETE", "/api/v1/ai/runs/" + run, null, null).status());
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!HeldKeyPhase.interruptedWhileHeld() && System.nanoTime() < until) {
+            HeldKeyPhase.release();
+            Thread.sleep(20);
+        }
+        HeldKeyPhase.release();
+        assertTrue(HeldKeyPhase.interruptedWhileHeld(), "the cancellation reached the held execution");
+        assertEquals("cancelled", finished(agent, run).get("state").asString());
+        Thread.sleep(300);
+        assertEquals(0, HeldKeyPhase.completions(), "the adapter was never asked for a completion");
+        assertEquals(0, STUB.generations().size(), "nothing reached the provider");
     }
 
     @Test
