@@ -28,12 +28,26 @@ base_start_file=$state/base-start
 base_time_file=$state/base-time
 latest_file=$state/latest-point
 holder=backup-$(hostname)
+last_name_file=$state/last-name-epoch
+
+# The name of a base or point: the UTC second, but never the same or an earlier one than the last name of this state volume
+# (TASK-137, finding N4). Two runs in the same second or after the clock went back get the next free second, so a restore
+# point or a restic tag never names two moments. Runs only under the lock of run_once.
+unique_name() {
+  local now last
+  now=$(date -u +%s) || return 1
+  last=$(cat "$last_name_file" 2> /dev/null || echo 0)
+  case $last in ''|*[!0-9]*) last=0 ;; esac
+  [ "$now" -gt "$last" ] || now=$(( last + 1 ))
+  printf '%s' "$now" > "$last_name_file.new" && mv "$last_name_file.new" "$last_name_file" || return 1
+  date -u -d "@$now" +%Y%m%dT%H%M%SZ
+}
 
 # The base backup: the data directory of the database at a moment, with the write ahead log it needs to become
 # consistent. The archive carries everything after it, so one base serves every later point.
 make_base() {
   local dir=$state/base name start
-  name=$(date -u +%Y%m%dT%H%M%SZ)
+  name=$(unique_name) || { fail "no name for the base backup"; return 1; }
   log "base backup $name"
   rm -rf "$dir" "$dir.new" || return 1
   mkdir -p "$dir.new" || return 1
@@ -144,7 +158,7 @@ check_contents() {
 
 make_point() {
   local name rp lines t_before rp_lsn t_after wal size contents manifest
-  name=$(date -u +%Y%m%dT%H%M%SZ)
+  name=$(unique_name) || { fail "no name for the point"; return 1; }
   rp=tm-$name
   # From here until the snapshot is stored the clean up deletes no content (F4). When this call returns, no deletion
   # runs any more.

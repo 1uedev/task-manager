@@ -92,8 +92,11 @@ jobs:
           docker logout ghcr.io
           app=$(docker image inspect --format '{{index .RepoDigests 0}}' "$APP_IMAGE:$VERSION")
           backup=$(docker image inspect --format '{{index .RepoDigests 0}}' "$BACKUP_IMAGE:$VERSION")
-          case "$app$backup" in *@sha256:*@sha256:*) ;; *) echo "::error::no digest after the push"; exit 1 ;; esac
-          printf 'TASK_MANAGER_IMAGE=%s\nTASK_MANAGER_BACKUP_IMAGE=%s\n' "$app" "$backup" > "release/digests-$VERSION.env"
+          case "$app" in "$APP_IMAGE@sha256:"*) ;; *) echo "::error::no digest of $APP_IMAGE after the push"; exit 1 ;; esac
+          case "$backup" in "$BACKUP_IMAGE@sha256:"*) ;; *) echo "::error::no digest of $BACKUP_IMAGE after the push"; exit 1 ;; esac
+          # Only the digests: the template puts them behind the fixed names of the registry (TASK-137, N7).
+          printf 'TASK_MANAGER_IMAGE_DIGEST=%s\nTASK_MANAGER_BACKUP_IMAGE_DIGEST=%s\n' "${app#*@}" "${backup#*@}" \
+            > "release/digests-$VERSION.env"
           cat "release/digests-$VERSION.env"
       - name: Operations template of this version
         env:

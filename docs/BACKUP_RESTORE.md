@@ -69,13 +69,15 @@ db:
   volumes:
     - db-data:/var/lib/postgresql
     - wal-archive:/archive
-    - ./db-init.sh:/docker-entrypoint-initdb.d/10-backup-role.sh:ro
+    - ./db-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    - ./db-roles.sh:/opt/taskmanager/db-roles.sh:ro
+    - ./db-roles.sql:/opt/taskmanager/db-roles.sql:ro
     - ./archive-wal.sh:/opt/taskmanager/archive-wal.sh:ro
 ```
 
 ### 2. Ein Datenbankkonto für die Sicherung
 
-[db-init.sh](../deploy/db-init.sh) legt beim ersten Start der Datenbank mit [db-roles.sql](../deploy/db-roles.sql) die Rollen der Vorlage an, darunter `taskmanager_backup` mit dem Passwort aus `TASK_MANAGER_BACKUP_DB_PASSWORD` ([INSTALL.md](INSTALL.md), „Datenbankrollen“). Das Konto darf sich als Replikationsclient verbinden (Basissicherung), ein Segment schließen (`pg_switch_wal`) und den Wiederherstellungspunkt schreiben (`pg_create_restore_point`). Lesen darf es seit TASK-136 nur, was `backup.sh` liest: die Migrationshistorie und die Liste der gespeicherten Inhalte `operations_backup_content`; keine Inhalte der Anwendung. Den Schutz des Dateispeichers setzt es nur über die beiden Funktionen `files_purge_hold_begin` und `files_purge_hold_end`, die V0071 bereitstellt und V0072 nur ihm und der Laufzeitrolle freigibt. Die Vormerkung einer Rücksicherung schreibt nicht dieses Konto, sondern die Rücksicherung in ihrer abgeschotteten Instanz als Verwaltungskonto (`TASK_MANAGER_RESTORE_DB_USER`, Vorgabe `taskmanager`).
+[db-init.sh](../deploy/db-init.sh) legt beim ersten Start der Datenbank mit [db-roles.sql](../deploy/db-roles.sql) die Rollen der Vorlage an, darunter `taskmanager_backup` mit dem Passwort aus `TASK_MANAGER_BACKUP_DB_PASSWORD` ([INSTALL.md](INSTALL.md), „Datenbankrollen“). Das Konto darf sich als Replikationsclient verbinden (Basissicherung), ein Segment schließen (`pg_switch_wal`) und den Wiederherstellungspunkt schreiben (`pg_create_restore_point`). Lesen darf es seit TASK-136 nur, was `backup.sh` liest: die Migrationshistorie und die Liste der gespeicherten Inhalte `operations_backup_content`; keine Inhalte der Anwendung. Den Schutz des Dateispeichers setzt es nur über die beiden Funktionen `files_purge_hold_begin` und `files_purge_hold_end`, die V0071 bereitstellt und V0072 nur ihm freigibt; die Laufzeitrolle darf sie seit V0073 nicht mehr aufrufen und liest die Tabelle `files_purge_hold` nur (TASK-137). Die Vormerkung einer Rücksicherung schreibt nicht dieses Konto, sondern die Rücksicherung in ihrer abgeschotteten Instanz als Verwaltungskonto (`TASK_MANAGER_RESTORE_DB_USER`, Vorgabe `taskmanager`).
 
 ### 3. Speicherbereiche und Besitzer
 
@@ -114,7 +116,7 @@ sudo chown -R 999:999 ssh && sudo chmod 0700 ssh && sudo chmod 0600 ssh/*
 
 ### 5. Der Dienst
 
-Der Dienst `backup` der Vorlage läuft mit `loop`. Fehlt eine Pflichtangabe, startet er nicht und nennt sie. Ein einzelner Punkt zum Prüfen: `docker compose run --rm backup once`; er meldet `point NAME complete (database up to ZEIT, restore point tm-NAME, N contents)`. Ein solcher Punkt und die Punkte des Dienstes laufen nie gleichzeitig: beide nehmen dieselbe Sperre im Volume `backup-state`, und ein zweiter Lauf meldet `another point is being made; this one waits for it` und beginnt nach dem ersten (TASK-136).
+Der Dienst `backup` der Vorlage läuft mit `loop`. Fehlt eine Pflichtangabe, startet er nicht und nennt sie. Ein einzelner Punkt, etwa vor einem Update: über den laufenden Dienst `docker compose exec backup /opt/backup/entrypoint.sh once`, nur bei angehaltenem Dienst `docker compose run --rm backup once`. Er meldet `point NAME complete (database up to ZEIT, restore point tm-NAME, N contents)`. Ein solcher Punkt und die Punkte des Dienstes laufen nie gleichzeitig: beide nehmen dieselbe Sperre im Volume `backup-state`, und ein zweiter Lauf meldet `another point is being made; this one waits for it` und beginnt nach dem ersten (TASK-136). Der Name eines Punkts und einer Basis ist die Sekunde in UTC, nie dieselbe oder eine frühere als der letzte Name dieses Volumes; zwei Läufe in derselben Sekunde oder nach einem Zeitsprung erhalten die nächste freie Sekunde (TASK-137).
 
 ### 6. Die Schlüssel liegen außerhalb der Sicherung
 
@@ -125,7 +127,7 @@ Diese Werte gehören **nicht** in den Sicherungsstand, sondern getrennt zum Betr
 | `RESTIC_PASSWORD` (`TASK_MANAGER_BACKUP_PASSWORD`) | ist kein Sicherungspunkt lesbar; der ganze Bestand ist verloren. |
 | Zugangsdaten des Ziels, bei SFTP das Verzeichnis `ssh` | kommt niemand an den Bestand. |
 | `TASK_MANAGER_SECRET_KEY` der Anwendung | sind Postfachpasswörter, Git Tokens, Anwendungsgeheimnisse und KI Schlüssel nach einer Rücksicherung unbrauchbar und müssen neu eingetragen werden; alles andere, auch Tickets, Dateien und Anmeldungen, funktioniert. |
-| `TASK_MANAGER_DB_PASSWORD` | meldet sich die Anwendung an der zurückgespielten Datenbank nicht an, weil die Datenbank ihr Passwort mitbringt. |
+| `TASK_MANAGER_DB_PASSWORD` (Verwaltungskonto), `TASK_MANAGER_MIGRATE_DB_PASSWORD` (Migrationsrolle), `TASK_MANAGER_APP_DB_PASSWORD` (Laufzeitrolle), `TASK_MANAGER_BACKUP_DB_PASSWORD` (Sicherungsrolle) | melden sich Verwaltung, `migrate`, Webprozess und Ausführer oder der Dienst `backup` an der zurückgespielten Datenbank nicht an, weil die Datenbank die Passwörter ihrer Rollen mitbringt. Nach einem Wechsel eines Passworts gilt für einen älteren Punkt das Passwort aus der Zeit dieses Punkts; die alte `.env` deshalb aufbewahren, solange Punkte aus ihrer Zeit bestehen. |
 
 Am einfachsten wird die ganze `.env` mit dem Verzeichnis `ssh` getrennt abgelegt. Beim Einrichten einmal prüfen, dass alles dort vorhanden ist, und das in der Vorlage unten festhalten. Eine alte Version des Anwendungsschlüssels nicht löschen, solange noch Sicherungen aus ihrer Zeit aufbewahrt werden.
 
@@ -140,7 +142,7 @@ Der Ablauf gilt für einen vollständigen Ausfall und für den Rückweg nach ein
    docker compose run --rm prepare
    docker compose run --rm --no-deps backup points
    ```
-   Die Liste zeigt die vollständigen Punkte, den neuesten zuerst.
+   Die Liste zeigt die vollständigen Punkte, den neuesten zuerst. Auch mit `--no-deps` startet nur das Image mit dem Digest aus `.env`: die Vorlage kennt die Images nur als `ghcr.io/1uedev/task-manager-backup@DIGEST` und `ghcr.io/1uedev/task-manager@DIGEST`, ein Tag kann an ihre Stelle nicht treten (TASK-137). `docker compose run --rm images` nennt einen falschen Wert vorher mit Grund.
 3. **Zurückspielen und beweisen:**
    ```sh
    docker compose run --rm --no-deps backup restore /restore              # der neueste Punkt
@@ -169,7 +171,7 @@ Der Bericht nennt nur Kennungen und Zahlen, keine Inhalte, und erscheint erst na
 
 ## Die Probe
 
-`tools/restore/restore-check.sh` spielt den vollständigen Verlust gegen ein synthetisches SFTP Ziel in einem eigenen Container durch, mit Schlüssel und geprüftem Hostschlüssel wie in Abschnitt 4:
+`tools/restore/restore-check.sh` spielt den vollständigen Verlust gegen ein synthetisches SFTP Ziel in einem eigenen Container durch, mit Schlüssel und geprüftem Hostschlüssel wie in Abschnitt 4. Die Probe baut ihre Images und Demodaten aus dem ganzen Quellstand; sie liegt deshalb nicht im Paket der Version, sondern läuft in einem Klon des Repositorys am Tag der Version (`git clone --branch vVERSION https://github.com/1uedev/task-manager`, TASK-137):
 
 1. Installation mit Sicherung, Demodaten und den Daten, die die Rücksicherung tragen oder anhalten muss: zwei Anhänge und ein Wikibild mit bekannten Prüfsummen, eine Portalsitzung, ein KI Vorschlag, eine Mailantwort in „wird gesendet“ (der synthetische Mailserver hält die Verbindung) und eine in „wartet“, beide mit ihren Aufträgen. Ihr Bestehen wird vor der Sicherung geprüft.
 2. Zwei Punkte, während nichts schreibt, und die Rücksicherung des zweiten.

@@ -13,6 +13,11 @@
 --
 -- The psql variables app_password, migrate_password, backup_password and owner come from db-roles.sh.
 
+-- The passwords below are literals of their statements. PostgreSQL never writes a statement of this session into its log,
+-- also not when a statement fails or the server logs every statement (TASK-137, finding N12 of the review of TASK-136).
+set log_statement = 'none';
+set log_min_error_statement = 'panic';
+set log_min_duration_statement = -1;
 select set_config('taskmanager.owner', :'owner', false);
 
 do $$

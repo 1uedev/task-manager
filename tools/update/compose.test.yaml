@@ -1,8 +1,13 @@
-# The separate test path of the update check (TASK-136, F8): the images this check builds exist only on the runner, so it
-# references them by their local image identifier (sha256:...), which is as immutable as a digest of the registry. Only
-# tools/update/update-check.sh adds this file; an installation never uses it.
+# The separate test path of the update check (TASK-136, F8; TASK-137, N7): the images this check builds exist only on the
+# runner, without a digest of the registry. This file references them by their local image identifier (sha256:...), which
+# is as immutable as a digest, by taking the digest settings as the whole reference. Only tools/update/update-check.sh adds
+# this file; an installation never uses it.
 services:
-  images:
-    environment:
-      TASK_MANAGER_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64}'
-      TASK_MANAGER_BACKUP_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager-backup@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64}'
+  app:
+    image: ${TASK_MANAGER_IMAGE_DIGEST:?}
+  worker:
+    image: ${TASK_MANAGER_IMAGE_DIGEST:?}
+  migrate:
+    image: ${TASK_MANAGER_IMAGE_DIGEST:?}
+  backup:
+    image: ${TASK_MANAGER_BACKUP_IMAGE_DIGEST:?}

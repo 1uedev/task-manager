@@ -15,8 +15,8 @@ import bundle  # noqa: E402
 
 CHECK_TAG = ROOT / "tools" / "release" / "check-tag.sh"
 DIGESTS = {
-    "TASK_MANAGER_IMAGE": "ghcr.io/1uedev/task-manager@sha256:" + "a" * 64,
-    "TASK_MANAGER_BACKUP_IMAGE": "ghcr.io/1uedev/task-manager-backup@sha256:" + "b" * 64,
+    "TASK_MANAGER_IMAGE_DIGEST": "sha256:" + "a" * 64,
+    "TASK_MANAGER_BACKUP_IMAGE_DIGEST": "sha256:" + "b" * 64,
 }
 
 
@@ -88,11 +88,13 @@ class BundleTest(unittest.TestCase):
         for name in bundle.DEPLOY:
             self.assertTrue((result / "deploy" / name).is_file(), name)
         example = (result / "deploy" / ".env.example").read_text(encoding="utf-8")
-        self.assertIn("TASK_MANAGER_IMAGE=" + DIGESTS["TASK_MANAGER_IMAGE"] + "\n", example)
-        self.assertIn("TASK_MANAGER_BACKUP_IMAGE=" + DIGESTS["TASK_MANAGER_BACKUP_IMAGE"] + "\n", example)
+        self.assertIn("TASK_MANAGER_IMAGE_DIGEST=" + DIGESTS["TASK_MANAGER_IMAGE_DIGEST"] + "\n", example)
+        self.assertIn("TASK_MANAGER_BACKUP_IMAGE_DIGEST=" + DIGESTS["TASK_MANAGER_BACKUP_IMAGE_DIGEST"] + "\n", example)
         for guide in ("INSTALL.md", "BACKUP_RESTORE.md", "OPERATIONS.md"):
             self.assertTrue((result / "docs" / guide).is_file(), guide)
-        self.assertTrue((result / "tools" / "restore" / "restore-check.sh").is_file())
+        # The checks of the repository stay in the repository; the guide links the restore check at the tag (N11).
+        self.assertFalse((result / "tools").exists())
+        self.assertIn("/blob/v1.2.3/tools/restore/restore-check.sh", (result / "docs" / "BACKUP_RESTORE.md").read_text(encoding="utf-8"))
         checked, rewritten = 0, 0
         for guide in (result / "docs").glob("*.md"):
             for target in re.findall(r"\]\(([^)\s]+)\)", guide.read_text(encoding="utf-8")):
@@ -107,10 +109,11 @@ class BundleTest(unittest.TestCase):
         self.assertGreater(rewritten, 0)
         self.assertIn("/blob/v1.2.3/tools/demo/demo.py", (result / "docs" / "DEMO.md").read_text(encoding="utf-8"))
 
-    def test_a_tag_or_a_foreign_registry_is_refused(self):
-        for value in ("ghcr.io/1uedev/task-manager:1.2.3", "docker.io/1uedev/task-manager@sha256:" + "a" * 64):
+    def test_a_tag_or_a_whole_reference_is_refused(self):
+        for value in ("1.2.3", "ghcr.io/1uedev/task-manager@sha256:" + "a" * 64, "sha256:" + "a" * 63, "sha512:" + "a" * 64):
             with self.assertRaises(bundle.BundleError):
-                bundle.build("1.2.3", dict(DIGESTS, TASK_MANAGER_IMAGE=value), self.target / value.replace("/", "_"))
+                bundle.build("1.2.3", dict(DIGESTS, TASK_MANAGER_IMAGE_DIGEST=value),
+                             self.target / value.replace("/", "_").replace(":", "_"))
 
     def test_a_dead_link_refuses_the_bundle(self):
         root = self.target / "repository"
