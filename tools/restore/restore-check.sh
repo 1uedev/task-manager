@@ -34,6 +34,8 @@ export TASK_MANAGER_DB_PASSWORD="${TASK_MANAGER_DB_PASSWORD:-$(secret)}"
 export TASK_MANAGER_DEMO_PASSWORD="${TASK_MANAGER_DEMO_PASSWORD:-$(secret)}"
 export TASK_MANAGER_BACKUP_PASSWORD="${TASK_MANAGER_BACKUP_PASSWORD:-$(secret)}"
 export TASK_MANAGER_BACKUP_DB_PASSWORD="${TASK_MANAGER_BACKUP_DB_PASSWORD:-$(secret)}"
+export TASK_MANAGER_APP_DB_PASSWORD="${TASK_MANAGER_APP_DB_PASSWORD:-$(secret)}"
+export TASK_MANAGER_MIGRATE_DB_PASSWORD="${TASK_MANAGER_MIGRATE_DB_PASSWORD:-$(secret)}"
 export TASK_MANAGER_SECRET_KEY="${TASK_MANAGER_SECRET_KEY:-$(head -c 32 /dev/urandom | base64)}"
 results=${RESTORE_CHECK_RESULTS:-restore-results}
 mkdir -p "$results"
@@ -165,7 +167,13 @@ loop_run() {
   local name=$1 container
   shift
   container=$(dc run -d -e TASK_MANAGER_BACKUP_INTERVAL=3 "$@" backup loop)
-  sleep 25
+  # Stopped only while it waits between two runs, after the second failed run ended: a run killed in its middle may leave
+  # a candidate behind on purpose, which the next run forgets, and that is not what this step checks.
+  local deadline=$((SECONDS + 180))
+  until [ "$(docker logs "$container" 2>&1 | grep -c "this point was not made")" -ge 2 ]; do
+    [ "$SECONDS" -lt "$deadline" ] || break
+    sleep 0.5
+  done
   docker logs "$container" > "$results/loop-$name.log" 2>&1 || true
   docker rm -f "$container" > /dev/null
   grep -q "this point was not made" "$results/loop-$name.log" || { cat "$results/loop-$name.log"; fail "the loop did not report the failure ($name)"; }

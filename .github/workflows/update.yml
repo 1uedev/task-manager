@@ -1,32 +1,43 @@
 name: Update
 
-# The update check of TASK-132 (DEC-162, rule 4): the way from the last released version to this change with the
-# operations template deploy/compose.yaml, TLS and synthetic demo data, with all data kept. Until the first version exists
-# the way starts at a fixed earlier state of main. It runs on demand and whenever migrations, the template, the operations
-# module or the check change.
+# The update check of TASK-132 (DEC-162, rule 4) with the fixes of TASK-136: the way from the newest published release to
+# this change with the operations template, TLS and synthetic demo data, with every content kept and the way back to a
+# backup point. The older version is installed with the template and the image digests of its own release, pulled from
+# ghcr.io (F9). Until the first version exists the way starts at a fixed earlier state of main, built here. It runs on
+# demand and whenever migrations, the start of the application, the template, the demo data, the guide or the check change.
 on:
   pull_request:
     branches: [main]
     paths:
       - backend/src/main/resources/db/migration/**
+      - backend/src/main/resources/application.yaml
       - backend/src/main/java/taskmanager/operations/**
+      - backend/src/main/java/taskmanager/TaskManagerApplication.java
       - deploy/**
       - tools/update/**
+      - tools/demo/**
+      - docs/INSTALL.md
       - Dockerfile
       - .github/workflows/update.yml
   push:
     branches: [main]
     paths:
       - backend/src/main/resources/db/migration/**
+      - backend/src/main/resources/application.yaml
       - backend/src/main/java/taskmanager/operations/**
+      - backend/src/main/java/taskmanager/TaskManagerApplication.java
       - deploy/**
       - tools/update/**
+      - tools/demo/**
+      - docs/INSTALL.md
       - Dockerfile
       - .github/workflows/update.yml
   workflow_dispatch:
 
 permissions:
   contents: read
+  # The images of a released older version in ghcr.io, by digest.
+  packages: read
 
 concurrency:
   group: update-${{ github.ref }}
@@ -47,28 +58,73 @@ jobs:
           fetch-depth: 0
       - name: Choose the older version
         id: base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          base=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --merged HEAD --sort=-v:refname \
-            | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | head -n 1 || true)
-          [ -n "$base" ] || base=$UPDATE_FIRST_BASE
-          echo "Older version: $base"
-          git worktree add --detach "$RUNNER_TEMP/old" "$base"
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[]' | jq -s . > "$RUNNER_TEMP/releases.json"
+          python3 tools/update/choose_base.py "$RUNNER_TEMP/releases.json" "$(git rev-parse HEAD)" "$UPDATE_FIRST_BASE" \
+            | tee -a "$GITHUB_OUTPUT"
+      - name: Fetch the older release with its template and digests
+        if: steps.base.outputs.kind == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.base.outputs.ref }}
+          VERSION: ${{ steps.base.outputs.version }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/old" "$TAG"
+          mkdir "$RUNNER_TEMP/release"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
+            --pattern "digests-$VERSION.env" --pattern "task-manager-$VERSION-deploy.tar.gz" --pattern "SHA256SUMS-$VERSION"
+          (cd "$RUNNER_TEMP/release" && sha256sum --check --ignore-missing "SHA256SUMS-$VERSION")
+          tar -C "$RUNNER_TEMP/release" -xzf "$RUNNER_TEMP/release/task-manager-$VERSION-deploy.tar.gz"
+          app=$(sed -n 's/^TASK_MANAGER_IMAGE=//p' "$RUNNER_TEMP/release/digests-$VERSION.env")
+          backup=$(sed -n 's/^TASK_MANAGER_BACKUP_IMAGE=//p' "$RUNNER_TEMP/release/digests-$VERSION.env")
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$app"
+          docker pull "$backup"
+          docker logout ghcr.io
+          {
+            echo "UPDATE_CHECK_BASE=release $TAG"
+            echo "UPDATE_CHECK_OLD_IMAGE=$app"
+            echo "UPDATE_CHECK_OLD_BACKUP_IMAGE=$backup"
+            echo "UPDATE_CHECK_OLD_TEMPLATE=$RUNNER_TEMP/release/task-manager-$VERSION/deploy"
+          } >> "$GITHUB_ENV"
+      - name: Build the fixed older commit
+        if: steps.base.outputs.kind == 'commit'
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/old" "$BASE"
+          docker build --tag task-manager:update-old "$RUNNER_TEMP/old"
+          {
+            echo "UPDATE_CHECK_BASE=commit $BASE"
+            echo "UPDATE_CHECK_OLD_IMAGE=task-manager:update-old"
+            echo "UPDATE_CHECK_OLD_BACKUP_IMAGE=task-manager-backup:update"
+          } >> "$GITHUB_ENV"
       - name: Record tool versions
         run: |
           docker version
           docker compose version
-      - name: Build the older version, this change and the backup service
+      - name: Build this change and its backup service
         run: |
-          docker build --tag task-manager:update-old "$RUNNER_TEMP/old"
           docker build --tag task-manager:update-new .
           docker build --tag task-manager-backup:update deploy/backup
-      - name: Update with the operations template and check the data
+      - name: Update with the operations template and check the content and the way back
         env:
-          UPDATE_CHECK_OLD_IMAGE: task-manager:update-old
           UPDATE_CHECK_NEW_IMAGE: task-manager:update-new
           UPDATE_CHECK_BACKUP_IMAGE: task-manager-backup:update
           UPDATE_CHECK_RESULTS: update-results
+          UPDATE_CHECK_TARGET: ${{ github.sha }}
         run: UPDATE_CHECK_OLD_SOURCE="$RUNNER_TEMP/old" tools/update/update-check.sh
+      - name: Remove what an aborted run left behind
+        if: always()
+        run: |
+          prefix="tm-update-$GITHUB_RUN_ID-"
+          containers=$(docker ps -a --format '{{.ID}} {{.Label "com.docker.compose.project"}}' | awk -v p="$prefix" 'index($2, p) == 1 { print $1 }')
+          [ -z "$containers" ] || docker rm -f $containers || echo "::warning::containers of an aborted update check were not removed"
+          volumes=$(docker volume ls --format '{{.Name}} {{.Label "com.docker.compose.project"}}' | awk -v p="$prefix" 'index($2, p) == 1 { print $1 }')
+          [ -z "$volumes" ] || docker volume rm $volumes || echo "::warning::volumes of an aborted update check were not removed"
       - name: Preserve the evidence of the update
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

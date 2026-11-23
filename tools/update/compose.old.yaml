@@ -1,0 +1,14 @@
+# Only the older version of the update check before the first release (TASK-136): the fixed state of main before package
+# A18 migrates at its own start and knows neither the command "migrate" nor the runtime role, so it runs like the template
+# of TASK-132 did, with the administration account of the database. The update to this change then moves the objects to
+# the migration role with db-roles.sh, as docs/INSTALL.md describes for installations from before TASK-136. A released
+# older version is installed with the template of its own release instead, and never with this file.
+services:
+  app:
+    environment:
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD}
+  worker:
+    environment:
+      TASK_MANAGER_DB_USER: taskmanager
+      TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD}

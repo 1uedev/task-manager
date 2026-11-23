@@ -4,6 +4,12 @@ name: Release
 # commit of main; then this workflow builds the application image and the image of the backup service, publishes both in
 # ghcr.io/1uedev, and puts their digests, the software bill of materials (SPDX) and the vulnerability reports together with
 # the files of the operations template into the release. Without such a tag nothing is published.
+#
+# Two protections Holger sets in the settings of the repository keep a version his (TASK-136, finding F7 of the review of
+# TASK-132; docs/INSTALL.md, "Veröffentlichen einer Version"): the job runs in the environment "release", which waits for
+# his approval before any step and therefore before the token with packages: write exists, and a tag ruleset lets only
+# him create, move or delete tags v*. The check of the tag itself is tools/release/check-tag.sh, tested without a release
+# in tests/test_release_tools.py.
 on:
   push:
     tags: ['v*']
@@ -25,6 +31,7 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    environment: release
     permissions:
       # The release with its files.
       contents: write
@@ -38,17 +45,9 @@ jobs:
       - name: Check the tag
         id: tag
         run: |
-          tag=$GITHUB_REF_NAME
-          if ! [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error::The tag $tag is not a version vMAJOR.MINOR.PATCH; nothing is published."
-            exit 1
-          fi
           git fetch --no-tags origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::The tag $tag is not on main; nothing is published."
-            exit 1
-          fi
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          version=$(bash tools/release/check-tag.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" origin/main)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build both images
         env:
           VERSION: ${{ steps.tag.outputs.version }}
@@ -76,6 +75,12 @@ jobs:
               "sbom:/out/sbom-$part-$VERSION.spdx.json" -o json --file "/out/vulnerabilities-$part-$VERSION.json"
           done
           rm -f "$RUNNER_TEMP/app.tar" "$RUNNER_TEMP/backup.tar"
+          # The ssh client of the backup image comes from the Debian sources at the build; its version is in the bill of
+          # materials, and the release names it (H4 of the review of TASK-132).
+          ssh=$(jq -r '[.packages[] | select(.name == "openssh-client") | .versionInfo] | first // empty' \
+            "release/sbom-backup-$VERSION.spdx.json")
+          [ -n "$ssh" ] || { echo "::error::the bill of materials of the backup image names no openssh-client"; exit 1; }
+          echo "openssh-client $ssh" | tee "release/ssh-client-$VERSION.txt"
       - name: Publish both images
         env:
           VERSION: ${{ steps.tag.outputs.version }}
@@ -94,15 +99,9 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          bundle="$RUNNER_TEMP/task-manager-$VERSION"
-          mkdir -p "$bundle/docs"
-          cp deploy/compose.yaml deploy/Caddyfile deploy/db-init.sh deploy/archive-wal.sh deploy/restore-place.sh deploy/.gitignore "$bundle/"
-          # The example settings name the digests of exactly this version.
-          app=$(sed -n 's/^TASK_MANAGER_IMAGE=//p' "release/digests-$VERSION.env")
-          backup=$(sed -n 's/^TASK_MANAGER_BACKUP_IMAGE=//p' "release/digests-$VERSION.env")
-          sed -e "s|^TASK_MANAGER_IMAGE=.*|TASK_MANAGER_IMAGE=$app|" -e "s|^TASK_MANAGER_BACKUP_IMAGE=.*|TASK_MANAGER_BACKUP_IMAGE=$backup|" \
-            deploy/.env.example > "$bundle/.env.example"
-          cp docs/INSTALL.md docs/BACKUP_RESTORE.md "$bundle/docs/"
+          # deploy/ with every file the template mounts and .env.example with the digests of exactly this version, the
+          # operation guides with the guides they link, and the restore check; a dead link refuses the bundle.
+          python3 tools/release/bundle.py "$VERSION" "release/digests-$VERSION.env" "$RUNNER_TEMP"
           tar -C "$RUNNER_TEMP" -czf "release/task-manager-$VERSION-deploy.tar.gz" "task-manager-$VERSION"
           (cd release && sha256sum * > "SHA256SUMS-$VERSION")
       - name: Create the release
@@ -119,7 +118,8 @@ jobs:
             cat "release/digests-$VERSION.env"
             echo '```'
             echo
-            echo "Installation and update: docs/INSTALL.md in task-manager-$VERSION-deploy.tar.gz. Update only after a"
+            echo "Installation and update: docs/INSTALL.md in task-manager-$VERSION-deploy.tar.gz, the template in its"
+            echo "directory deploy/. Registries needed: ghcr.io for both images, docker.io for postgres and caddy. Update only after a"
             echo "confirmed backup point; the way back is the restore of that point, never an older image."
             echo
             echo "Attached: software bill of materials (SPDX) and vulnerability report of both images, checksums."

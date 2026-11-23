@@ -1,0 +1,8 @@
+# Only for the counter test of finding F5 in the update check (TASK-136): the backup service of the template in its loop
+# with a base backup at every point and a short interval, so that a point of the loop is running when the operator asks
+# for one of his own. Never part of an installation.
+services:
+  backup:
+    environment:
+      TASK_MANAGER_BACKUP_INTERVAL: "5"
+      TASK_MANAGER_BACKUP_BASE_AGE: "0"

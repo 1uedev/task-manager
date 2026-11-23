@@ -75,7 +75,7 @@ db:
 
 ### 2. Ein Datenbankkonto für die Sicherung
 
-[db-init.sh](../deploy/db-init.sh) legt beim ersten Start der Datenbank das Konto `taskmanager_backup` an, mit dem Passwort aus `TASK_MANAGER_BACKUP_DB_PASSWORD`. Es darf sich als Replikationsclient verbinden (Basissicherung), ein Segment schließen (`pg_switch_wal`), den Wiederherstellungspunkt schreiben (`pg_create_restore_point`) und Tabellen lesen. Den Schutz des Dateispeichers setzt es nur über die beiden Funktionen `files_purge_hold_begin` und `files_purge_hold_end`, die V0071 dafür bereitstellt.
+[db-init.sh](../deploy/db-init.sh) legt beim ersten Start der Datenbank mit [db-roles.sql](../deploy/db-roles.sql) die Rollen der Vorlage an, darunter `taskmanager_backup` mit dem Passwort aus `TASK_MANAGER_BACKUP_DB_PASSWORD` ([INSTALL.md](INSTALL.md), „Datenbankrollen“). Das Konto darf sich als Replikationsclient verbinden (Basissicherung), ein Segment schließen (`pg_switch_wal`) und den Wiederherstellungspunkt schreiben (`pg_create_restore_point`). Lesen darf es seit TASK-136 nur, was `backup.sh` liest: die Migrationshistorie und die Liste der gespeicherten Inhalte `operations_backup_content`; keine Inhalte der Anwendung. Den Schutz des Dateispeichers setzt es nur über die beiden Funktionen `files_purge_hold_begin` und `files_purge_hold_end`, die V0071 bereitstellt und V0072 nur ihm und der Laufzeitrolle freigibt. Die Vormerkung einer Rücksicherung schreibt nicht dieses Konto, sondern die Rücksicherung in ihrer abgeschotteten Instanz als Verwaltungskonto (`TASK_MANAGER_RESTORE_DB_USER`, Vorgabe `taskmanager`).
 
 ### 3. Speicherbereiche und Besitzer
 
@@ -114,7 +114,7 @@ sudo chown -R 999:999 ssh && sudo chmod 0700 ssh && sudo chmod 0600 ssh/*
 
 ### 5. Der Dienst
 
-Der Dienst `backup` der Vorlage läuft mit `loop`. Fehlt eine Pflichtangabe, startet er nicht und nennt sie. Ein einzelner Punkt zum Prüfen: `docker compose run --rm backup once`; er meldet `point NAME complete (database up to ZEIT, restore point tm-NAME, N contents)`.
+Der Dienst `backup` der Vorlage läuft mit `loop`. Fehlt eine Pflichtangabe, startet er nicht und nennt sie. Ein einzelner Punkt zum Prüfen: `docker compose run --rm backup once`; er meldet `point NAME complete (database up to ZEIT, restore point tm-NAME, N contents)`. Ein solcher Punkt und die Punkte des Dienstes laufen nie gleichzeitig: beide nehmen dieselbe Sperre im Volume `backup-state`, und ein zweiter Lauf meldet `another point is being made; this one waits for it` und beginnt nach dem ersten (TASK-136).
 
 ### 6. Die Schlüssel liegen außerhalb der Sicherung
 

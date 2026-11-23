@@ -202,7 +202,7 @@ Diese Fälle beschreiben spätere Tests. Jetzt wurden nur Dokumentkonsistenz und
 | O15 Mailspitze / 30 Sitzungen / KI-Last | Begrenzte Warteschlangen und nachvollziehbare Überlastreaktion; keine unbegrenzten Wiederholungen. |
 | O16 Fernwartung / Diagnose / Zielmanipulation | Zeitlich begrenzte Zugänge, bereinigte Diagnosen und nur freigegebene Netzwerkziele. |
 
-**Umgesetzt mit TASK-132 (DEC-162):** Betriebsvorlage, Versionen, der Befehl `migrate`, die Startprüfung der Schemaversion (O11) und der Updateweg stehen in [INSTALL.md](INSTALL.md).
+**Umgesetzt mit TASK-132 (DEC-162):** Betriebsvorlage, Versionen, der Befehl `migrate`, die Startprüfung der Schemaversion (O11) und der Updateweg stehen in [INSTALL.md](INSTALL.md). **Nachgebessert mit TASK-136 (DEC-166):** nur der Containerbefehl `migrate` ändert das Schema, getrennte Datenbankrollen, nur Digests der Registry, ein Zugriffsprotokoll ohne Query, Veröffentlichung nach Holgers Freigabe, die Updateprüfung ab dem neuesten Release mit Inhaltsvergleich und Rückweg und der Weg für einen eigenen Proxy.
 
 **Umgesetzt mit TASK-131 (DEC-161):** Das Sicherungsverfahren, der gemeinsame Sicherungspunkt, die Rücksicherung, der Befehl `after-restore` und die gemessene Probe stehen in [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Damit sind aus OPEN-012 die Referenzplattform, das Sicherungswerkzeug und -ziel, die ausgehenden Verbindungen und die Zuordnung von Verantwortung und Servicezeit entschieden; der Nachweis auf der Referenzumgebung mit vollem Daten- und Dateibestand bleibt bei TASK-134.
 

@@ -3,7 +3,6 @@ package taskmanager.operations.internal;
 import java.io.PrintStream;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,7 +11,7 @@ import org.springframework.stereotype.Component;
  * failed migration) ends the start before it, with exit code 2 from the entry point.
  */
 @Component
-@ConditionalOnProperty(name = "taskmanager.operations-command", havingValue = SchemaGuard.MIGRATE_COMMAND)
+@ConditionalOnContainerCommand(SchemaGuard.MIGRATE_COMMAND)
 class MigrateCommandRunner implements ApplicationRunner {
     private final SchemaMigration migration;
     private final PrintStream out;
