@@ -1,0 +1,4 @@
+# Settings and secrets of the installation stay on the host (TASK-132).
+.env
+tls/
+ssh/

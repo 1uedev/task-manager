@@ -95,6 +95,8 @@ After changing task metadata, run `python3 scripts/task_board.py --write` to upd
 | docs/GIT_MIGRATION.md | Confirmed Git variants and Redmine priority, setup and operation of the Git link (TASK-113); proposed import mapping and cutover |
 | docs/FUNCTION_INVENTORY.md | Core scope, proposed V1 priorities, later modules and AI use assessment |
 | docs/OPERATIONS.md | Confirmed recovery targets and proposed deployment, backup, retention, resource and performance profiles |
+| docs/BACKUP_RESTORE.md / docs/INSTALL.md | Backup, restore and the restore drill (TASK-131); operations template, versions, `migrate` and the update path (TASK-132) |
+| deploy/ | Operations template `deploy/compose.yaml` with TLS entry and the backup service image |
 | .github/ | CI, ownership and contribution templates |
 | scripts/ / tests/ | Dependency-free repository validation and its regression checks |
 

@@ -1,0 +1,190 @@
+# Operations template of the task manager (TASK-132, DEC-162). Not the demonstration in the root of the repository: this
+# file runs a released version behind TLS with a backup service. Every setting comes from deploy/.env (see .env.example);
+# no password has a default. The walk through is in docs/INSTALL.md, the backup in docs/BACKUP_RESTORE.md.
+#
+#   docker compose run --rm migrate                     the one schema change of an installation or an update
+#   docker compose run --rm app bootstrap-admin NAME    the first administrator
+#   docker compose up -d                                TLS entry, web process, worker, database and backup
+#
+# No container gets the Docker socket or runs privileged. Web process and worker never change the schema
+# (TASK_MANAGER_SCHEMA_MODE=verify) and refuse to start when it does not fit the image.
+name: task-manager
+
+x-app: &app
+  # The application only by digest: ghcr.io/1uedev/task-manager@sha256:..., as the release names it.
+  image: ${TASK_MANAGER_IMAGE:?set TASK_MANAGER_IMAGE to the digest of a released version}
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &app-environment
+    TASK_MANAGER_DB_URL: jdbc:postgresql://db:5432/taskmanager
+    TASK_MANAGER_DB_USER: taskmanager
+    TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+    TASK_MANAGER_FILES_DIR: /data/files
+    TASK_MANAGER_SECRET_KEY: ${TASK_MANAGER_SECRET_KEY:?set TASK_MANAGER_SECRET_KEY}
+    TASK_MANAGER_PUBLIC_URL: https://${TASK_MANAGER_DOMAIN:?set TASK_MANAGER_DOMAIN}
+    TASK_MANAGER_SCHEMA_MODE: verify
+    TASK_MANAGER_JOBS_WORKER: "false"
+    TASK_MANAGER_LDAP_BIND_PASSWORD: ${TASK_MANAGER_LDAP_BIND_PASSWORD:-}
+    TASK_MANAGER_AI_PLAIN_HTTP_HOSTS: ${TASK_MANAGER_AI_PLAIN_HTTP_HOSTS:-}
+  volumes:
+    - files-data:/data/files
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+services:
+  # Hands the named volumes of the write ahead log archive, the backup state and the restore target to the account of the
+  # database and of the backup service; a new named volume belongs to root. Runs at every start and ends.
+  prepare:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    user: "0:0"
+    entrypoint: ["chown", "999:999", "/archive", "/state", "/restore"]
+    volumes:
+      - wal-archive:/archive
+      - backup-state:/state
+      - restore-target:/restore
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  db:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+    # The write ahead log goes into the archive the backup service reads; a segment closes at least every 5 minutes
+    # (rule 7 of TASK-131).
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /archive/%f && cp %p /archive/%f
+      - -c
+      - archive_timeout=300
+    environment:
+      POSTGRES_DB: taskmanager
+      POSTGRES_USER: taskmanager
+      POSTGRES_PASSWORD: ${TASK_MANAGER_DB_PASSWORD:?set TASK_MANAGER_DB_PASSWORD}
+      TASK_MANAGER_BACKUP_DB_PASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql
+      - wal-archive:/archive
+      - ./db-init.sh:/docker-entrypoint-initdb.d/10-backup-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    shm_size: 256m
+    mem_limit: ${TASK_MANAGER_DB_MEMORY:-6g}
+    cpus: ${TASK_MANAGER_DB_CPUS:-2}
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  # The one schema change of an installation or an update; never started by "up".
+  migrate:
+    <<: *app
+    profiles: [maintenance]
+    command: ["migrate"]
+    environment:
+      <<: *app-environment
+    restart: "no"
+
+  app:
+    <<: *app
+    mem_limit: ${TASK_MANAGER_APP_MEMORY:-4g}
+    cpus: ${TASK_MANAGER_APP_CPUS:-2}
+    # Longer than the grace period of the job executor (15 s plus 3 s), as in the demonstration (TASK-055).
+    stop_grace_period: 30s
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "kill -0 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    mem_limit: ${TASK_MANAGER_WORKER_MEMORY:-2g}
+    cpus: ${TASK_MANAGER_WORKER_CPUS:-1}
+    stop_grace_period: 30s
+
+  # The TLS entry: the only service with a port. TASK_MANAGER_TLS=acme (default) or own, see the Caddyfile.
+  caddy:
+    image: caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      TASK_MANAGER_DOMAIN: ${TASK_MANAGER_DOMAIN:?set TASK_MANAGER_DOMAIN}
+      TASK_MANAGER_TLS: ${TASK_MANAGER_TLS:-acme}
+    ports:
+      - "${TASK_MANAGER_HTTP_BIND:-80}:80"
+      - "${TASK_MANAGER_HTTPS_BIND:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${TASK_MANAGER_TLS_DIR:-./tls}:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+
+  # The backup service of TASK-131: a backup point every 15 minutes onto an S3 or SFTP target on another computer.
+  backup:
+    # By digest as well: ghcr.io/1uedev/task-manager-backup@sha256:..., released together with the application.
+    image: ${TASK_MANAGER_BACKUP_IMAGE:?set TASK_MANAGER_BACKUP_IMAGE to the digest of the released backup image}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["loop"]
+    environment:
+      TASK_MANAGER_BACKUP_REPOSITORY: ${TASK_MANAGER_BACKUP_REPOSITORY:?set TASK_MANAGER_BACKUP_REPOSITORY}
+      TASK_MANAGER_BACKUP_STATE: /state
+      RESTIC_PASSWORD: ${TASK_MANAGER_BACKUP_PASSWORD:?set TASK_MANAGER_BACKUP_PASSWORD}
+      RESTIC_CACHE_DIR: /state/cache
+      # Only for an S3 target; an SFTP target uses the ssh directory below.
+      AWS_ACCESS_KEY_ID: ${TASK_MANAGER_BACKUP_S3_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${TASK_MANAGER_BACKUP_S3_SECRET:-}
+      PGHOST: db
+      PGUSER: taskmanager_backup
+      PGPASSWORD: ${TASK_MANAGER_BACKUP_DB_PASSWORD:?set TASK_MANAGER_BACKUP_DB_PASSWORD}
+      PGDATABASE: taskmanager
+    volumes:
+      - wal-archive:/archive:ro
+      - files-data:/data/files:ro
+      - backup-state:/state
+      - ${TASK_MANAGER_BACKUP_SSH_DIR:-./ssh}:/var/lib/postgresql/.ssh:ro
+      - restore-target:/restore
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 1
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  files-data:
+  wal-archive:
+  backup-state:
+  restore-target:
+  caddy-data:
+  caddy-config:

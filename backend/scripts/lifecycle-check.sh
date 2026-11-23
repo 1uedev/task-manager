@@ -165,9 +165,26 @@ grep -q 'The installation is released.' "$logs/after-restore.out" || fail "after
 [ "$(sql "select operation || ' ' || operator from operations_audit_event")" = 'restore.released Lifecycle' ] \
   || fail "after-restore did not record what it did"
 
+phase=schema
+echo "== Schema version: migrate and the verify mode of the operations template (TASK-132)"
+java -jar "$jar" migrate > "$logs/migrate.out" 2> "$logs/migrate.err" || { cat "$logs/migrate.err"; fail "migrate on a current schema failed"; }
+grep -q '^Migrations applied: 0$' "$logs/migrate.out" || fail "migrate changed a current schema"
+sql "insert into flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) values (9999, '9999', 'later version', 'SQL', 'V9999__later_version.sql', 0, 'lifecycle', now(), 0, true)" > /dev/null
+set +e
+java -jar "$jar" migrate > "$logs/migrate-newer.out" 2> "$logs/migrate-newer.err"
+code=$?
+env TASK_MANAGER_SCHEMA_MODE=verify TASK_MANAGER_HTTP_PORT=$port timeout 120 java -jar "$jar" > "$logs/verify-newer.log" 2>&1
+web_code=$?
+set -e
+[ "$code" -eq 2 ] || fail "migrate on a newer database exited with $code instead of 2"
+grep -q 'newer than this image' "$logs/migrate-newer.err" || fail "migrate did not name the newer database"
+[ "$web_code" -ne 0 ] && [ "$web_code" -ne 124 ] || fail "the web server started on a newer database in the verify mode"
+grep -q 'newer than this image' "$logs/verify-newer.log" || fail "the web server did not name the newer database"
+sql "delete from flyway_schema_history where installed_rank = 9999" > /dev/null
+
 phase=started-with-admin
-echo "== Start with an existing account"
-run with-account
+echo "== Start with an existing account, in the verify mode of the operations template (TASK-132)"
+TASK_MANAGER_SCHEMA_MODE=verify run with-account
 [ -d "$TASK_MANAGER_FILES_DIR/staging" ] && [ -d "$TASK_MANAGER_FILES_DIR/content" ] || fail "the web application did not prepare the file store"
 
 phase=worker

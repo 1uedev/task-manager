@@ -4,6 +4,8 @@ Stand 23. November 2026 · Ergebnis von TASK-131 zur Prüfung (DEC-161). Diese A
 
 Nicht Teil dieser Anleitung: TLS, Installationsvorlage und Updates (TASK-132), Betriebsübersicht und Überwachung (TASK-133), die Messung auf der Referenzumgebung und die V1 Freigabe (TASK-134). Die Vorführung aus [DEMO.md](DEMO.md) bleibt unverändert und ist kein Betrieb.
 
+Die Betriebsvorlage `deploy/compose.yaml` mit diesem Sicherungsdienst, die Installation und der Updateweg stehen in [INSTALL.md](INSTALL.md) (TASK-132).
+
 ## Überblick
 
 | Teil | Inhalt |
