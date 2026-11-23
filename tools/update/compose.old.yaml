@@ -2,13 +2,17 @@
 # A18 migrates at its own start and knows neither the command "migrate" nor the runtime role, so it runs like the template
 # of TASK-132 did, with the administration account of the database. The update to this change then moves the objects to
 # the migration role with db-roles.sh, as docs/INSTALL.md describes for installations from before TASK-136. A released
-# older version is installed with the template of its own release instead, and never with this file.
+# older version is installed with the template of its own release instead, and never with this file. It also knows no
+# argument "operations" of the entry point (TASK-137), so its processes start with the entry point of its own image.
+x-old-entrypoint: &old-entrypoint ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
 services:
   app:
+    entrypoint: *old-entrypoint
     environment:
       TASK_MANAGER_DB_USER: taskmanager
       TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD}
   worker:
+    entrypoint: *old-entrypoint
     environment:
       TASK_MANAGER_DB_USER: taskmanager
       TASK_MANAGER_DB_PASSWORD: ${TASK_MANAGER_DB_PASSWORD}

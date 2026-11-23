@@ -6,10 +6,11 @@ name: Release
 # the files of the operations template into the release. Without such a tag nothing is published.
 #
 # Two protections Holger sets in the settings of the repository keep a version his (TASK-136, finding F7 of the review of
-# TASK-132; docs/INSTALL.md, "Veröffentlichen einer Version"): the job runs in the environment "release", which waits for
-# his approval before any step and therefore before the token with packages: write exists, and a tag ruleset lets only
-# him create, move or delete tags v*. The check of the tag itself is tools/release/check-tag.sh, tested without a release
-# in tests/test_release_tools.py.
+# TASK-132; TASK-137, N6; docs/INSTALL.md, "Veröffentlichen einer Version"): the job "release" runs in the environment
+# "release", which waits for his approval before any step and therefore before the token with packages: write exists, and
+# a tag ruleset lets only him create, move or delete tags v*; neither has a bypass. The check of the tag itself is
+# tools/release/check-tag.sh in the job "check", which runs at the push and before the approval; it is tested without a
+# release in tests/test_release_tools.py.
 on:
   push:
     tags: ['v*']
@@ -28,7 +29,32 @@ env:
   GRYPE: anchore/grype:v0.100.0@sha256:dcf0168c9b275c6dbcbff5ceeecfac29a6ccf138a87f0adc9ce5bd69fe6146f3
 
 jobs:
+  # The check of the tag at the moment it was pushed, before any approval and with read rights only (TASK-137, finding N6 of
+  # the review of TASK-136): a tag on a commit that is not on main at that moment never reaches the approval, also when the
+  # commit comes to main later. The release job builds exactly the commit this job checked.
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      commit: ${{ steps.tag.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check the tag
+        id: tag
+        run: |
+          git fetch --no-tags origin main
+          version=$(bash tools/release/check-tag.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" origin/main)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
   release:
+    needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: release
@@ -41,13 +67,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
-      - name: Check the tag
+          ref: ${{ needs.check.outputs.commit }}
+      - name: The tag still names the checked commit
         id: tag
+        env:
+          CHECKED: ${{ needs.check.outputs.commit }}
+          VERSION: ${{ needs.check.outputs.version }}
         run: |
-          git fetch --no-tags origin main
-          version=$(bash tools/release/check-tag.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" origin/main)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A tag moved during the wait for the approval is refused; the ruleset should already prevent it.
+          git fetch --no-tags origin "+refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          now=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")
+          [ "$now" = "$CHECKED" ] && [ "$(git rev-parse HEAD)" = "$CHECKED" ] \
+            || { echo "::error::the tag no longer names the checked commit; nothing is published"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build both images
         env:
           VERSION: ${{ steps.tag.outputs.version }}
@@ -106,6 +138,8 @@ jobs:
           # operation guides with the guides they link, and the restore check; a dead link refuses the bundle.
           python3 tools/release/bundle.py "$VERSION" "release/digests-$VERSION.env" "$RUNNER_TEMP"
           tar -C "$RUNNER_TEMP" -czf "release/task-manager-$VERSION-deploy.tar.gz" "task-manager-$VERSION"
+          # The package as an operator receives it: unpacked alone, resolved with and without the proxy file (TASK-137, N11).
+          sh tools/release/check-package.sh "release/task-manager-$VERSION-deploy.tar.gz" "$VERSION"
           (cd release && sha256sum * > "SHA256SUMS-$VERSION")
       - name: Create the release
         env:
