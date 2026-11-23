@@ -11,6 +11,8 @@ on:
       - deploy/backup/**
       - deploy/archive-wal.sh
       - deploy/db-init.sh
+      - deploy/db-roles.sh
+      - deploy/db-roles.sql
       - deploy/restore-place.sh
       - tools/restore/**
       - tools/demo/demo.py
@@ -27,6 +29,8 @@ on:
       - deploy/backup/**
       - deploy/archive-wal.sh
       - deploy/db-init.sh
+      - deploy/db-roles.sh
+      - deploy/db-roles.sql
       - deploy/restore-place.sh
       - tools/restore/**
       - tools/demo/demo.py
