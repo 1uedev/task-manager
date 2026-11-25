@@ -622,7 +622,14 @@ grep -q '^  expected=task-manager ' "$work/delete-block.sh" || fail "the guide h
 guarded_delete() {
   sed "s/^  expected=task-manager /  expected=$1 /" "$work/delete-block.sh" > "$work/delete-block-run.sh"
   # shellcheck disable=SC2329
-  docker() { if [ "$1" = compose ]; then shift; dc "$@"; else command docker "$@"; fi; }
+  # Not through dc: dc itself calls "docker compose" and would call this function again without end.
+  docker() {
+    if [ "$1" = compose ]; then
+      shift; command docker compose -p "$project" "${compose_files[@]}" --env-file "$work/env" "$@"
+    else
+      command docker "$@"
+    fi
+  }
   # shellcheck source=/dev/null
   . "$work/delete-block-run.sh"
 }
