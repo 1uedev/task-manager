@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-139](#task-139-befunde-f1-bis-f10-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-137-beheben) | Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben | claude-20261125-opsfix-04 | 2026-11-25 |
 
 ### Blockiert – BLOCKIERT
 
@@ -357,3 +359,31 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** Umgesetzt auf claude/project-thread-elfpvq mit Migration V0073. N1: Die Vorlage startet jeden Prozess über `java -jar app.jar operations` (`OperationsStart`); so gestartet prüft `SchemaGuard` immer und lehnt jeden Modus außer leer und `verify` ab, nur `migrate` migriert (`MigrateCommandTest.aProcessOfTheOperationsTemplateNeverMigratesWhateverTheModeSays`, Profil und Umgebung). N2: typgerechter Vergleich der wirksamen Flyway Konfiguration mit exakter Ablage, leerer Satz abgelehnt (`SchemaGuardSettingsTest`, `aProfileAnExcludedFlywayAndAnotherSpellingAreRefused`). N3: V0073 nimmt der Laufzeitrolle Schreibrechte an `flyway_schema_history` und `files_purge_hold` und die Sperrfunktionen; `db-roles.sql` legt Schema an `taskmanager_migrate` und `pg_trgm` an das Verwaltungskonto, Übergang mit Folgen, Partition, Typen, Sichten und Funktion zweimal geprüft; `reset-admin-password`, `rebuild-search` und ein Ausführer laufen im Test als Laufzeitrolle (`DatabaseRolesTest`). N4: eindeutige Punkt- und Basisnamen (`tests/test_backup_names.py`). N5: Caddy ohne Query, Referrer, Cookies und querytragendes `Location` in Erfolg, Weiterleitung der Anwendung, HTTPS Weiterleitung und 502 (`tools/caddy/check-log.sh` grün, gegen TASK-136 rot). N6: Job `check` mit Leserechten beim Push, Job `release` baut genau den geprüften Commit; Anleitung ohne Bypass, nur Holgers Konto. N7: Vorlage kennt nur `…@${TASK_MANAGER_IMAGE_DIGEST}`; Updateprüfung zeigt mit lokal getaggten Images, dass pull, up --no-deps und run --no-deps von migrate und backup abgelehnt werden. N8: fester Stand nur ohne stabiles Release, sonst Rückgabewert 3; `tools/update/release-files.sh` verlangt je eine Prüfsummenzeile; kein zweiter Pull; Bericht mit Tag, Commit und Digests (`tests/test_update_base.py`, `tests/test_update_release_files.py`). N9: Inventar aller 51 vom Seed gefüllten Tabellen mit benannter Ausschluss- und Pflichtliste, Gegenprobe mit gelöschter Mailvorlage, Suche nach Projekt, Nummer und Titel, aktiver Ausführer mit erfolgreichem wiederkehrendem Auftrag, Abbruch bei Lesefehlern. N10: Punkt vor dem Wechsel, synthetische nächste Version mit bestätigter V0074 und wirklich scheiternder V0075, Rückkehr mit aufbewahrtem Paket und `.env`, Prüfung von Projekt und Volumes, Rückgabewert 3; Anleitung „Rückkehr“ in neun Schritten, `up -d --wait db`, Fehlertext mit Verweis auf den Rückweg. N11: entfernter Proxy über eigenes Netz oder `DOCKER-USER` mit Zugriffstest von zwei Rechnern; `tools/release/check-package.sh` im Workflow und in `tests/test_release_tools.py`; die Restore Probe verweist auf den Quellstand des Tags. N12: Suchmuster aus geschützter Datei, synthetischer Rollenfehler bei `log_statement=all` ohne Passwort in Ausgabe und Datenbanklog, Reichweite der Imageprüfung benannt, restore-check ohne Passwörter in Argumenten. H1: frühere Fehler einer unbekannten Migration benannt (`aFailedMigrationUnknownToTheImageIsNamedAsSuch`); in der Updateprüfung lehnt die vorherige Version die neuere Datenbank mit „newer than this image“ ab, weil PostgreSQL die gescheiterte Migration zurückrollt. H3: Netze und Testimages in der Abschlussaktion, Hostports je Lauf. H5: Ausschnitt und Passwortliste in docs/BACKUP_RESTORE.md. Nachweise: Repository Prüfungen, 77 Python Tests, Backend Tests der geänderten Klassen mit Java 21 und PostgreSQL 16, lokaler Lauf von `tools/update/update-check.sh` von V0069 auf V0073 grün (911 Zeilen in 51 Tabellen und 3 Dateien gleich, Rückkehr auf den Punkt mit Vorgängerpaket). **Offen für Holger:** Umgebung `release` und Tag Regelsatz nach docs/INSTALL.md, „Veröffentlichen einer Version“. Grenzen: das Holen privater Images mit Anmeldung läuft erst ab dem ersten Release mit; bis dahin belegt ein synthetisches Paar die Rückkehr.
 
 **Nächster Schritt:** Codex Prüfung des Ergebnis PR, danach Abnahme von TASK-132, TASK-136 und TASK-137 durch Holger.
+
+## TASK-139 Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261125-opsfix-04 · **Aktualisiert:** 2026-11-25
+
+**Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166, DEC-167, DEC-170; docs/REVIEW_TASK-137_PR-355.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-137 auf main (PR #355). **Arbeitsstand:** Holger wählt am 25. November 2026 zur Codex Prüfung von TASK-137 (Empfehlung nachbessern) „Alles beheben als TASK-139“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-170, Migration V0074 nur falls nötig.
+
+**Umfang:** Behebung der Befunde F1 bis F10 und der Hinweise H1 bis H4 aus docs/REVIEW_TASK-137_PR-355.md in den Workflows „Release“ und „Update“, den Proben unter `tools/`, der Betriebsvorlage `deploy/`, dem Sicherungsdienst, der Schemaprüfung des Backends und in docs/INSTALL.md und docs/BACKUP_RESTORE.md. Nicht Teil: Betriebsübersicht (TASK-133), Messung und Freigabe (TASK-134), eine tatsächliche Veröffentlichung.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier F1 bis F10 und H1 bis H4):
+1. F1: Die Herkunft eines Tags stellt ein Prüfablauf aus einem vertrauenswürdigen Stand von main fest, bevor Code des Kandidaten läuft; der Referenzzeitpunkt ist festgelegt und beschrieben. Gegenproben für einen später integrierten Commit und einen abweichenden Prüfstand.
+2. F2: Die Anleitung beschreibt den unterstützten Weg für Holgers persönliche Ausnahme im Tag Regelsatz mit Kontrolle des eingetragenen Kontos und der Ablehnung eines anderen; die Einrichtung bleibt Holgers offener Schritt.
+3. F3: Je Datei wird genau die gezählte Prüfsummenzeile geprüft, Text- und Binärzeilen gleich behandelt oder Binärzeilen abgelehnt; beide Kombinationen mit falscher Prüfsumme sind getestet.
+4. F4: Für den Bestand aus TASK-136 ist der Eigentümer von `pg_trgm` festgelegt, umgesetzt und beschrieben; der Übergang ist ein eigener Testfall.
+5. F5: Die Schemaprüfung legt alle für Migration und Prüfung relevanten wirksamen Werte fest, auch Platzhalter, Standard Callbacks und Schemaanlage; eine programmatische Änderung wird wie die Spring Einstellung abgelehnt.
+6. F6: Der Sicherungsdienst übernimmt beim Übergang vorhandene Namen oder schließt sie eindeutig aus; ein unlesbarer Zustand bricht ab. Test mit Altbestand und eingefrorener oder zurückgestellter Uhr.
+7. F7: Die gemeinsame Prüfung beider Imageangaben greift auch für die dokumentierten Einzelbefehle, oder Regel und Anleitung legen die gleichwertige Invariante fest; je ein fehlerhafter Wert bei gültigem zweitem Digest ist geprüft.
+8. F8: Die Updateprobe belegt je Phase einen frisch erfolgreich abgeschlossenen Auftrag, und jede Dateilesung wird einzeln auf Erfolg geprüft, mit Gegenproben.
+9. F9: Kontroll- und Löschschritt der Rückkehr sind getrennt oder der Löschbefehl ist durch die Prüfungen gesperrt; die Sicherung beider Volumes steht davor.
+10. F10: Die Caddy Probe übergibt ihre Werte per Namen aus der Umgebung und ihre Muster per geschützter Datei; Fehlermeldungen nennen nur Fall und Feldtyp.
+11. H1 bis H4: eine getrennte synthetische Probe für den gespeicherten Fehler einer dem alten Image unbekannten Migration in der Updateprüfung, beschriftete Zwischencontainer und robuste Ports, die Metadaten der Images vollständig erfasst vor der Suche, und die Firewall Regel mit dem ursprünglichen Zielendpunkt.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. F1 bis F10 und H1 bis H4 sind nach den Regeln behoben, mit den Gegenproben; die Einrichtung in GitHub bleibt als offener Schritt für Holger benannt.
+2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
+3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-170 entsprechen dem Code.
+
+**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung.
