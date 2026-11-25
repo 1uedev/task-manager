@@ -181,7 +181,10 @@ loop_run() {
   [ "$(offered)" = "$before" ] || fail "the loop offered a point after the failure ($name)"
 }
 # The base backup fails: the database refuses the password of the backup account.
-loop_run base-refused -e TASK_MANAGER_BACKUP_BASE_AGE=0 -e PGPASSWORD=wrong-password
+# The wrong passwords reach the container through the environment of this script, never as an argument (TASK-137, N12).
+export PGPASSWORD="wrong-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+loop_run base-refused -e TASK_MANAGER_BACKUP_BASE_AGE=0 -e PGPASSWORD
+unset PGPASSWORD
 grep -q "pg_basebackup failed" "$results/loop-base-refused.log" || fail "the loop did not name the failed base backup"
 # restic cannot read one file of the file store and ends with status 3; its snapshot is forgotten, never offered.
 unreadable=$(db "select id from operations_backup_content order by id limit 1")
@@ -194,7 +197,9 @@ grep -q "restic ended with status 3" "$results/loop-unreadable.log" || fail "the
 [ -z "$(restic_in 'restic --quiet snapshots --tag candidate --json' | grep -o '"id"' || true)" ] \
   || fail "a candidate of a failed run stayed on the target"
 # The target refuses the repository password.
-loop_run target-refused -e RESTIC_PASSWORD=wrong-password
+export RESTIC_PASSWORD="wrong-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+loop_run target-refused -e RESTIC_PASSWORD
+unset RESTIC_PASSWORD
 
 step "F10: a reply in sending and a reply waiting, both with their jobs"
 drill reply --url "$url" --state "$state" --name sending

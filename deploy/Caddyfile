@@ -5,6 +5,20 @@
 {
 	# No administration endpoint: the configuration changes only with this file and a restart.
 	admin off
+	# Every other log of Caddy, above all the error log of the reverse proxy when the web process does not answer, names the
+	# request as well. It gets the same filter as the access log below (TASK-137, finding N5 of the review of TASK-136).
+	log default {
+		output stderr
+		format filter {
+			wrap console
+			fields {
+				request>uri regexp "\?.*$" "?"
+				request>headers>Referer delete
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+			}
+		}
+	}
 }
 
 (tls-acme) {
@@ -26,8 +40,10 @@
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
-	# The access log keeps method, path, status and duration, never the query or the referrer: an OAuth return carries
-	# its code and state there (TASK-136, finding F6 of the review of TASK-132; tools/caddy/check-log.sh tests it).
+	# The access log keeps method, path, status and duration, never the query, the referrer or cookies: an OAuth return
+	# carries its code and state there (TASK-136, finding F6 of the review of TASK-132). A redirect of the web process can
+	# carry them in its Location header, which loses its query as well (TASK-137, N5). tools/caddy/check-log.sh tests
+	# success, 502, the redirect to HTTPS and a redirect of the web process.
 	log {
 		output stdout
 		format filter {
@@ -38,6 +54,7 @@
 				request>headers>Cookie delete
 				request>headers>Authorization delete
 				resp_headers>Set-Cookie delete
+				resp_headers>Location regexp "\?.*$" "?"
 			}
 		}
 	}

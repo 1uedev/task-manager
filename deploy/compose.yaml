@@ -7,14 +7,19 @@
 #   docker compose run --rm app bootstrap-admin NAME    the first administrator
 #   docker compose up -d                                TLS entry, web process, worker, database and backup
 #
-# No container gets the Docker socket or runs privileged. Web process and worker never change the schema
-# (TASK_MANAGER_SCHEMA_MODE=verify), refuse to start when it does not fit the image, and connect with the runtime role
-# taskmanager_app, which may not change it either; only "migrate" uses the migration role (TASK-136, db-roles.sql).
+# No container gets the Docker socket or runs privileged. Every process of the application starts through the entry point
+# argument "operations" (TASK-137, N1): web process, worker and commands never change the schema, whatever a setting says,
+# refuse to start when it does not fit the image, and connect with the runtime role taskmanager_app, which may not change it
+# either; only "migrate" changes it, with the migration role (TASK-136, db-roles.sql).
 name: task-manager
 
 x-app: &app
-  # The application only by digest: ghcr.io/1uedev/task-manager@sha256:..., as the release names it.
-  image: ${TASK_MANAGER_IMAGE:?set TASK_MANAGER_IMAGE to the digest of a released version}
+  # The application only by digest (TASK-137, N7): the template fixes registry, name and the "@", the operator gives only the
+  # digest sha256:... the release names. Every command of Compose (pull, up, run, also with --no-deps) resolves exactly this
+  # reference; a tag cannot take its place.
+  image: ghcr.io/1uedev/task-manager@${TASK_MANAGER_IMAGE_DIGEST:?set TASK_MANAGER_IMAGE_DIGEST to the digest of a released version}
+  # The entry point of the image with the argument "operations" in front of every command (TASK-137, N1).
+  entrypoint: ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar", "operations"]
   depends_on:
     db:
       condition: service_healthy
@@ -39,16 +44,16 @@ x-app: &app
   restart: unless-stopped
 
 services:
-  # Refuses every start with an image reference that is not a digest of the release (TASK-136, F8). Every process of the
-  # application waits for the database, and the database waits for this check.
+  # Explains a wrong digest before anything starts (TASK-136, F8; TASK-137, N7). The digest form of the image references
+  # above already holds for every command; this check names the mistake. The database waits for it.
   images:
     image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     entrypoint: ["sh", "/opt/taskmanager/check-images.sh"]
     environment:
+      TASK_MANAGER_IMAGE_DIGEST: ${TASK_MANAGER_IMAGE_DIGEST:-}
+      TASK_MANAGER_BACKUP_IMAGE_DIGEST: ${TASK_MANAGER_BACKUP_IMAGE_DIGEST:-}
       TASK_MANAGER_IMAGE: ${TASK_MANAGER_IMAGE:-}
       TASK_MANAGER_BACKUP_IMAGE: ${TASK_MANAGER_BACKUP_IMAGE:-}
-      TASK_MANAGER_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager@sha256:[0-9a-f]{64}'
-      TASK_MANAGER_BACKUP_IMAGE_FORM: 'ghcr\.io/1uedev/task-manager-backup@sha256:[0-9a-f]{64}'
     volumes:
       - ./check-images.sh:/opt/taskmanager/check-images.sh:ro
     network_mode: none
@@ -183,8 +188,8 @@ services:
 
   # The backup service of TASK-131: a backup point every 15 minutes onto an S3 or SFTP target on another computer.
   backup:
-    # By digest as well: ghcr.io/1uedev/task-manager-backup@sha256:..., released together with the application.
-    image: ${TASK_MANAGER_BACKUP_IMAGE:?set TASK_MANAGER_BACKUP_IMAGE to the digest of the released backup image}
+    # By digest as well, released together with the application (TASK-137, N7).
+    image: ghcr.io/1uedev/task-manager-backup@${TASK_MANAGER_BACKUP_IMAGE_DIGEST:?set TASK_MANAGER_BACKUP_IMAGE_DIGEST to the digest of the released backup image}
     depends_on:
       db:
         condition: service_healthy
