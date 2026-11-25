@@ -69,6 +69,33 @@ class ReleaseFilesTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("does not match", result.stderr)
 
+    def test_the_counted_line_is_checked_in_text_and_binary_form(self):
+        # F3 of the review of TASK-137: a correct line of one file and a wrong line of the other in the other form.
+        digests, package = f"digests-{VERSION}.env", f"task-manager-{VERSION}-deploy.tar.gz"
+        wrong = "0" * 64
+        for valid_binary in (False, True):
+            for wrong_name in (digests, package):
+                with self.subTest(valid_binary=valid_binary, wrong=wrong_name):
+                    lines = []
+                    for name in (digests, package):
+                        digest = subprocess.run(["sha256sum", name], cwd=self.release, check=True, capture_output=True,
+                                                text=True).stdout.split()[0]
+                        binary = valid_binary if name != wrong_name else not valid_binary
+                        lines.append(f"{wrong if name == wrong_name else digest} {'*' if binary else ' '}{name}\n")
+                    (self.release / f"SHA256SUMS-{VERSION}").write_text("".join(lines), encoding="utf-8")
+                    result = self.run_check()
+                    self.assertEqual(1, result.returncode, result.stdout)
+                    self.assertIn(f"the checksum of {wrong_name} in SHA256SUMS-{VERSION} does not match", result.stderr)
+                    self.assertFalse((self.release / f"task-manager-{VERSION}").exists())
+
+    def test_binary_lines_with_correct_checksums_are_accepted(self):
+        lines = subprocess.run(["sha256sum", "--binary", f"digests-{VERSION}.env", f"task-manager-{VERSION}-deploy.tar.gz"],
+                               cwd=self.release, check=True, capture_output=True, text=True).stdout
+        self.assertIn(" *digests", lines)
+        (self.release / f"SHA256SUMS-{VERSION}").write_text(lines, encoding="utf-8")
+        result = self.run_check()
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_a_tag_instead_of_a_digest_is_refused(self):
         (self.release / f"digests-{VERSION}.env").write_text(
             f"TASK_MANAGER_IMAGE_DIGEST=v{VERSION}\nTASK_MANAGER_BACKUP_IMAGE_DIGEST={BACKUP}\n", encoding="utf-8")

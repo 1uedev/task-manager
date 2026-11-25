@@ -3,7 +3,7 @@
 
   probe.py first-login --url URL                              the first login of the administrator from bootstrap-admin
   probe.py prepare --url URL --state FILE                     before the backup point of the update
-  probe.py flows --url URL --state FILE --phase NAME [--upload]
+  probe.py flows --url URL --state FILE --phase NAME --since TIME [--job KIND] [--upload]
 
 "first-login" replaces the one time password of the administrator by the demo password. "prepare" creates a ticket of
 its own in the project HELP with an attachment and an image on a wiki page, with known checksums, so that the backup point
@@ -110,19 +110,49 @@ def flows(args) -> None:
               f"{args.phase}: attachment from {attachment['phase']} downloads byte for byte")
     image = client.call("GET", f"/wiki/images/{state['image']['id']}", as_bytes=True).body
     check(hashlib.sha256(image).hexdigest() == state["image"]["sha256"], f"{args.phase}: the wiki image downloads byte for byte")
-    # A worker is alive and has run a recurring task of the installation to its end (TASK-137, N9): a stopped worker or
-    # one that fails every job does not pass, however well the endpoint answers.
+    # A worker is alive and has run exactly the job of this phase to its end (TASK-137, N9; TASK-139, F8 of the review of
+    # TASK-137): the update check made the recurring task --job due at --since, so only a run created and finished after
+    # that moment counts. An old success of the same kind from the database before or from the restored point does not,
+    # and a fresh failure of that kind ends the probe at once.
+    since = moment(args.since)
     deadline = time.monotonic() + 120
     while True:
         summary = client.call("GET", "/jobs/summary").body
-        done = client.call("GET", "/jobs", query={"state": "succeeded", "limit": "100"}).body
-        recurring = [job for job in done if str(job.get("kind", "")).startswith("recurring.")] if isinstance(done, list) else []
-        if isinstance(summary, dict) and summary.get("activeWorkers", 0) >= 1 and recurring:
+        listed = client.call("GET", "/jobs", query={"limit": "100"}).body
+        verdict = fresh_outcome(listed if isinstance(listed, list) else [], args.job, since)
+        if verdict == "failed":
+            check(False, f"{args.phase}: the job {args.job} of this phase did not fail")
+        if isinstance(summary, dict) and summary.get("activeWorkers", 0) >= 1 and verdict == "succeeded":
             break
         if time.monotonic() >= deadline:
-            check(False, f"{args.phase}: a worker is active and a recurring task succeeded")
+            check(False, f"{args.phase}: a worker is active and the job {args.job} of this phase succeeded")
         time.sleep(3)
-    check(True, f"{args.phase}: a worker is active and a recurring task succeeded ({recurring[0]['kind']})")
+    check(True, f"{args.phase}: a worker is active and the job {args.job} made due at {args.since} succeeded")
+
+
+def moment(text: str):
+    """A time of the server or of the database as an aware datetime; "Z" and an offset are both accepted."""
+    from datetime import datetime, timezone
+    value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if value.tzinfo is None:
+        raise ValueError(f"{text} has no time zone")
+    return value.astimezone(timezone.utc)
+
+
+def fresh_outcome(jobs: list, kind: str, since) -> str | None:
+    """"succeeded" or "failed" for a job of the kind created at or after since and finished; None while there is none.
+
+    A failure wins over a success, so a worker that fails the job of the phase never passes with another run.
+    """
+    outcomes = set()
+    for job in jobs:
+        if not isinstance(job, dict) or job.get("kind") != kind or not job.get("createdAt") or not job.get("finishedAt"):
+            continue
+        if moment(job["createdAt"]) < since or moment(job["finishedAt"]) < since:
+            continue
+        if job.get("state") in ("succeeded", "failed"):
+            outcomes.add(job["state"])
+    return "failed" if "failed" in outcomes else "succeeded" if "succeeded" in outcomes else None
 
 
 def main(argv: list[str]) -> None:
@@ -138,6 +168,8 @@ def main(argv: list[str]) -> None:
     three.add_argument("--state", required=True)
     three.add_argument("--phase", required=True)
     three.add_argument("--upload", action="store_true")
+    three.add_argument("--since", required=True, help="the time the update check made the job due (TASK-139, F8)")
+    three.add_argument("--job", default="recurring.files.cleanup")
     args = parser.parse_args(argv)
     {"first-login": first_login, "prepare": prepare, "flows": flows}[args.command](args)
 

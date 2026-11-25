@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-139](#task-139-befunde-f1-bis-f10-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-137-beheben) | Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben | claude-20261125-opsfix-04 | 2026-11-25 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -51,6 +49,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
 | [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
 | [TASK-137](#task-137-befunde-n1-bis-n12-und-hinweise-h1-bis-h5-der-codex-prüfung-von-task-136-beheben) | Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben | claude-20261123-opsfix-03 | 2026-11-23 |
+| [TASK-139](#task-139-befunde-f1-bis-f10-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-137-beheben) | Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben | claude-20261125-opsfix-04 | 2026-11-25 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -339,7 +338,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-139 Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261125-opsfix-04 · **Aktualisiert:** 2026-11-25
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261125-opsfix-04 · **Aktualisiert:** 2026-11-25
 
 **Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166, DEC-167, DEC-170; docs/REVIEW_TASK-137_PR-355.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-137 auf main (PR #355). **Arbeitsstand:** Holger wählt am 25. November 2026 zur Codex Prüfung von TASK-137 (Empfehlung nachbessern) „Alles beheben als TASK-139“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-170, Migration V0074 nur falls nötig.
 
@@ -363,4 +362,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
 3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-170 entsprechen dem Code.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung.
+**Übergabe:** Umgesetzt auf claude/project-thread-elfpvq ohne Migration. F1: Der Workflow `Release` hat keinen Push Auslöser mehr; Holger startet ihn auf main mit dem Tag als Eingabe (`workflow_dispatch`). Workflow und `tools/release/check-tag.sh` kommen damit aus dem Commit von main beim Start; der Job `check` checkt genau diesen Commit aus (`GITHUB_SHA`, Referenzzeitpunkt), holt vom Tag nur die Git Objekte, lehnt einen Lauf auf einem anderen Branch ab und prüft, dass der Commit des Tags in der Geschichte dieses Commits liegt; erst nach Prüfung und Freigabe läuft Code des Tags. Gegenproben in `tests/test_release_tools.py`: ein erst nach dem Start auf main gekommener Commit, eine bewegliche oder unbekannte Referenz, ein Lauf außerhalb von main, kein Push Auslöser. F2: docs/INSTALL.md legt den Tag Regelsatz über die REST Schnittstelle mit `actor_type` `User` an, mit Kontrolle der Bypass Liste (genau ein Eintrag mit Holgers Kontonummer) und der Ablehnung eines anderen Kontos; die Einrichtung bleibt Holgers offener Schritt, ebenso die Umgebung `release` jetzt mit dem Branch `main`. F3: `tools/update/release-files.sh` vergleicht je Datei genau die gezählte Zeile, Text- und Binärzeilen gleich; beide Kombinationen mit falscher Prüfsumme getestet. F4: `pg_trgm` behält die Rolle, die es angelegt hat (Verwaltungskonto, im Bestand aus TASK-136 `taskmanager_migrate`), beschrieben in deploy/db-roles.sql und docs/INSTALL.md; `DatabaseRolesTest.anInstallationOfTheTemplateOfTask136KeepsTheExtensionWithTheMigrationRole` spielt das Rollenskript von TASK-136 und V0033 mit der Migrationsrolle nach und prüft Eigentum, Funktionsrechte, Nutzung und Ablehnung von Änderungen durch die Laufzeitrolle. F5: `SchemaGuard.refuseChangedConfiguration` vergleicht jeden Wert von `Configuration` außer einer benannten Liste für Verbindung und Laden, Objekte nach Klasse; Platzhalter, Callbacks, Standard Callbacks, Schemaanlage und weitere sind in `SchemaGuardSettingsTest` geprüft. F6: `unique_name` übernimmt `base-name` und `latest-point` eines Volumes ohne Zähler und bricht bei unlesbarem Zustand ab; Altbestand mit eingefrorener und zurückgestellter Uhr in `tests/test_backup_names.py`. F7: Jeder Container der beiden Images prüft beide Angaben beim Start (`OperationsStart.imageRefusal`, Einstieg des Sicherungsimages), auch bei `run --no-deps`; Gegenprobe mit je einem falschen Wert neben einem gültigen in `OperationsStartImagesTest` und in der Updateprüfung. F8: Die Updateprüfung macht je Phase `files.cleanup` fällig, und die Probe zählt nur einen danach angelegten und beendeten Lauf, ein frischer Fehler beendet sie; `tools/update/files-fingerprint.sh` prüft jede Dateilesung einzeln; Gegenproben in `tests/test_update_probe.py`. F9: Der Rückkehrschritt 4 ist in Kontrolle, Sicherung und einen Löschblock getrennt, der Projekt und Labels beider Volumes gegen den eingetragenen Namen prüft; die Updateprüfung führt genau diesen Block aus, erst mit falschem Namen (abgelehnt), dann mit dem richtigen. F10: `tools/caddy/check-log.sh` übergibt die Werte nur per Namen aus der Umgebung und sucht sie aus geschützten Dateien; Befunde nennen nur Fall und Feld. H1: eigener synthetischer gespeicherter Fehler von V(n+1) in der Updateprüfung, `migrate` mit 2 und Start abgelehnt, jeweils mit der eigenen Meldung. H2: beschrifteter Zwischencontainer, bis zu drei Versuche mit neuen Ports. H3: Metadaten erst vollständig gelesen, dann durchsucht. H4: Firewall Regel mit `--ctorigdst` und `--ctorigdstport`. Prüfungen: siehe Ergebnis PR.
+
+**Nächster Schritt:** Codex Prüfung des Ergebnis PR; Holger richtet Umgebung `release` (Branch `main`) und Tag Regelsatz nach docs/INSTALL.md ein; danach Abnahme von TASK-132, TASK-136, TASK-137 und TASK-139 durch Holger.

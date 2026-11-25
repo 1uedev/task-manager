@@ -147,46 +147,98 @@ class SchemaGuard implements FlywayMigrationStrategy, ApplicationListener<Contex
     }
 
     /**
+     * The getters of the Flyway configuration that may differ from the image (TASK-139, F5 of the review of TASK-137): how
+     * the process reaches its database and how Flyway itself is loaded, none of which changes which migrations run, how
+     * they are checked or what they contain. Every other value of {@link Configuration}, also one a later Flyway adds, must
+     * equal the configuration the image fixes.
+     */
+    static final Set<String> CONNECTION_ONLY = Set.of("data-source", "cached-data-sources", "url", "user", "password",
+        "driver", "jdbc-properties", "kerberos-config-file", "connect-retries", "connect-retries-interval",
+        "lock-retry-count", "class-loader", "plugin-register", "loggers");
+
+    /**
      * Compares the Flyway configuration Spring bound with the one the image fixes, value by value and with its type (N2):
-     * exactly the location {@code classpath:db/migration} in this spelling, the default history table, schema, target,
-     * naming, placeholders and resolvers, no baseline, no out of order and the default ignore patterns. A configuration that
-     * finds no migration at all is refused as well.
+     * every value {@link Configuration} offers, except the ones in {@link #CONNECTION_ONLY} (TASK-139, F5): locations in
+     * exactly the spelling {@code classpath:db/migration}, history table, schemas and their creation, target, naming,
+     * placeholders with their values, prefix and suffix, callbacks with the default callbacks, resolvers, Java migrations,
+     * baseline, order and ignore patterns. A programmatic change is refused like the Spring setting of the same name;
+     * objects such as callbacks and resolvers are compared by their classes. A configuration that finds no migration at all
+     * is refused as well.
      */
     static void refuseChangedConfiguration(Configuration bound) {
         FluentConfiguration fixed = Flyway.configure().locations(LOCATION).cleanDisabled(true).baselineOnMigrate(false)
             .validateMigrationNaming(true);
         Set<String> refused = new TreeSet<>();
-        compare(refused, "locations", Arrays.stream(bound.getLocations()).map(Object::toString).toList(),
-            Arrays.stream(fixed.getLocations()).map(Object::toString).toList());
-        compare(refused, "table", bound.getTable(), fixed.getTable());
-        compare(refused, "schemas", List.of(bound.getSchemas()), List.of(fixed.getSchemas()));
-        compare(refused, "default-schema", bound.getDefaultSchema(), fixed.getDefaultSchema());
-        compare(refused, "target", String.valueOf(bound.getTarget()), String.valueOf(fixed.getTarget()));
-        compare(refused, "cherry-pick", bound.getCherryPick() == null ? List.of() : List.of(bound.getCherryPick()),
-            fixed.getCherryPick() == null ? List.of() : List.of(fixed.getCherryPick()));
-        compare(refused, "baseline-on-migrate", bound.isBaselineOnMigrate(), false);
-        compare(refused, "baseline-version", String.valueOf(bound.getBaselineVersion()), String.valueOf(fixed.getBaselineVersion()));
-        compare(refused, "out-of-order", bound.isOutOfOrder(), false);
-        compare(refused, "clean-disabled", bound.isCleanDisabled(), true);
-        compare(refused, "validate-migration-naming", bound.isValidateMigrationNaming(), true);
-        compare(refused, "validate-on-migrate", bound.isValidateOnMigrate(), true);
-        compare(refused, "ignore-migration-patterns", Arrays.stream(bound.getIgnoreMigrationPatterns()).map(Object::toString).toList(),
-            Arrays.stream(fixed.getIgnoreMigrationPatterns()).map(Object::toString).toList());
-        compare(refused, "sql-migration-prefix", bound.getSqlMigrationPrefix(), fixed.getSqlMigrationPrefix());
-        compare(refused, "sql-migration-separator", bound.getSqlMigrationSeparator(), fixed.getSqlMigrationSeparator());
-        compare(refused, "sql-migration-suffixes", List.of(bound.getSqlMigrationSuffixes()), List.of(fixed.getSqlMigrationSuffixes()));
-        compare(refused, "repeatable-sql-migration-prefix", bound.getRepeatableSqlMigrationPrefix(), fixed.getRepeatableSqlMigrationPrefix());
-        compare(refused, "placeholder-replacement", bound.isPlaceholderReplacement(), fixed.isPlaceholderReplacement());
-        compare(refused, "skip-default-resolvers", bound.isSkipDefaultResolvers(), false);
-        compare(refused, "resolvers", bound.getResolvers().length, 0);
-        compare(refused, "java-migrations", bound.getJavaMigrations().length, 0);
-        compare(refused, "group", bound.isGroup(), false);
-        compare(refused, "mixed", bound.isMixed(), false);
-        compare(refused, "init-sql", bound.getInitSql(), fixed.getInitSql());
+        for (java.lang.reflect.Method getter : Configuration.class.getMethods()) {
+            String name = settingName(getter);
+            if (name == null || CONNECTION_ONLY.contains(name)) {
+                continue;
+            }
+            Object mine;
+            Object theirs;
+            try {
+                mine = described(getter.invoke(bound));
+                theirs = described(getter.invoke(fixed));
+            } catch (ReflectiveOperationException | RuntimeException failure) {
+                // A value that cannot be read cannot be shown to be the fixed one.
+                refused.add(name);
+                continue;
+            }
+            compare(refused, name, mine, theirs);
+        }
         if (!refused.isEmpty()) {
             throw new SchemaVersionException("The schema check refuses changed Flyway settings (" + String.join(", ", refused)
                 + "). The image fixes the set of migrations, their history and the target; remove these settings.");
         }
+    }
+
+    /** "isBaselineOnMigrate" gives "baseline-on-migrate"; null for a method that is not a plain getter. */
+    private static String settingName(java.lang.reflect.Method method) {
+        if (method.getParameterCount() != 0 || method.getReturnType() == void.class
+                || java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+            return null;
+        }
+        String name = method.getName();
+        String bare;
+        if (name.startsWith("get") && name.length() > 3) {
+            bare = name.substring(3);
+        } else if (name.startsWith("is") && name.length() > 2 && (method.getReturnType() == boolean.class
+                || method.getReturnType() == Boolean.class)) {
+            bare = name.substring(2);
+        } else {
+            return null;
+        }
+        return bare.replaceAll("([a-z0-9])([A-Z])", "$1-$2").toLowerCase(Locale.ROOT);
+    }
+
+    /** A comparable form: values as they are, arrays and collections element by element, maps by key, objects by class. */
+    private static Object described(Object value) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean
+                || value instanceof Character || value instanceof Enum<?>) {
+            return value;
+        }
+        if (value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> items = new java.util.ArrayList<>(length);
+            for (int index = 0; index < length; index++) {
+                items.add(described(java.lang.reflect.Array.get(value, index)));
+            }
+            return items;
+        }
+        if (value instanceof java.util.Collection<?> collection) {
+            return collection.stream().map(SchemaGuard::described).toList();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> sorted = new java.util.TreeMap<>();
+            map.forEach((key, item) -> sorted.put(String.valueOf(key), described(item)));
+            return sorted;
+        }
+        if (value instanceof java.nio.charset.Charset || value instanceof org.flywaydb.core.api.Location
+                || value instanceof org.flywaydb.core.api.MigrationVersion || value instanceof org.flywaydb.core.api.pattern.ValidatePattern
+                || value instanceof java.io.File || value instanceof java.nio.file.Path) {
+            return value.getClass().getName() + ":" + value;
+        }
+        return value.getClass().getName();
     }
 
     private static void compare(Set<String> refused, String name, Object bound, Object fixed) {

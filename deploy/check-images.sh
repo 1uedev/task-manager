@@ -3,7 +3,9 @@
 # of TASK-132; TASK-137, finding N7 of the review of TASK-136). compose.yaml itself only knows the references
 # ghcr.io/1uedev/task-manager@DIGEST and ghcr.io/1uedev/task-manager-backup@DIGEST, so every command of Compose, pull, up and
 # run, also with --no-deps, uses a digest; a tag cannot take its place. This check runs before the database and names the
-# mistake: a value that is not a digest of SHA-256, or the settings of the form before TASK-137.
+# mistake: a value that is not a digest of SHA-256, or the settings of the form before TASK-137. The same rule runs at the
+# start of every container of both images (the entry point of the backup image and OperationsStart.imageRefusal of the
+# application), so a command with --no-deps without this service checks both values together as well (TASK-139, F7).
 set -eu
 refuse() {
   echo "Refused: $1 Copy both lines from digests-VERSION.env of the release into .env." >&2

@@ -30,14 +30,32 @@ latest_file=$state/latest-point
 holder=backup-$(hostname)
 last_name_file=$state/last-name-epoch
 
-# The name of a base or point: the UTC second, but never the same or an earlier one than the last name of this state volume
-# (TASK-137, finding N4). Two runs in the same second or after the clock went back get the next free second, so a restore
-# point or a restic tag never names two moments. Runs only under the lock of run_once.
+# The name of a base or point: the UTC second, but never the same or an earlier one than any name this state volume
+# already knows (TASK-137, finding N4; TASK-139, F6 of the review of TASK-137): the counter last-name-epoch, the name of the
+# current base (base-name) and the newest point (latest-point). A volume of the template of TASK-136 has no counter yet;
+# its base and point names are taken over at the first run, so no older name comes back with a clock at or before them.
+# Two runs in the same second or after the clock went back get the next free second, so a restore point or a restic tag
+# never names two moments. A state file that exists but cannot be read or holds no name ends the run without a name.
+# Runs only under the lock of run_once.
+name_epoch() {
+  [[ $1 =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || return 1
+  date -u -d "${1:0:4}-${1:4:2}-${1:6:2}T${1:9:2}:${1:11:2}:${1:13:2}Z" +%s
+}
+
 unique_name() {
-  local now last
+  local now last=0 value epoch file
   now=$(date -u +%s) || return 1
-  last=$(cat "$last_name_file" 2> /dev/null || echo 0)
-  case $last in ''|*[!0-9]*) last=0 ;; esac
+  if [ -e "$last_name_file" ]; then
+    last=$(cat "$last_name_file") || { echo "the name counter $last_name_file cannot be read" >&2; return 1; }
+    [[ $last =~ ^[0-9]{1,12}$ ]] || { echo "the name counter $last_name_file holds no second" >&2; return 1; }
+  fi
+  for file in "$base_name_file" "$latest_file"; do
+    [ -e "$file" ] || continue
+    value=
+    read -r value _ < "$file" || [ -n "${value:-}" ] || { echo "$file cannot be read" >&2; return 1; }
+    epoch=$(name_epoch "$value") || { echo "$file holds no name of a base or point" >&2; return 1; }
+    [ "$epoch" -le "$last" ] || last=$epoch
+  done
   [ "$now" -gt "$last" ] || now=$(( last + 1 ))
   printf '%s' "$now" > "$last_name_file.new" && mv "$last_name_file.new" "$last_name_file" || return 1
   date -u -d "@$now" +%Y%m%dT%H%M%SZ

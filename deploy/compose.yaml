@@ -34,6 +34,12 @@ x-app: &app
     TASK_MANAGER_JOBS_WORKER: "false"
     TASK_MANAGER_LDAP_BIND_PASSWORD: ${TASK_MANAGER_LDAP_BIND_PASSWORD:-}
     TASK_MANAGER_AI_PLAIN_HTTP_HOSTS: ${TASK_MANAGER_AI_PLAIN_HTTP_HOSTS:-}
+    # Both image settings, so that every process of the image checks them together at its start, also after "run --no-deps"
+    # without the service "images" (TASK-139, finding F7 of the review of TASK-137).
+    TASK_MANAGER_IMAGE_DIGEST: ${TASK_MANAGER_IMAGE_DIGEST:-}
+    TASK_MANAGER_BACKUP_IMAGE_DIGEST: ${TASK_MANAGER_BACKUP_IMAGE_DIGEST:-}
+    TASK_MANAGER_IMAGE: ${TASK_MANAGER_IMAGE:-}
+    TASK_MANAGER_BACKUP_IMAGE: ${TASK_MANAGER_BACKUP_IMAGE:-}
   volumes:
     - files-data:/data/files
   read_only: true
@@ -213,6 +219,11 @@ services:
       # The restore checks a point in an isolated instance of its own over a local socket, as the administration account
       # of the restored data directory; it marks the restore there for after-restore (TASK-136, F11).
       TASK_MANAGER_RESTORE_DB_USER: taskmanager
+      # Both image settings, checked together by the entry point at every start (TASK-139, F7).
+      TASK_MANAGER_IMAGE_DIGEST: ${TASK_MANAGER_IMAGE_DIGEST:-}
+      TASK_MANAGER_BACKUP_IMAGE_DIGEST: ${TASK_MANAGER_BACKUP_IMAGE_DIGEST:-}
+      TASK_MANAGER_IMAGE: ${TASK_MANAGER_IMAGE:-}
+      TASK_MANAGER_BACKUP_IMAGE: ${TASK_MANAGER_BACKUP_IMAGE:-}
     volumes:
       # Writable, because the service removes the segments no point needs any more (TASK-135, H3).
       - wal-archive:/archive

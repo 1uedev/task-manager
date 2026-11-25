@@ -8,18 +8,26 @@ name: Release
 # Two protections Holger sets in the settings of the repository keep a version his (TASK-136, finding F7 of the review of
 # TASK-132; TASK-137, N6; docs/INSTALL.md, "Veröffentlichen einer Version"): the job "release" runs in the environment
 # "release", which waits for his approval before any step and therefore before the token with packages: write exists, and
-# a tag ruleset lets only him create, move or delete tags v*; neither has a bypass. The check of the tag itself is
-# tools/release/check-tag.sh in the job "check", which runs at the push and before the approval; it is tested without a
-# release in tests/test_release_tools.py.
+# a tag ruleset lets only him create, move or delete tags v*.
+#
+# The run is started by hand on main with the tag as input (TASK-139, finding F1 of the review of TASK-137): this file
+# and tools/release/check-tag.sh then come from that commit of main and never from the tag, and the job "check" runs only
+# that code; it establishes the origin of the tag against the commit of main the run started on (GITHUB_SHA, the fixed
+# reference point) before any code of the tagged commit runs. A run started on another branch is refused. Tested without
+# a release in tests/test_release_tools.py.
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag vMAJOR.MINOR.PATCH that Holger set on a commit of main'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
@@ -29,10 +37,11 @@ env:
   GRYPE: anchore/grype:v0.100.0@sha256:dcf0168c9b275c6dbcbff5ceeecfac29a6ccf138a87f0adc9ce5bd69fe6146f3
 
 jobs:
-  # The check of the tag at the moment it was pushed, before any approval and with read rights only (TASK-137, finding N6 of
-  # the review of TASK-136): a tag on a commit that is not on main at that moment never reaches the approval, also when the
-  # commit comes to main later. The release job builds exactly the commit this job checked.
+  # The check of the tag before any approval and with read rights only, from the trusted commit of main the run started
+  # on (TASK-139, F1): only code of that commit runs here; of the tag only its git objects are fetched. The release job
+  # builds exactly the commit this job checked.
   check:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -40,18 +49,27 @@ jobs:
     outputs:
       version: ${{ steps.tag.outputs.version }}
       commit: ${{ steps.tag.outputs.commit }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Check the tag
+      - name: Check the tag against the reference commit of main
         id: tag
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          git fetch --no-tags origin main
-          version=$(bash tools/release/check-tag.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" origin/main)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          [ "$GITHUB_REF" = refs/heads/main ] && [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] \
+            || { echo "::error::the run must start on main; nothing is published"; exit 1; }
+          # The exact form is checked by check-tag.sh; this keeps any other input out of the fetch.
+          printf '%s' "$TAG" | grep -Eqx 'v[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}' \
+            || { echo "::error::the tag is not a version vMAJOR.MINOR.PATCH; nothing is published"; exit 1; }
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          checked=$(bash tools/release/check-tag.sh "$TAG" "$GITHUB_SHA")
+          read -r version commit <<< "$checked"
+          { echo "version=$version"; echo "commit=$commit"; echo "tag=$TAG"; } >> "$GITHUB_OUTPUT"
 
   release:
     needs: check
@@ -73,21 +91,23 @@ jobs:
         env:
           CHECKED: ${{ needs.check.outputs.commit }}
           VERSION: ${{ needs.check.outputs.version }}
+          TAG: ${{ needs.check.outputs.tag }}
         run: |
           # A tag moved during the wait for the approval is refused; the ruleset should already prevent it.
-          git fetch --no-tags origin "+refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          now=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          now=$(git rev-parse "refs/tags/$TAG^{commit}")
           [ "$now" = "$CHECKED" ] && [ "$(git rev-parse HEAD)" = "$CHECKED" ] \
             || { echo "::error::the tag no longer names the checked commit; nothing is published"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          { echo "version=$VERSION"; echo "tag=$TAG"; echo "commit=$CHECKED"; } >> "$GITHUB_OUTPUT"
       - name: Build both images
         env:
           VERSION: ${{ steps.tag.outputs.version }}
+          COMMIT: ${{ steps.tag.outputs.commit }}
         run: |
-          docker build --build-arg "TASK_MANAGER_VERSION=$VERSION" --build-arg "TASK_MANAGER_REVISION=$GITHUB_SHA" \
+          docker build --build-arg "TASK_MANAGER_VERSION=$VERSION" --build-arg "TASK_MANAGER_REVISION=$COMMIT" \
             --tag "$APP_IMAGE:$VERSION" .
           docker build --label "org.opencontainers.image.version=$VERSION" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.revision=$COMMIT" \
             --label "org.opencontainers.image.source=https://github.com/1uedev/task-manager" \
             --tag "$BACKUP_IMAGE:$VERSION" deploy/backup
       - name: Software bill of materials and vulnerability reports
@@ -144,6 +164,7 @@ jobs:
       - name: Create the release
         env:
           VERSION: ${{ steps.tag.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           {
@@ -161,5 +182,5 @@ jobs:
             echo
             echo "Attached: software bill of materials (SPDX) and vulnerability report of both images, checksums."
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Task Manager $VERSION" --notes-file "$RUNNER_TEMP/notes.md" release/*
