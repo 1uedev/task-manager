@@ -31,8 +31,13 @@ class DatabaseRolesTest {
     private static final String BACKUP_PASSWORD = "backup-secret-for-tests";
 
     /** Runs deploy/db-roles.sql as db-roles.sh does, with the psql variables written out. */
-    private static synchronized void runRoleScript(String url) throws Exception {
-        String script = Files.readString(Path.of("..", "deploy", "db-roles.sql"));
+    private static void runRoleScript(String url) throws Exception {
+        runRoleScript(url, Path.of("..", "deploy", "db-roles.sql"));
+    }
+
+    /** Runs a role script as db-roles.sh does, with the psql variables written out. */
+    private static synchronized void runRoleScript(String url, Path file) throws Exception {
+        String script = Files.readString(file);
         String database = url.substring(url.lastIndexOf('/') + 1).replaceAll("\\?.*", "");
         script = script
             .replace(":'owner'", "'" + TestDatabase.username() + "'")
@@ -77,6 +82,14 @@ class DatabaseRolesTest {
     }
 
     private static void assertRuntimeRoleCannotChangeTheSchema(String url) {
+        assertRuntimeRoleCannotChangeTheSchema(url, TestDatabase.username());
+    }
+
+    /**
+     * {@code extensionOwner}: the role that created pg_trgm, which PostgreSQL never hands to another (TASK-139, F4 of the
+     * review of TASK-137): the administration account, or the migration role in an installation of the template of TASK-136.
+     */
+    private static void assertRuntimeRoleCannotChangeTheSchema(String url, String extensionOwner) {
         JdbcTemplate app = jdbc(url, "taskmanager_app", APP_PASSWORD);
         assertEquals("taskmanager_app", app.queryForObject("select current_user", String.class));
         assertEquals(Boolean.FALSE, app.queryForObject("select rolsuper or rolcreaterole or rolcreatedb from pg_roles "
@@ -105,8 +118,18 @@ class DatabaseRolesTest {
         JdbcTemplate admin = jdbc(url, TestDatabase.username(), TestDatabase.password());
         assertEquals("taskmanager_migrate", admin.queryForObject(
             "select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'public'", String.class));
-        assertEquals(TestDatabase.username(), admin.queryForObject(
+        assertEquals(extensionOwner, admin.queryForObject(
             "select pg_get_userbyid(extowner) from pg_extension where extname = 'pg_trgm'", String.class));
+        // The runtime role uses the extension (functions, operators, the trigram index) and cannot change it.
+        assertEquals(Boolean.TRUE, app.queryForObject("select similarity('Rechnung', 'Rechnungen') > 0.3 and "
+            + "'Rechnung' % 'Rechnungen'", Boolean.class));
+        app.queryForList("select id from tag where normalized % 'rechnung'");
+        for (String change : List.of("drop extension pg_trgm", "alter extension pg_trgm update",
+                "alter function similarity(text, text) cost 2")) {
+            var refused = assertThrows(Exception.class, () -> app.execute(change), change);
+            String reason = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(refused).getMessage();
+            assertTrue(reason.contains("must be owner"), change + ": " + reason);
+        }
         assertEquals(List.of(), admin.queryForList("select p.proname from pg_proc p join pg_depend d on d.classid = "
             + "'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e' join pg_extension e on e.oid = d.refobjid "
             + "where p.proowner <> e.extowner", String.class));
@@ -220,6 +243,33 @@ class DatabaseRolesTest {
             as(url, "taskmanager_app", APP_PASSWORD))));
         assertRuntimeRoleCannotChangeTheSchema(url);
         assertBackupRoleReadsOnlyItsShare(url);
+    }
+
+    @Test
+    void anInstallationOfTheTemplateOfTask136KeepsTheExtensionWithTheMigrationRole() throws Exception {
+        // TASK-139, F4 of the review of TASK-137: the role script of TASK-136 left the creation of pg_trgm to V0033, which
+        // the migration role ran. The script of today keeps that owner (PostgreSQL has no change of the owner of an
+        // extension) and settles everything else; the migration role keeps migrating, the runtime role only uses it.
+        String url = TestDatabase.createEmptyDatabase();
+        runRoleScript(url, Path.of("src", "test", "resources", "operations", "db-roles-task-136.sql"));
+        Flyway.configure().dataSource(url, "taskmanager_migrate", MIGRATE_PASSWORD)
+            .locations("classpath:db/migration").target("0072").load().migrate();
+        JdbcTemplate admin = jdbc(url, TestDatabase.username(), TestDatabase.password());
+        assertEquals("taskmanager_migrate", admin.queryForObject(
+            "select pg_get_userbyid(extowner) from pg_extension where extname = 'pg_trgm'", String.class));
+
+        runRoleScript(url);
+        runRoleScript(url);
+        assertEquals(0, quietly(() -> TaskManagerApplication.runMigrateCommand(true, new String[] { "migrate" },
+            as(url, "taskmanager_migrate", MIGRATE_PASSWORD))), () -> output);
+        assertEquals(List.of("taskmanager_migrate"), admin.queryForList("select distinct pg_get_userbyid(relowner) from "
+            + "pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and relkind in "
+            + "('r', 'p', 'v', 'm', 'S')", String.class));
+        assertEquals(0, quietly(() -> TaskManagerApplication.runAdminCommand(true, new String[] { "bootstrap-admin", "chef" },
+            as(url, "taskmanager_app", APP_PASSWORD))));
+        assertRuntimeRoleCannotChangeTheSchema(url, "taskmanager_migrate");
+        assertBackupRoleReadsOnlyItsShare(url);
+        assertRuntimeRoleRunsTheCommandsAndTheJobs(url);
     }
 
     @Test

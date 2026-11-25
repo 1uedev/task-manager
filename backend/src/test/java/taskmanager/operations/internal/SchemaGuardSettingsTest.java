@@ -19,6 +19,14 @@ import taskmanager.operations.SchemaVersionException;
  * N2 of the review of TASK-136), without a database.
  */
 class SchemaGuardSettingsTest {
+    /** A Java migration added in code, which the image never has. */
+    @SuppressWarnings("checkstyle:TypeName")
+    static final class V9999__Extra extends org.flywaydb.core.api.migration.BaseJavaMigration {
+        @Override
+        public void migrate(org.flywaydb.core.api.migration.Context context) {
+        }
+    }
+
     private static FluentConfiguration fixed() {
         return Flyway.configure().locations("classpath:db/migration").cleanDisabled(true).baselineOnMigrate(false)
             .validateMigrationNaming(true);
@@ -63,11 +71,45 @@ class SchemaGuardSettingsTest {
             Map.entry("skip-default-resolvers", c -> c.skipDefaultResolvers(true)),
             Map.entry("group", c -> c.group(true)),
             Map.entry("mixed", c -> c.mixed(true)),
-            Map.entry("init-sql", c -> c.initSql("set role postgres")));
+            Map.entry("init-sql", c -> c.initSql("set role postgres")),
+            // TASK-139, F5 of the review of TASK-137: placeholders, callbacks and the creation of schemas, and the rest.
+            Map.entry("placeholders", c -> c.placeholders(Map.of("owner", "postgres"))),
+            Map.entry("placeholder-prefix", c -> c.placeholderPrefix("#{")),
+            Map.entry("placeholder-suffix", c -> c.placeholderSuffix("]")),
+            Map.entry("skip-default-callbacks", c -> c.skipDefaultCallbacks(true)),
+            Map.entry("callbacks", c -> c.callbacks(new org.flywaydb.core.api.callback.BaseCallback() {
+                @Override
+                public void handle(org.flywaydb.core.api.callback.Event event, org.flywaydb.core.api.callback.Context context) {
+                }
+            })),
+            Map.entry("callback-locations", c -> c.callbackLocations("classpath:db/callback")),
+            Map.entry("create-schemas", c -> c.createSchemas(false)),
+            Map.entry("execute-in-transaction", c -> c.executeInTransaction(false)),
+            Map.entry("encoding", c -> c.encoding("ISO-8859-1")),
+            Map.entry("installed-by", c -> c.installedBy("someone")),
+            Map.entry("fail-on-missing-locations", c -> c.failOnMissingLocations(true)),
+            Map.entry("skip-executing-migrations", c -> c.skipExecutingMigrations(true)),
+            Map.entry("tablespace", c -> c.tablespace("elsewhere")),
+            Map.entry("resolvers", c -> c.resolvers(context -> java.util.List.of())),
+            Map.entry("java-migrations", c -> c.javaMigrations(new V9999__Extra())));
         for (var change : changes.entrySet()) {
             var failure = assertThrows(SchemaVersionException.class,
                 () -> SchemaGuard.refuseChangedConfiguration(change.getValue().apply(fixed())), change.getKey());
             assertTrue(failure.getMessage().contains(change.getKey()), change.getKey() + ": " + failure.getMessage());
+        }
+    }
+
+    @Test
+    void onlyTheValuesOfConnectionAndLoadingMayDiffer() {
+        // Every value of the configuration not named as connection or loading is compared, also one a later Flyway adds.
+        var changed = fixed().dataSource("jdbc:postgresql://elsewhere/db", "someone", "secret").connectRetries(3)
+            .connectRetriesInterval(5).lockRetryCount(5).driver("org.postgresql.Driver")
+            .jdbcProperties(Map.of("ssl", "true"));
+        assertDoesNotThrow(() -> SchemaGuard.refuseChangedConfiguration(changed));
+        for (String name : SchemaGuard.CONNECTION_ONLY) {
+            assertTrue(java.util.Arrays.stream(org.flywaydb.core.api.configuration.Configuration.class.getMethods())
+                .anyMatch(method -> method.getParameterCount() == 0 && method.getName().toLowerCase(java.util.Locale.ROOT)
+                    .replaceFirst("^(get|is)", "").equals(name.replace("-", ""))), name + " is no value of Flyway");
         }
     }
 

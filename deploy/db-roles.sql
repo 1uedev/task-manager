@@ -2,8 +2,8 @@
 -- administration account of the database (POSTGRES_USER), at the creation of the database and again after an update of
 -- the template; every statement can run any number of times.
 --
---   POSTGRES_USER         administration only: creates roles, owns the database and the extension pg_trgm. No process of
---                         the application uses it.
+--   POSTGRES_USER         administration only: creates roles, owns the database and, in a new installation and one from
+--                         before TASK-136, the extension pg_trgm. No process of the application uses it.
 --   taskmanager_migrate   owns the schema public and its objects; only the command "migrate" uses it.
 --   taskmanager_app       the web process, the worker and the other commands: reads and writes rows of the business tables,
 --                         never changes the schema, owns nothing and manages no roles. It only reads the history of the
@@ -38,9 +38,13 @@ alter role taskmanager_migrate with login nosuperuser nocreatedb nocreaterole no
 alter role taskmanager_app with login nosuperuser nocreatedb nocreaterole noreplication nobypassrls password :'app_password';
 alter role taskmanager_backup with login replication nosuperuser nocreatedb nocreaterole nobypassrls password :'backup_password';
 
--- The extension pg_trgm of V0033 belongs to the administration account in every installation (TASK-137, N3): PostgreSQL
--- cannot hand an extension to another owner, an installation from before TASK-136 created it with that account, and a new
--- one creates it here before the first migration, so that V0033 finds it. No migration changes it.
+-- The extension pg_trgm of V0033 keeps the role that created it, because PostgreSQL cannot hand an extension to another
+-- owner (TASK-137, N3; TASK-139, F4 of the review of TASK-137): the administration account in a new installation (created
+-- here before the first migration, so that V0033 finds it) and in one from before TASK-136 (which migrated with that
+-- account); the migration role in an installation of the template of TASK-136, where V0033 ran with it. Both are settled
+-- owners; never the runtime role. The routines of the extension follow its owner (below), the runtime role may execute
+-- them and change none. No migration changes the extension; a future update of it is a step of the administration account
+-- or of the owner named by "select pg_get_userbyid(extowner) from pg_extension where extname = 'pg_trgm'".
 create extension if not exists pg_trgm with schema public;
 
 -- The migration role owns the schema public; only it creates objects there (TASK-137, N3).
