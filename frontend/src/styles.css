@@ -347,6 +347,9 @@ main.page-board { max-width: none; }
 .dropzone-title { font-weight: 650; }
 .link-button { min-height: 0; padding: 0; background: none; border: 0; box-shadow: none; color: var(--brand-text); text-decoration: underline 2px var(--brand-primary); text-underline-offset: 4px; font-weight: 600; }
 .link-button:hover:not(:disabled) { background: none; }
+.assist-sources { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.assist-sources .link-button { font-weight: 500; font-size: 0.9em; }
+.assist-draft { border-left: 3px solid var(--brand-primary); padding-left: 12px; margin: 8px 0 16px; }
 /* Five previews are taller than a screen, so the column scrolls with the page instead of sticking (TASK-081). */
 .preview { position: static; }
 .preview-set { display: grid; gap: 1rem; }

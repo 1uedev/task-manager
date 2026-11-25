@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -28,9 +28,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
-|---|---|---|---|
-| [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-25 |
+Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Blockiert – BLOCKIERT
 
@@ -46,6 +44,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-113](#task-113-git-demodaten-nachweis-gegen-echte-anbieter-und-betriebsdokumentation-a15-teil-3) | Git Demodaten, Nachweis gegen echte Anbieter und Betriebsdokumentation (A15 Teil 3) | claude-20261113-git-01 | 2026-11-17 |
+| [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-25 |
 | [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
@@ -89,7 +88,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-25
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-25
 
 **Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001; DEC-034, DEC-035; ACC-010; docs/AI_USE_CASES.md (AI-UC-01, AI-UC-02, Prüffälle A01 bis A03, A08 bis A11). **Abhängigkeiten:** TASK-125 auf main; TASK-058, TASK-076, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt. Nach der Abnahme von TASK-125, TASK-129, TASK-130 und TASK-138 (PR #354) gibt Holger am 25. November 2026 mit „ja“ den Beginn frei. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-157, Migration V0074 nur falls nötig.
 
@@ -105,7 +104,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Ein Entwurf wird nur nach Prüfen und Bestätigen versendet; geänderter Text braucht eine neue Prüfung, doppelte Bestätigung erzeugt höchstens einen Versand (A10, A11).
 4. Vertrag gegen Routen, Backend Tests, Browser Tests für Ticket, Antwortdialog und Portalantwort.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Übergabe (2026-11-25, claude-20261117-ai-01):** Ergebnis auf dem Branch claude/project-thread-av1na6 im Ergebnis PR, ohne Migration. Neues Modul `taskmanager.assist` mit den Routen `GET /api/v1/projects/{projectId}/tickets/{number}/ai`, `POST …/ai/summary` und `POST …/ai/reply-draft` (Vertrag contracts/assist.openapi.yaml), gelesen nur über die neuen Ports `tickets.TicketReader`, `sla.TicketPriorities` und `helpdesk.TicketConversation` mit den Regeln der Oberfläche; Prüfer je Anwendungsfall und Objektart, die den Kontext beim Lesen mit den heutigen Rechten neu bauen und über einen Fingerabdruck vergleichen (`ai.source_changed`). Zu den Kriterien: 1 `AssistApiTest`: Quelle S1 mit den lesbaren Feldern als Pflicht, danach Mails, gesendete Antworten und Portalbeiträge; Sachstand und offene Punkte mit Verweisen; eine Antwort mit unbekannter Quelle wird verworfen (A15); nicht lesbare Felder und Mails fehlen; geänderte Quelle oder verlorenes Recht machen den Vorschlag ungültig. 2 Der Entwurf bekommt nur Titel und Einträge des aktuellen Kunden, nie Beschreibung, eigene Felder oder Priorität; der Text einer Mail wird nur als markierte Quelle übergeben (A08), Englisch beim englischen Kontakt, Rechte einer Antwort und Kanal geprüft, Portalkonten 403. 3 Browsertest `ai-assist`: Entwurf im Textfeld, Enter im Ziel prüft und sendet nicht, nach „Zurück“ und Ändern gibt es kein „Jetzt senden“ ohne neue Prüfung, gesendet wird genau der geprüfte Text, zwei Klicks auf „Jetzt senden“ und auf „Im Portal veröffentlichen“ ergeben je eine Anfrage; eigener Text bleibt bis „Text ersetzen“, Rückfragen und Hinweise nur für die Person. Auf dem Server ist jede Bestätigung weiterhin ein eigener Versand; die Sperre gegen den Doppelklick liegt in der Oberfläche, der unsichere SMTP Fall folgt TASK-058. 4 `AssistContractTest` (drei Routen), `AssistApiTest`, Browsertests für Ticket, Antwortdialog und Portalantwort. Auslegung: Regel 2 nennt für die Portalantwort `portal.answer`; das ist seit DEC-106 die Aktion der Portalkonten, der Support antwortet im Portal mit `helpdesk.reply`, und so verlangt es auch der Entwurf (README des Backends, Abschnitt „KI am Ticket“). Gelaufen: Backend Tests der Module ai, assist, helpdesk, Portalgespräch, sla und tickets sowie ModuleStructureTest gegen lokales PostgreSQL 16, `npm run verify`, Browsertests ai-assist, ai, helpdesk, portal, app und sla, Repository Prüfungen. Nicht gelaufen: echte Anbieter (TASK-128).
+
+**Nächster Schritt:** Codex Prüfung des Ergebnis PR nach dem Prüfauftrag, danach Holgers Abnahme; TASK-127 bleibt bis zum Ergebnis von TASK-126 auf main blockiert.
 
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 

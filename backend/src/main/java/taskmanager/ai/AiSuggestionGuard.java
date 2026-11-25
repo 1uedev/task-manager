@@ -12,5 +12,11 @@ import taskmanager.permissions.AccessContext;
 public interface AiSuggestionGuard {
     AiUseCase useCase();
 
+    /**
+     * The kind of object this guard answers for, such as {@code ticket} (TASK-126). A suggestion counts as checked only by the
+     * guards of its use case and its kind of object; a guard never judges objects of another module.
+     */
+    String objectKind();
+
     boolean stillValid(AccessContext actor, UUID projectId, String objectKind, UUID objectId, Long objectVersion, String referencesJson);
 }

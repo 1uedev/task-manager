@@ -314,7 +314,7 @@ public class ReplyService {
             .withDedupKey("reply:" + replyId + ":" + send).withMaxAttempts(MAX_ATTEMPTS));
     }
 
-    private Contact contact(AccessContext actor, UUID ticket) {
+    Contact contact(AccessContext actor, UUID ticket) {
         Optional<Contact> contact = repository.ticketCustomer(ticket).map(HelpdeskRepository.TicketCustomer::contactId)
             .flatMap(id -> repository.contact(actor.companyId(), id));
         if (contact.isEmpty() || contact.get().addresses().isEmpty()) {

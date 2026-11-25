@@ -26,7 +26,7 @@ info:
     `code` und ohne Zugang, Modell und Skill; er zählt nicht gegen die Tagesgrenzen. Ein Vorschlag liegt höchstens 24 Stunden
     vor und wird nur seiner Person gezeigt; danach, nach einer Änderung der Versionen von Zuordnung (auch Aus und wieder
     Ein), Zugang, Modell oder Skill, ohne `ai.use`, bei geänderter Quelle oder ohne zuständigen Prüfer seines
-    Anwendungsfalls kommt er als `content: null` mit dem Grund in `invalid`.
+    Anwendungsfalls und seiner Objektart (TASK-126) kommt er als `content: null` mit dem Grund in `invalid`.
 
     Die Ausgabe eines Modells muss genau ein JSON Objekt ohne doppelte Schlüssel sein, nur von Leerraum oder einem
     einzelnen Codeblock (optional mit `json`) umgeben, mit genau den Feldern seines Anwendungsfalls, alle Pflicht:

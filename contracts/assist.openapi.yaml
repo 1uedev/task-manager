@@ -1,0 +1,188 @@
+openapi: 3.1.1
+info:
+  title: Task Manager API, KI Assistenz am Ticket (TASK-126)
+  version: 0.1.0
+  description: |
+    KI Ticketzusammenfassung und Antwortentwurf (DEC-157, REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001).
+    Ein Start liefert sofort `202` mit der Kennung der Ausführung; gelesen und abgebrochen wird sie über
+    `/ai/runs/{runId}` des KI Vertrags. Beide Anwendungsfälle schreiben nichts: Die Zusammenfassung ist nur eine Vorschau,
+    der Entwurf geht in das bearbeitbare Textfeld und wird nur über das bestehende Prüfen und Bestätigen der Antwort an
+    Kunden beziehungsweise das ausdrückliche Senden der Portalantwort verschickt.
+
+    Ohne `ticket.read` gibt es das Projekt für die Person nicht (404 `project.not_found`), eine unbekannte Nummer beantwortet
+    der Server mit 404 `ticket.not_found`. Portalkonten erhalten 404. Die Rechte und Grenzen der KI Grundlage gelten
+    zusätzlich: ohne die Projektaktion `ai.use` 403 `ai.use_forbidden`, ohne nutzbare Zuordnung 409 `ai.unavailable`,
+    Tagesgrenzen 429, alle Plätze belegt 503 `ai.busy`, zu großer Pflichtkontext 400 `ai.context_too_large`.
+
+    Die Zusammenfassung erhält, was die Person am Ticket lesen darf: Titel, Typ, Status, Priorität, die lesbaren eigenen
+    Felder und die Beschreibung als Pflichtquelle `S1`, danach mit der Leseregel von `mail` die Mails des Tickets, die
+    gesendeten Antworten und die Beiträge des Portals, die ältesten zuerst. Der Entwurf erhält nur, was der Kunde des
+    Tickets schon gesehen hat: den Titel (mit seiner Leseregel), die Mails des Kunden, die an ihn gesendeten Antworten und
+    die für ihn geschriebenen Beiträge des Portals, nie Beschreibung, eigene Felder, Priorität oder Einträge eines früheren
+    Kunden. Er verlangt die Rechte einer Antwort des Supports (`helpdesk.reply`, `ticket.read` mit den Leseregeln von
+    `mail` und `contact`), sonst 403 `auth.forbidden`; für eine Mail einen Kontakt mit Adresse (409
+    `helpdesk.reply_no_contact`), für das Portal einen Kunden (409 `helpdesk.portal_no_customer`). Er schreibt in der
+    Sprache des Kontakts, ohne Kontakt auf Deutsch. Gibt es keine Quelle, antwortet der Server 409 `assist.no_sources`.
+
+    Jedes Lesen eines Vorschlags stellt die Quellen für die lesende Person neu zusammen. Weicht eine Quelle ab oder fehlt
+    ein Recht, kommt der Vorschlag als `content: null` mit `invalid: ai.source_changed`. Sitzung, CSRF und
+    Problemantworten gelten wie im Identitätsvertrag.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /projects/{projectId}/tickets/{number}/ai:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    get:
+      operationId: getTicketAssistOptions
+      summary: Welche KI Funktion die Person am Ticket jetzt beginnen kann
+      description: |
+        Eine Momentaufnahme für die Oberfläche, nie eine Berechtigung: `ai.use` im Projekt und eine nutzbare Zuordnung des
+        Anwendungsfalls. Ob eine Antwort an Kunden oder eine Portalantwort möglich ist, sagt die Ansicht des Helpdesks.
+      responses:
+        '200':
+          description: Möglichkeiten
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistOptions'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/ai/summary:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    post:
+      operationId: startTicketSummary
+      summary: Ticketzusammenfassung beginnen
+      description: In der Sprache der Person (`de` oder `en`, ohne Angabe Deutsch). Format des Vorschlags `ticket_summary`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                language: {type: [string, 'null'], enum: [de, en, null]}
+      responses:
+        '202':
+          description: Begonnen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /projects/{projectId}/tickets/{number}/ai/reply-draft:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Number'
+    post:
+      operationId: startReplyDraft
+      summary: Antwortentwurf für eine Mail oder eine Portalantwort beginnen
+      description: |
+        `channel` ist `mail` (Antwort an Kunden) oder `portal` (Portalantwort des Supports). `goal` ist ein optionales kurzes
+        Ziel der Person mit höchstens 500 Zeichen. Format des Vorschlags `reply_draft`: `body` ohne Anrede und Signatur,
+        `questions` und `notes` nur für die prüfende Person.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel: {type: string, enum: [mail, portal]}
+                goal: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '202':
+          description: Begonnen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-tm-session
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Number:
+      name: number
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+  responses:
+    Problem:
+      description: |
+        Problem nach RFC 9457. Codes dieses Bereichs: request.invalid (violations language.invalid, channel.invalid,
+        goal.invalid), project.not_found, ticket.not_found, auth.forbidden, helpdesk.reply_no_contact,
+        helpdesk.portal_no_customer, assist.no_sources, assist.busy (503), dazu die Codes eines Starts der KI Grundlage
+        (ai.use_forbidden, ai.unavailable, ai.daily_limit_person, ai.daily_limit_company, ai.busy, ai.context_too_large),
+        auth.required, auth.csrf_invalid, auth.password_change_required.
+      headers:
+        X-Correlation-Id: {schema: {type: string, format: uuid}}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [title, status, instance, code, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        instance: {type: string}
+        code: {type: string}
+        correlationId: {type: string, format: uuid}
+        violations:
+          type: array
+          items: {type: string}
+    AssistOptions:
+      type: object
+      required: [summary, replyDraft]
+      properties:
+        summary: {type: boolean}
+        replyDraft: {type: boolean}
+    AssistSource:
+      type: object
+      required: [id, kind, entryId]
+      description: |
+        Worauf sich eine Quelle des Vorschlags bezieht: `ticket` (das Ticket selbst, ohne Zeit) oder ein Eintrag `mail`,
+        `reply` oder `post` mit seiner Zeit und `author` `customer` oder `support`.
+      properties:
+        id: {type: string, pattern: '^S[1-9][0-9]{0,3}$'}
+        kind: {type: string, enum: [ticket, mail, reply, post]}
+        entryId: {type: string, format: uuid}
+        at: {type: [string, 'null'], format: date-time}
+        author: {type: [string, 'null'], enum: [customer, support, null]}
+    AssistStarted:
+      type: object
+      required: [runId, language, sources]
+      properties:
+        runId: {type: string, format: uuid}
+        language: {type: string, enum: [de, en]}
+        sources:
+          type: array
+          items: {$ref: '#/components/schemas/AssistSource'}
