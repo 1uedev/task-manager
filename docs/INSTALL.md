@@ -121,15 +121,37 @@ Es gibt keinen Weg zurück über ein älteres Image: die Datenbank ist dann neue
 1. **Anhalten:** `docker compose stop`.
 2. **Vorherige Version eintragen:** `deploy/` und `.env` aus dem aufbewahrten Paket der vorherigen Version zurücklegen, dann `docker compose run --rm images` und `docker compose pull`. Die `.env` aus der Zeit des Punkts gehört dazu, weil die zurückgespielte Datenbank die Passwörter ihrer Rollen mitbringt. Wer innerhalb derselben Version zurückkehrt, überspringt diesen Schritt.
 3. **Punkt zurückspielen und beweisen:** `docker compose run --rm --no-deps backup points` zeigt die Punkte; der Name aus Update Schritt 2 muss darin stehen. `docker compose run --rm --no-deps backup restore /restore NAME` mit genau diesem Namen. Der Befehl meldet `point NAME restored and proven`; fehlt die Meldung, nicht weitermachen.
-4. **Daten des gescheiterten Updates entfernen.** Vorher prüfen, dass Projekt und Volumes die richtigen sind:
-   ```sh
-   docker compose down
-   project=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
-   echo "$project"
-   docker volume ls --filter "label=com.docker.compose.project=$project"
-   docker volume rm "${project}_db-data" "${project}_files-data"
-   ```
-   Der ausgegebene Name muss der Name der Installation sein und die Liste beide Volumes zeigen. Wer den Stand des gescheiterten Updates zur Analyse behalten will, sichert beide Volumes vorher. Alle anderen Volumes bleiben, auch das Ziel der Rücksicherung.
+4. **Daten des gescheiterten Updates entfernen**, in drei getrennten Schritten (TASK-139). Erst kontrollieren, dann sichern, dann löschen; der Löschbefehl prüft die Kontrolle selbst noch einmal.
+   1. **Kontrollieren:**
+      ```sh
+      docker compose down
+      docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])'
+      docker volume ls --filter "label=com.docker.compose.project=task-manager"
+      ```
+      Die erste Ausgabe muss der Name dieser Installation sein (in der Vorlage `task-manager`), die Liste muss `task-manager_db-data` und `task-manager_files-data` zeigen. Weicht etwas ab, hier aufhören: dann liegt das Verzeichnis einer anderen Installation vor.
+   2. **Sichern, wenn der Stand des gescheiterten Updates zur Analyse bleiben soll:** beide Volumes vor dem Löschen als Archiv ablegen, zum Beispiel
+      ```sh
+      for volume in db-data files-data; do
+        docker run --rm -v "task-manager_$volume:/from:ro" -v "$PWD:/to" --entrypoint tar \
+          postgres:18.6 -czf "/to/gescheitert-$volume.tar.gz" -C /from .
+      done
+      ```
+   3. **Löschen**, erst nachdem 1 stimmt und 2 erledigt oder bewusst ausgelassen ist. Der Block trägt den erwarteten Namen fest ein und löscht nur, wenn Projekt und die Labels beider Volumes ihn bestätigen; sonst meldet er den Grund und löscht nichts:
+      ```sh
+      (
+        set -eu
+        expected=task-manager        # der Name aus Schritt 1
+        project=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
+        [ "$project" = "$expected" ] || { echo "abgebrochen: Projekt $project statt $expected" >&2; exit 1; }
+        for volume in db-data files-data; do
+          [ "$(docker volume inspect -f '{{index .Labels "com.docker.compose.project"}}' "${project}_$volume")" = "$expected" ] \
+            && [ "$(docker volume inspect -f '{{index .Labels "com.docker.compose.volume"}}' "${project}_$volume")" = "$volume" ] \
+            || { echo "abgebrochen: ${project}_$volume gehört nicht zu $expected" >&2; exit 1; }
+        done
+        docker volume rm "${expected}_db-data" "${expected}_files-data"
+      )
+      ```
+   Alle anderen Volumes bleiben, auch das Ziel der Rücksicherung.
 5. **An ihren Platz legen:** `docker compose run --rm restore-place`, dann `docker compose up -d --wait db`.
 6. **Freigeben:** `docker compose run --rm app after-restore "<Name der Person>"`. Rückgabewert 0: weiter. Rückgabewert 3: Inhalte fehlen oder sind beschädigt; nicht starten, sondern nach [BACKUP_RESTORE.md](BACKUP_RESTORE.md) einen anderen Punkt prüfen. 2 oder 1: nichts ist geändert, Meldung lesen.
 7. **Rechte abgleichen:** die von `after-restore` genannten Konten mit Rechten für das ganze Unternehmen durchsehen und Sperren oder Entzüge seit dem Punkt nachziehen, bevor jemand arbeitet (Schritt 8 in [BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
@@ -140,7 +162,7 @@ Es gibt keinen Weg zurück über ein älteres Image: die Datenbank ist dann neue
 
 | Workflow | Wann | Was |
 |---|---|---|
-| Update | bei Änderungen an Migrationen, Start der Anwendung (`TaskManagerApplication`, `application.yaml`), Betriebsmodul, Vorlage, Demodaten, dieser Anleitung oder Prüfung, auf Anforderung | nimmt als ältere Version das neueste veröffentlichte Release, das nicht dieser Stand ist und in seiner Geschichte liegt, mit Vorlage und Digests aus dem Release; nur solange kein stabiles Release veröffentlicht ist, den festen Stand vor Paket A18 auf main, gebaut. Gibt es Releases, aber keinen passenden Vorgänger, bricht die Prüfung mit eigenem Grund ab (TASK-137). Installiert die ältere Version hinter TLS mit Demodaten, Anhang und Wikibild, aktualisiert nach dieser Anleitung und prüft: ein Tag wird von der Vorlage bei `pull`, `up --no-deps` und `run --no-deps` abgelehnt, Rollen übertragen, ein synthetischer Fehler von `db-roles.sh` bei vollständiger Protokollierung zeigt kein Passwort, Start vor `migrate` abgelehnt, alle Zeilen aller Tabellen, die der Seed füllt (ohne eine benannte Liste technischer Tabellen), und jede Datei des Dateispeichers unverändert, mit einem absichtlichen Verlust als Gegenprobe, Kernabläufe mit Suche nach dem geänderten Ticket, aktivem Ausführer, Hoch und Herunterladen vor und nach dem Austausch der Container, Laufzeitrolle ohne Schemarechte, ein eigener Punkt neben einem laufenden des Dienstes, ein Update auf eine synthetische nächste Version, deren Migration wirklich scheitert, und die Rückkehr mit Paket und `.env` der vorherigen Version auf genau diesen Punkt, die Metadaten der Images ohne Geheimnisse und die Härtung der Container. Der Bericht `update-run.json` nennt Basis mit Tag oder Commit, Ziel, Images und die geprüften Tabellen |
+| Update | bei Änderungen an Migrationen, Start der Anwendung (`TaskManagerApplication`, `application.yaml`), Betriebsmodul, Vorlage, Demodaten, dieser Anleitung oder Prüfung, auf Anforderung | nimmt als ältere Version das neueste veröffentlichte Release, das nicht dieser Stand ist und in seiner Geschichte liegt, mit Vorlage und Digests aus dem Release; nur solange kein stabiles Release veröffentlicht ist, den festen Stand vor Paket A18 auf main, gebaut. Gibt es Releases, aber keinen passenden Vorgänger, bricht die Prüfung mit eigenem Grund ab (TASK-137). Installiert die ältere Version hinter TLS mit Demodaten, Anhang und Wikibild, aktualisiert nach dieser Anleitung und prüft: ein Tag wird von der Vorlage bei `pull`, `up --no-deps` und `run --no-deps` abgelehnt, Rollen übertragen, ein synthetischer Fehler von `db-roles.sh` bei vollständiger Protokollierung zeigt kein Passwort, Start vor `migrate` abgelehnt, alle Zeilen aller Tabellen, die der Seed füllt (ohne eine benannte Liste technischer Tabellen), und jede Datei des Dateispeichers unverändert, mit einem absichtlichen Verlust als Gegenprobe, Kernabläufe mit Suche nach dem geänderten Ticket, aktivem Ausführer, Hoch und Herunterladen vor und nach dem Austausch der Container, Laufzeitrolle ohne Schemarechte, ein eigener Punkt neben einem laufenden des Dienstes, ein Update auf eine synthetische nächste Version, deren Migration wirklich scheitert, und die Rückkehr mit Paket und `.env` der vorherigen Version auf genau diesen Punkt, die Metadaten der Images ohne Geheimnisse und die Härtung der Container. Seit TASK-139 außerdem: je eine falsche Imageangabe neben einer gültigen bei `run --no-deps`, je Phase ein frisch fällig gemachter und erfolgreich beendeter Auftrag `files.cleanup`, jede Dateilesung einzeln geprüft, der Löschblock aus „Rückkehr“ erst mit falschem, dann mit richtigem Namen, und ein gespeicherter Fehler einer dem Image unbekannten Migration mit eigener Meldung. Der Bericht `update-run.json` nennt Basis mit Tag oder Commit, Ziel, Images und die geprüften Tabellen |
 | Release | von Hand auf main gestartet mit einem Tag `vMAJOR.MINOR.PATCH`, dessen Commit im Stand von main beim Start liegt (Job `check`, nur Code von main), nach Holgers Freigabe in der Umgebung `release` | baut beide Images, erzeugt Komponentenverzeichnis (SPDX) und Schwachstellenbericht, veröffentlicht in `ghcr.io/1uedev` und legt Digests, Berichte, Prüfsummen und das Paket der Vorlage zur Version |
 | Restore | wöchentlich und bei Änderungen am Sicherungsweg | die Probe aus [BACKUP_RESTORE.md](BACKUP_RESTORE.md) |
 

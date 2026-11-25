@@ -138,6 +138,31 @@ use_new_template() { compose_files=(-f deploy/compose.yaml -f tools/update/compo
 use_package() { compose_files=(-f "$1/compose.yaml" -f tools/update/compose.test.yaml); }
 
 dc() { docker compose -p "$project" "${compose_files[@]}" --env-file "$work/env" "$@"; }
+# "up -d" with the host ports of this run (TASK-139, hint H2 of the review of TASK-137): free_port only finds a free port and
+# cannot hold it until Compose binds it. When another process took one in between, the run takes two new ports, writes
+# them into every env file of this run and tries again, at most three times; given ports (UPDATE_CHECK_*_PORT) are kept.
+up_ports() {
+  local attempt
+  for attempt in 1 2 3; do
+    if dc up -d "$@" > "$results/up.log" 2>&1; then
+      return 0
+    fi
+    if [ -n "${UPDATE_CHECK_HTTPS_PORT:-}${UPDATE_CHECK_HTTP_PORT:-}" ] \
+        || ! grep -Eq 'port is already allocated|address already in use' "$results/up.log"; then
+      cat "$results/up.log"
+      return 1
+    fi
+    echo "a host port was taken meanwhile (attempt $attempt); two new ports"
+    https_port=$(free_port) http_port=$(free_port)
+    url="https://localhost:$https_port"
+    for file in "$work"/env*; do
+      sed -i -e "s/^TASK_MANAGER_HTTP_BIND=.*/TASK_MANAGER_HTTP_BIND=127.0.0.1:$http_port/" \
+        -e "s/^TASK_MANAGER_HTTPS_BIND=.*/TASK_MANAGER_HTTPS_BIND=127.0.0.1:$https_port/" "$file"
+    done
+  done
+  cat "$results/up.log"
+  return 1
+}
 step() { echo; echo "== $*"; }
 fail() { echo "FAILED: $*" >&2; exit 1; }
 cleanup() {
@@ -281,7 +306,7 @@ if [ "$old_has_migrate" = 1 ]; then
   dc run --rm migrate > "$results/old-migrate.log" 2>&1 || { cat "$results/old-migrate.log"; fail "migrate of the older version failed"; }
 fi
 # A version from before TASK-132 migrates at its first start, as the demonstration still does.
-dc up -d > /dev/null
+up_ports || fail "the containers did not start"
 await_tls
 bootstrap=$(dc run --rm -T app bootstrap-admin admin)
 TASK_MANAGER_ONE_TIME_PASSWORD=$(printf '%s' "$bootstrap" | sed -n 's/^One time password (shown only now): //p' | tr -d '\r')
@@ -405,8 +430,31 @@ grep -q "^Schema version now: $new_newest$" "$results/migrate.log" || fail "migr
 dc run --rm -T migrate > "$results/migrate-again.log" 2>&1 || { cat "$results/migrate-again.log"; fail "the second migrate failed"; }
 grep -q '^Migrations applied: 0$' "$results/migrate-again.log" || fail "the second migrate changed the schema"
 
+echo "H1: a stored failure of a migration this image does not know is named as such (synthetic, then removed)"
+# TASK-139, hint H1 of the review of TASK-137: a newer image left a failed row of V(n+1); this image must refuse with its own
+# diagnosis, in migrate and at the start. A row of its own, removed again; the real return further below stays.
+future=$(printf '%04d' $((10#$new_newest + 1)))
+db "insert into flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by,
+      execution_time, success)
+    select max(installed_rank) + 1, '$future', 'synthetic failure of a newer image', 'SQL', 'V${future}__synthetic.sql', 0,
+      'taskmanager_migrate', 0, false from flyway_schema_history" > /dev/null || fail "the synthetic failed row was not written"
+set +e
+dc run --rm -T migrate > "$results/future-failed-migrate.log" 2>&1
+code=$?
+dc run --rm -T --no-deps app rebuild-search > "$results/future-failed-start.log" 2>&1
+start_code=$?
+set -e
+db "delete from flyway_schema_history where version = '$future' and success = false" > /dev/null \
+  || fail "the synthetic failed row was not removed"
+[ "$code" = 2 ] || { cat "$results/future-failed-migrate.log"; fail "migrate did not refuse the failed newer migration with 2 ($code)"; }
+for log in future-failed-migrate future-failed-start; do
+  grep -Eq "The migration\(s\) 0*$((10#$future)), unknown to this image, failed in an earlier run of a newer image" "$results/$log.log" \
+    || { cat "$results/$log.log"; fail "$log does not name the failed migration unknown to this image"; }
+done
+[ "$start_code" != 0 ] || fail "a command started on a database with a failed newer migration"
+
 step "Start the new version and check the content"
-dc up -d > /dev/null
+up_ports || fail "the containers did not start"
 await_tls
 after=$(fingerprint nachher)
 echo "after the update:  $after"
@@ -415,7 +463,7 @@ flows --state /state/probe.json --phase nachher --upload
 current=$(fingerprint aktuell)
 
 step "O01: replaced containers keep content and configuration"
-dc up -d --force-recreate > /dev/null
+up_ports --force-recreate || fail "the containers were not replaced"
 await_tls
 replaced=$(fingerprint ausgetauscht)
 [ "$replaced" = "$current" ] || fail "replacing the containers changed the content of: $(differing aktuell ausgetauscht)"
@@ -487,7 +535,8 @@ cp -a deploy/. "$work/package-next/"
 cp "$work/env" "$work/env.previous"
 next_applied=$(printf '%04d' $((10#$new_newest + 1)))
 next_failing=$(printf '%04d' $((10#$new_newest + 2)))
-container=$(docker create "$new_image")
+# Labelled with the project, so that the clean up of the workflow also finds it after an abort before "docker rm" (H2).
+container=$(docker create --label "com.docker.compose.project=$project" --label taskmanager.update-check=jar-copy "$new_image")
 docker cp "$container:/app/app.jar" "$work/next/app.jar" > /dev/null
 docker rm "$container" > /dev/null
 # The archive comes out read only (0444 in the image); the check appends to its own copy.
@@ -558,15 +607,35 @@ dc run --rm --no-deps backup restore /restore "$point" > "$results/restore.log" 
   || { tail -30 "$results/restore.log"; fail "the restore of $point failed"; }
 grep -q "point $point restored and proven" "$results/restore.log" || fail "the restore did not take $point"
 
-echo "Rückkehr step 4: project and both volumes checked, then removed"
+echo "Rückkehr step 4: the guarded delete block of docs/INSTALL.md, first with a wrong name, then with the right one"
 dc down > /dev/null
-named=$(dc config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
-[ "$named" = "$project" ] || fail "the template names the project '$named' instead of '$project'"
+# Exactly the block of the guide (TASK-139, F9 of the review of TASK-137), with "docker compose" bound to this run.
+python3 -I - docs/INSTALL.md > "$work/delete-block.sh" <<'PY'
+import sys, textwrap
+text = open(sys.argv[1], encoding="utf-8").read()
+start = text.index("3. **Löschen**")
+block = text[text.index("```sh\n", start) + 6:]
+print(textwrap.dedent(block[:block.index("```")]))
+PY
+grep -q '^  expected=task-manager ' "$work/delete-block.sh" || fail "the guide has no delete block with the expected name"
+guarded_delete() {
+  sed "s/^  expected=task-manager /  expected=$1 /" "$work/delete-block.sh" > "$work/delete-block-run.sh"
+  # shellcheck disable=SC2329
+  docker() { if [ "$1" = compose ]; then shift; dc "$@"; else command docker "$@"; fi; }
+  # shellcheck source=/dev/null
+  . "$work/delete-block-run.sh"
+}
+if (guarded_delete "another-installation") > "$results/delete-wrong.log" 2>&1; then
+  fail "the delete block of the guide deleted under a wrong expected name"
+fi
+grep -q "abgebrochen" "$results/delete-wrong.log" || { cat "$results/delete-wrong.log"; fail "the delete block gave no reason"; }
 for volume in db-data files-data; do
-  docker volume inspect "${project}_$volume" --format '{{index .Labels "com.docker.compose.project"}}' \
-    | grep -qx "$project" || fail "the volume ${project}_$volume does not belong to the project"
+  docker volume inspect "${project}_$volume" > /dev/null 2>&1 || fail "the refused delete block removed ${project}_$volume"
 done
-docker volume rm "${project}_db-data" "${project}_files-data" > /dev/null
+(guarded_delete "$project") > "$results/delete.log" 2>&1 || { cat "$results/delete.log"; fail "the delete block of the guide failed"; }
+for volume in db-data files-data; do
+  if docker volume inspect "${project}_$volume" > /dev/null 2>&1; then fail "${project}_$volume is still there"; fi
+done
 
 echo "Rückkehr step 5: in place, released, started"
 dc run --rm restore-place > "$results/restore-place.log" 2>&1 || { cat "$results/restore-place.log"; fail "restore-place failed"; }
@@ -582,7 +651,7 @@ case "$code" in
 esac
 grep -q "rights for the whole company\|company rights\|Unternehmen" "$results/after-restore.log" \
   || echo "note: after-restore printed no list of accounts with company rights"
-dc up -d > /dev/null
+up_ports || fail "the containers did not start"
 await_tls
 [ "$(db "select count(*) from flyway_schema_history where version in ('$next_applied', '$next_failing') or not success")" = 0 ] \
   || fail "the history still holds the next version"
@@ -598,14 +667,22 @@ step "O01: no secret in the image metadata, no privileged container"
 # Scope (N12): configuration, environment and history of both images against the secrets of this run, read from the
 # protected file; the files inside the images are not searched. Values generated for this run cannot have reached a
 # build; the check proves that the template passes them only at run time.
+# The metadata are read completely into files first, each read checked for itself, and searched afterwards: grep -q may
+# end a pipe early, which pipefail would report as a failed check (TASK-139, hint H3 of the review of TASK-137).
 for image in "$new_image" "$new_backup_image"; do
-  if docker image inspect "$image" | holds_secret || docker history --no-trunc "$image" | holds_secret; then
+  docker image inspect "$image" > "$work/inspect" || fail "the configuration of the image $image could not be read"
+  docker history --no-trunc "$image" > "$work/history" || fail "the history of the image $image could not be read"
+  [ -s "$work/inspect" ] && [ -s "$work/history" ] || fail "the metadata of the image $image are empty"
+  if holds_secret "$work/inspect" "$work/history"; then
     fail "the metadata of the image $image holds a secret of this installation"
   fi
 done
-if docker image inspect "$new_image" --format '{{json .Config.Env}}' | grep -qiE 'password=.|secret_key=.'; then
+docker image inspect "$new_image" --format '{{json .Config.Env}}' > "$work/image-env" \
+  || fail "the environment of the image could not be read"
+if grep -qiE 'password=.|secret_key=.' "$work/image-env"; then
   fail "the image environment sets a password or key"
 fi
+rm -f "$work/inspect" "$work/history" "$work/image-env"
 for container in $(dc ps -q); do
   name=$(docker inspect --format '{{.Name}}' "$container")
   [ "$(docker inspect --format '{{.HostConfig.Privileged}}' "$container")" = false ] || fail "$name runs privileged"

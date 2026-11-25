@@ -120,7 +120,8 @@ def flows(args) -> None:
         summary = client.call("GET", "/jobs/summary").body
         listed = client.call("GET", "/jobs", query={"limit": "100"}).body
         verdict = fresh_outcome(listed if isinstance(listed, list) else [], args.job, since)
-        check(verdict != "failed", f"{args.phase}: the job {args.job} of this phase did not fail")
+        if verdict == "failed":
+            check(False, f"{args.phase}: the job {args.job} of this phase did not fail")
         if isinstance(summary, dict) and summary.get("activeWorkers", 0) >= 1 and verdict == "succeeded":
             break
         if time.monotonic() >= deadline:
