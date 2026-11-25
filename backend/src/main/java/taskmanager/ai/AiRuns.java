@@ -12,4 +12,10 @@ import taskmanager.permissions.AccessContext;
  */
 public interface AiRuns {
     UUID start(AccessContext actor, AiRequest request);
+
+    /**
+     * Whether the person may start the use case in the project now: an internal person with {@code ai.use} there and a usable
+     * assignment of the use case (TASK-126). A snapshot for the interface, never an authorization; {@link #start} checks again.
+     */
+    boolean usable(AccessContext actor, UUID projectId, AiUseCase useCase);
 }

@@ -195,6 +195,15 @@ public class RunService implements AiRuns {
         }, companyId -> prepare(companyId, actor.userId(), "use", request, true, null));
     }
 
+    @Override
+    @Transactional
+    public boolean usable(AccessContext actor, UUID projectId, AiUseCase useCase) {
+        if (actor.external() || projectId == null || useCase == null || !access.mayUse(actor, projectId)) {
+            return false;
+        }
+        return config.availability().stream().anyMatch(a -> a.useCase() == useCase && a.available());
+    }
+
     /** The trial of a skill by the administration (rule 7): the draft or what applies, with a sample text as the only source. */
     public UUID trial(UUID accountId, AiUseCase useCase, String language, String sample, String goal) {
         String text = sample == null ? null : sample.strip();
@@ -539,7 +548,7 @@ public class RunService implements AiRuns {
             JsonNode references = JSON.readTree(suggestion.get().sources()).path("references");
             boolean guarded = false;
             for (AiSuggestionGuard guard : guards) {
-                if (guard.useCase() != run.useCase()) {
+                if (guard.useCase() != run.useCase() || !guard.objectKind().equals(run.objectKind())) {
                     continue;
                 }
                 guarded = true;

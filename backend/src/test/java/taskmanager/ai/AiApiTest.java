@@ -75,6 +75,11 @@ class AiApiTest {
     private static final AtomicInteger COUNTER = new AtomicInteger();
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Stub STUB = new Stub();
+    /**
+     * The kind of object of the uses of this test: its own, so the guards of the real use cases (TASK-126) never judge them and
+     * only the guard of this test answers for the ticket summary.
+     */
+    static final String TEST_OBJECT = "test-object";
     /** A second provider, the new target after a change of the address (TASK-129, F1). */
     private static final Stub OTHER = new Stub();
     private static final Tls TLS = new Tls();
@@ -143,7 +148,7 @@ class AiApiTest {
                 sources.add(new AiSource("S" + (i + 1), "Eintrag " + (i + 1), body.texts().get(i), i == body.texts().size() - 1));
             }
             UUID id = runs.start(contexts.current().orElseThrow(), new AiRequest(AiUseCase.of(useCase).orElseThrow(), body.language(), project,
-                "ticket", UUID.randomUUID(), 3L, body.goal(), sources, Map.of("version", 3)));
+                TEST_OBJECT, UUID.randomUUID(), 3L, body.goal(), sources, Map.of("version", 3)));
             return Map.of("runId", id);
         }
     }
@@ -157,6 +162,11 @@ class AiApiTest {
         @Override
         public AiUseCase useCase() {
             return AiUseCase.TICKET_SUMMARY;
+        }
+
+        @Override
+        public String objectKind() {
+            return TEST_OBJECT;
         }
 
         @Override

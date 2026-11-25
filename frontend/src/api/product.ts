@@ -2,6 +2,7 @@ import { guarded, INVALID_RESPONSE, parseSession, type Outcome, type ServerApi, 
 import type { components as AppearanceTypes } from './generated/appearance';
 import type { components as FileTypes } from './generated/files';
 import type { components as AiTypes } from './generated/ai';
+import type { components as AssistTypes } from './generated/assist';
 import type { components as GitTypes } from './generated/git';
 import type { components as HelpdeskTypes } from './generated/helpdesk';
 import type { components as IdentityTypes } from './generated/identity';
@@ -1242,3 +1243,23 @@ export const readAiUsage = (api: ServerApi, days: number) =>
   run(() => api.ai.GET('/ai/admin/usage', { params: { query: { days } } }), listOf<AiUsage>(isAiUsage));
 export const listAiRuns = (api: ServerApi, before: string | null) =>
   run(() => api.ai.GET('/ai/admin/runs', { params: { query: before === null ? { limit: 50 } : { before, limit: 50 } } }), one<AiRecords>(isAiRecords));
+
+// ---------------------------------------------------------------- AI at the ticket (TASK-126)
+
+export type AssistOptions = AssistTypes['schemas']['AssistOptions'];
+export type AssistStarted = AssistTypes['schemas']['AssistStarted'];
+export type AssistSource = AssistTypes['schemas']['AssistSource'];
+export type AssistChannel = 'mail' | 'portal';
+const isAssistOptions = (v: unknown) => record(v) && typeof v.summary === 'boolean' && typeof v.replyDraft === 'boolean';
+const isAssistStarted = (v: unknown) => hasStrings(v, 'runId', 'language') && Array.isArray((v as AssistStarted).sources)
+  && (v as AssistStarted).sources.every((s) => hasStrings(s, 'id', 'kind', 'entryId'));
+const ticketPath = (projectId: string, number: number) => ({ path: { projectId, number } });
+
+export const readAssistOptions = (api: ServerApi, projectId: string, number: number) =>
+  run(() => api.assist.GET('/projects/{projectId}/tickets/{number}/ai', { params: ticketPath(projectId, number) }), one<AssistOptions>(isAssistOptions));
+export const startTicketSummary = (api: ServerApi, projectId: string, number: number, language: AiLanguage) =>
+  run(() => api.assist.POST('/projects/{projectId}/tickets/{number}/ai/summary', { params: ticketPath(projectId, number), body: { language } }),
+    one<AssistStarted>(isAssistStarted));
+export const startReplyDraft = (api: ServerApi, projectId: string, number: number, channel: AssistChannel, goal: string | null) =>
+  run(() => api.assist.POST('/projects/{projectId}/tickets/{number}/ai/reply-draft', { params: ticketPath(projectId, number), body: { channel, goal } }),
+    one<AssistStarted>(isAssistStarted));

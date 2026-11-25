@@ -160,6 +160,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     // counts (TASK-129, H3). `plainHttpHosts` are the hosts the operation releases for plain http.
     ai: { secretKey: true, providers: [], models: [], assignments: new Map(), limits: { personDaily: 50, companyDaily: 500, version: 0 }, skills: new Map(),
       runs: [], aiAnswer: { state: [{ text: 'Bericht bricht mit DEMO-42 ab', sources: ['S1'] }], open: [] }, aiFail: null, aiHold: false, aiInvalid: null,
+      draftAnswer: { body: 'Guten Tag,\nwir prüfen den Drucker heute noch.', questions: [], notes: [], sources: ['S2'] }, contexts: [],
       plainHttpHosts: ['localhost', '127.0.0.1', 'ollama:11434'] },
     git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [],
       links: [], limited: false },
@@ -1098,6 +1099,7 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       return ok(ticketView(account, ticket), `"${ticket.version}"`);
     }
     if (tail.startsWith('/helpdesk')) return ticketHelpdeskRoute(account, item, ticket, method, tail, headers, body);
+    if (tail === '/ai' || tail.startsWith('/ai/')) return assistRoute(account, item, ticket, method, tail, body);
     if (tail.startsWith('/sla')) return ticketSlaRoute(account, item, ticket, method, tail, body);
     if (tail === '/history') {
       const shown = [...readable(account, item.id), ...[...HELPDESK_FIELDS, PRIORITY_FIELD].filter((name) => field(account, item.id, name, 'read')), ...(customReadable(account, item.id) ? customFieldsOf(item.id).map((entry) => `custom.${entry.key}`) : []), ...(field(account, item.id, TAG_FIELD, 'read') ? [TAG_FIELD] : []), ...(field(account, item.id, ATTACHMENT_FIELD, 'read') ? [ATTACHMENT_FIELD] : []), ...(field(account, item.id, GIT_FIELD, 'read') ? [GIT_FIELD] : []),
@@ -3871,6 +3873,76 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const page = ai.runs.slice(from, from + limit);
       const next = ai.runs.length > from + limit ? `${page[page.length - 1].startedAt}_${page[page.length - 1].id}` : null;
       return ok({ runs: page.map((run) => ({ ...run, content: null, invalid: null })), next });
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  // The AI functions at a ticket as the backend (TASK-126): the summary from what the person may read, the draft of an answer
+  // from what the customer already saw. Every start names its sources; `ai.contexts` keeps the texts given for the tests and
+  // `ai.draftAnswer` is the content of a successful draft.
+  const assistUsable = (account, projectId, useCase) => account.kind !== 'portal' && may(account, 'ai.use', projectId) && aiAvailability(useCase, true).available;
+  function assistEntries(ticket, customerId) {
+    const mails = hd.messages.filter((message) => message.ticketId === ticket.id && (customerId === undefined || message.customerId === customerId))
+      .map((message) => ({ kind: 'mail', id: message.id, at: message.receivedAt, author: 'customer', name: message.fromName, subject: message.subject, body: message.body }));
+    const replies = hd.replies.filter((reply) => reply.ticketId === ticket.id && reply.state === 'sent' && (customerId === undefined || reply.customerId === customerId))
+      .map((reply) => ({ kind: 'reply', id: reply.id, at: reply.sentAt ?? reply.createdAt, author: 'support', name: null, subject: reply.subject, body: reply.body }));
+    const posts = hd.posts.filter((post) => post.ticketId === ticket.id && (customerId === undefined || post.organizationId === customerId))
+      .map((post) => ({ kind: 'post', id: post.id, at: post.createdAt, author: post.authorKind === 'support' ? 'support' : 'customer', name: null, subject: null, body: post.body }));
+    return [...mails, ...replies, ...posts].sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  }
+  function assistStart(account, item, ticket, useCase, language, sources, goal) {
+    if (sources.length === 0) return problem(409, 'assist.no_sources');
+    if (!may(account, 'ai.use', item.id)) return problem(403, 'ai.use_forbidden');
+    const availability = aiAvailability(useCase, true);
+    if (!availability.available) return aiRefuse(account, useCase, language, availability.reason, problem(409, 'ai.unavailable', { violations: [availability.reason] }));
+    if (aiToday(account.id) >= ai.limits.personDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_person', problem(429, 'ai.daily_limit_person'));
+    if (aiToday(null) >= ai.limits.companyDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_company', problem(429, 'ai.daily_limit_company'));
+    const failed = ai.aiFail;
+    const held = ai.aiHold;
+    const run = { id: uuid(), kind: 'use', useCase, language, state: held ? 'running' : failed ? 'failed' : 'succeeded', code: held ? null : failed, truncated: false,
+      projectId: item.id, objectKind: 'ticket', objectId: ticket.id, objectVersion: ticket.version, skillVersion: 'builtin-1',
+      providerId: availability.provider.id, modelId: availability.model.id, modelKey: availability.modelKey, dataPath: availability.provider.dataPath,
+      inputTokens: held || failed ? null : 240, outputTokens: held || failed ? null : 60, startedAt: now(), finishedAt: held ? null : now(), accountId: account.id,
+      content: held || failed ? null : useCase === 'ticket_summary' ? ai.aiAnswer : ai.draftAnswer };
+    ai.runs.unshift(run);
+    ai.contexts.push({ runId: run.id, useCase, language, goal, sources: sources.map(({ text, ...rest }) => ({ ...rest, text })) });
+    return { status: 202, body: { runId: run.id, language, sources: sources.map(({ id, kind, entryId, at, author }) => ({ id, kind, entryId, at, author })) } };
+  }
+  function assistRoute(account, item, ticket, method, tail, body) {
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    if (tail === '/ai' && method === 'GET') {
+      return ok({ summary: assistUsable(account, item.id, 'ticket_summary'), replyDraft: assistUsable(account, item.id, 'reply_draft') });
+    }
+    const entryText = (entry) => [entry.name ? `Von: ${entry.name}` : null, entry.subject ? `Betreff: ${entry.subject}` : null, '', entry.body].filter((line) => line !== null).join('\n');
+    const asSources = (entries, first) => entries.map((entry, index) => ({ id: `S${first + index}`, kind: entry.kind, entryId: entry.id, at: entry.at, author: entry.author, text: entryText(entry) }));
+    if (tail === '/ai/summary' && method === 'POST') {
+      if (!['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      const fields = readable(account, item.id);
+      const lines = fields.filter((name) => ticket.values[name]).map((name) => `${name}: ${ticket.values[name]}`);
+      if (field(account, item.id, PRIORITY_FIELD, 'read') && state.sla.priorities.get(ticket.id)) lines.push(`priority: ${state.sla.priorities.get(ticket.id)}`);
+      const sources = [{ id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: lines.join('\n') },
+        ...(field(account, item.id, 'mail', 'read') ? asSources(assistEntries(ticket), 2) : [])];
+      return assistStart(account, item, ticket, 'ticket_summary', body.language, sources, null);
+    }
+    if (tail === '/ai/reply-draft' && method === 'POST') {
+      if (!['mail', 'portal'].includes(body.channel)) return problem(400, 'request.invalid', { violations: ['channel.invalid'] });
+      const goal = typeof body.goal === 'string' && body.goal.trim() !== '' ? body.goal.trim() : null;
+      if (goal !== null && goal.length > 500) return problem(400, 'request.invalid', { violations: ['goal.invalid'] });
+      if (!mayReply(account, item.id)) return problem(403, 'auth.forbidden');
+      const link = hd.ticketCustomers.get(ticket.id);
+      const contact = link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
+      let customerId;
+      if (body.channel === 'mail') {
+        if (!contact) return problem(409, 'helpdesk.reply_no_contact');
+        customerId = contact.customerId;
+      } else {
+        if (!link?.customerId) return problem(409, 'helpdesk.portal_no_customer');
+        customerId = link.customerId;
+      }
+      const language = contact?.language === 'en' ? 'en' : 'de';
+      const title = field(account, item.id, 'title', 'read') && ticket.values.title ? [{ id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: ticket.values.title }] : [];
+      const sources = [...title, ...asSources(assistEntries(ticket, customerId), title.length + 1)];
+      return assistStart(account, item, ticket, 'reply_draft', language, sources, goal);
     }
     return problem(404, 'resource.not_found');
   }

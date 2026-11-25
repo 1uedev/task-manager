@@ -225,6 +225,21 @@ public class TicketSla {
 
     // ------------------------------------------------------------------------------------------------ the ticket
 
+    /** The priority with its read rule only, for {@link taskmanager.sla.TicketPriorities} (TASK-126). */
+    @Transactional
+    public Optional<String> readablePriority(AccessContext actor, UUID projectId, long number) {
+        Supplier<ResourceContext> resource = resource(actor, projectId);
+        Decision read = permissions.inspect(actor, resource, READ, Set.of(TicketAccess.PRIORITY_FIELD));
+        if (!read.allowed()) {
+            throw projectNotFound();
+        }
+        UUID ticket = ticket(actor, projectId, number);
+        if (!read.readableFields().contains(TicketAccess.PRIORITY_FIELD)) {
+            return Optional.empty();
+        }
+        return Optional.of(repository.ticket(ticket).map(SlaRepository.TicketRow::priority).orElse(Rule.DEFAULT_PRIORITY));
+    }
+
     @Transactional
     public View view(AccessContext actor, UUID projectId, long number) {
         Supplier<ResourceContext> resource = resource(actor, projectId);
