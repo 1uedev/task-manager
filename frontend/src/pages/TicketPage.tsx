@@ -17,6 +17,7 @@ import type { MessageKey } from '../i18n/index.ts';
 import { CUSTOM_ERROR, CustomFieldInput, useCustomText } from './CustomFieldInput.tsx';
 import { TicketAttachments } from './TicketAttachments.tsx';
 import { GitLinksPanel, useGitHistoryText } from './GitLinks.tsx';
+import { TicketAiSummary } from './TicketAi.tsx';
 import { TicketHelpdesk } from './TicketHelpdesk.tsx';
 import { TicketRequirements } from './TicketRequirements.tsx';
 import { TicketSla } from './TicketSla.tsx';
@@ -314,6 +315,7 @@ function TicketView({ project, limited, ticket, etag, round, refusals, onChanged
           </form>
         </section>
         <div>
+          <TicketAiSummary key={`ai-${refusals}`} project={project} ticket={ticket} />
           <TicketSla key={`sla-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketTime key={`time-${refusals}`} projectId={project.id} ticketNumber={ticket.number} round={round} />

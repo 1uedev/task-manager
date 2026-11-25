@@ -13,6 +13,7 @@ import { useI18n } from '../i18n/I18nProvider.tsx';
 import { useHelpdeskCode } from './HelpdeskPage.tsx';
 import { ANSWER_PROBLEMS } from './InboxPage.tsx';
 import { MailView } from './MailView.tsx';
+import { AiDraft } from './TicketAi.tsx';
 
 // Customer, contact and the mails of a ticket (TASK-057). Each part follows the rules of its ticket field, which only the
 // server knows: a part without the read rule is not shown, and the choice is offered only with the write rules.
@@ -104,7 +105,7 @@ function PortalThread({ project, ticket, round }: { readonly project: Project; r
       <h3>{t('ticketHelpdesk.portal')}</h3>
       <ul className="plain-list" data-testid="ticket-portal-posts">
         {posts.value.map((post) => (
-          <li key={post.id} data-author={post.authorKind}>
+          <li key={post.id} data-author={post.authorKind} data-entry={post.id}>
             <p className="label-small">{t(post.authorKind === 'support' ? 'ticketHelpdesk.portalSupport' : 'ticketHelpdesk.portalCustomer',
               { date: formatDateTime(post.createdAt, language) })}</p>
             <p className="prewrap mail-body">{post.body}</p>
@@ -126,6 +127,7 @@ function PortalAnswer({ project, ticket, onSent }: { readonly project: Project; 
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   useUnsavedGuard(open && body.trim() !== '');
 
@@ -140,10 +142,14 @@ function PortalAnswer({ project, ticket, onSent }: { readonly project: Project; 
 
   async function send(event: FormEvent) {
     event.preventDefault();
+    // One sending at a time: a second press while the first one runs sends nothing (prüffall A11, TASK-126).
+    if (sending.current) return;
     setNotice(null);
     if (body.trim() === '') return setNotice({ kind: 'info', text: t('ticketHelpdesk.error.replyInvalid') });
+    sending.current = true;
     setBusy(true);
     const result = await answerInPortal(api, project.id, ticket.number, body);
+    sending.current = false;
     setBusy(false);
     if (result.kind !== 'ok') {
       return setNotice({ kind: 'info', text: text(result.problem, { ...REPLY_PROBLEMS, 'helpdesk.portal_no_customer': 'ticketHelpdesk.error.portalNoCustomer' }) });
@@ -158,6 +164,7 @@ function PortalAnswer({ project, ticket, onSent }: { readonly project: Project; 
     <form className="inline-form" onSubmit={(event) => void send(event)} noValidate data-testid="portal-answer">
       <h3>{t('ticketHelpdesk.portalCompose')}</h3>
       <p className="hint">{t('ticketHelpdesk.portalHint')}</p>
+      <AiDraft project={project} ticket={ticket} channel="portal" body={body} onDraft={setBody} />
       <TextField label={t('ticketHelpdesk.body')} value={body} onChange={setBody} required multiline maxLength={100000} />
       <p className="actions">
         <button type="submit" disabled={busy}>{t('ticketHelpdesk.portalSend')}</button>
@@ -195,7 +202,7 @@ function MailThread({ value, project, ticket, onChanged }: {
       <NoticeView notice={notice} />
       <ul className="plain-list" data-testid="ticket-mails">
         {entries.map(({ mail, reply }) => mail !== null ? (
-          <li key={mail.id} data-mail={mail.id} className={mail.newAnswer ? 'new-answer' : undefined}>
+          <li key={mail.id} data-mail={mail.id} data-entry={mail.id} className={mail.newAnswer ? 'new-answer' : undefined}>
             <details open={mail.newAnswer}>
               <summary>{t('ticketHelpdesk.mail', { subject: mail.subject ?? t('inbox.noSubject'), from: mail.fromAddress ?? t('inbox.noSender'),
                 date: formatDateTime(mail.receivedAt, language) })}
@@ -213,7 +220,7 @@ function MailThread({ value, project, ticket, onChanged }: {
             }} />}
           </li>
         ) : reply !== null && (
-          <li key={reply.id} data-reply={reply.id}>
+          <li key={reply.id} data-reply={reply.id} data-entry={reply.id}>
             <details>
               <summary>{t('ticketHelpdesk.reply', { subject: reply.subject, to: reply.toAddress, date: formatDateTime(reply.createdAt, language) })}{' '}
                 <span className={`badge reply-${reply.state}`} data-testid="reply-state">{t(`ticketHelpdesk.replyState.${reply.state}` as MessageKey)}</span></summary>
@@ -332,6 +339,7 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   const checkRegion = useRef<HTMLDivElement | null>(null);
   const checkButton = useRef<HTMLButtonElement | null>(null);
   const backToForm = useRef(false);
+  const sending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   useUnsavedGuard(open && body.trim() !== '');
@@ -389,8 +397,12 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
   }
 
   async function confirm(draft: ReplyDraft) {
+    // One confirmation at a time: a second press while the first one runs sends nothing (prüffall A11, TASK-126).
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
     const result = await sendReply(api, project.id, ticket.number, draft.mailbox, draft.to, draft.subject, draft.body);
+    sending.current = false;
     setBusy(false);
     if (result.kind !== 'ok') {
       backToForm.current = true;
@@ -416,6 +428,7 @@ function ReplyComposer({ project, ticket, onSent }: { readonly project: Project;
           <SelectField label={t('ticketHelpdesk.to')} value={chosenTo} onChange={edited(setTo)}
             options={options.recipients.map((address) => ({ value: address, label: `${options.contactName} <${address}>` }))} />
           <TextField label={t('ticketHelpdesk.subject')} value={chosenSubject} onChange={edited(setSubject)} required maxLength={998} />
+          <AiDraft project={project} ticket={ticket} channel="mail" body={body} onDraft={edited(setBody)} />
           <TextField label={t('ticketHelpdesk.body')} value={body} onChange={edited(setBody)} required multiline maxLength={100000} />
           <p className="actions">
             <button type="submit" ref={checkButton} disabled={busy}>{t('ticketHelpdesk.check')}</button>
