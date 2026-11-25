@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 5 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -30,13 +30,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
+| [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-25 |
 | [TASK-137](#task-137-befunde-n1-bis-n12-und-hinweise-h1-bis-h5-der-codex-prüfung-von-task-136-beheben) | Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben | claude-20261123-opsfix-03 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-128](#task-128-ki-prüfsatz-demo-lauf-gegen-echte-anbieter-und-betriebsdokumentation-a16-teil-4) | KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-133](#task-133-betriebszustand-und-überwachung-a18-teil-3) | Betriebszustand und Überwachung (A18 Teil 3) | claude-20261123-ops-01 | 2026-11-23 |
@@ -89,9 +89,9 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-126 KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-25
 
-**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001; DEC-034, DEC-035; ACC-010; docs/AI_USE_CASES.md (AI-UC-01, AI-UC-02, Prüffälle A01 bis A03, A08 bis A11). **Abhängigkeiten:** TASK-125 auf main; TASK-058, TASK-076, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-125 auf main ist. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-157.
+**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001; DEC-034, DEC-035; ACC-010; docs/AI_USE_CASES.md (AI-UC-01, AI-UC-02, Prüffälle A01 bis A03, A08 bis A11). **Abhängigkeiten:** TASK-125 auf main; TASK-058, TASK-076, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt. Nach der Abnahme von TASK-125, TASK-129, TASK-130 und TASK-138 (PR #354) gibt Holger am 25. November 2026 mit „ja“ den Beginn frei. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-157, Migration V0074 nur falls nötig.
 
 **Umfang:** Die Funktionen Ticketzusammenfassung und Antwortentwurf mit Kontext, Validierung, Vorschau, Vertrag, Oberfläche und Tests. Nicht Teil: Speichern der Zusammenfassung am Ticket, Wikiseiten als Quelle, automatischer Versand.
 
@@ -105,7 +105,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 3. Ein Entwurf wird nur nach Prüfen und Bestätigen versendet; geänderter Text braucht eine neue Prüfung, doppelte Bestätigung erzeugt höchstens einen Versand (A10, A11).
 4. Vertrag gegen Routen, Backend Tests, Browser Tests für Ticket, Antwortdialog und Portalantwort.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-125 auf main die Blockade aufheben und umsetzen.
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 
