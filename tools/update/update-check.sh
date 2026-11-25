@@ -355,7 +355,8 @@ done
 [ "$(project_containers)" = "$containers_before" ] || fail "a command with a tag created or changed a container"
 echo "pull, up --no-deps, run --no-deps of migrate and backup: refused with a tag, no container started"
 # F7 of the review of TASK-137: one wrong value beside a valid second digest. The image of the command is valid and starts,
-# its entry point checks both values together before any work, also with --no-deps and without the service "images".
+# its entry point checks both values together before any work, also with --no-deps and without the service "images". The
+# test path names the valid image by its local identifier, so nothing is pulled from the registry.
 write_env "v0.0.0-$project" "$new_backup_image" "$work/env-app-tag"
 write_env "$new_image" "v0.0.0-$project" "$work/env-backup-tag"
 for case in "env-app-tag:TASK_MANAGER_IMAGE_DIGEST:run --rm --no-deps backup points" \
@@ -364,7 +365,7 @@ for case in "env-app-tag:TASK_MANAGER_IMAGE_DIGEST:run --rm --no-deps backup poi
     "env-backup-tag:TASK_MANAGER_BACKUP_IMAGE_DIGEST:run --rm --no-deps app reset-admin-password chef"; do
   env_file=${case%%:*} rest=${case#*:} name=${rest%%:*} command=${rest#*:}
   # shellcheck disable=SC2086
-  if docker compose -p "$project" -f deploy/compose.yaml --env-file "$work/$env_file" $command > "$results/digest-command.log" 2>&1; then
+  if docker compose -p "$project" "${compose_files[@]}" --env-file "$work/$env_file" $command > "$results/digest-command.log" 2>&1; then
     fail "'docker compose $command' ran with a wrong $name beside a valid digest"
   fi
   grep -q "Refused: $name must be the digest" "$results/digest-command.log" \
