@@ -15,8 +15,8 @@ import bundle  # noqa: E402
 
 CHECK_TAG = ROOT / "tools" / "release" / "check-tag.sh"
 DIGESTS = {
-    "TASK_MANAGER_IMAGE": "ghcr.io/1uedev/task-manager@sha256:" + "a" * 64,
-    "TASK_MANAGER_BACKUP_IMAGE": "ghcr.io/1uedev/task-manager-backup@sha256:" + "b" * 64,
+    "TASK_MANAGER_IMAGE_DIGEST": "sha256:" + "a" * 64,
+    "TASK_MANAGER_BACKUP_IMAGE_DIGEST": "sha256:" + "b" * 64,
 }
 
 
@@ -74,6 +74,22 @@ class CheckTagTest(unittest.TestCase):
         self.assertIn("tools/release/check-tag.sh", workflow)
         self.assertRegex(workflow, r"(?m)^    environment: release$")
         self.assertIn("tools/release/bundle.py", workflow)
+        self.assertIn("tools/release/check-package.sh", workflow)
+
+    def test_the_tag_is_checked_at_the_push_before_the_approval_and_binds_the_build(self):
+        # N6 of the review of TASK-136: the check runs in a job of its own with read rights and without the environment,
+        # so it sees main at the push of the tag; the release job waits for it and builds exactly the checked commit.
+        text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        jobs = text[text.index("\njobs:\n"):]
+        check = jobs[jobs.index("\n  check:\n"):jobs.index("\n  release:\n")]
+        release = jobs[jobs.index("\n  release:\n"):]
+        self.assertRegex(check, r"\n    permissions:\n      contents: read\n    outputs:")
+        self.assertNotIn("environment:", check)
+        self.assertIn("tools/release/check-tag.sh", check)
+        self.assertIn("\n    needs: check\n", release)
+        self.assertIn("\n    environment: release\n", release)
+        self.assertIn("ref: ${{ needs.check.outputs.commit }}", release)
+        self.assertNotIn("check-tag.sh", release)
 
 
 class BundleTest(unittest.TestCase):
@@ -88,11 +104,13 @@ class BundleTest(unittest.TestCase):
         for name in bundle.DEPLOY:
             self.assertTrue((result / "deploy" / name).is_file(), name)
         example = (result / "deploy" / ".env.example").read_text(encoding="utf-8")
-        self.assertIn("TASK_MANAGER_IMAGE=" + DIGESTS["TASK_MANAGER_IMAGE"] + "\n", example)
-        self.assertIn("TASK_MANAGER_BACKUP_IMAGE=" + DIGESTS["TASK_MANAGER_BACKUP_IMAGE"] + "\n", example)
+        self.assertIn("TASK_MANAGER_IMAGE_DIGEST=" + DIGESTS["TASK_MANAGER_IMAGE_DIGEST"] + "\n", example)
+        self.assertIn("TASK_MANAGER_BACKUP_IMAGE_DIGEST=" + DIGESTS["TASK_MANAGER_BACKUP_IMAGE_DIGEST"] + "\n", example)
         for guide in ("INSTALL.md", "BACKUP_RESTORE.md", "OPERATIONS.md"):
             self.assertTrue((result / "docs" / guide).is_file(), guide)
-        self.assertTrue((result / "tools" / "restore" / "restore-check.sh").is_file())
+        # The checks of the repository stay in the repository; the guide links the restore check at the tag (N11).
+        self.assertFalse((result / "tools").exists())
+        self.assertIn("/blob/v1.2.3/tools/restore/restore-check.sh", (result / "docs" / "BACKUP_RESTORE.md").read_text(encoding="utf-8"))
         checked, rewritten = 0, 0
         for guide in (result / "docs").glob("*.md"):
             for target in re.findall(r"\]\(([^)\s]+)\)", guide.read_text(encoding="utf-8")):
@@ -107,10 +125,11 @@ class BundleTest(unittest.TestCase):
         self.assertGreater(rewritten, 0)
         self.assertIn("/blob/v1.2.3/tools/demo/demo.py", (result / "docs" / "DEMO.md").read_text(encoding="utf-8"))
 
-    def test_a_tag_or_a_foreign_registry_is_refused(self):
-        for value in ("ghcr.io/1uedev/task-manager:1.2.3", "docker.io/1uedev/task-manager@sha256:" + "a" * 64):
+    def test_a_tag_or_a_whole_reference_is_refused(self):
+        for value in ("1.2.3", "ghcr.io/1uedev/task-manager@sha256:" + "a" * 64, "sha256:" + "a" * 63, "sha512:" + "a" * 64):
             with self.assertRaises(bundle.BundleError):
-                bundle.build("1.2.3", dict(DIGESTS, TASK_MANAGER_IMAGE=value), self.target / value.replace("/", "_"))
+                bundle.build("1.2.3", dict(DIGESTS, TASK_MANAGER_IMAGE_DIGEST=value),
+                             self.target / value.replace("/", "_").replace(":", "_"))
 
     def test_a_dead_link_refuses_the_bundle(self):
         root = self.target / "repository"
@@ -122,6 +141,34 @@ class BundleTest(unittest.TestCase):
         (root / "docs" / "OPERATIONS.md").write_text("See [the plan](../PLAN.md).\n", encoding="utf-8")
         with self.assertRaisesRegex(bundle.BundleError, "does not exist"):
             bundle.build("1.2.3", DIGESTS, self.target / "out", root)
+
+
+class PackageCheckTest(unittest.TestCase):
+    """tools/release/check-package.sh against a bundle in a fresh directory (TASK-137, N11)."""
+
+    def setUp(self):
+        if shutil.which("docker") is None or subprocess.run(["docker", "compose", "version"], capture_output=True).returncode:
+            self.skipTest("needs Docker Compose")
+        self.target = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.target)
+        self.built = bundle.build("1.2.3", DIGESTS, self.target)
+
+    def check(self):
+        archive = self.target / "package.tar.gz"
+        subprocess.run(["tar", "-C", str(self.target), "-czf", str(archive), self.built.name], check=True)
+        return subprocess.run(["sh", str(ROOT / "tools" / "release" / "check-package.sh"), str(archive), "1.2.3"],
+                              capture_output=True, text=True)
+
+    def test_the_unpacked_package_resolves_with_and_without_the_proxy_file(self):
+        result = self.check()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("template resolved with and without the proxy file", result.stdout)
+
+    def test_a_missing_mounted_file_refuses_the_package(self):
+        (self.built / "deploy" / "db-roles.sql").unlink()
+        result = self.check()
+        self.assertEqual(1, result.returncode)
+        self.assertIn("db mounts db-roles.sql, which the package lacks", result.stderr)
 
 
 if __name__ == "__main__":

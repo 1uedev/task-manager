@@ -1,6 +1,6 @@
 name: Update
 
-# The update check of TASK-132 (DEC-162, rule 4) with the fixes of TASK-136: the way from the newest published release to
+# The update check of TASK-132 (DEC-162, rule 4) with the fixes of TASK-136 and TASK-137: the way from the newest published release to
 # this change with the operations template, TLS and synthetic demo data, with every content kept and the way back to a
 # backup point. The older version is installed with the template and the image digests of its own release, pulled from
 # ghcr.io (F9). Until the first version exists the way starts at a fixed earlier state of main, built here. It runs on
@@ -76,19 +76,19 @@ jobs:
           mkdir "$RUNNER_TEMP/release"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
             --pattern "digests-$VERSION.env" --pattern "task-manager-$VERSION-deploy.tar.gz" --pattern "SHA256SUMS-$VERSION"
-          (cd "$RUNNER_TEMP/release" && sha256sum --check --ignore-missing "SHA256SUMS-$VERSION")
-          tar -C "$RUNNER_TEMP/release" -xzf "$RUNNER_TEMP/release/task-manager-$VERSION-deploy.tar.gz"
-          app=$(sed -n 's/^TASK_MANAGER_IMAGE=//p' "$RUNNER_TEMP/release/digests-$VERSION.env")
-          backup=$(sed -n 's/^TASK_MANAGER_BACKUP_IMAGE=//p' "$RUNNER_TEMP/release/digests-$VERSION.env")
+          # Exactly one checksum line for each of both files, both matching, both digests of SHA-256 (TASK-137, N8).
+          bash tools/update/release-files.sh "$RUNNER_TEMP/release" "$VERSION" > "$RUNNER_TEMP/release.env"
+          app=$(sed -n 's/^UPDATE_CHECK_OLD_IMAGE=//p' "$RUNNER_TEMP/release.env")
+          backup=$(sed -n 's/^UPDATE_CHECK_OLD_BACKUP_IMAGE=//p' "$RUNNER_TEMP/release.env")
+          # Both images are pulled here while the login holds; the check itself pulls nothing more from ghcr.io.
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           docker pull "$app"
           docker pull "$backup"
           docker logout ghcr.io
           {
             echo "UPDATE_CHECK_BASE=release $TAG"
-            echo "UPDATE_CHECK_OLD_IMAGE=$app"
-            echo "UPDATE_CHECK_OLD_BACKUP_IMAGE=$backup"
-            echo "UPDATE_CHECK_OLD_TEMPLATE=$RUNNER_TEMP/release/task-manager-$VERSION/deploy"
+            echo "UPDATE_CHECK_BASE_COMMIT=$(git -C "$RUNNER_TEMP/old" rev-parse HEAD)"
+            cat "$RUNNER_TEMP/release.env"
           } >> "$GITHUB_ENV"
       - name: Build the fixed older commit
         if: steps.base.outputs.kind == 'commit'
@@ -99,6 +99,7 @@ jobs:
           docker build --tag task-manager:update-old "$RUNNER_TEMP/old"
           {
             echo "UPDATE_CHECK_BASE=commit $BASE"
+            echo "UPDATE_CHECK_BASE_COMMIT=$BASE"
             echo "UPDATE_CHECK_OLD_IMAGE=task-manager:update-old"
             echo "UPDATE_CHECK_OLD_BACKUP_IMAGE=task-manager-backup:update"
           } >> "$GITHUB_ENV"
@@ -125,6 +126,10 @@ jobs:
           [ -z "$containers" ] || docker rm -f $containers || echo "::warning::containers of an aborted update check were not removed"
           volumes=$(docker volume ls --format '{{.Name}} {{.Label "com.docker.compose.project"}}' | awk -v p="$prefix" 'index($2, p) == 1 { print $1 }')
           [ -z "$volumes" ] || docker volume rm $volumes || echo "::warning::volumes of an aborted update check were not removed"
+          networks=$(docker network ls --format '{{.Name}} {{.Label "com.docker.compose.project"}}' | awk -v p="$prefix" 'index($2, p) == 1 { print $1 }')
+          [ -z "$networks" ] || docker network rm $networks || echo "::warning::networks of an aborted update check were not removed"
+          images=$(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -E ":(update-failing-|v0\.0\.0-)$prefix" || true)
+          [ -z "$images" ] || docker image rm --force $images || echo "::warning::test images of an aborted update check were not removed"
       - name: Preserve the evidence of the update
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

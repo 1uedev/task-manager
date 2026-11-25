@@ -4,12 +4,16 @@
 The base is the newest published release, never a draft or a prerelease, whose tag is a version vMAJOR.MINOR.PATCH, lies
 on the history of the checked commit and is not that commit itself, so that the check never updates a version to itself.
 It must carry the files an operator uses: the digests, the operations template and the checksums; the check then installs
-exactly those references. Only while no release exists does the check start from a fixed earlier commit of main.
+exactly those references. Only while no stable release is published at all does the check start from a fixed earlier
+commit of main (TASK-137, finding N8 of the review of TASK-136): once one exists, a missing suitable release (all on the
+checked commit itself, outside its history or not resolvable) is a state of its own that stops the check, never a silent
+fall back to the fixed commit.
 
   choose_base.py RELEASES_JSON HEAD FIXED_COMMIT
 
-RELEASES_JSON is the answer of the GitHub API for the releases of the repository. Prints three lines key=value for
-$GITHUB_OUTPUT: kind (release or commit), ref (the tag or the commit) and version (without "v", empty for a commit).
+RELEASES_JSON is the answer of the GitHub API for the releases of the repository. Prints four lines key=value for
+$GITHUB_OUTPUT: kind (release or commit), ref (the tag or the commit), commit (the commit of the base) and version
+(without "v", empty for a commit). Without a suitable release although one is published it ends with 3.
 """
 from __future__ import annotations
 
@@ -31,9 +35,14 @@ def git_is_ancestor(commit: str, head: str) -> bool:
     return subprocess.run(["git", "merge-base", "--is-ancestor", commit, head]).returncode == 0
 
 
+class NoSuitableRelease(Exception):
+    """Stable releases are published, but none of them can be the older version of this commit."""
+
+
 def choose(releases: list[dict], head: str, fixed: str, commit_of: Callable[[str], str | None] = git_commit,
            is_ancestor: Callable[[str, str], bool] = git_is_ancestor) -> dict[str, str]:
     candidates = []
+    skipped = []
     for release in releases:
         tag = release.get("tag_name", "")
         match = VERSION.fullmatch(tag)
@@ -42,15 +51,25 @@ def choose(releases: list[dict], head: str, fixed: str, commit_of: Callable[[str
         candidates.append((tuple(int(part) for part in match.groups()), tag, release))
     for _, tag, release in sorted(candidates, reverse=True):
         commit = commit_of(tag)
-        if commit is None or commit == head or not is_ancestor(commit, head):
+        if commit is None:
+            skipped.append(f"{tag} (tag not found)")
+            continue
+        if commit == head:
+            skipped.append(f"{tag} (this commit itself)")
+            continue
+        if not is_ancestor(commit, head):
+            skipped.append(f"{tag} (not in the history of this commit)")
             continue
         version = tag[1:]
         names = {asset.get("name") for asset in release.get("assets", [])}
         needed = {f"digests-{version}.env", f"task-manager-{version}-deploy.tar.gz", f"SHA256SUMS-{version}"}
         if not needed <= names:
             raise SystemExit(f"the release {tag} lacks {', '.join(sorted(needed - names))}; it cannot be the base")
-        return {"kind": "release", "ref": tag, "version": version}
-    return {"kind": "commit", "ref": fixed, "version": ""}
+        return {"kind": "release", "ref": tag, "commit": commit, "version": version}
+    if candidates:
+        raise NoSuitableRelease("stable releases are published, but none is an older version of this commit: "
+                                + ", ".join(skipped) + "; the check stops instead of starting from the fixed commit")
+    return {"kind": "commit", "ref": fixed, "commit": fixed, "version": ""}
 
 
 def main(argv: list[str]) -> int:
@@ -59,7 +78,11 @@ def main(argv: list[str]) -> int:
         return 2
     with open(argv[1], encoding="utf-8") as source:
         releases = json.load(source)
-    chosen = choose(releases, argv[2], argv[3])
+    try:
+        chosen = choose(releases, argv[2], argv[3])
+    except NoSuitableRelease as reason:
+        print(f"no suitable older version: {reason}", file=sys.stderr)
+        return 3
     for key, value in chosen.items():
         print(f"{key}={value}")
     return 0

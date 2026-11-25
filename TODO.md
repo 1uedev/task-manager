@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 5 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 6 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-25 |
-| [TASK-137](#task-137-befunde-n1-bis-n12-und-hinweise-h1-bis-h5-der-codex-prüfung-von-task-136-beheben) | Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben | claude-20261123-opsfix-03 | 2026-11-23 |
 
 ### Blockiert – BLOCKIERT
 
@@ -51,6 +50,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
 | [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
+| [TASK-137](#task-137-befunde-n1-bis-n12-und-hinweise-h1-bis-h5-der-codex-prüfung-von-task-136-beheben) | Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben | claude-20261123-opsfix-03 | 2026-11-23 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
 <!-- TASK-BOARD:END -->
@@ -329,7 +329,7 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 
 ## TASK-137 Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261123-opsfix-03 · **Aktualisiert:** 2026-11-23
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261123-opsfix-03 · **Aktualisiert:** 2026-11-23
 
 **Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166, DEC-167; docs/REVIEW_TASK-136_PR-350.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-136 auf main (PR #350). **Arbeitsstand:** Holger hält am 23. November 2026 zur Codex Prüfung von TASK-136 (Empfehlung nachbessern) die Nachbesserung für beauftragt („Dachte das ist schon in arbeit“) zur vorgeschlagenen Wahl „Alles beheben als TASK-137“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-167, Migration V0073 nur falls nötig. H2 und H4 des Berichts verlangen keine Änderung.
 
@@ -355,4 +355,6 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
 3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-167 entsprechen dem Code.
 
-**Nächster Schritt:** Umsetzung nach dem Merge dieser Reservierung.
+**Übergabe:** Umgesetzt auf claude/project-thread-elfpvq mit Migration V0073. N1: Die Vorlage startet jeden Prozess über `java -jar app.jar operations` (`OperationsStart`); so gestartet prüft `SchemaGuard` immer und lehnt jeden Modus außer leer und `verify` ab, nur `migrate` migriert (`MigrateCommandTest.aProcessOfTheOperationsTemplateNeverMigratesWhateverTheModeSays`, Profil und Umgebung). N2: typgerechter Vergleich der wirksamen Flyway Konfiguration mit exakter Ablage, leerer Satz abgelehnt (`SchemaGuardSettingsTest`, `aProfileAnExcludedFlywayAndAnotherSpellingAreRefused`). N3: V0073 nimmt der Laufzeitrolle Schreibrechte an `flyway_schema_history` und `files_purge_hold` und die Sperrfunktionen; `db-roles.sql` legt Schema an `taskmanager_migrate` und `pg_trgm` an das Verwaltungskonto, Übergang mit Folgen, Partition, Typen, Sichten und Funktion zweimal geprüft; `reset-admin-password`, `rebuild-search` und ein Ausführer laufen im Test als Laufzeitrolle (`DatabaseRolesTest`). N4: eindeutige Punkt- und Basisnamen (`tests/test_backup_names.py`). N5: Caddy ohne Query, Referrer, Cookies und querytragendes `Location` in Erfolg, Weiterleitung der Anwendung, HTTPS Weiterleitung und 502 (`tools/caddy/check-log.sh` grün, gegen TASK-136 rot). N6: Job `check` mit Leserechten beim Push, Job `release` baut genau den geprüften Commit; Anleitung ohne Bypass, nur Holgers Konto. N7: Vorlage kennt nur `…@${TASK_MANAGER_IMAGE_DIGEST}`; Updateprüfung zeigt mit lokal getaggten Images, dass pull, up --no-deps und run --no-deps von migrate und backup abgelehnt werden. N8: fester Stand nur ohne stabiles Release, sonst Rückgabewert 3; `tools/update/release-files.sh` verlangt je eine Prüfsummenzeile; kein zweiter Pull; Bericht mit Tag, Commit und Digests (`tests/test_update_base.py`, `tests/test_update_release_files.py`). N9: Inventar aller 51 vom Seed gefüllten Tabellen mit benannter Ausschluss- und Pflichtliste, Gegenprobe mit gelöschter Mailvorlage, Suche nach Projekt, Nummer und Titel, aktiver Ausführer mit erfolgreichem wiederkehrendem Auftrag, Abbruch bei Lesefehlern. N10: Punkt vor dem Wechsel, synthetische nächste Version mit bestätigter V0074 und wirklich scheiternder V0075, Rückkehr mit aufbewahrtem Paket und `.env`, Prüfung von Projekt und Volumes, Rückgabewert 3; Anleitung „Rückkehr“ in neun Schritten, `up -d --wait db`, Fehlertext mit Verweis auf den Rückweg. N11: entfernter Proxy über eigenes Netz oder `DOCKER-USER` mit Zugriffstest von zwei Rechnern; `tools/release/check-package.sh` im Workflow und in `tests/test_release_tools.py`; die Restore Probe verweist auf den Quellstand des Tags. N12: Suchmuster aus geschützter Datei, synthetischer Rollenfehler bei `log_statement=all` ohne Passwort in Ausgabe und Datenbanklog, Reichweite der Imageprüfung benannt, restore-check ohne Passwörter in Argumenten. H1: frühere Fehler einer unbekannten Migration benannt (`aFailedMigrationUnknownToTheImageIsNamedAsSuch`); in der Updateprüfung lehnt die vorherige Version die neuere Datenbank mit „newer than this image“ ab, weil PostgreSQL die gescheiterte Migration zurückrollt. H3: Netze und Testimages in der Abschlussaktion, Hostports je Lauf. H5: Ausschnitt und Passwortliste in docs/BACKUP_RESTORE.md. Nachweise: Repository Prüfungen, 77 Python Tests, Backend Tests der geänderten Klassen mit Java 21 und PostgreSQL 16, lokaler Lauf von `tools/update/update-check.sh` von V0069 auf V0073 grün (911 Zeilen in 51 Tabellen und 3 Dateien gleich, Rückkehr auf den Punkt mit Vorgängerpaket). **Offen für Holger:** Umgebung `release` und Tag Regelsatz nach docs/INSTALL.md, „Veröffentlichen einer Version“. Grenzen: das Holen privater Images mit Anmeldung läuft erst ab dem ersten Release mit; bis dahin belegt ein synthetisches Paar die Rückkehr.
+
+**Nächster Schritt:** Codex Prüfung des Ergebnis PR, danach Abnahme von TASK-132, TASK-136 und TASK-137 durch Holger.

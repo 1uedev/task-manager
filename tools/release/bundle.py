@@ -5,7 +5,10 @@ Builds the directory task-manager-VERSION with the layout of the repository, so 
   deploy/                 the template with every file compose.yaml and compose.proxy.yaml mount, and .env.example with
                           the digests of exactly this version
   docs/                   the three operation guides and every guide in docs/ they link directly
-  tools/restore/          the restore check that docs/BACKUP_RESTORE.md describes
+
+The checks of the repository, such as the restore check of docs/BACKUP_RESTORE.md, build their own images and seed data
+from the whole source; the bundle does not carry them, and the guides link them in the repository at the tag (TASK-137,
+finding N11 of the review of TASK-136).
 
 A relative link of a bundled guide to a file outside the bundle (for example the source of the demonstration) becomes a
 link to that file in the repository at the tag. A link that points to nothing in the repository refuses the bundle, so a
@@ -24,7 +27,7 @@ REPOSITORY = "https://github.com/1uedev/task-manager"
 DEPLOY = ["compose.yaml", "compose.proxy.yaml", "Caddyfile", "check-images.sh", "db-init.sh", "db-roles.sh",
           "db-roles.sql", "archive-wal.sh", "restore-place.sh", ".gitignore"]
 GUIDES = ["INSTALL.md", "BACKUP_RESTORE.md", "OPERATIONS.md"]
-TOOLS = ["tools/restore"]
+TOOLS: list[str] = []
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
@@ -77,10 +80,10 @@ def build(version: str, digests: dict[str, str], target: Path, root: Path = ROOT
     for name in DEPLOY:
         shutil.copy2(root / "deploy" / name, bundle / "deploy" / name)
     example = (root / "deploy" / ".env.example").read_text(encoding="utf-8")
-    for key in ("TASK_MANAGER_IMAGE", "TASK_MANAGER_BACKUP_IMAGE"):
+    for key in ("TASK_MANAGER_IMAGE_DIGEST", "TASK_MANAGER_BACKUP_IMAGE_DIGEST"):
         value = digests.get(key, "")
-        if not re.fullmatch(r"ghcr\.io/1uedev/task-manager(-backup)?@sha256:[0-9a-f]{64}", value):
-            raise BundleError(f"{key} is not a digest of the registry")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+            raise BundleError(f"{key} is not a digest")
         example, count = re.subn(rf"(?m)^{key}=.*$", f"{key}={value}", example)
         if count != 1:
             raise BundleError(f"{key} is missing from deploy/.env.example")

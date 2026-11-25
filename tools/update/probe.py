@@ -23,6 +23,7 @@ import json
 import os
 import pathlib
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "demo"))
 from demo import Client  # noqa: E402
@@ -90,8 +91,12 @@ def flows(args) -> None:
     changed = client.call("PATCH", f"/projects/{project}/tickets/{number}", {"title": title},
                           headers={"If-Match": current.headers.get("etag", "")})
     check(changed.body.get("fields", {}).get("title") == title, f"{args.phase}: the ticket can be changed")
+    # The search finds exactly this ticket with its new title, not just any hit (TASK-137, N9).
     found = client.call("GET", "/search/tickets", query={"q": args.phase}).body
-    check(isinstance(found, dict) and found.get("total", 0) > 0, f"{args.phase}: the search finds the changed ticket")
+    hits = found.get("items", []) if isinstance(found, dict) else []
+    check(any(hit.get("projectId") == project and hit.get("number") == number
+              and hit.get("fields", {}).get("title") == title for hit in hits),
+          f"{args.phase}: the search finds the changed ticket by project, number and new title")
     if args.upload:
         content = f"Hochgeladen in der Phase {args.phase}\n".encode() * 500
         added = client.call("POST", f"/projects/{project}/tickets/{number}/attachments", content=content,
@@ -105,8 +110,19 @@ def flows(args) -> None:
               f"{args.phase}: attachment from {attachment['phase']} downloads byte for byte")
     image = client.call("GET", f"/wiki/images/{state['image']['id']}", as_bytes=True).body
     check(hashlib.sha256(image).hexdigest() == state["image"]["sha256"], f"{args.phase}: the wiki image downloads byte for byte")
-    summary = client.call("GET", "/jobs/summary").body
-    check(isinstance(summary, dict), f"{args.phase}: the page of the background jobs answers")
+    # A worker is alive and has run a recurring task of the installation to its end (TASK-137, N9): a stopped worker or
+    # one that fails every job does not pass, however well the endpoint answers.
+    deadline = time.monotonic() + 120
+    while True:
+        summary = client.call("GET", "/jobs/summary").body
+        done = client.call("GET", "/jobs", query={"state": "succeeded", "limit": "100"}).body
+        recurring = [job for job in done if str(job.get("kind", "")).startswith("recurring.")] if isinstance(done, list) else []
+        if isinstance(summary, dict) and summary.get("activeWorkers", 0) >= 1 and recurring:
+            break
+        if time.monotonic() >= deadline:
+            check(False, f"{args.phase}: a worker is active and a recurring task succeeded")
+        time.sleep(3)
+    check(True, f"{args.phase}: a worker is active and a recurring task succeeded ({recurring[0]['kind']})")
 
 
 def main(argv: list[str]) -> None:

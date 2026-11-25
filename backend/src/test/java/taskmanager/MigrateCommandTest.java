@@ -316,6 +316,8 @@ class MigrateCommandTest {
         Result now = migrate(url);
         assertEquals(2, now.exitCode(), now.out());
         assertTrue(now.err().contains("A migration failed in this run; the schema stays at version 0070"), now.err());
+        assertTrue(now.err().contains("section 'Rückkehr'"), now.err());
+        assertFalse(now.err().contains("start the previous version"), now.err());
 
         update(url, "drop table files_purge_hold");
         update(url, "insert into flyway_schema_history (installed_rank, version, description, type, script, checksum, "
@@ -324,6 +326,101 @@ class MigrateCommandTest {
         Result earlier = migrate(url);
         assertEquals(2, earlier.exitCode(), earlier.out());
         assertTrue(earlier.err().contains("failed in an earlier run"), earlier.err());
+    }
+
+    /** TASK-137, N1: every process of the operations template only checks, whatever source sets the schema mode. */
+    @Test
+    void aProcessOfTheOperationsTemplateNeverMigratesWhateverTheModeSays() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+
+        // Without a mode: the operations entry point verifies and refuses the missing migrations.
+        var web = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWeb(true,
+            arguments(url, "server.port=0"))));
+        assertTrue(refusal(web).getMessage().contains("migration(s) are missing"), refusal(web).getMessage());
+        var worker = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWorker(true,
+            new String[] { "worker" }, database(url))));
+        assertTrue(refusal(worker).getMessage().contains("migration(s) are missing"), refusal(worker).getMessage());
+        var search = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runSearchCommand(true,
+            new String[] { "rebuild-search" }, database(url))));
+        assertTrue(refusal(search).getMessage().contains("migration(s) are missing"), refusal(search).getMessage());
+
+        // The mode "migrate" from a higher source (command line, system property) is refused, not followed.
+        var webMigrate = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWeb(true,
+            arguments(url, "server.port=0", "taskmanager.schema.mode=migrate"))));
+        assertTrue(refusal(webMigrate).getMessage().contains("may only be 'verify' here"), refusal(webMigrate).getMessage());
+        var admin = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runAdminCommand(true,
+            new String[] { "bootstrap-admin", "chef" }, database(url, "taskmanager.schema.mode=migrate"))));
+        assertTrue(refusal(admin).getMessage().contains("may only be 'verify' here"), refusal(admin).getMessage());
+        System.setProperty("taskmanager.schema.mode", "migrate");
+        try {
+            var workerMigrate = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWorker(true,
+                new String[] { "worker" }, database(url))));
+            assertTrue(refusal(workerMigrate).getMessage().contains("may only be 'verify' here"),
+                refusal(workerMigrate).getMessage());
+        } finally {
+            System.clearProperty("taskmanager.schema.mode");
+        }
+        assertEquals(List.of("0"), query(url, "select count(*) from information_schema.tables where table_schema = 'public'"));
+
+        // Only the command migrate changes the schema, also behind the operations entry point.
+        PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
+        try {
+            assertEquals(0, TaskManagerApplication.runMigrateCommand(true, new String[] { "migrate" }, database(url)));
+            assertEquals(0, TaskManagerApplication.runAdminCommand(true, new String[] { "bootstrap-admin", "chef" },
+                database(url)));
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        // A newer history refuses web process, worker and command of the operations template.
+        update(url, "insert into flyway_schema_history (installed_rank, version, description, type, script, checksum, "
+            + "installed_by, installed_on, execution_time, success) values (9999, '9999', 'later version', 'SQL', "
+            + "'V9999__later_version.sql', 0, 'test', now(), 0, true)");
+        var newerWeb = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWeb(true,
+            arguments(url, "server.port=0"))));
+        assertTrue(refusal(newerWeb).getMessage().contains("newer than this image"), refusal(newerWeb).getMessage());
+        var newerWorker = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runWorker(true,
+            new String[] { "worker" }, database(url))));
+        assertTrue(refusal(newerWorker).getMessage().contains("newer than this image"), refusal(newerWorker).getMessage());
+        var newerAdmin = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runAdminCommand(true,
+            new String[] { "reset-admin-password", "chef" }, database(url))));
+        assertTrue(refusal(newerAdmin).getMessage().contains("newer than this image"), refusal(newerAdmin).getMessage());
+    }
+
+    /** TASK-137, N2: a profile, excluded Flyway and a location in another spelling are refused when the schema is checked. */
+    @Test
+    void aProfileAnExcludedFlywayAndAnotherSpellingAreRefused() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+        assertEquals(0, migrate(url).exitCode());
+
+        for (String setting : List.of("spring.profiles.active=schemaguard", "spring.flyway.locations=classpath:DB/migration",
+                "spring.flyway.locations[0]=classpath:db/migration")) {
+            var failure = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runAdminCommand(true,
+                new String[] { "bootstrap-admin", "chef" }, database(url, setting))));
+            assertTrue(refusal(failure).getMessage().contains("refuses changed Flyway settings"), setting + ": "
+                + refusal(failure).getMessage());
+        }
+        var excluded = assertThrows(RuntimeException.class, () -> quietly(() -> TaskManagerApplication.runAdminCommand(true,
+            new String[] { "bootstrap-admin", "chef" }, database(url,
+                "spring.autoconfigure.exclude=org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"))));
+        assertTrue(refusal(excluded).getMessage().contains("The schema was not checked"), refusal(excluded).getMessage());
+    }
+
+    /** TASK-137, H1: a failed migration unknown to the image is named as such. */
+    @Test
+    void aFailedMigrationUnknownToTheImageIsNamedAsSuch() throws Exception {
+        String url = TestDatabase.createEmptyDatabase();
+        assertEquals(0, migrate(url).exitCode());
+        update(url, "insert into flyway_schema_history (installed_rank, version, description, type, script, checksum, "
+            + "installed_by, installed_on, execution_time, success) values (9999, '9999', 'later version', 'SQL', "
+            + "'V9999__later_version.sql', 0, 'test', now(), 0, false)");
+
+        Result refused = migrate(url);
+        assertEquals(2, refused.exitCode(), refused.out());
+        assertTrue(refused.err().contains("unknown to this image, failed in an earlier run of a newer image"), refused.err());
+        var failure = assertThrows(RuntimeException.class, () -> quietly(() -> verifiedCommand(url)));
+        assertTrue(refusal(failure).getMessage().contains("unknown to this image"), refusal(failure).getMessage());
     }
 
     @Test
