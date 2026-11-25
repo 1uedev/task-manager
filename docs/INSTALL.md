@@ -95,7 +95,8 @@ Nur der Containerbefehl `migrate` ändert das Schema. Die Vorlage startet jeden 
 | Datenbank neuer als das Image | kein Start, Meldung „… newer than this image …“; auch `migrate` lehnt mit Rückgabewert 2 ab |
 | eine Migration ist früher gescheitert | kein Start, Meldung „… failed in an earlier run …“; Rückkehr zum Punkt von vor dem Update |
 | eine Migration scheitert in diesem Lauf von `migrate` | Rückgabewert 2, Meldung „A migration failed in this run; the schema stays at version … Do not start any version on this database: return …“ mit der Ursache; weiter mit „Rückkehr“ |
-| geänderte Flyway Einstellungen | kein Start, Meldung „The schema check refuses changed Flyway settings (…)“ mit den Namen |
+| geänderte Flyway Einstellungen | kein Start, Meldung „The schema check refuses changed Flyway settings (…)“ mit den Namen; verglichen wird jeder Wert der wirksamen Flyway Konfiguration außer Verbindung und Laden, auch Platzhalter, Callbacks und Anlage von Schemas (TASK-139) |
+| eine der beiden Imageangaben in `.env` ist kein Digest oder eine Angabe der Form vor TASK-137 steht darin | kein Start dieses Prozesses, auch bei `run --no-deps`, Rückgabewert 2 (Sicherungsdienst 1), Meldung „Refused: <Name> must be the digest …“ (TASK-139) |
 | unbekannter Wert von `TASK_MANAGER_SCHEMA_MODE` | kein Start, Meldung nennt die erlaubten Werte `migrate` und `verify`, nie den Wert selbst |
 
 `migrate` läuft genau einmal: Flyway sperrt seine Historie, ein zweiter Lauf zur selben Zeit wartet und findet nichts mehr zu tun, ein späterer meldet `Migrations applied: 0`. Rückgabewerte: 0 erledigt oder schon aktuell, 2 abgelehnt oder in diesem Lauf gescheitert, 1 unerwarteter Fehler. Die Vorführung startet ohne `operations` und migriert wie bisher beim Start (`TASK_MANAGER_SCHEMA_MODE` leer oder `migrate`).

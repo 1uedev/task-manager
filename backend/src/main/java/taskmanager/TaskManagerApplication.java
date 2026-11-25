@@ -29,6 +29,12 @@ public class TaskManagerApplication {
         boolean operations = args.length > 0 && taskmanager.operations.OperationsStart.ARGUMENT.equals(args[0]);
         if (operations) {
             args = java.util.Arrays.copyOfRange(args, 1, args.length);
+            // Both image settings together, before anything else (TASK-139, F7).
+            String refusal = taskmanager.operations.OperationsStart.imageRefusal(System.getenv());
+            if (refusal != null) {
+                System.err.println("Refused: " + refusal);
+                System.exit(2);
+            }
         }
         if (args.length > 0 && ADMIN_COMMANDS.contains(args[0])) {
             System.exit(runAdminCommand(operations, args, new String[0]));

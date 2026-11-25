@@ -142,7 +142,7 @@ Der Ablauf gilt für einen vollständigen Ausfall und für den Rückweg nach ein
    docker compose run --rm prepare
    docker compose run --rm --no-deps backup points
    ```
-   Die Liste zeigt die vollständigen Punkte, den neuesten zuerst. Auch mit `--no-deps` startet nur das Image mit dem Digest aus `.env`: die Vorlage kennt die Images nur als `ghcr.io/1uedev/task-manager-backup@DIGEST` und `ghcr.io/1uedev/task-manager@DIGEST`, ein Tag kann an ihre Stelle nicht treten (TASK-137). `docker compose run --rm images` nennt einen falschen Wert vorher mit Grund.
+   Die Liste zeigt die vollständigen Punkte, den neuesten zuerst. Auch mit `--no-deps` startet nur das Image mit dem Digest aus `.env`: die Vorlage kennt die Images nur als `ghcr.io/1uedev/task-manager-backup@DIGEST` und `ghcr.io/1uedev/task-manager@DIGEST`, ein Tag kann an ihre Stelle nicht treten (TASK-137). Jeder Container dieser beiden Images prüft an seinem Start beide Werte aus `.env` gemeinsam, auch bei `run --no-deps` ohne den Dienst `images`: ist einer kein Digest oder steht noch eine Angabe der Form vor TASK-137 darin, bricht er mit `Refused:` und dem Namen der Einstellung ab, bevor er etwas tut (TASK-139). `docker compose pull` startet keinen Container; ein falscher Wert fällt beim nächsten Befehl auf. `docker compose run --rm images` nennt einen falschen Wert vorher mit Grund.
 3. **Zurückspielen und beweisen:**
    ```sh
    docker compose run --rm --no-deps backup restore /restore              # der neueste Punkt

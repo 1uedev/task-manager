@@ -157,6 +157,23 @@ trap cleanup EXIT
 
 # Never reads standard input: inside a "while read" loop it would swallow the rest of the list.
 db() { dc exec -T db psql -X -A -t -q -v ON_ERROR_STOP=1 -U taskmanager -d taskmanager -c "$1" < /dev/null | tr -d '\r'; }
+# The job of a phase (TASK-139, F8 of the review of TASK-137): the recurring clean up of the file store is made due now, and
+# the probe accepts only a run of it created and finished after this moment; prints that moment in UTC.
+fresh_job() {
+  local since due
+  since=$(db "select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')") \
+    || fail "the time of the database could not be read"
+  [ -n "$since" ] || fail "the database gave no time"
+  due=$(db "update job_schedule set next_run_at = clock_timestamp() where name = 'files.cleanup' returning name") \
+    || fail "the clean up could not be made due"
+  [ "$due" = files.cleanup ] || fail "the installation has no schedule files.cleanup"
+  printf '%s' "$since"
+}
+flows() {
+  local since
+  since=$(fresh_job) || exit 1
+  probe flows --since "$since" "$@"
+}
 # The probe runs through TLS on the host address with the certificate of the installation; passwords only as names of
 # environment variables (H2).
 probe() {
@@ -224,7 +241,7 @@ fingerprint() {
   [ -f "$work/inventory" ] || inventory > "$results/inventory.log"
   : > "$work/fingerprint-$label"
   while read -r table; do
-    columns=$(cat "$work/columns-$table")
+    columns=$(cat "$work/columns-$table") || fail "the columns of $table could not be read"
     line=$(db "select count(*) || ' ' || coalesce(md5(string_agg(r::text, E'\n' order by r::text)), '-')
                from (select $columns from public.$table) r") || fail "the rows of $table could not be read"
     read -r count sum <<< "$line"
@@ -233,9 +250,10 @@ fingerprint() {
     rows=$((rows + count)); tables=$((tables + 1))
   done < "$work/inventory"
   local files
-  files=$(docker run --rm --network none -v "${project}_files-data:/files:ro" --entrypoint bash "$python_image" -c \
-    'set -euo pipefail; cd /files/content; find . -type f -print0 | sort -z | xargs -0r sha256sum > /tmp/sums;
-     printf "%s %s %s" "$(wc -l < /tmp/sums)" "$(find . -type f -print0 | xargs -0r cat | wc -c)" "$(sha256sum < /tmp/sums | cut -c1-64)"') \
+  # Every read of the file store is a step of its own (TASK-139, F8 of the review of TASK-137).
+  files=$(docker run --rm --network none -v "${project}_files-data:/files:ro" \
+    -v "$PWD/tools/update/files-fingerprint.sh:/check/files-fingerprint.sh:ro" --entrypoint bash "$python_image" \
+    /check/files-fingerprint.sh /files/content) \
     || fail "the file store could not be read"
   read -r file_count file_bytes file_sum <<< "$files"
   [ -n "$file_sum" ] || fail "no checksum for the file store"
@@ -275,7 +293,7 @@ docker run --rm --network "${project}_default" -v "$old_source/tools/demo:/demo:
   -e TASK_MANAGER_DEMO_PASSWORD "$python_image" python -I -u /demo/demo.py seed > "$results/seed.log" 2>&1 \
   || { tail -20 "$results/seed.log"; fail "the demo data of the older version could not be created"; }
 probe prepare --state /state/probe.json
-probe flows --state /state/probe.json --phase vorher --upload
+flows --state /state/probe.json --phase vorher --upload
 before=$(fingerprint vorher)
 cat "$results/inventory.log"
 echo "before the update: $before"
@@ -311,6 +329,24 @@ for command in "pull app worker migrate backup" "up -d --no-deps app worker" "ru
 done
 [ "$(project_containers)" = "$containers_before" ] || fail "a command with a tag created or changed a container"
 echo "pull, up --no-deps, run --no-deps of migrate and backup: refused with a tag, no container started"
+# F7 of the review of TASK-137: one wrong value beside a valid second digest. The image of the command is valid and starts,
+# its entry point checks both values together before any work, also with --no-deps and without the service "images".
+write_env "v0.0.0-$project" "$new_backup_image" "$work/env-app-tag"
+write_env "$new_image" "v0.0.0-$project" "$work/env-backup-tag"
+for case in "env-app-tag:TASK_MANAGER_IMAGE_DIGEST:run --rm --no-deps backup points" \
+    "env-app-tag:TASK_MANAGER_IMAGE_DIGEST:run --rm --no-deps backup restore /restore" \
+    "env-backup-tag:TASK_MANAGER_BACKUP_IMAGE_DIGEST:run --rm --no-deps migrate" \
+    "env-backup-tag:TASK_MANAGER_BACKUP_IMAGE_DIGEST:run --rm --no-deps app reset-admin-password chef"; do
+  env_file=${case%%:*} rest=${case#*:} name=${rest%%:*} command=${rest#*:}
+  # shellcheck disable=SC2086
+  if docker compose -p "$project" -f deploy/compose.yaml --env-file "$work/$env_file" $command > "$results/digest-command.log" 2>&1; then
+    fail "'docker compose $command' ran with a wrong $name beside a valid digest"
+  fi
+  grep -q "Refused: $name must be the digest" "$results/digest-command.log" \
+    || { cat "$results/digest-command.log"; fail "'docker compose $command' did not name the wrong $name"; }
+done
+[ "$(project_containers)" = "$containers_before" ] || fail "a command with one wrong digest left or changed a container"
+echo "run --no-deps of backup, migrate and a command: one wrong digest beside a valid one is refused at the start"
 echo "F8: the service images explains a wrong value before anything starts"
 write_env "$UPDATE_CHECK_NEW_IMAGE" "$new_backup_image"
 if dc run --rm images > "$results/tag-refused.log" 2>&1; then fail "the service images accepted a tag"; fi
@@ -375,7 +411,7 @@ await_tls
 after=$(fingerprint nachher)
 echo "after the update:  $after"
 [ "$after" = "$before" ] || fail "the update changed the content of: $(differing vorher nachher)"
-probe flows --state /state/probe.json --phase nachher --upload
+flows --state /state/probe.json --phase nachher --upload
 current=$(fingerprint aktuell)
 
 step "O01: replaced containers keep content and configuration"
@@ -383,7 +419,7 @@ dc up -d --force-recreate > /dev/null
 await_tls
 replaced=$(fingerprint ausgetauscht)
 [ "$replaced" = "$current" ] || fail "replacing the containers changed the content of: $(differing aktuell ausgetauscht)"
-probe flows --state /state/probe.json --phase ausgetauscht
+flows --state /state/probe.json --phase ausgetauscht
 
 step "F3: web process and worker run with the runtime role, which may not change the schema"
 roles=$(db "select string_agg(distinct usename, ',' order by usename) from pg_stat_activity
@@ -433,7 +469,7 @@ dc up -d backup > /dev/null
 step "N10: an update that really fails after point $point, and the way back with the previous package"
 # Writes after the point, which the way back must undo: an upload through TLS and, with the processes stopped, a deliberate
 # loss in a table the inventory of TASK-136 missed (the counter test of N9).
-probe flows --state /state/probe.json --phase nachdempunkt --upload
+flows --state /state/probe.json --phase nachdempunkt --upload
 lost=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["attachments"][-1]["id"])' "$work/state/probe.json")
 dc stop app worker caddy > /dev/null
 fingerprint vorverlust > /dev/null
@@ -555,7 +591,7 @@ await_tls
 returned=$(fingerprint zurueck)
 [ "$returned" = "$at_point" ] || fail "the way back did not reach the point; differing: $(differing punkt zurueck)"
 cp "$work/state/probe-at-point.json" "$work/state/probe.json"
-probe flows --state /state/probe.json --phase zurueck
+flows --state /state/probe.json --phase zurueck
 echo "back at point $point with the previous version: content as at the point, the deliberate loss and the upload after it undone, core flows work"
 
 step "O01: no secret in the image metadata, no privileged container"
