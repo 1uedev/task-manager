@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, KI Assistenz am Ticket (TASK-126)
+  title: Task Manager API, KI Assistenz am Ticket (TASK-126, TASK-141)
   version: 0.1.0
   description: |
     KI Ticketzusammenfassung und Antwortentwurf (DEC-157, REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001).
@@ -10,7 +10,8 @@ info:
     Kunden beziehungsweise das ausdrückliche Senden der Portalantwort verschickt.
 
     Ohne `ticket.read` gibt es das Projekt für die Person nicht (404 `project.not_found`), eine unbekannte Nummer beantwortet
-    der Server mit 404 `ticket.not_found`. Portalkonten erhalten 404. Die Rechte und Grenzen der KI Grundlage gelten
+    der Server mit 404 `ticket.not_found`. Portalkonten erhalten an allen drei Routen 403 `auth.forbidden`, bevor ein
+    Projekt oder Ticket gelesen wird, auch für unbekannte Nummern (TASK-141). Die Rechte und Grenzen der KI Grundlage gelten
     zusätzlich: ohne die Projektaktion `ai.use` 403 `ai.use_forbidden`, ohne nutzbare Zuordnung 409 `ai.unavailable`,
     Tagesgrenzen 429, alle Plätze belegt 503 `ai.busy`, zu großer Pflichtkontext 400 `ai.context_too_large`.
 
@@ -24,9 +25,15 @@ info:
     `helpdesk.reply_no_contact`), für das Portal einen Kunden (409 `helpdesk.portal_no_customer`). Er schreibt in der
     Sprache des Kontakts, ohne Kontakt auf Deutsch. Gibt es keine Quelle, antwortet der Server 409 `assist.no_sources`.
 
-    Jedes Lesen eines Vorschlags stellt die Quellen für die lesende Person neu zusammen. Weicht eine Quelle ab oder fehlt
-    ein Recht, kommt der Vorschlag als `content: null` mit `invalid: ai.source_changed`. Sitzung, CSRF und
-    Problemantworten gelten wie im Identitätsvertrag.
+    Passen nicht alle Einträge in die Grenze von 500 Quellen, gehen nur die neuesten mit; die Ausführung trägt dann
+    `truncated: true`, auch wenn alle übergebenen Quellen in den Kontext passen (TASK-141).
+
+    Jedes Lesen eines Vorschlags stellt die Quellen für die lesende Person neu zusammen und vergleicht einen Fingerabdruck
+    aus Zweck, Sprache, Ticket, den Texten der Quellen mit der echten Kennung jedes Eintrags und beim Entwurf Kunde,
+    Kontakt und den Empfängerdaten der Antwort (Name und Adressen des Kontakts bei einer Mail). Weicht etwas davon ab oder
+    fehlt ein Recht, kommt der Vorschlag als `content: null` mit `invalid: ai.source_changed`; ein Wechsel von Kunde oder
+    Kontakt entwertet einen Entwurf auch bei gleicher Sprache und gleichem Text, Änderungen an nicht verwendeten Feldern
+    entwerten nichts (TASK-141). Sitzung, CSRF und Problemantworten gelten wie im Identitätsvertrag.
 servers:
   - url: /api/v1
 security:

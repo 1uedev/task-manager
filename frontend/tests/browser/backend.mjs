@@ -3689,9 +3689,12 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const run = ai.runs.find((entry) => entry.id === match[1] && entry.accountId === account.id);
       if (!run) return problem(404, 'ai.run_not_found');
       if (method === 'DELETE' && (run.state === 'queued' || run.state === 'running')) Object.assign(run, { state: 'cancelled', code: null, content: null, finishedAt: now() });
-      // As the server: a suggestion that no longer counts comes without content and with its reason.
-      const invalid = run.state === 'succeeded' && ai.aiInvalid ? ai.aiInvalid : null;
-      return ok({ ...run, content: method === 'DELETE' || invalid ? null : run.content, invalid });
+      // As the server: a suggestion that no longer counts comes without content and with its reason. A suggestion at a ticket is
+      // checked against its sources as they are now (TASK-141, H2); `ai.aiInvalid` stands for the other reasons of the foundation.
+      const invalid = run.state !== 'succeeded' ? null : ai.aiInvalid ? ai.aiInvalid
+        : run.assist && !assistStillValid(account, run) ? 'ai.source_changed' : null;
+      const { assist, ...shown } = run;
+      return ok({ ...shown, content: method === 'DELETE' || invalid ? null : run.content, invalid });
     }
     if (!p.startsWith('/ai/admin/')) return problem(404, 'resource.not_found');
     if (!manage) return problem(403, 'auth.forbidden');
@@ -3872,15 +3875,19 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const from = before === null ? 0 : ai.runs.findIndex((run) => `${run.startedAt}_${run.id}` === before) + 1;
       const page = ai.runs.slice(from, from + limit);
       const next = ai.runs.length > from + limit ? `${page[page.length - 1].startedAt}_${page[page.length - 1].id}` : null;
-      return ok({ runs: page.map((run) => ({ ...run, content: null, invalid: null })), next });
+      return ok({ runs: page.map(({ assist, ...run }) => ({ ...run, content: null, invalid: null })), next });
     }
     return problem(404, 'resource.not_found');
   }
 
-  // The AI functions at a ticket as the backend (TASK-126): the summary from what the person may read, the draft of an answer
-  // from what the customer already saw. Every start names its sources; `ai.contexts` keeps the texts given for the tests and
-  // `ai.draftAnswer` is the content of a successful draft.
+  // The AI functions at a ticket as the backend (TASK-126, TASK-141): the summary from what the person may read, the draft of an
+  // answer from what the customer already saw. Every start names its sources; `ai.contexts` keeps the texts given for the tests and
+  // `ai.draftAnswer` is the content of a successful draft. Like the server, every reading of a finished suggestion assembles its
+  // context again for the reader and compares the fingerprint of sources, real entry identifiers, customer, contact and recipient;
+  // a refusal or another fingerprint makes it invalid with `ai.source_changed`.
   const assistUsable = (account, projectId, useCase) => account.kind !== 'portal' && may(account, 'ai.use', projectId) && aiAvailability(useCase, true).available;
+  const ASSIST_SOURCES_MAX = 500;
+  const PRIORITY_NAMES = { de: { low: 'niedrig', normal: 'normal', high: 'hoch', critical: 'kritisch' }, en: { low: 'low', normal: 'normal', high: 'high', critical: 'critical' } };
   function assistEntries(ticket, customerId) {
     const mails = hd.messages.filter((message) => message.ticketId === ticket.id && (customerId === undefined || message.customerId === customerId))
       .map((message) => ({ kind: 'mail', id: message.id, at: message.receivedAt, author: 'customer', name: message.fromName, subject: message.subject, body: message.body }));
@@ -3890,8 +3897,81 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       .map((post) => ({ kind: 'post', id: post.id, at: post.createdAt, author: post.authorKind === 'support' ? 'support' : 'customer', name: null, subject: null, body: post.body }));
     return [...mails, ...replies, ...posts].sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
   }
-  function assistStart(account, item, ticket, useCase, language, sources, goal) {
-    if (sources.length === 0) return problem(409, 'assist.no_sources');
+  // The newest entries that fit into the limit of sources after the given ones; `truncated` when older ones were left out.
+  function assistWithEntries(given, entries, language) {
+    const de = language === 'de';
+    const room = ASSIST_SOURCES_MAX - given.length;
+    const kept = entries.length > room ? entries.slice(entries.length - room) : entries;
+    const text = (entry) => {
+      const head = [entry.name ? `${de ? 'Von' : 'From'}: ${entry.name}` : null, entry.subject ? `${de ? 'Betreff' : 'Subject'}: ${entry.subject}` : null]
+        .filter((line) => line !== null);
+      return [...head, ...(head.length > 0 ? [''] : []), entry.body ?? ''].join('\n');
+    };
+    const sources = [...given, ...kept.map((entry, index) => ({ id: `S${given.length + index + 1}`, kind: entry.kind, entryId: entry.id, at: entry.at,
+      author: entry.author, text: text(entry) }))];
+    return { sources, truncated: kept.length < entries.length };
+  }
+  // The context of a start or check, or the refusal of the server.
+  function assistContext(account, item, ticket, purpose, language) {
+    if (!may(account, 'ticket.read', item.id)) return { refused: problem(404, 'project.not_found') };
+    if (purpose === 'summary') {
+      const de = language === 'de';
+      const config = configurationOf(item.id);
+      const name = (list, key) => (list ?? []).find((entry) => entry.key === key)?.name ?? key;
+      const lines = [];
+      const line = (label, value) => { if (value !== null && value !== undefined && String(value).trim() !== '') lines.push(`${label}: ${String(value).trim()}`); };
+      if (field(account, item.id, 'title', 'read')) line(de ? 'Titel' : 'Title', ticket.values.title);
+      if (field(account, item.id, 'type', 'read') && ticket.values.type) line(de ? 'Typ' : 'Type', name(config.ticketTypes, ticket.values.type));
+      if (field(account, item.id, 'status', 'read') && ticket.values.status) line('Status', name(config.statuses, ticket.values.status));
+      if (field(account, item.id, PRIORITY_FIELD, 'read')) {
+        const priority = state.sla.priorities.get(ticket.id) ?? 'normal';
+        line(de ? 'Priorität' : 'Priority', PRIORITY_NAMES[language][priority] ?? priority);
+      }
+      if (customReadable(account, item.id)) {
+        for (const custom of customFieldsOf(item.id)) line(custom.name ?? custom.key, ticket.custom?.[custom.key]);
+      }
+      if (field(account, item.id, 'description', 'read') && ticket.values.description?.trim()) {
+        lines.push(`${de ? 'Beschreibung' : 'Description'}:\n${ticket.values.description.trim()}`);
+      }
+      const ticketSource = { id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: lines.join('\n') };
+      const entries = field(account, item.id, 'mail', 'read') ? assistEntries(ticket) : [];
+      return { language, binding: [], ...assistWithEntries([ticketSource], entries, language) };
+    }
+    if (!mayReply(account, item.id)) return { refused: problem(403, 'auth.forbidden') };
+    const link = hd.ticketCustomers.get(ticket.id);
+    const linked = link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
+    let customerId;
+    let contact;
+    if (purpose === 'mail') {
+      // As the server: a reply by mail needs a contact with an address.
+      if (!linked || (linked.addresses ?? []).length === 0) return { refused: problem(409, 'helpdesk.reply_no_contact') };
+      contact = linked;
+      customerId = contact.customerId;
+    } else {
+      if (!link?.customerId) return { refused: problem(409, 'helpdesk.portal_no_customer') };
+      customerId = link.customerId;
+      contact = linked && linked.customerId === customerId ? linked : null;
+    }
+    const contactLanguage = contact?.language === 'en' ? 'en' : 'de';
+    const title = field(account, item.id, 'title', 'read') && ticket.values.title?.trim()
+      ? [{ id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: ticket.values.title.trim() }] : [];
+    const binding = [`customer=${customerId}`, `contact=${contact?.id ?? ''}`, ...(purpose === 'mail' ? [contact.name ?? '', ...contact.addresses].map((value) => `recipient=${value}`) : [])];
+    return { language: contactLanguage, binding, ...assistWithEntries(title, assistEntries(ticket, customerId), contactLanguage) };
+  }
+  const assistFingerprint = (purpose, ticket, context) => JSON.stringify([purpose, context.language, ticket.id,
+    context.sources.map(({ id, kind, entryId, text }) => [id, kind, entryId, text]), context.binding]);
+  // Whether a finished suggestion still counts for the reader, as the guards of the server decide it.
+  function assistStillValid(account, run) {
+    const item = state.projects.find((entry) => entry.id === run.projectId);
+    const ticket = state.tickets.find((entry) => entry.id === run.objectId);
+    if (!item || !ticket) return false;
+    const context = assistContext(account, item, ticket, run.assist.purpose, run.assist.language);
+    return !context.refused && assistFingerprint(run.assist.purpose, ticket, context) === run.assist.fingerprint;
+  }
+  function assistStart(account, item, ticket, useCase, purpose, context, goal) {
+    if (context.refused) return context.refused;
+    if (context.sources.length === 0) return problem(409, 'assist.no_sources');
+    const language = context.language;
     if (!may(account, 'ai.use', item.id)) return problem(403, 'ai.use_forbidden');
     const availability = aiAvailability(useCase, true);
     if (!availability.available) return aiRefuse(account, useCase, language, availability.reason, problem(409, 'ai.unavailable', { violations: [availability.reason] }));
@@ -3899,50 +3979,33 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     if (aiToday(null) >= ai.limits.companyDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_company', problem(429, 'ai.daily_limit_company'));
     const failed = ai.aiFail;
     const held = ai.aiHold;
-    const run = { id: uuid(), kind: 'use', useCase, language, state: held ? 'running' : failed ? 'failed' : 'succeeded', code: held ? null : failed, truncated: false,
-      projectId: item.id, objectKind: 'ticket', objectId: ticket.id, objectVersion: ticket.version, skillVersion: 'builtin-1',
+    const run = { id: uuid(), kind: 'use', useCase, language, state: held ? 'running' : failed ? 'failed' : 'succeeded', code: held ? null : failed,
+      truncated: context.truncated, projectId: item.id, objectKind: 'ticket', objectId: ticket.id, objectVersion: ticket.version, skillVersion: 'builtin-1',
       providerId: availability.provider.id, modelId: availability.model.id, modelKey: availability.modelKey, dataPath: availability.provider.dataPath,
       inputTokens: held || failed ? null : 240, outputTokens: held || failed ? null : 60, startedAt: now(), finishedAt: held ? null : now(), accountId: account.id,
-      content: held || failed ? null : useCase === 'ticket_summary' ? ai.aiAnswer : ai.draftAnswer };
+      content: held || failed ? null : useCase === 'ticket_summary' ? ai.aiAnswer : ai.draftAnswer,
+      assist: { purpose, language, fingerprint: assistFingerprint(purpose, ticket, context) } };
     ai.runs.unshift(run);
-    ai.contexts.push({ runId: run.id, useCase, language, goal, sources: sources.map(({ text, ...rest }) => ({ ...rest, text })) });
-    return { status: 202, body: { runId: run.id, language, sources: sources.map(({ id, kind, entryId, at, author }) => ({ id, kind, entryId, at, author })) } };
+    ai.contexts.push({ runId: run.id, useCase, language, goal, truncated: context.truncated, sources: context.sources });
+    return { status: 202, body: { runId: run.id, language, sources: context.sources.map(({ id, kind, entryId, at, author }) => ({ id, kind, entryId, at, author })) } };
   }
   function assistRoute(account, item, ticket, method, tail, body) {
+    // As the server: portal accounts are refused before any object is read (TASK-141, F4).
     if (account.kind === 'portal') return problem(403, 'auth.forbidden');
     if (tail === '/ai' && method === 'GET') {
       return ok({ summary: assistUsable(account, item.id, 'ticket_summary'), replyDraft: assistUsable(account, item.id, 'reply_draft') });
     }
-    const entryText = (entry) => [entry.name ? `Von: ${entry.name}` : null, entry.subject ? `Betreff: ${entry.subject}` : null, '', entry.body].filter((line) => line !== null).join('\n');
-    const asSources = (entries, first) => entries.map((entry, index) => ({ id: `S${first + index}`, kind: entry.kind, entryId: entry.id, at: entry.at, author: entry.author, text: entryText(entry) }));
     if (tail === '/ai/summary' && method === 'POST') {
-      if (!['de', 'en'].includes(body.language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
-      const fields = readable(account, item.id);
-      const lines = fields.filter((name) => ticket.values[name]).map((name) => `${name}: ${ticket.values[name]}`);
-      if (field(account, item.id, PRIORITY_FIELD, 'read') && state.sla.priorities.get(ticket.id)) lines.push(`priority: ${state.sla.priorities.get(ticket.id)}`);
-      const sources = [{ id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: lines.join('\n') },
-        ...(field(account, item.id, 'mail', 'read') ? asSources(assistEntries(ticket), 2) : [])];
-      return assistStart(account, item, ticket, 'ticket_summary', body.language, sources, null);
+      // As the server: a missing language is German, any other than de and en is refused.
+      const language = body?.language ?? null;
+      if (language !== null && !['de', 'en'].includes(language)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+      return assistStart(account, item, ticket, 'ticket_summary', 'summary', assistContext(account, item, ticket, 'summary', language === 'en' ? 'en' : 'de'), null);
     }
     if (tail === '/ai/reply-draft' && method === 'POST') {
-      if (!['mail', 'portal'].includes(body.channel)) return problem(400, 'request.invalid', { violations: ['channel.invalid'] });
+      if (!['mail', 'portal'].includes(body?.channel)) return problem(400, 'request.invalid', { violations: ['channel.invalid'] });
       const goal = typeof body.goal === 'string' && body.goal.trim() !== '' ? body.goal.trim() : null;
       if (goal !== null && goal.length > 500) return problem(400, 'request.invalid', { violations: ['goal.invalid'] });
-      if (!mayReply(account, item.id)) return problem(403, 'auth.forbidden');
-      const link = hd.ticketCustomers.get(ticket.id);
-      const contact = link?.contactId ? hd.contacts.find((entry) => entry.id === link.contactId) : null;
-      let customerId;
-      if (body.channel === 'mail') {
-        if (!contact) return problem(409, 'helpdesk.reply_no_contact');
-        customerId = contact.customerId;
-      } else {
-        if (!link?.customerId) return problem(409, 'helpdesk.portal_no_customer');
-        customerId = link.customerId;
-      }
-      const language = contact?.language === 'en' ? 'en' : 'de';
-      const title = field(account, item.id, 'title', 'read') && ticket.values.title ? [{ id: 'S1', kind: 'ticket', entryId: ticket.id, at: null, author: null, text: ticket.values.title }] : [];
-      const sources = [...title, ...asSources(assistEntries(ticket, customerId), title.length + 1)];
-      return assistStart(account, item, ticket, 'reply_draft', language, sources, goal);
+      return assistStart(account, item, ticket, 'reply_draft', body.channel, assistContext(account, item, ticket, body.channel, null), goal);
     }
     return problem(404, 'resource.not_found');
   }

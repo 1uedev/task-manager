@@ -211,7 +211,7 @@ public class RunService implements AiRuns {
             throw ApiProblemException.withViolations(400, "request.invalid", List.of("sample.invalid"));
         }
         AiRequest request = new AiRequest(useCase, SkillService.language(language), null, null, null, null, goal,
-            List.of(new AiSource("S1", "de".equals(language) ? "Beispiel" : "Sample", text, true)), null);
+            List.of(new AiSource("S1", "de".equals(language) ? "Beispiel" : "Sample", text, true)), null, false);
         validate(request);
         return begin(accountId, "test", request, access::requireManage,
             companyId -> prepare(companyId, accountId, "test", request, false, skills.forTrial(companyId, useCase, request.language())));
@@ -290,7 +290,7 @@ public class RunService implements AiRuns {
         AiFrame.Built built;
         try {
             built = AiFrame.build(request.useCase(), request.language(), applied.content(), request.goal(), request.sources(),
-                properties.contextCharacters(), availability.model());
+                request.truncated(), properties.contextCharacters(), availability.model());
         } catch (AiFrame.TooLarge tooLarge) {
             throw new Refused(companyId, ApiProblemException.of(400, "ai.context_too_large"), "ai.context_too_large");
         }

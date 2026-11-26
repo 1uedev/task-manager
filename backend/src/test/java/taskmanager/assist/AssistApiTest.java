@@ -81,6 +81,8 @@ class AssistApiTest {
         registry.add("taskmanager.helpdesk.secret-key", () -> KEY);
         registry.add("taskmanager.ai.plain-http-hosts", () -> "localhost,127.0.0.1");
         registry.add("taskmanager.ai.timeout", () -> "5s");
+        // Room for 500 short sources, so only the limit of sources of the assistance leaves entries out (TASK-141, H3).
+        registry.add("taskmanager.ai.context-characters", () -> "300000");
     }
 
     @AfterAll
@@ -352,7 +354,7 @@ class AssistApiTest {
         Response provider = admin.send("POST", "/api/v1/ai/admin/providers", access, null);
         assertEquals(201, provider.status(), provider.body());
         Response model = admin.send("POST", "/api/v1/ai/admin/models", Map.of("providerId", provider.json().get("id").asString(), "name", "Lokal",
-            "modelKey", "llama3.2", "contextTokens", 32000, "outputTokens", 2000), null);
+            "modelKey", "llama3.2", "contextTokens", 120000, "outputTokens", 2000), null);
         assertEquals(201, model.status(), model.body());
         for (String useCase : List.of("ticket_summary", "reply_draft")) {
             Map<String, Object> body = new LinkedHashMap<>();
@@ -486,6 +488,7 @@ class AssistApiTest {
         assertEquals("succeeded", result.get("state").asString(), result.toString());
         assertEquals("Export bricht ab", result.get("content").get("state").get(0).get("text").asString());
         assertEquals(1, result.get("content").get("open").size());
+        assertFalse(result.get("truncated").asBoolean(), "every entry was given");
 
         String prompt = MODEL.lastPrompt();
         for (String expected : List.of("Export bricht ab", "Beim CSV Export kommt Fehler 500.", "Priorität: hoch", "Der Export bricht seit gestern ab.",
@@ -669,7 +672,11 @@ class AssistApiTest {
         assertEquals(0, MODEL.seen.size(), "no refused start reached the model");
     }
 
-    /** Prüffall A06: a portal account never starts an AI function, also with the read right of the request. */
+    /**
+     * Prüffall A06 and TASK-141, F4: a portal account never reaches the AI assistance, also with the read right of the request.
+     * All three routes answer exactly 403 {@code auth.forbidden} before any object is read, so a known and an unknown ticket
+     * cannot be told apart.
+     */
     @Test
     void aPortalAccountCannotStartAnAiFunction() {
         Setup setup = setup();
@@ -685,10 +692,139 @@ class AssistApiTest {
         assertEquals(201, created.status(), created.body());
         Browser portal = login(UUID.fromString(created.json().get("account").get("id").asString()),
             created.json().get("account").get("username").asString(), created.json().get("oneTimePassword").asString());
-        for (String path : List.of("/ai/summary", "/ai/reply-draft")) {
-            Response refused = portal.send("POST", base(setup, number) + path, draft("portal", null), null);
-            assertTrue(refused.status() == 403 || refused.status() == 404, refused.body());
+        assertEquals(200, portal.get("/api/v1/portal/projects/" + setup.project() + "/tickets/" + number + "/conversation").status(),
+            "the portal account reads its request");
+        for (long ticket : List.of(number, 9999L)) {
+            Response options = portal.get(base(setup, ticket) + "/ai");
+            assertEquals(403, options.status(), options.body());
+            assertEquals("auth.forbidden", options.code());
+            Response summary = portal.send("POST", base(setup, ticket) + "/ai/summary", Map.of("language", "de"), null);
+            assertEquals(403, summary.status(), summary.body());
+            assertEquals("auth.forbidden", summary.code());
+            for (String channel : List.of("portal", "mail")) {
+                Response refused = portal.send("POST", base(setup, ticket) + "/ai/reply-draft", draft(channel, null), null);
+                assertEquals(403, refused.status(), refused.body());
+                assertEquals("auth.forbidden", refused.code());
+            }
         }
         assertEquals(0, MODEL.seen.size());
+    }
+
+    // ---------------------------------------------------------------- TASK-141
+
+    /**
+     * F1: a draft by mail is bound to the contact it was written for. Another contact of the same customer with the same language
+     * makes it invalid although title and conversation stay the same; so does a changed address of the contact.
+     */
+    @Test
+    void aChangedContactMakesAMailDraftInvalid() throws InterruptedException {
+        Setup setup = setup();
+        UUID other = contact(setup.admin(), setup.nordwerk(), "ben" + COUNTER.incrementAndGet() + "@nordwerk.example", "en");
+        long number = ticket(setup, "Export bricht ab", "Text", setup.nordwerk(), setup.contact());
+        mail(setup, number, setup.nordwerk(), "Export", "Der Export bricht ab.", 10);
+        MODEL.answer = DRAFT;
+        Response started = setup.agent().send("POST", base(setup, number) + "/ai/reply-draft", draft("mail", null), null);
+        assertEquals("en", started.json().get("language").asString());
+        UUID run = runId(started);
+        assertEquals("succeeded", finished(setup.agent(), run).get("state").asString());
+        assertTrue(setup.agent().get("/api/v1/ai/runs/" + run).json().get("invalid").isNull());
+
+        Map<String, Object> link = new HashMap<>();
+        link.put("customerId", setup.nordwerk());
+        link.put("contactId", other);
+        assertEquals(200, setup.agent().send("PUT", base(setup, number) + "/helpdesk/customer", link, null).status());
+        JsonNode changed = setup.agent().get("/api/v1/ai/runs/" + run).json();
+        assertTrue(changed.get("content").isNull(), changed.toString());
+        assertEquals("ai.source_changed", changed.get("invalid").asString());
+
+        // The recipient data count as well: a new address of the contact the draft was written for makes it invalid.
+        UUID second = runId(setup.agent().send("POST", base(setup, number) + "/ai/reply-draft", draft("mail", null), null));
+        assertEquals("succeeded", finished(setup.agent(), second).get("state").asString());
+        assertTrue(setup.agent().get("/api/v1/ai/runs/" + second).json().get("invalid").isNull());
+        jdbc.update("update helpdesk_contact_address set address = ? where contact_id = ?", "neu" + COUNTER.incrementAndGet() + "@nordwerk.example", other);
+        assertEquals("ai.source_changed", setup.agent().get("/api/v1/ai/runs/" + second).json().get("invalid").asString());
+    }
+
+    /**
+     * F1: a draft for the portal is bound to the customer. A draft from the title alone becomes invalid when the ticket gets
+     * another customer of the same language, although no source text changed.
+     */
+    @Test
+    void aChangedCustomerMakesAPortalDraftFromTheTitleInvalid() throws InterruptedException {
+        Setup setup = setup();
+        long number = ticket(setup, "Nur ein Titel", "Text", setup.nordwerk(), null);
+        MODEL.answer = "{\"body\": \"Guten Tag, wir melden uns.\", \"questions\": [], \"notes\": [], \"sources\": [\"S1\"]}";
+        Response started = setup.agent().send("POST", base(setup, number) + "/ai/reply-draft", draft("portal", null), null);
+        assertEquals(List.of("S1:ticket"), sources(started));
+        assertEquals("de", started.json().get("language").asString());
+        UUID run = runId(started);
+        assertEquals("succeeded", finished(setup.agent(), run).get("state").asString());
+        assertTrue(setup.agent().get("/api/v1/ai/runs/" + run).json().get("invalid").isNull());
+
+        Map<String, Object> link = new HashMap<>();
+        link.put("customerId", setup.suedtechnik());
+        link.put("contactId", null);
+        assertEquals(200, setup.agent().send("PUT", base(setup, number) + "/helpdesk/customer", link, null).status());
+        JsonNode changed = setup.agent().get("/api/v1/ai/runs/" + run).json();
+        assertTrue(changed.get("content").isNull(), changed.toString());
+        assertEquals("ai.source_changed", changed.get("invalid").asString());
+    }
+
+    /**
+     * F1: the digest holds the real identifiers of the entries. Another mail with exactly the same sender, subject, text and time
+     * in place of the one given is another source.
+     */
+    @Test
+    void anotherEntryWithTheSameTextMakesTheSummaryInvalid() throws InterruptedException {
+        Setup setup = setup();
+        long number = ticket(setup, "Export", "Text", setup.nordwerk(), setup.contact());
+        UUID first = mail(setup, number, setup.nordwerk(), "Export", "Gleicher Text", 10);
+        UUID run = runId(setup.agent().send("POST", base(setup, number) + "/ai/summary", null, null));
+        assertEquals("succeeded", finished(setup.agent(), run).get("state").asString());
+        assertTrue(setup.agent().get("/api/v1/ai/runs/" + run).json().get("invalid").isNull());
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.update("""
+                    insert into helpdesk_message (id, company_id, mailbox_id, project_id, uid_validity, uid, received_at, from_address, from_name,
+                        subject, body, size_bytes, state, ticket_id, customer_id, version)
+                    select ?, company_id, mailbox_id, project_id, uid_validity, ?, received_at, from_address, from_name, subject, body, size_bytes,
+                        'ticket', ticket_id, customer_id, 1
+                    from helpdesk_message where id = ?
+                    """, UUID.randomUUID(), COUNTER.incrementAndGet(), first);
+            jdbc.update("update helpdesk_message set state = 'review', ticket_id = null where id = ?", first);
+        });
+        JsonNode changed = setup.agent().get("/api/v1/ai/runs/" + run).json();
+        assertTrue(changed.get("content").isNull(), changed.toString());
+        assertEquals("ai.source_changed", changed.get("invalid").asString());
+    }
+
+    /**
+     * H3: when the limit of 500 sources already leaves older entries out, the execution counts as truncated and the model is told,
+     * even though every given source fits into the context.
+     */
+    @Test
+    void entriesLeftOutByTheLimitOfSourcesMarkTheExecutionTruncated() throws InterruptedException {
+        Setup setup = setup();
+        long number = ticket(setup, "Viele Mails", "Text", setup.nordwerk(), setup.contact());
+        int base = 1_000_000 + COUNTER.incrementAndGet() * 1000;
+        jdbc.update("""
+                insert into helpdesk_message (id, company_id, mailbox_id, project_id, uid_validity, uid, received_at, from_address, from_name,
+                    subject, body, size_bytes, state, ticket_id, customer_id, version)
+                select gen_random_uuid(), ?, ?, ?, 1, ? + g, now() - make_interval(mins => 600 - g), 'kunde@example.com', null, null,
+                    'Kurz ' || g, 10, 'ticket', ?, ?, 1
+                from generate_series(1, 520) g
+                """, companies.find().orElseThrow(), setup.mailbox(), setup.project(), base, ticketId(setup, number), setup.nordwerk());
+        Response started = setup.agent().send("POST", base(setup, number) + "/ai/summary", null, null);
+        assertEquals(500, started.json().get("sources").size(), started.body().length() > 300 ? started.body().substring(0, 300) : started.body());
+        assertEquals("S500", started.json().get("sources").get(499).get("id").asString());
+        JsonNode result = finished(setup.agent(), runId(started));
+        assertEquals("succeeded", result.get("state").asString(), result.toString());
+        assertTrue(result.get("truncated").asBoolean(), "older entries were left out by the limit of sources");
+        String prompt = MODEL.lastPrompt();
+        assertEquals(500, prompt.split("<source id=", -1).length - 1, "every given source reached the model");
+        assertTrue(prompt.contains("Kurz 520"));
+        assertFalse(prompt.contains("Kurz 21\\n"), "the oldest entries stay out");
+        assertTrue(prompt.contains("Kurz 22\\n"));
+        assertTrue(prompt.contains("Ältere Einträge wurden wegen der Größe weggelassen"));
     }
 }

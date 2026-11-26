@@ -25,10 +25,14 @@ public interface TicketConversation {
 
     /**
      * What the customer already saw, for an answer of the support: only the entries written for the customer of the ticket and
-     * the language of its contact ({@code de} or {@code en}, German without contact).
+     * the language of its contact ({@code de} or {@code en}, German without contact). {@code contactId} is the contact of the
+     * answer, empty for a portal answer without a contact of that customer; {@code recipient} holds what a reply by mail uses of
+     * the contact, its name and addresses in their order, and is empty in the portal. Both serve to recognise a change of the
+     * recipient (TASK-141, F1) and are not passed on as content.
      */
-    record CustomerView(UUID ticketId, UUID customerId, String language, List<Entry> entries) {
+    record CustomerView(UUID ticketId, UUID customerId, UUID contactId, List<String> recipient, String language, List<Entry> entries) {
         public CustomerView {
+            recipient = List.copyOf(recipient);
             entries = List.copyOf(entries);
         }
     }
