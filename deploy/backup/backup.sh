@@ -34,6 +34,9 @@ last_name_file=$state/last-name-epoch
 # already knows (TASK-137, finding N4; TASK-139, F6 of the review of TASK-137): the counter last-name-epoch, the name of the
 # current base (base-name) and the newest point (latest-point). A volume of the template of TASK-136 has no counter yet;
 # its base and point names are taken over at the first run, so no older name comes back with a clock at or before them.
+# That first run also reads the names of every snapshot the target still keeps (TASK-140, finding N4 of the review of
+# TASK-139): after a clock that went back under TASK-136 a retained point can carry a higher name than latest-point, and
+# that name never comes back either. A target that cannot be read then ends the run without a name.
 # Two runs in the same second or after the clock went back get the next free second, so a restore point or a restic tag
 # never names two moments. A state file that exists but cannot be read or holds no name ends the run without a name.
 # Runs only under the lock of run_once.
@@ -42,12 +45,26 @@ name_epoch() {
   date -u -d "${1:0:4}-${1:4:2}-${1:6:2}T${1:9:2}:${1:11:2}:${1:13:2}Z" +%s
 }
 
+# Every name of a base, point or candidate the target keeps, one per line.
+stored_names() {
+  local listing
+  listing=$(restic --quiet snapshots --json) || return 1
+  [[ $listing == \[* ]] || return 1
+  grep -oE '"(base|point|candidate)=[0-9]{8}T[0-9]{6}Z"' <<< "$listing" | sed -E 's/^"[a-z]+=(.*)"$/\1/' || true
+}
+
 unique_name() {
-  local now last=0 value epoch file
+  local now last=0 value epoch file stored
   now=$(date -u +%s) || return 1
   if [ -e "$last_name_file" ]; then
     last=$(cat "$last_name_file") || { echo "the name counter $last_name_file cannot be read" >&2; return 1; }
     [[ $last =~ ^[0-9]{1,12}$ ]] || { echo "the name counter $last_name_file holds no second" >&2; return 1; }
+  else
+    stored=$(stored_names) || { echo "the names of the snapshots in the target cannot be read" >&2; return 1; }
+    for value in $stored; do
+      epoch=$(name_epoch "$value") || continue
+      [ "$epoch" -le "$last" ] || last=$epoch
+    done
   fi
   for file in "$base_name_file" "$latest_file"; do
     [ -e "$file" ] || continue

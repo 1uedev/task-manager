@@ -103,14 +103,71 @@ class SchemaGuardSettingsTest {
     void onlyTheValuesOfConnectionAndLoadingMayDiffer() {
         // Every value of the configuration not named as connection or loading is compared, also one a later Flyway adds.
         var changed = fixed().dataSource("jdbc:postgresql://elsewhere/db", "someone", "secret").connectRetries(3)
-            .connectRetriesInterval(5).lockRetryCount(5).driver("org.postgresql.Driver")
-            .jdbcProperties(Map.of("ssl", "true"));
+            .connectRetriesInterval(5).lockRetryCount(5).driver("org.postgresql.Driver");
         assertDoesNotThrow(() -> SchemaGuard.refuseChangedConfiguration(changed));
+        // TASK-140, N3: JDBC properties of Flyway itself are no longer an exception; currentSchema would choose the schema.
+        var schema = assertThrows(SchemaVersionException.class, () -> SchemaGuard.refuseChangedConfiguration(
+            fixed().jdbcProperties(Map.of("currentSchema", "other"))));
+        assertTrue(schema.getMessage().contains("jdbc-properties"), schema.getMessage());
+        assertTrue(java.util.Collections.disjoint(SchemaGuard.CONNECTION_ONLY, SchemaGuard.BOUND_TO_IMAGE));
+        assertTrue(!SchemaGuard.CONNECTION_ONLY.contains("jdbc-properties")
+            && !SchemaGuard.CONNECTION_ONLY.contains("kerberos-config-file"));
         for (String name : SchemaGuard.CONNECTION_ONLY) {
             assertTrue(java.util.Arrays.stream(org.flywaydb.core.api.configuration.Configuration.class.getMethods())
                 .anyMatch(method -> method.getParameterCount() == 0 && method.getName().toLowerCase(java.util.Locale.ROOT)
                     .replaceFirst("^(get|is)", "").equals(name.replace("-", ""))), name + " is no value of Flyway");
         }
+    }
+
+    /**
+     * TASK-140, N3: another class loader sees other resources under the same location; it is refused even when it only
+     * delegates to the class loader of the image, and so is a plugin changed after the configuration was created.
+     */
+    @Test
+    void anotherClassLoaderOrChangedPluginsAreRefused() throws Exception {
+        var directory = java.nio.file.Files.createTempDirectory("other-loader");
+        try {
+            var migrations = java.nio.file.Files.createDirectories(directory.resolve("db/migration"));
+            java.nio.file.Files.writeString(migrations.resolve("V9998__extra.sql"), "select 1;");
+            try (var other = new java.net.URLClassLoader(new java.net.URL[] {directory.toUri().toURL()},
+                    SchemaGuard.class.getClassLoader())) {
+                var failure = assertThrows(SchemaVersionException.class, () -> SchemaGuard.refuseChangedConfiguration(
+                    Flyway.configure(other).locations("classpath:db/migration").cleanDisabled(true).baselineOnMigrate(false)
+                        .validateMigrationNaming(true)));
+                assertTrue(failure.getMessage().contains("class-loader"), failure.getMessage());
+            }
+        } finally {
+            org.springframework.util.FileSystemUtils.deleteRecursively(directory);
+        }
+        var changed = fixed();
+        var extension = changed.getPluginRegister()
+            .getPlugin(org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension.class);
+        extension.setTransactionalLock(!extension.isTransactionalLock());
+        var failure = assertThrows(SchemaVersionException.class, () -> SchemaGuard.refuseChangedConfiguration(changed));
+        assertTrue(failure.getMessage().contains("plugin-register"), failure.getMessage());
+    }
+
+    /** TASK-140, N3: a connection whose search path starts elsewhere than in the schema of the image is refused. */
+    @Test
+    void aConnectionThatChoosesAnotherSchemaIsRefused() throws Exception {
+        String url = taskmanager.TestDatabase.createEmptyDatabase();
+        try (var connection = java.sql.DriverManager.getConnection(url, taskmanager.TestDatabase.username(),
+                taskmanager.TestDatabase.password()); var statement = connection.createStatement()) {
+            statement.execute("create schema other");
+        }
+        assertDoesNotThrow(() -> SchemaGuard.refuseOtherSchema(dataSource(url)));
+        String separator = url.contains("?") ? "&" : "?";
+        for (String parameter : java.util.List.of("currentSchema=other", "currentSchema=other,public",
+                "options=-c%20search_path%3Dother")) {
+            var failure = assertThrows(SchemaVersionException.class,
+                () -> SchemaGuard.refuseOtherSchema(dataSource(url + separator + parameter)), parameter);
+            assertTrue(failure.getMessage().contains("other"), parameter + ": " + failure.getMessage());
+        }
+    }
+
+    private static javax.sql.DataSource dataSource(String url) {
+        return new org.springframework.jdbc.datasource.DriverManagerDataSource(url, taskmanager.TestDatabase.username(),
+            taskmanager.TestDatabase.password());
     }
 
     @Test
