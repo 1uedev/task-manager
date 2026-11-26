@@ -672,7 +672,9 @@ done
 rmdir "$return_dir/gescheitert-db-data.tar.gz.neu"
 archive_volumes > "$results/archive.log" 2>&1 || { cat "$results/archive.log"; fail "the archive block of the guide failed"; }
 grep -q "beide Archive vollständig" "$results/archive.log" || { cat "$results/archive.log"; fail "the archive block reported no success"; }
-tar -tzf "$return_dir/gescheitert-db-data.tar.gz" | grep -q "PG_VERSION" || fail "the archive of db-data holds no database"
+# The listing goes to a file first: grep -q ends early, and with pipefail the cut off tar would count as a failure.
+tar -tzf "$return_dir/gescheitert-db-data.tar.gz" > "$work/archive-list.txt" || fail "the archive of db-data cannot be read"
+grep -q "PG_VERSION" "$work/archive-list.txt" || fail "the archive of db-data holds no database"
 if (guarded_delete "another-installation") > "$results/delete-wrong.log" 2>&1; then
   fail "the delete block of the guide deleted under a wrong expected name"
 fi
