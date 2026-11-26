@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -31,6 +31,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-25 |
+| [TASK-141](#task-141-befunde-f1-bis-f4-und-hinweise-h2-und-h3-der-codex-prüfung-von-task-126-beheben) | Befunde F1 bis F4 und Hinweise H2 und H3 der Codex Prüfung von TASK-126 beheben | claude-20261126-aifix-04 | 2026-11-26 |
 
 ### Blockiert – BLOCKIERT
 
@@ -85,6 +86,29 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe (2026-11-25, claude-20261117-ai-01):** Ergebnis auf dem Branch claude/project-thread-av1na6 im Ergebnis PR, ohne Migration. Neues Modul `taskmanager.assist` mit den Routen `GET /api/v1/projects/{projectId}/tickets/{number}/ai`, `POST …/ai/summary` und `POST …/ai/reply-draft` (Vertrag contracts/assist.openapi.yaml), gelesen nur über die neuen Ports `tickets.TicketReader`, `sla.TicketPriorities` und `helpdesk.TicketConversation` mit den Regeln der Oberfläche; Prüfer je Anwendungsfall und Objektart, die den Kontext beim Lesen mit den heutigen Rechten neu bauen und über einen Fingerabdruck vergleichen (`ai.source_changed`). Zu den Kriterien: 1 `AssistApiTest`: Quelle S1 mit den lesbaren Feldern als Pflicht, danach Mails, gesendete Antworten und Portalbeiträge; Sachstand und offene Punkte mit Verweisen; eine Antwort mit unbekannter Quelle wird verworfen (A15); nicht lesbare Felder und Mails fehlen; geänderte Quelle oder verlorenes Recht machen den Vorschlag ungültig. 2 Der Entwurf bekommt nur Titel und Einträge des aktuellen Kunden, nie Beschreibung, eigene Felder oder Priorität; der Text einer Mail wird nur als markierte Quelle übergeben (A08), Englisch beim englischen Kontakt, Rechte einer Antwort und Kanal geprüft, Portalkonten 403. 3 Browsertest `ai-assist`: Entwurf im Textfeld, Enter im Ziel prüft und sendet nicht, nach „Zurück“ und Ändern gibt es kein „Jetzt senden“ ohne neue Prüfung, gesendet wird genau der geprüfte Text, zwei Klicks auf „Jetzt senden“ und auf „Im Portal veröffentlichen“ ergeben je eine Anfrage; eigener Text bleibt bis „Text ersetzen“, Rückfragen und Hinweise nur für die Person. Auf dem Server ist jede Bestätigung weiterhin ein eigener Versand; die Sperre gegen den Doppelklick liegt in der Oberfläche, der unsichere SMTP Fall folgt TASK-058. 4 `AssistContractTest` (drei Routen), `AssistApiTest`, Browsertests für Ticket, Antwortdialog und Portalantwort. Auslegung: Regel 2 nennt für die Portalantwort `portal.answer`; das ist seit DEC-106 die Aktion der Portalkonten, der Support antwortet im Portal mit `helpdesk.reply`, und so verlangt es auch der Entwurf (README des Backends, Abschnitt „KI am Ticket“). Gelaufen: Backend Tests der Module ai, assist, helpdesk, Portalgespräch, sla und tickets sowie ModuleStructureTest gegen lokales PostgreSQL 16, `npm run verify`, Browsertests ai-assist, ai, helpdesk, portal, app und sla, Repository Prüfungen. Nicht gelaufen: echte Anbieter (TASK-128).
 
 **Nächster Schritt:** Codex Prüfung des Ergebnis PR nach dem Prüfauftrag, danach Holgers Abnahme; TASK-127 bleibt bis zum Ergebnis von TASK-126 auf main blockiert.
+
+## TASK-141 Befunde F1 bis F4 und Hinweise H2 und H3 der Codex Prüfung von TASK-126 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261126-aifix-04 · **Aktualisiert:** 2026-11-26
+
+**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001; ACC-010; DEC-106, DEC-157, DEC-172; docs/REVIEW_TASK-126_PR-359.md; docs/AI_USE_CASES.md (Prüffälle A02, A09, A11). **Abhängigkeiten:** TASK-126 auf main (PR #359). **Arbeitsstand:** Holger wählt am 26. November 2026 zur Codex Prüfung von TASK-126 (Empfehlung nachbessern) „F1 bis F4, H2, H3“ unter der zuerst vorgeschlagenen Nummer 140; diese Nummer ging gleichzeitig an die Nachbesserung von TASK-139 (PR #361), daher TASK-141. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-172, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 bis F4 und der Hinweise H2 und H3 aus docs/REVIEW_TASK-126_PR-359.md im Modul `assist`, in den Ports `helpdesk.TicketConversation` und `tickets.TicketReader`, in der Oberfläche der KI am Ticket, im Vertrag contracts/assist.openapi.yaml, im Testersatz und in backend/README.md. Nicht Teil: eine serverseitige Idempotenz der Bestätigung (H1); sie bleibt als benannte Grenze von A11 bestehen.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Der Fingerabdruck eines Vorschlags enthält neben den Quelltexten die echten Kennungen der Einträge und beim Entwurf Kunde und Kontakt mit den Empfängerdaten, die eine Antwort verwendet. Ein Wechsel von Kunde oder Kontakt entwertet einen Entwurf auch bei gleicher Sprache und gleichem Text. Änderungen an Feldern, die der Vorschlag nicht verwendet, entwerten nichts. Dauerhafte API Tests für Mail und Portal.
+2. F2: Ob ein Entwurf eingesetzt wird, entscheidet der Feldinhalt beim Eintreffen des Ergebnisses. Steht dann eigener Text im Feld, bleibt er, und der Entwurf wird nur zum Ersetzen angeboten. Browsertests für Mail und Portal mit angehaltenem Lauf.
+3. F3: Nach einer gespeicherten Änderung am Ticket, an seinem Verlauf oder an Kunde und Kontakt fragt die Oberfläche eine angezeigte Zusammenfassung erneut beim Server ab. Vor „Kopieren“ und vor „Text ersetzen“ prüft sie die Gültigkeit erneut. Ein ungültiger Vorschlag zeigt seinen Grund statt der Vorschau. Browsertest für Erzeugen, Quelle ändern und Übernehmen.
+4. F4: Portalkonten erhalten an allen drei Routen 403 `auth.forbidden` vor jedem Zugriff auf ein Objekt. Vertrag, README, Testersatz und Tests mit genau dieser Antwort; unbekannte und fremde Tickets bleiben für interne Konten 404.
+5. H2: Der Testersatz folgt dem Server bei fehlender Sprache, den lesbaren Feldern samt eigenen Feldern, der Standardpriorität, einem Kontakt ohne Adresse und bei Quellenänderungen, soweit die Browsertests sie brauchen.
+6. H3: Fallen Einträge schon wegen der Grenze von 500 Quellen weg, trägt die Ausführung `truncated`, und die Oberfläche zeigt den Hinweis. Grenztest mit vielen kurzen Einträgen.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund und jeder gewählte Hinweis ist nach seiner Regel behoben und durch einen Test belegt, der ohne die Korrektur scheitert.
+2. Vertrag, README, Testersatz und Server stimmen für die Assist Routen überein.
+3. Backend Tests, `npm run verify`, die Browsertests der KI, des Helpdesk und des Portals sowie die Repository Prüfungen laufen grün.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 
