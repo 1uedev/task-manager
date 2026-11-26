@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 7 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -30,6 +30,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
+| [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-25 |
 | [TASK-141](#task-141-befunde-f1-bis-f4-und-hinweise-h2-und-h3-der-codex-prüfung-von-task-126-beheben) | Befunde F1 bis F4 und Hinweise H2 und H3 der Codex Prüfung von TASK-126 beheben | claude-20261126-aifix-04 | 2026-11-26 |
 
 ### Blockiert – BLOCKIERT
@@ -390,3 +391,27 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 **Übergabe:** Umgesetzt auf claude/project-thread-elfpvq ohne Migration. F1: Der Workflow `Release` hat keinen Push Auslöser mehr; Holger startet ihn auf main mit dem Tag als Eingabe (`workflow_dispatch`). Workflow und `tools/release/check-tag.sh` kommen damit aus dem Commit von main beim Start; der Job `check` checkt genau diesen Commit aus (`GITHUB_SHA`, Referenzzeitpunkt), holt vom Tag nur die Git Objekte, lehnt einen Lauf auf einem anderen Branch ab und prüft, dass der Commit des Tags in der Geschichte dieses Commits liegt; erst nach Prüfung und Freigabe läuft Code des Tags. Gegenproben in `tests/test_release_tools.py`: ein erst nach dem Start auf main gekommener Commit, eine bewegliche oder unbekannte Referenz, ein Lauf außerhalb von main, kein Push Auslöser. F2: docs/INSTALL.md legt den Tag Regelsatz über die REST Schnittstelle mit `actor_type` `User` an, mit Kontrolle der Bypass Liste (genau ein Eintrag mit Holgers Kontonummer) und der Ablehnung eines anderen Kontos; die Einrichtung bleibt Holgers offener Schritt, ebenso die Umgebung `release` jetzt mit dem Branch `main`. F3: `tools/update/release-files.sh` vergleicht je Datei genau die gezählte Zeile, Text- und Binärzeilen gleich; beide Kombinationen mit falscher Prüfsumme getestet. F4: `pg_trgm` behält die Rolle, die es angelegt hat (Verwaltungskonto, im Bestand aus TASK-136 `taskmanager_migrate`), beschrieben in deploy/db-roles.sql und docs/INSTALL.md; `DatabaseRolesTest.anInstallationOfTheTemplateOfTask136KeepsTheExtensionWithTheMigrationRole` spielt das Rollenskript von TASK-136 und V0033 mit der Migrationsrolle nach und prüft Eigentum, Funktionsrechte, Nutzung und Ablehnung von Änderungen durch die Laufzeitrolle. F5: `SchemaGuard.refuseChangedConfiguration` vergleicht jeden Wert von `Configuration` außer einer benannten Liste für Verbindung und Laden, Objekte nach Klasse; Platzhalter, Callbacks, Standard Callbacks, Schemaanlage und weitere sind in `SchemaGuardSettingsTest` geprüft. F6: `unique_name` übernimmt `base-name` und `latest-point` eines Volumes ohne Zähler und bricht bei unlesbarem Zustand ab; Altbestand mit eingefrorener und zurückgestellter Uhr in `tests/test_backup_names.py`. F7: Jeder Container der beiden Images prüft beide Angaben beim Start (`OperationsStart.imageRefusal`, Einstieg des Sicherungsimages), auch bei `run --no-deps`; Gegenprobe mit je einem falschen Wert neben einem gültigen in `OperationsStartImagesTest` und in der Updateprüfung. F8: Die Updateprüfung macht je Phase `files.cleanup` fällig, und die Probe zählt nur einen danach angelegten und beendeten Lauf, ein frischer Fehler beendet sie; `tools/update/files-fingerprint.sh` prüft jede Dateilesung einzeln; Gegenproben in `tests/test_update_probe.py`. F9: Der Rückkehrschritt 4 ist in Kontrolle, Sicherung und einen Löschblock getrennt, der Projekt und Labels beider Volumes gegen den eingetragenen Namen prüft; die Updateprüfung führt genau diesen Block aus, erst mit falschem Namen (abgelehnt), dann mit dem richtigen. F10: `tools/caddy/check-log.sh` übergibt die Werte nur per Namen aus der Umgebung und sucht sie aus geschützten Dateien; Befunde nennen nur Fall und Feld. H1: eigener synthetischer gespeicherter Fehler von V(n+1) in der Updateprüfung, `migrate` mit 2 und Start abgelehnt, jeweils mit der eigenen Meldung. H2: beschrifteter Zwischencontainer, bis zu drei Versuche mit neuen Ports. H3: Metadaten erst vollständig gelesen, dann durchsucht. H4: Firewall Regel mit `--ctorigdst` und `--ctorigdstport`. Prüfungen: siehe Ergebnis PR.
 
 **Nächster Schritt:** Codex Prüfung des Ergebnis PR; Holger richtet Umgebung `release` (Branch `main`) und Tag Regelsatz nach docs/INSTALL.md ein; danach Abnahme von TASK-132, TASK-136, TASK-137 und TASK-139 durch Holger.
+
+## TASK-140 Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261125-opsfix-05 · **Aktualisiert:** 2026-11-25
+
+**Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166, DEC-167, DEC-170, DEC-171; docs/REVIEW_TASK-139_PR-360.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-139 auf main (PR #360). **Arbeitsstand:** Holger wählt am 25. November 2026 zur Codex Prüfung von TASK-139 (Empfehlung nachbessern) „Alles beheben als TASK-140“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-171, Migration V0074 nur falls nötig.
+
+**Umfang:** Behebung der Befunde N1 bis N6 und der Hinweise H1 und H2 aus docs/REVIEW_TASK-139_PR-360.md im Workflow „Release“ und seinen Prüfungen, der Schemaprüfung des Backends, dem Sicherungsdienst, der Updateprüfung, `deploy/check-images.sh` und in docs/INSTALL.md und docs/BACKUP_RESTORE.md. Hinweis H3 bestätigt nur den Stand und braucht keine Änderung. Nicht Teil: Betriebsübersicht (TASK-133), Messung und Freigabe (TASK-134), eine tatsächliche Veröffentlichung.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt; die Befunde dieses Berichts heißen hier N1 bis N6 und H1 und H2):
+1. N1: Der früheste veröffentlichbare Stand ist festgelegt; ein Tag auf einem älteren Stand, dessen Workflow noch auf Tags reagiert, wird von Prüfung und Anleitung abgelehnt, und der Umgang mit den historischen Tag Auslösern ist beschrieben. Gegenprobe mit einem Commit vor diesem Stand.
+2. N2: Unmittelbar vor der Veröffentlichung wird der Commit des Tags erneut gegen den geprüften Commit abgeglichen; die Anleitung sichert die Zuordnung danach (unveränderliche Releases oder gleichwertig). Gegenprobe mit einem später umgesetzten Tag.
+3. N3: Die Ausnahmen der Schemaprüfung sind auf die nötigen Verbindungsparameter begrenzt; Ressourcen- und Pluginauflösung sind an das Image gebunden, und JDBC Eigenschaften, die das Schema wählen, werden abgelehnt. Gegenproben mit einem anderen ClassLoader und mit `currentSchema`.
+4. N4: Beim ersten Lauf ohne Zähler berücksichtigt der Sicherungsdienst auch alle aufbewahrten Punkte, oder neue Namen sind eindeutig vom alten Format abgegrenzt. Regression mit einem aufbewahrten höheren Namen als `latest-point`.
+5. N5: Die Rückkehr prüft zuerst das Ziel, bevor etwas angehalten wird; der Archivblock bricht beim ersten Fehler ab, und vor dem Löschen ist bestätigt, dass beide Archive vollständig sind. Gegenprobe mit einem Fehler beim ersten Archiv.
+6. N6: Die Firewall Regel verwirft nur Pakete in ursprünglicher Richtung (`--ctdir ORIGINAL`); der beschriebene Test umfasst erlaubten Proxy, zweiten Host und Antwortverkehr.
+7. H1 und H2: Die Portwiederholung der Updateprüfung gilt auch für einen automatisch gewählten Port neben einem festen; `deploy/check-images.sh` lehnt mehrzeilige Werte ausdrücklich ab.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. N1 bis N6 und H1 und H2 sind nach den Regeln behoben, mit den Gegenproben; die Einrichtung in GitHub bleibt als offener Schritt für Holger benannt.
+2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
+3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-171 entsprechen dem Code.
+
+**Nächster Schritt:** Umsetzung nach Merge der Reservierung.
