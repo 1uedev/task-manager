@@ -488,7 +488,7 @@ export interface components {
             /**
              * @description Stabiler Grund eines Fehlers, etwa ai.timeout, ai.unreachable, ai.tls_failed, ai.redirect_refused,
              *     ai.auth_failed, ai.rate_limited, ai.model_unsuitable, ai.context_too_large, ai.output_too_long,
-             *     ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.configuration_changed,
+             *     ai.provider_failed, ai.unexpected_answer, ai.invalid_output, ai.unknown_source, ai.placeholders_changed, ai.configuration_changed,
              *     ai.account_deactivated, ai.request_invalid, ai.address_not_allowed, ai.key_missing, ai.interrupted; bei `refused` der Grund der
              *     Ablehnung, etwa ai.not_assigned, ai.disabled, ai.daily_limit_person, ai.daily_limit_company, ai.busy oder
              *     ai.context_too_large.

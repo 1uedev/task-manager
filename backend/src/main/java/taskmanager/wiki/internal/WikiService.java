@@ -1,6 +1,9 @@
 package taskmanager.wiki.internal;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -8,6 +11,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,9 +30,13 @@ import taskmanager.permissions.Permissions;
 import taskmanager.permissions.ResourceContext;
 import taskmanager.platform.ApiProblemException;
 import taskmanager.projects.ProjectAccess;
+import taskmanager.wiki.WikiDrafts;
 import taskmanager.wiki.WikiPageChanged;
 import taskmanager.wiki.WikiPages;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The wiki of a project (TASK-093, DEC-123) after the rules Holger confirmed on 9 November 2026:
@@ -51,7 +59,7 @@ import tools.jackson.databind.JsonNode;
  * language it translates; when the source is published again later, the translation is marked as outdated.
  */
 @Service
-public class WikiService implements WikiPages {
+public class WikiService implements WikiPages, WikiDrafts {
     public static final String READ = "wiki.read";
     public static final String EDIT = "wiki.edit";
     public static final String PUBLISH = "wiki.publish";
@@ -867,6 +875,130 @@ public class WikiService implements WikiPages {
             deepest = Math.max(deepest, height(children, child, seen));
         }
         return deepest + 1;
+    }
+
+    // ------------------------------------------------------------------------------------------------ the AI revision (TASK-127)
+
+    /** The current draft of a language version for the AI revision: {@code wiki.edit}, a page that is not archived. */
+    private record Drafted(WikiRepository.Page page, String language, WikiRepository.Variant variant, WikiDocument document) {
+    }
+
+    /** The blocks of one section, from index {@code from} up to {@code to}, with their Markdown. */
+    private record Part(Integer section, String heading, int from, int to, List<JsonNode> all, WikiMarkdown.Text text) {
+        List<JsonNode> blocks() {
+            return all.subList(from, to);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Section section(AccessContext actor, UUID pageId, String language, Integer basedOn, Integer section) {
+        Drafted drafted = drafted(actor, pageId, language);
+        if (basedOn != null && drafted.variant().draftRevision() != basedOn) {
+            throw ApiProblemException.of(412, "wiki.version_conflict");
+        }
+        Part part = part(drafted.document(), section);
+        return new Section(drafted.page().id(), drafted.page().projectId(), drafted.language(), drafted.variant().draftRevision(), part.section(),
+            part.heading(), part.text().markdown(), part.text().placeholders().stream().map(WikiMarkdown.Placeholder::token).toList(),
+            fingerprint(drafted, part));
+    }
+
+    @Override
+    @Transactional
+    public Revised revise(AccessContext actor, UUID pageId, String language, Integer section, String fingerprint, String text) {
+        Drafted drafted = drafted(actor, pageId, language);
+        Part part = part(drafted.document(), section);
+        if (!fingerprint(drafted, part).equals(fingerprint)) {
+            throw ApiProblemException.of(409, "wiki.section_changed");
+        }
+        ArrayNode revised;
+        try {
+            revised = WikiMarkdown.read(text == null ? "" : text, part.text().placeholders());
+        } catch (WikiMarkdown.Invalid invalid) {
+            throw ApiProblemException.of(409, invalid.code());
+        }
+        ArrayNode merged = JsonNodeFactory.instance.arrayNode();
+        part.all().subList(0, part.from()).forEach(merged::add);
+        merged.addAll(revised);
+        part.all().subList(part.to(), part.all().size()).forEach(merged::add);
+        try {
+            WikiDocument original = WikiDocument.check(doc(JsonNodeFactory.instance.arrayNode().addAll(part.blocks())));
+            WikiDocument after = WikiDocument.check(doc(revised));
+            WikiDocument document = WikiDocument.check(doc(merged));
+            return new Revised(drafted.variant().draftRevision(), original.tree(), after.tree(), document.tree());
+        } catch (WikiDocument.Invalid invalid) {
+            throw ApiProblemException.of(409, "ai.invalid_output");
+        }
+    }
+
+    private Drafted drafted(AccessContext actor, UUID pageId, String language) {
+        String requested = language(language);
+        WikiRepository.Page page = visiblePage(actor, pageId);
+        if (!access(actor, page.projectId()).edit()) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        require(actor, page.projectId(), EDIT);
+        if (page.archived()) {
+            throw ApiProblemException.of(409, "wiki.page_archived");
+        }
+        String code = requested == null ? page.language() : requested;
+        WikiRepository.Variant variant = repository.variant(page.id(), code).orElseThrow(WikiService::languageNotFound);
+        WikiRepository.Revision revision = repository.revision(page.id(), code, variant.draftRevision()).orElseThrow(WikiService::languageNotFound);
+        return new Drafted(page, code, variant, WikiDocument.stored(revision.content()));
+    }
+
+    private static Part part(WikiDocument document, Integer section) {
+        List<JsonNode> all = new ArrayList<>();
+        document.tree().get("content").forEach(all::add);
+        int from = 0;
+        int to = all.size();
+        String heading = null;
+        if (section != null) {
+            List<Integer> headings = new ArrayList<>();
+            for (int i = 0; i < all.size(); i++) {
+                if ("heading".equals(all.get(i).get("type").asString())) {
+                    headings.add(i);
+                }
+            }
+            if (section < 1 || section > headings.size()) {
+                throw ApiProblemException.withViolations(400, "request.invalid", List.of("section.invalid"));
+            }
+            from = headings.get(section - 1);
+            to = section < headings.size() ? headings.get(section) : all.size();
+            heading = WikiDocument.check(doc(JsonNodeFactory.instance.arrayNode().add(all.get(from)))).plainText();
+        }
+        return new Part(section, heading, from, to, all, WikiMarkdown.write(all.subList(from, to)));
+    }
+
+    private static ObjectNode doc(ArrayNode content) {
+        ObjectNode doc = JsonNodeFactory.instance.objectNode().put("type", "doc");
+        doc.set("content", content);
+        return doc;
+    }
+
+    /** Page, language, section, text and the original of every placeholder: changes whenever the section does. */
+    private static String fingerprint(Drafted drafted, Part part) {
+        try {
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            List<String> parts = new ArrayList<>();
+            parts.add(drafted.page().id().toString());
+            parts.add(drafted.language());
+            parts.add(part.section() == null ? "" : part.section().toString());
+            parts.add(part.text().markdown());
+            for (WikiMarkdown.Placeholder placeholder : part.text().placeholders()) {
+                parts.add(placeholder.token());
+                parts.add(placeholder.node().toString());
+            }
+            for (String value : parts) {
+                byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+                sha.update(Integer.toString(bytes.length).getBytes(StandardCharsets.US_ASCII));
+                sha.update((byte) ':');
+                sha.update(bytes);
+            }
+            return HexFormat.of().formatHex(sha.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     /** A page the caller may see: readers only published ones, archived ones only people who publish. */

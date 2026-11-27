@@ -110,7 +110,7 @@ public class RunService implements AiRuns {
 
     /** One execution as it will be sent, prepared in the transaction of the start, with the versions it started with (F4). */
     private record Plan(UUID runId, UUID companyId, String kind, AiUseCase useCase, String language, AiProvider provider, AiModel model,
-            AiAdapters.Prompt prompt, List<String> sourceIds, String references, String stamp) {
+            AiAdapters.Prompt prompt, List<String> sourceIds, String references, String stamp, String objectKind) {
     }
 
     /** A start the rules refuse after the rights were checked (TASK-129, F12); it is recorded as refused, then answered. */
@@ -303,7 +303,7 @@ public class RunService implements AiRuns {
             stamp, "queued", null, built.truncated(), null, null, now, null, false));
         String references = request.references() == null ? "null" : JSON.writeValueAsString(request.references());
         return new Plan(runId, companyId, kind, request.useCase(), request.language(), provider, model, built.prompt(), built.sourceIds(),
-            references, stamp);
+            references, stamp, "use".equals(kind) ? request.objectKind() : null);
     }
 
     /** The versions an execution depends on: assignment, access, model and the applied skill (TASK-129, F4). */
@@ -408,6 +408,11 @@ public class RunService implements AiRuns {
                     // TASK-130, F2: also what only the decoding or the cleaning turns into the key is never kept.
                     throw new KeyRepeated();
                 }
+                String problem = contentProblem(plan, content);
+                if (problem != null) {
+                    // TASK-127: the module of the use case refuses the answer, for example a wiki revision without its placeholders.
+                    throw new AiFormats.Invalid(problem);
+                }
             } catch (KeyRepeated repeated) {
                 // TASK-138, F2: an answer that repeats the key keeps none of the counts its provider reported.
                 finish(plan.runId(), "failed", repeated.code(), null);
@@ -437,6 +442,19 @@ public class RunService implements AiRuns {
             LOG.warn("AI run {} failed unexpectedly: {}", plan.runId(), unexpected.getClass().getName());
             finish(plan.runId(), "failed", task.abort != null ? task.abort : "ai.internal_error", null);
         }
+    }
+
+    /** The first refusal of a guard of the use case and kind of object of the execution, or {@code null}. */
+    private String contentProblem(Plan plan, ObjectNode content) {
+        for (AiSuggestionGuard guard : guards) {
+            if (plan.objectKind() != null && guard.useCase() == plan.useCase() && guard.objectKind().equals(plan.objectKind())) {
+                String problem = guard.contentProblem(plan.references(), content);
+                if (problem != null) {
+                    return problem;
+                }
+            }
+        }
+        return null;
     }
 
     /** An answer that repeats the key; it ends like any answer outside the format, but without counts (TASK-138, F2). */
@@ -565,6 +583,16 @@ public class RunService implements AiRuns {
             return new View(run, null, "ai.rights_changed");
         }
         return new View(run, JSON.readTree(suggestion.get().content()), null);
+    }
+
+    @Override
+    @Transactional
+    public Suggestion suggestion(AccessContext actor, UUID runId) {
+        View view = read(actor, runId);
+        Run run = view.run();
+        JsonNode references = view.content() == null ? null
+            : store.suggestion(runId).map(s -> JSON.readTree(s.sources()).path("references")).orElse(null);
+        return new Suggestion(run.useCase(), run.objectKind(), run.objectId(), run.state(), run.code(), view.content(), references, view.invalid());
     }
 
     /** Cancels an execution of the person that is still waiting or running; a finished one stays as it is. */

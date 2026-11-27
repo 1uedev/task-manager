@@ -19,7 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import org.yaml.snakeyaml.Yaml;
 import taskmanager.TestDatabase;
 
-/** The published contract of the AI assistance at the ticket (TASK-126) and the mapped routes must not drift apart. */
+/** The published contract of the AI assistance (TASK-126, TASK-127) and the mapped routes must not drift apart. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class AssistContractTest {
     private static final Path CONTRACT = Path.of("..", "contracts", "assist.openapi.yaml");
@@ -65,7 +65,7 @@ class AssistContractTest {
     @Test
     void everyMappedRouteIsDocumentedAndEveryDocumentedRouteExists() throws IOException {
         Set<String> mapped = mapped();
-        assertEquals(3, mapped.size(), mapped.toString());
+        assertEquals(8, mapped.size(), mapped.toString());
         assertEquals(mapped, documented());
     }
 }

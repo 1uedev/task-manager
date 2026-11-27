@@ -16,6 +16,7 @@ import { useI18n } from '../i18n/I18nProvider.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
 import { DiffView } from './WikiDiffView.tsx';
+import { WikiAiRevision } from './WikiAi.tsx';
 import { WikiContent } from './WikiContent.tsx';
 import { useWikiEditor, WikiEditorContent, WikiToolbar } from './WikiEditor.tsx';
 
@@ -348,6 +349,12 @@ function EditorPanel({ page, links, onSaved, onClose }: {
           </div>
         </section>
       )}
+      <WikiAiRevision pageId={page.id} language={page.language} base={base} dirty={dirty} blocked={busy || conflict !== null}
+        onTakeOver={(document) => {
+          editor.commands.setContent(document);
+          setVersion((value) => value + 1);
+          setNotice(null);
+        }} />
       <NoticeView notice={notice} />
       <div className="actions">
         <button type="submit" disabled={busy || conflict !== null || !dirty} data-testid="wiki-save">{t('wiki.save')}</button>

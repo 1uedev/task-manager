@@ -2,6 +2,7 @@ package taskmanager.ai;
 
 import java.util.UUID;
 import taskmanager.permissions.AccessContext;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Lets the module of a use case decide whether a stored suggestion still matches its object and the rights of the person
@@ -19,4 +20,13 @@ public interface AiSuggestionGuard {
     String objectKind();
 
     boolean stillValid(AccessContext actor, UUID projectId, String objectKind, UUID objectId, Long objectVersion, String referencesJson);
+
+    /**
+     * A check of the validated answer before it is kept (TASK-127): {@code null} keeps it, a code refuses the execution with that
+     * code like an answer outside the format, for example when a wiki revision lost a placeholder. It runs when the execution
+     * ends, without a person and without a transaction, and must judge the answer from it and the references alone.
+     */
+    default String contentProblem(String referencesJson, JsonNode content) {
+        return null;
+    }
 }
