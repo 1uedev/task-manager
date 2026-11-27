@@ -139,21 +139,24 @@ use_package() { compose_files=(-f "$1/compose.yaml" -f tools/update/compose.test
 
 dc() { docker compose -p "$project" "${compose_files[@]}" --env-file "$work/env" "$@"; }
 # "up -d" with the host ports of this run (TASK-139, hint H2 of the review of TASK-137): free_port only finds a free port and
-# cannot hold it until Compose binds it. When another process took one in between, the run takes two new ports, writes
-# them into every env file of this run and tries again, at most three times; given ports (UPDATE_CHECK_*_PORT) are kept.
+# cannot hold it until Compose binds it. When another process took one in between, the run takes new ports, writes
+# them into every env file of this run and tries again, at most three times. A given port (UPDATE_CHECK_*_PORT) is kept;
+# only the ports this run chose itself are taken anew, also when the other one is given (TASK-140, hint H1 of the review of
+# TASK-139). With both ports given there is nothing to choose, and the run ends.
 up_ports() {
   local attempt
   for attempt in 1 2 3; do
     if dc up -d "$@" > "$results/up.log" 2>&1; then
       return 0
     fi
-    if [ -n "${UPDATE_CHECK_HTTPS_PORT:-}${UPDATE_CHECK_HTTP_PORT:-}" ] \
+    if [ -n "${UPDATE_CHECK_HTTPS_PORT:-}" ] && [ -n "${UPDATE_CHECK_HTTP_PORT:-}" ] \
         || ! grep -Eq 'port is already allocated|address already in use' "$results/up.log"; then
       cat "$results/up.log"
       return 1
     fi
-    echo "a host port was taken meanwhile (attempt $attempt); two new ports"
-    https_port=$(free_port) http_port=$(free_port)
+    echo "a host port was taken meanwhile (attempt $attempt); new ports for the ones this run chose"
+    [ -n "${UPDATE_CHECK_HTTPS_PORT:-}" ] || https_port=$(free_port)
+    [ -n "${UPDATE_CHECK_HTTP_PORT:-}" ] || http_port=$(free_port)
     url="https://localhost:$https_port"
     for file in "$work"/env*; do
       sed -i -e "s/^TASK_MANAGER_HTTP_BIND=.*/TASK_MANAGER_HTTP_BIND=127.0.0.1:$http_port/" \
@@ -608,24 +611,39 @@ dc run --rm --no-deps backup restore /restore "$point" > "$results/restore.log" 
   || { tail -30 "$results/restore.log"; fail "the restore of $point failed"; }
 grep -q "point $point restored and proven" "$results/restore.log" || fail "the restore did not take $point"
 
-echo "Rückkehr step 4: the guarded delete block of docs/INSTALL.md, first with a wrong name, then with the right one"
+echo "Rückkehr step 4: the archive and delete blocks of docs/INSTALL.md, with a failed first archive and a wrong name"
 dc down > /dev/null
-# Exactly the block of the guide (TASK-139, F9 of the review of TASK-137), with "docker compose" bound to this run.
-python3 -I - docs/INSTALL.md > "$work/delete-block.sh" <<'PY'
+# Exactly the blocks of the guide (TASK-139, F9 of the review of TASK-137; TASK-140, N5 of the review of TASK-139), with
+# "docker compose" bound to this run.
+guide_block() {
+  python3 -I - docs/INSTALL.md "$1" <<'PY'
 import sys, textwrap
 text = open(sys.argv[1], encoding="utf-8").read()
-start = text.index("3. **Löschen**")
+start = text.index(sys.argv[2])
 block = text[text.index("```sh\n", start) + 6:]
 print(textwrap.dedent(block[:block.index("```")]))
 PY
+}
+guide_block "2. **Sichern" > "$work/archive-block.sh"
+guide_block "3. **Löschen**" > "$work/delete-block.sh"
+grep -q '^  project=task-manager ' "$work/archive-block.sh" || fail "the guide has no archive block with the project name"
 grep -q '^  expected=task-manager ' "$work/delete-block.sh" || fail "the guide has no delete block with the expected name"
+return_dir=$work/return
+repo_root=$PWD
+mkdir -p "$return_dir"
+archive_volumes() {
+  sed "s/^  project=task-manager /  project=$project /" "$work/archive-block.sh" > "$work/archive-block-run.sh"
+  (cd "$return_dir" && bash "$work/archive-block-run.sh")
+}
 guarded_delete() {
   sed "s/^  expected=task-manager /  expected=$1 /" "$work/delete-block.sh" > "$work/delete-block-run.sh"
+  cd "$return_dir" || return 1
   # shellcheck disable=SC2329
   # Not through dc: dc itself calls "docker compose" and would call this function again without end.
   docker() {
     if [ "$1" = compose ]; then
-      shift; command docker compose -p "$project" "${compose_files[@]}" --env-file "$work/env" "$@"
+      # The compose files are named relative to the repository; the block itself runs where the archives lie.
+      shift; (cd "$repo_root" && command docker compose -p "$project" "${compose_files[@]}" --env-file "$work/env" "$@")
     else
       command docker "$@"
     fi
@@ -633,6 +651,30 @@ guarded_delete() {
   # shellcheck source=/dev/null
   . "$work/delete-block-run.sh"
 }
+# N5: the first archive fails (its target is a directory); the block stops there, makes no second archive and reports no
+# success, and the delete block refuses without both archives.
+mkdir "$return_dir/gescheitert-db-data.tar.gz.neu"
+if archive_volumes > "$results/archive-failed.log" 2>&1; then
+  cat "$results/archive-failed.log"; fail "the archive block of the guide ended with success after a failed first archive"
+fi
+if grep -q "beide Archive vollständig" "$results/archive-failed.log" || [ -e "$return_dir/gescheitert-files-data.tar.gz" ] \
+    || [ -e "$return_dir/gescheitert-files-data.tar.gz.neu" ]; then
+  cat "$results/archive-failed.log"; fail "the archive block went on after the first failure"
+fi
+if (guarded_delete "$project") > "$results/delete-no-archive.log" 2>&1; then
+  fail "the delete block of the guide deleted without both archives"
+fi
+grep -q "Archiv gescheitert-db-data.tar.gz fehlt" "$results/delete-no-archive.log" \
+  || { cat "$results/delete-no-archive.log"; fail "the delete block gave no reason for the missing archive"; }
+for volume in db-data files-data; do
+  docker volume inspect "${project}_$volume" > /dev/null 2>&1 || fail "the refused delete block removed ${project}_$volume"
+done
+rmdir "$return_dir/gescheitert-db-data.tar.gz.neu"
+archive_volumes > "$results/archive.log" 2>&1 || { cat "$results/archive.log"; fail "the archive block of the guide failed"; }
+grep -q "beide Archive vollständig" "$results/archive.log" || { cat "$results/archive.log"; fail "the archive block reported no success"; }
+# The listing goes to a file first: grep -q ends early, and with pipefail the cut off tar would count as a failure.
+tar -tzf "$return_dir/gescheitert-db-data.tar.gz" > "$work/archive-list.txt" || fail "the archive of db-data cannot be read"
+grep -q "PG_VERSION" "$work/archive-list.txt" || fail "the archive of db-data holds no database"
 if (guarded_delete "another-installation") > "$results/delete-wrong.log" 2>&1; then
   fail "the delete block of the guide deleted under a wrong expected name"
 fi

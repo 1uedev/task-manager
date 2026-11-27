@@ -107,6 +107,7 @@ class SchemaGuard implements FlywayMigrationStrategy, ApplicationListener<Contex
     public void migrate(Flyway flyway) {
         if (enforced()) {
             refuseChangedConfiguration(flyway.getConfiguration());
+            refuseOtherSchema(flyway.getConfiguration().getDataSource());
         }
         if (command) {
             MigrationInfoService info = flyway.info();
@@ -153,12 +154,23 @@ class SchemaGuard implements FlywayMigrationStrategy, ApplicationListener<Contex
      * equal the configuration the image fixes.
      */
     static final Set<String> CONNECTION_ONLY = Set.of("data-source", "cached-data-sources", "url", "user", "password",
-        "driver", "jdbc-properties", "kerberos-config-file", "connect-retries", "connect-retries-interval",
-        "lock-retry-count", "class-loader", "plugin-register", "loggers");
+        "driver", "connect-retries", "connect-retries-interval", "lock-retry-count", "loggers");
+
+    /**
+     * Values that are not compared as values but bound to the image (TASK-140, finding N3 of the review of TASK-139): the
+     * class loader Flyway resolves migrations, resolvers and resources with must be the one that loaded this image, and the
+     * plugins it finds, with every setting of their configuration extensions, must be the ones of a fresh configuration.
+     */
+    static final Set<String> BOUND_TO_IMAGE = Set.of("class-loader", "plugin-register");
+
+    /** The one schema the image keeps its tables and its history in; nothing may choose another (N3). */
+    static final String SCHEMA = "public";
 
     /**
      * Compares the Flyway configuration Spring bound with the one the image fixes, value by value and with its type (N2):
-     * every value {@link Configuration} offers, except the ones in {@link #CONNECTION_ONLY} (TASK-139, F5): locations in
+     * every value {@link Configuration} offers, except the ones in {@link #CONNECTION_ONLY} (TASK-139, F5; since TASK-140, N3,
+     * without JDBC properties, Kerberos file, class loader and plugins), with class loader and plugins bound to the image
+     * ({@link #BOUND_TO_IMAGE}): locations in
      * exactly the spelling {@code classpath:db/migration}, history table, schemas and their creation, target, naming,
      * placeholders with their values, prefix and suffix, callbacks with the default callbacks, resolvers, Java migrations,
      * baseline, order and ignore patterns. A programmatic change is refused like the Spring setting of the same name;
@@ -172,6 +184,12 @@ class SchemaGuard implements FlywayMigrationStrategy, ApplicationListener<Contex
         for (java.lang.reflect.Method getter : Configuration.class.getMethods()) {
             String name = settingName(getter);
             if (name == null || CONNECTION_ONLY.contains(name)) {
+                continue;
+            }
+            if (BOUND_TO_IMAGE.contains(name)) {
+                if (!boundToImage(name, bound, fixed)) {
+                    refused.add(name);
+                }
                 continue;
             }
             Object mine;
@@ -189,6 +207,88 @@ class SchemaGuard implements FlywayMigrationStrategy, ApplicationListener<Contex
         if (!refused.isEmpty()) {
             throw new SchemaVersionException("The schema check refuses changed Flyway settings (" + String.join(", ", refused)
                 + "). The image fixes the set of migrations, their history and the target; remove these settings.");
+        }
+    }
+
+    /**
+     * N3: the class loader is the very one of this image, so {@code classpath:db/migration} names the migrations in the
+     * image and no other resources; the plugins are the same classes with the same settings as in a configuration that
+     * nothing changed. The URL, if Flyway has one of its own, chooses no schema either.
+     */
+    private static boolean boundToImage(String name, Configuration bound, Configuration fixed) {
+        try {
+            if (name.equals("class-loader")) {
+                return imageLoader(bound.getClassLoader());
+            }
+            return plugins(bound).equals(plugins(fixed));
+        } catch (RuntimeException | ReflectiveOperationException failure) {
+            return false;
+        }
+    }
+
+    /**
+     * The class loader of the image, or the class loader of the embedded Tomcat of the web process directly above it: that
+     * one has no resources of its own and asks the class loader of the image first, so it finds the same migrations. Any
+     * other loader, also one that only adds resources to the one of the image, is refused.
+     */
+    static boolean imageLoader(ClassLoader loader) {
+        ClassLoader image = SchemaGuard.class.getClassLoader();
+        if (loader == image) {
+            return true;
+        }
+        if (loader == null || loader.getParent() != image || loader.getClass().getClassLoader() != image
+                || !loader.getClass().getName().equals("org.springframework.boot.tomcat.TomcatEmbeddedWebappClassLoader")) {
+            return false;
+        }
+        return !(loader instanceof java.net.URLClassLoader urls) || urls.getURLs().length == 0;
+    }
+
+    private static List<Object> plugins(Configuration configuration) throws ReflectiveOperationException {
+        List<Object> described = new java.util.ArrayList<>();
+        for (var plugin : configuration.getPluginRegister().getPlugins(org.flywaydb.core.extensibility.Plugin.class)) {
+            Map<String, Object> values = new java.util.TreeMap<>();
+            values.put("", plugin.getClass().getName());
+            for (java.lang.reflect.Method getter : plugin.getClass().getMethods()) {
+                String setting = settingName(getter);
+                if (setting == null || getter.getDeclaringClass() == Object.class || setting.equals("class")) {
+                    continue;
+                }
+                Object value = getter.invoke(plugin);
+                Object form = described(value);
+                // A nested settings object such as the transactional model counts with its text, not only its class.
+                if (value != null && form instanceof String text && text.equals(value.getClass().getName())
+                        && value.getClass().getMethod("toString").getDeclaringClass() != Object.class) {
+                    form = text + ":" + value;
+                }
+                values.put(setting, form);
+            }
+            described.add(values);
+        }
+        described.sort(java.util.Comparator.comparing(String::valueOf));
+        return described;
+    }
+
+    /**
+     * N3: the connection Flyway works with uses exactly the schema {@value #SCHEMA}. A JDBC property such as
+     * {@code currentSchema} or {@code options}, a setting of the role or of the database that changes the search path is
+     * refused here, whatever source set it, before Flyway reads or writes anything.
+     */
+    static void refuseOtherSchema(javax.sql.DataSource dataSource) {
+        List<String> schemas = new java.util.ArrayList<>();
+        try (var connection = dataSource.getConnection();
+             var statement = connection.createStatement();
+             var result = statement.executeQuery("select unnest(current_schemas(false))")) {
+            while (result.next()) {
+                schemas.add(result.getString(1));
+            }
+        } catch (java.sql.SQLException failure) {
+            throw new SchemaVersionException("The schema check cannot read the search path of the database connection: "
+                + firstLine(failure.getMessage()));
+        }
+        if (!schemas.equals(List.of(SCHEMA))) {
+            throw new SchemaVersionException("The database connection uses the schema(s) " + schemas + "; the image keeps its "
+                + "tables only in '" + SCHEMA + "'. Remove JDBC properties such as currentSchema or options and any changed "
+                + "search_path of the role or the database.");
         }
     }
 

@@ -165,8 +165,24 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
           TAG: ${{ steps.tag.outputs.tag }}
+          CHECKED: ${{ steps.tag.outputs.commit }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The tag of the remote repository must still name the built commit right before and after the publication
+          # (TASK-140, finding N2 of the review of TASK-139): the release is created as a draft, the tag is compared
+          # again, only then published, and compared once more. With immutable releases (docs/INSTALL.md) the published
+          # release keeps its tag; a mismatch before the publication deletes the draft and publishes nothing.
+          # The function comes from this workflow on main, not from the tagged commit; tests/test_release_tools.py runs it.
+          # remote-tag-commit begin
+          remote_tag_commit() {
+            local lines peeled plain
+            lines=$(git ls-remote --tags origin "refs/tags/$1" "refs/tags/$1^{}") || return 1
+            peeled=$(awk -v name="refs/tags/$1^{}" '$2 == name { print $1 }' <<< "$lines")
+            plain=$(awk -v name="refs/tags/$1" '$2 == name { print $1 }' <<< "$lines")
+            printf '%s\n' "${peeled:-$plain}"
+          }
+          # remote-tag-commit end
+          same() { local now; now=$(remote_tag_commit "$TAG") && [[ "$now" =~ ^[0-9a-f]{40}$ ]] && [ "$now" = "$CHECKED" ]; }
           {
             echo "Task Manager $VERSION"
             echo
@@ -182,5 +198,13 @@ jobs:
             echo
             echo "Attached: software bill of materials (SPDX) and vulnerability report of both images, checksums."
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          same || { echo "::error::the tag no longer names the built commit; nothing is published"; exit 1; }
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
             --title "Task Manager $VERSION" --notes-file "$RUNNER_TEMP/notes.md" release/*
+          if ! same; then
+            gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes
+            echo "::error::the tag moved while the release was prepared; the draft is deleted, nothing is published"
+            exit 1
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          same || { echo "::error::the tag moved during the publication; withdraw release $TAG by hand"; exit 1; }
