@@ -84,18 +84,37 @@ public class TicketAssist {
     public record Options(boolean summary, boolean replyDraft) {
     }
 
-    /** The assembled sources of one start or check. */
-    record Context(UUID ticketId, long version, String language, List<AiSource> sources, List<SourceRef> refs) {
+    /**
+     * The assembled sources of one start or check. {@code binding} holds what the suggestion depends on beyond the texts of its
+     * sources and never reaches the model: for a draft the customer, the contact and the recipient data of the answer. With
+     * {@code truncated} older entries were left out because of the limit of sources (TASK-141, H3).
+     */
+    record Context(UUID ticketId, long version, String language, List<AiSource> sources, List<SourceRef> refs, List<String> binding,
+            boolean truncated) {
+        /**
+         * The digest of exactly what the suggestion was made from: purpose, language, ticket, every source with the kind and the
+         * real identifier of its entry, and the binding (TASK-141, F1). The running source names alone would let another entry with
+         * the same text or another recipient pass as unchanged.
+         */
         String digest(String purpose) {
             try {
                 MessageDigest sha = MessageDigest.getInstance("SHA-256");
                 update(sha, purpose);
                 update(sha, language);
-                for (AiSource source : sources) {
+                update(sha, ticketId.toString());
+                for (int i = 0; i < sources.size(); i++) {
+                    AiSource source = sources.get(i);
+                    SourceRef ref = refs.get(i);
                     update(sha, source.id());
                     update(sha, source.label());
                     update(sha, source.text());
                     update(sha, Boolean.toString(source.required()));
+                    update(sha, ref.kind());
+                    update(sha, ref.entryId() == null ? "" : ref.entryId().toString());
+                }
+                update(sha, Integer.toString(binding.size()));
+                for (String value : binding) {
+                    update(sha, value == null ? "" : value);
                 }
                 return HexFormat.of().formatHex(sha.digest());
             } catch (NoSuchAlgorithmException impossible) {
@@ -148,7 +167,7 @@ public class TicketAssist {
         }
         References references = new References(purpose, number, context.language(), context.digest(purpose));
         UUID run = runs.start(actor, new AiRequest(useCase, context.language(), projectId, OBJECT_KIND, context.ticketId(), context.version(), goal,
-            context.sources(), references));
+            context.sources(), references, context.truncated()));
         return new Started(run, context.language(), context.refs());
     }
 
@@ -205,8 +224,8 @@ public class TicketAssist {
         String label = (de ? "Ticket " : "Ticket ") + ticket.projectKey() + "-" + ticket.number();
         sources.add(new AiSource("S1", label, fields.toString().strip(), true));
         refs.add(new SourceRef("S1", "ticket", ticket.id(), null, null));
-        addEntries(sources, refs, entries, de, false);
-        return new Context(ticket.id(), ticket.version(), language, List.copyOf(sources), List.copyOf(refs));
+        boolean truncated = addEntries(sources, refs, entries, de, false);
+        return new Context(ticket.id(), ticket.version(), language, List.copyOf(sources), List.copyOf(refs), List.of(), truncated);
     }
 
     private Context draftContext(AccessContext actor, UUID projectId, long number, TicketConversation.Channel channel) {
@@ -220,15 +239,21 @@ public class TicketAssist {
             sources.add(new AiSource("S1", de ? "Titel der Anfrage" : "Title of the request", title.strip(), false));
             refs.add(new SourceRef("S1", "ticket", ticket.id(), null, null));
         }
-        addEntries(sources, refs, view.entries(), de, true);
-        return new Context(ticket.id(), ticket.version(), view.language(), List.copyOf(sources), List.copyOf(refs));
+        boolean truncated = addEntries(sources, refs, view.entries(), de, true);
+        List<String> binding = new ArrayList<>();
+        binding.add("customer=" + view.customerId());
+        binding.add("contact=" + (view.contactId() == null ? "" : view.contactId()));
+        view.recipient().forEach(value -> binding.add("recipient=" + value));
+        return new Context(ticket.id(), ticket.version(), view.language(), List.copyOf(sources), List.copyOf(refs), List.copyOf(binding),
+            truncated);
     }
 
     /**
      * The entries as sources after the ones already given, oldest first; only the newest that fit into the limit of sources.
-     * With {@code newestRequired} the newest entry must fit, else the start is refused as too large.
+     * With {@code newestRequired} the newest entry must fit, else the start is refused as too large. Answers whether older entries
+     * were left out because of the limit.
      */
-    private static void addEntries(List<AiSource> sources, List<SourceRef> refs, List<TicketConversation.Entry> entries, boolean de,
+    private static boolean addEntries(List<AiSource> sources, List<SourceRef> refs, List<TicketConversation.Entry> entries, boolean de,
             boolean newestRequired) {
         int room = SOURCES_MAX - sources.size();
         List<TicketConversation.Entry> kept = entries.size() > room ? entries.subList(entries.size() - room, entries.size()) : entries;
@@ -240,6 +265,7 @@ public class TicketAssist {
             sources.add(new AiSource(id, label(entry, de), text(entry, de), newestRequired && newest));
             refs.add(new SourceRef(id, entry.kind(), entry.id(), entry.at(), entry.author()));
         }
+        return kept.size() < entries.size();
     }
 
     private static String label(TicketConversation.Entry entry, boolean de) {

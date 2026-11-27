@@ -44,13 +44,20 @@ type Reason = (code: string | null | undefined) => string;
 type Translate = ReturnType<typeof useI18n>['t'];
 
 // Starts an execution and reads it until it ended; a later start or leaving the page drops the answers of an earlier one.
+// A finished execution can be read again: the server checks its suggestion against the sources as they are now (TASK-141, F3).
 function useAssistRun() {
   const { api } = useBrand();
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [phase, setPhaseState] = useState<Phase>({ kind: 'idle' });
+  const current = useRef<Phase>(phase);
   const round = useRef(0);
   useEffect(() => () => {
     round.current += 1;
   }, []);
+
+  function setPhase(next: Phase) {
+    current.current = next;
+    setPhaseState(next);
+  }
 
   async function start(begin: Begin): Promise<Finished> {
     const mine = ++round.current;
@@ -94,7 +101,28 @@ function useAssistRun() {
     setPhase({ kind: 'idle' });
   }
 
-  return { phase, start, cancel, reset };
+  // Reads the finished execution again and answers it, or null when nothing was finished, the reading failed or a later start
+  // or leaving the page overtook it. An answer that no longer counts comes without content and with its reason.
+  async function recheck(): Promise<AiRun | null> {
+    const shown = current.current;
+    if (shown.kind !== 'done') return null;
+    const mine = round.current;
+    const read = await readAiRun(api, shown.started.runId);
+    if (mine !== round.current || current.current !== shown) return null;
+    if (read.kind !== 'ok') {
+      setPhase({ kind: 'problem', problem: read.problem });
+      return null;
+    }
+    setPhase({ kind: 'done', started: shown.started, run: read.data.value });
+    return read.data.value;
+  }
+
+  return { phase, start, cancel, reset, recheck };
+}
+
+// The content of a suggestion that still counts, else null.
+function usable(run: AiRun | null): Record<string, unknown> | null {
+  return run !== null && run.state === 'succeeded' && !run.invalid && run.content ? run.content as Record<string, unknown> : null;
 }
 
 // Whether the person may start the use cases at this ticket now; nothing is shown while it is not known.
@@ -167,35 +195,50 @@ function runText(run: AiRun, reason: Reason, t: Translate): string | null {
 }
 
 // The summary of the ticket (rule 1): a preview of state and open points with their sources, to copy; nothing is stored.
-export function TicketAiSummary({ project, ticket }: { readonly project: Project; readonly ticket: Ticket }) {
+// `round` changes with every saved change of the ticket, its history or its customer; a shown summary is then checked again by
+// the server, and once more right before it is copied (TASK-141, F3).
+export function TicketAiSummary({ project, ticket, round }: { readonly project: Project; readonly ticket: Ticket; readonly round: number }) {
   const { t, language } = useI18n();
   const { api } = useBrand();
   const problem = useAssistProblem();
   const reason = useAiReason();
   const label = useSourceLabel();
   const options = useAssistOptions(project, ticket);
-  const { phase, start, cancel } = useAssistRun();
+  const { phase, start, cancel, recheck } = useAssistRun();
   const [notice, setNotice] = useState<Notice | null>(null);
+  const seenRound = useRef(round);
+  useEffect(() => {
+    if (seenRound.current === round) return;
+    seenRound.current = round;
+    setNotice(null);
+    void recheck();
+  });
   if (options === null || !options.summary) return null;
 
   const run = phase.kind === 'done' ? phase.run : null;
-  const content = run?.state === 'succeeded' && !run.invalid && run.content ? run.content as Record<string, unknown> : null;
+  const content = usable(run);
   const state = content ? points(content.state) : [];
   const open = content ? points(content.open) : [];
   const sources = phase.kind === 'done' || phase.kind === 'running' ? phase.started.sources : [];
 
-  function plain(): string {
+  function plain(shown: Record<string, unknown>): string {
     const line = (point: Point) => {
       const refs = point.sources.map((id) => sources.find((s) => s.id === id)).filter((s): s is AssistSource => s !== undefined)
         .map((s) => `${s.id}: ${label(s)}`);
       return `- ${point.text}${refs.length > 0 ? ` (${refs.join('; ')})` : ''}`;
     };
-    return [t('assist.state'), ...state.map(line), '', t('assist.open'), ...(open.length > 0 ? open.map(line) : [`- ${t('assist.noOpen')}`])].join('\n');
+    const opened = points(shown.open);
+    return [t('assist.state'), ...points(shown.state).map(line), '', t('assist.open'),
+      ...(opened.length > 0 ? opened.map(line) : [`- ${t('assist.noOpen')}`])].join('\n');
   }
 
   async function copy() {
+    setNotice(null);
+    // Copied is only what the server still confirms; an invalid summary shows its reason instead of the preview.
+    const fresh = usable(await recheck());
+    if (fresh === null) return;
     try {
-      await navigator.clipboard.writeText(plain());
+      await navigator.clipboard.writeText(plain(fresh));
       setNotice({ kind: 'success', text: t('assist.copied') });
     } catch {
       setNotice({ kind: 'info', text: t('assist.copyFailed') });
@@ -218,7 +261,8 @@ export function TicketAiSummary({ project, ticket }: { readonly project: Project
       {run && runText(run, reason, t) !== null && <p role="status" className="mode-notice" data-testid="assist-result">{runText(run, reason, t)}</p>}
       {content && (
         <div data-testid="assist-summary" role="status">
-          <p className="hint">{t('assist.preview')}{run?.truncated ? ` ${t('ai.truncated')}` : ''}</p>
+          <p className="hint">{t('assist.preview')}</p>
+          {run?.truncated && <p className="hint" data-testid="assist-truncated">{t('assist.truncated')}</p>}
           <h3>{t('assist.state')}</h3>
           <ul data-testid="assist-state">
             {state.map((point, index) => <li key={index}>{point.text} <SourceLinks ids={point.sources} sources={sources} /></li>)}
@@ -251,10 +295,14 @@ export function AiDraft({ project, ticket, channel, body, onDraft }: {
   const problem = useAssistProblem();
   const reason = useAiReason();
   const options = useAssistOptions(project, ticket);
-  const { phase, start, cancel, reset } = useAssistRun();
+  const { phase, start, cancel, reset, recheck } = useAssistRun();
   const [goal, setGoal] = useState('');
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // The text of the field as it is now: what the person typed while the draft was written counts, not the text at the start
+  // (TASK-141, F2).
+  const current = useRef(body);
+  current.current = body;
   if (options === null || !options.replyDraft) return null;
 
   async function draft() {
@@ -263,15 +311,26 @@ export function AiDraft({ project, ticket, channel, body, onDraft }: {
     const trimmed = goal.trim();
     const result = await start(() => startReplyDraft(api, project.id, ticket.number, channel, trimmed === '' ? null : trimmed));
     if (result === null) return;
-    const content = result.run.state === 'succeeded' && !result.run.invalid ? result.run.content as Record<string, unknown> | null : null;
+    const content = usable(result.run);
     const text = content && typeof content.body === 'string' ? content.body : null;
     if (text === null) return;
-    if (body.trim() === '') {
+    if (current.current.trim() === '') {
       onDraft(text);
       setNotice({ kind: 'success', text: t('assist.draftInserted') });
     } else {
       setPending(text);
     }
+  }
+
+  // A held draft replaces the own text only on request and only while the server still confirms it (TASK-141, F3).
+  async function replace() {
+    setNotice(null);
+    const fresh = usable(await recheck());
+    const text = fresh && typeof fresh.body === 'string' ? fresh.body : null;
+    setPending(null);
+    if (text === null) return;
+    onDraft(text);
+    setNotice({ kind: 'success', text: t('assist.draftInserted') });
   }
 
   function keys(event: KeyboardEvent<HTMLDivElement>) {
@@ -283,7 +342,7 @@ export function AiDraft({ project, ticket, channel, body, onDraft }: {
   }
 
   const run = phase.kind === 'done' ? phase.run : null;
-  const content = run?.state === 'succeeded' && !run.invalid && run.content ? run.content as Record<string, unknown> : null;
+  const content = usable(run);
   const questions = content && Array.isArray(content.questions) ? content.questions.filter((q): q is string => typeof q === 'string') : [];
   const notes = content && Array.isArray(content.notes) ? content.notes.filter((n): n is string => typeof n === 'string') : [];
 
@@ -300,15 +359,12 @@ export function AiDraft({ project, ticket, channel, body, onDraft }: {
       {pending !== null && (
         <p className="actions" data-testid="assist-replace">
           <span className="hint">{t('assist.draftReady')}</span>{' '}
-          <button type="button" className="secondary" onClick={() => {
-            onDraft(pending);
-            setPending(null);
-            setNotice({ kind: 'success', text: t('assist.draftInserted') });
-          }}>{t('assist.replace')}</button>
+          <button type="button" className="secondary" onClick={() => void replace()}>{t('assist.replace')}</button>
           <button type="button" className="secondary" onClick={() => { setPending(null); reset(); }}>{t('assist.discard')}</button>
         </p>
       )}
       <NoticeView notice={notice} />
+      {content && run?.truncated && <p className="hint" data-testid="assist-truncated">{t('assist.truncated')}</p>}
       {(questions.length > 0 || notes.length > 0) && (
         <div className="hint" data-testid="assist-notes">
           <p>{t('assist.forYou')}</p>

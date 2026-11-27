@@ -11,7 +11,9 @@ import java.util.UUID;
  *
  * @param language {@code de} or {@code en}: the skill and the frame in that language
  * @param goal an optional short goal of the person, at most 500 characters
+ * @param truncated whether the module already left out sources of the object, for example the oldest entries beyond its limit
+ *     of sources (TASK-141, H3); the execution then counts as truncated even when every given source fits
  */
 public record AiRequest(AiUseCase useCase, String language, UUID projectId, String objectKind, UUID objectId, Long objectVersion,
-        String goal, List<AiSource> sources, Object references) {
+        String goal, List<AiSource> sources, Object references, boolean truncated) {
 }

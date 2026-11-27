@@ -77,6 +77,11 @@ class ConversationReader implements TicketConversation {
                 .filter(c -> c.customerId().equals(customer)).orElse(null);
         }
         String language = contact != null && "en".equals(contact.language()) ? "en" : "de";
+        List<String> recipient = new ArrayList<>();
+        if (channel == Channel.MAIL) {
+            recipient.add(contact.name() == null ? "" : contact.name());
+            recipient.addAll(contact.addresses());
+        }
         List<Entry> entries = new ArrayList<>();
         repository.messagesOfTicket(ticket).stream().filter(m -> m.state().equals("ticket") && customer.equals(m.customerId()))
             .forEach(m -> entries.add(mail(m)));
@@ -84,7 +89,7 @@ class ConversationReader implements TicketConversation {
             .forEach(r -> entries.add(reply(r)));
         posts.postsFor(ticket, customer).forEach(p -> entries.add(new Entry("post", p.id(), p.createdAt(), p.authorKind(), null, null, p.body())));
         entries.sort(ORDER);
-        return new CustomerView(ticket, customer, language, entries);
+        return new CustomerView(ticket, customer, contact == null ? null : contact.id(), recipient, language, entries);
     }
 
     private static Entry mail(Message m) {

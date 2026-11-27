@@ -35,8 +35,8 @@ final class AiFrame {
         }
     }
 
-    static Built build(AiUseCase useCase, String language, String skill, String goal, List<AiSource> sources, int contextCharacters,
-            AiModel model) {
+    static Built build(AiUseCase useCase, String language, String skill, String goal, List<AiSource> sources,
+            boolean alreadyTruncated, int contextCharacters, AiModel model) {
         boolean german = !"en".equals(language);
         String marker = HexFormat.of().formatHex(bytes(12));
         String system = (german ? SYSTEM_DE : SYSTEM_EN).replace("{marker}", marker).replace("{skill}", skill.strip())
@@ -44,7 +44,7 @@ final class AiFrame {
         int modelCharacters = Math.max(0, (model.contextTokens() - model.outputTokens()) * CHARACTERS_PER_TOKEN - system.length() - 2000);
         int budget = Math.min(contextCharacters, modelCharacters);
         List<AiSource> kept = new ArrayList<>(sources);
-        boolean truncated = false;
+        boolean truncated = alreadyTruncated;
         while (size(kept) > budget) {
             int index = firstOptional(kept);
             if (index < 0) {

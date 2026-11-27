@@ -13,7 +13,8 @@ import taskmanager.permissions.PermissionContexts;
 import taskmanager.platform.ApiProblemException;
 
 /**
- * What the endpoints of the AI assistance share (TASK-126): the caller with a complete login and the answer 503
+ * What the endpoints of the AI assistance share (TASK-126): the internal caller with a complete login, portal accounts refused
+ * with 403 {@code auth.forbidden} before any object is read (TASK-141), and the answer 503
  * {@code assist.busy} with {@code Retry-After} for a lock that could not be taken in time or a deadlock, after which the whole
  * request may be repeated.
  */
@@ -29,13 +30,18 @@ class AssistRequests {
         this.contexts = contexts;
     }
 
-    /** The permissions context of a request with a complete login. */
+    /** The permissions context of a request of an internal account with a complete login. */
     AccessContext actor() {
         var request = identity.require();
         if (request.level() != AuthenticationLevel.FULL) {
             throw ApiProblemException.of(403, "auth.password_change_required");
         }
-        return contexts.current().orElseThrow(() -> ApiProblemException.of(403, "auth.forbidden"));
+        AccessContext actor = contexts.current().orElseThrow(() -> ApiProblemException.of(403, "auth.forbidden"));
+        // Portal accounts never reach the AI assistance of the support, before any object is read (TASK-141, F4).
+        if (actor.external()) {
+            throw ApiProblemException.of(403, "auth.forbidden");
+        }
+        return actor;
     }
 
     static <T> T retrying(Supplier<T> call) {

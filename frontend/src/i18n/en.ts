@@ -2146,6 +2146,7 @@ export const en: Record<MessageKey, Message> = {
   'assist.cancel': 'Cancel',
   'assist.running': 'The AI is working …',
   'assist.preview': 'Suggestion of the AI, please check it. It is not stored and only visible to you.',
+  'assist.truncated': 'Older entries of the conversation were left out because of the size; the suggestion rests on the newer ones only.',
   'assist.state': 'Current state',
   'assist.open': 'Open points',
   'assist.noOpen': 'No open points named.',

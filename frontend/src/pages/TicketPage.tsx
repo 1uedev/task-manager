@@ -315,7 +315,7 @@ function TicketView({ project, limited, ticket, etag, round, refusals, onChanged
           </form>
         </section>
         <div>
-          <TicketAiSummary key={`ai-${refusals}`} project={project} ticket={ticket} />
+          <TicketAiSummary key={`ai-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} />
           <TicketSla key={`sla-${refusals}`} project={project} ticket={ticket} round={round + attachmentChanges} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketHelpdesk key={`helpdesk-${refusals}`} project={project} ticket={ticket} round={round} onChanged={() => setAttachmentChanges((value) => value + 1)} />
           <TicketTime key={`time-${refusals}`} projectId={project.id} ticketNumber={ticket.number} round={round} />
