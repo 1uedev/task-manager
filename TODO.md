@@ -16,7 +16,7 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 0 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 10 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
@@ -28,7 +28,9 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 ### Durch eine KI reserviert – IN ARBEIT
 
-Derzeit keine Aufgaben in dieser Kategorie.
+| Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
+|---|---|---|---|
+| [TASK-142](#task-142-befunde-f1-bis-f4-und-hinweis-h1-der-codex-nachprüfung-von-task-141-beheben) | Befunde F1 bis F4 und Hinweis H1 der Codex Nachprüfung von TASK-141 beheben | claude-20261127-aifix-05 | 2026-11-27 |
 
 ### Blockiert – BLOCKIERT
 
@@ -116,8 +118,30 @@ Die folgenden Aufgaben wurden in TASK-020 vorgemerkt. DEC-054 beauftragte TASK-0
 6. H3: `AiRequest` trägt `truncated`; lässt `TicketAssist` Einträge wegen der Grenze weg, trägt die Ausführung `truncated` und das Modell erhält den Hinweis auf weggelassene Einträge. Grenztest `entriesLeftOutByTheLimitOfSourcesMarkTheExecutionTruncated` mit 520 kurzen Mails, die alle in den Kontext passen; die Oberfläche zeigt den Hinweis an Zusammenfassung und Entwurf (Browsertest mit 520 Mails).
 Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der Korrekturen im Backend und durch den Build der Oberfläche von main). H1 bleibt eine benannte Grenze von A11.
 
-**Nächster Schritt:** Codex Prüfung des Ergebnis PR nach dem Prüfauftrag, danach Holgers Abnahme von TASK-126 und TASK-141.
+**Nächster Schritt:** Die Codex Nachprüfung (docs/REVIEW_TASK-141_PR-363.md) empfiehlt nachbessern; die Befunde F1 bis F4 und den Hinweis H1 behebt TASK-142. Danach Holgers Abnahme von TASK-126, TASK-141 und TASK-142 zusammen.
 
+
+## TASK-142 Befunde F1 bis F4 und Hinweis H1 der Codex Nachprüfung von TASK-141 beheben
+
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261127-aifix-05 · **Aktualisiert:** 2026-11-27
+
+**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001; ACC-010; DEC-157, DEC-172, DEC-174; docs/REVIEW_TASK-141_PR-363.md; docs/AI_USE_CASES.md (Prüffall A09). **Abhängigkeiten:** TASK-141 auf main (PR #363); TASK-127 auf main (PR #366), weil die gemeinsame Laufsteuerung `assistRun.ts` dort entstand. **Arbeitsstand:** Holger wählt am 27. November 2026 zur Codex Nachprüfung von TASK-141 (Empfehlung nachbessern) „F1 bis F4 und H1 als TASK-142“. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-174, ohne Migration.
+
+**Umfang:** Behebung der Befunde F1 bis F4 und des Hinweises H1 aus docs/REVIEW_TASK-141_PR-363.md in der Oberfläche der KI am Ticket, in der gemeinsamen Laufsteuerung der KI Vorschläge und im Testersatz der Browsertests. Nicht Teil: eine serverseitige Idempotenz der Bestätigung (H1 der Prüfung von TASK-126); sie bleibt eine benannte Grenze von A11.
+
+**Fachliche Regeln** (Vorschlag mit der Wahl bestätigt):
+1. F1: Jedes erfolgreiche Neuladen des Tickets, auch nach einem Versionskonflikt, gilt als neuer Quellenstand; eine angezeigte Zusammenfassung wird danach erneut beim Server geprüft. Browsertest „Zusammenfassen, fremde Änderung, eigener Konflikt 412, neuer Ticketstand“.
+2. F2: Jede Gültigkeitsprüfung trägt eine eigene fortlaufende Nummer. Nur die Antwort der neuesten Prüfung darf Anzeige, Zwischenablage oder Textfeld ändern; eine überholte Prüfung übernimmt nichts. Das gilt für alle Vorschläge mit der gemeinsamen Laufsteuerung, also auch für Anforderung und Wikiseite. Browsertests für beide Reihenfolgen der Antworten.
+3. F3: Der Testersatz lehnt Portalkonten an den Assist Routen mit 403 `auth.forbidden` ab, bevor er Projekt oder Ticket sucht; interne Konten behalten ihre 404 Antworten. Test für vorhandene und unbekannte Objekte.
+4. F4: Der Testersatz übernimmt eigene Felder in den Assist Kontext nur nach ihrer Leseregel `custom.<key>`; ein entzogenes Feld ändert den Fingerabdruck. Positive und negative Tests.
+5. H1: Dauerhafte Proben für fehlende Sprache, eigene Felder, Standardpriorität und einen Kontakt ohne Adresse im Testersatz, die jeweils ohne ihre Regel scheitern.
+
+**Abnahmekriterien:** Vorschlag, zur Prüfung:
+1. Jeder Befund und der Hinweis ist nach seiner Regel behoben und durch einen Test belegt, der ohne die Korrektur scheitert.
+2. Testersatz und Server stimmen für die Assist Routen in Rechten, Feldregeln und Antworten überein.
+3. `npm run verify`, die Browsertests der KI, des Helpdesk und des Portals, die betroffenen Backend Tests und die Repository Prüfungen laufen grün.
+
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 
 **Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-27
