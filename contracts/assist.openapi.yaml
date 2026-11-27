@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Task Manager API, KI Assistenz am Ticket (TASK-126, TASK-141)
+  title: Task Manager API, KI Assistenz an Ticket, Anforderung und Wikiseite (TASK-126, TASK-141, TASK-127)
   version: 0.1.0
   description: |
     KI Ticketzusammenfassung und Antwortentwurf (DEC-157, REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-HD-001).
@@ -34,6 +34,28 @@ info:
     fehlt ein Recht, kommt der Vorschlag als `content: null` mit `invalid: ai.source_changed`; ein Wechsel von Kunde oder
     Kontakt entwertet einen Entwurf auch bei gleicher Sprache und gleichem Text, Änderungen an nicht verwendeten Feldern
     entwerten nichts (TASK-141). Sitzung, CSRF und Problemantworten gelten wie im Identitätsvertrag.
+
+    Die Anforderungsprüfung (TASK-127, DEC-173) prüft genau die gezeigte Revision einer Anforderung mit
+    `requirement.read` und den Leseregeln des Ressourcentyps `requirement`: Titel, Beschreibung als Text, jedes
+    Abnahmekriterium mit seiner festen Nummer und die lesbaren eigenen Felder, jedes als Pflichtquelle. Sind die Kriterien
+    lesbar, aber leer, erhält das Modell die Quelle „Abnahmekriterien“ mit dem Hinweis, dass keine erfasst sind. Der
+    Vorschlag im Format `requirement_review` enthält Befunde mit Art, Textstelle, Begründung und optionalem Vorschlag.
+    Übernehmen schreibt nur in den Editor; gespeichert wird mit dem normalen Speichern und If-Match nach den Regeln der
+    Revisionen. Die KI gibt nie frei und ändert nie den Status. Jedes Lesen vergleicht Revision, ob sie die aktuelle ist,
+    und die Texte der Quellen für die lesende Person; eine gespeicherte Änderung, eine neuere Revision oder eine verlorene
+    Leseregel ergibt `invalid: ai.source_changed`.
+
+    Die Wiki Überarbeitung (TASK-127, DEC-173) braucht `wiki.edit` an einer nicht archivierten Seite und arbeitet am
+    aktuellen Entwurf einer Sprachfassung: an einem Abschnitt (eine Überschrift oben im Dokument bis zur nächsten) oder an
+    der ganzen Fassung. Der Server übergibt einfaches Markdown, in dem Bilder als `[[IMAGE-n]]`, Links auf Wikiseiten als
+    `[[LINK-n]]`, Blöcke ohne Markdown Form (Tabellen, Codeblöcke, verschachtelte Inhalte) als `[[BLOCK-n]]` und nicht
+    darstellbarer Text als `[[TEXT-n]]` stehen. Kein Bildpfad und keine Seitenkennung erreicht das Modell. Eine Antwort, die
+    einen Platzhalter verliert, verdoppelt, an eine falsche Stelle setzt oder einen neuen Link auf eine Wikiseite enthält,
+    beendet die Ausführung mit `ai.placeholders_changed` beziehungsweise `ai.invalid_output`. Das Ergebnis bringt der
+    Server über die eigene Route in die Form des Editors: Abschnitt vorher und nachher und der ganze Entwurf mit dem
+    überarbeiteten Abschnitt, geprüft wie ein Speichern. Die Seite ändert sich erst mit dem normalen Speichern des
+    Entwurfs; Veröffentlichen bleibt eine eigene Aktion. Jedes Lesen vergleicht den Fingerabdruck des Abschnitts; eine
+    Änderung in einem anderen Abschnitt entwertet nichts.
 servers:
   - url: /api/v1
 security:
@@ -122,6 +144,160 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '429': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/ai:
+    parameters:
+      - $ref: '#/components/parameters/RequirementId'
+    get:
+      operationId: getRequirementAssistOptions
+      summary: Ob die Person die KI Prüfung der Revision jetzt beginnen kann
+      description: Eine Momentaufnahme für die Oberfläche, nie eine Berechtigung.
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Möglichkeit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [review]
+                properties:
+                  review: {type: boolean}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /requirements/{requirementId}/ai/review:
+    parameters:
+      - $ref: '#/components/parameters/RequirementId'
+    post:
+      operationId: startRequirementReview
+      summary: KI Prüfung genau einer Revision beginnen
+      description: |
+        `revision` ist die gezeigte Revision, `language` die Sprache der Befunde (`de` oder `en`, ohne Angabe Deutsch).
+        Format des Vorschlags `requirement_review`. Eine unbekannte Revision ist 404 `requirement.revision_not_found`, eine
+        Anforderung, die die Person nicht sehen darf, 404 `requirement.not_found`; ist nichts lesbar, 409
+        `assist.no_sources`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: {type: integer, minimum: 1}
+                language: {type: [string, 'null'], enum: [de, en, null]}
+      responses:
+        '202':
+          description: Begonnen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RequirementReviewStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/ai:
+    parameters:
+      - $ref: '#/components/parameters/PageId'
+      - $ref: '#/components/parameters/Language'
+    get:
+      operationId: getWikiAssistOptions
+      summary: Ob die Person die KI Überarbeitung des Entwurfs jetzt beginnen kann
+      description: Eine Momentaufnahme für die Oberfläche, nie eine Berechtigung; ohne `wiki.edit` oder an einer archivierten Seite `false`.
+      responses:
+        '200':
+          description: Möglichkeit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision]
+                properties:
+                  revision: {type: boolean}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/ai/revision:
+    parameters:
+      - $ref: '#/components/parameters/PageId'
+      - $ref: '#/components/parameters/Language'
+    post:
+      operationId: startWikiRevision
+      summary: KI Überarbeitung eines Abschnitts oder der ganzen Fassung beginnen
+      description: |
+        `revision` ist die Revision des gezeigten Entwurfs; weicht der aktuelle Entwurf ab, 412 `wiki.version_conflict`.
+        `section` ist die Nummer einer Überschrift oben im Dokument ab 1, ohne Angabe die ganze Fassung; eine unbekannte
+        Nummer ist 400 mit `section.invalid`. `goal` ist `shorter`, `clearer`, `factual` oder `custom` mit dem eigenen
+        Ziel in `text` (höchstens 500 Zeichen). Das Modell schreibt in der Sprache der Fassung. Format des Vorschlags
+        `wiki_revision`. Ohne `wiki.edit` 403 `auth.forbidden`, an einer archivierten Seite 409 `wiki.page_archived`,
+        ein leerer Abschnitt 409 `assist.no_sources`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, goal]
+              properties:
+                revision: {type: integer, minimum: 1}
+                section: {type: [integer, 'null'], minimum: 1}
+                goal: {type: string, enum: [shorter, clearer, factual, custom]}
+                text: {type: [string, 'null'], maxLength: 500}
+      responses:
+        '202':
+          description: Begonnen
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WikiRevisionStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '412': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /wiki/pages/{pageId}/ai/revision/{runId}:
+    parameters:
+      - $ref: '#/components/parameters/PageId'
+      - name: runId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - $ref: '#/components/parameters/Language'
+    get:
+      operationId: getWikiRevisionResult
+      summary: Ergebnis der Überarbeitung in der Form des Editors
+      description: |
+        Nach jeder Prüfung des Lesens wie `/ai/runs/{runId}`. Eine Ausführung einer anderen Person, eines anderen
+        Anwendungsfalls, einer anderen Seite oder Sprachfassung ist 404 `ai.run_not_found`. Läuft sie noch, 409
+        `assist.not_ready`; ist sie fehlgeschlagen, abgebrochen oder entwertet, 409 mit dem Code der Ausführung oder dem
+        Grund (`ai.source_changed`, `ai.suggestion_expired`, `ai.placeholders_changed`, ...). Hat sich der Abschnitt seit dem
+        Start geändert, 409 `wiki.section_changed`. `revision` ist die Revision des aktuellen Entwurfs, in den das Ergebnis
+        eingesetzt wurde; übernehmen darf die Oberfläche nur, wenn sie genau diese Revision zeigt.
+      responses:
+        '200':
+          description: Ergebnis
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WikiRevisionResult'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     sessionCookie:
@@ -134,6 +310,22 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    RequirementId:
+      name: requirementId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    PageId:
+      name: pageId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Language:
+      name: language
+      in: query
+      required: false
+      description: Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache.
+      schema: {type: string, enum: [de, en]}
     Number:
       name: number
       in: path
@@ -143,8 +335,12 @@ components:
     Problem:
       description: |
         Problem nach RFC 9457. Codes dieses Bereichs: request.invalid (violations language.invalid, channel.invalid,
-        goal.invalid), project.not_found, ticket.not_found, auth.forbidden, helpdesk.reply_no_contact,
-        helpdesk.portal_no_customer, assist.no_sources, assist.busy (503), dazu die Codes eines Starts der KI Grundlage
+        goal.invalid, revision.invalid, section.invalid), project.not_found, ticket.not_found, requirement.not_found,
+        requirement.revision_not_found, wiki.page_not_found, wiki.language_not_found, wiki.page_archived,
+        wiki.version_conflict (412), wiki.section_changed, auth.forbidden, helpdesk.reply_no_contact,
+        helpdesk.portal_no_customer, assist.no_sources, assist.not_ready, assist.busy (503), ai.run_not_found, die Gründe und
+        Codes einer gelesenen Ausführung (ai.source_changed, ai.rights_changed, ai.suggestion_expired,
+        ai.configuration_changed, ai.placeholders_changed, ai.invalid_output, ai.cancelled), dazu die Codes eines Starts der KI Grundlage
         (ai.use_forbidden, ai.unavailable, ai.daily_limit_person, ai.daily_limit_company, ai.busy, ai.context_too_large),
         auth.required, auth.csrf_invalid, auth.password_change_required.
       headers:
@@ -193,3 +389,51 @@ components:
         sources:
           type: array
           items: {$ref: '#/components/schemas/AssistSource'}
+    RequirementReviewSource:
+      type: object
+      required: [id, part, criterion]
+      description: |
+        Worauf sich eine Quelle der Prüfung bezieht: `title`, `description`, ein Kriterium `criterion` mit seiner Nummer,
+        `criteria` (keine Kriterien erfasst) oder `fields` (die lesbaren eigenen Felder).
+      properties:
+        id: {type: string, pattern: '^S[1-9][0-9]{0,3}$'}
+        part: {type: string, enum: [title, description, criterion, criteria, fields]}
+        criterion: {type: [integer, 'null'], minimum: 1}
+    RequirementReviewStarted:
+      type: object
+      required: [runId, language, revision, sources]
+      properties:
+        runId: {type: string, format: uuid}
+        language: {type: string, enum: [de, en]}
+        revision: {type: integer, minimum: 1}
+        sources:
+          type: array
+          items: {$ref: '#/components/schemas/RequirementReviewSource'}
+    WikiRevisionStarted:
+      type: object
+      required: [runId, language, revision, section, heading]
+      properties:
+        runId: {type: string, format: uuid}
+        language: {type: string, enum: [de, en]}
+        revision: {type: integer, minimum: 1}
+        section: {type: [integer, 'null'], minimum: 1}
+        heading: {type: [string, 'null']}
+    WikiRevisionResult:
+      type: object
+      required: [revision, section, heading, original, revised, document, notes]
+      properties:
+        revision: {type: integer, minimum: 1}
+        section: {type: [integer, 'null'], minimum: 1}
+        heading: {type: [string, 'null']}
+        original:
+          description: Der Abschnitt vor der Überarbeitung als eigenes Dokument des Wiki Editors.
+          type: object
+        revised:
+          description: Der Abschnitt nach der Überarbeitung als eigenes Dokument des Wiki Editors.
+          type: object
+        document:
+          description: Der ganze aktuelle Entwurf mit dem überarbeiteten Abschnitt, geprüft wie ein Speichern.
+          type: object
+        notes:
+          type: array
+          items: {type: string}

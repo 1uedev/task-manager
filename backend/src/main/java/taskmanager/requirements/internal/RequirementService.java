@@ -32,6 +32,7 @@ import taskmanager.projects.ProjectConfiguration;
 import taskmanager.projects.ProjectConfiguration.CustomField;
 import taskmanager.requirements.RequirementChanged;
 import taskmanager.requirements.RequirementGitRecords;
+import taskmanager.requirements.RequirementReviews;
 import taskmanager.requirements.RequirementSources;
 import taskmanager.wiki.RichText;
 import tools.jackson.databind.JsonNode;
@@ -61,7 +62,7 @@ import tools.jackson.databind.JsonNode;
  * of the requirement and is refused with 412 when the requirement is newer.
  */
 @Service
-public class RequirementService implements RequirementSources {
+public class RequirementService implements RequirementSources, RequirementReviews {
     public static final String READ = "requirement.read";
     public static final String EDIT = "requirement.edit";
     public static final String APPROVE = "requirement.approve";
@@ -318,6 +319,32 @@ public class RequirementService implements RequirementSources {
         ProjectConfiguration configuration = configuration(requirement.projectId());
         return new RevisionContent(revision.revision(), revision.revision() == requirement.currentRevision(), revision.savedAt(), revision.savedBy(),
             revision.approvedAt(), revision.approvedBy(), content(revision, readable, configuration), readableFields(configuration, readable));
+    }
+
+    /** The content of one revision for the AI review (TASK-127), with the read rules of the caller. */
+    @Override
+    @Transactional
+    public Review review(AccessContext actor, UUID id, int number) {
+        RequirementRepository.Requirement requirement = visible(actor, id);
+        Set<String> readable = access(actor, requirement.projectId()).readable();
+        RequirementRepository.Revision revision = repository.revision(requirement.id(), number)
+            .orElseThrow(() -> ApiProblemException.of(404, "requirement.revision_not_found"));
+        ProjectConfiguration configuration = configuration(requirement.projectId());
+        List<RequirementReviews.Field> fields = new ArrayList<>();
+        for (CustomField field : configuration.requirementFields()) {
+            String value = revision.custom().get(field.key());
+            if (value != null && readable.contains(field.id())) {
+                fields.add(new RequirementReviews.Field(field, value));
+            }
+        }
+        String description = null;
+        if (readable.contains("description")) {
+            description = revision.description() == null ? "" : RichText.stored(revision.description()).plainText();
+        }
+        return new Review(requirement.id(), requirement.projectId(), KEY_PREFIX + requirement.number(), revision.revision(),
+            revision.revision() == requirement.currentRevision(), readable.contains("title") ? revision.title() : null, description,
+            readable.contains("criteria") ? revision.criteria().stream().map(c -> new RequirementReviews.Criterion(c.id(), c.text())).toList() : null,
+            List.copyOf(fields));
     }
 
     /**
