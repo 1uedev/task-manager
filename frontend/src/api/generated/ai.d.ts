@@ -494,7 +494,7 @@ export interface components {
              *     ai.context_too_large.
              */
             code: string | null;
-            /** @description Ob ältere Quellen für den Kontext weggelassen wurden. */
+            /** @description Ob ältere Quellen für den Kontext oder schon beim Zusammenstellen durch den Anwendungsfall weggelassen wurden. */
             truncated: boolean;
             /** Format: uuid */
             projectId: string | null;

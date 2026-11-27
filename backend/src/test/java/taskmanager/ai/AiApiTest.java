@@ -148,7 +148,7 @@ class AiApiTest {
                 sources.add(new AiSource("S" + (i + 1), "Eintrag " + (i + 1), body.texts().get(i), i == body.texts().size() - 1));
             }
             UUID id = runs.start(contexts.current().orElseThrow(), new AiRequest(AiUseCase.of(useCase).orElseThrow(), body.language(), project,
-                TEST_OBJECT, UUID.randomUUID(), 3L, body.goal(), sources, Map.of("version", 3)));
+                TEST_OBJECT, UUID.randomUUID(), 3L, body.goal(), sources, Map.of("version", 3), false));
             return Map.of("runId", id);
         }
     }

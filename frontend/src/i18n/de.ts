@@ -2146,6 +2146,7 @@ export const de = {
   'assist.cancel': 'Abbrechen',
   'assist.running': 'Die KI arbeitet …',
   'assist.preview': 'Vorschlag der KI, bitte prüfen. Er ist nicht gespeichert und nur für dich sichtbar.',
+  'assist.truncated': 'Ältere Einträge des Verlaufs wurden wegen der Größe weggelassen; der Vorschlag beruht nur auf den neueren.',
   'assist.state': 'Sachstand',
   'assist.open': 'Offene Punkte',
   'assist.noOpen': 'Keine offenen Punkte genannt.',

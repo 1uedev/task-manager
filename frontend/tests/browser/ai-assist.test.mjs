@@ -74,6 +74,20 @@ async function withApp({ prepare, as = BEN, locale = 'de-DE', path } = {}, body)
 }
 
 const posts = (backend, suffix) => backend.state.requests.filter((request) => request.method === 'POST' && request.path.endsWith(suffix));
+const reads = (backend) => backend.state.requests.filter((request) => request.method === 'GET' && /\/ai\/runs\/[^/]+$/.test(request.path)).length;
+
+// Lets a held execution end with the content of its use case, as the model answered late.
+function release(backend) {
+  const [run] = backend.state.ai.runs;
+  Object.assign(run, { state: 'succeeded', code: null, inputTokens: 240, outputTokens: 60, finishedAt: new Date().toISOString(),
+    content: run.useCase === 'ticket_summary' ? backend.state.ai.aiAnswer : backend.state.ai.draftAnswer });
+}
+
+// Another mail of the customer at the ticket, as the intake adds it in the meantime.
+function laterMail(backend, { ticket, customer, contact }, body) {
+  return backend.addMail({ state: 'ticket', reason: null, ticketId: ticket.id, customerId: customer.id, contactId: contact.id, fromAddress: 'lea@nordwerk.example',
+    fromName: 'Lea Lang', mailboxId: MAILBOX, receivedAt: '2026-11-25T09:00:00.000Z', body });
+}
 
 describe('summary of a ticket', () => {
   test('the preview separates state and open points, names its sources and can be copied, without storing anything', async () => {
@@ -106,7 +120,9 @@ describe('summary of a ticket', () => {
       assert.equal(context.useCase, 'ticket_summary');
       assert.deepEqual(context.sources.map((source) => [source.id, source.kind]), [['S1', 'ticket'], ['S2', 'mail']]);
       assert.doesNotMatch(context.sources[0].text, /Kunde zahlt verspätet/);
-      assert.match(context.sources[0].text, /Drucker defekt/);
+      assert.match(context.sources[0].text, /^Titel: Drucker defekt$/m);
+      // As the server (H2): no assignee among the fields of the summary.
+      assert.doesNotMatch(context.sources[0].text, /assignee|Zuständig/);
       assert.equal(context.sources[1].entryId, mail.id);
       const [run] = backend.state.ai.runs;
       assert.equal(run.objectKind, 'ticket');
@@ -157,6 +173,70 @@ describe('summary of a ticket', () => {
       await page.getByTestId('ticket-helpdesk').getByRole('button', { name: 'Dem Kunden antworten' }).click();
       await page.getByTestId('assist-draft-mail').waitFor();
       assert.equal(await page.getByTestId('ticket-ai-summary').count(), 0);
+    });
+  });
+});
+
+describe('summary after a change of its sources (TASK-141)', () => {
+  test('a saved change of the ticket checks the shown summary again, so an outdated one is no longer offered', async () => {
+    await withApp({ prepare: (backend) => {
+      const prepared = withTicket(backend);
+      backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000126d3', name: 'Titel', members: [backend.ben.id],
+        actions: [{ action: 'ticket.edit', projectId: backend.project.id }],
+        fields: [{ resourceType: 'ticket', field: 'title', projectId: backend.project.id, operation: 'write', effect: 'allow' }] });
+      return prepared;
+    } }, async (page, backend) => {
+      const panel = page.getByTestId('ticket-ai-summary');
+      await panel.getByRole('button', { name: 'Zusammenfassen' }).click();
+      await panel.getByTestId('assist-summary').getByRole('button', { name: 'Kopieren' }).waitFor();
+      const before = reads(backend);
+
+      await page.getByLabel(/^Titel/).fill('Drucker im zweiten Stock defekt');
+      await page.getByRole('button', { name: 'Änderungen speichern' }).click();
+      await page.getByText('Gespeichert.', { exact: true }).waitFor();
+      await panel.getByTestId('assist-result').getByText(/^Der Vorschlag gilt nicht mehr: /).waitFor();
+      assert.equal(await panel.getByTestId('assist-summary').count(), 0, 'no preview of an outdated summary');
+      assert.ok(reads(backend) > before, 'the execution was read again after the change');
+    });
+  });
+
+  test('copying checks the summary again and refuses one whose source changed meanwhile', async () => {
+    await withApp({ prepare: (backend) => withTicket(backend) }, async (page, backend, prepared) => {
+      await page.evaluate(() => {
+        window.__copied = null;
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copied = text; } } });
+      });
+      const panel = page.getByTestId('ticket-ai-summary');
+      await panel.getByRole('button', { name: 'Zusammenfassen' }).click();
+      const copy = panel.getByTestId('assist-summary').getByRole('button', { name: 'Kopieren' });
+      await copy.waitFor();
+      // A new mail arrives without the page knowing of it.
+      laterMail(backend, prepared, 'Der Drucker geht wieder.');
+      await copy.click();
+      await panel.getByTestId('assist-result').getByText(/^Der Vorschlag gilt nicht mehr: /).waitFor();
+      assert.equal(await page.evaluate(() => window.__copied), null, 'nothing outdated reaches the clipboard');
+      assert.equal(await panel.getByTestId('assist-summary').count(), 0);
+    });
+  });
+
+  test('entries left out by the limit of sources are named at the summary (H3)', async () => {
+    await withApp({ prepare: (backend) => {
+      const prepared = withTicket(backend);
+      for (let index = 0; index < 520; index += 1) {
+        backend.addMail({ state: 'ticket', reason: null, ticketId: prepared.ticket.id, customerId: prepared.customer.id, contactId: prepared.contact.id,
+          fromAddress: 'lea@nordwerk.example', fromName: 'Lea Lang', mailboxId: MAILBOX,
+          receivedAt: new Date(Date.UTC(2026, 10, 20, 8, index)).toISOString(), body: `Kurz ${index}` });
+      }
+      return prepared;
+    } }, async (page, backend) => {
+      const panel = page.getByTestId('ticket-ai-summary');
+      await panel.getByRole('button', { name: 'Zusammenfassen' }).click();
+      await panel.getByTestId('assist-truncated')
+        .getByText('Ältere Einträge des Verlaufs wurden wegen der Größe weggelassen; der Vorschlag beruht nur auf den neueren.').waitFor();
+      const [context] = backend.state.ai.contexts;
+      assert.equal(context.sources.length, 500);
+      assert.equal(context.truncated, true);
+      assert.ok(context.sources.every((source) => source.text !== 'Kurz 0'), 'the oldest entries stay out');
     });
   });
 });
@@ -228,6 +308,8 @@ describe('draft of an answer', () => {
       // The contact writes English, so does the draft.
       assert.equal(backend.state.ai.contexts[0].language, 'en');
       await replace.getByRole('button', { name: 'Text ersetzen' }).click();
+      // The held draft is checked again by the server before it replaces the text (TASK-141, F3).
+      await draft.getByText('Der Entwurf steht im Textfeld.', { exact: false }).waitFor();
       assert.equal(await text.inputValue(), 'Dear Ms Lang,\nwe will replace the printer.');
       assert.ok(!(await text.inputValue()).includes('Which floor'), 'questions and notes never go into the answer');
       assert.equal(backend.state.helpdesk.replies.length, 0);
@@ -264,6 +346,61 @@ describe('draft of an answer', () => {
       await section.getByText('Die Antwort steht im Portal.').waitFor();
       assert.equal(posts(backend, '/helpdesk/portal-posts').length, 1, 'a double press publishes once');
       assert.equal(backend.state.helpdesk.posts.filter((post) => post.authorKind === 'support')[0].body, 'Guten Tag,\nder Techniker kommt morgen.');
+    });
+  });
+
+  test('a text typed while the mail draft is written stays, the draft is only offered to replace it (F2)', async () => {
+    await withApp({ prepare: (backend) => {
+      const prepared = withTicket(backend);
+      backend.state.ai.aiHold = true;
+      return prepared;
+    } }, async (page, backend) => {
+      const section = page.getByTestId('ticket-helpdesk');
+      await section.getByRole('button', { name: 'Dem Kunden antworten' }).click();
+      const form = section.getByTestId('reply-form');
+      const text = form.getByLabel('Text');
+      const draft = form.getByTestId('assist-draft-mail');
+      await draft.getByRole('button', { name: 'Entwurf mit KI' }).click();
+      await draft.getByText('Die KI arbeitet …', { exact: false }).waitFor();
+      await text.fill('Mein Text während des Wartens');
+      release(backend);
+      const replace = draft.getByTestId('assist-replace');
+      await replace.getByText('Der Entwurf liegt vor. Dein Text im Feld bleibt, bis du ihn ersetzt.').waitFor();
+      assert.equal(await text.inputValue(), 'Mein Text während des Wartens');
+      await replace.getByRole('button', { name: 'Text ersetzen' }).click();
+      await draft.getByText('Der Entwurf steht im Textfeld.', { exact: false }).waitFor();
+      assert.equal(await text.inputValue(), 'Guten Tag,\nwir prüfen den Drucker heute noch.');
+    });
+  });
+
+  test('a text typed while the portal draft is written stays, and a held draft whose source changed is not inserted (F2, F3)', async () => {
+    await withApp({ as: ANNA, prepare: (backend) => {
+      const prepared = withTicket(backend);
+      backend.state.groups.push({ id: '00000000-0000-4000-8000-0000000126d4', name: 'KI Anna', members: [backend.anna.id],
+        actions: ['helpdesk.reply', 'ai.use'].map((action) => ({ action, projectId: backend.project.id })),
+        fields: ['customer', 'contact', 'mail'].map((field) => ({ resourceType: 'ticket', field, projectId: backend.project.id, operation: 'read', effect: 'allow' })) });
+      backend.state.ai.aiHold = true;
+      return prepared;
+    } }, async (page, backend, prepared) => {
+      const section = page.getByTestId('ticket-helpdesk');
+      await section.getByRole('button', { name: 'Im Portal antworten' }).click();
+      const answer = section.getByTestId('portal-answer');
+      const text = answer.getByLabel('Text');
+      const draft = answer.getByTestId('assist-draft-portal');
+      await draft.getByRole('button', { name: 'Entwurf mit KI' }).click();
+      await draft.getByText('Die KI arbeitet …', { exact: false }).waitFor();
+      await text.fill('Eigener Portaltext');
+      release(backend);
+      const replace = draft.getByTestId('assist-replace');
+      await replace.getByText('Der Entwurf liegt vor. Dein Text im Feld bleibt, bis du ihn ersetzt.').waitFor();
+      assert.equal(await text.inputValue(), 'Eigener Portaltext');
+
+      // The customer wrote again before the person replaces the text: the held draft no longer counts and is not inserted.
+      laterMail(backend, prepared, 'Bitte auch den Toner prüfen.');
+      await replace.getByRole('button', { name: 'Text ersetzen' }).click();
+      await draft.getByTestId('assist-result').getByText(/^Der Vorschlag gilt nicht mehr: /).waitFor();
+      assert.equal(await text.inputValue(), 'Eigener Portaltext');
+      assert.equal(await draft.getByTestId('assist-replace').count(), 0);
     });
   });
 

@@ -711,7 +711,7 @@ components:
             ai.account_deactivated, ai.request_invalid, ai.address_not_allowed, ai.key_missing, ai.interrupted; bei `refused` der Grund der
             Ablehnung, etwa ai.not_assigned, ai.disabled, ai.daily_limit_person, ai.daily_limit_company, ai.busy oder
             ai.context_too_large.
-        truncated: {type: boolean, description: Ob ältere Quellen für den Kontext weggelassen wurden.}
+        truncated: {type: boolean, description: Ob ältere Quellen für den Kontext oder schon beim Zusammenstellen durch den Anwendungsfall weggelassen wurden.}
         projectId: {type: [string, 'null'], format: uuid}
         objectKind: {type: [string, 'null']}
         objectId: {type: [string, 'null'], format: uuid}
