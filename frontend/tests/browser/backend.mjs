@@ -161,6 +161,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     ai: { secretKey: true, providers: [], models: [], assignments: new Map(), limits: { personDaily: 50, companyDaily: 500, version: 0 }, skills: new Map(),
       runs: [], aiAnswer: { state: [{ text: 'Bericht bricht mit DEMO-42 ab', sources: ['S1'] }], open: [] }, aiFail: null, aiHold: false, aiInvalid: null,
       draftAnswer: { body: 'Guten Tag,\nwir prüfen den Drucker heute noch.', questions: [], notes: [], sources: ['S2'] }, contexts: [],
+      // TASK-127: the content of a requirement review, and how the revision of a wiki section changes its blocks.
+      reviewAnswer: { findings: [] }, wikiRevise: null,
       plainHttpHosts: ['localhost', '127.0.0.1', 'ollama:11434'] },
     git: { secretKey: true, callbackUrl: 'https://tm.example/api/v1/git/oauth/callback', providers: [], connections: new Map(), repositories: new Map(), releases: [],
       links: [], limited: false },
@@ -981,6 +983,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     }
     if (p.startsWith('/sla')) return slaRoute(account, method, p, headers, body);
     if (p.startsWith('/time')) return timeRoute(account, method, p, query, headers, body);
+    const assistDocument = p.match(/^\/(requirements|wiki\/pages)\/([^/]+)\/ai(\/.*)?$/);
+    if (assistDocument) return assistDocumentRoute(account, method, assistDocument[1], assistDocument[2], assistDocument[3] ?? '', query, body);
     if (p.startsWith('/wiki')) return wikiRoute(account, method, p, query, headers, body);
     if (p.startsWith('/requirements')) return requirementRoute(account, method, p, query, headers, body);
     return problem(404, 'resource.not_found');
@@ -3962,6 +3966,8 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
     context.sources.map(({ id, kind, entryId, text }) => [id, kind, entryId, text]), context.binding]);
   // Whether a finished suggestion still counts for the reader, as the guards of the server decide it.
   function assistStillValid(account, run) {
+    if (run.assist.kind === 'requirement') return reviewStillValid(account, run);
+    if (run.assist.kind === 'wiki') return wikiRevisionStillValid(account, run);
     const item = state.projects.find((entry) => entry.id === run.projectId);
     const ticket = state.tickets.find((entry) => entry.id === run.objectId);
     if (!item || !ticket) return false;
@@ -4006,6 +4012,161 @@ export function createBackend({ accent = '#f97316', anonymousAppearance = false,
       const goal = typeof body.goal === 'string' && body.goal.trim() !== '' ? body.goal.trim() : null;
       if (goal !== null && goal.length > 500) return problem(400, 'request.invalid', { violations: ['goal.invalid'] });
       return assistStart(account, item, ticket, 'reply_draft', body.channel, assistContext(account, item, ticket, body.channel, null), goal);
+    }
+    return problem(404, 'resource.not_found');
+  }
+
+  // The AI review of a requirement and the revision of a wiki draft as the backend (TASK-127). The review passes exactly the
+  // shown revision with what the person may read of it; its fingerprint covers the revision, whether it is current and every
+  // source. The revision passes one section of the saved draft (the n-th heading at the top to the next one) or the whole version
+  // and needs wiki.edit at a page that is not archived; its fingerprint covers page, language, section and the blocks. Unlike the
+  // server the stand in does not write Markdown: `ai.wikiRevise` turns the blocks of the section into the revised blocks, by
+  // default with "Kurz: " before the first text of each paragraph, so images and links stay. `ai.aiFail` stands for an answer the
+  // server refuses, for example with `ai.placeholders_changed`.
+  function reviewContext(account, item, revision, language) {
+    const access = requirementAccess(account, item.projectId);
+    if (!access.read) return { refused: problem(404, 'requirement.not_found') };
+    const shown = requirementRevision(item, revision);
+    if (!shown) return { refused: problem(404, 'requirement.revision_not_found') };
+    const de = language !== 'en';
+    const readable = (name) => access.readableFields.includes(name);
+    const sources = [];
+    const add = (label, text, part, criterion = null) => sources.push({ id: `S${sources.length + 1}`, label, text, part, criterion });
+    if (readable('title') && shown.title?.trim()) add(de ? 'Titel' : 'Title', shown.title.trim(), 'title');
+    const description = readable('description') && shown.description ? assistPlain(shown.description).trim() : '';
+    if (description !== '') add(de ? 'Beschreibung' : 'Description', description, 'description');
+    if (readable('criteria')) {
+      if (shown.criteria.every((criterion) => !criterion.text.trim())) add(de ? 'Abnahmekriterien' : 'Acceptance criteria', '-', 'criteria');
+      for (const criterion of shown.criteria) if (criterion.text.trim()) add(`${de ? 'Abnahmekriterium' : 'Acceptance criterion'} K${criterion.id}`, criterion.text.trim(), 'criterion', criterion.id);
+    }
+    const custom = Object.entries(shown.custom ?? {}).filter(([key, value]) => readable(`custom.${key}`) && String(value).trim() !== '');
+    if (custom.length > 0) add(de ? 'Eigene Felder' : 'Custom fields', custom.map(([key, value]) => `${key}: ${value}`).join('\n'), 'fields');
+    return { language: de ? 'de' : 'en', sources, fingerprint: JSON.stringify([revision, revision === item.revision, sources]) };
+  }
+  function reviewStillValid(account, run) {
+    const item = req.items.find((entry) => entry.id === run.objectId);
+    if (!item) return false;
+    const context = reviewContext(account, item, run.assist.revision, run.assist.language);
+    return !context.refused && context.fingerprint === run.assist.fingerprint;
+  }
+  const assistPlain = (node) => (node?.text ?? '') + (node?.content ?? []).map(assistPlain).join(node?.type === 'doc' ? '\n' : '');
+  function wikiSection(account, page, language, basedOn, section) {
+    const access = wikiAccess(account, page.projectId);
+    if (!access.edit) return { refused: problem(403, 'auth.forbidden') };
+    if (page.archived) return { refused: problem(409, 'wiki.page_archived') };
+    const code = language ?? page.language;
+    const variant = wikiVariant(page, code);
+    if (!variant) return { refused: problem(404, 'wiki.language_not_found') };
+    if (basedOn !== null && basedOn !== variant.draftRevision) return { refused: problem(412, 'wiki.version_conflict') };
+    const all = wikiRevision(page, variant.draftRevision, code).content.content;
+    let from = 0;
+    let to = all.length;
+    let heading = null;
+    if (section !== null) {
+      const headings = all.map((block, index) => (block.type === 'heading' ? index : -1)).filter((index) => index >= 0);
+      if (!Number.isInteger(section) || section < 1 || section > headings.length) return { refused: problem(400, 'request.invalid', { violations: ['section.invalid'] }) };
+      from = headings[section - 1];
+      to = section < headings.length ? headings[section] : all.length;
+      heading = assistPlain(all[from]).trim();
+    }
+    const blocks = all.slice(from, to);
+    return { code, revision: variant.draftRevision, all, from, to, heading, blocks, text: blocks.map(wikiPlain).join('\n').trim(),
+      fingerprint: JSON.stringify([page.id, code, section, blocks]) };
+  }
+  function wikiRevisionStillValid(account, run) {
+    const page = wiki.pages.find((entry) => entry.id === run.objectId);
+    if (!page || !wikiVisible(account, page)) return false;
+    const part = wikiSection(account, page, run.assist.language, null, run.assist.section);
+    return !part.refused && part.fingerprint === run.assist.fingerprint;
+  }
+  const wikiRevised = (blocks) => (ai.wikiRevise ? ai.wikiRevise(structuredClone(blocks)) : structuredClone(blocks).map((block) => {
+    if (block.type !== 'paragraph') return block;
+    const first = (block.content ?? []).find((node) => node.type === 'text');
+    if (first) first.text = `Kurz: ${first.text}`;
+    return block;
+  }));
+  function assistDocumentStart(account, projectId, useCase, objectKind, objectId, objectVersion, language, sources, goal, content, assist, answer) {
+    if (sources.length === 0) return problem(409, 'assist.no_sources');
+    if (!may(account, 'ai.use', projectId)) return problem(403, 'ai.use_forbidden');
+    const availability = aiAvailability(useCase, true);
+    if (!availability.available) return aiRefuse(account, useCase, language, availability.reason, problem(409, 'ai.unavailable', { violations: [availability.reason] }));
+    if (aiToday(account.id) >= ai.limits.personDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_person', problem(429, 'ai.daily_limit_person'));
+    if (aiToday(null) >= ai.limits.companyDaily) return aiRefuse(account, useCase, language, 'ai.daily_limit_company', problem(429, 'ai.daily_limit_company'));
+    const failed = ai.aiFail;
+    const held = ai.aiHold;
+    const run = { id: uuid(), kind: 'use', useCase, language, state: held ? 'running' : failed ? 'failed' : 'succeeded', code: held ? null : failed,
+      truncated: false, projectId, objectKind, objectId, objectVersion, skillVersion: 'builtin-1', providerId: availability.provider.id,
+      modelId: availability.model.id, modelKey: availability.modelKey, dataPath: availability.provider.dataPath, inputTokens: held || failed ? null : 240,
+      outputTokens: held || failed ? null : 60, startedAt: now(), finishedAt: held ? null : now(), accountId: account.id, content: held || failed ? null : content, assist };
+    ai.runs.unshift(run);
+    ai.contexts.push({ runId: run.id, useCase, language, goal, truncated: false, sources });
+    return { status: 202, body: { runId: run.id, ...answer } };
+  }
+  function assistDocumentRoute(account, method, area, id, tail, query, body) {
+    // As the server: portal accounts are refused before any object is read.
+    if (account.kind === 'portal') return problem(403, 'auth.forbidden');
+    if (area === 'requirements') {
+      const item = req.items.find((entry) => entry.id === id);
+      if (!item || !requirementAccess(account, item.projectId).read) return problem(404, 'requirement.not_found');
+      if (tail === '' && method === 'GET') {
+        const revision = Number(query.get('revision'));
+        if (!requirementRevision(item, revision)) return problem(404, 'requirement.revision_not_found');
+        return ok({ review: assistUsable(account, item.projectId, 'requirement_review') });
+      }
+      if (tail === '/review' && method === 'POST') {
+        const violations = [];
+        if (!Number.isInteger(body?.revision) || body.revision < 1) violations.push('revision.invalid');
+        if (body?.language != null && !['de', 'en'].includes(body.language)) violations.push('language.invalid');
+        if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+        const context = reviewContext(account, item, body.revision, body.language ?? 'de');
+        if (context.refused) return context.refused;
+        return assistDocumentStart(account, item.projectId, 'requirement_review', 'requirement', item.id, body.revision, context.language, context.sources, null,
+          ai.reviewAnswer, { kind: 'requirement', revision: body.revision, language: context.language, fingerprint: context.fingerprint },
+          { language: context.language, revision: body.revision, sources: context.sources.map(({ id: source, part, criterion }) => ({ id: source, part, criterion })) });
+      }
+      return problem(404, 'resource.not_found');
+    }
+    const requested = query.get('language');
+    if (requested !== null && !WIKI_LANGUAGES.includes(requested)) return problem(400, 'request.invalid', { violations: ['language.invalid'] });
+    const page = wiki.pages.find((entry) => entry.id === id);
+    if (!page || !wikiVisible(account, page)) return problem(404, 'wiki.page_not_found');
+    if (tail === '' && method === 'GET') {
+      const part = wikiSection(account, page, requested, null, null);
+      if (part.refused && part.refused.status !== 403 && part.refused.status !== 409) return part.refused;
+      return ok({ revision: !part.refused && assistUsable(account, page.projectId, 'wiki_revision') });
+    }
+    if (tail === '/revision' && method === 'POST') {
+      const goals = ['shorter', 'clearer', 'factual', 'custom'];
+      const own = typeof body?.text === 'string' ? body.text.trim() : '';
+      const violations = [];
+      if (!Number.isInteger(body?.revision)) violations.push('revision.invalid');
+      if (!goals.includes(body?.goal) || (body.goal === 'custom' && (own === '' || own.length > 500))) violations.push('goal.invalid');
+      if (violations.length > 0) return problem(400, 'request.invalid', { violations });
+      const part = wikiSection(account, page, requested, body.revision, body.section ?? null);
+      if (part.refused) return part.refused;
+      if (part.text === '') return problem(409, 'assist.no_sources');
+      const label = part.heading === null ? 'Ganze Seite' : `Abschnitt „${part.heading}“`;
+      return assistDocumentStart(account, page.projectId, 'wiki_revision', 'wiki_page', page.id, part.revision, part.code,
+        [{ id: 'S1', label, text: part.text }], body.goal === 'custom' ? own : body.goal, { text: part.text, notes: ['Gekürzt.'] },
+        { kind: 'wiki', language: part.code, section: body.section ?? null, heading: part.heading, fingerprint: part.fingerprint },
+        { language: part.code, revision: part.revision, section: body.section ?? null, heading: part.heading });
+    }
+    const result = tail.match(/^\/revision\/([^/]+)$/);
+    if (result && method === 'GET') {
+      const run = ai.runs.find((entry) => entry.id === result[1] && entry.accountId === account.id);
+      if (!run || run.useCase !== 'wiki_revision' || run.objectId !== page.id || (requested !== null && requested !== run.assist.language)) {
+        return problem(404, 'ai.run_not_found');
+      }
+      if (run.state === 'queued' || run.state === 'running') return problem(409, 'assist.not_ready');
+      if (run.state !== 'succeeded') return problem(409, run.code ?? 'ai.cancelled');
+      if (ai.aiInvalid) return problem(409, ai.aiInvalid);
+      const part = wikiSection(account, page, run.assist.language, null, run.assist.section);
+      if (part.refused) return problem(409, 'ai.source_changed');
+      if (part.fingerprint !== run.assist.fingerprint) return problem(409, 'ai.source_changed');
+      const revised = wikiRevised(part.blocks);
+      const document = { type: 'doc', content: [...part.all.slice(0, part.from), ...revised, ...part.all.slice(part.to)] };
+      return ok({ revision: part.revision, section: run.assist.section, heading: run.assist.heading, original: { type: 'doc', content: part.blocks },
+        revised: { type: 'doc', content: revised }, document, notes: run.content.notes });
     }
     return problem(404, 'resource.not_found');
   }

@@ -1263,3 +1263,33 @@ export const startTicketSummary = (api: ServerApi, projectId: string, number: nu
 export const startReplyDraft = (api: ServerApi, projectId: string, number: number, channel: AssistChannel, goal: string | null) =>
   run(() => api.assist.POST('/projects/{projectId}/tickets/{number}/ai/reply-draft', { params: ticketPath(projectId, number), body: { channel, goal } }),
     one<AssistStarted>(isAssistStarted));
+
+// ---------------------------------------------------------------- AI at requirements and wiki pages (TASK-127)
+
+export type RequirementReviewStarted = AssistTypes['schemas']['RequirementReviewStarted'];
+export type RequirementReviewSource = AssistTypes['schemas']['RequirementReviewSource'];
+export type WikiRevisionStarted = AssistTypes['schemas']['WikiRevisionStarted'];
+export type WikiRevisionResult = AssistTypes['schemas']['WikiRevisionResult'];
+export type WikiRevisionGoal = 'shorter' | 'clearer' | 'factual' | 'custom';
+const isReviewStarted = (v: unknown) => hasStrings(v, 'runId', 'language') && typeof (v as RequirementReviewStarted).revision === 'number'
+  && Array.isArray((v as RequirementReviewStarted).sources) && (v as RequirementReviewStarted).sources.every((s) => hasStrings(s, 'id', 'part'));
+const isRevisionStarted = (v: unknown) => hasStrings(v, 'runId', 'language') && typeof (v as WikiRevisionStarted).revision === 'number';
+const isRevisionResult = (v: unknown) => record(v) && typeof v.revision === 'number' && record(v.original) && record(v.revised)
+  && record(v.document) && Array.isArray(v.notes);
+
+export const readRequirementAssist = (api: ServerApi, requirementId: string, revision: number) =>
+  run(() => api.assist.GET('/requirements/{requirementId}/ai', { params: { path: { requirementId }, query: { revision } } }),
+    one<{ review: boolean }>((v) => record(v) && typeof v.review === 'boolean'));
+export const startRequirementReview = (api: ServerApi, requirementId: string, revision: number, language: AiLanguage) =>
+  run(() => api.assist.POST('/requirements/{requirementId}/ai/review', { params: { path: { requirementId } }, body: { revision, language } }),
+    one<RequirementReviewStarted>(isReviewStarted));
+export const readWikiAssist = (api: ServerApi, pageId: string, language: WikiLanguage) =>
+  run(() => api.assist.GET('/wiki/pages/{pageId}/ai', { params: { path: { pageId }, query: { language } } }),
+    one<{ revision: boolean }>((v) => record(v) && typeof v.revision === 'boolean'));
+export const startWikiRevision = (api: ServerApi, pageId: string, language: WikiLanguage, revision: number, section: number | null,
+  goal: WikiRevisionGoal, text: string | null) =>
+  run(() => api.assist.POST('/wiki/pages/{pageId}/ai/revision', { params: { path: { pageId }, query: { language } },
+    body: { revision, section, goal, text } }), one<WikiRevisionStarted>(isRevisionStarted));
+export const readWikiAiResult = (api: ServerApi, pageId: string, language: WikiLanguage, runId: string) =>
+  run(() => api.assist.GET('/wiki/pages/{pageId}/ai/revision/{runId}', { params: { path: { pageId, runId }, query: { language } } }),
+    one<WikiRevisionResult>(isRevisionResult));

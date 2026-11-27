@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ProblemInfo } from '../api/problem.ts';
 import {
-  cancelAiRun, readAiRun, readAssistOptions, startReplyDraft, startTicketSummary, type AiRun, type AssistChannel, type AssistOptions,
-  type AssistSource, type AssistStarted, type Project, type Ticket,
+  readAssistOptions, startReplyDraft, startTicketSummary, type AssistChannel, type AssistOptions, type AssistSource, type AssistStarted,
+  type Project, type Ticket,
 } from '../api/product.ts';
+import { runText, usable, useAssistRun } from './assistRun.ts';
 import { useBrand } from '../brand/BrandProvider.tsx';
 import { NoticeView, TextField, type Notice } from '../app/ui.tsx';
 import { formatDateTime } from '../i18n/format.ts';
@@ -30,100 +31,6 @@ function useAssistProblem(): (problem: ProblemInfo) => string {
 
 // AI at the ticket (TASK-126): the summary as a preview to copy and the draft of an answer that goes into the editable text
 // field. Neither writes anything; a draft is sent only through the check and confirmation of the answer.
-
-type Phase =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'running'; readonly started: AssistStarted; readonly run: AiRun | null }
-  | { readonly kind: 'done'; readonly started: AssistStarted; readonly run: AiRun }
-  | { readonly kind: 'problem'; readonly problem: ProblemInfo };
-
-type Begin = () => StartOutcome;
-type StartOutcome = ReturnType<typeof startTicketSummary>;
-type Finished = { readonly started: AssistStarted; readonly run: AiRun } | null;
-type Reason = (code: string | null | undefined) => string;
-type Translate = ReturnType<typeof useI18n>['t'];
-
-// Starts an execution and reads it until it ended; a later start or leaving the page drops the answers of an earlier one.
-// A finished execution can be read again: the server checks its suggestion against the sources as they are now (TASK-141, F3).
-function useAssistRun() {
-  const { api } = useBrand();
-  const [phase, setPhaseState] = useState<Phase>({ kind: 'idle' });
-  const current = useRef<Phase>(phase);
-  const round = useRef(0);
-  useEffect(() => () => {
-    round.current += 1;
-  }, []);
-
-  function setPhase(next: Phase) {
-    current.current = next;
-    setPhaseState(next);
-  }
-
-  async function start(begin: Begin): Promise<Finished> {
-    const mine = ++round.current;
-    setPhase({ kind: 'idle' });
-    const started = await begin();
-    if (mine !== round.current) return null;
-    if (started.kind !== 'ok') {
-      setPhase({ kind: 'problem', problem: started.problem });
-      return null;
-    }
-    const value = started.data.value;
-    setPhase({ kind: 'running', started: value, run: null });
-    for (;;) {
-      const read = await readAiRun(api, value.runId);
-      if (mine !== round.current) return null;
-      if (read.kind !== 'ok') {
-        setPhase({ kind: 'problem', problem: read.problem });
-        return null;
-      }
-      const run = read.data.value;
-      if (run.state !== 'queued' && run.state !== 'running') {
-        setPhase({ kind: 'done', started: value, run });
-        return { started: value, run };
-      }
-      setPhase({ kind: 'running', started: value, run });
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      if (mine !== round.current) return null;
-    }
-  }
-
-  async function cancel() {
-    if (phase.kind !== 'running') return;
-    const id = phase.started.runId;
-    round.current += 1;
-    const result = await cancelAiRun(api, id);
-    setPhase(result.kind === 'ok' ? { kind: 'done', started: phase.started, run: result.data.value } : { kind: 'idle' });
-  }
-
-  function reset() {
-    round.current += 1;
-    setPhase({ kind: 'idle' });
-  }
-
-  // Reads the finished execution again and answers it, or null when nothing was finished, the reading failed or a later start
-  // or leaving the page overtook it. An answer that no longer counts comes without content and with its reason.
-  async function recheck(): Promise<AiRun | null> {
-    const shown = current.current;
-    if (shown.kind !== 'done') return null;
-    const mine = round.current;
-    const read = await readAiRun(api, shown.started.runId);
-    if (mine !== round.current || current.current !== shown) return null;
-    if (read.kind !== 'ok') {
-      setPhase({ kind: 'problem', problem: read.problem });
-      return null;
-    }
-    setPhase({ kind: 'done', started: shown.started, run: read.data.value });
-    return read.data.value;
-  }
-
-  return { phase, start, cancel, reset, recheck };
-}
-
-// The content of a suggestion that still counts, else null.
-function usable(run: AiRun | null): Record<string, unknown> | null {
-  return run !== null && run.state === 'succeeded' && !run.invalid && run.content ? run.content as Record<string, unknown> : null;
-}
 
 // Whether the person may start the use cases at this ticket now; nothing is shown while it is not known.
 function useAssistOptions(project: Project, ticket: Ticket): AssistOptions | null {
@@ -187,12 +94,6 @@ function points(value: unknown): Point[] {
   return value.filter((p): p is Point => typeof p === 'object' && p !== null && typeof (p as Point).text === 'string' && Array.isArray((p as Point).sources));
 }
 
-function runText(run: AiRun, reason: Reason, t: Translate): string | null {
-  if (run.state === 'succeeded' && run.invalid) return t('assist.invalid', { reason: reason(run.invalid) });
-  if (run.state === 'cancelled') return t('assist.cancelled');
-  if (run.state !== 'succeeded') return t('assist.failed', { reason: reason(run.code ?? run.state) });
-  return null;
-}
 
 // The summary of the ticket (rule 1): a preview of state and open points with their sources, to copy; nothing is stored.
 // `round` changes with every saved change of the ticket, its history or its customer; a shown summary is then checked again by
@@ -204,7 +105,7 @@ export function TicketAiSummary({ project, ticket, round }: { readonly project: 
   const reason = useAiReason();
   const label = useSourceLabel();
   const options = useAssistOptions(project, ticket);
-  const { phase, start, cancel, recheck } = useAssistRun();
+  const { phase, start, cancel, recheck } = useAssistRun<AssistStarted>();
   const [notice, setNotice] = useState<Notice | null>(null);
   const seenRound = useRef(round);
   useEffect(() => {
@@ -295,7 +196,7 @@ export function AiDraft({ project, ticket, channel, body, onDraft }: {
   const problem = useAssistProblem();
   const reason = useAiReason();
   const options = useAssistOptions(project, ticket);
-  const { phase, start, cancel, reset, recheck } = useAssistRun();
+  const { phase, start, cancel, reset, recheck } = useAssistRun<AssistStarted>();
   const [goal, setGoal] = useState('');
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);

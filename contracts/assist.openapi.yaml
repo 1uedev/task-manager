@@ -428,12 +428,15 @@ components:
         original:
           description: Der Abschnitt vor der Überarbeitung als eigenes Dokument des Wiki Editors.
           type: object
+          additionalProperties: true
         revised:
           description: Der Abschnitt nach der Überarbeitung als eigenes Dokument des Wiki Editors.
           type: object
+          additionalProperties: true
         document:
           description: Der ganze aktuelle Entwurf mit dem überarbeiteten Abschnitt, geprüft wie ein Speichern.
           type: object
+          additionalProperties: true
         notes:
           type: array
           items: {type: string}

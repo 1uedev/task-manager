@@ -76,6 +76,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/requirements/{requirementId}/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Ob die Person die KI Prüfung der Revision jetzt beginnen kann
+         * @description Eine Momentaufnahme für die Oberfläche, nie eine Berechtigung.
+         */
+        get: operations["getRequirementAssistOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/requirements/{requirementId}/ai/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * KI Prüfung genau einer Revision beginnen
+         * @description `revision` ist die gezeigte Revision, `language` die Sprache der Befunde (`de` oder `en`, ohne Angabe Deutsch).
+         *     Format des Vorschlags `requirement_review`. Eine unbekannte Revision ist 404 `requirement.revision_not_found`, eine
+         *     Anforderung, die die Person nicht sehen darf, 404 `requirement.not_found`; ist nichts lesbar, 409
+         *     `assist.no_sources`.
+         */
+        post: operations["startRequirementReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{pageId}/ai": {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Ob die Person die KI Überarbeitung des Entwurfs jetzt beginnen kann
+         * @description Eine Momentaufnahme für die Oberfläche, nie eine Berechtigung; ohne `wiki.edit` oder an einer archivierten Seite `false`.
+         */
+        get: operations["getWikiAssistOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{pageId}/ai/revision": {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * KI Überarbeitung eines Abschnitts oder der ganzen Fassung beginnen
+         * @description `revision` ist die Revision des gezeigten Entwurfs; weicht der aktuelle Entwurf ab, 412 `wiki.version_conflict`.
+         *     `section` ist die Nummer einer Überschrift oben im Dokument ab 1, ohne Angabe die ganze Fassung; eine unbekannte
+         *     Nummer ist 400 mit `section.invalid`. `goal` ist `shorter`, `clearer`, `factual` oder `custom` mit dem eigenen
+         *     Ziel in `text` (höchstens 500 Zeichen). Das Modell schreibt in der Sprache der Fassung. Format des Vorschlags
+         *     `wiki_revision`. Ohne `wiki.edit` 403 `auth.forbidden`, an einer archivierten Seite 409 `wiki.page_archived`,
+         *     ein leerer Abschnitt 409 `assist.no_sources`.
+         */
+        post: operations["startWikiRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wiki/pages/{pageId}/ai/revision/{runId}": {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Ergebnis der Überarbeitung in der Form des Editors
+         * @description Nach jeder Prüfung des Lesens wie `/ai/runs/{runId}`. Eine Ausführung einer anderen Person, eines anderen
+         *     Anwendungsfalls, einer anderen Seite oder Sprachfassung ist 404 `ai.run_not_found`. Läuft sie noch, 409
+         *     `assist.not_ready`; ist sie fehlgeschlagen, abgebrochen oder entwertet, 409 mit dem Code der Ausführung oder dem
+         *     Grund (`ai.source_changed`, `ai.suggestion_expired`, `ai.placeholders_changed`, ...). Hat sich der Abschnitt seit dem
+         *     Start geändert, 409 `wiki.section_changed`. `revision` ist die Revision des aktuellen Entwurfs, in den das Ergebnis
+         *     eingesetzt wurde; übernehmen darf die Oberfläche nur, wenn sie genau diese Revision zeigt.
+         */
+        get: operations["getWikiRevisionResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -116,12 +249,61 @@ export interface components {
             language: "de" | "en";
             sources: components["schemas"]["AssistSource"][];
         };
+        /**
+         * @description Worauf sich eine Quelle der Prüfung bezieht: `title`, `description`, ein Kriterium `criterion` mit seiner Nummer,
+         *     `criteria` (keine Kriterien erfasst) oder `fields` (die lesbaren eigenen Felder).
+         */
+        RequirementReviewSource: {
+            id: string;
+            /** @enum {string} */
+            part: "title" | "description" | "criterion" | "criteria" | "fields";
+            criterion: number | null;
+        };
+        RequirementReviewStarted: {
+            /** Format: uuid */
+            runId: string;
+            /** @enum {string} */
+            language: "de" | "en";
+            revision: number;
+            sources: components["schemas"]["RequirementReviewSource"][];
+        };
+        WikiRevisionStarted: {
+            /** Format: uuid */
+            runId: string;
+            /** @enum {string} */
+            language: "de" | "en";
+            revision: number;
+            section: number | null;
+            heading: string | null;
+        };
+        WikiRevisionResult: {
+            revision: number;
+            section: number | null;
+            heading: string | null;
+            /** @description Der Abschnitt vor der Überarbeitung als eigenes Dokument des Wiki Editors. */
+            original: {
+                [key: string]: unknown;
+            };
+            /** @description Der Abschnitt nach der Überarbeitung als eigenes Dokument des Wiki Editors. */
+            revised: {
+                [key: string]: unknown;
+            };
+            /** @description Der ganze aktuelle Entwurf mit dem überarbeiteten Abschnitt, geprüft wie ein Speichern. */
+            document: {
+                [key: string]: unknown;
+            };
+            notes: string[];
+        };
     };
     responses: {
         /**
          * @description Problem nach RFC 9457. Codes dieses Bereichs: request.invalid (violations language.invalid, channel.invalid,
-         *     goal.invalid), project.not_found, ticket.not_found, auth.forbidden, helpdesk.reply_no_contact,
-         *     helpdesk.portal_no_customer, assist.no_sources, assist.busy (503), dazu die Codes eines Starts der KI Grundlage
+         *     goal.invalid, revision.invalid, section.invalid), project.not_found, ticket.not_found, requirement.not_found,
+         *     requirement.revision_not_found, wiki.page_not_found, wiki.language_not_found, wiki.page_archived,
+         *     wiki.version_conflict (412), wiki.section_changed, auth.forbidden, helpdesk.reply_no_contact,
+         *     helpdesk.portal_no_customer, assist.no_sources, assist.not_ready, assist.busy (503), ai.run_not_found, die Gründe und
+         *     Codes einer gelesenen Ausführung (ai.source_changed, ai.rights_changed, ai.suggestion_expired,
+         *     ai.configuration_changed, ai.placeholders_changed, ai.invalid_output, ai.cancelled), dazu die Codes eines Starts der KI Grundlage
          *     (ai.use_forbidden, ai.unavailable, ai.daily_limit_person, ai.daily_limit_company, ai.busy, ai.context_too_large),
          *     auth.required, auth.csrf_invalid, auth.password_change_required.
          */
@@ -137,6 +319,10 @@ export interface components {
     };
     parameters: {
         ProjectId: string;
+        RequirementId: string;
+        PageId: string;
+        /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+        Language: "de" | "en";
         Number: number;
     };
     requestBodies: never;
@@ -244,6 +430,181 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getRequirementAssistOptions: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Möglichkeit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        review: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    startRequirementReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    revision: number;
+                    /** @enum {string|null} */
+                    language?: "de" | "en" | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Begonnen */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementReviewStarted"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getWikiAssistOptions: {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Möglichkeit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    startWikiRevision: {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    revision: number;
+                    section?: number | null;
+                    /** @enum {string} */
+                    goal: "shorter" | "clearer" | "factual" | "custom";
+                    text?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Begonnen */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiRevisionStarted"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            412: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getWikiRevisionResult: {
+        parameters: {
+            query?: {
+                /** @description Die Sprachfassung der Seite, ohne Angabe die Ausgangssprache. */
+                language?: components["parameters"]["Language"];
+            };
+            header?: never;
+            path: {
+                pageId: components["parameters"]["PageId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ergebnis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiRevisionResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

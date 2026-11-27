@@ -15,6 +15,8 @@ import { EmptyText, LoadedView, NoticeView, PageHead, SelectField, TextField, us
 import { useReorder } from '../app/useReorder.ts';
 import { formatDateTime } from '../i18n/format.ts';
 import { useI18n } from '../i18n/I18nProvider.tsx';
+import { RequirementAiReview } from './RequirementAi.tsx';
+import type { Proposal } from './requirementProposal.ts';
 import { RequirementLinksPanel } from './RequirementLinksPanel.tsx';
 import type { MessageKey } from '../i18n/index.ts';
 import { blocksOf, diffBlocks, type DiffEntry } from './wikiDiff.ts';
@@ -378,8 +380,10 @@ function CriteriaEditor({ items, setItems, disabled }: {
   );
 }
 
-function EditorPanel({ requirement, onSaved, onClose }: {
+function EditorPanel({ requirement, proposal = null, onSaved, onClose }: {
   readonly requirement: Requirement;
+  /** A proposal of the AI review taken over into the editor; it is unsaved until the person saves (TASK-127). */
+  readonly proposal?: Proposal | null;
   readonly onSaved: (next: Requirement) => void;
   readonly onClose: () => void;
 }) {
@@ -392,14 +396,19 @@ function EditorPanel({ requirement, onSaved, onClose }: {
   const next = () => ++keys.current;
   // The version the next save builds on; after a conflict the person takes over the newer one explicitly.
   const [base, setBase] = useState(requirement);
-  const [title, setTitle] = useState(requirement.content.title ?? '');
+  const [title, setTitle] = useState(proposal?.kind === 'title' ? proposal.text : requirement.content.title ?? '');
   const [priority, setPriority] = useState<string>(requirement.content.priority ?? 'normal');
   const [owner, setOwner] = useState(requirement.ownerId ?? '');
-  const [criteria, setCriteria] = useState<Draft[]>(() => draftsOf(requirement.content.criteria, next));
+  const [criteria, setCriteria] = useState<Draft[]>(() => {
+    const drafts = draftsOf(requirement.content.criteria, next);
+    if (proposal?.kind === 'newCriterion') return [...drafts, { key: next(), id: null, text: proposal.text }];
+    if (proposal?.kind === 'criterion') return drafts.map((item) => (item.id === proposal.id ? { ...item, text: proposal.text } : item));
+    return drafts;
+  });
   const editableFields = requirement.customFields.filter((field) => writable(access, `${CUSTOM_PREFIX}${field.key}`));
   const [custom, setCustom] = useState<Record<string, string>>(() => textsOf(requirement.content));
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(proposal === null ? null : { kind: 'info', text: t('assist.review.inEditor') });
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<Requirement | null>(null);
   const [editorVersion, setEditorVersion] = useState(0);
@@ -411,7 +420,13 @@ function EditorPanel({ requirement, onSaved, onClose }: {
   const [owners, reloadOwners] = useLoad(() => (needsPeople ? listRequirementOwners(api, requirement.projectId)
     : Promise.resolve({ kind: 'ok' as const, data: { value: [] as string[], etag: null } })), [api, requirement.projectId]);
   useEffect(() => {
-    if (editor !== null) setBaseline(JSON.stringify(editor.getJSON()));
+    if (editor === null) return;
+    setBaseline(JSON.stringify(editor.getJSON()));
+    // A proposal for the description changes the editor after the baseline, so it counts as an unsaved change.
+    if (proposal?.kind === 'description') {
+      editor.commands.setContent(proposal.document as WikiDocument);
+      setEditorVersion((value) => value + 1);
+    }
   }, [editor]);
   useEffect(() => {
     if (editor === null) return;
@@ -993,6 +1008,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
   const [mode, setMode] = useState<Mode>('read');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
 
   function changed(next: Requirement, text: string | null, nextMode: Mode = 'read') {
     replace({ value: next, etag: `"${next.version}"` });
@@ -1060,7 +1076,7 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
             {mode !== 'edit' && (
               <div className="actions" data-testid="requirement-actions">
                 {mode !== 'read' && <button type="button" className="secondary" onClick={() => setMode('read')}>{t('requirements.action.read')}</button>}
-                {canEdit && <button type="button" onClick={() => { setNotice(null); setMode('edit'); }} data-testid="requirement-edit-open">{t('requirements.action.edit')}</button>}
+                {canEdit && <button type="button" onClick={() => { setNotice(null); setProposal(null); setMode('edit'); }} data-testid="requirement-edit-open">{t('requirements.action.edit')}</button>}
                 {access.edit && requirement.status === 'draft' && (
                   <button type="button" disabled={busy} data-testid="requirement-submit"
                     onClick={() => void act(() => submitRequirement(api, requirement.id, requirement.version),
@@ -1090,7 +1106,8 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
               </div>
             )}
             {mode === 'edit' && (
-              <EditorPanel requirement={requirement} onSaved={(saved) => replace({ value: saved, etag: `"${saved.version}"` })} onClose={() => setMode('read')} />
+              <EditorPanel requirement={requirement} proposal={proposal} onSaved={(saved) => replace({ value: saved, etag: `"${saved.version}"` })}
+                onClose={() => { setProposal(null); setMode('read'); }} />
             )}
             {mode === 'approve' && (
               <ApproveDialog requirement={requirement} onCancel={() => setMode('read')} onStale={retry}
@@ -1102,6 +1119,10 @@ function DetailView({ projectId, requirementId }: { readonly projectId: string; 
             )}
             {mode === 'history' && <HistoryPanel key={requirement.id} requirement={requirement} />}
             {(mode === 'read' || mode === 'return' || mode === 'discard') && <ContentView content={content} access={access} fields={requirement.customFields} testId="requirement-content" />}
+            {mode === 'read' && (
+              <RequirementAiReview key={`ai-${requirement.id}-${requirement.version}`} requirement={requirement}
+                onTakeOver={(next) => { setNotice(null); setProposal(next); setMode('edit'); }} />
+            )}
             {mode === 'read' && <RequirementLinksPanel key={requirement.id} requirement={requirement} />}
             {mode === 'read' && <GitLinksPanel key={`git-${requirement.id}`} target={{ kind: 'requirement', id: requirement.id }} />}
           </article>
