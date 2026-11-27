@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -30,7 +30,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-27 |
 | [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-25 |
 
 ### Blockiert – BLOCKIERT
@@ -46,6 +45,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-126](#task-126-ki-ticketzusammenfassung-und-antwortentwurf-a16-teil-2) | KI Ticketzusammenfassung und Antwortentwurf (A16 Teil 2) | claude-20261117-ai-01 | 2026-11-25 |
+| [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-27 |
 | [TASK-131](#task-131-sicherung-und-wiederherstellung-mit-praktischem-nachweis-a18-teil-1) | Sicherung und Wiederherstellung mit praktischem Nachweis (A18 Teil 1) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-132](#task-132-installation-version-und-update-für-den-betrieb-a18-teil-2) | Installation, Version und Update für den Betrieb (A18 Teil 2) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-135](#task-135-befunde-f1-bis-f11-und-hinweise-h1-bis-h3-der-codex-prüfung-von-task-131-beheben) | Befunde F1 bis F11 und Hinweise H1 bis H3 der Codex Prüfung von TASK-131 beheben | claude-20261123-opsfix-01 | 2026-11-23 |
@@ -121,9 +121,9 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-27
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-27
 
-**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-REQ-001, REQ-REQ-002; DEC-030, DEC-033, DEC-034; ACC-010; docs/AI_USE_CASES.md (AI-UC-03, AI-UC-04, Prüffälle A04, A05, A09, A15). **Abhängigkeiten:** TASK-126 auf main; TASK-093, TASK-094, TASK-096, TASK-098, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt. Das Ergebnis von TASK-126 und seiner Nachbesserung TASK-141 ist auf main (PR #359, PR #363); auf Holgers Frage vom 27. November 2026, was derweil möglich ist, beginnt TASK-127 mit dem Merge dieser Reservierung noch vor der Abnahme von TASK-126 und TASK-141. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-173 statt der vorgemerkten DEC-158 (vergeben an TASK-129, siehe DEC-160), eine Migration nur falls nötig mit der dann nächsten freien Nummer.
+**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-REQ-001, REQ-REQ-002; DEC-030, DEC-033, DEC-034; ACC-010; docs/AI_USE_CASES.md (AI-UC-03, AI-UC-04, Prüffälle A04, A05, A09, A15). **Abhängigkeiten:** TASK-126 auf main; TASK-093, TASK-094, TASK-096, TASK-098, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt. Das Ergebnis von TASK-126 und seiner Nachbesserung TASK-141 ist auf main (PR #359, PR #363); auf Holgers Frage vom 27. November 2026, was derweil möglich ist, beginnt TASK-127 mit dem Merge dieser Reservierung noch vor der Abnahme von TASK-126 und TASK-141. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-173 statt der vorgemerkten DEC-158 (vergeben an TASK-129, siehe DEC-160), eine Migration nur falls nötig mit der dann nächsten freien Nummer. Ergebnis ohne Migration im Ergebnis PR auf demselben Branch: Modul `assist` mit `RequirementAssist` und `WikiAssist`, Ports `requirements.RequirementReviews` und `wiki.WikiDrafts`, die Umwandlung `WikiMarkdown` mit Platzhaltern `[[IMAGE-n]]`, `[[LINK-n]]`, `[[BLOCK-n]]` und `[[TEXT-n]]`, in der KI Grundlage `AiRuns.suggestion` und `AiSuggestionGuard.contentProblem`, die Routen in contracts/assist.openapi.yaml, der Code `ai.placeholders_changed` in contracts/ai.openapi.yaml, die Panels „KI Prüfung“ an der Anforderung und „KI Überarbeitung“ im Wiki Editor, beschrieben in backend/README.md. Belege: `AssistDocumentsApiTest` (8), `WikiMarkdownTest` (6), `AssistContractTest`, der Einheitentest `requirementProposal` (5) und die Browsertests `ai-documents` (8). Abweichungen zur Prüfung: Ein Abschnitt reicht von einer Überschrift oben im Dokument bis zur nächsten, gleich welcher Ebene. Der Testersatz schreibt kein Markdown, sondern ändert die Blöcke des Abschnitts selbst; die Umwandlung prüfen die Backend Tests. Ein Vorschlag der Prüfung geht nur in den Editor, wenn seine Textstelle genau einmal in Titel, Kriterien oder einem Textknoten der Beschreibung steht und das Feld beschreibbar ist, ein fehlendes Kriterium wird ein neues Kriterium; sonst bleibt nur „Kopieren“.
 
 **Umfang:** Die Funktionen Anforderungsprüfung und Wiki Überarbeitung mit Kontext, Validierung, Vergleich, Übernahme in den Editor, Vertrag, Oberfläche und Tests. Nicht Teil: Freigabe oder Statuswechsel durch KI, Veröffentlichung durch KI, Übersetzung, Bearbeitung mehrerer Seiten oder Anforderungen auf einmal.
 
@@ -137,7 +137,7 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 3. Ändert sich die Quelle oder das Recht vor der Übernahme, ist der Vorschlag ungültig (A09); eine Ausgabe mit Skript wird nicht ausgeführt (A15).
 4. Vertrag gegen Routen, Backend Tests, Browser Tests für Anforderung und Wiki.
 
-**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
+**Nächster Schritt:** Übergabe zur Prüfung: wechselseitige Codex Prüfung des Ergebnis PR, danach Holgers Abnahme zusammen mit oder nach TASK-126 und TASK-141; TASK-128 bleibt blockiert, bis das Ergebnis auf main ist.
 
 ## TASK-128 KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4)
 
