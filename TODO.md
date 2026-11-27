@@ -16,8 +16,8 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
-| Blockiert (BLOCKIERT) | 4 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
+| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
 | Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
@@ -30,13 +30,13 @@ Derzeit keine Aufgaben in dieser Kategorie.
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
+| [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-27 |
 | [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-25 |
 
 ### Blockiert – BLOCKIERT
 
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
-| [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-128](#task-128-ki-prüfsatz-demo-lauf-gegen-echte-anbieter-und-betriebsdokumentation-a16-teil-4) | KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4) | claude-20261117-ai-01 | 2026-11-17 |
 | [TASK-133](#task-133-betriebszustand-und-überwachung-a18-teil-3) | Betriebszustand und Überwachung (A18 Teil 3) | claude-20261123-ops-01 | 2026-11-23 |
 | [TASK-134](#task-134-referenzmessung-und-v1-freigabeprüfung-a18-teil-4) | Referenzmessung und V1 Freigabeprüfung (A18 Teil 4) | claude-20261123-ops-01 | 2026-11-23 |
@@ -121,9 +121,9 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 
 ## TASK-127 KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3)
 
-**Status:** BLOCKIERT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-17
+**Status:** IN ARBEIT · **Verantwortlich:** claude-20261117-ai-01 · **Aktualisiert:** 2026-11-27
 
-**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-REQ-001, REQ-REQ-002; DEC-030, DEC-033, DEC-034; ACC-010; docs/AI_USE_CASES.md (AI-UC-03, AI-UC-04, Prüffälle A04, A05, A09, A15). **Abhängigkeiten:** TASK-126 auf main; TASK-093, TASK-094, TASK-096, TASK-098, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt; blockiert, bis das Ergebnis von TASK-126 auf main ist. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-158.
+**Bezug:** REQ-AI-001, REQ-AI-004, REQ-AI-005, REQ-AI-006, REQ-REQ-001, REQ-REQ-002; DEC-030, DEC-033, DEC-034; ACC-010; docs/AI_USE_CASES.md (AI-UC-03, AI-UC-04, Prüffälle A04, A05, A09, A15). **Abhängigkeiten:** TASK-126 auf main; TASK-093, TASK-094, TASK-096, TASK-098, geliefert. **Arbeitsstand:** Mit TASK-125 von Holger am 17. November 2026 beauftragt und mit den Vorschlägen bestätigt. Das Ergebnis von TASK-126 und seiner Nachbesserung TASK-141 ist auf main (PR #359, PR #363); auf Holgers Frage vom 27. November 2026, was derweil möglich ist, beginnt TASK-127 mit dem Merge dieser Reservierung noch vor der Abnahme von TASK-126 und TASK-141. Geplanter Branch claude/project-thread-av1na6, Entscheidung DEC-173 statt der vorgemerkten DEC-158 (vergeben an TASK-129, siehe DEC-160), eine Migration nur falls nötig mit der dann nächsten freien Nummer.
 
 **Umfang:** Die Funktionen Anforderungsprüfung und Wiki Überarbeitung mit Kontext, Validierung, Vergleich, Übernahme in den Editor, Vertrag, Oberfläche und Tests. Nicht Teil: Freigabe oder Statuswechsel durch KI, Veröffentlichung durch KI, Übersetzung, Bearbeitung mehrerer Seiten oder Anforderungen auf einmal.
 
@@ -137,7 +137,7 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 3. Ändert sich die Quelle oder das Recht vor der Übernahme, ist der Vorschlag ungültig (A09); eine Ausgabe mit Skript wird nicht ausgeführt (A15).
 4. Vertrag gegen Routen, Backend Tests, Browser Tests für Anforderung und Wiki.
 
-**Nächster Schritt:** Nach dem Ergebnis von TASK-126 auf main die Blockade aufheben und umsetzen.
+**Nächster Schritt:** Nach dem Merge der Reservierung umsetzen.
 
 ## TASK-128 KI Prüfsatz, Demo, Lauf gegen echte Anbieter und Betriebsdokumentation (A16 Teil 4)
 
