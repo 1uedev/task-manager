@@ -1,0 +1,210 @@
+diff --git a/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java b/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
+index 4204e0f..88974b6 100644
+--- a/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
++++ b/backend/src/test/java/taskmanager/tickets/TicketsApiTest.java
+@@ -560,0 +561,205 @@ class TicketsApiTest {
++    // ---------------------------------------------------------------- review probes (Claude review of TASK-027, not for merge)
++
++    /** DEC-067: only without all three actions the project is unknown. ticket.create alone must allow creating. */
++    @Test
++    void reviewCreateWithoutReadActionMustCreateTheTicket() {
++        Person reporter = person();
++        Project project = project(reporter);
++        grant(reporter.id(), project.id(), "ticket.create", "READ:*", "WRITE:*");
++        Response created = create(reporter, project, "Nur melden");
++        long stored = jdbc.queryForObject("select count(*) from ticket where project_id = ?", Long.class, project.id());
++        assertEquals(201, created.status(), "observed " + created.status() + " " + created.body() + ", stored tickets " + stored);
++    }
++
++    /** DEC-067: ticket.edit alone is not "none of the three"; a change must not end as unknown project with rollback. */
++    @Test
++    void reviewEditWithoutReadActionMustChangeTheTicket() {
++        Person writer = person();
++        Person editor = person();
++        Project project = project(writer, editor);
++        grant(writer.id(), project.id(), FULL);
++        grant(editor.id(), project.id(), "ticket.edit", "READ:*", "WRITE:*");
++        assertEquals(201, create(writer, project, "Vorher").status());
++        Response changed = patch(editor, project, 1, map("title", "Nachher"), "\"1\"");
++        String title = jdbc.queryForObject("select title from ticket where project_id = ?", String.class, project.id());
++        assertEquals(200, changed.status(), "observed " + changed.status() + " " + changed.body() + ", stored title " + title);
++    }
++
++    /** Input with a NUL character is a normal invalid input and must not end as 500. */
++    @Test
++    void reviewNulCharacterInTextMustBeValidation400() {
++        Person worker = person();
++        Project project = project(worker);
++        grant(worker.id(), project.id(), FULL);
++        Response title = create(worker, project, map("type", "task", "title", "a\u0000b"));
++        Response description = create(worker, project, map("type", "task", "title", "ok", "description", "x\u0000y"));
++        assertEquals(List.of(400, 400), List.of(title.status(), description.status()),
++            "observed " + title.body() + " / " + description.body());
++    }
++
++    /** Observation only: the ticket body shows that, when and by whom a hidden field was changed. */
++    @Test
++    void reviewHiddenChangeShowsInVersionAndUpdatedBy() {
++        Person writer = person();
++        Person restricted = person();
++        Project project = project(writer, restricted);
++        grant(writer.id(), project.id(), FULL);
++        grant(restricted.id(), project.id(), "ticket.read", "READ:*");
++        grant(restricted.id(), project.id(), "DENY-READ:description");
++        assertEquals(201, create(writer, project, map("type", "task", "title", "Sichtbar", "description", "geheim")).status());
++        assertEquals(200, patch(writer, project, 1, map("description", "geheimer"), "\"1\"").status());
++        Response read = restricted.get(tickets(project) + "/1");
++        Response history = restricted.get(tickets(project) + "/1/history");
++        assertEquals("\"2\"", read.header("ETag"));
++        assertEquals(writer.id().toString(), read.json().get("updatedBy").asString());
++        assertEquals(1, history.json().size());
++    }
++
++    /** A rights revocation that holds the revision row first is seen by the waiting change; nothing is written. */
++    @Test
++    void reviewChangeWaitsForConcurrentRightsRevocationAndIsRefused() throws Exception {
++        Person member = person();
++        Project project = project(member);
++        grant(member.id(), project.id(), FULL);
++        assertEquals(201, create(member, project, "Unverändert").status());
++        CountDownLatch locked = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        Future<?> revocation = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
++            UUID company = companies.find().orElseThrow();
++            jdbc.queryForList("select revision from permissions_revision where company_id = ? for update", company);
++            locked.countDown();
++            try {
++                assertTrue(release.await(30, TimeUnit.SECONDS));
++            } catch (InterruptedException interrupted) {
++                Thread.currentThread().interrupt();
++            }
++            jdbc.update("delete from permissions_membership where company_id = ? and user_id = ?", company, member.id());
++            jdbc.update("update permissions_revision set revision = revision + 1 where company_id = ?", company);
++        }));
++        try {
++            assertTrue(locked.await(15, TimeUnit.SECONDS));
++            Future<Response> change = POOL.submit(() -> patch(member, project, 1, map("title", "Geändert"), "\"1\""));
++            assertTrue(waitsAt("from permissions_revision"), "the change must wait at the revision row");
++            release.countDown();
++            revocation.get(15, TimeUnit.SECONDS);
++            Response refused = change.get(20, TimeUnit.SECONDS);
++            assertTrue(refused.status() == 404 || refused.status() == 403, refused.body());
++        } finally {
++            release.countDown();
++            revocation.get(15, TimeUnit.SECONDS);
++        }
++        assertEquals("Unverändert", jdbc.queryForObject("select title from ticket where project_id = ?", String.class, project.id()));
++        assertEquals(1L, jdbc.queryForObject("select count(*) from ticket_change c join ticket t on t.id = c.ticket_id where t.project_id = ? and c.version > 1", Long.class, project.id()) + 1);
++    }
++
++    /** An assignee who is being deactivated: the assignment waits at the account row and is refused after the commit. */
++    @Test
++    void reviewAssignmentWaitsForConcurrentDeactivationOfTheAssignee() throws Exception {
++        Person worker = person();
++        Person colleague = person();
++        Project project = project(worker, colleague);
++        grant(worker.id(), project.id(), FULL);
++        assertEquals(201, create(worker, project, "Zuweisen").status());
++        CountDownLatch locked = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        Future<?> deactivation = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
++            jdbc.queryForList("select id from identity_account where id = ? for update", colleague.id());
++            locked.countDown();
++            try {
++                assertTrue(release.await(30, TimeUnit.SECONDS));
++            } catch (InterruptedException interrupted) {
++                Thread.currentThread().interrupt();
++            }
++            jdbc.update("update identity_account set active = false where id = ?", colleague.id());
++        }));
++        try {
++            assertTrue(locked.await(15, TimeUnit.SECONDS));
++            Future<Response> change = POOL.submit(() -> patch(worker, project, 1, map("assignee", colleague.id().toString()), "\"1\""));
++            assertTrue(waitsAt("from identity_account"), "the assignment must wait at the account row");
++            release.countDown();
++            deactivation.get(15, TimeUnit.SECONDS);
++            Response refused = change.get(20, TimeUnit.SECONDS);
++            assertEquals(400, refused.status(), refused.body());
++            assertEquals(List.of("assignee.not_member"), refused.violations());
++        } finally {
++            release.countDown();
++            deactivation.get(15, TimeUnit.SECONDS);
++        }
++        assertNull(jdbc.queryForObject("select assignee from ticket where project_id = ?", UUID.class, project.id()));
++    }
++
++    /** Two changes with the same ETag: exactly one wins, the other gets 412, the history holds one version 2. */
++    @Test
++    void reviewTwoChangesWithTheSameVersionYieldOneConflict() throws Exception {
++        Person worker = person();
++        Person colleague = person();
++        Project project = project(worker, colleague);
++        grant(worker.id(), project.id(), FULL);
++        grant(colleague.id(), project.id(), FULL);
++        assertEquals(201, create(worker, project, "Start").status());
++        for (int round = 0; round < 5; round++) {
++            String version = "\"" + (round + 1) + "\"";
++            int r = round;
++            Future<Response> a = POOL.submit(() -> patch(worker, project, 1, map("title", "A" + r), version));
++            Future<Response> b = POOL.submit(() -> patch(colleague, project, 1, map("title", "B" + r), version));
++            List<Integer> statuses = new ArrayList<>(List.of(a.get(20, TimeUnit.SECONDS).status(), b.get(20, TimeUnit.SECONDS).status()));
++            statuses.sort(null);
++            assertEquals(List.of(200, 412), statuses);
++        }
++        assertEquals(6L, jdbc.queryForObject("select version from ticket where project_id = ?", Long.class, project.id()));
++        assertEquals(5L, jdbc.queryForObject("select count(*) from ticket_change c join ticket t on t.id = c.ticket_id where t.project_id = ? and c.version > 1", Long.class, project.id()));
++    }
++
++    /** Numbers and assignees stay inside their project, also for a person who is a member of both. */
++    @Test
++    void reviewNumbersAndAssigneesStayInsideTheirProject() {
++        Person both = person();
++        Person onlyB = person();
++        Project a = project(both);
++        Project b = project(both, onlyB);
++        grant(both.id(), null, FULL);
++        assertEquals(201, create(both, a, "Nur in A").status());
++        assertProblem(both.get(tickets(b) + "/1"), 404, "ticket.not_found");
++        assertProblem(patch(both, b, 1, map("title", "x"), "\"1\""), 404, "ticket.not_found");
++        assertProblem(both.get(tickets(b) + "/1/history"), 404, "ticket.not_found");
++        assertEquals(List.of("assignee.not_member"), patch(both, a, 1, map("assignee", onlyB.id().toString()), "\"1\"").violations());
++        assertEquals(0, both.get(tickets(b)).json().size());
++    }
++
++    /** Known F2 of TASK-026 in the ticket path: a foreign project locked by a concurrent change must answer like an unknown one. */
++    @Test
++    void reviewLockedForeignProjectMustAnswerLikeAnUnknownOne() throws Exception {
++        Person member = person();
++        Person outsider = person();
++        Project project = project(member);
++        grant(outsider.id(), null, FULL);
++        CountDownLatch locked = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        Future<?> holder = POOL.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
++            jdbc.queryForList("select id from project where id = ? for update", project.id());
++            locked.countDown();
++            try {
++                assertTrue(release.await(30, TimeUnit.SECONDS));
++            } catch (InterruptedException interrupted) {
++                Thread.currentThread().interrupt();
++            }
++        }));
++        try {
++            assertTrue(locked.await(15, TimeUnit.SECONDS));
++            assertProblem(outsider.get(tickets(project)), 404, "project.not_found");
++        } finally {
++            release.countDown();
++            holder.get(15, TimeUnit.SECONDS);
++        }
++    }
++
++    /** The contract forbids additional properties in a creation; an unknown or not creatable field must be refused. */
++    @Test
++    void reviewCreationWithAnUnknownFieldMustBeRefused() {
++        Person worker = person();
++        Project project = project(worker);
++        grant(worker.id(), project.id(), FULL);
++        Response created = create(worker, project, map("type", "task", "title", "Mit Status", "status", "done", "priority", "hoch"));
++        assertEquals(400, created.status(), "observed " + created.status() + " " + created.body());
++    }
++
