@@ -11,24 +11,31 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "deploy" / "backup" / "backup.sh"
 
 
-def run(count, files=None, clock=None, unreadable=()):
+def run(count, files=None, clock=None, unreadable=(), snapshots="[]"):
     """Runs unique_name of backup.sh count times on a fresh state directory with the given state files.
 
-    clock: a fixed second for date -u +%s (a frozen or reset clock). Returns (status, names, error).
+    clock: a fixed second for date -u +%s (a frozen or reset clock). snapshots: what restic snapshots --json prints, or
+    None for a target that cannot be read. Returns (status, names, error).
     """
-    with tempfile.TemporaryDirectory() as state:
+    with tempfile.TemporaryDirectory() as root:
+        state = os.path.join(root, "state")
+        os.mkdir(state)
+        if snapshots is not None:
+            pathlib.Path(root, "snapshots.json").write_text(snapshots)
         for name, content in (files or {}).items():
             pathlib.Path(state, name).write_text(content)
         for name in unreadable:
             pathlib.Path(state, name).mkdir()
         functions = "".join(subprocess.run(["sed", "-n", f"/^{name}() {{/,/^}}/p", str(SCRIPT)], check=True,
-                                           capture_output=True, text=True).stdout for name in ("name_epoch", "unique_name"))
+                                           capture_output=True, text=True).stdout for name in ("name_epoch", "stored_names", "unique_name"))
         frozen = "" if clock is None else (
             f'date() {{ if [ "$*" = "-u +%s" ]; then echo {clock}; else command date "$@"; fi; }}\n')
+        restic = ('restic() { return 1; }\n' if snapshots is None
+                  else 'restic() { [ "$*" = "--quiet snapshots --json" ] && cat "$ROOT/snapshots.json"; }\n')
         program = (f'last_name_file="$STATE/last-name-epoch"\nbase_name_file="$STATE/base-name"\n'
-                   f'latest_file="$STATE/latest-point"\n{frozen}{functions}\n'
+                   f'latest_file="$STATE/latest-point"\n{frozen}{restic}{functions}\n'
                    f'for i in $(seq {count}); do unique_name || exit 1; echo; done\n')
-        result = subprocess.run(["bash", "-c", program], capture_output=True, text=True, env={**os.environ, "STATE": state})
+        result = subprocess.run(["bash", "-c", program], capture_output=True, text=True, env={**os.environ, "STATE": state, "ROOT": root})
         return result.returncode, result.stdout.split(), result.stderr
 
 
@@ -67,6 +74,31 @@ class UniqueNameTest(unittest.TestCase):
         # A counter behind the names of the state does not win either.
         self.assertEqual(names(1, files={**files, "last-name-epoch": "1700000000"}, clock=1700000000),
                          ["20261124T080001Z"])
+
+    def test_a_retained_point_with_a_higher_name_than_latest_point_never_comes_back(self):
+        # TASK-140, N4: under TASK-136 a point of 10:00:00 was kept, the clock went back and the old service wrote
+        # 09:59:59 as latest-point; the base is from 08:00:00. The first run without counter reads the target as well.
+        files = {"base-name": "20261124T080000Z", "latest-point": "20261124T095959Z 2026-11-24 09:59:59+00\n"}
+        listing = ('[{"id":"%s","tags":["point","point=20261124T100000Z"]},'
+                   '{"id":"%s","tags":["point","point=20261124T095959Z"]},'
+                   '{"id":"%s","tags":["base","base=20261124T080000Z"]}]' % ("a" * 64, "b" * 64, "c" * 64))
+        for clock in (1795514399, 1795514400):  # 09:59:59 and 10:00:00
+            with self.subTest(clock=clock):
+                self.assertEqual(names(2, files=files, clock=clock, snapshots=listing),
+                                 ["20261124T100001Z", "20261124T100002Z"])
+        # A candidate left behind counts as well; with the counter the target is no longer read.
+        self.assertEqual(names(1, clock=1795514399, snapshots='[{"tags":["candidate","point=20261124T110000Z"]}]'),
+                         ["20261124T110001Z"])
+        self.assertEqual(names(1, files={"last-name-epoch": "1795514400"}, clock=1795514399, snapshots=None),
+                         ["20261124T100001Z"])
+
+    def test_a_target_that_cannot_be_read_at_the_first_run_ends_without_a_name(self):
+        for snapshots in (None, "", "kaputt"):
+            with self.subTest(snapshots=snapshots):
+                status, result, error = run(1, clock=1767225600, snapshots=snapshots)
+                self.assertEqual(1, status, result)
+                self.assertEqual([], result)
+                self.assertIn("names of the snapshots", error)
 
     def test_an_unreadable_or_damaged_state_ends_without_a_name(self):
         for files, unreadable, reason in (

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,13 +35,33 @@ class CheckTagTest(unittest.TestCase):
     def setUpClass(cls):
         cls.directory = tempfile.mkdtemp()
         git(cls.directory, "init", "-q", "-b", "main")
-        git(cls.directory, "commit", "-q", "--allow-empty", "-m", "first")
+        workflows = Path(cls.directory) / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        # An old state of main whose release workflow still reacts to pushed tags (TASK-140, N1 of the review of TASK-139).
+        (workflows / "release.yml").write_text("on:\n  push:\n    tags: ['v*']\n", encoding="utf-8")
+        git(cls.directory, "add", "-A")
+        git(cls.directory, "commit", "-q", "-m", "old release workflow")
+        cls.before_first = git(cls.directory, "rev-parse", "HEAD")
+        (workflows / "release.yml").write_text("on:\n  workflow_dispatch:\njobs:\n  release:\n    steps:\n"
+                                               "      - run: docker push x\n", encoding="utf-8")
+        git(cls.directory, "add", "-A")
+        git(cls.directory, "commit", "-q", "-m", "first releasable state")
+        cls.first = git(cls.directory, "rev-parse", "HEAD")
+        (Path(cls.directory) / "tools" / "release").mkdir(parents=True)
+        (Path(cls.directory) / "tools" / "release" / "first-releasable").write_text(cls.first + "\n", encoding="utf-8")
+        git(cls.directory, "add", "-A")
+        git(cls.directory, "commit", "-q", "-m", "name the earliest releasable state")
         cls.on_main = git(cls.directory, "rev-parse", "HEAD")
         # The reference: main when the run starts.
         cls.reference = cls.on_main
         # A commit that reaches main only after the start of the run.
         git(cls.directory, "commit", "-q", "--allow-empty", "-m", "later")
         cls.later = git(cls.directory, "rev-parse", "HEAD")
+        # A later commit whose release workflow reacts to pushed tags again.
+        (workflows / "release.yml").write_text("on:\n  workflow_dispatch:\n  push:\n    tags: ['v*']\n", encoding="utf-8")
+        git(cls.directory, "add", "-A")
+        git(cls.directory, "commit", "-q", "-m", "push trigger again")
+        cls.push_again = git(cls.directory, "rev-parse", "HEAD")
         git(cls.directory, "checkout", "-q", "-b", "side", cls.on_main)
         git(cls.directory, "commit", "-q", "--allow-empty", "-m", "side")
         cls.off_main = git(cls.directory, "rev-parse", "HEAD")
@@ -90,6 +111,28 @@ class CheckTagTest(unittest.TestCase):
                 self.assertEqual(1, result.returncode)
                 self.assertIn("full hash of a known commit", result.stderr)
 
+    def test_a_tag_before_the_earliest_releasable_state_is_refused(self):
+        # N1 of the review of TASK-139: on such a commit GitHub would run its old workflow for the pushed tag.
+        result = self.check("v1.0.4", self.before_first)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("before the earliest releasable state " + self.first, result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertEqual(0, self.check("v1.0.5", self.first).returncode)
+
+    def test_a_tagged_workflow_that_reacts_to_pushed_tags_is_refused(self):
+        result = self.check("v1.0.6", self.push_again, reference=self.push_again)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("reacts to pushed tags", result.stderr)
+
+    def test_a_reference_without_the_earliest_releasable_state_is_refused(self):
+        result = self.check("v1.0.7", self.first, reference=self.first)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("names no earliest releasable state", result.stderr)
+
+    def test_the_earliest_releasable_state_of_this_repository_is_a_full_hash(self):
+        value = (ROOT / "tools" / "release" / "first-releasable").read_text(encoding="utf-8")
+        self.assertRegex(value, r"\A[0-9a-f]{40}\n\Z")
+
     def test_an_unknown_tag_is_refused(self):
         result = subprocess.run(["bash", str(CHECK_TAG), "v9.9.9", self.reference], cwd=self.directory,
                                 capture_output=True, text=True)
@@ -132,6 +175,58 @@ class CheckTagTest(unittest.TestCase):
         self.assertIn("ref: ${{ needs.check.outputs.commit }}", release)
         self.assertNotIn("check-tag.sh", release)
         self.assertNotIn("inputs.tag", release)
+
+
+class RemoteTagTest(unittest.TestCase):
+    """The tag is compared again right before and after the publication (TASK-140, finding N2 of the review of TASK-139)."""
+
+    WORKFLOW = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    def setUp(self):
+        self.directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.directory)
+        self.work = self.directory / "work"
+        self.work.mkdir()
+        git(self.work, "init", "-q", "-b", "main")
+        git(self.work, "commit", "-q", "--allow-empty", "-m", "built")
+        self.built = git(self.work, "rev-parse", "HEAD")
+        git(self.work, "commit", "-q", "--allow-empty", "-m", "other")
+        self.other = git(self.work, "rev-parse", "HEAD")
+        git(self.work, "tag", "v1.0.0", self.built)
+        git(self.work, "tag", "-a", "v1.0.1", "-m", "annotated", self.built)
+        git(self.directory, "clone", "-q", "--bare", str(self.work), "remote.git")
+        git(self.work, "remote", "add", "origin", str(self.directory / "remote.git"))
+        block = self.WORKFLOW[self.WORKFLOW.index("# remote-tag-commit begin"):self.WORKFLOW.index("# remote-tag-commit end")]
+        self.function = textwrap.dedent("          " + block)
+
+    def remote(self, tag):
+        script = self.function + '\nremote_tag_commit "$1"\n'
+        return subprocess.run(["bash", "-c", script, "probe", tag], cwd=self.work, capture_output=True, text=True)
+
+    def test_lightweight_and_annotated_tags_name_their_commit(self):
+        for tag in ("v1.0.0", "v1.0.1"):
+            with self.subTest(tag=tag):
+                result = self.remote(tag)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(self.built, result.stdout.strip())
+
+    def test_a_tag_moved_later_names_the_other_commit(self):
+        self.assertEqual(self.built, self.remote("v1.0.0").stdout.strip())
+        git(self.work, "tag", "-f", "v1.0.0", self.other)
+        git(self.work, "push", "-q", "-f", "origin", "refs/tags/v1.0.0")
+        self.assertEqual(self.other, self.remote("v1.0.0").stdout.strip())
+
+    def test_an_unknown_tag_names_no_commit(self):
+        self.assertEqual("", self.remote("v9.9.9").stdout.strip())
+
+    def test_the_release_is_a_draft_until_the_tag_was_compared_again(self):
+        step = self.WORKFLOW[self.WORKFLOW.index("      - name: Create the release\n"):]
+        order = [step.index(text) for text in (
+            "same || {", 'gh release create "$TAG"', "if ! same; then", "gh release delete", "--draft=false",
+            "same || { echo \"::error::the tag moved during the publication")]
+        self.assertEqual(sorted(order), order)
+        self.assertIn("--verify-tag --draft", step)
+        self.assertIn("CHECKED: ${{ steps.tag.outputs.commit }}", step)
 
 
 class BundleTest(unittest.TestCase):

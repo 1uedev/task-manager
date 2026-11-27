@@ -16,9 +16,9 @@ Automatisch aus den Aufgabeneinträgen weiter unten erzeugt. Maßgeblich ist TOD
 | Kategorie | Anzahl | Bedeutung |
 |---|---:|---|
 | Frei und bearbeitbar (OFFEN) | 0 | Zur Reservierung verfügbar; Auftrag und Abhängigkeiten im Detail prüfen. |
-| Durch eine KI reserviert (IN ARBEIT) | 2 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
+| Durch eine KI reserviert (IN ARBEIT) | 1 | Für andere Sitzungen gesperrt; eingetragene Sitzung bearbeitet die Aufgabe. |
 | Blockiert (BLOCKIERT) | 3 | Nicht beginnen; Freigabe oder Voraussetzung fehlt. Ein vorhandener Besitzer bleibt zuständig. |
-| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 8 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
+| Zur Prüfung bereit (BEREIT ZUR PRÜFUNG) | 9 | Ergebnis liegt vor; keine freie Entwicklungsaufgabe und noch nicht abgenommen. |
 
 Eine Reservierung gilt nach dem Merge des Claim-PRs. Sie ist eine koordinierte Zuständigkeit, keine technische Dateisperre und kein Nachweis, dass eine KI gerade läuft. Sie verfällt nicht automatisch. [Verfahren](docs/AI_WORKFLOW.md).
 
@@ -31,7 +31,6 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | Aufgabe | Titel | Zuständige Sitzung | Aktualisiert |
 |---|---|---|---|
 | [TASK-127](#task-127-ki-anforderungsprüfung-und-wiki-überarbeitung-a16-teil-3) | KI Anforderungsprüfung und Wiki Überarbeitung (A16 Teil 3) | claude-20261117-ai-01 | 2026-11-27 |
-| [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-25 |
 
 ### Blockiert – BLOCKIERT
 
@@ -52,6 +51,7 @@ Derzeit keine Aufgaben in dieser Kategorie.
 | [TASK-136](#task-136-befunde-f1-bis-f12-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-132-beheben) | Befunde F1 bis F12 und Hinweise H1 bis H4 der Codex Prüfung von TASK-132 beheben | claude-20261123-opsfix-02 | 2026-11-23 |
 | [TASK-137](#task-137-befunde-n1-bis-n12-und-hinweise-h1-bis-h5-der-codex-prüfung-von-task-136-beheben) | Befunde N1 bis N12 und Hinweise H1 bis H5 der Codex Prüfung von TASK-136 beheben | claude-20261123-opsfix-03 | 2026-11-23 |
 | [TASK-139](#task-139-befunde-f1-bis-f10-und-hinweise-h1-bis-h4-der-codex-prüfung-von-task-137-beheben) | Befunde F1 bis F10 und Hinweise H1 bis H4 der Codex Prüfung von TASK-137 beheben | claude-20261125-opsfix-04 | 2026-11-25 |
+| [TASK-140](#task-140-befunde-n1-bis-n6-und-hinweise-h1-und-h2-der-codex-prüfung-von-task-139-beheben) | Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben | claude-20261125-opsfix-05 | 2026-11-26 |
 | [TASK-141](#task-141-befunde-f1-bis-f4-und-hinweise-h2-und-h3-der-codex-prüfung-von-task-126-beheben) | Befunde F1 bis F4 und Hinweise H2 und H3 der Codex Prüfung von TASK-126 beheben | claude-20261126-aifix-04 | 2026-11-26 |
 
 Abhängigkeiten, Arbeitsstand und nächster Schritt stehen im verlinkten Aufgabeneintrag. Abgenommene Ergebnisse stehen in [DONE.md](DONE.md).
@@ -403,7 +403,7 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 
 ## TASK-140 Befunde N1 bis N6 und Hinweise H1 und H2 der Codex Prüfung von TASK-139 beheben
 
-**Status:** IN ARBEIT · **Verantwortlich:** claude-20261125-opsfix-05 · **Aktualisiert:** 2026-11-25
+**Status:** BEREIT ZUR PRÜFUNG · **Verantwortlich:** claude-20261125-opsfix-05 · **Aktualisiert:** 2026-11-26
 
 **Bezug:** REQ-OPS-004, REQ-OPS-005, REQ-OPS-006, REQ-SEC-001; ACC-008; DEC-162, DEC-166, DEC-167, DEC-170, DEC-171; docs/REVIEW_TASK-139_PR-360.md; docs/OPERATIONS.md (Prüffälle O01 und O11). **Abhängigkeiten:** TASK-139 auf main (PR #360). **Arbeitsstand:** Holger wählt am 25. November 2026 zur Codex Prüfung von TASK-139 (Empfehlung nachbessern) „Alles beheben als TASK-140“. Geplanter Branch claude/project-thread-elfpvq, Entscheidung DEC-171, Migration V0074 nur falls nötig.
 
@@ -423,4 +423,6 @@ Jeder neue Test scheitert ohne seine Korrektur (geprüft durch Zurücknehmen der
 2. Backend Tests, Lebenszyklusprüfung und die Workflows „Update“ und „Restore“ sind grün.
 3. docs/INSTALL.md, docs/BACKUP_RESTORE.md, TODO.md und DEC-171 entsprechen dem Code.
 
-**Nächster Schritt:** Umsetzung nach Merge der Reservierung.
+**Übergabe:** Umgesetzt auf claude/project-thread-elfpvq ohne Migration. N1: `tools/release/first-releasable` nennt den Merge von PR #360 (9de437d), den ersten Stand, dessen Workflow `Release` nur von Hand startet. `check-tag.sh` liest die Datei aus dem Stand von main und lehnt ein Tag auf einem älteren Commit ab, ebenso ein Tag, dessen eigener Workflow noch auf `push` oder `create` reagiert, und einen Stand von main ohne diese Datei; Gegenproben in `tests/test_release_tools.py` mit einem Commit davor und einem späteren Commit mit wieder eingeführtem Tag Auslöser. docs/INSTALL.md beschreibt die historischen Auslöser (TASK-132 bis TASK-137) und was bei einem Tag darauf zu tun ist. N2: Der Job `release` vergleicht den Commit des Tags in `origin` (auch annotiert) unmittelbar vor dem Anlegen, legt das Release als Entwurf an, vergleicht erneut, löscht den Entwurf bei Abweichung und veröffentlicht erst dann, mit einem letzten Vergleich danach. Die Funktion steht im Workflow von main, weil der Job den getaggten Stand auscheckt; der Test führt genau diesen Block gegen ein synthetisches Remote mit leichtem, annotiertem, unbekanntem und später umgesetztem Tag aus. Schritt 4 der Anleitung schaltet unveränderliche Releases ein. N3: `CONNECTION_ONLY` nennt nur noch Datenquelle, Adresse, Konto, Passwort, Treiber, Wiederholungen und Protokollierung; JDBC Eigenschaften und Kerberos Datei werden verglichen. ClassLoader und Plugins sind an das Image gebunden (der des Images oder der eingebettete Tomcat direkt darüber ohne eigene Ressourcen; Pluginklassen mit allen Einstellungen wie bei einer frischen Konfiguration). Vor jeder Prüfung muss die Verbindung genau den Suchpfad `public` haben. Gegenproben in `SchemaGuardSettingsTest` mit einem ClassLoader mit zusätzlicher Migration, einem geänderten Plugin, `jdbcProperties(currentSchema)` und Verbindungen mit `currentSchema` und `options`. N4: `unique_name` liest beim ersten Lauf ohne Zähler zusätzlich die Namen aller Sicherungen im Ziel (`restic snapshots`, auch Kandidaten) und bricht ohne Namen ab, wenn das Ziel nicht lesbar ist; Regression in `tests/test_backup_names.py` mit aufbewahrtem Punkt 10:00:00, `latest-point` 09:59:59 und Basis 08:00:00. N5: Die Rückkehr kontrolliert nur lesend vor `docker compose down`; der Archivblock bricht beim ersten Fehler ab, benennt ein Archiv erst nach `tar -tzf` und meldet nur bei beiden Erfolg; der Löschblock verlangt beide lesbaren Archive oder ausdrücklich `archive=nein`. `tests/test_return_blocks.py` führt die Blöcke der Anleitung mit Ersatz für Docker aus, die Updateprüfung mit echten Volumes, je mit gescheitertem erstem Archiv. N6: Die Regel trägt `--ctdir ORIGINAL`; die Anleitung beschreibt die Prüfung vom Proxy mit Antwortverkehr, einen größeren Abruf, den zweiten Rechner und den Zähler der Regel. Eine echte Firewall wurde nicht geändert; die Prüfung bleibt beim Betreiber. H1: `up_ports` wählt nur selbst gewählte Ports neu, auch neben einem festen (`tests/test_update_ports.py`). H2: `check-images.sh` lehnt mehrzeilige Werte ausdrücklich ab (`tests/test_check_images.py`). H3 ohne Änderung.
+
+**Nächster Schritt:** Codex Prüfung des Ergebnis PR; Holger richtet Umgebung `release`, Tag Regelsatz und unveränderliche Releases nach docs/INSTALL.md ein; danach Abnahme von TASK-132, TASK-136, TASK-137, TASK-139 und TASK-140 durch Holger.

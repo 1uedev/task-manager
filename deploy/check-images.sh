@@ -15,8 +15,15 @@ if [ -n "${TASK_MANAGER_IMAGE:-}" ] || [ -n "${TASK_MANAGER_BACKUP_IMAGE:-}" ]; 
   refuse "TASK_MANAGER_IMAGE and TASK_MANAGER_BACKUP_IMAGE are no longer read; since TASK-137 the template takes only the
  digests as TASK_MANAGER_IMAGE_DIGEST and TASK_MANAGER_BACKUP_IMAGE_DIGEST. Remove the two old lines."
 fi
+# The whole value is checked, not line by line: a value of several lines is refused by itself, as the start of both images
+# refuses it (TASK-140, hint H2 of the review of TASK-139).
+newline='
+'
 check() {
   name=$1 value=$2
+  case $value in
+    *"$newline"*) refuse "$name holds more than one line; it must be exactly one digest of the release." ;;
+  esac
   if ! printf '%s' "$value" | grep -Eqx 'sha256:[0-9a-f]{64}'; then
     refuse "$name must be the digest the release names (sha256: and 64 hexadecimal characters); found '$value'."
   fi
