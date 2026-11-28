@@ -1,0 +1,136 @@
+[
+  {
+    "case": "delegation",
+    "onlyOwnProject": true,
+    "noMembers": true,
+    "onlyHeldActions": true,
+    "onlyHeldFields": true,
+    "negativeStatuses": [
+      403,
+      403,
+      403,
+      403,
+      403,
+      403,
+      403,
+      403
+    ],
+    "allowedChange": 204,
+    "companyDenyRemoval": 403
+  },
+  {
+    "case": "project_existence",
+    "knownStatus": 403,
+    "knownCode": "auth.forbidden",
+    "unknownStatus": 404,
+    "unknownCode": "project.not_found",
+    "normalProjectStatus": 404
+  },
+  {
+    "case": "noops_and_provenance",
+    "noOpsUnchanged": true,
+    "otherAuthorCounted": true,
+    "roleChangeCounted": true,
+    "previousEffect": "allow"
+  },
+  {
+    "case": "audit_paging",
+    "entries": 174,
+    "pageLimit": 17,
+    "duplicates": 0,
+    "complete": true
+  },
+  {
+    "case": "commit_http",
+    "status": 403,
+    "code": "auth.forbidden",
+    "elapsedSeconds": 2.95,
+    "unchangedTitle": true,
+    "unchangedVersion": true,
+    "correlation": true
+  },
+  {
+    "case": "logo",
+    "fixture": "png-rgb",
+    "independentDecode": true,
+    "bytes": 76,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "png-alpha",
+    "independentDecode": true,
+    "bytes": 78,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "jpeg-baseline",
+    "independentDecode": true,
+    "bytes": 633,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "jpeg-progressive",
+    "independentDecode": true,
+    "bytes": 521,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "jpeg-cmyk",
+    "independentDecode": true,
+    "bytes": 351,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "webp-lossy",
+    "independentDecode": true,
+    "bytes": 70,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "webp-lossless",
+    "independentDecode": true,
+    "bytes": 36,
+    "status": 200
+  },
+  {
+    "case": "logo",
+    "fixture": "webp-animated",
+    "independentDecode": true,
+    "bytes": 206,
+    "status": 200
+  },
+  {
+    "case": "malformed_webp",
+    "fixture": "anmf-only-no-image",
+    "hex": "524946461c00000057454250414e4d461000000000000000000000000000000000000000",
+    "independentDecode": false,
+    "status": 200,
+    "versionBefore": 9,
+    "versionAfter": 10
+  },
+  {
+    "case": "malformed_webp",
+    "fixture": "animated-no-frame-image",
+    "hex": "524946463c00000057454250565038580a00000002000000010000010000414e494d06000000000000000000414e4d461000000000000000000000000000000000000000",
+    "independentDecode": false,
+    "status": 200,
+    "versionBefore": 10,
+    "versionAfter": 11
+  },
+  {
+    "case": "self_reset",
+    "status": 200,
+    "selfRevocationDidNotRollback": true
+  },
+  {
+    "case": "duplicate_group_name",
+    "status": 409,
+    "code": "permissions.group_name_taken"
+  }
+]
