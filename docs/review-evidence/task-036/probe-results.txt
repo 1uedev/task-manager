@@ -1,0 +1,10 @@
+Independent review probes; 2026-10-19; reviewed main b57a63f00210e216494daed1e86b66a821ada70d
+Frontend: one additional regression assertion, 1 failed, 0 execution errors. API is mocked.
+REVIEW_PROBE_HEX {"visible":"#12","invalid":"true","saveEnabled":true,"writes":[{"method":"PUT","path":"/api/v1/appearance","body":{"accentColor":"#7c3aed"}}]}
+Backend: one additional HTTP regression assertion against PostgreSQL 18.6, 1 failed, 0 execution errors.
+REVIEW_PROBE_LOGO write=200 read=200 bytes=8 version=2 audit=1
+Expected HTTP 415; observed HTTP 200. The 8-byte PNG signature was persisted and returned.
+Mobile DOM observation: innerWidth=320, clientWidth=305, scrollWidth=305.
+brand-name rectangle x=66.39..133.16, y=15.19..65.75;
+language select rectangle x=55.41..161.00, y=21.58..59.36. The rectangles overlap.
+Source test files were restored byte-for-byte after both probes.

@@ -1,0 +1,18 @@
+
+
+test('review probe: invalid visible hex must prevent a write after a valid draft', async () => {
+  const server = backend();
+  await withPage({ setup: server.install, hash: '#/appearance' }, async (page) => {
+    await page.waitForFunction(() => document.querySelector('[data-testid="preview-color"]')?.textContent === '#2563EB');
+    const field = page.getByLabel('Farbwert');
+    await field.fill('#7C3AED');
+    await accentBecomes(page, '#7c3aed');
+    await field.fill('#12');
+    const save = page.getByRole('button', { name: 'Für alle speichern' });
+    const before = { visible: await field.inputValue(), invalid: await field.getAttribute('aria-invalid'), saveEnabled: await save.isEnabled() };
+    if (before.saveEnabled) await save.click();
+    await page.getByText('Die Akzentfarbe ist für alle gespeichert.').waitFor();
+    console.log('REVIEW_PROBE_HEX', JSON.stringify({ ...before, writes: server.writes().map(write => ({ method: write.method, path: write.path, body: JSON.parse(write.body.toString()) })) }));
+    assert.deepEqual(server.writes(), [], 'An invalid visible value must not save a stale valid draft');
+  });
+});
