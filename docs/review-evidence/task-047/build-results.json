@@ -1,0 +1,335 @@
+{
+  "commit": "1274c318de3a2baa995118804b5debc9391e93d3",
+  "date": "2026-10-24",
+  "provenance": "Extracted from own command logs and Surefire XML, not CI results.",
+  "python": {
+    "discovered": 38,
+    "executed": 37,
+    "skipped": 1,
+    "failures": 0,
+    "utf8": true,
+    "firstRunWithoutUtf8": {
+      "failures": 8,
+      "reason": "Windows default encoding of temporary test documents"
+    },
+    "skipReason": "time.tzset unavailable on Windows"
+  },
+  "backend": {
+    "result": "BUILD SUCCESS",
+    "duration": "06:15 min",
+    "java": "Temurin 25.0.4.1+1",
+    "postgresql": "18.6",
+    "totals": {
+      "tests": 272,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "suites": [
+      {
+        "name": "taskmanager.AdminCommandTest",
+        "tests": "6",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "32.622"
+      },
+      {
+        "name": "taskmanager.appearance.AppearanceApiTest",
+        "tests": "10",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "10.846"
+      },
+      {
+        "name": "taskmanager.appearance.AppearanceContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "2.006"
+      },
+      {
+        "name": "taskmanager.ApplicationLifecycleTest",
+        "tests": "2",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "3.939"
+      },
+      {
+        "name": "taskmanager.DatabaseFoundationTest",
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.933"
+      },
+      {
+        "name": "taskmanager.identity.account.RulesTest",
+        "tests": "7",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.42"
+      },
+      {
+        "name": "taskmanager.identity.AdministrationRightsApiTest",
+        "tests": "10",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "12.129"
+      },
+      {
+        "name": "taskmanager.identity.directory.DirectoryIdentifierTest",
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.009"
+      },
+      {
+        "name": "taskmanager.identity.IdentityApiTest",
+        "tests": "33",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "19.093"
+      },
+      {
+        "name": "taskmanager.identity.IdentityContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "1.11"
+      },
+      {
+        "name": "taskmanager.identity.IdentityHardeningTest",
+        "tests": "12",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "5.831"
+      },
+      {
+        "name": "taskmanager.identity.LdapLoginTest",
+        "tests": "25",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "16.786"
+      },
+      {
+        "name": "taskmanager.identity.LdapTlsTest",
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "6.797"
+      },
+      {
+        "name": "taskmanager.identity.PermissionContextsProbeTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "3.112"
+      },
+      {
+        "name": "taskmanager.identity.session.TokensTest",
+        "tests": "3",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.014"
+      },
+      {
+        "name": "taskmanager.identity.web.AdministrationRightsWiringTest",
+        "tests": "5",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.06"
+      },
+      {
+        "name": "taskmanager.IdentityPermissionsAdapterTest",
+        "tests": "18",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "28.992"
+      },
+      {
+        "name": "taskmanager.MigrationConventionTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "10.313"
+      },
+      {
+        "name": "taskmanager.ModuleStructureTest",
+        "tests": "2",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.597"
+      },
+      {
+        "name": "taskmanager.permissions.internal.PolicyTest",
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.036"
+      },
+      {
+        "name": "taskmanager.permissions.PermissionsIntegrationTest",
+        "tests": "24",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "11.004"
+      },
+      {
+        "name": "taskmanager.PermissionsApiTest",
+        "tests": "8",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "18.131"
+      },
+      {
+        "name": "taskmanager.PermissionsContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "2.016"
+      },
+      {
+        "name": "taskmanager.platform.web.ProblemResponsesTest",
+        "tests": "5",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "2.506"
+      },
+      {
+        "name": "taskmanager.platform.web.WebInterfaceHeadersTest",
+        "tests": "3",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "2.002"
+      },
+      {
+        "name": "taskmanager.projects.ProjectConfigurationApiTest",
+        "tests": "11",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "25.076"
+      },
+      {
+        "name": "taskmanager.projects.ProjectConfigurationTest",
+        "tests": "13",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.065"
+      },
+      {
+        "name": "taskmanager.projects.ProjectsApiTest",
+        "tests": "10",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "13.523"
+      },
+      {
+        "name": "taskmanager.projects.ProjectsContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "2.113"
+      },
+      {
+        "name": "taskmanager.RequestPermissionContextsTest",
+        "tests": "2",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "0.871"
+      },
+      {
+        "name": "taskmanager.search.SearchApiTest",
+        "tests": "13",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "57.455"
+      },
+      {
+        "name": "taskmanager.search.SearchContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "1.402"
+      },
+      {
+        "name": "taskmanager.tags.TagsApiTest",
+        "tests": "12",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "16.408"
+      },
+      {
+        "name": "taskmanager.tags.TagsContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "1.204"
+      },
+      {
+        "name": "taskmanager.tickets.TicketsApiTest",
+        "tests": "13",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "19.04"
+      },
+      {
+        "name": "taskmanager.tickets.TicketsContractTest",
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "1.032"
+      }
+    ]
+  },
+  "frontend": {
+    "npmCi": "success",
+    "verify": "success",
+    "tests": 75,
+    "failed": 0,
+    "generationTypecheckBuild": "success"
+  },
+  "browser": {
+    "tests": 92,
+    "suites": 16,
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 131275.5201,
+    "testConcurrency": 1
+  }
+}

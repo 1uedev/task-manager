@@ -1,0 +1,16 @@
+[ {
+  "case" : "before-resume",
+  "kind" : "local",
+  "externalCleared" : true,
+  "localPasswordChangeComplete" : true,
+  "oldSessionAuthenticated" : false
+}, {
+  "case" : "ldap-after-conversion-and-password-change",
+  "status" : 200,
+  "level" : "full",
+  "authKind" : "local",
+  "username" : "race-person",
+  "accountsStatus" : 200,
+  "freshDirectoryPasswordStatus" : 401,
+  "localAccountCount" : 1
+} ]
