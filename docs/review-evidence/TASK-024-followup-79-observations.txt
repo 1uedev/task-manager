@@ -1,0 +1,11 @@
+Independent follow-up to PR #79; product main 370a69cec0c6b4bfc8432f04247d40870a17ede7
+Temurin 25.0.4.1+1 / Maven 3.9.16 / native PostgreSQL 18.6 / synthetic isolated databases
+Unmodified baseline before probes: 83 tests, 0 failures, 0 errors, 0 skipped; verify successful
+Final probes use direct public product methods without an extra outer transaction.
+Passing probe assertions CONFIRM the residual bugs; they are not security acceptance.
+
+FOLLOWUP N1: concurrent rotation escaped shortening; expired replacement token revived after 1 -> 24
+FOLLOWUP N2: real V0003 -> V0004 upgrade allowed the already-used credential to start a second session
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.37 s -- in taskmanager.identity.IdentityFixesFollowupProbeTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
