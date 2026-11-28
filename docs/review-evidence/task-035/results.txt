@@ -1,0 +1,91 @@
+TASK-035 / PR #62 — independent correction review
+Session: codex-20261020-qualification-followup-01
+Executed: 2026-10-20
+Main baseline: 3e3349ec7cfd8854138af6c4d9b405d33e4a32f2
+PR #62 final head: 8d7b11ac3d766dabd232db013f7bd76450acf49f
+PR integration: 03350ba
+Relevant qualification sources, contract, workflow and attributes unchanged since that integration.
+
+SELF-EXECUTED ORIGINAL SOURCE RUN
+Windows; Temurin 25.0.4.1+1; Maven 3.9.16 via the checked-out mvnw.cmd
+clean verify -Dtest=ModuleQualificationTest,TransportFixtureTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+SELF-EXECUTED NATIVE DATABASE RUN (test connection adapter applied)
+PostgreSQL native server_version: 18.6; dedicated synthetic local database
+All nine test cases and assertions unchanged; only test datasource setup adapted.
+clean verify
+Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+Q1 RECORDS MUTATION — only RecordService MANDATORY removed
+moduleWritesRequireAnExistingTransaction:
+Expected IllegalTransactionStateException to be thrown, but nothing was thrown.
+Tests run: 5, Failures: 1, Errors: 0, Skipped: 0
+BUILD FAILURE (expected assertion failure)
+Mutation restored before the next experiment.
+
+Q1 PROJECTION MUTATION — only JdbcProjection MANDATORY removed
+moduleWritesRequireAnExistingTransaction:
+Unexpected exception type thrown, expected IllegalTransactionStateException
+but was DataIntegrityViolationException (foreign key rejection of the unguarded insert).
+Tests run: 5, Failures: 1, Errors: 0, Skipped: 0
+BUILD FAILURE (expected assertion failure)
+Mutation restored before the next experiment.
+
+Q2 MUTATION — swapped invalidaccess and invalidcycle fixture package selections
+foreignInternalAccessIsRejected: actual violation is Cycle detected
+dependencyCyclesAreRejected: actual violation is depends on non-exposed type
+Tests run: 3, Failures: 2, Errors: 0, Skipped: 0
+BUILD FAILURE (expected assertion failures)
+
+SELF-EXECUTED POSITIVE RETURN WITH NATIVE DATABASE ADAPTER
+All three behavior mutations removed; clean verify
+Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+SELF-EXECUTED CLIENT RUN
+Node 24.22.0; npm 11.19.1
+npm ci --ignore-scripts: success
+npm run verify: generation, TypeScript check, six tests and Vite build successful
+tests 6; pass 6; fail 0; skipped 0
+Generated API types: no Git diff
+The first client attempt lacked fixtures because a simultaneous reviewer clean removed them.
+The complete run was repeated after the positive Java build and passed.
+
+Q3 BYTE COMPARISON ON FRESH WINDOWS CHECKOUT
+git attributes: text=set, eol=crlf
+Checked-out mvnw.cmd: 8481 bytes, 189 CRLF, 0 bare LF
+Archive: maven-wrapper-distribution-3.3.4-only-script.zip from Maven Central
+Archive SHA-256: 6cb584c2bc907b849a0b931d8266d3ff3214cdd3127115ed4f49fb7176413d36
+Original archive entry mvnw.cmd: 8481 bytes
+Direct byte equality: true
+Checked-out cmd SHA-256: 46eedb8419bd14fe70d5bb2916d7b6f51806e51b39d5b76a42610384ca929c1c
+Wrapper used successfully for all local Maven commands.
+
+Q4 AND FINAL RESTORATION
+TransportFixtureTest uses asString(); no deprecation/asText warning in original/native clean logs.
+TransactionQualificationTest, RecordService, JdbcProjection, ModuleQualificationTest:
+each restored SHA-256 equals its saved original SHA-256.
+git diff --exit-code -- qualification .gitattributes: exit 0
+Original ModuleQualificationTest and TransportFixtureTest clean verify repeated after restoring the connection setup.
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0; BUILD SUCCESS.
+
+SELF-EXECUTED REPOSITORY CHECKS
+Repository validator, task board, 25 Python regression tests and staged diff whitespace check: successful.
+
+SEPARATELY READ CI — NOT A LOCAL CONTAINER RUN
+Docker daemon was unreachable locally; the unmodified nine-case container run was not reexecuted locally.
+Positive final-head run: https://github.com/1uedev/task-manager/actions/runs/39116142898
+Job: 117642211670
+Pinned PostgreSQL image: sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+2026-10-18T09:39:20.0952417Z Flyway: PostgreSQL 18.6
+2026-10-18T09:39:22.5695721Z Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+2026-10-18T09:39:23.4381480Z BUILD SUCCESS
+2026-10-18T09:39:34.9115982Z tests 6
+2026-10-18T09:39:34.9117590Z pass 6
+Earlier author mutation: https://github.com/1uedev/task-manager/actions/runs/39116009163
+Job: 117641823956
+2026-10-18T09:37:24.7802109Z Tests run: 9, Failures: 1, Errors: 0, Skipped: 0
+The sole failure was moduleWritesRequireAnExistingTransaction, expected exception absent.

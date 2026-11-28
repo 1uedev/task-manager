@@ -1,0 +1,45 @@
+# Unabhängige Nachprüfung TASK-035 / PR #62
+
+Stand: 20. Oktober 2026. Prüfer: Codex, Sitzung `codex-20261020-qualification-followup-01`, eigener Arbeitsbereich und Branch `review/task-035-pr62-codex`.
+
+**Ergebnis: Q1 bis Q4 sind für die geprüften Abläufe korrigiert; keine neuen Befunde.** Die zusätzlichen Gegenproben erkennen eine entfernte Transaktionspflicht in jedem der beiden Modulports und die falsche Verstoßart der Modulprüfung. Der Windows-Wrapper ist bytegleich mit dem passenden Apache-Original. Das Ergebnis ist eine begrenzte technische Nachprüfung, keine neue fachliche Abnahme oder allgemeine Produktfreigabe.
+
+## Prüfgrundlage und Zuständigkeit
+
+Geprüft wurden Claudes Korrekturen aus [PR #62](https://github.com/1uedev/task-manager/pull/62), finaler Head `8d7b11ac3d766dabd232db013f7bd76450acf49f`, integriert als `03350ba`. Grundlage der eigenen Ausführung ist main `3e3349ec7cfd8854138af6c4d9b405d33e4a32f2`. Ein Git-Vergleich mit `03350ba` ergab keine Änderungen an `qualification/`, dem synthetischen OpenAPI-Vertrag, dem Qualifikationsworkflow oder `.gitattributes`.
+
+DONE.md dokumentiert die bereits erfolgte Abnahme von TASK-035 durch Holger und die noch fehlende unabhängige Prüfung der Änderung. Dieser Bericht holt diese Prüfung gemäß DEC-040 nach. Der ursprüngliche Qualifikationsversuch stammt aus Codex-Arbeit; die Gegenprüfung hier betrifft ausdrücklich **Claudes Korrekturen**, nicht eine unabhängige Gesamtprüfung der eigenen ursprünglichen Umsetzung. Maßstab sind die ursprünglichen Q1–Q4 aus [REVIEW_TASK-021_TASK-033.md](REVIEW_TASK-021_TASK-033.md), die TASK-035-Kriterien in DONE.md, DEC-054, REQ-ARCH-002, REQ-DATA-001, REQ-DEV-005 und die dokumentierten technischen Grenzen in TECHNICAL_BASELINE.md und TECHNICAL_CONTRACTS.md.
+
+TASK-026 ist mit [Claim-PR #104](https://github.com/1uedev/task-manager/pull/104) für Claude vorgesehen. Hier werden weder Projektcode noch zentrale Verträge, Reservierungen oder Aufgabenstatus geändert. Der Bericht übernimmt keine blockierte Entwicklungsaufgabe.
+
+## Bewertung der vier Korrekturen
+
+| Befund | Fundstelle | Eigenständig geprüfter Nachweis | Ergebnis |
+|---|---|---|---|
+| Q1, Transaktionspflicht bisher nicht negativ geprüft | [TransactionQualificationTest.java:65–68](https://github.com/1uedev/task-manager/blob/8d7b11ac3d766dabd232db013f7bd76450acf49f/qualification/backend/src/test/java/com/example/qualification/TransactionQualificationTest.java#L65), RecordService und JdbcProjection | Beide Ports werden ohne äußere Transaktion aufgerufen; erwartet ist IllegalTransactionStateException. Zwei getrennte Mutationen entfernen jeweils nur die Pflichtannotation eines Ports. Jede lässt genau den neuen Test scheitern, die übrigen vier Transaktionsfälle bestehen. Nach Wiederherstellung wieder grün. | **Korrigiert.** Der Test erkennt den Verlust der Pflicht unabhängig für beide Ports. |
+| Q2, Negativtests ließen jede beliebige Modulverletzung genügen | [ModuleQualificationTest.java:19–29](https://github.com/1uedev/task-manager/blob/8d7b11ac3d766dabd232db013f7bd76450acf49f/qualification/backend/src/test/java/com/example/qualification/ModuleQualificationTest.java#L19) | Die beiden fehlerhaften Fixtures wurden vertauscht, ihre tatsächlichen Violations blieben bestehen. Beide Tests scheitern nun an der jeweils falschen Verstoßart; der erlaubte Modulaufbau besteht. Danach zurückgesetzt und grün. | **Korrigiert.** Ein bloßer anderer Modulfehler lässt diese Tests nicht mehr bestehen. |
+| Q3, Batchwrapper mit LF statt CRLF | [.gitattributes:2](https://github.com/1uedev/task-manager/blob/8d7b11ac3d766dabd232db013f7bd76450acf49f/.gitattributes#L2), qualification/backend/mvnw.cmd | Frischer eigener Windows-Worktree: Git-Attribute `text` und `eol=crlf`, 189 CRLF, kein alleinstehendes LF. 8.481 Byte, bytegleich mit mvnw.cmd aus Apache Maven Wrapper 3.3.4 **only-script**. Der Wrapper wurde für die eigenen Mavenläufe tatsächlich benutzt. | **Korrigiert und auf Windows ausgeführt.** |
+| Q4, veralteter Jackson-Aufruf | [TransportFixtureTest.java:18](https://github.com/1uedev/task-manager/blob/8d7b11ac3d766dabd232db013f7bd76450acf49f/qualification/backend/src/test/java/com/example/qualification/TransportFixtureTest.java#L18) | `asString()` ersetzt `asText()`. Saubere Neukompilierung und Transporttest erfolgreich; in den eigenen Compiler-/Testprotokollen keine Deprecation-Meldung dieser Testklasse. Die tatsächlich erzeugten Java-Fixtures werden von den sechs Clienttests verarbeitet. | **Korrigiert.** Keine Aussage über Warnungen oder veraltete APIs sämtlicher Abhängigkeiten. |
+
+## Ausgeführte Prüfungen und Aussagegrenzen
+
+| Prüfung | Tatsächliches Ergebnis |
+|---|---|
+| Unveränderte Originalquellen, Modul- und Transporttests | Windows, Temurin 25.0.4.1+1, Maven-Wrapper 3.9.16: `clean verify -Dtest=ModuleQualificationTest,TransportFixtureTest`, **4 Tests grün**, keine übersprungen. Nach vollständiger Wiederherstellung erneut ausgeführt. |
+| Alle neun Java-Testfälle gegen eigenes PostgreSQL | **9 grün**, keine übersprungen, Flyway-Migration, Commit und Rückabwicklung geprüft. Eigene native PostgreSQL **18.6**. Dafür wurde ausschließlich die Testverbindung vorübergehend von Testcontainers auf Systemeigenschaften umgestellt; keine Assertions oder Transaktionsregeln abgeschwächt. Nach den Mutationen derselbe vollständige Lauf erneut **9 grün**. |
+| Records-Mutation | Nur die MANDATORY-Annotation in RecordService entfernt. **5 Tests, 1 erwarteter Assertion-Fehlschlag, 0 Ausführungsfehler, 0 übersprungen**: Die erwartete IllegalTransactionStateException blieb aus. |
+| Projection-Mutation | Nur die MANDATORY-Annotation in JdbcProjection entfernt. **5 Tests, 1 erwarteter Assertion-Fehlschlag, 0 Ausführungsfehler, 0 übersprungen**: Statt IllegalTransactionStateException gelangte der Aufruf bis zur Datenbank und scheiterte an der Fremdschlüsselprüfung mit DataIntegrityViolationException. Das ist eine erkannte Abweichung, kein Nachweis erfolgreichen Schreibens außerhalb der Transaktion. |
+| Vertauschte Modul-Fixtures | **3 Tests, 2 erwartete Assertion-Fehlschläge, 0 Ausführungsfehler, 0 übersprungen**: „Cycle detected“ statt „depends on non-exposed type“ und umgekehrt. |
+| Synthetischer Client | Node **24.22.0**, `npm ci --ignore-scripts`, `npm run verify`: Generierung ohne Git-Diff, Typprüfung, **6 Tests grün**, Build erfolgreich. Java-Fixtures aus dem abgeschlossenen positiven Neun-Test-Lauf. Der erste eigene Clientversuch scheiterte wegen gleichzeitig von meinem Java-Neuaufbau gelöschter Fixtures; nach korrekter Reihenfolge vollständig wiederholt. |
+| Wrapper-Herkunft | Archiv [maven-wrapper-distribution-3.3.4-only-script.zip](https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper-distribution/3.3.4/maven-wrapper-distribution-3.3.4-only-script.zip) bezogen; SHA-256 `6cb584c2bc907b849a0b931d8266d3ff3214cdd3127115ed4f49fb7176413d36` stimmt mit TECHNICAL_BASELINE.md überein. Bytevergleich des enthaltenen mvnw.cmd mit dem frischen Checkout erfolgreich. |
+| Repository | Repository-Validator, Aufgabenübersicht, **25 Python-Regressionstests** und `git diff --check` einschließlich Bericht/Nachweisen erfolgreich. |
+
+Docker ist lokal installiert, sein Daemon war beim Zugriff nicht erreichbar. Deshalb wird hier **kein selbst ausgeführter unveränderter Neun-Test-Containerlauf** behauptet. Das getrennt gelesene [CI-Protokoll 39116142898](https://github.com/1uedev/task-manager/actions/runs/39116142898) am finalen PR-Head belegt den unveränderten Lauf mit dem festgeschriebenen PostgreSQL-18.6-Image, **9 Java- und 6 Clienttests** sowie erfolgreichen Build. Auch die frühere [Autorenmutation 39116009163](https://github.com/1uedev/task-manager/actions/runs/39116009163) wurde nachgelesen: 9 Tests, genau ein Assertion-Fehlschlag wegen fehlender Transaktionspflicht. Diese CI-Nachweise sind gelesene Nachweise und werden von den eigenen Läufen getrennt.
+
+Die [Reproduktionsquellen und gekürzten tatsächlichen Ergebnisse](review-evidence/task-035/README.md) enthalten den lokalen Verbindungsadapter und die drei Mutationen. Alle vier vorübergehend geänderten Java-Dateien wurden danach anhand ihrer SHA-256-Werte bytegleich wiederhergestellt. `git diff --exit-code -- qualification .gitattributes` ist leer; die Originaltests wurden abschließend sauber neu kompiliert. Die eigene Testdatenbank wurde beendet. Veröffentlicht werden ausschließlich Dokumente und Nachweise.
+
+## Übergabe
+
+Aus Q1–Q4 bleibt für die geprüften Fälle kein konkreter offener Befund. Q5–Q7 sowie T1/T2 aus dem ursprünglichen Bericht werden durch diese begrenzte Nachprüfung nicht geschlossen und auch nicht pauschal als weiterhin vorhandene Produktfehler bewertet. Es wurden keine produktiven Endpunkte, Rechteentzüge, Last-/Restoreziele oder Browserabläufe geprüft und keine allgemeine Abhängigkeits- oder Sicherheitsfreigabe erteilt.
+
+TODO.md, DONE.md, die bestätigten Entscheidungen und Claudes Zuständigkeit für TASK-026 bleiben unverändert. Die technische Nachprüfung ersetzt oder wiederholt Holgers bereits dokumentierte fachliche Abnahme von TASK-035 nicht.

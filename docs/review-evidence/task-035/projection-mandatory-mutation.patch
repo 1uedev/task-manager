@@ -1,0 +1,12 @@
+diff --git a/qualification/backend/src/test/java/com/example/qualification/valid/projection/internal/JdbcProjection.java b/qualification/backend/src/test/java/com/example/qualification/valid/projection/internal/JdbcProjection.java
+index 8268324..31318d9 100644
+--- a/qualification/backend/src/test/java/com/example/qualification/valid/projection/internal/JdbcProjection.java
++++ b/qualification/backend/src/test/java/com/example/qualification/valid/projection/internal/JdbcProjection.java
+@@ -12,7 +12,6 @@ class JdbcProjection implements Projection {
+     private final JdbcTemplate jdbc;
+     JdbcProjection(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+     @Override
+-    @Transactional(propagation = Propagation.MANDATORY)
+     public void index(UUID id, String text) {
+         jdbc.update("insert into probe_projection (record_id, body) values (?, ?)", id, text);
+     }
