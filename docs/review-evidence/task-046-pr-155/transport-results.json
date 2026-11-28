@@ -1,0 +1,28 @@
+[ {
+  "case" : "hostname-ldaps",
+  "trusted" : "authenticated",
+  "wrongName" : "directory.tls_failed",
+  "wrongNameSearchBinds" : 0,
+  "wrongNamePersonBinds" : 0
+}, {
+  "case" : "hostname-starttls",
+  "trusted" : "authenticated",
+  "wrongName" : "directory.tls_failed",
+  "wrongNameSearchBinds" : 0,
+  "wrongNamePersonBinds" : 0
+}, {
+  "case" : "untrusted-ldaps",
+  "reason" : "directory.tls_failed"
+}, {
+  "case" : "untrusted-starttls",
+  "reason" : "directory.tls_failed"
+}, {
+  "case" : "trust-store-missing-file",
+  "failedClosed" : true
+}, {
+  "case" : "trust-store-wrong-password",
+  "failedClosed" : true
+}, {
+  "case" : "trust-store-wrong-type",
+  "failedClosed" : true
+} ]
