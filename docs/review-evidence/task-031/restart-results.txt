@@ -1,0 +1,4 @@
+ok      session of anna is still valid after the restart
+ok      fixed end unchanged (2026-10-23T06:08:30.690978200Z before, 2026-10-23T06:08:30.690978Z after)
+ok      data kept, anna sees ['APP', 'HELP', 'WEB']
+all checks passed

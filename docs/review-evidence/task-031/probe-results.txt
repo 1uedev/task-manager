@@ -1,0 +1,11 @@
+PERCENTILES: nearest-rank p50/p95/p99 => 50/95/99 for 1..100
+AGGREGATES CONSISTENT: measurement-20261021-193921.json 5365 samples;
+AGGREGATES CONSISTENT: measurement-20261021-195144.json 3523 samples;
+AGGREGATES CONSISTENT: measurement-20261021-195747.json 62127 samples;
+NOTE: published files contain aggregates, not individual latency observations
+COMPLEX QUERY CONSTRUCTION: {"queries": 10000, "structurally_zero_matches": 8914, "tags_from_different_project_catalogs": 8331, "tag_outside_selected_projects": 7988, "example": {"projects": ["p0", "p2", "p3"], "tag_project_origins": ["p1", "p2", "p3", "p4"]}}
+Reason: ticket tags are AND filters; a ticket cannot carry tags from two project catalogs
+WRITE TIMING: controlled GET=900 ms, PATCH=10 ms => sample=10 ms; GET is not included
+WRITE TARGET: None
+POST RETRY: one Client.call => 2 accepted creations; caller sees success id 2
+SESSION TIME CALCULATION: {"timezone": ["Mitteleuropäische Zeit", "Mitteleuropäische Sommerzeit"], "actual_hours": 24, "verify_formula_hours": 23.0}

@@ -1,0 +1,12 @@
+FAILED  session ends after the default of 24 hours (23.00 h left)
+ok      anna sees her three projects ['APP', 'HELP', 'WEB']
+ok      carla sees only WEB
+ok      carla reads no description or assignee ['status', 'title', 'type']
+ok      carla may change no field
+ok      a change by carla is refused (403)
+ok      carla does not find the HELP ticket about the printer
+ok      david finds the printer ticket in HELP
+ok      david finds nothing from WEB
+ok      ben changes a ticket
+ok      an outdated change is a conflict (412)
+ok      the search finds the new title right away
