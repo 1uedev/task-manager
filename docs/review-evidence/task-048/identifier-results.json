@@ -1,0 +1,84 @@
+{
+  "byteStringsChecked" : 65792,
+  "collisionsFound" : 0,
+  "samples" : [ {
+    "rawHex" : "656e7472792d757569642d313233",
+    "oldKey" : "entry-uuid-123",
+    "newKey" : "entry-uuid-123",
+    "unchanged" : true
+  }, {
+    "rawHex" : "4dc3bc6c6c65722d3137",
+    "oldKey" : "Müller-17",
+    "newKey" : "Müller-17",
+    "unchanged" : true
+  }, {
+    "rawHex" : "20696420",
+    "oldKey" : "id",
+    "newKey" : " id ",
+    "unchanged" : false
+  }, {
+    "rawHex" : "6964",
+    "oldKey" : "id",
+    "newKey" : "id",
+    "unchanged" : true
+  }, {
+    "rawHex" : "2020",
+    "oldKey" : null,
+    "newKey" : "hex:2020",
+    "unchanged" : false
+  }, {
+    "rawHex" : "6865783a3830",
+    "oldKey" : "hex:80",
+    "newKey" : "hex:6865783a3830",
+    "unchanged" : false
+  }, {
+    "rawHex" : "4845583a3830",
+    "oldKey" : "HEX:80",
+    "newKey" : "HEX:80",
+    "unchanged" : true
+  }, {
+    "rawHex" : "016964",
+    "oldKey" : "id",
+    "newKey" : "hex:016964",
+    "unchanged" : false
+  }, {
+    "rawHex" : "6964c285",
+    "oldKey" : "id",
+    "newKey" : "hex:6964c285",
+    "unchanged" : false
+  }, {
+    "rawHex" : "c3a9",
+    "oldKey" : "é",
+    "newKey" : "é",
+    "unchanged" : true
+  }, {
+    "rawHex" : "65cc81",
+    "oldKey" : "é",
+    "newKey" : "é",
+    "unchanged" : true
+  }, {
+    "rawHex" : "f09f9880",
+    "oldKey" : "😀",
+    "newKey" : "😀",
+    "unchanged" : true
+  }, {
+    "rawHex" : "e2808b",
+    "oldKey" : "​",
+    "newKey" : "​",
+    "unchanged" : true
+  }, {
+    "rawHex" : "efbbbf",
+    "oldKey" : "﻿",
+    "newKey" : "﻿",
+    "unchanged" : true
+  }, {
+    "rawHex" : "78efbfbd79",
+    "oldKey" : "x�y",
+    "newKey" : "hex:78efbfbd79",
+    "unchanged" : false
+  } ],
+  "multipleIdenticalValuesRefused" : true,
+  "lossyStringRefused" : true,
+  "invalidUtf8Key" : "hex:c328",
+  "unpairedSurrogateStringKey" : "x?y"
+}

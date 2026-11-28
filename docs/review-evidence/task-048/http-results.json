@@ -1,0 +1,188 @@
+[ {
+  "case" : "F1-original",
+  "returnedUsername" : "binary-b",
+  "distinctAccounts" : true,
+  "secondAccountsStatus" : 403,
+  "keys" : [ "hex:80808080808040808080808080808080", "hex:81818181818140818081818181818181" ]
+}, {
+  "case" : "F2-original",
+  "collisionStatus" : 401,
+  "freeRenameStatus" : 200,
+  "freeRenameAccount" : "collision-a"
+}, {
+  "case" : "F3-original",
+  "variant" : "missing",
+  "method" : "PUT",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "F3-original",
+  "variant" : "missing",
+  "method" : "POST",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "F3-original",
+  "variant" : "null",
+  "method" : "PUT",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "F3-original",
+  "variant" : "null",
+  "method" : "POST",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "F3-original",
+  "variant" : "blank",
+  "method" : "PUT",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "F3-original",
+  "variant" : "blank",
+  "method" : "POST",
+  "status" : 400,
+  "violations" : [ "ldap.security.invalid" ]
+}, {
+  "case" : "validator-matrix",
+  "cases" : 32,
+  "internalErrors" : 0,
+  "responses" : [ {
+    "field" : "enabled",
+    "status" : 200,
+    "variant" : "missing"
+  }, {
+    "field" : "enabled",
+    "status" : 200,
+    "variant" : "null"
+  }, {
+    "field" : "enabled",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "enabled",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "url",
+    "status" : 400,
+    "variant" : "missing"
+  }, {
+    "field" : "url",
+    "status" : 400,
+    "variant" : "null"
+  }, {
+    "field" : "url",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "url",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "security",
+    "status" : 400,
+    "variant" : "missing"
+  }, {
+    "field" : "security",
+    "status" : 400,
+    "variant" : "null"
+  }, {
+    "field" : "security",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "security",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "bindDn",
+    "status" : 200,
+    "variant" : "missing"
+  }, {
+    "field" : "bindDn",
+    "status" : 200,
+    "variant" : "null"
+  }, {
+    "field" : "bindDn",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "bindDn",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "searchBase",
+    "status" : 400,
+    "variant" : "missing"
+  }, {
+    "field" : "searchBase",
+    "status" : 400,
+    "variant" : "null"
+  }, {
+    "field" : "searchBase",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "searchBase",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "userFilter",
+    "status" : 400,
+    "variant" : "missing"
+  }, {
+    "field" : "userFilter",
+    "status" : 400,
+    "variant" : "null"
+  }, {
+    "field" : "userFilter",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "userFilter",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "idAttribute",
+    "status" : 400,
+    "variant" : "missing"
+  }, {
+    "field" : "idAttribute",
+    "status" : 400,
+    "variant" : "null"
+  }, {
+    "field" : "idAttribute",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "idAttribute",
+    "status" : 400,
+    "variant" : "wrong-type"
+  }, {
+    "field" : "nameAttribute",
+    "status" : 200,
+    "variant" : "missing"
+  }, {
+    "field" : "nameAttribute",
+    "status" : 200,
+    "variant" : "null"
+  }, {
+    "field" : "nameAttribute",
+    "status" : 400,
+    "variant" : "long"
+  }, {
+    "field" : "nameAttribute",
+    "status" : 400,
+    "variant" : "wrong-type"
+  } ]
+}, {
+  "case" : "F4-original",
+  "status" : 200,
+  "answer" : {
+    "ok" : false,
+    "reason" : "directory.tls_failed"
+  }
+} ]
