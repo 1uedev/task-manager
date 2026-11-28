@@ -1,0 +1,22 @@
+Independent review of TASK-038 / PR #90
+Executed product main 24b942225656961957c2c696532e736c3bd43172; backend equals PR head 9d2ac545b84dd6855329eb289bc4d8933db85480
+Temurin 25.0.4.1+1 / Maven 3.9.16 / native PostgreSQL 18.6 / isolated synthetic databases
+
+BASELINE: unchanged verify
+[INFO] Tests run: 92, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+MUTATION: active -> exists and role-origin guard removed; provenance column and stored role retained
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 14.12 s <<< FAILURE! -- in taskmanager.permissions.PermissionsIntegrationTest
+[ERROR]   PermissionsIntegrationTest.aCompanyDenyStaysProtectedAfterItsAuthorLosesTheCompanyRoleButKeepsADelegation:277 Expected taskmanager.permissions.PermissionDenied to be thrown, but nothing was thrown.
+[ERROR]   PermissionsIntegrationTest.aDeactivatedAccountDoesNotKeepTheCompanyAdministrationAlive:247 Expected taskmanager.permissions.PermissionDenied to be thrown, but nothing was thrown.
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+[INFO] BUILD FAILURE
+
+CLEAN RESTORED RUN: three original correction tests plus actual pending migration probe
+REVIEW M1: adding the real pending V0006 after applied V0007 is rejected: RESOLVED_VERSIONED_MIGRATION_NOT_APPLIED; history unchanged
+REVIEW CONTROL: the same complete V0001-V0007 set succeeds on an empty database, including the appearance seed
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.044 s -- in taskmanager.permissions.MigrationOrderingProbeTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 17.00 s -- in taskmanager.permissions.PermissionsIntegrationTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS

@@ -1,0 +1,9 @@
+--- a/backend/src/main/java/taskmanager/permissions/internal/JdbcPermissions.java
++++ b/backend/src/main/java/taskmanager/permissions/internal/JdbcPermissions.java
+@@ -129,2 +129 @@
+-                (rs, row) -> "DENY".equals(rs.getString(1)) && !(actor.userId().equals(rs.getObject(2, UUID.class))
+-                    && Boolean.FALSE.equals(rs.getObject(3, Boolean.class))),
++                (rs, row) -> "DENY".equals(rs.getString(1)) && !actor.userId().equals(rs.getObject(2, UUID.class)),
+@@ -207 +206 @@
+-        if (holders.stream().noneMatch(user -> adapter().userActive(actor.companyId(), user))) throw new PermissionDenied();
++        if (holders.stream().noneMatch(user -> adapter().userExists(actor.companyId(), user))) throw new PermissionDenied();
