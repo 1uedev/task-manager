@@ -1,0 +1,75 @@
+package taskmanager.identity.web;
+
+import static org.junit.jupiter.api.Assertions.*;
+import java.lang.reflect.InvocationTargetException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import taskmanager.identity.AccessContext;
+import taskmanager.identity.AccessContexts;
+import taskmanager.identity.AuthenticationLevel;
+import taskmanager.platform.AdministrationRight;
+import taskmanager.platform.AdministrationRights;
+import taskmanager.platform.ApiProblemException;
+
+/** Review-only behavioral matrix of every actual consumer helper, including the session hint. */
+class AdministrationConsumerReviewTest {
+    private static Object make(String name, Object... args) throws Throwable {
+        var constructor = Class.forName(name).getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        return constructor.newInstance(args);
+    }
+    private static Object call(Object target, String name, Class<?>[] types, Object... args) throws Throwable {
+        var method = target.getClass().getDeclaredMethod(name, types);
+        method.setAccessible(true);
+        try { return method.invoke(target, args); }
+        catch (InvocationTargetException e) { throw e.getCause(); }
+    }
+    @Test
+    void reviewEveryConsumerRejectsAbsentAndAmbiguousEvenPrimary() throws Throwable {
+        for (int variant=0; variant<4; variant++) {
+            var beans = new DefaultListableBeanFactory();
+            int count = variant == 0 ? 0 : variant == 1 ? 1 : 2;
+            for (int i=0; i<count; i++) {
+                var definition = new RootBeanDefinition(AdministrationRights.class, Port::new);
+                definition.setPrimary(variant==3 && i==1);
+                beans.registerBeanDefinition("port"+i, definition);
+            }
+            var provider = beans.getBeanProvider(AdministrationRights.class);
+            var requests = new AdministrationRequests(provider, new DataSourceTransactionManager());
+            Object service = make("taskmanager.appearance.internal.AppearanceService", null, Clock.systemUTC(), provider);
+            var full = new AccessContext(UUID.randomUUID(), "synthetic", UUID.randomUUID(), AuthenticationLevel.FULL, Instant.now().plusSeconds(3600));
+            AccessContexts contexts = () -> Optional.of(full);
+            Object appearance = make("taskmanager.appearance.web.AppearanceController", null, contexts, provider);
+            var session = new SessionController(null, Clock.systemUTC(), provider);
+            List<org.junit.jupiter.api.function.Executable> mutations = List.of(
+                () -> requests.require(AdministrationRight.ACCOUNTS_MANAGE),
+                () -> requests.early(AdministrationRight.ACCOUNTS_MANAGE),
+                () -> call(service, "requireRight", new Class<?>[0]),
+                () -> call(appearance, "administrator", new Class<?>[0]));
+            for (var executable : mutations) {
+                if (count==1) assertDoesNotThrow(executable);
+                else {
+                    ApiProblemException denial = assertThrows(ApiProblemException.class, executable);
+                    assertEquals(403, denial.status());
+                    assertEquals("auth.forbidden", denial.code());
+                }
+            }
+            Object hint = call(session, "heldRights", new Class<?>[0]);
+            var expected = count==1 ? java.util.Arrays.stream(AdministrationRight.values()).map(AdministrationRight::key).sorted().toList() : List.of();
+            assertEquals(expected, hint);
+        }
+        System.out.println("[review041] consumer matrix: 4 configurations x 5 actual consumer paths passed");
+    }
+    private static class Port implements AdministrationRights {
+        public void require(AdministrationRight right) {}
+        public Set<AdministrationRight> held() { return Set.of(AdministrationRight.values()); }
+    }
+}
